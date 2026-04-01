@@ -1,0 +1,40 @@
+{
+  "name": "vulnerability-management-portal",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:backend": "cd backend && uv run uvicorn src.main:app --reload --port 8000",
+    "dev:all": "npm run dev:backend & npm run dev",
+    "build": "next build",
+    "start": "next start",
+    "test:frontend": "node --test tests/frontend/*.test.ts",
+    "test:contracts": "node --test tests/contracts/*.test.mts",
+    "test:e2e": "npx playwright test --config tests/e2e/playwright.config.ts",
+    "test:e2e:mocked": "npx playwright test --config tests/e2e/playwright.config.ts --project=ui --project=settings",
+    "test:e2e:critical": "npx playwright test --config tests/e2e/playwright.config.ts --project=critical",
+    "test:backend": "cd backend && python -m pytest ../tests/backend/ -v --rootdir=."
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "graphql": "^16.14.0",
+    "graphql-request": "^7.4.0",
+    "next": "16.2.3",
+    "otplib": "^13.4.0",
+    "qrcode": "^1.5.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

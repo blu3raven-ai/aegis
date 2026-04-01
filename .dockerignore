@@ -1,0 +1,17 @@
+.git
+.next
+node_modules
+.env*
+data/
+docs/
+backend/
+runner/
+.claude/
+.agents/
+.worktrees/
+coverage/
+.venv
+*.md
+.DS_Store
+.superpowers/
+superpowers/
