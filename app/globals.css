@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  --color-bg:             #f4f7fb;
+  --color-surface:        #ffffff;
+  --color-surface-raised: #fafbfd;
+  --color-bg-section:     #fafbfd;
+  --color-bg-input:       #ffffff;
+  --color-bg-hover:       rgba(15,39,71,0.05);
+
+  --color-navy:           #10233f;
+  --color-navy-hover:     #163b68;
+
+  --color-border:         rgba(15,39,71,0.07);
+  --color-border-medium:  rgba(15,39,71,0.08);
+  --color-border-strong:  rgba(15,39,71,0.12);
+  --color-border-divider: rgba(15,39,71,0.06);
+
+  --color-text-primary:   #0f2747;
+  --color-text-secondary: #64748b;
+  --color-text-tertiary:  #94a3b8;
+  --color-text-muted:     rgba(24,59,104,0.62);
+
+  --color-accent:         #2d7ff9;
+  --color-accent-hover:   #1a6ae8;
+  --color-accent-subtle:  #dbeafe;
+  --color-accent-deep:    #163b68;
+  --color-accent-ink:     #ffffff;
+  --color-accent-on:      #ffffff;
+
+  --color-on-danger:      #ffffff;
+  --color-status-ok:      #10b981;
+  --color-severity-critical: #ef4444;
+  --color-severity-high:     #f97316;
+  --color-severity-medium:   #fbbf24;
+  --color-severity-low:      #60a5fa;
+  --color-stat-primary:   #163b68;
+  --color-stat-secondary: #2d7ff9;
+  --color-nav-active:     rgba(15,39,71,0.05);
+
+  --shadow-card:    0 2px 16px rgba(15,39,71,0.06);
+  --shadow-sidebar: 0 2px 12px rgba(15,39,71,0.06);
+  --shadow-nav:     0 4px 12px rgba(15,39,71,0.18);
+  --shadow-header:  0 16px 40px rgba(15,39,71,0.06);
+
+  --gradient-blue:   linear-gradient(135deg, #f8fbff, #edf5ff, #cfe4ff);
+  --gradient-red:    linear-gradient(135deg, #fff8f8, #fff1f0, #fde8e8);
+  --gradient-green:  linear-gradient(135deg, #f0fdf4, #dcfce7, #bbf7d0);
+  --gradient-yellow: linear-gradient(135deg, #fffdf0, #fefce8, #fef9c3);
+  --gradient-purple: linear-gradient(135deg, #faf5ff, #f3e8ff, #e9d5ff);
+}
+
+.dark {
+  --color-bg:             #070d19;
+  --color-surface:        #0C1524;
+  --color-surface-raised: #09101e;
+  --color-bg-section:     #09101e;
+  --color-bg-input:       #0f1e38;
+  --color-bg-hover:       #253348;
+
+  --color-navy:           #0fbcff;
+  --color-navy-hover:     #3dcbff;
+
+  --color-border:         #252A35;
+  --color-border-medium:  #2B3447;
+  --color-border-strong:  #424751;
+  --color-border-divider: #1C253A;
+
+  --color-text-primary:   #F2F2F3;
+  --color-text-secondary: #AFB0B6;
+  --color-text-tertiary:  #848592;
+  --color-text-muted:     #75829A;
+
+  --color-accent:         #0fbcff;
+  --color-accent-hover:   #3dcbff;
+  --color-accent-subtle:  #0f2a4a;
+  --color-accent-deep:    #B2ECFF;
+  --color-accent-ink:     #070d19;
+  --color-accent-on:      #ffffff;
+
+  --color-on-danger:      #F2F2F3;
+  --color-status-ok:      #34d399;
+  --color-severity-critical: #f87171;
+  --color-severity-high:     #fb923c;
+  --color-severity-medium:   #fbbf24;
+  --color-severity-low:      #60a5fa;
+  --color-stat-primary:   #0fbcff;
+  --color-stat-secondary: #3dcbff;
+  --color-nav-active:     #253348;
+
+  --shadow-card:    0 2px 16px rgba(0,0,0,0.40);
+  --shadow-sidebar: 0 2px 12px rgba(0,0,0,0.35);
+  --shadow-nav:     0 4px 12px rgba(0,0,0,0.45);
+  --shadow-header:  0 16px 40px rgba(0,0,0,0.40);
+
+  --gradient-blue:   linear-gradient(135deg, #0C1524, #0f1e38, #1C2F49);
+  --gradient-red:    linear-gradient(135deg, #0C1524, #1a1018, #251419);
+  --gradient-green:  linear-gradient(135deg, #0C1524, #0e1a16, #122218);
+  --gradient-yellow: linear-gradient(135deg, #0C1524, #18160e, #1e1c10);
+  --gradient-purple: linear-gradient(135deg, #0C1524, #150e22, #1a1230);
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text-primary);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-headline: var(--font-space-grotesk);
+  --font-body-brand: var(--font-manrope);
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+:focus-visible:where([class*="focus:ring"], [class*="ring-"]) {
+  outline: none;
+}
+
+:root {
+  --type-xs:   0.6875rem;
+  --type-sm:   0.75rem;
+  --type-base: 0.8125rem;
+  --type-md:   0.875rem;
+  --type-lg:   1rem;
+  --type-xl:   1.125rem;
+  --type-2xl:  1.25rem;
+}
+
+@keyframes scan-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
