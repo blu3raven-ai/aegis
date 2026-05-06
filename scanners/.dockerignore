@@ -1,0 +1,5 @@
+# Only send scanner source to Docker daemon — exclude test scripts and docs
+**/test-*.sh
+**/README.md
+**/Makefile
+**/.DS_Store
