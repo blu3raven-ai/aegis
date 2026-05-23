@@ -5,6 +5,8 @@ import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
 import { FindingsEmptyState } from "@/components/shared/FindingsEmptyState"
 import { CollapsibleGroupHeader } from "@/components/shared/CollapsibleGroupHeader"
 
+const GROUPS_PER_PAGE = 20
+
 const CLASSIFICATION_ICONS: Record<string, React.ReactNode> = {
   verified_secret: (
     <svg className="inline-block mr-1 -mt-px" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -97,6 +99,8 @@ interface Props {
   groupBy?: (row: SecretFindingRow) => string
   /** Columns to hide (e.g. "repository" in repo view) */
   hideColumns?: Set<string>
+  /** Label for the group unit shown in the footer (e.g. "repos", "key types") */
+  groupLabel?: string
   /** Server-side pagination — when provided, overrides client-side pagination */
   serverPage?: number
   serverPerPage?: number
@@ -115,6 +119,7 @@ export function RepoGroupedFindings({
   onSelectFinding,
   totalCount,
   groupBy,
+  groupLabel,
   hideColumns,
   serverPage,
   serverPerPage,
@@ -126,6 +131,7 @@ export function RepoGroupedFindings({
   const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set())
   const [localPage, setLocalPage] = useState(1)
   const [localPerPage, setLocalPerPage] = useState(25)
+  const [localGroupPage, setLocalGroupPage] = useState(1)
 
   const useServerPagination = serverPage != null && onServerPageChange != null
   const page = useServerPagination ? serverPage! : localPage
@@ -176,13 +182,27 @@ export function RepoGroupedFindings({
     setExpandedRepos(new Set())
   }
 
+  // When grouped, always paginate groups client-side regardless of server mode
+  const groupTotalPages = grouped ? Math.max(1, Math.ceil(grouped.length / GROUPS_PER_PAGE)) : 1
+  const safeGroupPage = Math.min(Math.max(localGroupPage, 1), groupTotalPages)
+
+  // Reset group page when groups change
+  const prevGroupsLengthRef = useRef<number | null>(null)
+  useEffect(() => {
+    const len = grouped ? grouped.length : null
+    if (prevGroupsLengthRef.current !== len) {
+      prevGroupsLengthRef.current = len
+      setLocalGroupPage(1)
+    }
+  }, [grouped])
+
   const totalPages = useServerPagination
     ? Math.max(1, serverTotalPages ?? 1)
-    : Math.max(1, Math.ceil((grouped ? grouped.length : rows.length) / perPage))
+    : Math.max(1, Math.ceil(rows.length / perPage))
   const safePage = Math.min(Math.max(page, 1), totalPages)
   // In server pagination mode, all rows are the current page (server already sliced)
-  const pageRows = useServerPagination ? rows : (grouped ? rows : rows.slice((safePage - 1) * perPage, safePage * perPage))
-  const pageGroups = grouped ? (useServerPagination ? grouped : grouped.slice((safePage - 1) * perPage, safePage * perPage)) : null
+  const pageRows = useServerPagination ? rows : rows.slice((safePage - 1) * perPage, safePage * perPage)
+  const pageGroups = grouped ? grouped.slice((safeGroupPage - 1) * GROUPS_PER_PAGE, safeGroupPage * GROUPS_PER_PAGE) : null
 
   const allRowKeys = useMemo(() => rows.map((row) => row.rowKey), [rows])
   const selectedVisibleCount = allRowKeys.filter((key) => selected.has(key)).length
@@ -245,7 +265,9 @@ export function RepoGroupedFindings({
     <div className="overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 text-xs text-[var(--color-text-secondary)]">
         <span>
-          {useServerPagination ? (serverTotalCount ?? totalCount) : totalCount} keys{grouped ? ` across ${grouped.length} repositories` : ""}
+          {grouped
+            ? `${grouped.length} ${groupLabel ?? "groups"}`
+            : `${useServerPagination ? (serverTotalCount ?? totalCount) : totalCount} keys`}
           {selectedVisibleCount > 0 ? ` · ${selectedVisibleCount} selected` : ""}
         </span>
         <div className="flex flex-wrap justify-end gap-2">
@@ -326,12 +348,13 @@ export function RepoGroupedFindings({
       </div>
 
       <PaginatedTableFooter
-        totalCount={useServerPagination ? (serverTotalCount ?? rows.length) : rows.length}
-        page={safePage}
-        perPage={perPage}
-        totalPages={totalPages}
-        onPageChange={setPage}
-        onPerPageChange={setPerPage}
+        totalCount={grouped ? grouped.length : (useServerPagination ? (serverTotalCount ?? rows.length) : rows.length)}
+        page={grouped ? safeGroupPage : safePage}
+        perPage={grouped ? GROUPS_PER_PAGE : perPage}
+        totalPages={grouped ? groupTotalPages : totalPages}
+        onPageChange={grouped ? setLocalGroupPage : setPage}
+        onPerPageChange={(n) => { if (!grouped) { setPerPage(n); if (!useServerPagination) setLocalPage(1) } }}
+        label={grouped ? (groupLabel ?? "groups") : "findings"}
       />
     </div>
   )
