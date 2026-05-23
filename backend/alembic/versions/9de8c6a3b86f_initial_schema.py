@@ -71,6 +71,7 @@ def upgrade() -> None:
     sa.Column('repo', sa.String(length=255), nullable=True),
     sa.Column('identity_key', sa.String(length=512), nullable=False),
     sa.Column('state', sa.String(length=20), nullable=False),
+    sa.Column('review_status', sa.String(length=20), nullable=True),
     sa.Column('severity', sa.String(length=20), nullable=True),
     sa.Column('first_seen_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('fixed_at', sa.DateTime(timezone=True), nullable=True),
