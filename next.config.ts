@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["otplib", "qrcode"],
@@ -42,7 +44,7 @@ const nextConfig: NextConfig = {
             // inline script tag. Replace 'unsafe-inline' with nonces when
             // Next.js provides native nonce support or when a custom middleware
             // solution is implemented. Tracking: https://github.com/vercel/next.js/discussions/54907
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:",
+            value: `default-src 'self'; script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:`,
           },
         ],
       },
