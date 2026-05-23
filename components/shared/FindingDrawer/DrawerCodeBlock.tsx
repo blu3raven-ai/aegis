@@ -3,29 +3,33 @@
 export function DrawerCodeBlock({
   lines,
   highlightRange,
-  metaBar,
+  label,
+  filePath,
+  lineRange,
   maxHeight = 620,
 }: {
   lines: { number: number; content: string; highlighted?: boolean }[]
   highlightRange?: { start: number; end: number }
-  metaBar: { label: string; filePath: string; lineRange?: string }
+  label: string
+  filePath: string
+  lineRange?: string
   maxHeight?: number
 }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 rounded-t-xl border border-b-0 border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)]">
         <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-          <span className="shrink-0">{metaBar.label}</span>
+          <span className="shrink-0">{label}</span>
           <span className="shrink-0 opacity-40">·</span>
           <span
             className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)]"
-            title={metaBar.filePath}
+            title={filePath}
           >
-            {metaBar.filePath}
+            {filePath}
           </span>
         </span>
-        {metaBar.lineRange && (
-          <span className="shrink-0">{metaBar.lineRange}</span>
+        {lineRange && (
+          <span className="shrink-0">{lineRange}</span>
         )}
       </div>
       <div
