@@ -107,7 +107,7 @@ export const CODE_SCANNING_FINDINGS_QUERY = `
         language confidence category cwe snippet fixSuggestion codeWindow
         aiReview { verdict explanation reasoning confidence }
         codeFlows { file line snippet }
-        reachability { verdict entryPoint callChain { function file line } }
+        reachability { verdict entryPoint callChain { function file line snippet } }
       }
       totalCount
       pageInfo { hasNextPage hasPreviousPage totalPages }

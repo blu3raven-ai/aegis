@@ -226,6 +226,7 @@ export interface GqlCodeScanningCallChainStep {
   function: string
   file: string
   line: number
+  snippet?: string | null
 }
 
 export interface GqlCodeScanningReachability {

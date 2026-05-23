@@ -51,6 +51,7 @@ class CodeScanningCallChainStep:
     function: str
     file: str
     line: int
+    snippet: Optional[str] = None
 
 
 @strawberry.type
@@ -94,6 +95,7 @@ def _make_reachability(r: dict | None) -> Optional["CodeScanningReachability"]:
                 function=step.get("function", ""),
                 file=step.get("file", ""),
                 line=step.get("line") or 0,
+                snippet=step.get("snippet") or None,
             )
             for step in chain_raw
             if isinstance(step, dict)

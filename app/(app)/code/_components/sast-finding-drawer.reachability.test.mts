@@ -124,12 +124,12 @@ describe("sast-finding-drawer Reachability section", () => {
     )
   })
 
-  it("is positioned after Data Flow section (section 3)", () => {
-    const dataFlowIdx = drawerSrc.indexOf("Data Flow")
-    const reachabilityIdx = drawerSrc.indexOf("── 4. Reachability")
+  it("is within the Remediation tab (Code & Reachability)", () => {
+    const remediationIdx = drawerSrc.indexOf("Remediation")
+    const reachabilityIdx = drawerSrc.indexOf("Reachability", remediationIdx + 1)
     assert.ok(
-      dataFlowIdx > 0 && reachabilityIdx > dataFlowIdx,
-      "Reachability section should appear after Data Flow"
+      remediationIdx > 0 && reachabilityIdx > remediationIdx,
+      "Reachability section should appear inside the Remediation block"
     )
   })
 })
