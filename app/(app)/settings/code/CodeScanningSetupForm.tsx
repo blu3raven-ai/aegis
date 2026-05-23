@@ -8,6 +8,7 @@ import type { PrerequisiteItem } from "@/lib/shared/prerequisite-utils"
 import { RulesetPicker } from "@/app/(app)/code/_components/RulesetPicker"
 import { parseRulesets, serialiseRulesets, AUTO_RULESETS } from "@/lib/shared/code-scanning-rulesets"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { RetentionField } from "@/components/settings/RetentionField"
 
 interface CodeScanningSetupFormProps {
   initialScanConcurrency: string
@@ -196,16 +197,8 @@ export function CodeScanningSetupForm({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Data retention (days)</label>
-            <input
-              type="number"
-              min={1}
-              max={90}
-              value={values.retentionDays}
-              onChange={(e) => setValues({ ...values, retentionDays: Math.min(90, Math.max(1, parseInt(e.target.value) || 7)) })}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
-            />
-            <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">Scan output stored in object storage for debugging and audit (1–90).</p>
+            <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Data retention</label>
+            <RetentionField value={values.retentionDays} onChange={(d) => setValues({ ...values, retentionDays: d })} />
           </div>
       </fieldset>
       </SettingsCard>
