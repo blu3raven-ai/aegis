@@ -153,7 +153,7 @@ function AdvisoryReferences({ references, onLinkClick }: { references: { url: st
 
   return (
     <DrawerSection label="References">
-      <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+      <p className="text-xs text-[var(--color-text-secondary)]">
         Source links from the advisory.
       </p>
       <div className="space-y-2">
@@ -294,7 +294,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
           <div className="space-y-5">
             {/* Advisory metadata */}
             <DrawerSection label="Security brief">
-              <div className="mb-4 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${SEV_BADGE[sev] ?? ""}`}>
                   {sev || "-"}
                 </span>
@@ -424,7 +424,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
 
             {/* Advisory description */}
             <DrawerSection label="Advisory details">
-              <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+              <p className="text-xs text-[var(--color-text-secondary)]">
                 Details from the security advisory.
               </p>
               {detailLoading ? (
