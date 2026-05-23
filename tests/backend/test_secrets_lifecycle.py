@@ -121,3 +121,11 @@ def test_secrets_hooks_extract_detail_includes_locations():
     assert detail["locations"] == [{"repository": "repo-a"}]
     assert detail["repository"] == "repo-a"
     assert detail["filePath"] == "config.py"
+
+
+def test_secrets_hooks_should_mark_fixed_returns_false():
+    assert secrets_hooks.should_mark_fixed("any-key", {}) is False
+
+
+def test_secrets_hooks_should_mark_fixed_ignores_kwargs():
+    assert secrets_hooks.should_mark_fixed("any-key", {"filePath": "x"}, org="acme", run_id="r1") is False
