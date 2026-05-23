@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
 const source = readFileSync(
-  new URL("./sast-finding-drawer.tsx", import.meta.url),
+  new URL("./code-scanning-finding-drawer.tsx", import.meta.url),
   "utf8"
 )
 
@@ -12,8 +12,8 @@ test("drawer title uses firstSentence of message, not rule_name", () => {
   assert.doesNotMatch(source, /finding\.rule_name/)
 })
 
-test("drawer h3 has title tooltip showing full message", () => {
-  assert.match(source, /title=\{finding\.message\}/)
+test("drawer title receives full message as titleTooltip for tooltip", () => {
+  assert.match(source, /titleTooltip=\{finding\.message\}/)
 })
 
 test("drawer imports firstSentence from drawer-helpers", () => {
@@ -48,15 +48,17 @@ test("Message card section is removed", () => {
 })
 
 test("CWE renders conditionally only when non-empty", () => {
-  assert.match(source, /finding\.cwe\.length > 0 && <DetailItem label="CWE"/)
+  assert.match(source, /finding\.cwe\.length > 0/)
+  assert.match(source, /label: "CWE"/)
 })
 
-test("code block uses max-h-[620px]", () => {
-  assert.match(source, /max-h-\[620px\]/)
+test("code block is rendered via DrawerCodeBlock", () => {
+  assert.match(source, /DrawerCodeBlock/)
+  assert.match(source, /highlightRange=/)
 })
 
-test("metadata bar above code block shows file path and line range", () => {
-  assert.match(source, /title=\{finding\.file_path\}[\s\S]{0,50}finding\.file_path/)
+test("metadata bar receives file path and line range as DrawerCodeBlock props", () => {
+  assert.match(source, /filePath=\{finding\.file_path\}/)
   assert.match(source, /codeStartLine \+ snippetLines\.length - 1/)
 })
 
@@ -65,11 +67,11 @@ test("Data Flow section renders conditionally on code_flows", () => {
   assert.match(source, /Data Flow/)
 })
 
-test("Data Flow section appears before AI Analysis section in JSX", () => {
-  const dataFlowIdx = source.indexOf("Data Flow")
+test("AI Analysis section appears before Data Flow section in JSX", () => {
   const aiAnalysisIdx = source.indexOf("AI Analysis")
+  const dataFlowIdx = source.indexOf("Data Flow")
   assert.ok(
-    dataFlowIdx < aiAnalysisIdx,
-    `Expected Data Flow (${dataFlowIdx}) before AI Analysis (${aiAnalysisIdx})`
+    aiAnalysisIdx < dataFlowIdx,
+    `Expected AI Analysis (${aiAnalysisIdx}) before Data Flow (${dataFlowIdx})`
   )
 })
