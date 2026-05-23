@@ -25,6 +25,7 @@ export interface ContainerScanningRun {
 export interface ContainerScanningRunsResponse {
   latest?: ContainerScanningRun
   lastCompleted?: ContainerScanningRun
+  hasSboms?: boolean
   error?: string
 }
 
