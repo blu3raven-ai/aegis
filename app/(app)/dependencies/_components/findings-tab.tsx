@@ -38,15 +38,15 @@ function gqlToDependenciesFinding(gql: GqlDependenciesFindingsConnection["items"
     dismissed_reason: null,
     dismissed_comment: null,
     security_advisory: {
-      ghsa_id: gql.id,
-      cve_id: null,
+      ghsa_id: gql.ghsaId ?? "",   // real GHSA ID — required for findingIdentityKey
+      cve_id: null,                  // populated by detail query
       severity: gql.severity as any,
       summary: gql.advisorySummary ?? "",
-      description: "",
+      description: "",               // populated by detail query
       cvss: { score: gql.cvssScore ?? null, vector_string: null },
-      published_at: gql.firstSeenAt ?? "",
-      updated_at: gql.firstSeenAt ?? "",
-      references: [],
+      published_at: "",              // populated by detail query
+      updated_at: "",                // populated by detail query
+      references: [],                // populated by detail query
     },
     current_version: gql.currentVersion ?? undefined,
     dependency: {
