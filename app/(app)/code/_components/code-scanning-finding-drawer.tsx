@@ -331,49 +331,53 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
 
           {/* ── 4. Reachability ── */}
           <DrawerSection label="Reachability">
-            {finding.reachability?.verdict === "reachable" && finding.reachability.call_chain && finding.reachability.call_chain.length > 0 ? (
-              <div className="space-y-0">
-                <div className="flex gap-3">
-                  <div className="flex flex-col items-center">
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/10">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-                      </svg>
-                    </span>
-                    <div className="my-0.5 w-px flex-1 bg-[var(--color-border)]" />
-                  </div>
-                  <div className="min-w-0 pb-3">
-                    <p className="text-xs font-semibold text-[var(--color-accent)]">
-                      {finding.reachability.entry_point ?? "Entry point"}
-                    </p>
-                  </div>
-                </div>
-
-                {finding.reachability.call_chain.map((step, idx) => {
-                  const isLast = idx === finding.reachability!.call_chain!.length - 1
-                  return (
-                    <div key={idx} className="flex gap-3">
-                      <div className="flex flex-col items-center">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/10 text-[10px] font-bold tabular-nums text-[var(--color-accent)]">
-                          {idx + 1}
-                        </span>
-                        {!isLast && <div className="my-0.5 w-px flex-1 bg-[var(--color-border)]" />}
-                      </div>
-                      <div className={`min-w-0 pb-3 ${isLast ? "rounded-md bg-[var(--color-accent)]/5 px-2 py-1" : ""}`}>
-                        <p className="flex items-baseline gap-1.5">
-                          <span className="font-medium text-sm text-[var(--color-text-primary)]">{step.function}</span>
-                        </p>
-                        <p className="flex items-baseline gap-1">
-                          <span className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]" title={step.file}>
-                            {step.file.split("/").pop()}
-                          </span>
-                          <span className="shrink-0 text-[11px] text-[var(--color-text-secondary)]">:{step.line}</span>
-                        </p>
-                      </div>
+            {finding.reachability?.verdict === "reachable" ? (
+              finding.reachability.call_chain && finding.reachability.call_chain.length > 0 ? (
+                <div className="space-y-0">
+                  <div className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/10">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
+                        </svg>
+                      </span>
+                      <div className="my-0.5 w-px flex-1 bg-[var(--color-border)]" />
                     </div>
-                  )
-                })}
-              </div>
+                    <div className="min-w-0 pb-3">
+                      <p className="text-xs font-semibold text-[var(--color-accent)]">
+                        {finding.reachability.entry_point ?? "Entry point"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {finding.reachability.call_chain.map((step, idx) => {
+                    const isLast = idx === finding.reachability!.call_chain!.length - 1
+                    return (
+                      <div key={idx} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)]/10 text-[10px] font-bold tabular-nums text-[var(--color-accent)]">
+                            {idx + 1}
+                          </span>
+                          {!isLast && <div className="my-0.5 w-px flex-1 bg-[var(--color-border)]" />}
+                        </div>
+                        <div className={`min-w-0 pb-3 ${isLast ? "rounded-md bg-[var(--color-accent)]/5 px-2 py-1" : ""}`}>
+                          <p className="flex items-baseline gap-1.5">
+                            <span className="font-medium text-sm text-[var(--color-text-primary)]">{step.function}</span>
+                          </p>
+                          <p className="flex items-baseline gap-1">
+                            <span className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]" title={step.file}>
+                              {step.file.split("/").pop()}
+                            </span>
+                            <span className="shrink-0 text-[11px] text-[var(--color-text-secondary)]">:{step.line}</span>
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--color-text-secondary)]">This finding is reachable but no call chain was captured.</p>
+              )
             ) : finding.reachability?.verdict === "unreachable" ? (
               <p className="text-sm text-[var(--color-text-secondary)]">This code is not reachable from any detected entry point.</p>
             ) : (
