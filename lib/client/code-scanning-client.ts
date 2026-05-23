@@ -67,6 +67,7 @@ export interface CodeScanningFinding {
       function: string
       file: string
       line: number
+      snippet?: string | null
     }>
   }
 }
