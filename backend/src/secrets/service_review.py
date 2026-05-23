@@ -97,6 +97,7 @@ def apply_review_updates(
 
     # Apply each update via shared lifecycle
     from src.shared.lifecycle import dismiss_finding, reopen_finding
+    from src.shared.finding_queries import set_secret_review_status
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -108,10 +109,9 @@ def apply_review_updates(
         if status in ("false_positive", "action_taken"):
             reason = "Alert is inaccurate" if status == "false_positive" else "Fix started"
             dismiss_finding("secrets", org, identity_key, reason, user_id or "unknown")
-        elif status == "new":
+        elif status in ("new", "confirmed"):
             reopen_finding("secrets", org, identity_key, user_id or "unknown")
-        elif status == "confirmed":
-            reopen_finding("secrets", org, identity_key, user_id or "unknown")
+        set_secret_review_status(org, identity_key, status)
 
     # Return fresh snapshot with resolution timestamps applied
     snapshot = read_secrets_snapshot(org)

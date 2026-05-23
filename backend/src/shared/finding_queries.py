@@ -214,6 +214,30 @@ async def insert_event(
 
 
 # ---------------------------------------------------------------------------
+# Secrets review status
+# ---------------------------------------------------------------------------
+
+def set_secret_review_status(org: str, identity_key: str, review_status: str | None) -> None:
+    from src.db.helpers import run_db
+    from src.shared.paths import normalize_org
+
+    async def _run(session: AsyncSession) -> None:
+        result = await session.execute(
+            select(Finding).where(
+                Finding.tool == "secrets",
+                Finding.org == normalize_org(org),
+                Finding.identity_key == identity_key,
+            )
+        )
+        finding = result.scalars().first()
+        if finding:
+            finding.review_status = review_status
+            finding.updated_at = _utcnow()
+
+    run_db(_run)
+
+
+# ---------------------------------------------------------------------------
 # Analytics (pure functions operating on query results)
 # ---------------------------------------------------------------------------
 

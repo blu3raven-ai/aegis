@@ -311,6 +311,7 @@ class Finding(Base):
     repo: Mapped[str | None] = mapped_column(String(255), nullable=True)
     identity_key: Mapped[str] = mapped_column(String(512), nullable=False)
     state: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    review_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     severity: Mapped[str | None] = mapped_column(String(20), nullable=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     fixed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
