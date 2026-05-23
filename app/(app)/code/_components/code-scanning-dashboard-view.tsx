@@ -41,14 +41,32 @@ function gqlToCodeScanningFinding(g: GqlCodeScanningFindingsConnection["items"][
     rule_name: g.ruleName,
     severity: g.severity as CodeScanningFinding["severity"],
     confidence: g.confidence ?? "",
-    category: "",
-    cwe: [],
+    category: g.category ?? "",
+    cwe: g.cwe ?? [],
     message: g.message,
-    snippet: "",
+    snippet: g.snippet ?? "",
+    fix_suggestion: g.fixSuggestion ?? undefined,
     state: g.state as CodeScanningFinding["state"],
     first_seen_at: g.firstSeenAt ?? undefined,
     fixed_at: g.fixedAt ?? undefined,
     language: g.language ?? undefined,
+    code_window: g.codeWindow ?? undefined,
+    ai_review: g.aiReview
+      ? {
+          verdict: g.aiReview.verdict,
+          explanation: g.aiReview.explanation,
+          reasoning: g.aiReview.reasoning ?? undefined,
+          confidence: g.aiReview.confidence ?? undefined,
+        }
+      : undefined,
+    code_flows: g.codeFlows ?? undefined,
+    reachability: g.reachability
+      ? {
+          verdict: g.reachability.verdict as "reachable" | "unreachable" | "unknown",
+          entry_point: g.reachability.entryPoint ?? undefined,
+          call_chain: g.reachability.callChain ?? undefined,
+        }
+      : undefined,
   }
 }
 
