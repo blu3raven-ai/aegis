@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 MAX_QUERY_DEPTH = 5
-MAX_PER_PAGE = 100
+MAX_PER_PAGE = 500
 
 
 def check_query_depth(query: str, max_depth: int = MAX_QUERY_DEPTH) -> None:
