@@ -608,7 +608,7 @@ async def save_tool_settings(request: Request, tool: str, body: ToolSettingsRequ
     if "retentionDays" in tool_config:
         try:
             days = int(tool_config["retentionDays"])
-            tool_config["retentionDays"] = max(1, min(90, days))
+            tool_config["retentionDays"] = max(0, min(90, days))
         except (ValueError, TypeError):
             tool_config["retentionDays"] = 7
 
