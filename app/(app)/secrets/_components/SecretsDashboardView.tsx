@@ -213,7 +213,7 @@ export function SecretsDashboardView({ orgs, latestRun: propsLatestRun, onLatest
           org: enabledOrgs[0],
           // In grouped mode fetch all rows so groups aren't fragmented across server pages
           page: reviewViewMode !== "list" ? 1 : findingsPageNum,
-          perPage: reviewViewMode !== "list" ? 500 : findingsPerPage,
+          perPage: reviewViewMode !== "list" ? 10000 : findingsPerPage,
           reviewStatus: statusFilter || undefined,
           detector: keyType.length === 1 ? keyType[0] : undefined,
           repository: repository || undefined,
