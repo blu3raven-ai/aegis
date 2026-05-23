@@ -391,15 +391,13 @@ function FindingsTab({ findings, isLoading, error, primaryOrg, onActionComplete,
                   ? new Set(["rule"])
                   : undefined
             }
+            groupLabel={
+              viewMode === "repository" ? "repos" : viewMode === "rule" ? "rules" : undefined
+            }
           />
         )}
       </div>
 
-      {!isLoading && !error && filteredFindings.length > 0 && (
-        <p className="text-right text-xs text-[var(--color-text-secondary)]">
-          Showing {filteredFindings.length} of {findings.length} findings
-        </p>
-      )}
 
       <CodeScanningFindingDrawer
         finding={drawerFinding}
