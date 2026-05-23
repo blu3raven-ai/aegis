@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 
 interface DismissPopoverProps {
-  reasons: string[]
+  reasons: readonly string[]
   onDismiss: (reason: string) => void
   isLoading: boolean
   triggerLabel?: string

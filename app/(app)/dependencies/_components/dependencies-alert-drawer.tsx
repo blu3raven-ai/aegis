@@ -19,6 +19,8 @@ import {
   DrawerSection,
   DrawerDetailGrid,
   DrawerFooter,
+  DismissPopover,
+  DrawerCodeBlock,
 } from "@/components/shared/FindingDrawer"
 
 function VersionLine({ alert }: { alert: DependenciesFinding }) {
@@ -170,7 +172,6 @@ function AdvisoryReferences({ references, onLinkClick }: { references: { url: st
 }
 
 export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, onClose, onStateChange, dismissFn, reopenFn }: Props) {
-  const [dismissOpen, setDismissOpen] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [previewIndex, setPreviewIndex] = useState(0)
@@ -179,7 +180,6 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
   const snippetFindings = useMemo(() => allFindings.filter((f) => f.manifest_snippet), [allFindings])
 
   useEffect(() => {
-    setDismissOpen(false)
     setPreviewIndex(0)
   }, [finding])
 
@@ -192,7 +192,6 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
     try {
       const identityKey = findingIdentityKey(finding)
       await dismissFn?.(org, identityKey, reason)
-      setDismissOpen(false)
       onStateChange?.()
     } catch {
       setActionError("Failed to dismiss finding. Please try again.")
@@ -239,8 +238,12 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
     requestNavigation(url)
   }, [requestNavigation])
 
+  const safeIdx = Math.min(previewIndex, snippetFindings.length - 1)
+  const previewFinding = snippetFindings[safeIdx] ?? null
+  const isBinary = !!previewFinding?.manifest_snippet && /[\x00-\x08\x0E-\x1F]/.test(previewFinding.manifest_snippet)
+
   return (
-    <FindingsDrawerShell open={!!finding} onClose={onClose}>
+    <FindingsDrawerShell open={!!finding} onClose={onClose} label="Dependency finding details">
       <DrawerHeader
         eyebrow={`Dependencies · ${finding?.dependency.package.ecosystem ?? ""}`}
         title={finding ? finding.dependency.package.name : "Select a finding"}
@@ -324,16 +327,13 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                     const snippetIdx = snippetFindings.indexOf(f)
                     const isActive = snippetIdx >= 0 && snippetIdx === previewIndex
                     const hasSnippet = snippetIdx >= 0
-                    return (
-                      <div
-                        key={i}
-                        onClick={hasSnippet ? () => setPreviewIndex(snippetIdx) : undefined}
-                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors ${
-                          isActive
-                            ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/5"
-                            : "border-[var(--color-border)] bg-[var(--color-surface-raised)]"
-                        } ${hasSnippet ? "cursor-pointer hover:border-[var(--color-accent)]/30" : ""}`}
-                      >
+                    const sharedCls = `flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors ${
+                      isActive
+                        ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/5"
+                        : "border-[var(--color-border)] bg-[var(--color-surface-raised)]"
+                    }`
+                    const innerContent = (
+                      <>
                         <span
                           className="min-w-0 flex-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-primary)]"
                           title={f.dependency.manifest_path}
@@ -358,79 +358,83 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                         >
                           View in repository
                         </button>
+                      </>
+                    )
+
+                    return hasSnippet ? (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setPreviewIndex(snippetIdx)}
+                        className={`w-full text-left ${sharedCls} cursor-pointer hover:border-[var(--color-accent)]/30`}
+                      >
+                        {innerContent}
+                      </button>
+                    ) : (
+                      <div key={i} className={sharedCls}>
+                        {innerContent}
                       </div>
                     )
                   })}
                 </div>
               </div>
 
-              {/* Manifest file preview carousel */}
-              {snippetFindings.length > 0 && (() => {
-                const safeIdx = Math.min(previewIndex, snippetFindings.length - 1)
-                const previewFinding = snippetFindings[safeIdx]
-                if (!previewFinding?.manifest_snippet) return null
-
-                if (/[\x00-\x08\x0E-\x1F]/.test(previewFinding.manifest_snippet)) {
-                  return (
+              {/* Manifest file preview */}
+              {snippetFindings.length > 0 && previewFinding?.manifest_snippet && (
+                <div>
+                  {isBinary ? (
                     <div className="flex min-h-[80px] items-center justify-center rounded-xl border border-dashed border-[var(--color-border)] text-sm text-[var(--color-text-secondary)]">
                       Binary file — cannot display preview.
                     </div>
-                  )
-                }
-                return (
-                  <div>
-                    <div className="mb-2 flex items-center gap-2">
-                      {snippetFindings.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewIndex((i) => (i - 1 + snippetFindings.length) % snippetFindings.length)}
-                          className="rounded-md p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-                          aria-label="Previous manifest"
-                        >
-                          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                        </button>
-                      )}
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                        Preview — {previewFinding.dependency.manifest_path}
+                  ) : (
+                    <div>
+                      <div className="mb-2 flex items-center gap-2">
                         {snippetFindings.length > 1 && (
-                          <span className="ml-1.5 font-normal normal-case">({safeIdx + 1} of {snippetFindings.length})</span>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewIndex((i) => (i - 1 + snippetFindings.length) % snippetFindings.length)}
+                            className="rounded-md p-3 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+                            aria-label="Previous manifest"
+                          >
+                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                          </button>
                         )}
-                      </p>
-                      {snippetFindings.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setPreviewIndex((i) => (i + 1) % snippetFindings.length)}
-                          className="rounded-md p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-                          aria-label="Next manifest"
-                        >
-                          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-                        </button>
-                      )}
+                        {snippetFindings.length > 1 && (
+                          <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
+                            ({safeIdx + 1} of {snippetFindings.length})
+                          </span>
+                        )}
+                        {snippetFindings.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewIndex((i) => (i + 1) % snippetFindings.length)}
+                            className="rounded-md p-3 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+                            aria-label="Next manifest"
+                          >
+                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                          </button>
+                        )}
+                      </div>
+                      <DrawerCodeBlock
+                        lines={previewFinding.manifest_snippet.split("\n").map((line, idx) => {
+                          const lineNum = (previewFinding.manifest_match_line ?? 1) - 7 + idx
+                          const number = lineNum > 0 ? lineNum : idx + 1
+                          return {
+                            number,
+                            content: line,
+                            highlighted:
+                              previewFinding.manifest_match_line != null &&
+                              lineNum === previewFinding.manifest_match_line,
+                          }
+                        })}
+                        label={previewFinding.repository?.full_name ?? previewFinding.dependency.manifest_path}
+                        filePath={previewFinding.dependency.manifest_path}
+                        maxHeight={320}
+                      />
                     </div>
-                    <div className="max-h-[320px] overflow-auto rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950">
-                      <pre className="min-w-max p-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
-                        <code>
-                          {previewFinding.manifest_snippet.split("\n").map((line, idx) => {
-                            const lineNum = (previewFinding.manifest_match_line ?? 1) - 7 + idx
-                            const isMatch = previewFinding.manifest_match_line != null && lineNum === previewFinding.manifest_match_line
-                            return (
-                              <span
-                                key={idx}
-                                className={`block ${isMatch ? "-mx-4 bg-orange-500/15 px-4 text-orange-700 dark:text-orange-100" : ""}`}
-                              >
-                                <span className="mr-5 inline-block w-12 select-none text-right font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-secondary)]">
-                                  {lineNum > 0 ? lineNum : idx + 1}
-                                </span>
-                                <span>{line || " "}</span>
-                              </span>
-                            )
-                          })}
-                        </code>
-                      </pre>
-                    </div>
-                  </div>
-                )
-              })()}
+                  )}
+                </div>
+              )}
             </DrawerSection>
 
             {/* Advisory description */}
@@ -449,34 +453,11 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
       <DrawerFooter>
         {actionError && <p className="mb-3 text-xs text-red-500">{actionError}</p>}
         {(finding?.state === "open" || finding?.state === "deferred") && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setDismissOpen(!dismissOpen)}
-              disabled={actionLoading}
-              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-            >
-              Dismiss finding
-            </button>
-            {dismissOpen && (
-              <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
-                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
-                  Select reason
-                </p>
-                {DISMISS_REASONS.map((reason) => (
-                  <button
-                    key={reason}
-                    type="button"
-                    onClick={() => void handleDismiss(reason)}
-                    disabled={actionLoading}
-                    className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-                  >
-                    {reason}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <DismissPopover
+            reasons={DISMISS_REASONS}
+            onDismiss={(reason) => void handleDismiss(reason)}
+            isLoading={actionLoading}
+          />
         )}
       </DrawerFooter>
       <ExternalLinkConfirm url={pendingUrl} onClose={closeExtLink} />
