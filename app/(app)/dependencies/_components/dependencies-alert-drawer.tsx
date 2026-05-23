@@ -177,17 +177,14 @@ function AdvisoryReferences({ references, onLinkClick }: { references: { url: st
 export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, onClose, onStateChange, dismissFn, reopenFn }: Props) {
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [previewIndex, setPreviewIndex] = useState(0)
   const [detail, setDetail] = useState<GqlDependenciesFindingDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState(false)
 
   const allFindings = useMemo(() => relatedFindings.length > 0 ? relatedFindings : finding ? [finding] : [], [relatedFindings, finding])
-  const snippetFindings = useMemo(() => allFindings.filter((f) => f.manifest_snippet), [allFindings])
 
   useEffect(() => {
     setActionError(null)
-    setPreviewIndex(0)
   }, [finding])
 
   useEffect(() => {
@@ -354,59 +351,37 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                   Affected locations ({allFindings.length})
                 </p>
                 <div className="space-y-1">
-                  {allFindings.map((f, i) => {
-                    const snippetIdx = snippetFindings.indexOf(f)
-                    const isActive = snippetIdx >= 0 && snippetIdx === previewIndex
-                    const hasSnippet = snippetIdx >= 0
-                    const sharedCls = `flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors ${
-                      isActive
-                        ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/5"
-                        : "border-[var(--color-border)] bg-[var(--color-surface-raised)]"
-                    }`
-                    const innerContent = (
-                      <>
-                        <span
-                          className="min-w-0 flex-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-primary)]"
-                          title={f.dependency.manifest_path}
-                        >
-                          {f.dependency.manifest_path}
-                        </span>
-                        {f.current_version && (
-                          <span className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]">
-                            @{f.current_version}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            e.preventDefault()
-                            const repoPath = f.repository.full_name.includes("/") ? f.repository.full_name : `${f.repository.full_name}/${f.repository.name}`
-                            const manifestPath = (f.dependency.manifest_path || "").replace(/^\/+/, "")
-                            requestNavigation(`https://github.com/${repoPath}/blob/HEAD/${manifestPath}${f.manifest_match_line ? `#L${f.manifest_match_line}` : ""}`)
-                          }}
-                          className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline"
-                        >
-                          View in repository
-                        </button>
-                      </>
-                    )
-
-                    return hasSnippet ? (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setPreviewIndex(snippetIdx)}
-                        className={`w-full text-left ${sharedCls} cursor-pointer hover:border-[var(--color-accent)]/30`}
+                  {allFindings.map((f, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 transition-colors"
+                    >
+                      <span
+                        className="min-w-0 flex-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-primary)]"
+                        title={f.dependency.manifest_path}
                       >
-                        {innerContent}
+                        {f.dependency.manifest_path}
+                      </span>
+                      {f.current_version && (
+                        <span className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]">
+                          @{f.current_version}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          const repoPath = f.repository.full_name.includes("/") ? f.repository.full_name : `${f.repository.full_name}/${f.repository.name}`
+                          const manifestPath = (f.dependency.manifest_path || "").replace(/^\/+/, "")
+                          requestNavigation(`https://github.com/${repoPath}/blob/HEAD/${manifestPath}${detail?.manifestMatchLine ? `#L${detail.manifestMatchLine}` : ""}`)
+                        }}
+                        className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline"
+                      >
+                        View in repository
                       </button>
-                    ) : (
-                      <div key={i} className={sharedCls}>
-                        {innerContent}
-                      </div>
-                    )
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -452,10 +427,28 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
               <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
                 Details from the security advisory.
               </p>
-              <AdvisoryDescription content={finding.security_advisory.description} onLinkClick={handleExternalClick} />
+              {detailLoading ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-3 w-3/4 rounded bg-[var(--color-border)]" />
+                  <div className="h-3 w-full rounded bg-[var(--color-border)]" />
+                  <div className="h-3 w-5/6 rounded bg-[var(--color-border)]" />
+                </div>
+              ) : detailError ? (
+                <p className="text-sm text-[var(--color-text-secondary)]">Advisory details unavailable.</p>
+              ) : (
+                <AdvisoryDescription
+                  content={detail?.advisoryDescription ?? ""}
+                  onLinkClick={handleExternalClick}
+                />
+              )}
             </DrawerSection>
 
-            <AdvisoryReferences references={references} onLinkClick={handleExternalClick} />
+            {!detailLoading && !detailError && (
+              <AdvisoryReferences
+                references={(detail?.references ?? []).map((url) => ({ url }))}
+                onLinkClick={handleExternalClick}
+              />
+            )}
           </div>
         )}
       </div>
