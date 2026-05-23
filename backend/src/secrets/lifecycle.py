@@ -21,6 +21,9 @@ class SecretsHooks(LifecycleHooks):
     def initial_state(self, raw: dict[str, Any]) -> str:
         return "open"
 
+    def should_mark_fixed(self, identity_key: str, prev_detail: dict, **kwargs) -> bool:
+        return False
+
     def extract_repo(self, raw: dict[str, Any]) -> str | None:
         return None  # Secrets are org-scoped, locations in detail
 
