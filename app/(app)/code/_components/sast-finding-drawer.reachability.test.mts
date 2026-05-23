@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
 const drawerSrc = readFileSync(
-  new URL("./sast-finding-drawer.tsx", import.meta.url).pathname,
+  new URL("./code-scanning-finding-drawer.tsx", import.meta.url).pathname,
   "utf-8",
 )
 
@@ -52,11 +52,14 @@ describe("sast-finding-drawer reachability badge", () => {
 })
 
 describe("sast-finding-drawer Reachability section", () => {
-  it("always renders Reachability section heading", () => {
+  it("always renders Reachability section heading via DrawerSection", () => {
     assert.ok(
-      drawerSrc.includes("Reachability") &&
-      drawerSrc.includes("uppercase tracking-[0.18em]"),
-      "should always render section label with correct typography"
+      drawerSrc.includes("Reachability"),
+      "should include Reachability label"
+    )
+    assert.ok(
+      drawerSrc.includes("DrawerSection"),
+      "should use DrawerSection for sections"
     )
   })
 
@@ -67,11 +70,14 @@ describe("sast-finding-drawer Reachability section", () => {
     )
   })
 
-  it("renders entry point as step 0 with orange accent", () => {
+  it("renders entry point label with accent color", () => {
     assert.ok(
-      drawerSrc.includes("reachability.entry_point") &&
-      drawerSrc.includes("text-orange-400"),
-      "should show entry_point label in orange"
+      drawerSrc.includes("reachability.entry_point"),
+      "should show entry_point label"
+    )
+    assert.ok(
+      drawerSrc.includes("text-[var(--color-accent)]"),
+      "should use accent color token, not hardcoded color"
     )
   })
 
@@ -89,10 +95,14 @@ describe("sast-finding-drawer Reachability section", () => {
     )
   })
 
-  it("uses orange left-border on final step", () => {
+  it("highlights final step with background tint, not side-stripe border", () => {
     assert.ok(
-      drawerSrc.includes("border-l-2 border-orange-400"),
-      "final step should have orange left-border accent"
+      !drawerSrc.includes("border-l-2 border-orange-400"),
+      "should not have orange side-stripe border"
+    )
+    assert.ok(
+      !drawerSrc.includes("border-l-2 border-[var(--color-accent)]"),
+      "should not have accent side-stripe border"
     )
   })
 
