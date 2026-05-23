@@ -229,20 +229,22 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
             />
           )}
 
-          {/* ── Location ── */}
-          <div className="rounded-lg bg-[var(--color-surface-raised)] px-3 py-2 text-xs text-[var(--color-text-secondary)]">
-            <span className="font-semibold">Repository</span>{" "}
-            <span className="text-[var(--color-text-primary)]">{finding.repo_full_name}</span>
-          </div>
+          {/* ── Location — only when code block is absent ── */}
+          {snippetLines.length === 0 && (
+            <div className="rounded-lg bg-[var(--color-surface-raised)] px-3 py-2 text-xs text-[var(--color-text-secondary)]">
+              <span className="font-semibold">Repository</span>{" "}
+              <span className="text-[var(--color-text-primary)]">{finding.repo_full_name}</span>
+            </div>
+          )}
 
           {/* ── 2. AI Analysis + Fix Suggestion (promoted) ── */}
           <DrawerSection label="AI Analysis">
-            <div className="flex items-center gap-2.5 pb-3">
-              <svg className="h-4 w-4 shrink-0 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 3v1m0 16v1M4.22 4.22l.7.7m13.16 13.16.7.7M3 12h1m16 0h1M4.22 19.78l.7-.7M18.36 5.64l.7-.7" />
-                <circle cx="12" cy="12" r="4" />
-              </svg>
-              {finding.ai_review && finding.ai_review.verdict !== "skipped" && (
+            {finding.ai_review && finding.ai_review.verdict !== "skipped" && (
+              <div className="flex items-center gap-2.5 pb-3">
+                <svg className="h-4 w-4 shrink-0 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3v1m0 16v1M4.22 4.22l.7.7m13.16 13.16.7.7M3 12h1m16 0h1M4.22 19.78l.7-.7M18.36 5.64l.7-.7" />
+                  <circle cx="12" cy="12" r="4" />
+                </svg>
                 <div className="ml-auto flex items-center gap-2">
                   {finding.ai_review.confidence && (
                     <span className="text-[11px] font-medium text-[var(--color-text-secondary)] capitalize">
@@ -253,8 +255,8 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                     {finding.ai_review.verdict}
                   </span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {finding.ai_review ? (
               <div className="space-y-3">
