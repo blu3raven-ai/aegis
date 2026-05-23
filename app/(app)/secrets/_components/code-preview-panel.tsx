@@ -47,7 +47,7 @@ export function CodePreviewPanel({
   }, [finding])
 
   return (
-    <FindingsDrawerShell open={!!finding} onClose={onClose}>
+    <FindingsDrawerShell open={!!finding} onClose={onClose} label="Secret finding details">
       <DrawerHeader
         eyebrow={finding ? `Secrets · ${finding.detector}` : "Secrets"}
         title={finding ? `${finding.organization}/${finding.repository}` : "Select a finding"}
@@ -177,8 +177,9 @@ export function CodePreviewPanel({
               </p>
               <button
                 type="button"
+                aria-pressed={secretRevealed}
                 onClick={() => setSecretRevealed((v) => !v)}
-                className="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+                className="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
               >
                 {secretRevealed ? "Hide value" : "Reveal value"}
               </button>
