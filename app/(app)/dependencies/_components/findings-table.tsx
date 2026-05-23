@@ -11,10 +11,9 @@ type SortKey = "severity" | "cvss" | "age" | "repository" | "package"
 type SortDir = "asc" | "desc"
 
 const SEV_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+const GROUPS_PER_PAGE = 20
 
 import { SEV_BADGE, STATE_BADGE } from "@/lib/shared/ui/badge-styles"
-
-// PER_PAGE_OPTIONS moved to shared PaginatedTableFooter
 
 function VersionCell({ alert }: { alert: DependenciesFinding }) {
   const current = alert.current_version ?? null
@@ -65,6 +64,7 @@ export function FindingsTable({
   groupBy,
   renderGroupLabel,
   hideColumns,
+  groupLabel,
   serverPage,
   serverPerPage,
   serverTotalCount,
@@ -83,6 +83,8 @@ export function FindingsTable({
   renderGroupLabel?: (key: string) => React.ReactNode
   /** Columns to hide (e.g. hide "repository" in repo view since it's the group header) */
   hideColumns?: Set<string>
+  /** Label for the group unit shown in the footer (e.g. "repos", "packages") */
+  groupLabel?: string
   /** Server-side pagination — when provided, disables client-side slicing */
   serverPage?: number
   serverPerPage?: number
@@ -95,6 +97,7 @@ export function FindingsTable({
   const [sortDir, setSortDir] = useState<SortDir>("asc")
   const [localPage, setLocalPage]       = useState(1)
   const [localPerPage, setLocalPerPage] = useState(25)
+  const [localGroupPage, setLocalGroupPage] = useState(1)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const useServer = serverPage != null && onServerPageChange != null
@@ -136,17 +139,52 @@ export function FindingsTable({
     })
   }, [findings, sortKey, sortDir])
 
-  const totalPages = useServer
-    ? Math.max(1, serverTotalPages ?? 1)
-    : Math.max(1, Math.ceil(sorted.length / perPage))
-  const safePage   = Math.min(Math.max(page, 1), totalPages)
+  // Build grouped structure when groupBy is set
+  const groups = useMemo(() => {
+    if (!groupBy) return null
+    const map = new Map<string, AggregatedDependenciesFinding[]>()
+    for (const item of sorted) {
+      const key = groupBy(item)
+      const arr = map.get(key)
+      if (arr) arr.push(item)
+      else map.set(key, [item])
+    }
+    return [...map.entries()].map(([key, items]) => ({ key, items }))
+  }, [groupBy, sorted])
+
+  // Reset group page when groups change
+  const prevGroupsLengthRef = useRef<number | null>(null)
+  useEffect(() => {
+    const len = groups ? groups.length : null
+    if (prevGroupsLengthRef.current !== len) {
+      prevGroupsLengthRef.current = len
+      setLocalGroupPage(1)
+    }
+  }, [groups])
+
+  // When grouped, paginate by group count; otherwise use row-based pagination
+  const groupTotalPages = groups ? Math.max(1, Math.ceil(groups.length / GROUPS_PER_PAGE)) : 1
+  const safeGroupPage = Math.min(Math.max(localGroupPage, 1), groupTotalPages)
+
+  const totalPages = groups
+    ? groupTotalPages
+    : useServer
+      ? Math.max(1, serverTotalPages ?? 1)
+      : Math.max(1, Math.ceil(sorted.length / perPage))
+  const safePage = Math.min(Math.max(page, 1), totalPages)
+
   // In server pagination mode, all rows are the current page (server already sliced)
   const pageFindings = useServer ? sorted : sorted.slice((safePage - 1) * perPage, safePage * perPage)
+  // When grouped, show GROUPS_PER_PAGE groups per page
+  const pageGroups = groups
+    ? groups.slice((safeGroupPage - 1) * GROUPS_PER_PAGE, safeGroupPage * GROUPS_PER_PAGE)
+    : null
 
   function handleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
     else { setSortKey(key); setSortDir("asc") }
-    setPage(1)
+    if (groups) setLocalGroupPage(1)
+    else setPage(1)
   }
 
   function SortIndicator({ col }: { col: SortKey }) {
@@ -171,19 +209,6 @@ export function FindingsTable({
       return next
     })
   }
-
-  // Build grouped structure when groupBy is set
-  const groups = useMemo(() => {
-    if (!groupBy) return null
-    const map = new Map<string, AggregatedDependenciesFinding[]>()
-    for (const item of sorted) {
-      const key = groupBy(item)
-      const arr = map.get(key)
-      if (arr) arr.push(item)
-      else map.set(key, [item])
-    }
-    return [...map.entries()].map(([key, items]) => ({ key, items }))
-  }, [groupBy, sorted])
 
   function renderRow(item: AggregatedDependenciesFinding) {
     const alert = item.representative
@@ -251,7 +276,7 @@ export function FindingsTable({
     )
   }
 
-  const isEmpty = groups ? groups.length === 0 : pageFindings.length === 0
+  const isEmpty = pageGroups ? pageGroups.length === 0 : pageFindings.length === 0
 
   if (isEmpty) {
     return <FindingsEmptyState />
@@ -313,8 +338,8 @@ export function FindingsTable({
             </tr>
           </thead>
           <tbody>
-            {groups ? (
-              groups.map(({ key: groupKey, items }) => {
+            {pageGroups ? (
+              pageGroups.map(({ key: groupKey, items }) => {
                 const isOpen = expanded.has(groupKey)
                 const groupItemKeys = items.map((i) => i.advisoryKey)
                 const allGroupChecked = onCheckedKeysChange && groupItemKeys.length > 0 && groupItemKeys.every((k) => checkedKeys?.has(k))
@@ -370,12 +395,13 @@ export function FindingsTable({
       </div>
 
       <PaginatedTableFooter
-        totalCount={useServer ? (serverTotalCount ?? sorted.length) : sorted.length}
-        page={safePage}
-        perPage={perPage}
-        totalPages={totalPages}
-        onPageChange={setPage}
-        onPerPageChange={(n) => { setPerPage(n); if (!useServer) setLocalPage(1) }}
+        totalCount={groups ? groups.length : (useServer ? (serverTotalCount ?? sorted.length) : sorted.length)}
+        page={groups ? safeGroupPage : safePage}
+        perPage={groups ? GROUPS_PER_PAGE : perPage}
+        totalPages={groups ? groupTotalPages : totalPages}
+        onPageChange={groups ? setLocalGroupPage : setPage}
+        onPerPageChange={(n) => { if (!groups) { setPerPage(n); if (!useServer) setLocalPage(1) } }}
+        label={groups ? (groupLabel ?? "groups") : "findings"}
       />
     </div>
   )

@@ -276,7 +276,7 @@ export function DependenciesFindingsTab({
         </>
       )}
 
-      <div className="rounded-[20px] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
         <FindingsSearchBar
           search={search}
           stateFilter={stateFilter}
@@ -408,6 +408,9 @@ export function DependenciesFindingsTab({
               : viewMode === "package"
                 ? new Set(["package"])
                 : undefined
+          }
+          groupLabel={
+            viewMode === "repository" ? "repos" : viewMode === "package" ? "packages" : undefined
           }
         />
       </div>

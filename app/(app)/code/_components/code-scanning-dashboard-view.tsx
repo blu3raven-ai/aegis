@@ -298,7 +298,7 @@ function FindingsTab({ findings, isLoading, error, primaryOrg, onActionComplete,
       )}
 
       {/* ── Findings container — matches Secrets Review tab pattern ─────────── */}
-      <div className="overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
 
         <CodeScanningFindingsSearchBar
           search={filterRepo}
