@@ -13,6 +13,13 @@ type DismissFn = (org: string, identityKey: string, reason: string) => Promise<u
 type ReopenFn = (org: string, identityKey: string) => Promise<unknown>
 
 import { SEV_BADGE } from "@/lib/shared/ui/badge-styles"
+import {
+  DrawerHeader,
+  DrawerStatusBanner,
+  DrawerSection,
+  DrawerDetailGrid,
+  DrawerFooter,
+} from "@/components/shared/FindingDrawer"
 
 function VersionLine({ alert }: { alert: DependenciesFinding }) {
   const current = alert.current_version ?? null
@@ -40,18 +47,6 @@ function VersionLine({ alert }: { alert: DependenciesFinding }) {
 }
 
 
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-secondary)]">
-        {label}
-      </p>
-      <p className="mt-1 break-words text-sm font-medium text-[var(--color-text-primary)]">
-        {value}
-      </p>
-    </div>
-  )
-}
 
 interface Props {
   finding: DependenciesFinding | null
@@ -129,7 +124,7 @@ function AdvisoryDescription({ content, onLinkClick }: { content: string; onLink
           />
         ),
         blockquote: ({ children }) => (
-          <blockquote className="border-l-2 border-[var(--color-accent)] pl-3 text-sm italic text-[var(--color-text-secondary)]">
+          <blockquote className="rounded-md bg-[var(--color-surface-raised)] px-3 py-2 text-sm italic text-[var(--color-text-secondary)]">
             {children}
           </blockquote>
         ),
@@ -152,22 +147,17 @@ function AdvisoryReferences({ references, onLinkClick }: { references: { url: st
   if (references.length === 0) return null
 
   return (
-    <section className="space-y-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-          References
-        </p>
-        <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-          Source links from the advisory.
-        </p>
-      </div>
+    <DrawerSection label="References">
+      <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+        Source links from the advisory.
+      </p>
       <div className="space-y-2">
         {references.map((reference) => (
           <a
             key={reference.url}
             href={reference.url}
             onClick={(e) => onLinkClick(e, reference.url)}
-            className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs font-medium text-orange-400 transition-colors hover:bg-[var(--color-surface)] cursor-pointer"
+            className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs font-medium text-[var(--color-accent)] transition-colors hover:bg-[var(--color-surface)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
             title={reference.url}
           >
             <span className="truncate">{formatReferenceLabel(reference.url)}</span>
@@ -175,7 +165,7 @@ function AdvisoryReferences({ references, onLinkClick }: { references: { url: st
           </a>
         ))}
       </div>
-    </section>
+    </DrawerSection>
   )
 }
 
@@ -251,122 +241,35 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
 
   return (
     <FindingsDrawerShell open={!!finding} onClose={onClose}>
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] p-5">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--color-text-secondary)]">
-            Vulnerability Details
-          </p>
-          <h3 className="mt-2 truncate text-xl font-semibold text-[var(--color-text-primary)]">
-            {finding ? finding.dependency.package.name : "Select a finding"}
-          </h3>
-          {finding && (
-            <span className="mt-1 inline-block rounded-full border border-[var(--color-border)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
-              {finding.dependency.package.ecosystem}
-            </span>
-          )}
-        </div>
+      <DrawerHeader
+        eyebrow={`Dependencies · ${finding?.dependency.package.ecosystem ?? ""}`}
+        title={finding ? finding.dependency.package.name : "Select a finding"}
+        onClose={onClose}
+      />
+      {finding && (
+        <DrawerStatusBanner
+          state={finding.state as "open" | "dismissed" | "fixed" | "awaiting_fix" | "deferred"}
+          dismissedReason={finding.dismissed_reason ?? undefined}
+          onReopen={() => void handleReopen()}
+        />
+      )}
 
-        <div className="flex shrink-0 items-center gap-2">
-          {finding && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
-            >
-              ✕ Close
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="p-5">
+      <div className="flex-1 overflow-y-auto p-5">
         {!finding ? (
           <div className="flex min-h-[460px] items-center justify-center rounded-xl border border-dashed border-[var(--color-border)] px-6 text-center text-sm text-[var(--color-text-secondary)]">
             Select a finding to view details.
           </div>
         ) : (
-          <div className="space-y-6">
-            {/* Deferred banner */}
-            {finding.state === "deferred" && (
-              <div className="flex items-start gap-3 rounded-2xl border border-orange-500/20 bg-orange-500/8 p-4">
-                <span className="mt-0.5 text-orange-400">⏳</span>
-                <div>
-                  <p className="text-sm font-medium text-orange-400">Deferred — no patch available</p>
-                  <p className="mt-1 text-xs text-orange-400/70">
-                    This vulnerability has no fix yet. It will automatically move to Open when a patch becomes available.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Dismiss / Reopen actions */}
-            {finding.state === "dismissed" ? (
-              <div className="flex items-center justify-between rounded-2xl border border-purple-500/20 bg-purple-500/8 p-4">
-                <div>
-                  <p className="text-sm font-medium text-purple-400">Dismissed</p>
-                  {finding.dismissed_reason && (
-                    <p className="mt-0.5 text-xs text-purple-400/70">Reason: {finding.dismissed_reason}</p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleReopen()}
-                  disabled={actionLoading}
-                  className="rounded-lg border border-purple-500/30 bg-[var(--color-surface-raised)] px-3 py-1.5 text-xs font-semibold text-purple-400 hover:bg-[var(--color-surface)] disabled:opacity-50"
-                >
-                  Reopen
-                </button>
-              </div>
-            ) : (finding.state === "open" || finding.state === "deferred") && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setDismissOpen(!dismissOpen)}
-                  disabled={actionLoading}
-                  className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
-                >
-                  Dismiss finding
-                </button>
-                {dismissOpen && (
-                  <div className="absolute left-0 top-full z-10 mt-1 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
-                    <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                      Select reason
-                    </p>
-                    {DISMISS_REASONS.map((reason) => (
-                      <button
-                        key={reason}
-                        type="button"
-                        onClick={() => void handleDismiss(reason)}
-                        disabled={actionLoading}
-                        className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
-                      >
-                        {reason}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {actionError && (
-              <p className="text-sm text-red-400">{actionError}</p>
-            )}
-
+          <div className="space-y-5">
             {/* Advisory metadata */}
-            <section className="space-y-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                  Security brief
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${SEV_BADGE[sev] ?? ""}`}>
-                    {sev || "-"}
-                  </span>
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${cvssChipClass(cvss)}`}>
-                    CVSS {formatCvssScore(cvss)}
-                  </span>
-                </div>
+            <DrawerSection label="Security brief">
+              <div className="mb-4 flex items-center gap-3 flex-wrap">
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${SEV_BADGE[sev] ?? ""}`}>
+                  {sev || "-"}
+                </span>
+                <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${cvssChipClass(cvss)}`}>
+                  CVSS {formatCvssScore(cvss)}
+                </span>
               </div>
 
               <h4 className="text-lg font-semibold text-[var(--color-text-primary)]">
@@ -392,20 +295,19 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                 </p>
               )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <DetailItem label="Affected range" value={vulnerableRange} />
-                <DetailItem label="Patched version" value={patchedVersion} />
-                <DetailItem label="Published" value={formatDate(finding.security_advisory.published_at)} />
-                <DetailItem label="Updated" value={formatDate(finding.security_advisory.updated_at)} />
-              </div>
+              <DrawerDetailGrid
+                items={[
+                  { label: "Affected range", value: vulnerableRange },
+                  { label: "Patched version", value: patchedVersion },
+                  { label: "Published", value: formatDate(finding.security_advisory.published_at) },
+                  { label: "Updated", value: formatDate(finding.security_advisory.updated_at) },
+                ]}
+              />
 
-            </section>
+            </DrawerSection>
 
             {/* Remediation */}
-            <section className="space-y-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                Remediation
-              </p>
+            <DrawerSection label="Remediation">
 
               {/* Version upgrade */}
               <div className="flex items-center gap-3">
@@ -482,7 +384,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                         <button
                           type="button"
                           onClick={() => setPreviewIndex((i) => (i - 1 + snippetFindings.length) % snippetFindings.length)}
-                          className="rounded p-0.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                          className="rounded-md p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
                           aria-label="Previous manifest"
                         >
                           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
@@ -498,14 +400,14 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                         <button
                           type="button"
                           onClick={() => setPreviewIndex((i) => (i + 1) % snippetFindings.length)}
-                          className="rounded p-0.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                          className="rounded-md p-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
                           aria-label="Next manifest"
                         >
                           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
                         </button>
                       )}
                     </div>
-                    <div className="max-h-[320px] overflow-auto rounded-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950">
+                    <div className="max-h-[320px] overflow-auto rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950">
                       <pre className="min-w-max p-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
                         <code>
                           {previewFinding.manifest_snippet.split("\n").map((line, idx) => {
@@ -529,26 +431,54 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                   </div>
                 )
               })()}
-            </section>
+            </DrawerSection>
 
             {/* Advisory description */}
-            <section className="space-y-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">
-                  Advisory details
-                </p>
-                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                  Details from the security advisory.
-                </p>
-              </div>
+            <DrawerSection label="Advisory details">
+              <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+                Details from the security advisory.
+              </p>
               <AdvisoryDescription content={finding.security_advisory.description} onLinkClick={handleExternalClick} />
-            </section>
+            </DrawerSection>
 
             <AdvisoryReferences references={references} onLinkClick={handleExternalClick} />
           </div>
         )}
       </div>
 
+      <DrawerFooter>
+        {actionError && <p className="mb-3 text-xs text-red-500">{actionError}</p>}
+        {(finding?.state === "open" || finding?.state === "deferred") && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDismissOpen(!dismissOpen)}
+              disabled={actionLoading}
+              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+            >
+              Dismiss finding
+            </button>
+            {dismissOpen && (
+              <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
+                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
+                  Select reason
+                </p>
+                {DISMISS_REASONS.map((reason) => (
+                  <button
+                    key={reason}
+                    type="button"
+                    onClick={() => void handleDismiss(reason)}
+                    disabled={actionLoading}
+                    className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </DrawerFooter>
       <ExternalLinkConfirm url={pendingUrl} onClose={closeExtLink} />
     </FindingsDrawerShell>
   )
