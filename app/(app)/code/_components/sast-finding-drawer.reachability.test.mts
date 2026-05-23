@@ -115,3 +115,41 @@ describe("sast-finding-drawer Reachability section", () => {
     )
   })
 })
+
+describe("sast-finding-drawer color tokens", () => {
+  it("verdictChipClass uses --color-verdict-safe for false positive", () => {
+    assert.ok(drawerSrc.includes("color-verdict-safe"), "verdictChipClass should use verdict-safe token")
+  })
+
+  it("verdictChipClass uses --color-verdict-risk for true positive", () => {
+    assert.ok(drawerSrc.includes("color-verdict-risk"), "verdictChipClass should use verdict-risk token")
+  })
+
+  it("verdictChipClass uses --color-verdict-uncertain for likely", () => {
+    assert.ok(drawerSrc.includes("color-verdict-uncertain"), "verdictChipClass should use verdict-uncertain token")
+  })
+
+  it("verdictChipClass uses --color-verdict-neutral for default", () => {
+    assert.ok(drawerSrc.includes("color-verdict-neutral"), "verdictChipClass should use verdict-neutral token")
+  })
+
+  it("does not use hardcoded text-emerald-400 class", () => {
+    assert.ok(!drawerSrc.includes("text-emerald-400"), "should not hardcode emerald-400")
+  })
+
+  it("does not use hardcoded text-red-400 class", () => {
+    assert.ok(!drawerSrc.includes("text-red-400"), "should not hardcode red-400")
+  })
+
+  it("does not use hardcoded text-amber-400 class", () => {
+    assert.ok(!drawerSrc.includes("text-amber-400"), "should not hardcode amber-400")
+  })
+
+  it("uses DismissPopover instead of inline dismiss block", () => {
+    assert.ok(drawerSrc.includes("DismissPopover"), "should use DismissPopover component")
+  })
+
+  it("passes label prop to FindingsDrawerShell", () => {
+    assert.ok(drawerSrc.includes('label="SAST finding details"'), "should pass label to shell")
+  })
+})
