@@ -12,7 +12,7 @@ export function DrawerSection({
       <p className="px-4 pt-4 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
         {label}
       </p>
-      <div className="px-4 pb-4">{children}</div>
+      <div className="space-y-4 px-4 pb-4">{children}</div>
     </section>
   )
 }
