@@ -28,6 +28,19 @@ from src.storage import (
     read_container_scanning_findings,
     update_container_scanning_run,
 )
+from src.db.models import Sbom
+from src.db.helpers import run_db
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _has_sboms(org_names: list[str]) -> bool:
+    async def _q(session: AsyncSession):
+        result = await session.execute(
+            select(func.count()).select_from(Sbom).where(Sbom.org.in_([o.lower() for o in org_names]))
+        )
+        return (result.scalar() or 0) > 0
+    return run_db(_q)
 
 
 router = APIRouter(prefix="/container-scanning/api", tags=["container-scanning"])
@@ -75,7 +88,7 @@ def get_latest_run(request: Request, orgs: list[str] = Depends(require_orgs)) ->
     active_run = next((r for r in all_runs if r.get("status") in ("queued", "running", "ingesting")), None)
     latest = _enrich_run(active_run or (all_runs[0] if all_runs else None))
     last_completed = _enrich_run(next((r for r in all_runs if r.get("status") in ("completed", "completed_with_merge_error")), None))
-    return {"latest": latest, "lastCompleted": last_completed}
+    return {"latest": latest, "lastCompleted": last_completed, "hasSboms": _has_sboms(orgs)}
 
 
 @router.post("/runs")

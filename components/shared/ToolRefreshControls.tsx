@@ -22,6 +22,8 @@ interface ModeOption {
   id: string
   label: string
   description: string
+  disabled?: boolean
+  disabledReason?: string
 }
 
 interface ToolRefreshControlsProps {
@@ -193,13 +195,17 @@ export function ToolRefreshControls({
                   <button
                     key={mode.id}
                     type="button"
-                    onClick={() => void handleRefresh(mode.id)}
-                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-[var(--color-surface-raised)] ${
-                      i === 0 ? "rounded-t-lg" : ""
-                    } ${i === modeOptions.length - 1 ? "rounded-b-lg" : ""}`}
+                    onClick={() => !mode.disabled && void handleRefresh(mode.id)}
+                    disabled={mode.disabled}
+                    title={mode.disabled ? mode.disabledReason : undefined}
+                    className={`w-full px-4 py-2.5 text-left text-sm ${
+                      mode.disabled ? "cursor-not-allowed opacity-40" : "hover:bg-[var(--color-surface-raised)]"
+                    } ${i === 0 ? "rounded-t-lg" : ""} ${i === modeOptions.length - 1 ? "rounded-b-lg" : ""}`}
                   >
                     <span className="font-medium">{mode.label}</span>
-                    <span className="block text-xs text-[var(--color-text-tertiary)]">{mode.description}</span>
+                    <span className="block text-xs text-[var(--color-text-tertiary)]">
+                      {mode.disabled && mode.disabledReason ? mode.disabledReason : mode.description}
+                    </span>
                   </button>
                 ))}
               </div>

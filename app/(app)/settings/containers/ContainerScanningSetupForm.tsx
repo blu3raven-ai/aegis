@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import { AdvisorySourcesCopyBar } from "@/components/settings/AdvisorySourcesCopyBar"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { RetentionField } from "@/components/settings/RetentionField"
 import { useLicense } from "@/lib/client/license/client"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -78,7 +79,7 @@ export function ContainerScanningSetupForm({
   const [rerunScheduleType, setRerunScheduleType] = useState<"simple" | "cron">(initialRerunScheduleType)
   const [rerunScheduleValue, setRerunScheduleValue] = useState(initialRerunScheduleValue)
   const [scanConcurrency, setScanConcurrency] = useState(initialScanConcurrency || "4")
-  const [retentionDays, setRetentionDays] = useState(initialRetentionDays ?? 7)
+  const [retentionDays, setRetentionDays] = useState(initialRetentionDays ?? 0)
   const [nvdEnabled, setNvdEnabled] = useState(initialNvdEnabled)
   const [nvdApiKey, setNvdApiKey] = useState(initialNvdApiKey)
   const [showNvdKey, setShowNvdKey] = useState(false)
@@ -106,7 +107,7 @@ export function ContainerScanningSetupForm({
     rerunScheduleType !== initialRerunScheduleType ||
     rerunScheduleValue !== initialRerunScheduleValue ||
     scanConcurrency !== initialScanConcurrency ||
-    retentionDays !== (initialRetentionDays ?? 7) ||
+    retentionDays !== (initialRetentionDays ?? 0) ||
     nvdEnabled !== initialNvdEnabled ||
     nvdApiKey !== initialNvdApiKey ||
     ghsaEnabled !== initialGhsaEnabled ||
@@ -162,7 +163,7 @@ export function ContainerScanningSetupForm({
     setRerunScheduleType(initialRerunScheduleType)
     setRerunScheduleValue(initialRerunScheduleValue)
     setScanConcurrency(initialScanConcurrency)
-    setRetentionDays(initialRetentionDays ?? 7)
+    setRetentionDays(initialRetentionDays ?? 0)
     setNvdEnabled(initialNvdEnabled)
     setNvdApiKey(initialNvdApiKey)
     setEditingNvdKey(!initialNvdApiKey)
@@ -615,18 +616,8 @@ export function ContainerScanningSetupForm({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Data retention (days)</label>
-            <input
-              type="number"
-              min={1}
-              max={90}
-              value={retentionDays}
-              onChange={(e) => setRetentionDays(Math.min(90, Math.max(1, parseInt(e.target.value) || 7)))}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
-            />
-            <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
-              Scan output stored in object storage for debugging and audit (1–90).
-            </p>
+            <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Data retention</label>
+            <RetentionField value={retentionDays} onChange={setRetentionDays} />
           </div>
       </fieldset>
       </SettingsCard>
