@@ -104,7 +104,10 @@ export const CODE_SCANNING_FINDINGS_QUERY = `
       items {
         id state severity ruleId ruleName message
         filePath line repoFullName firstSeenAt fixedAt
-        language confidence
+        language confidence category cwe snippet fixSuggestion codeWindow
+        aiReview { verdict explanation reasoning confidence }
+        codeFlows { file line snippet }
+        reachability { verdict entryPoint callChain { function file line } }
       }
       totalCount
       pageInfo { hasNextPage hasPreviousPage totalPages }
