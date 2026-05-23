@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Decision, Finding, FindingEvent
@@ -33,6 +33,32 @@ async def read_findings(
         select(Finding).where(Finding.tool == tool, Finding.org == org)
     )
     return list(result.scalars().all())
+
+
+async def read_dependency_finding_detail_by_key(
+    session: AsyncSession,
+    org: str,
+    identity_key: str,
+) -> "tuple[Finding, Decision | None] | None":
+    """Fetch a single dependencies finding with its decision by identity key."""
+    result = await session.execute(
+        select(Finding, Decision)
+        .outerjoin(
+            Decision,
+            and_(
+                Decision.tool == Finding.tool,
+                Decision.org == Finding.org,
+                Decision.identity_key == Finding.identity_key,
+            ),
+        )
+        .where(
+            Finding.tool == "dependencies",
+            Finding.org == org,
+            Finding.identity_key == identity_key,
+        )
+    )
+    row = result.first()
+    return row if row else None
 
 
 async def upsert_finding(
