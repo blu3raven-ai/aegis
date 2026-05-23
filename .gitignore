@@ -37,9 +37,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 data/
-settings.local.json
-docs/pricing-plans.md
-settings.json
+settings.*.json
 
 # python runtime/build artifacts
 backend/**/__pycache__/
@@ -53,8 +51,6 @@ backend/**/*.egg-info/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.superpowers/
-superpowers/
 
 # e2e test artifacts
 e2e/.auth/

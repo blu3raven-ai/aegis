@@ -25,6 +25,7 @@ export interface DependenciesScanRun {
 export interface DependenciesRunsResponse {
   latest?: DependenciesScanRun
   lastCompleted?: DependenciesScanRun
+  hasSboms?: boolean
   error?: string
 }
 

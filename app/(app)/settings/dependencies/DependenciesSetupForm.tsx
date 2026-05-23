@@ -7,6 +7,7 @@ import { SaveBar } from "../SaveBar"
 import type { PrerequisiteItem } from "@/lib/shared/prerequisite-utils"
 import { AdvisorySourcesCopyBar } from "@/components/settings/AdvisorySourcesCopyBar"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { RetentionField } from "@/components/settings/RetentionField"
 import { useLicense } from "@/lib/client/license/client"
 import Link from "next/link"
 
@@ -90,7 +91,7 @@ export function DependenciesSetupForm({
   const [argusApiKey, setArgusApiKey] = useState(initialArgusApiKey)
   const [showArgusKey, setShowArgusKey] = useState(false)
   const [editingArgusKey, setEditingArgusKey] = useState(!initialArgusApiKey)
-  const [retentionDays, setRetentionDays] = useState(initialRetentionDays ?? 7)
+  const [retentionDays, setRetentionDays] = useState(initialRetentionDays ?? 0)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -112,7 +113,7 @@ export function DependenciesSetupForm({
     ghsaApiKey !== initialGhsaApiKey ||
     argusEnabled !== initialArgusEnabled ||
     argusApiKey !== initialArgusApiKey ||
-    retentionDays !== (initialRetentionDays ?? 7)
+    retentionDays !== (initialRetentionDays ?? 0)
 
   function handleSave() {
     setError(null)
@@ -174,7 +175,7 @@ export function DependenciesSetupForm({
     setArgusApiKey(initialArgusApiKey)
     setEditingArgusKey(!initialArgusApiKey)
     setShowArgusKey(false)
-    setRetentionDays(initialRetentionDays ?? 7)
+    setRetentionDays(initialRetentionDays ?? 0)
     setError(null)
     setSaved(false)
   }
@@ -611,16 +612,8 @@ export function DependenciesSetupForm({
           </div>
 
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Data retention (days)</label>
-            <input
-              type="number"
-              min={1}
-              max={90}
-              value={retentionDays}
-              onChange={(e) => setRetentionDays(Math.min(90, Math.max(1, parseInt(e.target.value) || 7)))}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
-            />
-            <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">Scan output stored in object storage for debugging and audit (1–90).</p>
+            <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Data retention</label>
+            <RetentionField value={retentionDays} onChange={setRetentionDays} />
           </div>
       </fieldset>
       </SettingsCard>

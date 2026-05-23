@@ -12,11 +12,16 @@ from src.shared.config import read_app_config
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_RETENTION_DAYS = 7
+DEFAULT_RETENTION_DAYS = 0
 MIN_RETENTION_DAYS = 1
 MAX_RETENTION_DAYS = 90
 UNTAGGED_SAFETY_NET_DAYS = 3
-TOOLS = ["dependencies", "secrets", "code_scanning", "container_scanning"]
+TOOLS = {
+    "dependencies":       "dependencies",
+    "secrets":            "secrets",
+    "code_scanning":      "codeScanning",
+    "container_scanning": "containerScanning",
+}
 CLEANUP_INTERVAL_SECONDS = 86400  # 24 hours
 
 
@@ -24,10 +29,10 @@ def build_retention_config(app_config: dict[str, Any]) -> dict[str, int]:
     """Build per-tool retention days from app config."""
     tools_config = app_config.get("tools") or {}
     result: dict[str, int] = {}
-    for tool in TOOLS:
-        tool_config = tools_config.get(tool) or {}
+    for tool, config_key in TOOLS.items():
+        tool_config = tools_config.get(config_key) or {}
         days = tool_config.get("retentionDays", DEFAULT_RETENTION_DAYS)
-        if not isinstance(days, int) or days < MIN_RETENTION_DAYS:
+        if not isinstance(days, int) or (days != 0 and days < MIN_RETENTION_DAYS):
             days = MIN_RETENTION_DAYS
         if days > MAX_RETENTION_DAYS:
             days = MAX_RETENTION_DAYS
@@ -68,6 +73,9 @@ def run_cleanup_once() -> dict[str, int]:
     results: dict[str, int] = {}
 
     for tool in TOOLS:
+        if retention[tool] == 0:
+            results[tool] = 0
+            continue
         prefix = f"{tool}/"
         deleted = 0
         try:
