@@ -88,6 +88,24 @@ describe("sast-finding-drawer Reachability section", () => {
     )
   })
 
+  it("always renders a terminal sink node at the finding location", () => {
+    assert.ok(
+      drawerSrc.includes("finding.start_line"),
+      "sink node should show the finding's exact line"
+    )
+    assert.ok(
+      drawerSrc.includes("color-verdict-risk"),
+      "sink node should use risk color tokens"
+    )
+  })
+
+  it("renders module-level entry point explanation", () => {
+    assert.ok(
+      drawerSrc.includes("Executes at module level on import"),
+      "should show module-level explanation on the entry node"
+    )
+  })
+
   it("renders unknown/absent placeholder message", () => {
     assert.ok(
       drawerSrc.includes("Reachability could not be determined"),
