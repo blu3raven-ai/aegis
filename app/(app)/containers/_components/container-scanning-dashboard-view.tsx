@@ -134,7 +134,7 @@ export function ContainerScanningDashboardView({ org, initialTab, canEdit, prere
           org,
           // In grouped mode fetch all rows so groups aren't fragmented across server pages
           page: findingsViewMode !== "list" ? 1 : findingsPageNum,
-          perPage: findingsViewMode !== "list" ? 500 : findingsPerPage,
+          perPage: findingsViewMode !== "list" ? 10000 : findingsPerPage,
           severity: findingsSeverity.length === 1 ? findingsSeverity[0] : undefined,
           state: findingsState || undefined,
           ecosystem: findingsEcosystem.length ? findingsEcosystem : undefined,
