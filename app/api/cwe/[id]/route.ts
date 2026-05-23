@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const rawId = params.id.replace(/^cwe-/i, "")
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id: rawIdParam } = await ctx.params
+  const rawId = rawIdParam.replace(/^cwe-/i, "")
   const num = parseInt(rawId, 10)
   if (isNaN(num) || num < 1 || num > 999999) {
     return NextResponse.json({ error: "Invalid CWE ID" }, { status: 400 })
