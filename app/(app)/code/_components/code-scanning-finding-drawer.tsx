@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
 import {
   DrawerHeader,
@@ -9,6 +9,7 @@ import {
   DrawerCodeBlock,
   DrawerDetailGrid,
   DrawerFooter,
+  DismissPopover,
 } from "@/components/shared/FindingDrawer"
 import type { CodeScanningFinding } from "@/lib/client/code-scanning-client"
 import { firstSentence } from "@/lib/shared/code-scanning/drawer-helpers"
@@ -31,12 +32,12 @@ function stateLabel(state: CodeScanningFinding["state"]): string {
 function verdictChipClass(verdict: string): string {
   const v = verdict.toLowerCase()
   if (v.includes("false positive") || v.includes("not exploitable") || v.includes("benign") || v.includes("unlikely"))
-    return "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+    return "border border-[var(--color-verdict-safe-border)] bg-[var(--color-verdict-safe-subtle)] text-[var(--color-verdict-safe)]"
   if (v.includes("true positive") || v.includes("confirmed") || v.includes("exploitable") || v.includes("vulnerable"))
-    return "border border-red-500/30 bg-red-500/10 text-red-400"
+    return "border border-[var(--color-verdict-risk-border)] bg-[var(--color-verdict-risk-subtle)] text-[var(--color-verdict-risk)]"
   if (v.includes("likely"))
-    return "border border-amber-500/30 bg-amber-500/10 text-amber-400"
-  return "border border-blue-500/30 bg-blue-500/10 text-blue-400"
+    return "border border-[var(--color-verdict-uncertain-border)] bg-[var(--color-verdict-uncertain-subtle)] text-[var(--color-verdict-uncertain)]"
+  return "border border-[var(--color-verdict-neutral-border)] bg-[var(--color-verdict-neutral-subtle)] text-[var(--color-verdict-neutral)]"
 }
 
 type ReachabilityVerdict = "reachable" | "unreachable" | "unknown"
@@ -53,7 +54,7 @@ function reachabilityBadgeConfig(verdict: ReachabilityVerdict): {
       return {
         svgPath: "M13 2 3 14h9l-1 8 10-12h-9l1-8z",
         label: "Reachable",
-        cls: "bg-red-500/10 text-red-400 border border-red-500/20",
+        cls: "bg-[var(--color-verdict-risk-subtle)] text-[var(--color-verdict-risk)] border border-[var(--color-verdict-risk-border)]",
         ariaLabel: "Reachability: Reachable",
         title: "This finding is reachable from a detected entry point",
       }
@@ -61,7 +62,7 @@ function reachabilityBadgeConfig(verdict: ReachabilityVerdict): {
       return {
         svgPath: "M2 12a10 10 0 1 0 20 0 10 10 0 0 0-20 0M4.93 4.93l14.14 14.14",
         label: "Unreachable",
-        cls: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
+        cls: "bg-[var(--color-verdict-safe-subtle)] text-[var(--color-verdict-safe)] border border-[var(--color-verdict-safe-border)]",
         ariaLabel: "Reachability: Unreachable",
         title: "This code is not reachable from any detected entry point",
       }
@@ -91,12 +92,10 @@ interface Props {
 }
 
 export function CodeScanningFindingDrawer({ finding, org, onClose, onActionComplete }: Props) {
-  const [dismissOpen, setDismissOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
-    setDismissOpen(false)
     setActionError(null)
   }, [finding])
 
@@ -109,7 +108,6 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
       if (!ok || payload.error) {
         setActionError(payload.error ?? "Failed to dismiss finding")
       } else {
-        setDismissOpen(false)
         onActionComplete()
         onClose()
       }
@@ -143,33 +141,37 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
     ? `https://github.com/${finding.repo_full_name}/blob/HEAD/${finding.file_path}#L${finding.start_line}`
     : null
 
-  const codeSource = finding?.code_window || finding?.snippet || ""
-  const codeStartLine = finding?.code_window
-    ? Math.max(1, finding.start_line - 40)
-    : (finding?.start_line ?? 1)
-  const snippetLines = codeSource
-    ? codeSource.split("\n").map((content, i) => ({
-        number: codeStartLine + i,
-        content,
-      }))
-    : []
-
-  const detailItems = finding
-    ? [
-        { label: "Category", value: finding.category },
-        { label: "Confidence", value: finding.confidence },
-        ...(finding.language ? [{ label: "Language", value: finding.language }] : []),
-        ...(finding.cwe.length > 0 ? [{ label: "CWE", value: finding.cwe.join(", ") }] : []),
-        { label: "First Seen", value: formatDate(finding.first_seen_at) },
-        ...(finding.fixed_at ? [{ label: "Fixed At", value: formatDate(finding.fixed_at) }] : []),
-        ...(finding.dismissed_at ? [{ label: "Dismissed At", value: formatDate(finding.dismissed_at) }] : []),
-        ...(finding.dismissed_by ? [{ label: "Dismissed By", value: finding.dismissed_by }] : []),
-        ...(finding.dismissed_reason ? [{ label: "Dismiss Reason", value: finding.dismissed_reason }] : []),
-      ]
-    : []
+  const codeSource = useMemo(
+    () => finding?.code_window || finding?.snippet || "",
+    [finding]
+  )
+  const codeStartLine = useMemo(
+    () => finding?.code_window ? Math.max(1, finding.start_line - 40) : (finding?.start_line ?? 1),
+    [finding]
+  )
+  const snippetLines = useMemo(
+    () => codeSource
+      ? codeSource.split("\n").map((content, i) => ({ number: codeStartLine + i, content }))
+      : [],
+    [codeSource, codeStartLine]
+  )
+  const detailItems = useMemo(
+    () => finding ? [
+      { label: "Category", value: finding.category },
+      { label: "Confidence", value: finding.confidence },
+      ...(finding.language ? [{ label: "Language", value: finding.language }] : []),
+      ...(finding.cwe.length > 0 ? [{ label: "CWE", value: finding.cwe.join(", ") }] : []),
+      { label: "First Seen", value: formatDate(finding.first_seen_at) },
+      ...(finding.fixed_at ? [{ label: "Fixed At", value: formatDate(finding.fixed_at) }] : []),
+      ...(finding.dismissed_at ? [{ label: "Dismissed At", value: formatDate(finding.dismissed_at) }] : []),
+      ...(finding.dismissed_by ? [{ label: "Dismissed By", value: finding.dismissed_by }] : []),
+      ...(finding.dismissed_reason ? [{ label: "Dismiss Reason", value: finding.dismissed_reason }] : []),
+    ] : [],
+    [finding]
+  )
 
   return (
-    <FindingsDrawerShell open={!!finding} onClose={onClose}>
+    <FindingsDrawerShell open={!!finding} onClose={onClose} label="SAST finding details">
       <DrawerHeader
         eyebrow="SAST Finding"
         title={finding ? firstSentence(finding.message) : ""}
@@ -390,34 +392,11 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
       <DrawerFooter>
         {actionError && <p className="mb-3 text-xs text-red-500">{actionError}</p>}
         {(finding?.state === "open" || finding?.state === "awaiting_fix") && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setDismissOpen(!dismissOpen)}
-              disabled={isSubmitting}
-              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-            >
-              Dismiss finding
-            </button>
-            {dismissOpen && (
-              <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg">
-                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
-                  Select reason
-                </p>
-                {DISMISS_REASONS.map((reason) => (
-                  <button
-                    key={reason}
-                    type="button"
-                    onClick={() => void handleDismiss(reason)}
-                    disabled={isSubmitting}
-                    className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-                  >
-                    {reason}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <DismissPopover
+            reasons={DISMISS_REASONS}
+            onDismiss={(reason) => void handleDismiss(reason)}
+            isLoading={isSubmitting}
+          />
         )}
       </DrawerFooter>
     </FindingsDrawerShell>
