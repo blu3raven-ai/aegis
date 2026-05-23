@@ -79,7 +79,7 @@ export function ContainerScanningSetupForm({
   const [rerunScheduleType, setRerunScheduleType] = useState<"simple" | "cron">(initialRerunScheduleType)
   const [rerunScheduleValue, setRerunScheduleValue] = useState(initialRerunScheduleValue)
   const [scanConcurrency, setScanConcurrency] = useState(initialScanConcurrency || "4")
-  const [retentionDays, setRetentionDays] = useState(initialRetentionDays ?? 7)
+  const [retentionDays, setRetentionDays] = useState(initialRetentionDays ?? 0)
   const [nvdEnabled, setNvdEnabled] = useState(initialNvdEnabled)
   const [nvdApiKey, setNvdApiKey] = useState(initialNvdApiKey)
   const [showNvdKey, setShowNvdKey] = useState(false)
@@ -107,7 +107,7 @@ export function ContainerScanningSetupForm({
     rerunScheduleType !== initialRerunScheduleType ||
     rerunScheduleValue !== initialRerunScheduleValue ||
     scanConcurrency !== initialScanConcurrency ||
-    retentionDays !== (initialRetentionDays ?? 7) ||
+    retentionDays !== (initialRetentionDays ?? 0) ||
     nvdEnabled !== initialNvdEnabled ||
     nvdApiKey !== initialNvdApiKey ||
     ghsaEnabled !== initialGhsaEnabled ||
@@ -163,7 +163,7 @@ export function ContainerScanningSetupForm({
     setRerunScheduleType(initialRerunScheduleType)
     setRerunScheduleValue(initialRerunScheduleValue)
     setScanConcurrency(initialScanConcurrency)
-    setRetentionDays(initialRetentionDays ?? 7)
+    setRetentionDays(initialRetentionDays ?? 0)
     setNvdEnabled(initialNvdEnabled)
     setNvdApiKey(initialNvdApiKey)
     setEditingNvdKey(!initialNvdApiKey)

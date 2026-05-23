@@ -45,7 +45,7 @@ export function SecretsSetupForm({
     autoRerunEnabled: Boolean(initialValues.autoRerunEnabled),
     rerunScheduleType: initialValues.rerunScheduleType ?? "simple",
     rerunScheduleValue: initialValues.rerunScheduleValue ?? "02:00",
-    retentionDays: initialValues.retentionDays ?? 7,
+    retentionDays: initialValues.retentionDays ?? 0,
   }
   const [values, setValues] = useState(normalizedInitialValues)
   const [error, setError] = useState<string | null>(null)

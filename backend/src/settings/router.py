@@ -610,7 +610,7 @@ async def save_tool_settings(request: Request, tool: str, body: ToolSettingsRequ
             days = int(tool_config["retentionDays"])
             tool_config["retentionDays"] = max(0, min(90, days))
         except (ValueError, TypeError):
-            tool_config["retentionDays"] = 7
+            tool_config["retentionDays"] = 0
 
     # Coerce rulesets string → list for Code Scanning
     if tool == "codeScanning" and "rulesets" in tool_config:

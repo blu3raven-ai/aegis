@@ -91,7 +91,7 @@ export function DependenciesSetupForm({
   const [argusApiKey, setArgusApiKey] = useState(initialArgusApiKey)
   const [showArgusKey, setShowArgusKey] = useState(false)
   const [editingArgusKey, setEditingArgusKey] = useState(!initialArgusApiKey)
-  const [retentionDays, setRetentionDays] = useState(initialRetentionDays ?? 7)
+  const [retentionDays, setRetentionDays] = useState(initialRetentionDays ?? 0)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -113,7 +113,7 @@ export function DependenciesSetupForm({
     ghsaApiKey !== initialGhsaApiKey ||
     argusEnabled !== initialArgusEnabled ||
     argusApiKey !== initialArgusApiKey ||
-    retentionDays !== (initialRetentionDays ?? 7)
+    retentionDays !== (initialRetentionDays ?? 0)
 
   function handleSave() {
     setError(null)
@@ -175,7 +175,7 @@ export function DependenciesSetupForm({
     setArgusApiKey(initialArgusApiKey)
     setEditingArgusKey(!initialArgusApiKey)
     setShowArgusKey(false)
-    setRetentionDays(initialRetentionDays ?? 7)
+    setRetentionDays(initialRetentionDays ?? 0)
     setError(null)
     setSaved(false)
   }
