@@ -48,6 +48,7 @@ class DependenciesFinding:
     fixed_at: Optional[str]
     current_version: Optional[str]
     manifest_path: Optional[str]
+    ghsa_id: Optional[str]
 
 
 @strawberry.type
@@ -249,6 +250,7 @@ def dependencies_findings(
             fixed_at=f.get("fixed_at"),
             current_version=f.get("current_version"),
             manifest_path=(dep.get("manifest_path") or None),
+            ghsa_id=adv.get("ghsa_id") or None,
         ))
 
     return DependenciesFindingsConnection(
