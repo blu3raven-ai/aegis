@@ -13,11 +13,11 @@ export function DrawerStatusBanner({
 }) {
   if (state === "dismissed") {
     return (
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-purple-500/5 px-5 py-3">
+      <div className="flex items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-state-dismissed-subtle)] px-5 py-3">
         <div>
-          <p className="text-sm font-medium text-purple-400">Dismissed</p>
+          <p className="text-sm font-medium text-[var(--color-state-dismissed)]">Dismissed</p>
           {dismissedReason && (
-            <p className="mt-0.5 text-xs text-purple-400/70">
+            <p className="mt-0.5 text-xs text-[var(--color-state-dismissed-muted)]">
               Reason: {dismissedReason}
             </p>
           )}
@@ -26,7 +26,7 @@ export function DrawerStatusBanner({
           <button
             type="button"
             onClick={onReopen}
-            className="rounded-lg border border-purple-500/30 bg-[var(--color-surface-raised)] px-3 py-1.5 text-xs font-semibold text-purple-400 hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+            className="rounded-lg border border-[var(--color-state-dismissed-border)] bg-[var(--color-surface-raised)] px-3 py-1.5 text-xs font-semibold text-[var(--color-state-dismissed)] hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
           >
             Reopen
           </button>
@@ -37,11 +37,11 @@ export function DrawerStatusBanner({
 
   if (state === "deferred") {
     return (
-      <div className="border-b border-[var(--color-border)] bg-orange-500/5 px-5 py-3">
-        <p className="text-sm font-medium text-orange-400">
+      <div className="border-b border-[var(--color-border)] bg-[var(--color-state-deferred-subtle)] px-5 py-3">
+        <p className="text-sm font-medium text-[var(--color-state-deferred)]">
           Deferred: no patch available
         </p>
-        <p className="mt-0.5 text-xs text-orange-400/70">
+        <p className="mt-0.5 text-xs text-[var(--color-state-deferred-muted)]">
           Will reopen automatically when a fix is released.
         </p>
       </div>
@@ -50,9 +50,9 @@ export function DrawerStatusBanner({
 
   if (state === "fixed" && fixedAt) {
     return (
-      <div className="border-b border-[var(--color-border)] bg-emerald-500/5 px-5 py-3">
-        <p className="text-sm font-medium text-emerald-400">Fixed</p>
-        <p className="mt-0.5 text-xs text-emerald-400/70">Fixed at: {fixedAt}</p>
+      <div className="border-b border-[var(--color-border)] bg-[var(--color-state-fixed-subtle)] px-5 py-3">
+        <p className="text-sm font-medium text-[var(--color-state-fixed)]">Fixed</p>
+        <p className="mt-0.5 text-xs text-[var(--color-state-fixed-muted)]">Fixed at: {fixedAt}</p>
       </div>
     )
   }
