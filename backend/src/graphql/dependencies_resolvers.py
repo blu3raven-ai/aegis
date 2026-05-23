@@ -51,6 +51,36 @@ class DependenciesFinding:
 
 
 @strawberry.type
+class DependenciesFindingDetail:
+    identity_key: str
+    org: str
+    state: str
+    severity: str
+    ecosystem: str
+    package_name: str
+    current_version: Optional[str]
+    manifest_path: str
+    ghsa_id: str
+    cve_id: Optional[str]
+    advisory_summary: Optional[str]
+    advisory_description: str
+    advisory_url: Optional[str]
+    published_at: Optional[str]
+    advisory_updated_at: Optional[str]
+    references: list[str]
+    cvss_score: Optional[float]
+    cvss_vector: Optional[str]
+    vulnerable_version_range: str
+    patched_version: Optional[str]
+    manifest_snippet: Optional[str]
+    manifest_match_line: Optional[int]
+    first_seen_at: Optional[str]
+    fixed_at: Optional[str]
+    dismissed_reason: Optional[str]
+    repo_full_name: str
+
+
+@strawberry.type
 class DependenciesFindingsConnection:
     items: list[DependenciesFinding]
     total_count: int
@@ -229,6 +259,68 @@ def dependencies_findings(
             has_previous_page=page > 1,
             total_pages=total_pages,
         ),
+    )
+
+
+def dependencies_finding_detail(
+    org: str,
+    identity_key: str,
+    info_context: dict[str, Any] | None,
+) -> Optional[DependenciesFindingDetail]:
+    if not info_context:
+        raise GraphQLAuthError("Unauthorized")
+    validate_org_access(info_context, org)
+
+    from src.db.helpers import run_db
+    from src.shared.finding_queries import read_dependency_finding_detail_by_key
+    from src.storage import _finding_to_dependencies_alert
+
+    row = run_db(
+        lambda session: read_dependency_finding_detail_by_key(session, org, identity_key)
+    )
+    if not row:
+        return None
+
+    f, decision = row
+    alert = _finding_to_dependencies_alert(f, decision)
+
+    advisory = alert.get("security_advisory") or {}
+    vuln = alert.get("security_vulnerability") or {}
+    dep = alert.get("dependency") or {}
+
+    pv = vuln.get("first_patched_version") or {}
+    patched = pv.get("identifier") if isinstance(pv, dict) else pv or None
+
+    return DependenciesFindingDetail(
+        identity_key=f.identity_key,
+        org=f.org,
+        state=alert["state"],
+        severity=f.severity or "",
+        ecosystem=(dep.get("package") or {}).get("ecosystem", ""),
+        package_name=(dep.get("package") or {}).get("name", ""),
+        current_version=alert.get("current_version"),
+        manifest_path=dep.get("manifest_path", ""),
+        ghsa_id=advisory.get("ghsa_id", ""),
+        cve_id=advisory.get("cve_id"),
+        advisory_summary=advisory.get("summary") or None,
+        advisory_description=advisory.get("description", ""),
+        advisory_url=advisory.get("html_url") or None,
+        published_at=advisory.get("published_at") or None,
+        advisory_updated_at=advisory.get("updated_at") or None,
+        references=[
+            r["url"] for r in advisory.get("references", [])
+            if isinstance(r, dict) and r.get("url")
+        ],
+        cvss_score=(advisory.get("cvss") or {}).get("score"),
+        cvss_vector=(advisory.get("cvss") or {}).get("vector_string"),
+        vulnerable_version_range=vuln.get("vulnerable_version_range", ""),
+        patched_version=patched,
+        manifest_snippet=alert.get("manifest_snippet"),
+        manifest_match_line=alert.get("manifest_match_line"),
+        first_seen_at=alert.get("first_seen_at"),
+        fixed_at=alert.get("fixed_at"),
+        dismissed_reason=alert.get("dismissed_reason"),
+        repo_full_name=(alert.get("repository") or {}).get("full_name", ""),
     )
 
 
