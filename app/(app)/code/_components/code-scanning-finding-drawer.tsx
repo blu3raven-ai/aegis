@@ -173,8 +173,7 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
       <DrawerHeader
         eyebrow="SAST Finding"
         title={finding ? firstSentence(finding.message) : ""}
-        // @ts-expect-error finding is guarded by open={!!finding} on the shell
-        titleTooltip={finding.message}
+        titleTooltip={finding?.message}
         identifier={finding?.rule_id}
         repoUrl={githubUrl ?? undefined}
         onClose={onClose}

@@ -13,7 +13,7 @@ test("drawer title uses firstSentence of message, not rule_name", () => {
 })
 
 test("drawer title receives full message as titleTooltip for tooltip", () => {
-  assert.match(source, /titleTooltip=\{finding\.message\}/)
+  assert.match(source, /titleTooltip=\{finding\??\.message\}/)
 })
 
 test("drawer imports firstSentence from drawer-helpers", () => {
