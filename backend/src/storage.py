@@ -541,11 +541,7 @@ def list_secret_runs(org: str) -> list[dict[str, Any]]:
 
 def _finding_to_secret_dict(f: Finding, decision: Decision | None = None) -> dict[str, Any]:
     detail = f.detail or {}
-    review_status = "new"
-    if f.state == "dismissed":
-        review_status = "false_positive"
-    elif f.state == "fixed":
-        review_status = "action_taken"
+    review_status = f.review_status or "new"
     result = {
         **detail,
         "organization": f.org or "",
