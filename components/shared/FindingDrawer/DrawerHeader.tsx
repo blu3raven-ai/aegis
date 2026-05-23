@@ -11,7 +11,7 @@ export function DrawerHeader({
 }: {
   eyebrow: string
   title: string
-  titleTooltip?: string
+  titleTooltip?: string | null
   identifier?: string
   badges?: React.ReactNode
   repoUrl?: string
@@ -25,7 +25,7 @@ export function DrawerHeader({
         </p>
         <h2
           className="mt-2 text-xl font-semibold text-[var(--color-text-primary)]"
-          title={titleTooltip}
+          title={titleTooltip ?? undefined}
         >
           {title}
         </h2>
