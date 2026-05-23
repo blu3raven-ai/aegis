@@ -30,7 +30,7 @@ export const DEPENDENCIES_FINDINGS_QUERY = `
       items {
         id state severity ecosystem packageName vulnerableVersion
         patchedVersion repoFullName advisorySummary
-        cvssScore firstSeenAt fixedAt currentVersion manifestPath
+        cvssScore firstSeenAt fixedAt currentVersion manifestPath ghsaId
       }
       totalCount
       pageInfo { hasNextPage hasPreviousPage totalPages }
@@ -311,6 +311,21 @@ export const HOME_ANALYTICS_QUERY = `
       topRepositories { name open critical high }
       ageBuckets { label count }
       remediation { totalFixed avgDays medianDays fixedLast30d }
+    }
+  }
+`
+
+export const DEPENDENCIES_FINDING_DETAIL_QUERY = `
+  query DependenciesFindingDetail($org: String!, $identityKey: String!) {
+    dependenciesFindingDetail(org: $org, identityKey: $identityKey) {
+      identityKey org state severity
+      ecosystem packageName currentVersion manifestPath
+      ghsaId cveId advisorySummary advisoryDescription advisoryUrl
+      publishedAt advisoryUpdatedAt references
+      cvssScore cvssVector
+      vulnerableVersionRange patchedVersion
+      manifestSnippet manifestMatchLine
+      firstSeenAt fixedAt dismissedReason repoFullName
     }
   }
 `
