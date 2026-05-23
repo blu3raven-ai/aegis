@@ -1,9 +1,13 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import type { CodeScanningFinding } from "@/lib/client/code-scanning-client"
 import { FindingsEmptyState } from "@/components/shared/FindingsEmptyState"
 import { CollapsibleGroupHeader } from "@/components/shared/CollapsibleGroupHeader"
+import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
+
+const ROWS_PER_PAGE = 50
+const GROUPS_PER_PAGE = 20
 
 const SEV_ORDER: Record<CodeScanningFinding["severity"], number> = {
   critical: 0,
@@ -54,6 +58,7 @@ interface Props {
   groupBy?: (item: CodeScanningFinding) => string
   renderGroupLabel?: (key: string) => React.ReactNode
   hideColumns?: Set<string>
+  groupLabel?: string
 }
 
 export function CodeScanningRepoGroupedFindings({
@@ -68,10 +73,22 @@ export function CodeScanningRepoGroupedFindings({
   groupBy,
   renderGroupLabel,
   hideColumns,
+  groupLabel,
 }: Props) {
   const [expandedRepos, setExpandedRepos] = useState<Set<string>>(() =>
     initialExpandedRepo ? new Set([initialExpandedRepo]) : new Set()
   )
+  const [localPage, setLocalPage] = useState(1)
+  const [localGroupPage, setLocalGroupPage] = useState(1)
+
+  // Reset row page when rows change
+  const prevRowsRef = useRef(rows)
+  useEffect(() => {
+    if (prevRowsRef.current !== rows) {
+      prevRowsRef.current = rows
+      setLocalPage(1)
+    }
+  }, [rows])
 
   const grouped = useMemo(() => {
     if (!groupBy) return null
@@ -93,6 +110,27 @@ export function CodeScanningRepoGroupedFindings({
       })
       .sort((a, b) => b[1].length - a[1].length)
   }, [rows, groupBy])
+
+  // Reset group page when groups change
+  const prevGroupsLengthRef = useRef<number | null>(null)
+  useEffect(() => {
+    const len = grouped ? grouped.length : null
+    if (prevGroupsLengthRef.current !== len) {
+      prevGroupsLengthRef.current = len
+      setLocalGroupPage(1)
+    }
+  }, [grouped])
+
+  // Pagination
+  const rowTotalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE))
+  const safePage = Math.min(Math.max(localPage, 1), rowTotalPages)
+  const pageRows = rows.slice((safePage - 1) * ROWS_PER_PAGE, safePage * ROWS_PER_PAGE)
+
+  const groupTotalPages = grouped ? Math.max(1, Math.ceil(grouped.length / GROUPS_PER_PAGE)) : 1
+  const safeGroupPage = Math.min(Math.max(localGroupPage, 1), groupTotalPages)
+  const pageGroups = grouped
+    ? grouped.slice((safeGroupPage - 1) * GROUPS_PER_PAGE, safeGroupPage * GROUPS_PER_PAGE)
+    : null
 
   function toggleRepo(repo: string) {
     setExpandedRepos((current) => {
@@ -167,8 +205,9 @@ export function CodeScanningRepoGroupedFindings({
     <div className="overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2 text-xs text-[var(--color-text-secondary)]">
         <span>
-          {totalCount} finding{totalCount !== 1 ? "s" : ""}
-          {grouped ? ` across ${grouped.length} ${grouped.length === 1 ? "group" : "groups"}` : ""}
+          {grouped
+            ? `${grouped.length} ${groupLabel ?? "groups"}`
+            : `${totalCount} finding${totalCount !== 1 ? "s" : ""}`}
           {selectedVisibleCount > 0 ? ` · ${selectedVisibleCount} selected` : ""}
         </span>
         <div className="flex flex-wrap justify-end gap-2">
@@ -222,8 +261,8 @@ export function CodeScanningRepoGroupedFindings({
             </tr>
           </thead>
           <tbody>
-            {grouped ? (
-              grouped.map(([groupKey, groupFindings]) => {
+            {pageGroups ? (
+              pageGroups.map(([groupKey, groupFindings]) => {
                 const isExpanded = expandedRepos.has(groupKey)
                 const groupRowKeys = groupFindings.map((f) => f.identity_key)
                 const selectedGroupCount = groupRowKeys.filter((k) => selected.has(k)).length
@@ -250,11 +289,21 @@ export function CodeScanningRepoGroupedFindings({
                 )
               })
             ) : (
-              rows.map((f) => renderRow(f))
+              pageRows.map((f) => renderRow(f))
             )}
           </tbody>
         </table>
       </div>
+
+      <PaginatedTableFooter
+        totalCount={grouped ? grouped.length : totalCount}
+        page={grouped ? safeGroupPage : safePage}
+        perPage={grouped ? GROUPS_PER_PAGE : ROWS_PER_PAGE}
+        totalPages={grouped ? groupTotalPages : rowTotalPages}
+        onPageChange={grouped ? setLocalGroupPage : setLocalPage}
+        onPerPageChange={() => {}}
+        label={grouped ? (groupLabel ?? "groups") : "findings"}
+      />
     </div>
   )
 }
