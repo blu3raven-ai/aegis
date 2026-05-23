@@ -1,6 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { gqlQuery } from "@/lib/client/graphql-client"
+import type { GqlDependenciesFindingDetail } from "@/lib/shared/graphql/types"
+import { DEPENDENCIES_FINDING_DETAIL_QUERY } from "@/lib/shared/graphql/queries"
 import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
 import Markdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -175,13 +178,45 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [previewIndex, setPreviewIndex] = useState(0)
+  const [detail, setDetail] = useState<GqlDependenciesFindingDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState(false)
 
   const allFindings = useMemo(() => relatedFindings.length > 0 ? relatedFindings : finding ? [finding] : [], [relatedFindings, finding])
   const snippetFindings = useMemo(() => allFindings.filter((f) => f.manifest_snippet), [allFindings])
 
   useEffect(() => {
+    setActionError(null)
     setPreviewIndex(0)
   }, [finding])
+
+  useEffect(() => {
+    if (!finding) {
+      setDetail(null)
+      setDetailLoading(false)
+      setDetailError(false)
+      return
+    }
+    let cancelled = false
+    setDetail(null)
+    setDetailLoading(true)
+    setDetailError(false)
+    const identityKey = findingIdentityKey(finding)
+    gqlQuery<{ dependenciesFindingDetail: GqlDependenciesFindingDetail | null }>(
+      DEPENDENCIES_FINDING_DETAIL_QUERY,
+      { org, identityKey },
+    )
+      .then(({ dependenciesFindingDetail }) => {
+        if (!cancelled) setDetail(dependenciesFindingDetail)
+      })
+      .catch(() => {
+        if (!cancelled) setDetailError(true)
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [finding, org])
 
   // Escape key handling moved to FindingsDrawerShell
 
@@ -215,15 +250,15 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
     }
   }
 
-  const sev  = finding?.security_advisory.severity ?? ""
-  const cvss = finding?.security_advisory.cvss.score ?? null
-  const ghsaId = finding?.security_advisory.ghsa_id ?? ""
-  const cveId = finding?.security_advisory.cve_id ?? ""
+  const sev    = finding?.security_advisory.severity ?? ""
+  const cvss   = finding?.security_advisory.cvss.score ?? null
+  const ghsaId = detail?.ghsaId ?? finding?.security_advisory.ghsa_id ?? ""
+  const cveId  = detail?.cveId ?? null
   // ghsa_id sometimes contains a CVE (Grype uses CVE as primary for Go modules)
   const isRealGhsa = ghsaId.startsWith("GHSA-")
-  const isRealCve = cveId.startsWith("CVE-")
+  const isRealCve = (cveId ?? "").startsWith("CVE-")
   // If ghsa_id is actually a CVE and cve_id is empty, use ghsa_id as the CVE
-  const effectiveCveId = isRealCve ? cveId : (!isRealGhsa && ghsaId.startsWith("CVE-")) ? ghsaId : ""
+  const effectiveCveId = isRealCve ? (cveId ?? "") : (!isRealGhsa && ghsaId.startsWith("CVE-")) ? ghsaId : ""
   const ghsaUrl = isRealGhsa ? `https://github.com/advisories/${ghsaId}` : null
   const cveUrl = effectiveCveId ? `https://nvd.nist.gov/vuln/detail/${effectiveCveId}` : null
 
@@ -237,10 +272,6 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
     e.preventDefault()
     requestNavigation(url)
   }, [requestNavigation])
-
-  const safeIdx = Math.min(previewIndex, snippetFindings.length - 1)
-  const previewFinding = snippetFindings[safeIdx] ?? null
-  const isBinary = !!previewFinding?.manifest_snippet && /[\x00-\x08\x0E-\x1F]/.test(previewFinding.manifest_snippet)
 
   return (
     <FindingsDrawerShell open={!!finding} onClose={onClose} label="Dependency finding details">
@@ -292,9 +323,9 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                 )}
               </div>
 
-              {finding.security_advisory.cvss.vector_string && (
+              {detail?.cvssVector && (
                 <p className="break-all rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]">
-                  {finding.security_advisory.cvss.vector_string}
+                  {detail.cvssVector}
                 </p>
               )}
 
@@ -302,8 +333,8 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                 items={[
                   { label: "Affected range", value: vulnerableRange },
                   { label: "Patched version", value: patchedVersion },
-                  { label: "Published", value: formatDate(finding.security_advisory.published_at) },
-                  { label: "Updated", value: formatDate(finding.security_advisory.updated_at) },
+                  { label: "Published", value: formatDate(detail?.publishedAt ?? "") },
+                  { label: "Updated", value: formatDate(detail?.advisoryUpdatedAt ?? "") },
                 ]}
               />
 
@@ -379,62 +410,41 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                 </div>
               </div>
 
-              {/* Manifest file preview */}
-              {snippetFindings.length > 0 && previewFinding?.manifest_snippet && (
-                <div>
-                  {isBinary ? (
+              {/* Manifest file preview — loaded from detail query */}
+              {detailLoading && (
+                <div className="animate-pulse space-y-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+                  <div className="h-3 w-1/3 rounded bg-[var(--color-border)]" />
+                  <div className="h-3 w-full rounded bg-[var(--color-border)]" />
+                  <div className="h-3 w-4/5 rounded bg-[var(--color-border)]" />
+                </div>
+              )}
+              {!detailLoading && detail?.manifestSnippet && (() => {
+                const snippet = detail.manifestSnippet
+                const matchLine = detail.manifestMatchLine
+                if (/[\x00-\x08\x0E-\x1F]/.test(snippet)) {
+                  return (
                     <div className="flex min-h-[80px] items-center justify-center rounded-xl border border-dashed border-[var(--color-border)] text-sm text-[var(--color-text-secondary)]">
                       Binary file — cannot display preview.
                     </div>
-                  ) : (
-                    <div>
-                      <div className="mb-2 flex items-center gap-2">
-                        {snippetFindings.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewIndex((i) => (i - 1 + snippetFindings.length) % snippetFindings.length)}
-                            className="rounded-md p-3 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-                            aria-label="Previous manifest"
-                          >
-                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                          </button>
-                        )}
-                        {snippetFindings.length > 1 && (
-                          <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
-                            ({safeIdx + 1} of {snippetFindings.length})
-                          </span>
-                        )}
-                        {snippetFindings.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => setPreviewIndex((i) => (i + 1) % snippetFindings.length)}
-                            className="rounded-md p-3 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-                            aria-label="Next manifest"
-                          >
-                            <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-                          </button>
-                        )}
-                      </div>
-                      <DrawerCodeBlock
-                        lines={previewFinding.manifest_snippet.split("\n").map((line, idx) => {
-                          const lineNum = (previewFinding.manifest_match_line ?? 1) - 7 + idx
-                          const number = lineNum > 0 ? lineNum : idx + 1
-                          return {
-                            number,
-                            content: line,
-                            highlighted:
-                              previewFinding.manifest_match_line != null &&
-                              lineNum === previewFinding.manifest_match_line,
-                          }
-                        })}
-                        label={previewFinding.repository?.full_name ?? previewFinding.dependency.manifest_path}
-                        filePath={previewFinding.dependency.manifest_path}
-                        maxHeight={320}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
+                  )
+                }
+                return (
+                  <DrawerCodeBlock
+                    lines={snippet.split("\n").map((line, idx) => {
+                      const lineNum = (matchLine ?? 1) - 7 + idx
+                      const number = lineNum > 0 ? lineNum : idx + 1
+                      return {
+                        number,
+                        content: line,
+                        highlighted: matchLine != null && lineNum === matchLine,
+                      }
+                    })}
+                    label={finding?.dependency.manifest_path ?? ""}
+                    filePath={finding?.dependency.manifest_path ?? ""}
+                    maxHeight={320}
+                  />
+                )
+              })()}
             </DrawerSection>
 
             {/* Advisory description */}
