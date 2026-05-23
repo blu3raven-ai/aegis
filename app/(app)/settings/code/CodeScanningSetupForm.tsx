@@ -64,7 +64,7 @@ export function CodeScanningSetupForm({
     autoRerunEnabled: Boolean(initialAutoRerunEnabled),
     rerunScheduleType: initialRerunScheduleType ?? "simple",
     rerunScheduleValue: initialRerunScheduleValue ?? "02:00",
-    retentionDays: initialRetentionDays ?? 7,
+    retentionDays: initialRetentionDays ?? 0,
   }
 
   const [values, setValues] = useState(normalizedInitial)

@@ -12,7 +12,7 @@ from src.shared.config import read_app_config
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_RETENTION_DAYS = 7
+DEFAULT_RETENTION_DAYS = 0
 MIN_RETENTION_DAYS = 1
 MAX_RETENTION_DAYS = 90
 UNTAGGED_SAFETY_NET_DAYS = 3
