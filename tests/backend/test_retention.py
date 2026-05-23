@@ -19,14 +19,17 @@ def test_build_retention_config_defaults():
 def test_build_retention_config_custom():
     app_config = {
         "tools": {
-            "dependencies": {"retentionDays": 30},
-            "secrets": {"retentionDays": 14},
+            "dependencies":       {"retentionDays": 30},
+            "secrets":            {"retentionDays": 14},
+            "codeScanning":       {"retentionDays": 21},
+            "containerScanning":  {"retentionDays": 60},
         }
     }
     config = build_retention_config(app_config)
     assert config["dependencies"] == 30
     assert config["secrets"] == 14
-    assert config["code_scanning"] == DEFAULT_RETENTION_DAYS
+    assert config["code_scanning"] == 21
+    assert config["container_scanning"] == 60
 
 
 def test_build_retention_config_clamps_values():
@@ -37,7 +40,7 @@ def test_build_retention_config_clamps_values():
         }
     }
     config = build_retention_config(app_config)
-    assert config["dependencies"] == 1
+    assert config["dependencies"] == 0  # 0 = keep forever, passes through unchanged
     assert config["secrets"] == 90
 
 
