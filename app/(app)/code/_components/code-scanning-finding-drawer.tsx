@@ -17,17 +17,8 @@ import {
   dismissCodeScanningFinding,
   reopenCodeScanningFinding,
 } from "@/lib/client/code-scanning-client"
-import { sevBadgeClass as severityBadgeClass, stateBadgeClass } from "@/lib/shared/ui/badge-styles"
+import { sevBadgeClass as severityBadgeClass } from "@/lib/shared/ui/badge-styles"
 import { formatDate } from "@/lib/shared/utils"
-
-function stateLabel(state: CodeScanningFinding["state"]): string {
-  switch (state) {
-    case "open":         return "Open"
-    case "dismissed":    return "Dismissed"
-    case "fixed":        return "Fixed"
-    case "awaiting_fix": return "Awaiting Fix"
-  }
-}
 
 function verdictChipClass(verdict: string): string {
   const v = verdict.toLowerCase()
@@ -225,17 +216,20 @@ const repoBaseUrl = finding?.repo_html_url || null
             {finding.cwe && finding.cwe.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 {finding.cwe.map((id) => {
-                  const normalised = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
-                  const num = String(parseInt(normalised.replace(/^CWE-/, ""), 10))
+                  const fullLabel = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
+                  const num = String(parseInt(fullLabel.replace(/^CWE-/, ""), 10))
+                  const shortLabel = `CWE-${num}`
                   return (
                     <a
                       key={id}
                       href={`https://cwe.mitre.org/data/definitions/${num}.html`}
                       target="_blank"
                       rel="noreferrer"
-                      className="cursor-pointer rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-surface-raised)]"
+                      title={fullLabel}
+                      aria-label={`${shortLabel} — open MITRE CWE definition`}
+                      className="cursor-pointer rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
                     >
-                      {normalised}
+                      {shortLabel}
                     </a>
                   )
                 })}
@@ -299,7 +293,7 @@ const repoBaseUrl = finding?.repo_html_url || null
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
                     Affected location
-                    <span className="ml-1.5 normal-case tracking-normal font-normal opacity-60">· {finding.file_path}:{finding.start_line}</span>
+                    <span className="ml-1.5 normal-case tracking-normal font-normal opacity-75">· {finding.file_path}:{finding.start_line}</span>
                   </p>
                   {findingUrl && (
                     <a
@@ -326,7 +320,7 @@ const repoBaseUrl = finding?.repo_html_url || null
                       startLine={codeWindowStart}
                       highlightIdx={codeHighlightIdx}
                       borderCls="border-[var(--color-border)]/60"
-                      hlRowCls="bg-orange-500/15"
+                      hlRowCls="bg-[var(--color-severity-high)]/15"
                     />
                   ) : (
                     <p className="px-3 pb-2.5 text-[11px] text-[var(--color-text-secondary)]">No code preview available</p>
@@ -451,25 +445,31 @@ const repoBaseUrl = finding?.repo_html_url || null
 
           {/* ── 3. Advisory Details ── */}
           <DrawerSection label="Advisory Details">
-            <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
-              {finding.message}
-            </p>
+            {/* Show scanner message only when it differs from fix_suggestion */}
+            {finding.message && finding.message !== finding.fix_suggestion && (
+              <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
+                {finding.message}
+              </p>
+            )}
             {finding.cwe?.map((id) => {
               const num = String(parseInt(id.replace(/^cwe-/i, ""), 10))
               const entry = cweData[num]
-              if (!entry?.description) return null
+              const isLoading = entry === undefined
               return (
                 <div key={id} className="mt-3">
-                  <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">CWE-{num}</p>
-                  <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{entry.description}</p>
+                  <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">CWE-{num}{entry?.name ? ` · ${entry.name}` : ""}</p>
+                  {isLoading ? (
+                    <div className="space-y-1.5" aria-busy="true">
+                      <div className="h-3 w-full animate-pulse rounded bg-[var(--color-border)]/60" />
+                      <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--color-border)]/60" />
+                      <div className="h-3 w-3/5 animate-pulse rounded bg-[var(--color-border)]/60" />
+                    </div>
+                  ) : entry?.description ? (
+                    <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{entry.description}</p>
+                  ) : null}
                 </div>
               )
             })}
-            {finding.fix_suggestion && (
-              <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-                {finding.fix_suggestion}
-              </p>
-            )}
           </DrawerSection>
 
           {/* ── 4. References ── */}
