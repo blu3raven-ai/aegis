@@ -59,6 +59,11 @@ ASKPASS
 
     echo "$head_sha" > "$repo_output_dir/head-sha.txt"
 
+    # Derive the web URL from the clone URL (strip credentials and .git suffix)
+    local html_url
+    html_url=$(echo "$repo_url" | sed 's|https://[^@]*@|https://|' | sed 's|\.git$||')
+    echo "$html_url" > "$repo_output_dir/html_url.txt"
+
     # Named rulesets use bundled rules; absolute paths pass through directly
     local config_args=()
     local use_bundled=false

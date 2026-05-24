@@ -255,6 +255,7 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                         "file_class": raw.get("file_class") or "source",
                         "language": _derive_language(raw.get("file_path", raw.get("path", ""))),
                         "reachability": raw.get("reachability"),
+                        "repo_html_url": raw.get("repo_html_url", ""),
                         "state": "open",
                         "finding_data": raw,
                     }

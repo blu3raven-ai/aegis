@@ -37,6 +37,7 @@ def _slim_finding(finding: dict[str, Any]) -> dict[str, Any]:
     return {
         "identity_key": code_scanning_hooks.compute_identity_key(finding),
         "repo_full_name": finding.get("repo_full_name", ""),
+        "repo_html_url": finding.get("repo_html_url", ""),
         "file_path": finding.get("file_path", ""),
         "start_line": finding.get("start_line", 0),
         "end_line": finding.get("end_line", 0),
