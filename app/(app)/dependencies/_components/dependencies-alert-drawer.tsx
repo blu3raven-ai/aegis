@@ -177,11 +177,14 @@ function AdvisoryReferences({ references, onLinkClick }: { references: { url: st
 export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, onClose, onStateChange, dismissFn, reopenFn }: Props) {
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [detail, setDetail] = useState<GqlDependenciesFindingDetail | null>(null)
+  const [detailMap, setDetailMap] = useState<Map<string, GqlDependenciesFindingDetail>>(new Map())
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState(false)
 
   const allFindings = useMemo(() => relatedFindings.length > 0 ? relatedFindings : finding ? [finding] : [], [relatedFindings, finding])
+
+  // Advisory-level detail from the primary finding
+  const detail = finding ? (detailMap.get(findingIdentityKey(finding)) ?? null) : null
 
   useEffect(() => {
     setActionError(null)
@@ -189,22 +192,34 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
 
   useEffect(() => {
     if (!finding) {
-      setDetail(null)
+      setDetailMap(new Map())
       setDetailLoading(false)
       setDetailError(false)
       return
     }
     let cancelled = false
-    setDetail(null)
+    setDetailMap(new Map())
     setDetailLoading(true)
     setDetailError(false)
-    const identityKey = findingIdentityKey(finding)
-    gqlQuery<{ dependenciesFindingDetail: GqlDependenciesFindingDetail | null }>(
-      DEPENDENCIES_FINDING_DETAIL_QUERY,
-      { org, identityKey },
+    const targets = relatedFindings.length > 0 ? relatedFindings : [finding]
+    Promise.all(
+      targets.map((f) =>
+        gqlQuery<{ dependenciesFindingDetail: GqlDependenciesFindingDetail | null }>(
+          DEPENDENCIES_FINDING_DETAIL_QUERY,
+          { org, identityKey: findingIdentityKey(f) },
+        ).then(({ dependenciesFindingDetail }) => ({
+          key: findingIdentityKey(f),
+          data: dependenciesFindingDetail,
+        }))
+      )
     )
-      .then(({ dependenciesFindingDetail }) => {
-        if (!cancelled) setDetail(dependenciesFindingDetail)
+      .then((results) => {
+        if (cancelled) return
+        const map = new Map<string, GqlDependenciesFindingDetail>()
+        for (const { key, data } of results) {
+          if (data) map.set(key, data)
+        }
+        setDetailMap(map)
       })
       .catch(() => {
         if (!cancelled) setDetailError(true)
@@ -213,7 +228,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
         if (!cancelled) setDetailLoading(false)
       })
     return () => { cancelled = true }
-  }, [finding, org])
+  }, [finding, org, relatedFindings])
 
   // Escape key handling moved to FindingsDrawerShell
 
@@ -385,7 +400,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                 </div>
               </div>
 
-              {/* Manifest file preview — loaded from detail query */}
+              {/* Manifest file previews — one per affected location that has a snippet */}
               {detailLoading && (
                 <div className="animate-pulse space-y-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
                   <div className="h-3 w-1/3 rounded bg-[var(--color-border)]" />
@@ -393,31 +408,27 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                   <div className="h-3 w-4/5 rounded bg-[var(--color-border)]" />
                 </div>
               )}
-              {!detailLoading && detail?.manifestSnippet && (() => {
-                const snippet = detail.manifestSnippet
-                const matchLine = detail.manifestMatchLine
-                if (/[\x00-\x08\x0E-\x1F]/.test(snippet)) {
-                  return (
-                    <div className="flex min-h-[80px] items-center justify-center rounded-xl border border-dashed border-[var(--color-border)] text-sm text-[var(--color-text-secondary)]">
-                      Binary file — cannot display preview.
-                    </div>
-                  )
-                }
+              {!detailLoading && allFindings.map((f) => {
+                const fDetail = detailMap.get(findingIdentityKey(f))
+                if (!fDetail?.manifestSnippet) return null
+                const snippet = fDetail.manifestSnippet
+                const matchLine = fDetail.manifestMatchLine
+                if (/[\x00-\x08\x0E-\x1F]/.test(snippet)) return null
+                const startLineNum = matchLine != null ? Math.max(1, matchLine - 7) : 1
+                const filename = f.dependency.manifest_path?.split("/").filter(Boolean).pop() ?? f.dependency.manifest_path ?? ""
                 return (
                   <DrawerCodeBlock
-                    lines={(() => {
-                      const startLineNum = matchLine != null ? Math.max(1, matchLine - 7) : 1
-                      return snippet.split("\n").map((line, idx) => ({
-                        number: startLineNum + idx,
-                        content: line,
-                        highlighted: matchLine != null && (startLineNum + idx) === matchLine,
-                      }))
-                    })()}
-                    label={finding?.dependency.manifest_path?.split("/").filter(Boolean).pop() ?? finding?.dependency.manifest_path ?? ""}
+                    key={findingIdentityKey(f)}
+                    lines={snippet.split("\n").map((line, idx) => ({
+                      number: startLineNum + idx,
+                      content: line,
+                      highlighted: matchLine != null && (startLineNum + idx) === matchLine,
+                    }))}
+                    label={filename}
                     maxHeight={320}
                   />
                 )
-              })()}
+              })}
             </DrawerSection>
 
             {/* Advisory description */}
