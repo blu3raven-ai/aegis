@@ -369,12 +369,18 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
               {/* Version upgrade */}
               <div className="space-y-1.5">
                 <VersionLine alert={finding} />
-                <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
-                  {alertPatchVersion(finding)
-                    ? <>Upgrade <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span> to <span className="font-[family-name:var(--font-jetbrains-mono)] text-emerald-400">{alertPatchVersion(finding)}</span> or later in your dependency manifest, then re-lock and redeploy.</>
-                    : <>No patch is currently available for <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span>. Monitor the advisory and consider removing or replacing this dependency until a fix is released.</>
-                  }
-                </p>
+                <div className="flex gap-2">
+                  <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-text-secondary)]/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 16v-4m0-4h.01" />
+                  </svg>
+                  <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
+                    {alertPatchVersion(finding)
+                      ? <>Upgrade <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span> to <span className="font-[family-name:var(--font-jetbrains-mono)] text-emerald-400">{alertPatchVersion(finding)}</span> or later in your dependency manifest, then re-lock and redeploy.</>
+                      : <>No patch is currently available for <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span>. Monitor the advisory and consider removing or replacing this dependency until a fix is released.</>
+                    }
+                  </p>
+                </div>
               </div>
 
               {/* Affected manifests list */}
