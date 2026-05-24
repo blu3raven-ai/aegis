@@ -299,7 +299,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
   return (
     <FindingsDrawerShell open={!!finding} onClose={onClose} label="Dependency finding details">
       <DrawerHeader
-        eyebrow={`Dependencies · ${finding?.dependency.package.ecosystem ?? ""}`}
+        eyebrow="Dependencies Scanning Finding"
         title={finding ? finding.dependency.package.name : "Select a finding"}
         onClose={onClose}
       />
