@@ -102,12 +102,12 @@ function CodeLines({
         <table className="w-full border-collapse">
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} ref={i === highlightIdx ? hlRef : undefined} className={i === highlightIdx ? hlRowCls : ""}>
+              <tr key={i} ref={i === highlightIdx ? hlRef : undefined} className={i === highlightIdx ? `${hlRowCls} text-orange-700 dark:text-orange-100` : ""}>
                 <td className="select-none w-9 text-right pr-3 pl-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]/35 leading-relaxed align-top py-[1px] whitespace-nowrap">
                   {startLine + i}
                 </td>
                 <td className="pr-3 align-top py-[1px]">
-                  <pre className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)] whitespace-pre leading-relaxed">
+                  <pre className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre leading-relaxed">
                     {row || " "}
                   </pre>
                 </td>
