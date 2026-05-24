@@ -11,7 +11,7 @@ export function DrawerCodeBlock({
   lines: { number: number; content: string; highlighted?: boolean }[]
   highlightRange?: { start: number; end: number }
   label: string
-  filePath: string
+  filePath?: string
   lineRange?: string
   maxHeight?: number
 }) {
@@ -20,13 +20,17 @@ export function DrawerCodeBlock({
       <div className="flex items-center justify-between gap-2 rounded-t-xl border border-b-0 border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)]">
         <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
           <span className="shrink-0">{label}</span>
-          <span className="shrink-0 opacity-40">·</span>
-          <span
-            className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)]"
-            title={filePath}
-          >
-            {filePath}
-          </span>
+          {filePath && (
+            <>
+              <span className="shrink-0 opacity-40">·</span>
+              <span
+                className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)]"
+                title={filePath}
+              >
+                {filePath}
+              </span>
+            </>
+          )}
         </span>
         {lineRange && (
           <span className="shrink-0">{lineRange}</span>
