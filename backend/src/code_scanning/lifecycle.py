@@ -45,6 +45,7 @@ class CodeScanningHooks(LifecycleHooks):
             "owasp": raw.get("owasp", []),
             "confidence": raw.get("confidence", ""),
             "fixSuggestion": raw.get("fix_suggestion"),
+            "repoHtmlUrl": raw.get("repo_html_url", ""),
             # Fields needed by AI review
             "language": raw.get("language", ""),
             "fileClass": raw.get("file_class", ""),
