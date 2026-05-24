@@ -370,7 +370,7 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                   <div className="rounded-lg border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950 overflow-hidden">
                     <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5">
                       <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]" title={finding.file_path}>
-                        {finding.file_path}<span className="text-[var(--color-text-primary)]">:{finding.start_line}</span>
+                        {finding.file_path}
                       </p>
                       <div className="ml-auto flex shrink-0 items-center gap-1.5">
                         <a href={findingUrl} target="_blank" rel="noreferrer" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]" aria-label={`View ${finding.file_path}:${finding.start_line} on GitHub (opens in new tab)`} title={`${finding.file_path}:${finding.start_line}`}>
