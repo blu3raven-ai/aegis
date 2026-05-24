@@ -367,10 +367,10 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                 <div className="space-y-4">
 
                   {/* Vulnerable code — always shown regardless of reachability */}
-                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-                      <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs font-semibold text-[var(--color-text-primary)]" title={finding.file_path}>
-                        {finding.file_path}<span className="text-[var(--color-text-secondary)]">:{finding.start_line}</span>
+                  <div className="rounded-lg border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950 overflow-hidden">
+                    <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5">
+                      <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]" title={finding.file_path}>
+                        {finding.file_path}<span className="text-[var(--color-text-primary)]">:{finding.start_line}</span>
                       </p>
                       <div className="ml-auto flex shrink-0 items-center gap-1.5">
                         <a href={findingUrl} target="_blank" rel="noreferrer" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]" aria-label={`View ${finding.file_path}:${finding.start_line} on GitHub (opens in new tab)`} title={`${finding.file_path}:${finding.start_line}`}>
@@ -385,7 +385,7 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                         startLine={codeWindowStart}
                         highlightIdx={codeHighlightIdx}
                         borderCls="border-[var(--color-border)]/60"
-                        hlRowCls="bg-yellow-400/20"
+                        hlRowCls="bg-orange-500/15"
                       />
                     ) : (
                       <p className="px-3 pb-2.5 text-[11px] text-[var(--color-text-secondary)]">No code preview available</p>
