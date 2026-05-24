@@ -181,6 +181,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState(false)
   const [snippetIndex, setSnippetIndex] = useState(0)
+  const [copiedVersion, setCopiedVersion] = useState(false)
 
   const allFindings = useMemo(() => relatedFindings.length > 0 ? relatedFindings : finding ? [finding] : [], [relatedFindings, finding])
 
@@ -367,61 +368,100 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
             <DrawerSection label="Remediation">
 
               {/* Version upgrade */}
-              <div className="space-y-1.5">
-                <VersionLine alert={finding} />
-                <div className="flex gap-2">
-                  <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-text-secondary)]/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 16v-4m0-4h.01" />
-                  </svg>
-                  <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
-                    {alertPatchVersion(finding)
-                      ? <>Upgrade <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span> to <span className="font-[family-name:var(--font-jetbrains-mono)] text-emerald-400">{alertPatchVersion(finding)}</span> or later in your dependency manifest, then re-lock and redeploy.</>
-                      : <>No patch is currently available for <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span>. Monitor the advisory and consider removing or replacing this dependency until a fix is released.</>
-                    }
-                  </p>
-                </div>
-              </div>
+              {(() => {
+                const patch = alertPatchVersion(finding)
+                const eco = (finding.dependency.package.ecosystem || "").toLowerCase()
+                const copyText = patch
+                  ? eco === "python" ? `${finding.dependency.package.name}==${patch}` : `${finding.dependency.package.name}@${patch}`
+                  : null
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <VersionLine alert={finding} />
+                      {copyText && (
+                        <button
+                          type="button"
+                          aria-label="Copy package version"
+                          title={copyText}
+                          onClick={() => {
+                            navigator.clipboard.writeText(copyText).catch(() => {})
+                            setCopiedVersion(true)
+                            setTimeout(() => setCopiedVersion(false), 2000)
+                          }}
+                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+                        >
+                          {copiedVersion ? (
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                          ) : (
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                          )}
+                          {copiedVersion ? "Copied" : "Copy"}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-text-secondary)]/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 16v-4m0-4h.01" />
+                      </svg>
+                      <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
+                        {patch
+                          ? <>Upgrade <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span> to that version or later in your dependency manifest, then reinstall and redeploy.</>
+                          : <>No patch is currently available for <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span>. Monitor the advisory and consider removing or replacing this dependency until a fix is released.</>
+                        }
+                      </p>
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Affected manifests list */}
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                  Affected locations ({allFindings.length})
-                </p>
-                <div className="space-y-1">
-                  {allFindings.map((f, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 transition-colors"
-                    >
-                      <span
-                        className="min-w-0 flex-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-primary)]"
-                        title={f.dependency.manifest_path}
-                      >
-                        {f.dependency.manifest_path}
-                      </span>
-                      {f.current_version && (
-                        <span className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]">
-                          @{f.current_version}
-                        </span>
+              {(() => {
+                const versions = [...new Set(allFindings.map((f) => f.current_version).filter(Boolean))]
+                const uniformVersion = versions.length === 1 ? versions[0] : null
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                      Affected locations ({allFindings.length}){uniformVersion && (
+                        <span className="ml-1.5 font-[family-name:var(--font-jetbrains-mono)] normal-case tracking-normal">· @{uniformVersion}</span>
                       )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          e.preventDefault()
-                          const repoPath = f.repository.full_name.includes("/") ? f.repository.full_name : `${f.repository.full_name}/${f.repository.name}`
-                          const manifestPath = (f.dependency.manifest_path || "").replace(/^\/+/, "")
-                          requestNavigation(`https://github.com/${repoPath}/blob/HEAD/${manifestPath}${detail?.manifestMatchLine ? `#L${detail.manifestMatchLine}` : ""}`)
-                        }}
-                        className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 rounded-sm"
-                      >
-                        View in repository
-                      </button>
+                    </p>
+                    <div className="space-y-1">
+                      {allFindings.map((f, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 transition-colors"
+                        >
+                          <span
+                            className="min-w-0 flex-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-primary)]"
+                            title={f.dependency.manifest_path}
+                          >
+                            {f.dependency.manifest_path}
+                          </span>
+                          {!uniformVersion && f.current_version && (
+                            <span className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]">
+                              @{f.current_version}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              e.preventDefault()
+                              const repoPath = f.repository.full_name.includes("/") ? f.repository.full_name : `${f.repository.full_name}/${f.repository.name}`
+                              const manifestPath = (f.dependency.manifest_path || "").replace(/^\/+/, "")
+                              requestNavigation(`https://github.com/${repoPath}/blob/HEAD/${manifestPath}${detail?.manifestMatchLine ? `#L${detail.manifestMatchLine}` : ""}`)
+                            }}
+                            className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 rounded-sm"
+                          >
+                            View in repository
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                )
+              })()}
 
               {/* Manifest file preview with navigator when multiple locations have snippets */}
               {detailLoading && (
