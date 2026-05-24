@@ -367,8 +367,14 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
             <DrawerSection label="Remediation">
 
               {/* Version upgrade */}
-              <div className="flex items-center gap-3">
+              <div className="space-y-1.5">
                 <VersionLine alert={finding} />
+                <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
+                  {alertPatchVersion(finding)
+                    ? <>Upgrade <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span> to <span className="font-[family-name:var(--font-jetbrains-mono)] text-emerald-400">{alertPatchVersion(finding)}</span> or later in your dependency manifest, then re-lock and redeploy.</>
+                    : <>No patch is currently available for <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">{finding.dependency.package.name}</span>. Monitor the advisory and consider removing or replacing this dependency until a fix is released.</>
+                  }
+                </p>
               </div>
 
               {/* Affected manifests list */}
