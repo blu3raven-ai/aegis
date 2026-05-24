@@ -108,13 +108,13 @@ function AdvisoryDescription({ content, onLinkClick }: { content: string; onLink
           const isBlock = className?.startsWith("language-")
           if (isBlock) {
             return (
-              <pre className="overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 font-mono text-xs leading-relaxed text-[var(--color-text-primary)]">
+              <pre className="overflow-x-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 font-[family-name:var(--font-jetbrains-mono)] text-xs leading-relaxed text-[var(--color-text-primary)]">
                 <code>{children}</code>
               </pre>
             )
           }
           return (
-            <code className="rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[13px] text-[var(--color-text-primary)]">
+            <code className="rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[13px] text-[var(--color-text-primary)]">
               {children}
             </code>
           )
@@ -379,7 +379,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
 
               {/* Affected manifests list */}
               <div className="space-y-2">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
                   Affected locations ({allFindings.length})
                 </p>
                 <div className="space-y-1">
@@ -408,7 +408,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                           const manifestPath = (f.dependency.manifest_path || "").replace(/^\/+/, "")
                           requestNavigation(`https://github.com/${repoPath}/blob/HEAD/${manifestPath}${detail?.manifestMatchLine ? `#L${detail.manifestMatchLine}` : ""}`)
                         }}
-                        className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline"
+                        className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 rounded-sm"
                       >
                         View in repository
                       </button>
