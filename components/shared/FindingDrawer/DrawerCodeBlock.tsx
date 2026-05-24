@@ -1,4 +1,5 @@
 // components/shared/FindingDrawer/DrawerCodeBlock.tsx
+import React from "react"
 
 export function DrawerCodeBlock({
   lines,
@@ -12,7 +13,7 @@ export function DrawerCodeBlock({
   highlightRange?: { start: number; end: number }
   label: string
   filePath?: string
-  lineRange?: string
+  lineRange?: React.ReactNode
   maxHeight?: number
 }) {
   return (
