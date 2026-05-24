@@ -8,12 +8,14 @@ export function DrawerCodeLines({
   highlightIdx,
   borderCls = "border-[var(--color-border)]/60",
   hlRowCls = "bg-orange-500/15",
+  maxHeight = 192,
 }: {
   code: string
   startLine: number
   highlightIdx: number
   borderCls?: string
   hlRowCls?: string
+  maxHeight?: number
 }) {
   const rows = code.trimEnd().split("\n")
   const hlRef = useRef<HTMLTableRowElement>(null)
@@ -24,7 +26,7 @@ export function DrawerCodeLines({
 
   return (
     <div className={`border-t ${borderCls} overflow-hidden`}>
-      <div className="overflow-x-auto max-h-48 overflow-y-auto">
+      <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight }}>
         <table className="w-full border-collapse">
           <tbody>
             {rows.map((row, i) => (
