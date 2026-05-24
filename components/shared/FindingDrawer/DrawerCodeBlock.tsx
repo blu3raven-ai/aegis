@@ -1,5 +1,6 @@
 // components/shared/FindingDrawer/DrawerCodeBlock.tsx
 import React from "react"
+import { DrawerCodeLines } from "./DrawerCodeLines"
 
 export function DrawerCodeBlock({
   lines,
@@ -37,36 +38,18 @@ export function DrawerCodeBlock({
           <span className="shrink-0">{lineRange}</span>
         )}
       </div>
-      <div
-        className="overflow-x-auto overflow-y-auto rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950"
-        style={{ maxHeight }}
-      >
-        <table className="w-full border-collapse">
-          <tbody>
-            {lines.map((line) => {
-              const isHighlighted =
-                line.highlighted === true ||
-                (highlightRange != null &&
-                  line.number >= highlightRange.start &&
-                  line.number <= highlightRange.end)
-              return (
-                <tr
-                  key={line.number}
-                  className={isHighlighted ? "bg-orange-500/15 text-orange-700 dark:text-orange-100" : ""}
-                >
-                  <td className="w-9 select-none whitespace-nowrap py-[1px] pl-2 pr-3 text-right align-top font-[family-name:var(--font-jetbrains-mono)] text-[10px] leading-relaxed text-[var(--color-text-secondary)]/35">
-                    {line.number}
-                  </td>
-                  <td className="py-[1px] pr-3 align-top">
-                    <pre className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] leading-relaxed whitespace-pre text-slate-700 dark:text-slate-300">
-                      {line.content || " "}
-                    </pre>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className="overflow-hidden rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950">
+        <DrawerCodeLines
+          code={lines.map((l) => l.content).join("\n")}
+          startLine={lines[0]?.number ?? 1}
+          highlightIdx={
+            highlightRange != null
+              ? lines.findIndex((l) => l.number >= highlightRange.start && l.number <= highlightRange.end)
+              : lines.findIndex((l) => l.highlighted === true)
+          }
+          borderCls="border-[var(--color-border)]"
+          maxHeight={maxHeight}
+        />
       </div>
     </div>
   )
