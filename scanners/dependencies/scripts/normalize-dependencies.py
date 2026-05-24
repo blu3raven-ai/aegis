@@ -58,7 +58,7 @@ def normalize_file(file_path: Path, org: str, repo: str, commit: str, manifests_
                 try:
                     lines = mf.read_text(errors="replace").splitlines()
                     pkg = finding["packageName"].lower()
-                    pkg_re = re.compile(r"(?i)\b" + re.escape(pkg) + r"\b")
+                    pkg_re = re.compile(r"(?i)(?<![a-zA-Z0-9._-])" + re.escape(pkg) + r"(?![a-zA-Z0-9._-])")
                     match_line = next((i for i, l in enumerate(lines, 1) if pkg_re.search(l)), 0)
                     if match_line:
                         start = max(0, match_line - 8)
