@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
 import {
   DrawerHeader,
@@ -90,13 +90,19 @@ function CodeLines({
   hlRowCls: string
 }) {
   const rows = code.trimEnd().split("\n")
+  const hlRef = useRef<HTMLTableRowElement>(null)
+
+  useEffect(() => {
+    hlRef.current?.scrollIntoView({ block: "center" })
+  }, [code, highlightIdx])
+
   return (
     <div className={`border-t ${borderCls} overflow-hidden`}>
       <div className="overflow-x-auto max-h-48 overflow-y-auto">
         <table className="w-full border-collapse">
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i} className={i === highlightIdx ? hlRowCls : ""}>
+              <tr key={i} ref={i === highlightIdx ? hlRef : undefined} className={i === highlightIdx ? hlRowCls : ""}>
                 <td className="select-none w-9 text-right pr-3 pl-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]/35 leading-relaxed align-top py-[1px] whitespace-nowrap">
                   {startLine + i}
                 </td>
