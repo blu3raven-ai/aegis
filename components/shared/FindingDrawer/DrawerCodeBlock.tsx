@@ -38,11 +38,11 @@ export function DrawerCodeBlock({
         )}
       </div>
       <div
-        className="overflow-auto rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950"
+        className="overflow-x-auto overflow-y-auto rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950"
         style={{ maxHeight }}
       >
-        <pre className="min-w-max p-4 font-[family-name:var(--font-jetbrains-mono)] text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
-          <code>
+        <table className="w-full border-collapse">
+          <tbody>
             {lines.map((line) => {
               const isHighlighted =
                 line.highlighted === true ||
@@ -50,19 +50,23 @@ export function DrawerCodeBlock({
                   line.number >= highlightRange.start &&
                   line.number <= highlightRange.end)
               return (
-                <span
+                <tr
                   key={line.number}
-                  className={`block ${isHighlighted ? "-mx-4 bg-orange-500/15 px-4 text-orange-700 dark:text-orange-100" : ""}`}
+                  className={isHighlighted ? "bg-orange-500/15 text-orange-700 dark:text-orange-100" : ""}
                 >
-                  <span className="inline-block w-9 select-none pl-1 pr-3 text-right font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]/40">
+                  <td className="w-9 select-none whitespace-nowrap py-[1px] pl-2 pr-3 text-right align-top font-[family-name:var(--font-jetbrains-mono)] text-[10px] leading-relaxed text-[var(--color-text-secondary)]/35">
                     {line.number}
-                  </span>
-                  <span>{line.content || " "}</span>
-                </span>
+                  </td>
+                  <td className="py-[1px] pr-3 align-top">
+                    <pre className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] leading-relaxed whitespace-pre text-slate-700 dark:text-slate-300">
+                      {line.content || " "}
+                    </pre>
+                  </td>
+                </tr>
               )
             })}
-          </code>
-        </pre>
+          </tbody>
+        </table>
       </div>
     </div>
   )
