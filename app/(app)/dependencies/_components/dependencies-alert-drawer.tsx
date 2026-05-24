@@ -405,17 +405,15 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                 }
                 return (
                   <DrawerCodeBlock
-                    lines={snippet.split("\n").map((line, idx) => {
-                      const lineNum = (matchLine ?? 1) - 7 + idx
-                      const number = lineNum > 0 ? lineNum : idx + 1
-                      return {
-                        number,
+                    lines={(() => {
+                      const startLineNum = matchLine != null ? Math.max(1, matchLine - 7) : 1
+                      return snippet.split("\n").map((line, idx) => ({
+                        number: startLineNum + idx,
                         content: line,
-                        highlighted: matchLine != null && lineNum === matchLine,
-                      }
-                    })}
-                    label={finding?.dependency.manifest_path ?? ""}
-                    filePath={finding?.dependency.manifest_path ?? ""}
+                        highlighted: matchLine != null && (startLineNum + idx) === matchLine,
+                      }))
+                    })()}
+                    label={finding?.dependency.manifest_path?.split("/").filter(Boolean).pop() ?? finding?.dependency.manifest_path ?? ""}
                     maxHeight={320}
                   />
                 )
