@@ -54,7 +54,7 @@ export function DrawerCodeBlock({
                   key={line.number}
                   className={`block ${isHighlighted ? "-mx-4 bg-orange-500/15 px-4 text-orange-700 dark:text-orange-100" : ""}`}
                 >
-                  <span className="mr-5 inline-block w-12 select-none text-right font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-secondary)]">
+                  <span className="inline-block w-9 select-none pl-1 pr-3 text-right font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]/40">
                     {line.number}
                   </span>
                   <span>{line.content || " "}</span>
