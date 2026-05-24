@@ -90,3 +90,54 @@ def test_ingest_missing_new_fields_defaults(tmp_path):
     assert f["imports"] == ""
     assert f["file_class"] == "source"
     assert f["language"] == "java"
+
+
+def test_ingest_passes_through_repo_html_url(tmp_path):
+    """repo_html_url from the scanner is preserved through ingestion."""
+    finding = {
+        "repo_full_name": "acme-org/example-repo",
+        "repo_html_url": "https://github.com/acme-org/example-repo",
+        "file_path": "src/app.py",
+        "start_line": 10,
+        "end_line": 10,
+        "rule_id": "python.injection",
+        "rule_name": "Injection",
+        "severity": "high",
+        "confidence": "high",
+        "category": "security",
+        "cwe": ["CWE-78"],
+        "message": "Dangerous call",
+        "snippet": "subprocess.run(cmd)",
+        "stateCandidate": "open",
+    }
+    p = tmp_path / "findings.jsonl"
+    p.write_text(json.dumps(finding) + "\n")
+
+    findings = ingest_findings_jsonl(p)
+    assert len(findings) == 1
+    assert findings[0]["repo_html_url"] == "https://github.com/acme-org/example-repo"
+
+
+def test_ingest_repo_html_url_absent_when_not_in_jsonl(tmp_path):
+    """When scanner did not write html_url.txt, repo_html_url is empty string."""
+    finding = {
+        "repo_full_name": "acme-org/example-repo",
+        "file_path": "src/app.py",
+        "start_line": 10,
+        "end_line": 10,
+        "rule_id": "python.injection",
+        "rule_name": "Injection",
+        "severity": "high",
+        "confidence": "high",
+        "category": "security",
+        "cwe": [],
+        "message": "Dangerous call",
+        "snippet": "subprocess.run(cmd)",
+        "stateCandidate": "open",
+    }
+    p = tmp_path / "findings.jsonl"
+    p.write_text(json.dumps(finding) + "\n")
+
+    findings = ingest_findings_jsonl(p)
+    assert len(findings) == 1
+    assert findings[0]["repo_html_url"] == ""

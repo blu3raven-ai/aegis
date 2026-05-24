@@ -744,6 +744,7 @@ def _finding_to_code_scanning_dict(f: Finding, decision: Decision | None = None)
         "message": detail.get("message", ""),
         "snippet": detail.get("snippet", ""),
         "fix_suggestion": detail.get("fixSuggestion"),
+        "repo_html_url": detail.get("repoHtmlUrl", ""),
         "ai_review": detail.get("aiReview"),
         # AI review context fields
         "language": detail.get("language", ""),

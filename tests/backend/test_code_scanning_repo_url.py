@@ -1,0 +1,110 @@
+"""Tests for repo_html_url propagation through the code scanning pipeline.
+
+Covers: lifecycle extract_detail, storage _finding_to_code_scanning_dict.
+The scanner-level test is in scanners/code-scanning/scripts/test-normalize.sh.
+"""
+from src.code_scanning.lifecycle import CodeScanningHooks
+from src.storage import _finding_to_code_scanning_dict
+
+
+_hooks = CodeScanningHooks()
+
+
+# ---------------------------------------------------------------------------
+# extract_detail — saves repoHtmlUrl into the stored detail blob
+# ---------------------------------------------------------------------------
+
+def test_extract_detail_saves_repo_html_url():
+    raw = {
+        "rule_id": "python.injection",
+        "rule_name": "Injection",
+        "file_path": "src/app.py",
+        "start_line": 10,
+        "end_line": 10,
+        "snippet": "subprocess.run(cmd)",
+        "message": "Dangerous call",
+        "category": "security",
+        "cwe": ["CWE-78"],
+        "confidence": "high",
+        "fix_suggestion": "Use shlex.escape()",
+        "repo_html_url": "https://github.com/acme-org/example-repo",
+        "language": "python",
+        "file_class": "source",
+    }
+    detail = _hooks.extract_detail(raw)
+    assert detail["repoHtmlUrl"] == "https://github.com/acme-org/example-repo"
+
+
+def test_extract_detail_empty_repo_html_url_when_missing():
+    raw = {
+        "rule_id": "python.injection",
+        "rule_name": "Injection",
+        "file_path": "src/app.py",
+        "start_line": 10,
+        "end_line": 10,
+        "snippet": "",
+        "message": "msg",
+        "category": "security",
+        "cwe": [],
+        "confidence": "medium",
+        "language": "python",
+        "file_class": "source",
+    }
+    detail = _hooks.extract_detail(raw)
+    assert detail.get("repoHtmlUrl") == ""
+
+
+# ---------------------------------------------------------------------------
+# _finding_to_code_scanning_dict — reads repoHtmlUrl back from detail
+# ---------------------------------------------------------------------------
+
+class _MockFinding:
+    """Minimal stand-in for the Finding ORM model."""
+    def __init__(self, detail):
+        self.state = "open"
+        self.first_seen_at = None
+        self.fixed_at = None
+        self.repo = "acme-org/example-repo"
+        self.severity = "high"
+        self.detail = detail
+
+
+def test_storage_exposes_repo_html_url():
+    detail = {
+        "ruleId": "python.injection",
+        "ruleName": "Injection",
+        "filePath": "src/app.py",
+        "startLine": 10,
+        "endLine": 10,
+        "snippet": "subprocess.run(cmd)",
+        "message": "Dangerous call",
+        "category": "security",
+        "cwe": ["CWE-78"],
+        "confidence": "high",
+        "fixSuggestion": "Use shlex.escape()",
+        "repoHtmlUrl": "https://github.com/acme-org/example-repo",
+        "language": "python",
+        "fileClass": "source",
+    }
+    result = _finding_to_code_scanning_dict(_MockFinding(detail), decision=None)
+    assert result["repo_html_url"] == "https://github.com/acme-org/example-repo"
+
+
+def test_storage_repo_html_url_empty_when_not_stored():
+    """Old findings in DB that predate the repoHtmlUrl field return empty string."""
+    detail = {
+        "ruleId": "python.injection",
+        "ruleName": "Injection",
+        "filePath": "src/app.py",
+        "startLine": 10,
+        "endLine": 10,
+        "snippet": "",
+        "message": "msg",
+        "category": "security",
+        "cwe": [],
+        "confidence": "medium",
+        "language": "python",
+        "fileClass": "source",
+    }
+    result = _finding_to_code_scanning_dict(_MockFinding(detail), decision=None)
+    assert result["repo_html_url"] == ""
