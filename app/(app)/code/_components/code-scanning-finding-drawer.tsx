@@ -76,6 +76,44 @@ function reachabilityBadgeConfig(verdict: ReachabilityVerdict): {
   }
 }
 
+function CodeLines({
+  code,
+  startLine,
+  highlightIdx,
+  borderCls,
+  hlRowCls,
+}: {
+  code: string
+  startLine: number
+  highlightIdx: number
+  borderCls: string
+  hlRowCls: string
+}) {
+  const rows = code.trimEnd().split("\n")
+  return (
+    <div className={`border-t ${borderCls} overflow-hidden`}>
+      <div className="overflow-x-auto max-h-48 overflow-y-auto">
+        <table className="w-full border-collapse">
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className={i === highlightIdx ? hlRowCls : ""}>
+                <td className="select-none w-9 text-right pr-3 pl-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]/35 leading-relaxed align-top py-[1px] whitespace-nowrap">
+                  {startLine + i}
+                </td>
+                <td className="pr-3 align-top py-[1px]">
+                  <pre className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)] whitespace-pre leading-relaxed">
+                    {row || " "}
+                  </pre>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function CweCard({ id }: { id: string }) {
   const normalised = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
   const num = normalised.replace(/^CWE-/, "")
@@ -269,54 +307,90 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
             </div>
 
             {/* Code & Reachability tab */}
-            {remediationTab === "code" && (
-              <div className="space-y-4">
+            {remediationTab === "code" && (() => {
+              const findingUrl = `https://github.com/${finding.repo_full_name}/blob/HEAD/${finding.file_path}#L${finding.start_line}`
+              const snippetTrimmed = (finding.snippet || "").trim()
+              // Prefer code_window (±40 lines of context). Fall back to snippet alone.
+              // Find the highlighted row by matching the snippet text — this is robust
+              // against off-by-one errors when code_window and start_line are misaligned.
+              let vulnerableCode: string
+              let codeWindowStart: number
+              let codeHighlightIdx: number
+              const rawWindow = (finding.code_window || "").trimEnd()
+              if (rawWindow) {
+                const windowLines = rawWindow.split("\n")
+                const foundIdx = snippetTrimmed
+                  ? windowLines.findIndex((l) => l.trim() === snippetTrimmed)
+                  : -1
+                if (foundIdx >= 0) {
+                  // Snippet found — derive true start line from finding position
+                  codeHighlightIdx = foundIdx
+                  codeWindowStart = finding.start_line - foundIdx
+                  vulnerableCode = rawWindow
+                } else {
+                  // Snippet not found (whitespace mismatch, etc.) — use math as fallback
+                  codeWindowStart = Math.max(1, finding.start_line - 40)
+                  codeHighlightIdx = finding.start_line - codeWindowStart
+                  vulnerableCode = rawWindow
+                }
+              } else {
+                // No code_window at all — show snippet as a single highlighted line
+                vulnerableCode = snippetTrimmed
+                codeWindowStart = finding.start_line
+                codeHighlightIdx = 0
+              }
+              const verdict = finding.reachability?.verdict
 
-                {/* Vulnerable line — mini snippet at a glance */}
-                {finding.snippet && (
-                  <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
-                    <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5">
-                      <span className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]" title={finding.file_path}>
-                        {finding.file_path}
-                      </span>
-                      <span className="ml-auto shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]">:{finding.start_line}</span>
-                    </div>
-                    <pre className="px-3 py-2 font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-primary)] overflow-x-auto whitespace-pre leading-relaxed bg-[var(--color-surface-raised)]">
-                      {finding.snippet.trim()}
-                    </pre>
-                  </div>
-                )}
+              const Arrow = () => (
+                <div className="flex flex-col items-center py-0.5" aria-hidden="true">
+                  <div className="h-3 w-px bg-[var(--color-border)]" />
+                  <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
+                    <path d="M0 0 L4 5 L8 0" stroke="var(--color-border)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              )
+              const LinkIcon = () => (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              )
 
-                {/* Call graph */}
-                <div>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Reachability</p>
-                  {finding.reachability?.verdict === "reachable" ? (() => {
-                    const chain = finding.reachability.call_chain ?? []
-                    const findingUrl = `https://github.com/${finding.repo_full_name}/blob/HEAD/${finding.file_path}#L${finding.start_line}`
-                    const Arrow = () => (
-                      <div className="flex flex-col items-center py-0.5" aria-hidden="true">
-                        <div className="h-3 w-px bg-[var(--color-border)]" />
-                        <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
-                          <path d="M0 0 L4 5 L8 0" stroke="var(--color-border)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+              return (
+                <div className="space-y-4">
+
+                  {/* Vulnerable code — always shown regardless of reachability */}
+                  <div className="rounded-lg border border-[var(--color-verdict-risk-border)] bg-[var(--color-verdict-risk-subtle)] overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+                      <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs font-semibold text-[var(--color-text-primary)]" title={finding.file_path}>
+                        {finding.file_path}<span className="text-[var(--color-verdict-risk)]">:{finding.start_line}</span>
+                      </p>
+                      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+                        <a href={findingUrl} target="_blank" rel="noreferrer" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]" aria-label={`View ${finding.file_path}:${finding.start_line} on GitHub (opens in new tab)`} title={`${finding.file_path}:${finding.start_line}`}>
+                          <LinkIcon />
+                          <span className="sr-only">(opens in new tab)</span>
+                        </a>
                       </div>
-                    )
-                    const LinkIcon = () => (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                        <polyline points="15 3 21 3 21 9" />
-                        <line x1="10" y1="14" x2="21" y2="3" />
-                      </svg>
-                    )
+                    </div>
+                    {vulnerableCode ? (
+                      <CodeLines
+                        code={vulnerableCode}
+                        startLine={codeWindowStart}
+                        highlightIdx={codeHighlightIdx}
+                        borderCls="border-[var(--color-verdict-risk-border)]/30"
+                        hlRowCls="bg-[var(--color-verdict-risk)]/20"
+                      />
+                    ) : (
+                      <p className="px-3 pb-2.5 text-[11px] text-[var(--color-text-secondary)]">No code preview available</p>
+                    )}
+                  </div>
+
+                  {/* Call graph — only when reachable */}
+                  {verdict === "reachable" && (() => {
+                    const chain = finding.reachability?.call_chain ?? []
                     return (
                       <div className="flex flex-col items-stretch">
-                        {chain.length > 0 && (
-                          <p className="mb-2 text-[11px] text-[var(--color-text-secondary)]">
-                            {chain.length === 1
-                              ? "Direct call — entry to sink"
-                              : `${chain.length} calls from entry to sink`}
-                          </p>
-                        )}
                         {chain.length > 0 ? chain.map((step, idx) => {
                           const isEntry = idx === 0
                           const stepUrl = `https://github.com/${finding.repo_full_name}/blob/HEAD/${step.file}#L${step.line}`
@@ -347,15 +421,17 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                                     </a>
                                   </div>
                                 </div>
-                                <p className="px-3 pb-2 font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)]" title={step.file}>
+                                <p className="px-3 pb-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)]" title={step.file}>
                                   {step.file}<span className="text-[var(--color-text-primary)]">:{step.line}</span>
                                 </p>
                                 {step.snippet && (
-                                  <div className={`border-t px-3 py-2 ${isEntry ? "border-[var(--color-accent)]/20" : "border-[var(--color-border)]/60"}`}>
-                                    <pre className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)] overflow-x-auto whitespace-pre leading-relaxed">
-                                      {step.snippet.trim()}
-                                    </pre>
-                                  </div>
+                                  <CodeLines
+                                    code={step.snippet.trimEnd()}
+                                    startLine={step.line}
+                                    highlightIdx={0}
+                                    borderCls={isEntry ? "border-[var(--color-accent)]/20" : "border-[var(--color-border)]/60"}
+                                    hlRowCls={isEntry ? "bg-[var(--color-accent)]/15" : "bg-[var(--color-border)]/40"}
+                                  />
                                 )}
                               </div>
                             </div>
@@ -367,48 +443,30 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                                 <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
                               </svg>
                               <span className="font-[family-name:var(--font-jetbrains-mono)] text-xs font-semibold text-[var(--color-accent)]">
-                                {finding.reachability.entry_point ?? "Entry point"}
+                                {finding.reachability?.entry_point ?? "Entry point"}
                               </span>
                               <span className="ml-auto rounded-full bg-[var(--color-accent)]/10 px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">entry</span>
                             </div>
-                            {finding.reachability.entry_point === "module-level" && (
+                            {finding.reachability?.entry_point === "module-level" && (
                               <p className="mt-1 text-[11px] text-[var(--color-text-secondary)]">Executes at module level on import</p>
                             )}
                           </div>
                         )}
-                        <Arrow />
-                        {/* Sink node — always anchored at the exact vulnerable line */}
-                        <div className="rounded-lg border border-[var(--color-verdict-risk-border)] bg-[var(--color-verdict-risk-subtle)] overflow-hidden">
-                          <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-                            <p className="font-[family-name:var(--font-jetbrains-mono)] text-xs font-semibold text-[var(--color-text-primary)]" title={finding.file_path}>
-                              {finding.file_path}<span className="text-[var(--color-verdict-risk)]">:{finding.start_line}</span>
-                            </p>
-                            <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                              <span className="rounded-full border border-[var(--color-verdict-risk-border)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-verdict-risk)]">sink</span>
-                              <a href={findingUrl} target="_blank" rel="noreferrer" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]" aria-label={`View ${finding.file_path}:${finding.start_line} on GitHub (opens in new tab)`} title={`${finding.file_path}:${finding.start_line}`}>
-                                <LinkIcon />
-                                <span className="sr-only">(opens in new tab)</span>
-                              </a>
-                            </div>
-                          </div>
-                          {finding.snippet && (
-                            <div className="border-t border-[var(--color-verdict-risk-border)]/30 px-3 py-2">
-                              <pre className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-verdict-risk)]/80 overflow-x-auto whitespace-pre leading-relaxed">
-                                {finding.snippet.trim()}
-                              </pre>
-                            </div>
-                          )}
-                        </div>
                       </div>
                     )
-                  })() : finding.reachability?.verdict === "unreachable" ? (
-                    <p className="text-sm text-[var(--color-text-secondary)]">This code is not reachable from any detected entry point.</p>
-                  ) : (
-                    <p className="text-sm text-[var(--color-text-secondary)]">Reachability could not be determined for this finding.</p>
+                  })()}
+
+                  {/* Reachability status note for non-reachable verdicts */}
+                  {verdict === "unreachable" && (
+                    <p className="text-[11px] text-[var(--color-text-secondary)]">Not reachable from any detected entry point — lower exploitation risk.</p>
                   )}
+                  {verdict === "unknown" && (
+                    <p className="text-[11px] text-[var(--color-text-secondary)]">Reachability could not be determined — treat as potentially reachable.</p>
+                  )}
+
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* AI Analysis tab — only renders content when selected */}
             {remediationTab === "ai" && (

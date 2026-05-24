@@ -20,6 +20,13 @@ import re
 import sys
 import warnings
 
+_TEMP_PREFIX_RE = re.compile(r"^/tmp/tmp\.[^/]*/")
+
+
+def _strip_tmp_prefix(uri: str) -> str:
+    """Strip /tmp/tmp.XXXX/ prefix that Opengrep writes into SARIF URIs."""
+    return _TEMP_PREFIX_RE.sub("", uri) or uri
+
 logger = logging.getLogger(__name__)
 from collections import deque
 
@@ -330,6 +337,23 @@ class CallGraph:
 # ── Main ─────────────────────────────────────────────────────────────────
 
 
+def _read_snippet(clone_path: Path, rel_file: str, start_line: int, n: int = 5) -> str | None:
+    """Read up to n lines from a source file starting at start_line (1-indexed)."""
+    try:
+        abs_path = clone_path / rel_file
+        lines = abs_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        lo = max(0, start_line - 1)
+        chunk = lines[lo : lo + n]
+        if not chunk:
+            return None
+        # Strip common leading whitespace
+        stripped = [l.rstrip() for l in chunk]
+        indent = min((len(l) - len(l.lstrip()) for l in stripped if l.strip()), default=0)
+        return "\n".join(l[indent:] for l in stripped)
+    except Exception:
+        return None
+
+
 def build_reachability(clone_dir: str, sarif_file: str) -> dict[str, Any]:
     clone_path = Path(clone_dir)
     sarif_path = Path(sarif_file)
@@ -351,7 +375,7 @@ def build_reachability(clone_dir: str, sarif_file: str) -> dict[str, Any]:
             if not locs:
                 continue
             phys = locs[0].get("physicalLocation", {})
-            uri = phys.get("artifactLocation", {}).get("uri", "")
+            uri = _strip_tmp_prefix(phys.get("artifactLocation", {}).get("uri", ""))
             line = phys.get("region", {}).get("startLine", 0)
             key = f"{uri}:{line}"
             if uri and line and key not in seen:
@@ -414,7 +438,12 @@ def build_reachability(clone_dir: str, sarif_file: str) -> dict[str, Any]:
                 "verdict": "reachable",
                 "entry_point": path[0]["name"],
                 "call_chain": [
-                    {"function": fn["name"], "file": fn["file"], "line": fn["start_line"]}
+                    {
+                        "function": fn["name"],
+                        "file": fn["file"],
+                        "line": fn["start_line"],
+                        "snippet": _read_snippet(clone_path, fn["file"], fn["start_line"]),
+                    }
                     for fn in path
                 ],
             }
