@@ -47,9 +47,8 @@ def normalize_file(file_path: Path, org: str, repo: str, commit: str, manifests_
         }
 
         # Enrich with manifest snippet
-        # Grype reports paths with a leading "/" (e.g. "/requirements.txt"), but run.sh
-        # skips absolute paths and saves manifests without the leading slash.  Strip it
-        # before building the safe filename so both cases resolve to the same file.
+        # Grype paths are root-relative (e.g. "/requirements.txt"); manifests are saved
+        # without the leading slash, so strip it before the lookup.
         if manifests_dir and manifests_dir.exists() and manifest_path and finding["packageName"]:
             clean_path = manifest_path.lstrip("/")
             safe_name = clean_path.replace("/", "__")
