@@ -99,3 +99,26 @@ def test_no_manifest_dir(tmp_path: Path):
 
     assert results[0]["manifestSnippet"] is None
     assert results[0]["manifestMatchLine"] is None
+
+
+def test_package_name_not_matched_as_substring(tmp_path: Path):
+    """torch must not match torch_stable in a find-links URL; should land on torch==2.1.2."""
+    manifests_dir = tmp_path / "manifests"
+    manifests_dir.mkdir()
+    content = (
+        "-f https://download.pytorch.org/whl/cu121/torch_stable.html\n"
+        "faster-whisper==1.1.1\n"
+        "torch==2.1.2\n"
+        "torchaudio==2.1.2\n"
+        "torchvision==0.16.2\n"
+    )
+    (manifests_dir / "requirements-ml.txt").write_text(content)
+
+    grype_json = {"matches": [_grype_match("torch", "/requirements-ml.txt")]}
+    findings_file = tmp_path / "findings.json"
+    findings_file.write_text(json.dumps(grype_json))
+
+    results = normalize_file(findings_file, "acme-org", "ml-repo", "abc123", manifests_dir)
+
+    assert results[0]["manifestMatchLine"] == 3, "should match torch==2.1.2 on line 3, not the find-links URL"
+    assert "torch==2.1.2" in results[0]["manifestSnippet"]
