@@ -385,7 +385,7 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                         startLine={codeWindowStart}
                         highlightIdx={codeHighlightIdx}
                         borderCls="border-[var(--color-border)]/60"
-                        hlRowCls="bg-[var(--color-accent)]/15"
+                        hlRowCls="bg-yellow-400/20"
                       />
                     ) : (
                       <p className="px-3 pb-2.5 text-[11px] text-[var(--color-text-secondary)]">No code preview available</p>
