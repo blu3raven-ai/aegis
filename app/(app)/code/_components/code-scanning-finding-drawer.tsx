@@ -86,7 +86,14 @@ interface Props {
 }
 
 export function CodeScanningFindingDrawer({ finding, org, onClose, onActionComplete }: Props) {
-  const [cweData, setCweData] = useState<Record<string, { name: string | null; description: string | null }>>({})
+  type CweEntry = {
+    name: string | null
+    description: string | null
+    likelihood: string | null
+    consequences: Array<{ scope: string[]; impact: string[] }>
+    mitigations: Array<{ phase: string[]; description: string }>
+  }
+  const [cweData, setCweData] = useState<Record<string, CweEntry>>({})
   useEffect(() => {
     if (!finding?.cwe?.length) return
     finding.cwe.forEach((id) => {
@@ -94,8 +101,14 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
       if (cweData[num] !== undefined) return
       fetch(`/api/cwe/${num}`)
         .then((r) => r.json())
-        .then((data: { name: string | null; description: string | null }) => {
-          setCweData((prev) => ({ ...prev, [num]: { name: data.name ?? null, description: data.description ?? null } }))
+        .then((data: CweEntry) => {
+          setCweData((prev) => ({ ...prev, [num]: {
+            name: data.name ?? null,
+            description: data.description ?? null,
+            likelihood: data.likelihood ?? null,
+            consequences: data.consequences ?? [],
+            mitigations: data.mitigations ?? [],
+          }}))
         })
         .catch(() => {})
     })
@@ -289,6 +302,39 @@ const repoBaseUrl = finding?.repo_html_url || null
                   </div>
                 )}
 
+                {/* MITRE mitigations — sourced from CWE data */}
+                {(() => {
+                  const allMitigations = (finding.cwe ?? []).flatMap((id) => {
+                    const num = String(parseInt(id.replace(/^cwe-/i, ""), 10))
+                    return cweData[num]?.mitigations ?? []
+                  })
+                  if (allMitigations.length === 0) return null
+                  return (
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">What to check</p>
+                      <div className="space-y-1.5">
+                        {allMitigations.map((m, idx) => (
+                          <div key={idx} className="flex gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2.5">
+                            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--color-border)]/60 text-[9px] font-bold tabular-nums text-[var(--color-text-secondary)]">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0 space-y-1">
+                              {m.phase.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {m.phase.map((p) => (
+                                    <span key={p} className="rounded-full bg-[var(--color-border)]/50 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">{p}</span>
+                                  ))}
+                                </div>
+                              )}
+                              <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">{m.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+
                 {/* Affected location */}
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
@@ -445,28 +491,73 @@ const repoBaseUrl = finding?.repo_html_url || null
 
           {/* ── 3. Advisory Details ── */}
           <DrawerSection label="Advisory Details">
-            {/* Show scanner message only when it differs from fix_suggestion */}
-            {finding.message && finding.message !== finding.fix_suggestion && (
-              <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
-                {finding.message}
-              </p>
-            )}
+            <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
+              {finding.message}
+            </p>
             {finding.cwe?.map((id) => {
               const num = String(parseInt(id.replace(/^cwe-/i, ""), 10))
               const entry = cweData[num]
-              const isLoading = entry === undefined
+              // Still loading — show skeleton
+              if (entry === undefined) {
+                return (
+                  <div key={id} className="mt-3 space-y-1.5" aria-busy="true">
+                    <div className="h-3 w-full animate-pulse rounded bg-[var(--color-border)]/60" />
+                    <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--color-border)]/60" />
+                    <div className="h-3 w-3/5 animate-pulse rounded bg-[var(--color-border)]/60" />
+                  </div>
+                )
+              }
+              // API returned no description — skip silently
+              if (!entry.description) return null
+              const likelihoodColor = entry.likelihood
+                ? entry.likelihood.toLowerCase() === "high" ? "text-[var(--color-verdict-risk)] bg-[var(--color-verdict-risk-subtle)] border-[var(--color-verdict-risk-border)]"
+                  : entry.likelihood.toLowerCase() === "medium" ? "text-[var(--color-verdict-uncertain)] bg-[var(--color-verdict-uncertain-subtle)] border-[var(--color-verdict-uncertain-border)]"
+                  : "text-[var(--color-verdict-safe)] bg-[var(--color-verdict-safe-subtle)] border-[var(--color-verdict-safe-border)]"
+                : null
               return (
-                <div key={id} className="mt-3">
-                  <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">CWE-{num}{entry?.name ? ` · ${entry.name}` : ""}</p>
-                  {isLoading ? (
-                    <div className="space-y-1.5" aria-busy="true">
-                      <div className="h-3 w-full animate-pulse rounded bg-[var(--color-border)]/60" />
-                      <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--color-border)]/60" />
-                      <div className="h-3 w-3/5 animate-pulse rounded bg-[var(--color-border)]/60" />
+                <div key={id} className="mt-3 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-xs font-semibold text-[var(--color-text-secondary)]">
+                      {`CWE-${num}`}{entry.name ? ` · ${entry.name}` : ""}
+                    </p>
+                    {entry.likelihood && likelihoodColor && (
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${likelihoodColor}`}>
+                        {entry.likelihood} likelihood
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{entry.description}</p>
+
+                  {/* Consequences */}
+                  {entry.consequences.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Potential impact</p>
+                      <div className="space-y-1.5">
+                        {entry.consequences.map((c, idx) => (
+                          <div key={idx} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2">
+                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                              {c.scope.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Scope</span>
+                                  {c.scope.map((s) => (
+                                    <span key={s} className="rounded-full bg-[var(--color-border)]/50 px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]">{s}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {c.impact.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1">
+                                  <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Impact</span>
+                                  {c.impact.map((i) => (
+                                    <span key={i} className="rounded-full bg-[var(--color-severity-high)]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-severity-high)]">{i}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ) : entry?.description ? (
-                    <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{entry.description}</p>
-                  ) : null}
+                  )}
                 </div>
               )
             })}
