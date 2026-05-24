@@ -180,14 +180,25 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
   const [detailMap, setDetailMap] = useState<Map<string, GqlDependenciesFindingDetail>>(new Map())
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState(false)
+  const [snippetIndex, setSnippetIndex] = useState(0)
 
   const allFindings = useMemo(() => relatedFindings.length > 0 ? relatedFindings : finding ? [finding] : [], [relatedFindings, finding])
 
   // Advisory-level detail from the primary finding
   const detail = finding ? (detailMap.get(findingIdentityKey(finding)) ?? null) : null
 
+  // Findings that have a manifest snippet — drives the navigator
+  const snippetFindings = useMemo(
+    () => allFindings.filter((f) => detailMap.get(findingIdentityKey(f))?.manifestSnippet),
+    [allFindings, detailMap],
+  )
+
   useEffect(() => {
     setActionError(null)
+  }, [finding])
+
+  useEffect(() => {
+    setSnippetIndex(0)
   }, [finding])
 
   useEffect(() => {
@@ -400,7 +411,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                 </div>
               </div>
 
-              {/* Manifest file previews — one per affected location that has a snippet */}
+              {/* Manifest file preview with navigator when multiple locations have snippets */}
               {detailLoading && (
                 <div className="animate-pulse space-y-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
                   <div className="h-3 w-1/3 rounded bg-[var(--color-border)]" />
@@ -408,27 +419,57 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                   <div className="h-3 w-4/5 rounded bg-[var(--color-border)]" />
                 </div>
               )}
-              {!detailLoading && allFindings.map((f) => {
-                const fDetail = detailMap.get(findingIdentityKey(f))
-                if (!fDetail?.manifestSnippet) return null
-                const snippet = fDetail.manifestSnippet
+              {!detailLoading && snippetFindings.length > 0 && (() => {
+                const safeIndex = Math.min(snippetIndex, snippetFindings.length - 1)
+                const f = snippetFindings[safeIndex]
+                const fDetail = detailMap.get(findingIdentityKey(f))!
+                const snippet = fDetail.manifestSnippet!
                 const matchLine = fDetail.manifestMatchLine
                 if (/[\x00-\x08\x0E-\x1F]/.test(snippet)) return null
                 const startLineNum = matchLine != null ? Math.max(1, matchLine - 7) : 1
                 const filename = f.dependency.manifest_path?.split("/").filter(Boolean).pop() ?? f.dependency.manifest_path ?? ""
+                const nav = snippetFindings.length > 1 ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      aria-label="Previous manifest"
+                      onClick={() => setSnippetIndex((i) => Math.max(0, i - 1))}
+                      disabled={safeIndex === 0}
+                      className="flex h-5 w-5 items-center justify-center rounded text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
+                        <path d="M6.5 2L3.5 5L6.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                    <span className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] tabular-nums text-[var(--color-text-secondary)]">
+                      {safeIndex + 1}/{snippetFindings.length}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Next manifest"
+                      onClick={() => setSnippetIndex((i) => Math.min(snippetFindings.length - 1, i + 1))}
+                      disabled={safeIndex === snippetFindings.length - 1}
+                      className="flex h-5 w-5 items-center justify-center rounded text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
+                        <path d="M3.5 2L6.5 5L3.5 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                ) : undefined
                 return (
                   <DrawerCodeBlock
-                    key={findingIdentityKey(f)}
                     lines={snippet.split("\n").map((line, idx) => ({
                       number: startLineNum + idx,
                       content: line,
                       highlighted: matchLine != null && (startLineNum + idx) === matchLine,
                     }))}
                     label={filename}
+                    lineRange={nav}
                     maxHeight={320}
                   />
                 )
-              })}
+              })()}
             </DrawerSection>
 
             {/* Advisory description */}
