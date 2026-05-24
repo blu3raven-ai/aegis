@@ -53,7 +53,11 @@ echo '{}' > "$CONTEXT_FILE"
 while IFS=$'\t' read -r rel_path line; do
     [[ -z "$rel_path" || "$line" == "0" ]] && continue
 
-    # Reject paths that could escape the clone directory
+    # Strip absolute /tmp/tmp.XXXX/ prefix that Opengrep embeds in SARIF URIs
+    # e.g. /tmp/tmp.ABC123/server.py -> server.py
+    rel_path=$(echo "$rel_path" | sed 's|^/tmp/tmp\.[^/]*/||')
+
+    # Reject any remaining absolute or escaping paths
     if [[ "$rel_path" == /* ]] || [[ "$rel_path" == *..* ]]; then
         continue
     fi

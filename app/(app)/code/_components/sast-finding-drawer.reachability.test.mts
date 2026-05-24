@@ -65,14 +65,14 @@ describe("sast-finding-drawer Reachability section", () => {
 
   it("renders call chain steps for reachable verdict", () => {
     assert.ok(
-      drawerSrc.includes("reachability.call_chain"),
+      drawerSrc.includes("reachability?.call_chain") || drawerSrc.includes("reachability.call_chain"),
       "should render call chain from reachability data"
     )
   })
 
   it("renders entry point label with accent color", () => {
     assert.ok(
-      drawerSrc.includes("reachability.entry_point"),
+      drawerSrc.includes("reachability?.entry_point") || drawerSrc.includes("reachability.entry_point"),
       "should show entry_point label"
     )
     assert.ok(
