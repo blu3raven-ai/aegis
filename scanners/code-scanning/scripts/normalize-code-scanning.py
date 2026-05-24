@@ -117,6 +117,11 @@ def main():
             if sha_file.exists():
                 commit = sha_file.read_text().strip() or "HEAD"
 
+            html_url = ""
+            html_url_file = repo_dir / "html_url.txt"
+            if html_url_file.exists():
+                html_url = html_url_file.read_text().strip()
+
             context = {}
             ctx_file = repo_dir / "context.json"
             if ctx_file.exists():
@@ -137,6 +142,8 @@ def main():
                 findings, file_rules = normalize_file(raw_file, org, repo, commit, context, reachability)
                 active_rules.update(file_rules)
                 for f in findings:
+                    if html_url:
+                        f["repo_html_url"] = html_url
                     out.write(json.dumps(f, separators=(",", ":")) + "\n")
                     total += 1
             except Exception as e:

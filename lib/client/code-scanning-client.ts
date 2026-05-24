@@ -37,6 +37,7 @@ export interface CodeScanningStartRunsResponse {
 export interface CodeScanningFinding {
   identity_key: string
   repo_full_name: string
+  repo_html_url?: string
   file_path: string
   start_line: number
   end_line: number
