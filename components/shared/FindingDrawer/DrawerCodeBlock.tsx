@@ -41,7 +41,7 @@ export function DrawerCodeBlock({
         className="overflow-auto rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950"
         style={{ maxHeight }}
       >
-        <pre className="min-w-max p-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
+        <pre className="min-w-max p-4 font-[family-name:var(--font-jetbrains-mono)] text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
           <code>
             {lines.map((line) => {
               const isHighlighted =
