@@ -81,7 +81,11 @@ def normalize_file(file_path: Path, org: str, repo: str, commit: str, context: d
                 "cwe": cwe,
                 "message": result.get("message", {}).get("text", ""),
                 "snippet": region.get("snippet", {}).get("text", ""),
-                "fix_suggestion": (result.get("fixes") or [{}])[0].get("description", {}).get("text") if result.get("fixes") else None,
+                "fix_suggestion": (
+                    (result.get("fixes") or [{}])[0].get("description", {}).get("text")
+                    if result.get("fixes")
+                    else rule.get("help", {}).get("text") or None
+                ),
                 "commit_sha": commit,
                 "stateCandidate": "open",
                 "code_flows": code_flows if code_flows else None,
