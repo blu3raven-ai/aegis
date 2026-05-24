@@ -122,3 +122,43 @@ def test_package_name_not_matched_as_substring(tmp_path: Path):
 
     assert results[0]["manifestMatchLine"] == 3, "should match torch==2.1.2 on line 3, not the find-links URL"
     assert "torch==2.1.2" in results[0]["manifestSnippet"]
+
+
+def test_package_name_not_matched_with_hyphen_suffix(tmp_path: Path):
+    """requests must not match requests-toolbelt."""
+    manifests_dir = tmp_path / "manifests"
+    manifests_dir.mkdir()
+    content = (
+        "requests-toolbelt==0.9.1\n"
+        "requests==2.28.0\n"
+    )
+    (manifests_dir / "requirements.txt").write_text(content)
+
+    grype_json = {"matches": [_grype_match("requests", "/requirements.txt")]}
+    findings_file = tmp_path / "findings.json"
+    findings_file.write_text(json.dumps(grype_json))
+
+    results = normalize_file(findings_file, "acme-org", "repo", "abc123", manifests_dir)
+
+    assert results[0]["manifestMatchLine"] == 2, "should match requests==2.28.0 on line 2, not requests-toolbelt"
+
+
+def test_package_name_not_matched_with_dot_suffix(tmp_path: Path):
+    """lodash must not match lodash.clonedeep in package.json."""
+    manifests_dir = tmp_path / "manifests"
+    manifests_dir.mkdir()
+    content = (
+        '{\n'
+        '  "lodash.clonedeep": "^4.5.0",\n'
+        '  "lodash": "^4.17.21"\n'
+        '}\n'
+    )
+    (manifests_dir / "package.json").write_text(content)
+
+    grype_json = {"matches": [_grype_match("lodash", "/package.json")]}
+    findings_file = tmp_path / "findings.json"
+    findings_file.write_text(json.dumps(grype_json))
+
+    results = normalize_file(findings_file, "acme-org", "repo", "abc123", manifests_dir)
+
+    assert results[0]["manifestMatchLine"] == 3, "should match lodash on line 3, not lodash.clonedeep"
