@@ -571,14 +571,14 @@ export function CodeScanningDashboardView({ org, initialTab, canEdit, prerequisi
     <div className="space-y-6">
       {showBanner && latestRun && (
         <ScanRunningBanner
-          organization={org}
+          organization={latestRun.org}
           status={latestRun.status}
           progress={latestRun.progress}
           logTail={latestRun.logTail}
           startedAt={latestRun.startedAt ?? null}
           createdAt={latestRun.createdAt ?? null}
           nowMs={nowMs}
-          commandLabel={`root@scanner:~$ ./run-code-scan.sh --org ${org}`}
+          commandLabel={`root@scanner:~$ ./run-code-scan.sh --org ${latestRun.org}`}
           scanLabel="Code scan"
           extraStages={{ scanning: "Scanning Repositories" }}
         />
