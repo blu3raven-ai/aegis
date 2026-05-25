@@ -42,7 +42,7 @@ async def sse_stream(request: Request) -> StreamingResponse:
     bus = get_event_bus()
 
     try:
-        subscription = bus.subscribe(
+        sub_obj, subscription = bus.subscribe(
             user_id=ctx["user_id"],
             role=ctx["role"],
             orgs=ctx["orgs"],
@@ -78,8 +78,8 @@ async def sse_stream(request: Request) -> StreamingResponse:
             if time.time() - last_org_refresh >= 60:
                 from src.shared.config import get_orgs_from_source_connections
                 refreshed_orgs = get_orgs_from_source_connections()
-                if refreshed_orgs != subscription.orgs:
-                    subscription.orgs = refreshed_orgs
+                if refreshed_orgs != sub_obj.orgs:
+                    sub_obj.orgs = refreshed_orgs
                     logger.debug("SSE org scope refreshed for user %s", ctx["user_id"])
                 last_org_refresh = time.time()
 

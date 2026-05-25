@@ -12,7 +12,7 @@ import {
   DrawerCodeLines,
 } from "@/components/shared/FindingDrawer"
 import type { CodeScanningFinding } from "@/lib/client/code-scanning-client"
-import { firstSentence } from "@/lib/shared/code-scanning/drawer-helpers"
+import { firstSentence, pickHighlightIdx } from "@/lib/shared/code-scanning/drawer-helpers"
 import {
   dismissCodeScanningFinding,
   reopenCodeScanningFinding,
@@ -337,9 +337,7 @@ const repoBaseUrl = finding?.repo_html_url || null
             const rawWindow = (finding.code_window || "").trimEnd()
             if (rawWindow) {
               const windowLines = rawWindow.split("\n")
-              const foundIdx = snippetTrimmed
-                ? windowLines.findIndex((l) => l.trim() === snippetTrimmed)
-                : -1
+              const foundIdx = pickHighlightIdx(windowLines, snippetTrimmed)
               if (foundIdx >= 0) {
                 codeHighlightIdx = foundIdx
                 codeWindowStart = finding.start_line - foundIdx

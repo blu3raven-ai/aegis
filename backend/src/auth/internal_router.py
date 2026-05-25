@@ -339,7 +339,7 @@ def migrate_single_user(body: MigrateUserRequest, request: Request) -> JSONRespo
             role="owner",
             role_id="role_owner",
             status="active",
-            password_reset_required=True,
+            password_reset_required=False,
             created_at=now,
             updated_at=now,
         )
