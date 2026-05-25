@@ -78,43 +78,7 @@ function reachabilityBadgeConfig(verdict: ReachabilityVerdict): {
 }
 
 
-function CweCard({ id }: { id: string }) {
-  const normalised = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
-  const num = normalised.replace(/^CWE-/, "")
-  const [name, setName] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let cancelled = false
-    fetch(`/api/cwe/${num}`)
-      .then((r) => r.json())
-      .then((data: { name: string | null }) => { if (!cancelled) setName(data.name ?? null) })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [num])
-
-  return (
-    <a
-      href={`https://cwe.mitre.org/data/definitions/${num}.html`}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2.5 transition-colors hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-accent)]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-    >
-      <div className="min-w-0">
-        <p className="text-xs font-semibold text-[var(--color-text-primary)]">{normalised}</p>
-        {loading ? (
-          <div className="mt-0.5 h-3 w-32 animate-pulse rounded bg-[var(--color-border)]" />
-        ) : name ? (
-          <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">{name}</p>
-        ) : null}
-      </div>
-      <span className="shrink-0 text-[11px] text-[var(--color-accent)]">
-        MITRE →<span className="sr-only"> (opens in new tab)</span>
-      </span>
-    </a>
-  )
-}
 
 const DISMISS_REASONS = [
   "Fix started",
@@ -131,13 +95,27 @@ interface Props {
 }
 
 export function CodeScanningFindingDrawer({ finding, org, onClose, onActionComplete }: Props) {
+  const [cweData, setCweData] = useState<Record<string, { name: string | null; description: string | null }>>({})
+  useEffect(() => {
+    if (!finding?.cwe?.length) return
+    finding.cwe.forEach((id) => {
+      const num = String(parseInt(id.replace(/^cwe-/i, ""), 10))
+      if (cweData[num] !== undefined) return
+      fetch(`/api/cwe/${num}`)
+        .then((r) => r.json())
+        .then((data: { name: string | null; description: string | null }) => {
+          setCweData((prev) => ({ ...prev, [num]: { name: data.name ?? null, description: data.description ?? null } }))
+        })
+        .catch(() => {})
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finding?.identity_key])
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [remediationTab, setRemediationTab] = useState<"code" | "ai">("code")
 
   useEffect(() => {
     setActionError(null)
-    setRemediationTab("code")
   }, [finding])
 
   async function handleDismiss(reason: string) {
@@ -178,8 +156,9 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
     }
   }
 
-  const githubUrl = finding
-    ? `https://github.com/${finding.repo_full_name}/blob/HEAD/${finding.file_path}#L${finding.start_line}`
+const repoBaseUrl = finding?.repo_html_url || null
+  const githubUrl = repoBaseUrl
+    ? `${repoBaseUrl}/blob/HEAD/${finding!.file_path}#L${finding!.start_line}`
     : null
 
   const briefDetails = useMemo(
@@ -199,10 +178,9 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
   return (
     <FindingsDrawerShell open={!!finding} onClose={onClose} label="SAST finding details">
       <DrawerHeader
-        eyebrow="SAST Finding"
-        title={finding ? firstSentence(finding.message) : ""}
-        titleTooltip={finding?.message}
-        identifier={finding?.rule_id}
+        eyebrow="Code Scanning Finding"
+        title={finding?.rule_id ?? ""}
+        titleTooltip={finding?.rule_id}
         repoUrl={githubUrl ?? undefined}
         onClose={onClose}
       />
@@ -219,19 +197,15 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
 
           {/* ── 1. Security Brief ── */}
           <DrawerSection label="Security Brief">
-            {/* Badge row — severity, state, reachability */}
-            <div className="mb-3 flex flex-wrap items-center gap-1.5">
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${severityBadgeClass(finding.severity)}`}>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${severityBadgeClass(finding.severity)}`}>
                 {finding.severity}
-              </span>
-              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${stateBadgeClass(finding.state)}`}>
-                {stateLabel(finding.state)}
               </span>
               {finding.reachability && (() => {
                 const cfg = reachabilityBadgeConfig(finding.reachability.verdict as ReachabilityVerdict)
                 return (
                   <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cfg.cls}`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${cfg.cls}`}
                     aria-label={cfg.ariaLabel}
                     title={cfg.title}
                   >
@@ -243,125 +217,136 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                 )
               })()}
             </div>
-            <p className="mb-4 text-sm leading-relaxed text-[var(--color-text-primary)]">
-              {finding.message}
-            </p>
+
+            <h4 className="text-lg font-semibold text-[var(--color-text-primary)]">
+              {firstSentence(finding.message)}
+            </h4>
+
+            {finding.cwe && finding.cwe.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {finding.cwe.map((id) => {
+                  const normalised = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
+                  const num = String(parseInt(normalised.replace(/^CWE-/, ""), 10))
+                  return (
+                    <a
+                      key={id}
+                      href={`https://cwe.mitre.org/data/definitions/${num}.html`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="cursor-pointer rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-surface-raised)]"
+                    >
+                      {normalised}
+                    </a>
+                  )
+                })}
+              </div>
+            )}
+
             <DrawerDetailGrid items={briefDetails} />
           </DrawerSection>
 
           {/* ── 2. Remediation ── */}
-          <DrawerSection label="Remediation">
-            {/* Tab bar */}
-            <div className="flex border-b border-[var(--color-border)] -mx-1 mb-4" role="tablist">
-              {(["code", "ai"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  role="tab"
-                  aria-selected={remediationTab === tab}
-                  onClick={() => setRemediationTab(tab)}
-                  className={`px-3 py-1.5 text-xs font-medium -mb-px border-b-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
-                    remediationTab === tab
-                      ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                      : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                  }`}
-                >
-                  {tab === "code" ? "Code & Reachability" : "AI Analysis"}
-                </button>
-              ))}
-            </div>
-
-            {/* Code & Reachability tab */}
-            {remediationTab === "code" && (() => {
-              const findingUrl = `https://github.com/${finding.repo_full_name}/blob/HEAD/${finding.file_path}#L${finding.start_line}`
-              const snippetTrimmed = (finding.snippet || "").trim()
-              // Prefer code_window (±40 lines of context). Fall back to snippet alone.
-              // Find the highlighted row by matching the snippet text — this is robust
-              // against off-by-one errors when code_window and start_line are misaligned.
-              let vulnerableCode: string
-              let codeWindowStart: number
-              let codeHighlightIdx: number
-              const rawWindow = (finding.code_window || "").trimEnd()
-              if (rawWindow) {
-                const windowLines = rawWindow.split("\n")
-                const foundIdx = snippetTrimmed
-                  ? windowLines.findIndex((l) => l.trim() === snippetTrimmed)
-                  : -1
-                if (foundIdx >= 0) {
-                  // Snippet found — derive true start line from finding position
-                  codeHighlightIdx = foundIdx
-                  codeWindowStart = finding.start_line - foundIdx
-                  vulnerableCode = rawWindow
-                } else {
-                  // Snippet not found (whitespace mismatch, etc.) — use math as fallback
-                  codeWindowStart = Math.max(1, finding.start_line - 40)
-                  codeHighlightIdx = finding.start_line - codeWindowStart
-                  vulnerableCode = rawWindow
-                }
+          {(() => {
+            const findingUrl = repoBaseUrl ? `${repoBaseUrl}/blob/HEAD/${finding.file_path}#L${finding.start_line}` : null
+            const snippetTrimmed = (finding.snippet || "").trim()
+            let vulnerableCode: string
+            let codeWindowStart: number
+            let codeHighlightIdx: number
+            const rawWindow = (finding.code_window || "").trimEnd()
+            if (rawWindow) {
+              const windowLines = rawWindow.split("\n")
+              const foundIdx = snippetTrimmed
+                ? windowLines.findIndex((l) => l.trim() === snippetTrimmed)
+                : -1
+              if (foundIdx >= 0) {
+                codeHighlightIdx = foundIdx
+                codeWindowStart = finding.start_line - foundIdx
+                vulnerableCode = rawWindow
               } else {
-                // No code_window at all — show snippet as a single highlighted line
-                vulnerableCode = snippetTrimmed
-                codeWindowStart = finding.start_line
-                codeHighlightIdx = 0
+                codeWindowStart = Math.max(1, finding.start_line - 40)
+                codeHighlightIdx = finding.start_line - codeWindowStart
+                vulnerableCode = rawWindow
               }
-              const verdict = finding.reachability?.verdict
+            } else {
+              vulnerableCode = snippetTrimmed
+              codeWindowStart = finding.start_line
+              codeHighlightIdx = 0
+            }
+            const verdict = finding.reachability?.verdict
 
-              const Arrow = () => (
-                <div className="flex flex-col items-center py-0.5" aria-hidden="true">
-                  <div className="h-3 w-px bg-[var(--color-border)]" />
-                  <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
-                    <path d="M0 0 L4 5 L8 0" stroke="var(--color-border)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-              )
-              const LinkIcon = () => (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                  <polyline points="15 3 21 3 21 9" />
-                  <line x1="10" y1="14" x2="21" y2="3" />
+            const Arrow = () => (
+              <div className="flex flex-col items-center py-0.5" aria-hidden="true">
+                <div className="h-3 w-px bg-[var(--color-border)]" />
+                <svg width="8" height="5" viewBox="0 0 8 5" fill="none">
+                  <path d="M0 0 L4 5 L8 0" stroke="var(--color-border)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              )
+              </div>
+            )
 
-              return (
-                <div className="space-y-4">
-
-                  {/* Vulnerable code — always shown regardless of reachability */}
-                  <div className="rounded-lg border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950 overflow-hidden">
-                    <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5">
-                      <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]" title={finding.file_path}>
-                        {finding.file_path}
-                      </p>
-                      <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                        <a href={findingUrl} target="_blank" rel="noreferrer" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]" aria-label={`View ${finding.file_path}:${finding.start_line} on GitHub (opens in new tab)`} title={`${finding.file_path}:${finding.start_line}`}>
-                          <LinkIcon />
-                          <span className="sr-only">(opens in new tab)</span>
-                        </a>
-                      </div>
-                    </div>
-                    {vulnerableCode ? (
-                      <DrawerCodeLines
-                        code={vulnerableCode}
-                        startLine={codeWindowStart}
-                        highlightIdx={codeHighlightIdx}
-                        borderCls="border-[var(--color-border)]/60"
-                        hlRowCls="bg-orange-500/15"
-                      />
-                    ) : (
-                      <p className="px-3 pb-2.5 text-[11px] text-[var(--color-text-secondary)]">No code preview available</p>
-                    )}
+            return (
+              <DrawerSection label="Remediation">
+                {/* Fix guidance */}
+                {finding.fix_suggestion && (
+                  <div className="flex items-start gap-2">
+                    <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
+                    </svg>
+                    <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">{finding.fix_suggestion}</p>
                   </div>
+                )}
 
-                  {/* Call graph — only when reachable */}
-                  {verdict === "reachable" && (() => {
-                    const chain = finding.reachability?.call_chain ?? []
-                    return (
+                {/* Affected location */}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
+                    Affected location
+                    <span className="ml-1.5 normal-case tracking-normal font-normal opacity-60">· {finding.file_path}:{finding.start_line}</span>
+                  </p>
+                  {findingUrl && (
+                    <a
+                      href={findingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline"
+                    >
+                      View in repository
+                    </a>
+                  )}
+                </div>
+
+                {/* Code block */}
+                <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
+                  <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5">
+                    <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs font-semibold text-[var(--color-text-primary)]" title={finding.file_path}>
+                      {finding.file_path}
+                    </p>
+                  </div>
+                  {vulnerableCode ? (
+                    <DrawerCodeLines
+                      code={vulnerableCode}
+                      startLine={codeWindowStart}
+                      highlightIdx={codeHighlightIdx}
+                      borderCls="border-[var(--color-border)]/60"
+                      hlRowCls="bg-orange-500/15"
+                    />
+                  ) : (
+                    <p className="px-3 pb-2.5 text-[11px] text-[var(--color-text-secondary)]">No code preview available</p>
+                  )}
+                </div>
+
+                {/* Call chain — only when reachable */}
+                {verdict === "reachable" && (() => {
+                  const chain = finding.reachability?.call_chain ?? []
+                  return (
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Call chain</p>
                       <div className="flex flex-col items-stretch">
                         {chain.length > 0 ? chain.map((step, idx) => {
                           const isEntry = idx === 0
-                          const stepUrl = `https://github.com/${finding.repo_full_name}/blob/HEAD/${step.file}#L${step.line}`
+                          const stepUrl = repoBaseUrl ? `${repoBaseUrl}/blob/HEAD/${step.file}#L${step.line}` : null
                           return (
                             <div key={idx} className="flex flex-col items-stretch">
                               {idx > 0 && <Arrow />}
-                              <div className={`rounded-lg border overflow-hidden ${isEntry ? "border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5" : "border-[var(--color-border)] bg-[var(--color-surface-raised)]"}`}>
+                              <div className={`rounded-lg border overflow-hidden ${isEntry ? "border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5" : "border-[var(--color-border)]"}`}>
                                 <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
                                   {isEntry ? (
                                     <svg className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -379,14 +364,15 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                                     {isEntry && (
                                       <span className="rounded-full bg-[var(--color-accent)]/10 px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">entry</span>
                                     )}
-                                    <a href={stepUrl} target="_blank" rel="noreferrer" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]" aria-label={`View ${step.file}:${step.line} on GitHub (opens in new tab)`} title={`${step.file}:${step.line}`}>
-                                      <LinkIcon />
-                                      <span className="sr-only">(opens in new tab)</span>
-                                    </a>
+                                    {stepUrl && (
+                                      <a href={stepUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--color-accent)] hover:underline" aria-label={`View ${step.file}:${step.line} (opens in new tab)`}>
+                                        View in repository
+                                      </a>
+                                    )}
                                   </div>
                                 </div>
-                                <p className="px-3 pb-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)]" title={step.file}>
-                                  {step.file}<span className="text-[var(--color-text-primary)]">:{step.line}</span>
+                                <p className="px-3 pb-1.5 font-[family-name:var(--font-jetbrains-mono)] text-[11px] font-semibold text-[var(--color-text-primary)]" title={step.file}>
+                                  {step.file}<span className="opacity-50">:{step.line}</span>
                                 </p>
                                 {step.snippet && (
                                   <DrawerCodeLines
@@ -417,96 +403,98 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                           </div>
                         )}
                       </div>
-                    )
-                  })()}
-
-                  {/* Reachability status note for non-reachable verdicts */}
-                  {verdict === "unreachable" && (
-                    <p className="text-[11px] text-[var(--color-text-secondary)]">Not reachable from any detected entry point — lower exploitation risk.</p>
-                  )}
-                  {verdict === "unknown" && (
-                    <p className="text-[11px] text-[var(--color-text-secondary)]">Reachability could not be determined — treat as potentially reachable.</p>
-                  )}
-
-                </div>
-              )
-            })()}
-
-            {/* AI Analysis tab — only renders content when selected */}
-            {remediationTab === "ai" && (
-              <div>
-                {finding.ai_review && finding.ai_review.verdict !== "skipped" && (
-                  <div className="flex items-center gap-2.5 pb-3">
-                    <svg className="h-4 w-4 shrink-0 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M12 3v1m0 16v1M4.22 4.22l.7.7m13.16 13.16.7.7M3 12h1m16 0h1M4.22 19.78l.7-.7M18.36 5.64l.7-.7" />
-                      <circle cx="12" cy="12" r="4" />
-                    </svg>
-                    <div className="ml-auto flex items-center gap-2">
-                      {finding.ai_review.confidence && (
-                        <span className="text-[11px] font-medium text-[var(--color-text-secondary)] capitalize">
-                          {finding.ai_review.confidence} confidence
-                        </span>
-                      )}
-                      <span className={`max-w-[55%] truncate rounded-full px-2.5 py-0.5 text-xs font-semibold ${verdictChipClass(finding.ai_review.verdict)}`}>
-                        {finding.ai_review.verdict}
-                      </span>
                     </div>
+                  )
+                })()}
+
+                {verdict === "unreachable" && (
+                  <p className="text-[11px] text-[var(--color-text-secondary)]">Not reachable from any detected entry point — lower exploitation risk.</p>
+                )}
+                {verdict === "unknown" && (
+                  <p className="text-[11px] text-[var(--color-text-secondary)]">Reachability could not be determined — treat as potentially reachable.</p>
+                )}
+              </DrawerSection>
+            )
+          })()}
+
+          {/* ── 3. AI Analysis ── */}
+          {finding.ai_review && (
+            <DrawerSection label="AI Analysis">
+              {finding.ai_review.verdict !== "skipped" && (
+                <div className="flex items-center gap-2">
+                  {finding.ai_review.confidence && (
+                    <span className="text-[11px] font-medium text-[var(--color-text-secondary)] capitalize">
+                      {finding.ai_review.confidence} confidence
+                    </span>
+                  )}
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${verdictChipClass(finding.ai_review.verdict)}`}>
+                    {finding.ai_review.verdict}
+                  </span>
+                </div>
+              )}
+              <div className="space-y-3">
+                {finding.ai_review.reasoning && (
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Reasoning</p>
+                    <p className="text-xs leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">{finding.ai_review.reasoning}</p>
                   </div>
                 )}
-
-                {finding.ai_review ? (
-                  <div className="space-y-3">
-                    {finding.ai_review.reasoning && (
-                      <div>
-                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Reasoning</p>
-                        <p className="text-xs leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
-                          {finding.ai_review.reasoning}
-                        </p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Explanation</p>
-                      <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
-                        {finding.ai_review.explanation}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
+                {finding.ai_review.explanation && (
                   <div>
-                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Manual triage</p>
-                    <ul className="space-y-1.5">
-                      {[
-                        "Does attacker-controlled data reach this code path?",
-                        "Is there input validation or sanitization before this point?",
-                        "Does the call chain cross a trust boundary?",
-                        "What is the worst-case impact if this is exploited?",
-                      ].map((q) => (
-                        <li key={q} className="flex items-start gap-2 text-xs text-[var(--color-text-secondary)]">
-                          <span className="mt-0.5 shrink-0 text-[var(--color-border)]">—</span>
-                          {q}
-                        </li>
-                      ))}
-                    </ul>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Explanation</p>
+                    <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{finding.ai_review.explanation}</p>
                   </div>
                 )}
               </div>
-            )}
-          </DrawerSection>
-
-          {/* ── 3. Advisory Details ── */}
-          {finding.fix_suggestion && (
-            <DrawerSection label="Advisory Details">
-              <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
-                {finding.fix_suggestion}
-              </p>
             </DrawerSection>
           )}
+
+          {/* ── 3. Advisory Details ── */}
+          <DrawerSection label="Advisory Details">
+            <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
+              {finding.message}
+            </p>
+            {finding.cwe?.map((id) => {
+              const num = String(parseInt(id.replace(/^cwe-/i, ""), 10))
+              const entry = cweData[num]
+              if (!entry?.description) return null
+              return (
+                <div key={id} className="mt-3">
+                  <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">CWE-{num}</p>
+                  <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{entry.description}</p>
+                </div>
+              )
+            })}
+            {finding.fix_suggestion && (
+              <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                {finding.fix_suggestion}
+              </p>
+            )}
+          </DrawerSection>
 
           {/* ── 4. References ── */}
           {finding.cwe && finding.cwe.length > 0 && (
             <DrawerSection label="References">
               <div className="space-y-2">
-                {finding.cwe.map((id) => <CweCard key={id} id={id} />)}
+                {finding.cwe.map((id) => {
+                  const normalised = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
+                  const num = String(parseInt(normalised.replace(/^CWE-/, ""), 10))
+                  const url = `https://cwe.mitre.org/data/definitions/${num}.html`
+                  const label = `cwe.mitre.org/data/definitions/${num}`
+                  return (
+                    <a
+                      key={id}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs font-medium text-[var(--color-accent)] transition-colors hover:bg-[var(--color-surface)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+                      title={url}
+                    >
+                      <span className="truncate">{label}</span>
+                      <span className="shrink-0 text-[var(--color-text-secondary)]">Open →</span>
+                    </a>
+                  )
+                })}
               </div>
             </DrawerSection>
           )}
