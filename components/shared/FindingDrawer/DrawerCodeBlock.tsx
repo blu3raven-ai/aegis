@@ -1,5 +1,6 @@
 // components/shared/FindingDrawer/DrawerCodeBlock.tsx
 import React from "react"
+import { DrawerCodeLines } from "./DrawerCodeLines"
 
 export function DrawerCodeBlock({
   lines,
@@ -20,7 +21,7 @@ export function DrawerCodeBlock({
     <div>
       <div className="flex items-center justify-between gap-2 rounded-t-xl border border-b-0 border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)]">
         <span className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-          <span className="shrink-0">{label}</span>
+          <span className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] font-semibold text-[var(--color-text-primary)]">{label}</span>
           {filePath && (
             <>
               <span className="shrink-0 opacity-40">·</span>
@@ -37,32 +38,18 @@ export function DrawerCodeBlock({
           <span className="shrink-0">{lineRange}</span>
         )}
       </div>
-      <div
-        className="overflow-auto rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950"
-        style={{ maxHeight }}
-      >
-        <pre className="min-w-max p-4 text-sm leading-6 text-slate-700 dark:text-slate-300">
-          <code>
-            {lines.map((line) => {
-              const isHighlighted =
-                line.highlighted === true ||
-                (highlightRange != null &&
-                  line.number >= highlightRange.start &&
-                  line.number <= highlightRange.end)
-              return (
-                <span
-                  key={line.number}
-                  className={`block ${isHighlighted ? "-mx-4 bg-orange-500/15 px-4 text-orange-700 dark:text-orange-100" : ""}`}
-                >
-                  <span className="mr-5 inline-block w-12 select-none text-right font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-secondary)]">
-                    {line.number}
-                  </span>
-                  <span>{line.content || " "}</span>
-                </span>
-              )
-            })}
-          </code>
-        </pre>
+      <div className="overflow-hidden rounded-b-xl border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950">
+        <DrawerCodeLines
+          code={lines.map((l) => l.content).join("\n")}
+          startLine={lines[0]?.number ?? 1}
+          highlightIdx={
+            highlightRange != null
+              ? lines.findIndex((l) => l.number >= highlightRange.start && l.number <= highlightRange.end)
+              : lines.findIndex((l) => l.highlighted === true)
+          }
+          borderCls="border-[var(--color-border)]"
+          maxHeight={maxHeight}
+        />
       </div>
     </div>
   )
