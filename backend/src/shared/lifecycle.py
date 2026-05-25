@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from src.db.helpers import run_db
 from src.db.models import Finding, Decision
@@ -116,6 +117,7 @@ def apply_lifecycle(
             if decision and decision.status == "dismissed":
                 if prev:
                     prev.detail = detail
+                    flag_modified(prev, "detail")
                     prev.severity = severity
                     prev.last_seen_at = now
                     prev.updated_at = now
@@ -139,6 +141,7 @@ def apply_lifecycle(
                     new_state = hooks.initial_state(raw)
                     await update_finding_state(session, prev, new_state)
                     prev.detail = detail
+                    flag_modified(prev, "detail")
                     prev.severity = severity
                     prev.last_seen_at = now
                     await insert_event(
@@ -150,6 +153,7 @@ def apply_lifecycle(
                 elif old_state == "deferred" and hooks.has_fix(raw):
                     await update_finding_state(session, prev, "open")
                     prev.detail = detail
+                    flag_modified(prev, "detail")
                     prev.severity = severity
                     prev.last_seen_at = now
                     await insert_event(
@@ -160,6 +164,7 @@ def apply_lifecycle(
 
                 else:
                     prev.detail = detail
+                    flag_modified(prev, "detail")
                     prev.severity = severity
                     prev.last_seen_at = now
                     prev.updated_at = now

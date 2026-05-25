@@ -2,6 +2,7 @@
 """Normalize Grype output to findings JSONL."""
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -47,14 +48,18 @@ def normalize_file(file_path: Path, org: str, repo: str, commit: str, manifests_
         }
 
         # Enrich with manifest snippet
+        # Grype paths are root-relative (e.g. "/requirements.txt"); manifests are saved
+        # without the leading slash, so strip it before the lookup.
         if manifests_dir and manifests_dir.exists() and manifest_path and finding["packageName"]:
-            safe_name = manifest_path.replace("/", "__")
+            clean_path = manifest_path.lstrip("/")
+            safe_name = clean_path.replace("/", "__")
             mf = manifests_dir / safe_name
             if mf.exists():
                 try:
                     lines = mf.read_text(errors="replace").splitlines()
                     pkg = finding["packageName"].lower()
-                    match_line = next((i for i, l in enumerate(lines, 1) if pkg in l.lower()), 0)
+                    pkg_re = re.compile(r"(?i)(?<![a-zA-Z0-9._-])" + re.escape(pkg) + r"(?![a-zA-Z0-9._-])")
+                    match_line = next((i for i, l in enumerate(lines, 1) if pkg_re.search(l)), 0)
                     if match_line:
                         start = max(0, match_line - 8)
                         finding["manifestSnippet"] = "\n".join(lines[start:match_line + 7])

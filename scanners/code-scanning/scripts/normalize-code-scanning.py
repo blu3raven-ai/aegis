@@ -2,6 +2,7 @@
 """Normalize opengrep SARIF output to findings JSONL."""
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -44,7 +45,10 @@ def normalize_file(file_path: Path, org: str, repo: str, commit: str, context: d
             tags = rule.get("properties", {}).get("tags", [])
             cwe = [t for t in tags if isinstance(t, str) and t.startswith("CWE-")]
 
-            ctx_key = f"{uri}:{start_line}"
+            # Strip /tmp/tmp.XXXX/ prefix that Opengrep embeds in SARIF URIs so the
+            # lookup key matches what extract-context.sh writes to context.json
+            stripped_uri = re.sub(r"^/tmp/tmp\.[^/]*/", "", uri)
+            ctx_key = f"{stripped_uri}:{start_line}"
             ctx_entry = context.get(ctx_key, {})
             file_class = ctx_entry.get("file_class", "source")
 
