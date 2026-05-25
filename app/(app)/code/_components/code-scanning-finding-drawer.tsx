@@ -12,7 +12,7 @@ import {
   DrawerCodeLines,
 } from "@/components/shared/FindingDrawer"
 import type { CodeScanningFinding } from "@/lib/client/code-scanning-client"
-import { firstSentence } from "@/lib/shared/code-scanning/drawer-helpers"
+import { firstSentence, pickHighlightIdx } from "@/lib/shared/code-scanning/drawer-helpers"
 import {
   dismissCodeScanningFinding,
   reopenCodeScanningFinding,
@@ -337,20 +337,7 @@ const repoBaseUrl = finding?.repo_html_url || null
             const rawWindow = (finding.code_window || "").trimEnd()
             if (rawWindow) {
               const windowLines = rawWindow.split("\n")
-              // Pick the match closest to the window center to handle duplicate snippets.
-              const centerIdx = (windowLines.length - 1) / 2
-              const allMatchIndices = snippetTrimmed
-                ? windowLines.reduce<number[]>((acc, l, i) => {
-                    if (l.trim() === snippetTrimmed) acc.push(i)
-                    return acc
-                  }, [])
-                : []
-              const foundIdx =
-                allMatchIndices.length > 0
-                  ? allMatchIndices.reduce((best, curr) =>
-                      Math.abs(curr - centerIdx) < Math.abs(best - centerIdx) ? curr : best
-                    )
-                  : -1
+              const foundIdx = pickHighlightIdx(windowLines, snippetTrimmed)
               if (foundIdx >= 0) {
                 codeHighlightIdx = foundIdx
                 codeWindowStart = finding.start_line - foundIdx

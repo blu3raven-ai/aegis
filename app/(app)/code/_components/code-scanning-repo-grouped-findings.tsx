@@ -174,7 +174,7 @@ export function CodeScanningRepoGroupedFindings({
           <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${stateBadgeClass(finding.state)}`}>{stateLabel(finding.state)}</span>
         </td>
         {!hideColumns?.has("rule") && (
-          <td className="px-2.5 py-2.5 max-w-[200px]">
+          <td className="px-2.5 py-2.5 overflow-hidden">
             <span className="block truncate text-xs font-medium text-[var(--color-text-primary)]">{finding.rule_name}</span>
             <span className="block truncate text-[11px] text-[var(--color-text-secondary)]">{finding.rule_id.split(".").slice(-2).join(".")}</span>
           </td>
@@ -232,7 +232,7 @@ export function CodeScanningRepoGroupedFindings({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="w-full table-fixed text-left text-sm">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
             <tr>
               <th className="w-8 px-2 py-2.5">
@@ -243,13 +243,13 @@ export function CodeScanningRepoGroupedFindings({
                   onChange={() => onSetSelected(allRowKeys, !allVisibleSelected)}
                 />
               </th>
-              <th className={thCls}>Severity</th>
-              <th className={thCls}>State</th>
+              <th className={`${thCls} w-[80px]`}>Severity</th>
+              <th className={`${thCls} w-[110px]`}>State</th>
               {!hideColumns?.has("rule") && <th className={thCls}>Rule</th>}
-              {!hideColumns?.has("repository") && <th className={thCls}>Repo</th>}
-              <th className={thCls}>File</th>
-              <th className={thCls}>AI</th>
-              <th className={thCls}>
+              {!hideColumns?.has("repository") && <th className={`${thCls} w-[160px]`}>Repo</th>}
+              <th className={`${thCls} w-[160px]`}>File</th>
+              <th className={`${thCls} w-[32px]`}>AI</th>
+              <th className={`${thCls} w-[54px]`}>
                 <span className="inline-flex items-center gap-1">
                   Age
                   <svg className="h-3 w-3 text-[var(--color-text-tertiary)]" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
