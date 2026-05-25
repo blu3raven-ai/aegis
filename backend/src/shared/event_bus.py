@@ -61,13 +61,16 @@ class EventBus:
 
     def subscribe(
         self, user_id: str, role: str, orgs: list[str],
-    ) -> AsyncGenerator[Event, None]:
-        """Return an async generator that yields events for this subscriber.
+    ) -> tuple["_Subscriber", AsyncGenerator[Event, None]]:
+        """Return (subscriber, async-generator) for this connection.
 
         Registration happens immediately (synchronously) when this method is
         called so that the subscriber is visible to publish() before the caller
         awaits the first event.  The actual queue-waiting happens inside the
         returned async generator.
+
+        The subscriber object exposes mutable fields (e.g. ``orgs``) that the
+        caller can update without reconnecting.
 
         Raises ConnectionError immediately if the per-user connection limit has
         been reached.
@@ -89,8 +92,8 @@ class EventBus:
             )
             self._subscribers[sub_id] = sub
 
-        # Return the async generator without entering the lock
-        return self._drain(sub_id, sub)
+        # Return both handles; caller iterates the generator and may mutate sub
+        return sub, self._drain(sub_id, sub)
 
     async def _drain(
         self, sub_id: int, sub: _Subscriber
