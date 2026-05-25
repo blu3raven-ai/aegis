@@ -245,14 +245,14 @@ export function ContainerScanningDashboardView({ org, initialTab, canEdit, prere
       {showBanner && latestRun && (
         <div className="mb-6">
           <ScanRunningBanner
-            organization={org}
+            organization={latestRun.org}
             status={latestRun.status}
             progress={latestRun.progress}
             logTail={latestRun.logTail}
             startedAt={latestRun.startedAt ?? null}
             createdAt={latestRun.createdAt ?? null}
             nowMs={nowMs}
-            commandLabel={`root@scanner:~$ ./run-container-scan.sh --org ${org}`}
+            commandLabel={`root@scanner:~$ ./run-container-scan.sh --org ${latestRun.org}`}
             scanLabel="Container scan"
             extraStages={{ scanning: "Scanning Images", refreshing_advisories: "Refreshing Advisory Sources", matching: "Matching Vulnerabilities" }}
           />
