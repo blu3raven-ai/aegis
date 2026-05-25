@@ -8,7 +8,6 @@ export interface CurrentUser {
   role: UserRole
   status: "active" | "disabled" | "pending"
   totpEnabled: boolean
-  passwordResetRequired: boolean
   avatarUrl?: string | null
 }
 

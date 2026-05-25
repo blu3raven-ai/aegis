@@ -19,9 +19,6 @@ export async function requireActiveUser(): Promise<DashboardUser | NextResponse>
   if (!user || user.status !== "active") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
-  if (user.passwordResetRequired) {
-    return NextResponse.json({ error: "Password reset required" }, { status: 403 })
-  }
   return user
 }
 
