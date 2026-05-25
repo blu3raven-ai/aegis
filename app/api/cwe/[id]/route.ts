@@ -9,18 +9,18 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }
 
   try {
-    const res = await fetch(`https://cwe.mitre.org/data/definitions/${num}.html`, {
+    const res = await fetch(`https://cwe-api.mitre.org/api/v1/cwe/weakness/${num}`, {
       next: { revalidate: 86400 },
     })
     if (!res.ok) {
-      return NextResponse.json({ id: rawId, name: null })
+      return NextResponse.json({ id: rawId, name: null, description: null })
     }
-    const html = await res.text()
-    // MITRE structure: <h2>CWE-{id}: {Name}</h2>
-    const match = html.match(/CWE-\d+:\s*([^<\n]+)/)
-    const name = match ? match[1].trim() : null
-    return NextResponse.json({ id: rawId, name })
+    const data = await res.json()
+    const weakness = data?.Weaknesses?.Weakness?.[0]
+    const name = weakness?.Name ?? null
+    const description = weakness?.Description ?? null
+    return NextResponse.json({ id: rawId, name, description })
   } catch {
-    return NextResponse.json({ id: rawId, name: null })
+    return NextResponse.json({ id: rawId, name: null, description: null })
   }
 }

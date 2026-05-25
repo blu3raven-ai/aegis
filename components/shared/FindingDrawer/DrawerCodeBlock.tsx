@@ -26,7 +26,7 @@ export function DrawerCodeBlock({
             <>
               <span className="shrink-0 opacity-40">·</span>
               <span
-                className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)]"
+                className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] font-semibold text-[var(--color-text-primary)]"
                 title={filePath}
               >
                 {filePath}
