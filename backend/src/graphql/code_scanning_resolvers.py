@@ -32,6 +32,79 @@ def _git_repos_only(sources: list) -> list[dict[str, Any]]:
 
 
 @strawberry.type
+class CodeScanningAiReview:
+    verdict: str
+    explanation: str
+    reasoning: Optional[str] = None
+    confidence: Optional[str] = None
+
+
+@strawberry.type
+class CodeScanningCodeFlow:
+    file: str
+    line: int
+    snippet: str
+
+
+@strawberry.type
+class CodeScanningCallChainStep:
+    function: str
+    file: str
+    line: int
+
+
+@strawberry.type
+class CodeScanningReachability:
+    verdict: str
+    entry_point: Optional[str] = None
+    call_chain: Optional[list[CodeScanningCallChainStep]] = None
+
+
+def _make_ai_review(r: dict | None) -> Optional["CodeScanningAiReview"]:
+    if not r:
+        return None
+    return CodeScanningAiReview(
+        verdict=r.get("verdict", ""),
+        explanation=r.get("explanation", ""),
+        reasoning=r.get("reasoning"),
+        confidence=r.get("confidence"),
+    )
+
+
+def _make_code_flows(flows: list | None) -> Optional[list["CodeScanningCodeFlow"]]:
+    if not flows:
+        return None
+    return [
+        CodeScanningCodeFlow(
+            file=flow.get("file", ""),
+            line=flow.get("line") or 0,
+            snippet=flow.get("snippet", ""),
+        )
+        for flow in flows
+    ]
+
+
+def _make_reachability(r: dict | None) -> Optional["CodeScanningReachability"]:
+    if not r:
+        return None
+    call_chain = None
+    if r.get("callChain"):
+        call_chain = [
+            CodeScanningCallChainStep(
+                function=step.get("function", ""),
+                file=step.get("file", ""),
+                line=step.get("line") or 0,
+            )
+            for step in r["callChain"]
+        ]
+    return CodeScanningReachability(
+        verdict=r.get("verdict", ""),
+        entry_point=r.get("entryPoint"),
+        call_chain=call_chain,
+    )
+
+
+@strawberry.type
 class CodeScanningFinding:
     id: str
     state: str
@@ -46,6 +119,14 @@ class CodeScanningFinding:
     fixed_at: Optional[str]
     language: Optional[str]
     confidence: Optional[str]
+    category: Optional[str] = None
+    cwe: Optional[list[str]] = None
+    snippet: Optional[str] = None
+    fix_suggestion: Optional[str] = None
+    code_window: Optional[str] = None
+    ai_review: Optional[CodeScanningAiReview] = None
+    code_flows: Optional[list[CodeScanningCodeFlow]] = None
+    reachability: Optional[CodeScanningReachability] = None
 
 
 @strawberry.type
@@ -216,6 +297,14 @@ def code_scanning_findings(
             fixed_at=f.get("fixed_at"),
             language=f.get("language"),
             confidence=f.get("confidence"),
+            category=f.get("category") or None,
+            cwe=f.get("cwe") or None,
+            snippet=f.get("snippet") or None,
+            fix_suggestion=f.get("fix_suggestion"),
+            code_window=f.get("code_window"),
+            ai_review=_make_ai_review(f.get("ai_review")),
+            code_flows=_make_code_flows(f.get("code_flows")),
+            reachability=_make_reachability(f.get("reachability")),
         )
         for f in page_items
     ]
