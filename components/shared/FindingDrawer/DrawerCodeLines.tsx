@@ -26,7 +26,7 @@ export function DrawerCodeLines({
 
   return (
     <div className={`border-t ${borderCls} overflow-hidden`}>
-      <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight }}>
+      <div className="overflow-x-auto overflow-y-auto bg-[var(--color-surface-raised)]" style={{ maxHeight }}>
         <table className="w-full border-collapse">
           <tbody>
             {rows.map((row, i) => (
