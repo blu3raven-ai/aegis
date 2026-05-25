@@ -12,7 +12,6 @@ export interface DashboardUser {
   role: UserRole
   roleId?: string | null
   status: UserStatus
-  passwordResetRequired: boolean
   createdAt: string
   updatedAt: string
   totpSecret?: string | null
@@ -34,7 +33,6 @@ function toDashboardUser(raw: any): DashboardUser {
     role: raw.role ?? "viewer",
     roleId: raw.roleId ?? null,
     status: raw.status ?? "active",
-    passwordResetRequired: raw.passwordResetRequired ?? false,
     createdAt: raw.createdAt ?? "",
     updatedAt: raw.updatedAt ?? "",
     totpSecret: raw.totpSecret ?? null,
@@ -170,7 +168,6 @@ export async function updateOwnAccount(input: {
   username: string
   email?: string | null
   passwordHash?: string
-  passwordResetRequired?: boolean
   avatarUrl?: string | null
 }): Promise<DashboardUser> {
   const username = input.username.trim()
@@ -179,7 +176,6 @@ export async function updateOwnAccount(input: {
   const body: Record<string, unknown> = { username }
   if ("email" in input) body.email = input.email ?? ""
   if (input.passwordHash) body.passwordHash = input.passwordHash
-  if (input.passwordResetRequired !== undefined) body.passwordResetRequired = input.passwordResetRequired
   if ("avatarUrl" in input) body.avatarUrl = input.avatarUrl ?? ""
 
   const data = await postJson<{ user: any }>(
@@ -210,7 +206,7 @@ export async function resetUserPassword(id: string, password: string): Promise<D
   const passwordHash = await hashPassword(password)
   const user = await findUserById(id)
   if (!user) throw new Error("User not found.")
-  return updateOwnAccount({ id, username: user.username, passwordHash, passwordResetRequired: false })
+  return updateOwnAccount({ id, username: user.username, passwordHash })
 }
 
 export async function updateUserStatus(id: string, status: UserStatus): Promise<DashboardUser> {
