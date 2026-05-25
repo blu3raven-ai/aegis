@@ -7,45 +7,28 @@ import { RepositoryCoverageTable, type RepoCoverageRow } from "@/components/shar
 import { CoverageGapsCard } from "@/components/shared/CoverageGapsCard"
 
 export function CodeScanningHealthTab({
-  latestRun,
-  lastCompleted,
+  runHistory = [],
   analytics,
   coverageGaps = [],
 }: {
-  latestRun: CodeScanningScanRun | null
-  lastCompleted: CodeScanningScanRun | null
+  runHistory?: CodeScanningScanRun[]
   analytics: GqlCodeScanningAnalytics | null
   coverageGaps?: Array<{ repository: string; reason: string; lastScannedAt: string | null }>
 }) {
   const topRepos = analytics?.topRepositories ?? []
 
-  const runs: ScanHealthRun[] = []
-  if (latestRun) {
-    runs.push({
-      id: latestRun.id,
-      status: latestRun.status,
-      createdAt: latestRun.createdAt,
-      startedAt: latestRun.startedAt,
-      finishedAt: latestRun.finishedAt,
-      durationSeconds: latestRun.durationSeconds,
-      findingsCount: latestRun.findingsCount,
-      error: latestRun.error,
-      progress: latestRun.progress,
-    })
-  }
-  if (lastCompleted && lastCompleted.id !== latestRun?.id) {
-    runs.push({
-      id: lastCompleted.id,
-      status: lastCompleted.status,
-      createdAt: lastCompleted.createdAt,
-      startedAt: lastCompleted.startedAt,
-      finishedAt: lastCompleted.finishedAt,
-      durationSeconds: lastCompleted.durationSeconds,
-      findingsCount: lastCompleted.findingsCount,
-      error: lastCompleted.error,
-      progress: lastCompleted.progress,
-    })
-  }
+  const runs: ScanHealthRun[] = runHistory.map((r) => ({
+    id: r.id,
+    status: r.status,
+    mode: r.scanMode ?? null,
+    createdAt: r.createdAt,
+    startedAt: r.startedAt,
+    finishedAt: r.finishedAt,
+    durationSeconds: r.durationSeconds,
+    findingsCount: r.findingsCount,
+    error: r.error,
+    progress: r.progress,
+  }))
 
   return (
     <div className="space-y-6">

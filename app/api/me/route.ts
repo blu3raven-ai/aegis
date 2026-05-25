@@ -15,7 +15,6 @@ export async function GET() {
       role: user.role,
       status: user.status,
       totpEnabled: user.totpEnabled ?? false,
-      passwordResetRequired: user.passwordResetRequired,
       avatarUrl: user.avatarUrl ?? null,
     },
   })

@@ -102,23 +102,19 @@ export function FindingsSearchBar({
           <option value="dismissed">Dismissed</option>
         </SelectFilter>
 
-        {repositories.length > 1 && (
-          <SelectFilter value={repositoryFilter} onChange={onRepositoryFilterChange}>
-            <option value="">All repositories</option>
-            {repositories.map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </SelectFilter>
-        )}
+        <SelectFilter value={repositoryFilter} onChange={onRepositoryFilterChange}>
+          <option value="">All repositories</option>
+          {repositories.map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </SelectFilter>
 
-        {organizations.length > 1 && (
-          <SelectFilter value={organizationFilter} onChange={onOrganizationFilterChange}>
-            <option value="">All organizations</option>
-            {organizations.map((o) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
-          </SelectFilter>
-        )}
+        <SelectFilter value={organizationFilter} onChange={onOrganizationFilterChange}>
+          <option value="">All organizations</option>
+          {organizations.map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </SelectFilter>
 
         <SelectFilter value={ageBucketFilter} onChange={onAgeBucketFilterChange}>
           <option value="">All ages</option>

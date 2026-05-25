@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   fetchCodeScanningRuns,
+  fetchCodeScanningHistory,
   bulkReviewCodeScanningFindings,
   type CodeScanningFinding,
   type CodeScanningScanRun,
@@ -441,6 +442,8 @@ export function CodeScanningDashboardView({ org, initialTab, canEdit, prerequisi
   const [error, setError] = useState<string | null>(null)
   const [latestRun, setLatestRun] = useState<CodeScanningScanRun | null>(null)
   const [lastCompleted, setLastCompleted] = useState<CodeScanningScanRun | null>(null)
+  const [history, setHistory] = useState<CodeScanningScanRun[]>([])
+  const [coverageGaps, setCoverageGaps] = useState<Array<{ repository: string; reason: string; lastScannedAt: string | null }>>([])
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   // ── GraphQL state ────────────────────────────────────────────────────────
@@ -466,6 +469,17 @@ export function CodeScanningDashboardView({ org, initialTab, canEdit, prerequisi
         setLatestRun(payload.latest ?? null)
         setLastCompleted(payload.lastCompleted ?? null)
       }
+    } catch {
+      // ignore
+    }
+  }, [orgQuery])
+
+  const loadHistory = useCallback(async () => {
+    if (!orgQuery) return
+    try {
+      const { payload } = await fetchCodeScanningHistory(orgQuery)
+      setHistory(payload.history ?? [])
+      setCoverageGaps(payload.coverageGaps ?? [])
     } catch {
       // ignore
     }
@@ -524,8 +538,9 @@ export function CodeScanningDashboardView({ org, initialTab, canEdit, prerequisi
   // ── Initial load ────────────────────────────────────────────────────────
   useEffect(() => {
     void loadRuns()
+    void loadHistory()
     void loadAnalytics()
-  }, [loadRuns, loadAnalytics])
+  }, [loadRuns, loadHistory, loadAnalytics])
 
   // Load tab-specific data on tab switch
   useEffect(() => {
@@ -549,6 +564,7 @@ export function CodeScanningDashboardView({ org, initialTab, canEdit, prerequisi
   useSSE("scan.completed", (data: ScanCompletedEvent) => {
     if (data.tool !== "code_scanning") return
     void loadRuns()
+    void loadHistory()
     void loadAnalytics()
     if (activeTab === "findings") {
       void loadGqlFindings()
@@ -612,9 +628,9 @@ export function CodeScanningDashboardView({ org, initialTab, canEdit, prerequisi
 
       {activeTab === "health" && (
         <CodeScanningHealthTab
-          latestRun={latestRun}
-          lastCompleted={lastCompleted}
+          runHistory={history}
           analytics={gqlAnalytics}
+          coverageGaps={coverageGaps}
         />
       )}
 

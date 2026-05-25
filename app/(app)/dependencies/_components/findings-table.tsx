@@ -251,7 +251,7 @@ export function FindingsTable({
           <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${STATE_BADGE[alert.state]?.cls ?? ""}`}>{STATE_BADGE[alert.state]?.label ?? alert.state}</span>
         </td>
         {!hideColumns?.has("package") && (
-          <td className="px-2.5 py-2.5 max-w-[140px]">
+          <td className="px-2.5 py-2.5 overflow-hidden">
             <span className="block truncate font-medium text-[var(--color-text-primary)] text-xs">{alert.dependency.package.name}</span>
             <span className="block text-[11px] text-[var(--color-text-secondary)]">{alert.dependency.package.ecosystem}</span>
           </td>
@@ -265,7 +265,7 @@ export function FindingsTable({
         {!hideColumns?.has("repository") && (
           <td className="px-2.5 py-2.5 whitespace-nowrap text-xs font-medium text-[var(--color-text-primary)]">{alert.repository.name}</td>
         )}
-        <td className="px-2.5 py-2.5 max-w-[180px]">
+        <td className="px-2.5 py-2.5 overflow-hidden">
           <span className="block truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)]">{alert.dependency.manifest_path}</span>
           {manifestCount > 1 && (
             <span className="mt-0.5 inline-block rounded-md bg-[var(--color-surface-raised)] px-1 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">+{manifestCount - 1}</span>
@@ -284,8 +284,8 @@ export function FindingsTable({
 
   return (
     <div className="overflow-hidden">
-      <div>
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full table-fixed text-left text-sm">
           <thead className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
             <tr>
               {onCheckedKeysChange && (
@@ -305,27 +305,27 @@ export function FindingsTable({
                   />
                 </th>
               )}
-              <th className={thSortCls} onClick={() => handleSort("severity")}>
+              <th className={`${thSortCls} w-[80px]`} onClick={() => handleSort("severity")}>
                 Severity <SortIndicator col="severity" />
               </th>
-              <th className={thSortCls} onClick={() => handleSort("cvss")}>
+              <th className={`${thSortCls} w-[68px]`} onClick={() => handleSort("cvss")}>
                 CVSS <SortIndicator col="cvss" />
               </th>
-              <th className={thCls}>State</th>
+              <th className={`${thCls} w-[110px]`}>State</th>
               {!hideColumns?.has("package") && (
                 <th className={thSortCls} onClick={() => handleSort("package")}>
                   Package <SortIndicator col="package" />
                 </th>
               )}
-              <th className={thCls}>Version</th>
-              {!hideColumns?.has("organization") && <th className={thCls}>Org</th>}
+              <th className={`${thCls} w-[160px]`}>Version</th>
+              {!hideColumns?.has("organization") && <th className={`${thCls} w-[120px]`}>Org</th>}
               {!hideColumns?.has("repository") && (
-                <th className={thSortCls} onClick={() => handleSort("repository")}>
+                <th className={`${thSortCls} w-[130px]`} onClick={() => handleSort("repository")}>
                   Repo <SortIndicator col="repository" />
                 </th>
               )}
-              <th className={thCls}>Manifests</th>
-              <th className={thSortCls} onClick={() => handleSort("age")}>
+              <th className={`${thCls} w-[150px]`}>Manifests</th>
+              <th className={`${thSortCls} w-[54px]`} onClick={() => handleSort("age")}>
                 <span className="inline-flex items-center gap-1">
                   Age
                   <svg className="h-3 w-3 text-[var(--color-text-tertiary)]" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from src.shared.config import get_code_scanning_scanner_config, get_scan_sources_for_org
+from src.shared.config import build_source_repo_list, get_code_scanning_scanner_config, get_scan_sources_for_org
 from src.shared.lifecycle import ScanContext, apply_lifecycle as _apply_lifecycle
 from src.shared.paths import DATA_DIR, normalize_org, normalize_path_segment
 from src.code_scanning.lifecycle import code_scanning_hooks
@@ -248,6 +248,11 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
         "findingsCount": len(all_findings),
         "progress": {"percent": 100, "stage": "completed"},
     })
+
+    # Write per-repo checkpoints so coverage gaps can be computed
+    from src.shared.checkpoints import write_checkpoint
+    for repo in build_source_repo_list(get_scan_sources_for_org(org)):
+        write_checkpoint("code_scanning", org, repo["full_name"])
 
 
 def execute_code_scanning_scan_once(

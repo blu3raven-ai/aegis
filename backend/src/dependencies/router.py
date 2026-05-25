@@ -17,6 +17,7 @@ from src.license.types import TIER_LIMITS
 from src.dependencies.scanner import InMemoryScanRuntime, execute_dependencies_scan_once, now_iso
 from src.settings.router import require_permission, has_permission
 from src.settings.team_access import actor_user_id
+from src.shared.checkpoints import compute_coverage_gaps
 from src.shared.config import build_source_repo_list, get_github_token_for_org, get_dependencies_scanner_config, get_scan_sources_for_org, org_has_source_connections
 from src.shared.scan_orchestration import start_multi_org_scan, cancel_multi_org_scan
 from src.shared.rate_limit import rate_limit_scan
@@ -51,12 +52,16 @@ _dependencies_runtime = InMemoryScanRuntime()
 @router.get("/history")
 def get_history(request: Request, orgs: list[str] = Depends(require_orgs)) -> dict[str, Any]:
     if not has_permission(request, "view_scan_history"):
-        return {"history": []}
+        return {"history": [], "coverageGaps": []}
     all_runs: list[dict[str, Any]] = []
+    coverage_gaps: list[dict[str, Any]] = []
     for org_name in orgs:
         all_runs.extend(_enrich_run(r) or r for r in list_dependencies_runs(org_name))
+        expected = [r["full_name"] for r in build_source_repo_list(get_scan_sources_for_org(org_name))]
+        if expected:
+            coverage_gaps.extend(compute_coverage_gaps("dependencies", org_name, expected))
     all_runs.sort(key=lambda r: r.get("createdAt", ""), reverse=True)
-    return {"history": all_runs[:20]}
+    return {"history": all_runs[:20], "coverageGaps": coverage_gaps}
 
 
 def _enrich_run(run: dict[str, Any] | None) -> dict[str, Any] | None:
