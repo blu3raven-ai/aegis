@@ -40,6 +40,35 @@ def test_org_scope_validation():
         validate_org_access(ctx, "org-c")
 
 
+def test_load_scoped_findings_multi_org(monkeypatch):
+    """_load_scoped_findings must accept a comma-joined org string and merge findings."""
+    from src.graphql import dependencies_resolvers
+
+    findings_by_org = {
+        "org-a": [{"id": "1", "org": "org-a"}],
+        "org-b": [{"id": "2", "org": "org-b"}],
+    }
+    monkeypatch.setattr(
+        dependencies_resolvers, "read_dependencies_findings",
+        lambda org: findings_by_org.get(org, []),
+    )
+
+    ctx = {"user_id": "u1", "role": "viewer", "orgs": ["org-a", "org-b"], "_cache": {}}
+    result = dependencies_resolvers._load_scoped_findings("org-a,org-b", ctx)
+    assert len(result) == 2
+    assert {f["id"] for f in result} == {"1", "2"}
+
+
+def test_load_scoped_findings_multi_org_access_denied():
+    """_load_scoped_findings must reject if any org in a comma-joined string is not allowed."""
+    from src.graphql.auth import GraphQLAuthError
+    from src.graphql import dependencies_resolvers
+
+    ctx = {"user_id": "u1", "role": "viewer", "orgs": ["org-a"], "_cache": {}}
+    with pytest.raises(GraphQLAuthError, match="Access denied"):
+        dependencies_resolvers._load_scoped_findings("org-a,org-b", ctx)
+
+
 def test_query_depth_within_limit():
     from src.graphql.limits import check_query_depth
     query = '{ scaCounts(org: "a") { total critical } }'
