@@ -731,7 +731,7 @@ def _finding_to_code_scanning_dict(f: Finding, decision: Decision | None = None)
         "dismissed_at": _dt_to_iso(decision.decided_at) if decision else None,
         "dismissed_by": decision.decided_by if decision else None,
         "dismissed_reason": decision.reason if decision else None,
-        "repo_full_name": f.repo or "",
+        "repo_full_name": f"{f.org}/{f.repo}" if f.org and f.repo else (f.repo or ""),
         "rule_id": detail.get("ruleId", ""),
         "rule_name": detail.get("ruleName", ""),
         "file_path": detail.get("filePath", ""),

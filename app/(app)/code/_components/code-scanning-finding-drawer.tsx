@@ -337,9 +337,20 @@ const repoBaseUrl = finding?.repo_html_url || null
             const rawWindow = (finding.code_window || "").trimEnd()
             if (rawWindow) {
               const windowLines = rawWindow.split("\n")
-              const foundIdx = snippetTrimmed
-                ? windowLines.findIndex((l) => l.trim() === snippetTrimmed)
-                : -1
+              // Pick the match closest to the window center to handle duplicate snippets.
+              const centerIdx = (windowLines.length - 1) / 2
+              const allMatchIndices = snippetTrimmed
+                ? windowLines.reduce<number[]>((acc, l, i) => {
+                    if (l.trim() === snippetTrimmed) acc.push(i)
+                    return acc
+                  }, [])
+                : []
+              const foundIdx =
+                allMatchIndices.length > 0
+                  ? allMatchIndices.reduce((best, curr) =>
+                      Math.abs(curr - centerIdx) < Math.abs(best - centerIdx) ? curr : best
+                    )
+                  : -1
               if (foundIdx >= 0) {
                 codeHighlightIdx = foundIdx
                 codeWindowStart = finding.start_line - foundIdx
