@@ -88,6 +88,24 @@ describe("sast-finding-drawer Reachability section", () => {
     )
   })
 
+  it("always renders a terminal sink node at the finding location", () => {
+    assert.ok(
+      drawerSrc.includes("finding.start_line"),
+      "sink node should show the finding's exact line"
+    )
+    assert.ok(
+      drawerSrc.includes("color-verdict-risk"),
+      "sink node should use risk color tokens"
+    )
+  })
+
+  it("renders module-level entry point explanation", () => {
+    assert.ok(
+      drawerSrc.includes("Executes at module level on import"),
+      "should show module-level explanation on the entry node"
+    )
+  })
+
   it("renders unknown/absent placeholder message", () => {
     assert.ok(
       drawerSrc.includes("Reachability could not be determined"),
@@ -106,12 +124,12 @@ describe("sast-finding-drawer Reachability section", () => {
     )
   })
 
-  it("is positioned after Data Flow section (section 3)", () => {
-    const dataFlowIdx = drawerSrc.indexOf("Data Flow")
-    const reachabilityIdx = drawerSrc.indexOf("── 4. Reachability")
+  it("is within the Remediation tab (Code & Reachability)", () => {
+    const remediationIdx = drawerSrc.indexOf("Remediation")
+    const reachabilityIdx = drawerSrc.indexOf("Reachability", remediationIdx + 1)
     assert.ok(
-      dataFlowIdx > 0 && reachabilityIdx > dataFlowIdx,
-      "Reachability section should appear after Data Flow"
+      remediationIdx > 0 && reachabilityIdx > remediationIdx,
+      "Reachability section should appear inside the Remediation block"
     )
   })
 })

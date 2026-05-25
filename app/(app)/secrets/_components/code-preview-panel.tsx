@@ -165,7 +165,7 @@ export function CodePreviewPanel({
         {/* Scanner evidence — always shown when finding exists */}
         {finding && (
           <DrawerSection label="Scanner evidence">
-            <p className="mb-3 text-xs text-[var(--color-text-secondary)]">
+            <p className="text-xs text-[var(--color-text-secondary)]">
               Candidate value reported by the scanner, not a final verdict.
             </p>
             <div className="flex items-center justify-between gap-3">

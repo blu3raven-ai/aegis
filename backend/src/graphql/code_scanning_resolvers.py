@@ -51,6 +51,7 @@ class CodeScanningCallChainStep:
     function: str
     file: str
     line: int
+    snippet: Optional[str] = None
 
 
 @strawberry.type
@@ -87,19 +88,24 @@ def _make_code_flows(flows: list | None) -> Optional[list["CodeScanningCodeFlow"
 def _make_reachability(r: dict | None) -> Optional["CodeScanningReachability"]:
     if not r:
         return None
-    call_chain = None
-    if r.get("callChain"):
-        call_chain = [
+    chain_raw = r.get("call_chain")
+    call_chain = (
+        [
             CodeScanningCallChainStep(
                 function=step.get("function", ""),
                 file=step.get("file", ""),
                 line=step.get("line") or 0,
+                snippet=step.get("snippet") or None,
             )
-            for step in r["callChain"]
+            for step in chain_raw
+            if isinstance(step, dict)
         ]
+        if isinstance(chain_raw, list)
+        else None
+    )
     return CodeScanningReachability(
         verdict=r.get("verdict", ""),
-        entry_point=r.get("entryPoint"),
+        entry_point=r.get("entry_point"),
         call_chain=call_chain,
     )
 
