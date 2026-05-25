@@ -42,6 +42,7 @@ export function DependenciesDashboardView({ org, initialTab, canEdit, prerequisi
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const { user } = useCurrentUser()
   const [history, setHistory] = useState<DependenciesHealthRunEntry[]>([])
+  const [coverageGaps, setCoverageGaps] = useState<Array<{ repository: string; reason: string; lastScannedAt: string | null }>>([])
   const [latestRun, setLatestRun] = useState<DependenciesScanRun | null>(null)
   const [lastCompleted, setLastCompleted] = useState<DependenciesScanRun | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -96,8 +97,9 @@ export function DependenciesDashboardView({ org, initialTab, canEdit, prerequisi
     if (!orgQuery) return
     try {
       const response = await fetch(`${DEPENDENCIES_API.history}?${orgQuery}`, { cache: "no-store" })
-      const payload = await readJsonResponse<{ history: DependenciesHealthRunEntry[] }>(response)
+      const payload = await readJsonResponse<{ history: DependenciesHealthRunEntry[]; coverageGaps?: Array<{ repository: string; reason: string; lastScannedAt: string | null }> }>(response)
       setHistory(payload.history || [])
+      setCoverageGaps(payload.coverageGaps ?? [])
     } catch {
       // ignore
     }
@@ -327,6 +329,7 @@ export function DependenciesDashboardView({ org, initialTab, canEdit, prerequisi
       {activeTab === "health" && (
           <DependenciesHealthTab
             runHistory={history}
+            coverageGaps={coverageGaps}
             lastCompletedAt={lastCompleted?.finishedAt ?? null}
             org={org}
             canRefresh={canRefresh}

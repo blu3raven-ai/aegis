@@ -5,6 +5,7 @@ export interface CodeScanningScanRun {
   id: string
   org: string
   status: "queued" | "running" | "ingesting" | "ai_review" | "completed" | "failed" | "cancelled"
+  scanMode?: string
   createdAt?: string
   startedAt?: string
   finishedAt?: string
@@ -26,6 +27,11 @@ export interface CodeScanningRunsResponse {
   latest?: CodeScanningScanRun
   lastCompleted?: CodeScanningScanRun
   error?: string
+}
+
+export interface CodeScanningHistoryResponse {
+  history: CodeScanningScanRun[]
+  coverageGaps: Array<{ repository: string; reason: string; lastScannedAt: string | null }>
 }
 
 export interface CodeScanningStartRunsResponse {
@@ -101,6 +107,10 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<{ ok: bo
 
 export function fetchCodeScanningRuns(orgQuery: string) {
   return fetchJson<CodeScanningRunsResponse>(`${CODE_SCANNING_API.runsLatest}?${orgQuery}`)
+}
+
+export function fetchCodeScanningHistory(orgQuery: string) {
+  return fetchJson<CodeScanningHistoryResponse>(`${CODE_SCANNING_API.history}?${orgQuery}`)
 }
 
 export function startCodeScanningRuns(
