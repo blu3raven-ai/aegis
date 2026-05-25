@@ -160,6 +160,30 @@ def _download_scan_output_from_minio(org: str, run_id: str) -> dict[str, dict[st
     return repo_sboms
 
 
+def _load_manifests_from_minio(prefix: str) -> dict[str, dict[str, str]]:
+    """Download all manifest files from MinIO, grouped by repo name.
+
+    MinIO layout: {prefix}{repo}/manifests/{manifest_path}
+    Returns: {repo_name: {manifest_filename: content}}
+
+    Called at ingestion time (before any retention wipe) so snippets can be
+    stored permanently in the DB alongside the finding detail.
+    """
+    keys = list_objects(prefix)
+    repo_manifests: dict[str, dict[str, str]] = {}
+    for key in keys:
+        relative = key[len(prefix):]
+        parts = relative.split("/")
+        # Expect at least: {repo}/manifests/{filename}
+        if len(parts) >= 3 and parts[1] == "manifests":
+            repo = parts[0]
+            manifest_name = "/".join(parts[2:])
+            data = download_bytes(key)
+            if data:
+                repo_manifests.setdefault(repo, {})[manifest_name] = data.decode(errors="replace")
+    return repo_manifests
+
+
 def _ingest_sboms_from_minio(org: str, run_id: str, prefix: str) -> None:
     """Find per-repo SBOMs in MinIO and populate the SbomComponent table."""
     from src.shared.object_store import list_objects, download_json
@@ -191,6 +215,17 @@ def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
         # Map to alert schema if not already mapped
         if all_findings and "security_advisory" not in all_findings[0]:
             all_findings = [map_finding_to_alert(f) for f in all_findings]
+        # Enrich with manifest snippets from MinIO artifacts (stored before any retention wipe)
+        repo_manifests = _load_manifests_from_minio(prefix)
+        if repo_manifests:
+            by_repo: dict[str, list[dict]] = {}
+            for f in all_findings:
+                repo_name = (f.get("repository") or {}).get("name", "")
+                by_repo.setdefault(repo_name, []).append(f)
+            for repo_name, repo_findings in by_repo.items():
+                manifests = repo_manifests.get(repo_name, {})
+                if manifests:
+                    enrich_with_manifest_snippets(repo_findings, manifests)
         # Also process per-repo SBOMs for the SBOM Explorer
         _ingest_sboms_from_minio(org, run_id, prefix)
     elif findings_data is not None:

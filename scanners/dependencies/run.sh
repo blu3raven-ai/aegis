@@ -226,18 +226,20 @@ scan_repository() {
 
         if [ -n "$manifest_paths" ]; then
             while IFS= read -r mpath; do
+                # Syft paths are root-relative — strip leading slash before security check
+                local clean_mpath="${mpath#/}"
                 # Reject paths that could escape the clone directory
-                if [[ "$mpath" == /* ]] || [[ "$mpath" == *..* ]]; then
+                if [[ "$clean_mpath" == *..* ]]; then
                     continue
                 fi
                 local resolved
-                resolved=$(realpath -m "$temp_dir/$mpath" 2>/dev/null || echo "")
+                resolved=$(realpath -m "$temp_dir/$clean_mpath" 2>/dev/null || echo "")
                 if [[ -z "$resolved" ]] || [[ "$resolved" != "$temp_dir"/* ]]; then
                     continue
                 fi
                 if [ -f "$resolved" ]; then
                     local safe_name
-                    safe_name=$(echo "$mpath" | sed 's|/|__|g')
+                    safe_name=$(echo "$clean_mpath" | sed 's|/|__|g')
                     cp "$resolved" "$manifests_dir/$safe_name" 2>/dev/null
                 fi
             done <<< "$manifest_paths"
