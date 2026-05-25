@@ -82,19 +82,25 @@ def _load_scoped_findings(org: str, ctx: dict[str, Any] | None) -> list[dict[str
     """Load container findings with per-request caching and repo-level scope filtering."""
     if not ctx:
         raise GraphQLAuthError("Unauthorized")
-    validate_org_access(ctx, org)
-    cache_key = f"_container_findings:{org}"
+    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    for single_org in orgs:
+        validate_org_access(ctx, single_org)
     request_cache = ctx.get("_cache")
-    if request_cache is not None and cache_key in request_cache:
-        return request_cache[cache_key]
-    findings = read_container_scanning_findings(org) or []
     request = ctx.get("request")
-    if request:
-        from src.shared.router_helpers import filter_findings_by_scope
-        findings = filter_findings_by_scope(request, findings)
-    if request_cache is not None:
-        request_cache[cache_key] = findings
-    return findings
+    all_findings: list[dict[str, Any]] = []
+    for single_org in orgs:
+        cache_key = f"_container_findings:{single_org}"
+        if request_cache is not None and cache_key in request_cache:
+            all_findings.extend(request_cache[cache_key])
+            continue
+        findings = read_container_scanning_findings(single_org) or []
+        if request:
+            from src.shared.router_helpers import filter_findings_by_scope
+            findings = filter_findings_by_scope(request, findings)
+        if request_cache is not None:
+            request_cache[cache_key] = findings
+        all_findings.extend(findings)
+    return all_findings
 
 
 def container_counts(org: str, info_context: dict[str, Any]) -> SeverityCounts:
@@ -256,8 +262,12 @@ def container_analytics(org: str, info_context: dict[str, Any]) -> ContainerAnal
     open_findings = [f for f in findings if f.get("state") == "open"]
     fixed_findings = [f for f in findings if f.get("state") == "fixed"]
 
-    sources = get_scan_sources_for_org(org)
-    source_repos = _container_images_only(sources)
+    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    seen_images: dict[str, dict[str, Any]] = {}
+    for single_org in orgs:
+        for r in _container_images_only(get_scan_sources_for_org(single_org)):
+            seen_images.setdefault(r["full_name"], r)
+    source_repos = list(seen_images.values())
     analytics = build_analytics(open_findings, fixed_findings, source_repos)
 
     import time
