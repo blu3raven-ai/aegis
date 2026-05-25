@@ -110,20 +110,26 @@ def _load_scoped_findings(org: str, ctx: dict[str, Any] | None) -> list[dict[str
     """Load findings with per-request caching and repo-level scope filtering."""
     if not ctx:
         raise GraphQLAuthError("Unauthorized")
-    validate_org_access(ctx, org)
-    cache_key = f"_dependencies_findings:{org}"
+    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    for single_org in orgs:
+        validate_org_access(ctx, single_org)
     request_cache = ctx.get("_cache")
-    if request_cache is not None and cache_key in request_cache:
-        return request_cache[cache_key]
-    findings = read_dependencies_findings(org) or []
-    # Apply repo-level scope filtering (same as REST endpoints)
     request = ctx.get("request")
-    if request:
-        from src.shared.router_helpers import filter_findings_by_scope
-        findings = filter_findings_by_scope(request, findings)
-    if request_cache is not None:
-        request_cache[cache_key] = findings
-    return findings
+    all_findings: list[dict[str, Any]] = []
+    for single_org in orgs:
+        cache_key = f"_dependencies_findings:{single_org}"
+        if request_cache is not None and cache_key in request_cache:
+            all_findings.extend(request_cache[cache_key])
+            continue
+        findings = read_dependencies_findings(single_org) or []
+        # Apply repo-level scope filtering (same as REST endpoints)
+        if request:
+            from src.shared.router_helpers import filter_findings_by_scope
+            findings = filter_findings_by_scope(request, findings)
+        if request_cache is not None:
+            request_cache[cache_key] = findings
+        all_findings.extend(findings)
+    return all_findings
 
 
 def dependencies_counts(org: str, info_context: dict[str, Any]) -> SeverityCounts:
@@ -500,8 +506,12 @@ def dependencies_analytics(org: str, info_context: dict[str, Any]) -> Dependenci
     open_findings = [f for f in findings if f.get("state") == "open"]
     fixed_findings = [f for f in findings if f.get("state") == "fixed"]
 
-    sources = get_scan_sources_for_org(org)
-    source_repos = _git_repos_only(sources)
+    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    seen_repos: dict[str, dict[str, Any]] = {}
+    for single_org in orgs:
+        for r in _git_repos_only(get_scan_sources_for_org(single_org)):
+            seen_repos.setdefault(r["full_name"], r)
+    source_repos = list(seen_repos.values())
     analytics = build_analytics(open_findings, fixed_findings, source_repos)
 
     import time

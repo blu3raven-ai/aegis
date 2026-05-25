@@ -158,26 +158,34 @@ class CodeScanningAnalytics:
     category_breakdown: list[CategoryCount]
 
 
+def _extract_code_scanning_full_name(f: dict) -> str:
+    # Code scanning uses repo_full_name, not repository.full_name
+    return f.get("repo_full_name", "")
+
+
 def _load_scoped_findings(org: str, ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
     """Load code scanning findings with per-request caching and repo-level scope filtering."""
     if not ctx:
         raise GraphQLAuthError("Unauthorized")
-    validate_org_access(ctx, org)
-    cache_key = f"_code_scanning_findings:{org}"
+    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    for single_org in orgs:
+        validate_org_access(ctx, single_org)
     request_cache = ctx.get("_cache")
-    if request_cache is not None and cache_key in request_cache:
-        return request_cache[cache_key]
-    findings = read_code_scanning_findings(org) or []
     request = ctx.get("request")
-    if request:
-        from src.shared.router_helpers import filter_findings_by_scope
-        # Code scanning uses repo_full_name, not repository.full_name
-        def _extract_code_scanning_full_name(f: dict) -> str:
-            return f.get("repo_full_name", "")
-        findings = filter_findings_by_scope(request, findings, _extract_code_scanning_full_name)
-    if request_cache is not None:
-        request_cache[cache_key] = findings
-    return findings
+    all_findings: list[dict[str, Any]] = []
+    for single_org in orgs:
+        cache_key = f"_code_scanning_findings:{single_org}"
+        if request_cache is not None and cache_key in request_cache:
+            all_findings.extend(request_cache[cache_key])
+            continue
+        findings = read_code_scanning_findings(single_org) or []
+        if request:
+            from src.shared.router_helpers import filter_findings_by_scope
+            findings = filter_findings_by_scope(request, findings, _extract_code_scanning_full_name)
+        if request_cache is not None:
+            request_cache[cache_key] = findings
+        all_findings.extend(findings)
+    return all_findings
 
 
 def _get_code_scanning_counts(alerts: list[dict[str, Any]]) -> "SeverityCounts":
@@ -335,8 +343,12 @@ def code_scanning_analytics(org: str, info_context: dict[str, Any]) -> CodeScann
     open_shaped = [_code_scanning_finding_to_advisory_shape(f) for f in open_findings]
     fixed_shaped = [_code_scanning_finding_to_advisory_shape(f) for f in fixed_findings]
 
-    sources = get_scan_sources_for_org(org)
-    source_repos = _git_repos_only(sources)
+    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    seen_repos: dict[str, dict[str, Any]] = {}
+    for single_org in orgs:
+        for r in _git_repos_only(get_scan_sources_for_org(single_org)):
+            seen_repos.setdefault(r["full_name"], r)
+    source_repos = list(seen_repos.values())
     analytics = build_analytics(open_shaped, fixed_shaped, source_repos)
 
     # top_rules: group by rule_id, count, sort desc, take 10
