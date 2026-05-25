@@ -35,6 +35,36 @@
   --color-severity-high:     #f97316;
   --color-severity-medium:   #fbbf24;
   --color-severity-low:      #60a5fa;
+
+  --color-state-dismissed:         #a855f7;
+  --color-state-dismissed-subtle:  rgb(168 85 247 / 0.05);
+  --color-state-dismissed-muted:   rgb(168 85 247 / 0.7);
+  --color-state-dismissed-border:  rgb(168 85 247 / 0.3);
+
+  --color-state-deferred:          #f97316;
+  --color-state-deferred-subtle:   rgb(249 115 22 / 0.05);
+  --color-state-deferred-muted:    rgb(249 115 22 / 0.7);
+
+  --color-state-fixed:             #10b981;
+  --color-state-fixed-subtle:      rgb(16 185 129 / 0.05);
+  --color-state-fixed-muted:       rgb(16 185 129 / 0.7);
+
+  --color-verdict-safe:            #10b981;
+  --color-verdict-safe-subtle:     rgb(16 185 129 / 0.1);
+  --color-verdict-safe-border:     rgb(16 185 129 / 0.3);
+
+  --color-verdict-risk:            #ef4444;
+  --color-verdict-risk-subtle:     rgb(239 68 68 / 0.1);
+  --color-verdict-risk-border:     rgb(239 68 68 / 0.3);
+
+  --color-verdict-uncertain:       #f59e0b;
+  --color-verdict-uncertain-subtle: rgb(245 158 11 / 0.1);
+  --color-verdict-uncertain-border: rgb(245 158 11 / 0.3);
+
+  --color-verdict-neutral:         #3b82f6;
+  --color-verdict-neutral-subtle:  rgb(59 130 246 / 0.1);
+  --color-verdict-neutral-border:  rgb(59 130 246 / 0.3);
+
   --color-stat-primary:   #163b68;
   --color-stat-secondary: #2d7ff9;
   --color-nav-active:     rgba(15,39,71,0.05);
@@ -85,6 +115,21 @@
   --color-severity-high:     #fb923c;
   --color-severity-medium:   #fbbf24;
   --color-severity-low:      #60a5fa;
+
+  --color-state-dismissed:         #c084fc;
+  --color-state-dismissed-muted:   rgb(192 132 252 / 0.7);
+
+  --color-state-deferred:          #fb923c;
+  --color-state-deferred-muted:    rgb(251 146 60 / 0.7);
+
+  --color-state-fixed:             #34d399;
+  --color-state-fixed-muted:       rgb(52 211 153 / 0.7);
+
+  --color-verdict-safe:            #34d399;
+  --color-verdict-risk:            #f87171;
+  --color-verdict-uncertain:       #fbbf24;
+  --color-verdict-neutral:         #60a5fa;
+
   --color-stat-primary:   #0fbcff;
   --color-stat-secondary: #3dcbff;
   --color-nav-active:     #253348;

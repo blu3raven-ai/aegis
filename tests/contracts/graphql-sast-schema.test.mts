@@ -14,13 +14,13 @@ import {
 const ROOT = path.resolve(import.meta.dirname, "../..")
 const queriesSource = readFileSync(path.join(ROOT, "lib/shared/graphql/queries.ts"), "utf-8")
 
-const findingsQueryMatch = queriesSource.match(/export const SAST_FINDINGS_QUERY = `([\s\S]*?)`/)
-assert.ok(findingsQueryMatch, "SAST_FINDINGS_QUERY not found")
+const findingsQueryMatch = queriesSource.match(/export const CODE_SCANNING_FINDINGS_QUERY = `([\s\S]*?)`/)
+assert.ok(findingsQueryMatch, "CODE_SCANNING_FINDINGS_QUERY not found")
 const findingsQuery = findingsQueryMatch[1]
 
-test("SAST_FINDINGS_QUERY fields align with SastFinding Strawberry type", () => {
-  const backendFields = extractStrawberryFields("backend/src/graphql/sast_resolvers.py", "SastFinding")
-  const queryFields = extractQueryFields(findingsQuery, "sastFindings.items")
+test("CODE_SCANNING_FINDINGS_QUERY fields align with SastFinding Strawberry type", () => {
+  const backendFields = extractStrawberryFields("backend/src/graphql/code_scanning_resolvers.py", "CodeScanningFinding")
+  const queryFields = extractQueryFields(findingsQuery, "codeScanningFindings.items")
   const backendCamel = new Set(backendFields.map(snakeToCamel))
 
   for (const field of queryFields) {
@@ -28,22 +28,22 @@ test("SAST_FINDINGS_QUERY fields align with SastFinding Strawberry type", () => 
   }
 })
 
-test("SAST_FINDINGS_QUERY filter params match sast_findings resolver signature", () => {
-  const resolverParams = extractResolverParams("backend/src/graphql/sast_resolvers.py", "sast_findings")
+test("CODE_SCANNING_FINDINGS_QUERY filter params match code_scanning_findings resolver signature", () => {
+  const resolverParams = extractResolverParams("backend/src/graphql/code_scanning_resolvers.py", "code_scanning_findings")
   const queryParams = extractQueryParams(findingsQuery)
   const resolverCamel = new Set(resolverParams.map(snakeToCamel))
 
   for (const param of queryParams) {
-    assert.ok(resolverCamel.has(param), `Frontend sends param "${param}" not in sast_findings()`)
+    assert.ok(resolverCamel.has(param), `Frontend sends param "${param}" not in code_scanning_findings()`)
   }
 })
 
-test("GqlSastFinding TS interface matches SAST_FINDINGS_QUERY selection set", () => {
-  const tsFields = extractTsInterfaceFields("lib/shared/graphql/types.ts", "GqlSastFinding")
-  const queryFields = extractQueryFields(findingsQuery, "sastFindings.items")
+test("GqlCodeScanningFinding TS interface matches CODE_SCANNING_FINDINGS_QUERY selection set", () => {
+  const tsFields = extractTsInterfaceFields("lib/shared/graphql/types.ts", "GqlCodeScanningFinding")
+  const queryFields = extractQueryFields(findingsQuery, "codeScanningFindings.items")
   const querySet = new Set(queryFields)
 
   for (const field of tsFields) {
-    assert.ok(querySet.has(field), `GqlSastFinding has "${field}" but query doesn't request it`)
+    assert.ok(querySet.has(field), `GqlCodeScanningFinding has "${field}" but query doesn't request it`)
   }
 })

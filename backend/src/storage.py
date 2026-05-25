@@ -215,7 +215,7 @@ def _finding_to_dependencies_alert(f: Finding, decision: Decision | None = None)
             "cvss": {"score": detail.get("cvssScore"), "vector_string": detail.get("cvssVector")},
             "published_at": detail.get("publishedAt", ""),
             "updated_at": detail.get("advisoryUpdatedAt", ""),
-            "html_url": detail.get("advisoryUrl", ""),
+            "html_url": detail.get("advisoryUrl") or "",
             "references": detail.get("references", []),
         },
         "security_vulnerability": {

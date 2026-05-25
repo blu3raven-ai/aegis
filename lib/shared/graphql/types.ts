@@ -55,6 +55,7 @@ export interface GqlDependenciesFinding {
   fixedAt: string | null
   currentVersion: string | null
   manifestPath: string | null
+  ghsaId: string | null
 }
 
 
@@ -70,6 +71,34 @@ export interface GqlDependenciesFindingsConnection {
   pageInfo: GqlPageInfo
 }
 
+export interface GqlDependenciesFindingDetail {
+  identityKey: string
+  org: string
+  state: string
+  severity: string
+  ecosystem: string
+  packageName: string
+  currentVersion: string | null
+  manifestPath: string
+  ghsaId: string
+  cveId: string | null
+  advisorySummary: string | null
+  advisoryDescription: string
+  advisoryUrl: string | null
+  publishedAt: string | null
+  advisoryUpdatedAt: string | null
+  references: string[]
+  cvssScore: number | null
+  cvssVector: string | null
+  vulnerableVersionRange: string
+  patchedVersion: string | null
+  manifestSnippet: string | null
+  manifestMatchLine: number | null
+  firstSeenAt: string | null
+  fixedAt: string | null
+  dismissedReason: string | null
+  repoFullName: string
+}
 
 export interface GqlSeverityBucket {
   severity: string
@@ -180,6 +209,31 @@ export interface GqlDependenciesAnalytics {
 
 
 // Code Scanning types
+export interface GqlCodeScanningAiReview {
+  verdict: string
+  explanation: string
+  reasoning?: string | null
+  confidence?: string | null
+}
+
+export interface GqlCodeScanningCodeFlow {
+  file: string
+  line: number
+  snippet: string
+}
+
+export interface GqlCodeScanningCallChainStep {
+  function: string
+  file: string
+  line: number
+}
+
+export interface GqlCodeScanningReachability {
+  verdict: string
+  entryPoint?: string | null
+  callChain?: GqlCodeScanningCallChainStep[] | null
+}
+
 export interface GqlCodeScanningFinding {
   id: string
   state: string
@@ -194,6 +248,14 @@ export interface GqlCodeScanningFinding {
   fixedAt: string | null
   language: string | null
   confidence: string | null
+  category?: string | null
+  cwe?: string[] | null
+  snippet?: string | null
+  fixSuggestion?: string | null
+  codeWindow?: string | null
+  aiReview?: GqlCodeScanningAiReview | null
+  codeFlows?: GqlCodeScanningCodeFlow[] | null
+  reachability?: GqlCodeScanningReachability | null
 }
 
 export interface GqlCodeScanningFindingsConnection {

@@ -901,6 +901,7 @@ export function SecretsDashboardView({ orgs, latestRun: propsLatestRun, onLatest
           onPreview={previewFinding}
           onToggleSelect={toggleSelection}
           onSetSelected={setRowSelection}
+          canReview={canReview}
           onReview={(status, findings) => {
             void applyReview(status, findings)
           }}

@@ -15,8 +15,9 @@ from src.graphql.auth import get_graphql_context, GraphQLAuthError
 from src.graphql.limits import check_query_depth
 from src.graphql.types import SeverityCounts, FilterOptions, CodeScanningFilterOptions
 from src.graphql.dependencies_resolvers import (
-    DependenciesAnalytics, DependenciesFindingsConnection,
-    dependencies_counts, dependencies_findings, dependencies_analytics, dependencies_filter_options,
+    DependenciesAnalytics, DependenciesFindingsConnection, DependenciesFindingDetail,
+    dependencies_counts, dependencies_findings, dependencies_analytics,
+    dependencies_filter_options, dependencies_finding_detail,
 )
 from src.graphql.code_scanning_resolvers import (
     CodeScanningAnalytics, CodeScanningFindingsConnection,
@@ -135,6 +136,16 @@ class Query:
     def dependencies_filter_options(self, info: strawberry.types.Info, org: str) -> FilterOptions:
         ctx = get_graphql_context(info.context["request"])
         return dependencies_filter_options(org=org, info_context=ctx)
+
+    @strawberry.field
+    def dependencies_finding_detail(
+        self,
+        info: strawberry.types.Info,
+        org: str,
+        identity_key: str,
+    ) -> Optional[DependenciesFindingDetail]:
+        ctx = get_graphql_context(info.context["request"])
+        return dependencies_finding_detail(org=org, identity_key=identity_key, info_context=ctx)
 
     @strawberry.field
     def code_scanning_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
