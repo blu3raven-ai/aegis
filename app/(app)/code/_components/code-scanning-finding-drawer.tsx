@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
 import {
   DrawerHeader,
@@ -9,6 +9,7 @@ import {
   DrawerDetailGrid,
   DrawerFooter,
   DismissPopover,
+  DrawerCodeLines,
 } from "@/components/shared/FindingDrawer"
 import type { CodeScanningFinding } from "@/lib/client/code-scanning-client"
 import { firstSentence } from "@/lib/shared/code-scanning/drawer-helpers"
@@ -76,49 +77,6 @@ function reachabilityBadgeConfig(verdict: ReachabilityVerdict): {
   }
 }
 
-function CodeLines({
-  code,
-  startLine,
-  highlightIdx,
-  borderCls,
-  hlRowCls,
-}: {
-  code: string
-  startLine: number
-  highlightIdx: number
-  borderCls: string
-  hlRowCls: string
-}) {
-  const rows = code.trimEnd().split("\n")
-  const hlRef = useRef<HTMLTableRowElement>(null)
-
-  useEffect(() => {
-    hlRef.current?.scrollIntoView({ block: "center" })
-  }, [code, highlightIdx])
-
-  return (
-    <div className={`border-t ${borderCls} overflow-hidden`}>
-      <div className="overflow-x-auto max-h-48 overflow-y-auto">
-        <table className="w-full border-collapse">
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={i} ref={i === highlightIdx ? hlRef : undefined} className={i === highlightIdx ? hlRowCls : ""}>
-                <td className="select-none w-9 text-right pr-3 pl-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]/35 leading-relaxed align-top py-[1px] whitespace-nowrap">
-                  {startLine + i}
-                </td>
-                <td className="pr-3 align-top py-[1px]">
-                  <pre className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)] whitespace-pre leading-relaxed">
-                    {row || " "}
-                  </pre>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
 
 function CweCard({ id }: { id: string }) {
   const normalised = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
@@ -367,10 +325,10 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                 <div className="space-y-4">
 
                   {/* Vulnerable code — always shown regardless of reachability */}
-                  <div className="rounded-lg border border-[var(--color-verdict-risk-border)] bg-[var(--color-verdict-risk-subtle)] overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-                      <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs font-semibold text-[var(--color-text-primary)]" title={finding.file_path}>
-                        {finding.file_path}<span className="text-[var(--color-verdict-risk)]">:{finding.start_line}</span>
+                  <div className="rounded-lg border border-[var(--color-border)] bg-slate-100 dark:bg-slate-950 overflow-hidden">
+                    <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5">
+                      <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]" title={finding.file_path}>
+                        {finding.file_path}
                       </p>
                       <div className="ml-auto flex shrink-0 items-center gap-1.5">
                         <a href={findingUrl} target="_blank" rel="noreferrer" className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]" aria-label={`View ${finding.file_path}:${finding.start_line} on GitHub (opens in new tab)`} title={`${finding.file_path}:${finding.start_line}`}>
@@ -380,12 +338,12 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                       </div>
                     </div>
                     {vulnerableCode ? (
-                      <CodeLines
+                      <DrawerCodeLines
                         code={vulnerableCode}
                         startLine={codeWindowStart}
                         highlightIdx={codeHighlightIdx}
-                        borderCls="border-[var(--color-verdict-risk-border)]/30"
-                        hlRowCls="bg-[var(--color-verdict-risk)]/20"
+                        borderCls="border-[var(--color-border)]/60"
+                        hlRowCls="bg-orange-500/15"
                       />
                     ) : (
                       <p className="px-3 pb-2.5 text-[11px] text-[var(--color-text-secondary)]">No code preview available</p>
@@ -431,7 +389,7 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
                                   {step.file}<span className="text-[var(--color-text-primary)]">:{step.line}</span>
                                 </p>
                                 {step.snippet && (
-                                  <CodeLines
+                                  <DrawerCodeLines
                                     code={step.snippet.trimEnd()}
                                     startLine={step.line}
                                     highlightIdx={0}
