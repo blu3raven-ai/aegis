@@ -17,17 +17,8 @@ import {
   dismissCodeScanningFinding,
   reopenCodeScanningFinding,
 } from "@/lib/client/code-scanning-client"
-import { sevBadgeClass as severityBadgeClass, stateBadgeClass } from "@/lib/shared/ui/badge-styles"
+import { sevBadgeClass as severityBadgeClass } from "@/lib/shared/ui/badge-styles"
 import { formatDate } from "@/lib/shared/utils"
-
-function stateLabel(state: CodeScanningFinding["state"]): string {
-  switch (state) {
-    case "open":         return "Open"
-    case "dismissed":    return "Dismissed"
-    case "fixed":        return "Fixed"
-    case "awaiting_fix": return "Awaiting Fix"
-  }
-}
 
 function verdictChipClass(verdict: string): string {
   const v = verdict.toLowerCase()
@@ -95,7 +86,14 @@ interface Props {
 }
 
 export function CodeScanningFindingDrawer({ finding, org, onClose, onActionComplete }: Props) {
-  const [cweData, setCweData] = useState<Record<string, { name: string | null; description: string | null }>>({})
+  type CweEntry = {
+    name: string | null
+    description: string | null
+    likelihood: string | null
+    consequences: Array<{ scope: string[]; impact: string[] }>
+    mitigations: Array<{ phase: string[]; description: string }>
+  }
+  const [cweData, setCweData] = useState<Record<string, CweEntry>>({})
   useEffect(() => {
     if (!finding?.cwe?.length) return
     finding.cwe.forEach((id) => {
@@ -103,13 +101,22 @@ export function CodeScanningFindingDrawer({ finding, org, onClose, onActionCompl
       if (cweData[num] !== undefined) return
       fetch(`/api/cwe/${num}`)
         .then((r) => r.json())
-        .then((data: { name: string | null; description: string | null }) => {
-          setCweData((prev) => ({ ...prev, [num]: { name: data.name ?? null, description: data.description ?? null } }))
+        .then((data: CweEntry) => {
+          setCweData((prev) => ({ ...prev, [num]: {
+            name: data.name ?? null,
+            description: data.description ?? null,
+            likelihood: data.likelihood ?? null,
+            consequences: data.consequences ?? [],
+            mitigations: data.mitigations ?? [],
+          }}))
         })
         .catch(() => {})
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finding?.identity_key])
+
+  const [remView, setRemView] = useState<"code" | "ai">("code")
+  useEffect(() => { setRemView("code") }, [finding?.identity_key])
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -225,17 +232,20 @@ const repoBaseUrl = finding?.repo_html_url || null
             {finding.cwe && finding.cwe.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 {finding.cwe.map((id) => {
-                  const normalised = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
-                  const num = String(parseInt(normalised.replace(/^CWE-/, ""), 10))
+                  const fullLabel = id.toUpperCase().startsWith("CWE-") ? id.toUpperCase() : `CWE-${id}`
+                  const num = String(parseInt(fullLabel.replace(/^CWE-/, ""), 10))
+                  const shortLabel = `CWE-${num}`
                   return (
                     <a
                       key={id}
                       href={`https://cwe.mitre.org/data/definitions/${num}.html`}
                       target="_blank"
                       rel="noreferrer"
-                      className="cursor-pointer rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-surface-raised)]"
+                      title={fullLabel}
+                      aria-label={`${shortLabel} — open MITRE CWE definition`}
+                      className="cursor-pointer rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
                     >
-                      {normalised}
+                      {shortLabel}
                     </a>
                   )
                 })}
@@ -245,7 +255,79 @@ const repoBaseUrl = finding?.repo_html_url || null
             <DrawerDetailGrid items={briefDetails} />
           </DrawerSection>
 
-          {/* ── 2. Remediation ── */}
+          {/* ── 2. Vulnerability Details ── */}
+          <DrawerSection label="Vulnerability Details">
+            {finding.cwe?.length ? (
+              finding.cwe.map((id) => {
+                const num = String(parseInt(id.replace(/^cwe-/i, ""), 10))
+                const entry = cweData[num]
+                if (entry === undefined) {
+                  return (
+                    <div key={id} className="space-y-1.5" aria-busy="true">
+                      <div className="h-3 w-full animate-pulse rounded bg-[var(--color-border)]/60" />
+                      <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--color-border)]/60" />
+                      <div className="h-3 w-3/5 animate-pulse rounded bg-[var(--color-border)]/60" />
+                    </div>
+                  )
+                }
+                if (!entry.description) return null
+                const likelihoodColor = entry.likelihood
+                  ? entry.likelihood.toLowerCase() === "high" ? "text-[var(--color-verdict-risk)] bg-[var(--color-verdict-risk-subtle)] border-[var(--color-verdict-risk-border)]"
+                    : entry.likelihood.toLowerCase() === "medium" ? "text-[var(--color-verdict-uncertain)] bg-[var(--color-verdict-uncertain-subtle)] border-[var(--color-verdict-uncertain-border)]"
+                    : "text-[var(--color-verdict-safe)] bg-[var(--color-verdict-safe-subtle)] border-[var(--color-verdict-safe-border)]"
+                  : null
+                const topConsequences = entry.consequences.slice(0, 2)
+                return (
+                  <div key={id} className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-semibold text-[var(--color-text-secondary)]">
+                        {`CWE-${num}`}{entry.name ? ` · ${entry.name}` : ""}
+                      </p>
+                      {entry.likelihood && likelihoodColor && (
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${likelihoodColor}`}>
+                          {entry.likelihood} exploit likelihood
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{entry.description}</p>
+                    {topConsequences.length > 0 && (
+                      <div>
+                        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Potential impact</p>
+                        <div className="space-y-1.5">
+                          {topConsequences.map((c, idx) => (
+                            <div key={idx} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2">
+                              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                {c.scope.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Scope</span>
+                                    {c.scope.map((s) => (
+                                      <span key={s} className="rounded-full bg-[var(--color-border)]/50 px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]">{s}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                {c.impact.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Impact</span>
+                                    {c.impact.map((i) => (
+                                      <span key={i} className="rounded-full border border-[var(--color-severity-high)]/30 bg-[var(--color-severity-high)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-severity-high)]">{i}</span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })
+            ) : (
+              <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{finding.message}</p>
+            )}
+          </DrawerSection>
+
+          {/* ── 3. Remediation ── */}
           {(() => {
             const findingUrl = repoBaseUrl ? `${repoBaseUrl}/blob/HEAD/${finding.file_path}#L${finding.start_line}` : null
             const snippetTrimmed = (finding.snippet || "").trim()
@@ -283,9 +365,40 @@ const repoBaseUrl = finding?.repo_html_url || null
               </div>
             )
 
-            return (
-              <DrawerSection label="Remediation">
-                {/* Fix guidance */}
+            const tabToggle = (
+              <div className="flex items-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setRemView("code")}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    remView === "code"
+                      ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
+                      : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                  }`}
+                >
+                  Code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRemView("ai")}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                    remView === "ai"
+                      ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
+                      : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                  }`}
+                >
+                  AI Remediation
+                  {!finding.ai_review && (
+                    <svg className="h-3 w-3 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )
+
+            const codeView = (
+              <>
                 {finding.fix_suggestion && (
                   <div className="flex items-start gap-2">
                     <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -295,25 +408,18 @@ const repoBaseUrl = finding?.repo_html_url || null
                   </div>
                 )}
 
-                {/* Affected location */}
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
                     Affected location
-                    <span className="ml-1.5 normal-case tracking-normal font-normal opacity-60">· {finding.file_path}:{finding.start_line}</span>
+                    <span className="ml-1.5 normal-case tracking-normal font-normal opacity-75">· {finding.file_path}:{finding.start_line}</span>
                   </p>
                   {findingUrl && (
-                    <a
-                      href={findingUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline"
-                    >
+                    <a href={findingUrl} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline">
                       View in repository
                     </a>
                   )}
                 </div>
 
-                {/* Code block */}
                 <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
                   <div className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-1.5">
                     <p className="min-w-0 truncate font-[family-name:var(--font-jetbrains-mono)] text-xs font-semibold text-[var(--color-text-primary)]" title={finding.file_path}>
@@ -326,14 +432,13 @@ const repoBaseUrl = finding?.repo_html_url || null
                       startLine={codeWindowStart}
                       highlightIdx={codeHighlightIdx}
                       borderCls="border-[var(--color-border)]/60"
-                      hlRowCls="bg-orange-500/15"
+                      hlRowCls="bg-[var(--color-severity-high)]/15"
                     />
                   ) : (
                     <p className="px-3 pb-2.5 text-[11px] text-[var(--color-text-secondary)]">No code preview available</p>
                   )}
                 </div>
 
-                {/* Call chain — only when reachable */}
                 {verdict === "reachable" && (() => {
                   const chain = finding.reachability?.call_chain ?? []
                   return (
@@ -413,64 +518,64 @@ const repoBaseUrl = finding?.repo_html_url || null
                 {verdict === "unknown" && (
                   <p className="text-[11px] text-[var(--color-text-secondary)]">Reachability could not be determined — treat as potentially reachable.</p>
                 )}
-              </DrawerSection>
+              </>
             )
-          })()}
 
-          {/* ── 3. AI Analysis ── */}
-          {finding.ai_review && (
-            <DrawerSection label="AI Analysis">
-              {finding.ai_review.verdict !== "skipped" && (
-                <div className="flex items-center gap-2">
-                  {finding.ai_review.confidence && (
-                    <span className="text-[11px] font-medium text-[var(--color-text-secondary)] capitalize">
-                      {finding.ai_review.confidence} confidence
-                    </span>
-                  )}
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${verdictChipClass(finding.ai_review.verdict)}`}>
-                    {finding.ai_review.verdict}
-                  </span>
+            const aiReview = finding.ai_review
+            const aiView = !aiReview ? (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
+                  <svg className="h-4 w-4 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
                 </div>
-              )}
-              <div className="space-y-3">
-                {finding.ai_review.reasoning && (
-                  <div>
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Reasoning</p>
-                    <p className="text-xs leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">{finding.ai_review.reasoning}</p>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-[var(--color-text-primary)]">AI Remediation not enabled</p>
+                  <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">Enable AI Code Review in Settings to get tailored remediation guidance and false positive detection for each finding.</p>
+                </div>
+                <a href="/settings" className="rounded-sm text-xs font-semibold text-[var(--color-accent)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]">
+                  Enable in Settings →
+                </a>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {aiReview.verdict !== "skipped" && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${verdictChipClass(aiReview.verdict)}`}>
+                      {aiReview.verdict}
+                    </span>
+                    {aiReview.confidence && (
+                      <span className="text-[11px] text-[var(--color-text-secondary)] capitalize">{aiReview.confidence} confidence</span>
+                    )}
                   </div>
                 )}
-                {finding.ai_review.explanation && (
+                {(aiReview.verdict.toLowerCase().includes("false positive") || aiReview.verdict.toLowerCase().includes("not exploitable") || aiReview.verdict.toLowerCase().includes("benign")) && (
+                  <div className="rounded-lg border border-[var(--color-verdict-safe-border)] bg-[var(--color-verdict-safe-subtle)] px-3 py-2.5">
+                    <p className="text-xs font-semibold text-[var(--color-verdict-safe)]">Likely false positive</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-[var(--color-text-secondary)]">This finding is likely not exploitable in this context. Consider dismissing with reason &quot;Alert is inaccurate&quot;.</p>
+                  </div>
+                )}
+                {aiReview.explanation && (
                   <div>
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Explanation</p>
-                    <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{finding.ai_review.explanation}</p>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">AI Assessment</p>
+                    <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{aiReview.explanation}</p>
+                  </div>
+                )}
+                {aiReview.reasoning && (
+                  <div>
+                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Technical reasoning</p>
+                    <p className="text-xs leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">{aiReview.reasoning}</p>
                   </div>
                 )}
               </div>
-            </DrawerSection>
-          )}
+            )
 
-          {/* ── 3. Advisory Details ── */}
-          <DrawerSection label="Advisory Details">
-            <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
-              {finding.message}
-            </p>
-            {finding.cwe?.map((id) => {
-              const num = String(parseInt(id.replace(/^cwe-/i, ""), 10))
-              const entry = cweData[num]
-              if (!entry?.description) return null
-              return (
-                <div key={id} className="mt-3">
-                  <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">CWE-{num}</p>
-                  <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{entry.description}</p>
-                </div>
-              )
-            })}
-            {finding.fix_suggestion && (
-              <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-                {finding.fix_suggestion}
-              </p>
-            )}
-          </DrawerSection>
+            return (
+              <DrawerSection label="Remediation" action={tabToggle}>
+                {remView === "code" ? codeView : aiView}
+              </DrawerSection>
+            )
+          })()}
 
           {/* ── 4. References ── */}
           {finding.cwe && finding.cwe.length > 0 && (

@@ -84,3 +84,65 @@ else
     echo "✗ FAIL: expected reachable verdict, got '$reach_verdict'"
     exit 1
 fi
+
+# ── Test: repo_html_url propagated from html_url.txt ──────────────────
+echo ""
+echo "=== Test: repo_html_url propagation ==="
+
+HTML_TMPDIR=$(mktemp -d)
+trap 'rm -rf "$HTML_TMPDIR"' EXIT
+
+mkdir -p "$HTML_TMPDIR/repo1"
+RAW2="$HTML_TMPDIR/repo1"
+
+cat > "$RAW2/opengrep.json" << 'SARIF2'
+{
+  "runs": [{
+    "tool": {"driver": {"rules": [{"id":"test.url","shortDescription":{"text":"URL test"},"properties":{"confidence":"high","tags":[],"category":"security"}}]}},
+    "results": [{
+      "ruleId": "test.url",
+      "level": "warning",
+      "message": {"text": "url test finding"},
+      "locations": [{"physicalLocation": {"artifactLocation": {"uri": "src/app.py"}, "region": {"startLine": 10, "endLine": 10, "snippet": {"text": "  bad_call()"}}}}]
+    }]
+  }]
+}
+SARIF2
+
+echo 'https://github.com/acme-org/example-repo' > "$RAW2/html_url.txt"
+echo 'abc123' > "$RAW2/head-sha.txt"
+
+NORMALIZE_PY2="$(dirname "$SCRIPT_DIR2")/normalize-code-scanning.py"
+[[ ! -f "$NORMALIZE_PY2" ]] && NORMALIZE_PY2="$SCRIPT_DIR2/normalize-code-scanning.py"
+
+if [[ ! -f "$NORMALIZE_PY2" ]]; then
+    echo "⚠ SKIP: normalize-code-scanning.py not found at $NORMALIZE_PY2"
+else
+    python3 "$NORMALIZE_PY2" "testorg" "$HTML_TMPDIR" "unused_run_id" 2>/dev/null || true
+
+    PY_FINDINGS="$HTML_TMPDIR/findings.jsonl"
+    if [[ ! -f "$PY_FINDINGS" ]]; then
+        echo "✗ FAIL: findings.jsonl not created by Python normalizer"
+        exit 1
+    fi
+
+    html_url_val=$(python3 -c "import json,sys; [print(json.loads(l).get('repo_html_url','')) for l in open('$PY_FINDINGS') if l.strip()]" 2>/dev/null | head -1)
+    if [[ "$html_url_val" == "https://github.com/acme-org/example-repo" ]]; then
+        echo "✓ repo_html_url read from html_url.txt and written to findings.jsonl"
+    else
+        echo "✗ FAIL: expected repo_html_url 'https://github.com/acme-org/example-repo', got '$html_url_val'"
+        exit 1
+    fi
+
+    # Without html_url.txt — field should be absent
+    rm "$RAW2/html_url.txt"
+    > "$PY_FINDINGS"
+    python3 "$NORMALIZE_PY2" "testorg" "$HTML_TMPDIR" "unused_run_id" 2>/dev/null || true
+    has_url=$(python3 -c "import json,sys; [print('yes' if json.loads(l).get('repo_html_url') else 'no') for l in open('$PY_FINDINGS') if l.strip()]" 2>/dev/null | head -1)
+    if [[ "$has_url" != "yes" ]]; then
+        echo "✓ repo_html_url absent when html_url.txt missing"
+    else
+        echo "✗ FAIL: repo_html_url unexpectedly present without html_url.txt"
+        exit 1
+    fi
+fi
