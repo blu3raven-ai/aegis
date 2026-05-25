@@ -298,7 +298,7 @@ function FindingsTab({ findings, isLoading, error, primaryOrg, onActionComplete,
       )}
 
       {/* ── Findings container — matches Secrets Review tab pattern ─────────── */}
-      <div className="overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
 
         <CodeScanningFindingsSearchBar
           search={filterRepo}
@@ -391,15 +391,13 @@ function FindingsTab({ findings, isLoading, error, primaryOrg, onActionComplete,
                   ? new Set(["rule"])
                   : undefined
             }
+            groupLabel={
+              viewMode === "repository" ? "repos" : viewMode === "rule" ? "rules" : undefined
+            }
           />
         )}
       </div>
 
-      {!isLoading && !error && filteredFindings.length > 0 && (
-        <p className="text-right text-xs text-[var(--color-text-secondary)]">
-          Showing {filteredFindings.length} of {findings.length} findings
-        </p>
-      )}
 
       <CodeScanningFindingDrawer
         finding={drawerFinding}

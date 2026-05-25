@@ -211,8 +211,9 @@ export function SecretsDashboardView({ orgs, latestRun: propsLatestRun, onLatest
         SECRET_FINDINGS_QUERY,
         {
           org: enabledOrgs[0],
-          page: findingsPageNum,
-          perPage: findingsPerPage,
+          // In grouped mode fetch all rows so groups aren't fragmented across server pages
+          page: reviewViewMode !== "list" ? 1 : findingsPageNum,
+          perPage: reviewViewMode !== "list" ? 10000 : findingsPerPage,
           reviewStatus: statusFilter || undefined,
           detector: keyType.length === 1 ? keyType[0] : undefined,
           repository: repository || undefined,
@@ -233,7 +234,7 @@ export function SecretsDashboardView({ orgs, latestRun: propsLatestRun, onLatest
         console.error("[secrets] findings query failed:", err)
       }
     }
-  }, [enabledOrgs, findingsPageNum, findingsPerPage, statusFilter, keyType, repository, organization, source, search, classificationFilter, ageBucket, newFindings, lastCompletedRun])
+  }, [enabledOrgs, reviewViewMode, findingsPageNum, findingsPerPage, statusFilter, keyType, repository, organization, source, search, classificationFilter, ageBucket, newFindings, lastCompletedRun])
 
   useEffect(() => {
     let stopped = false

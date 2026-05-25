@@ -181,6 +181,9 @@ export function ReviewTab({
               ? (row) => row.finding.detector || "Unknown"
               : undefined
           }
+          groupLabel={
+            viewMode === "repository" ? "repos" : viewMode === "key" ? "key types" : undefined
+          }
           hideColumns={
             viewMode === "repository"
               ? new Set(["repository"])

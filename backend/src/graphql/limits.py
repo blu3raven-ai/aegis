@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 MAX_QUERY_DEPTH = 5
-MAX_PER_PAGE = 100
 
 
 def check_query_depth(query: str, max_depth: int = MAX_QUERY_DEPTH) -> None:
@@ -28,7 +27,7 @@ def check_query_depth(query: str, max_depth: int = MAX_QUERY_DEPTH) -> None:
 
 
 def clamp_per_page(per_page: int | None) -> int:
-    """Clamp per_page to safe range."""
+    """Ensure per_page is a positive integer; default to 25 if unset."""
     if per_page is None:
         return 25
-    return max(1, min(per_page, MAX_PER_PAGE))
+    return max(1, per_page)

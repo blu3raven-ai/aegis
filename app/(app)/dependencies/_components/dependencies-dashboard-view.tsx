@@ -137,8 +137,9 @@ export function DependenciesDashboardView({ org, initialTab, canEdit, prerequisi
         DEPENDENCIES_FINDINGS_QUERY,
         {
           org,
-          page: findingsPageNum,
-          perPage: findingsPerPage,
+          // In grouped mode fetch all rows so groups aren't fragmented across server pages
+          page: findingsViewMode !== "list" ? 1 : findingsPageNum,
+          perPage: findingsViewMode !== "list" ? 10000 : findingsPerPage,
           severity: findingsSeverity.length === 1 ? findingsSeverity[0] : undefined,
           state: findingsState || undefined,
           ecosystem: findingsEcosystem.length ? findingsEcosystem : undefined,
@@ -155,7 +156,7 @@ export function DependenciesDashboardView({ org, initialTab, canEdit, prerequisi
     } catch {
       // ignore
     }
-  }, [org, findingsPageNum, findingsPerPage, findingsSeverity, findingsState, findingsEcosystem, findingsRepository, findingsOrganization, findingsPackageSearch, findingsFixAvailability, findingsCvssRange, findingsAgeBucket, findingsNewSinceLastScan])
+  }, [org, findingsViewMode, findingsPageNum, findingsPerPage, findingsSeverity, findingsState, findingsEcosystem, findingsRepository, findingsOrganization, findingsPackageSearch, findingsFixAvailability, findingsCvssRange, findingsAgeBucket, findingsNewSinceLastScan])
 
   // ── Initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
