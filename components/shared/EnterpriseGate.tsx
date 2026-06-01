@@ -11,7 +11,7 @@ export function EnterpriseGate({ feature, description }: EnterpriseGateProps) {
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
       <div className="max-w-lg">
-        <span className="rounded-full bg-purple-500/10 px-2.5 py-0.5 text-xs font-semibold text-purple-500">
+        <span className="rounded-full bg-[var(--color-argus-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-argus)]">
           Enterprise
         </span>
         <h3 className="mt-3 text-sm font-semibold text-[var(--color-text-primary)]">
@@ -22,7 +22,7 @@ export function EnterpriseGate({ feature, description }: EnterpriseGateProps) {
         </p>
         <Link
           href="/settings/license"
-          className={`mt-4 inline-block rounded-lg border border-purple-500/20 px-3 py-1.5 text-sm font-semibold text-purple-500 transition-colors hover:bg-purple-500/5 ${FOCUS_RING}`}
+          className={`mt-4 inline-block rounded-lg border border-[var(--color-argus-border)] px-3 py-1.5 text-sm font-semibold text-[var(--color-argus)] transition-colors hover:bg-[var(--color-argus-subtle)] ${FOCUS_RING}`}
         >
           Upgrade
         </Link>

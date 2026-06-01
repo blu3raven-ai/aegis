@@ -54,7 +54,6 @@ def list_all_runners(request: Request) -> JSONResponse:
                 "cpuPercent": r.get("cpuPercent"),
                 "cores": r.get("cores"),
                 "healthPercent": r.get("healthPercent"),
-                "scannerImages": r.get("scannerImages"),
             }
             for r in runners
             if r["computedStatus"] != "archived"
@@ -115,8 +114,6 @@ def get_runner_detail(runner_id: str, request: Request) -> JSONResponse:
             "diskUsedGb": runner.get("diskUsedGb"),
             "diskTotalGb": runner.get("diskTotalGb"),
             "cores": runner.get("cores"),
-            "activeContainers": runner.get("activeContainers") or [],
-            "scannerImages": runner.get("scannerImages"),
         },
         "recentJobs": recent_jobs,
     })

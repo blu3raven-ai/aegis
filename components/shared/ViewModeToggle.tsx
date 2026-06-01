@@ -90,14 +90,14 @@ export function ViewModeToggle({ modes, active, onChange, counts }: Props) {
             onClick={() => onChange(mode.id)}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold transition-colors ${
               isActive
-                ? "bg-[var(--color-accent)] text-white"
+                ? "bg-[var(--color-accent)] text-[var(--color-accent-on)]"
                 : "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
             } ${mode.id !== modes[0].id ? "border-l border-[var(--color-border)]" : ""}`}
           >
             {mode.icon}
             {mode.label}
             {counts?.[mode.id] != null && (
-              <span className={`tabular-nums ${isActive ? "text-white/70" : "text-[var(--color-text-secondary)]"}`}>
+              <span className={`tabular-nums ${isActive ? "text-[var(--color-accent-on)]/70" : "text-[var(--color-text-secondary)]"}`}>
                 {counts[mode.id]}
               </span>
             )}

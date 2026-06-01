@@ -26,6 +26,92 @@ CODE_SCANNING_DATA_DIR = DATA_DIR / "code_scanning"
 MAX_SCAN_DURATION_SECONDS = 12 * 60 * 60
 
 
+def _try_incremental_sast_scan(
+    repo_id: str,
+    checkout_path: Path,
+    baseline_sha: str | None,
+    head_sha: str,
+    rule_pack_version: str,
+) -> list[dict[str, Any]] | None:
+    """Return findings if an incremental SAST scan succeeded; None to fall through.
+
+    Guarded by AEGIS_USE_INCREMENTAL_SAST=true (default: false) so existing
+    full-scan behaviour is unchanged when the flag is absent.
+
+    Any exception — including NotImplementedError from adapter stubs — is
+    caught; the caller gets None and the full scan runs instead.
+    """
+    if os.getenv("AEGIS_USE_INCREMENTAL_SAST", "false").lower() != "true":
+        return None
+    try:
+        from src.code_scanning.baseline_delta import SastBaselineDelta
+        from src.code_scanning.file_finding_cache import FileFindingCache
+        from src.code_scanning.opengrep_adapter import run_opengrep
+
+        engine = SastBaselineDelta(
+            cache=FileFindingCache(),
+            opengrep_runner=run_opengrep,
+        )
+        result = engine.scan(
+            repo_id=repo_id,
+            checkout_path=checkout_path,
+            baseline_sha=baseline_sha,
+            head_sha=head_sha,
+            rule_pack_version=rule_pack_version,
+        )
+        logger.info(
+            "incremental sast scan: cached_files=%d rescanned=%d deleted=%d findings=%d",
+            result.cached_files,
+            result.rescanned_files,
+            result.deleted_files,
+            len(result.findings),
+        )
+        # Convert Finding dataclass instances to plain dicts for the ingest path
+        return [f if isinstance(f, dict) else vars(f) for f in result.findings]
+    except Exception:
+        logger.exception("incremental sast scan failed; falling through to full scan")
+        return None
+
+
+def _finalize_incremental_sast_scan(
+    org: str,
+    run_id: str,
+    findings: list[dict[str, Any]],
+) -> None:
+    """Persist incremental SAST findings and mark the run complete.
+
+    Called inline when the incremental SAST engine has already produced a
+    findings list, bypassing the scanner runner.
+    """
+    new_findings: list[dict[str, Any]] = []
+    if findings:
+        ctx = ScanContext(tool="code_scanning", org=org, run_id=run_id)
+        new_findings = _apply_lifecycle(code_scanning_hooks, ctx, findings)
+
+    if new_findings:
+        try:
+            from src.notifications.emitter import notify_new_critical_findings
+            notify_new_critical_findings("code_scanning", org, new_findings)
+        except Exception:
+            logger.warning("Failed to emit new finding notifications", exc_info=True)
+
+        from src.shared.event_emit_helpers import emit_finding_created
+        for finding in new_findings:
+            emit_finding_created(
+                org_id=org,
+                finding=finding,
+                scanner_type="sast",
+                source_component="code_scanning.scanner",
+            )
+
+    update_code_scanning_run(org, run_id, {
+        "status": "completed",
+        "finishedAt": now_iso(),
+        "findingsCount": len(findings),
+        "progress": {"percent": 100, "stage": "completed"},
+    })
+
+
 def _execute_via_runner(
     org: str,
     run_id: str,
@@ -235,6 +321,15 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
         except Exception:
             logger.warning("Failed to emit new finding notifications", exc_info=True)
 
+        from src.shared.event_emit_helpers import emit_finding_created
+        for finding in new_findings:
+            emit_finding_created(
+                org_id=org,
+                finding=finding,
+                scanner_type="sast",
+                source_component="code_scanning.scanner",
+            )
+
     # Guard against race: don't overwrite a concurrent cancellation
     from src.storage import list_code_scanning_runs
     current = next((r for r in list_code_scanning_runs(org) if r.get("id") == run_id), None)
@@ -346,6 +441,21 @@ def execute_code_scanning_scan_once(
             "p/ruby,p/php,p/c,p/cpp,p/kotlin,p/swift,p/rust,"
             "p/django,p/flask,p/express,p/react,p/spring"
         )
+
+        # Attempt incremental path — falls through to the runner when the
+        # flag is unset, adapters are stubs, or no baseline is known.
+        # head_sha uses run_id as a monotonic stand-in since no git context
+        # is available here; rule_pack_version tracks the configured rulesets.
+        incremental_findings = _try_incremental_sast_scan(
+            repo_id=org,
+            checkout_path=Path("/nonexistent"),
+            baseline_sha=None,
+            head_sha=run_id,
+            rule_pack_version=rulesets,
+        )
+        if incremental_findings is not None:
+            _finalize_incremental_sast_scan(org, run_id, incremental_findings)
+            return {"org": org, "meta": {"lastRefreshedAt": now_iso(), "runId": run_id}}
 
         result = _execute_via_runner(
             org=org,

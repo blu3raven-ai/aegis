@@ -49,7 +49,7 @@ export function DetectionHistoryPanel({ finding }: { finding: SecretFinding | nu
 
       {/* Classification sub-box */}
       <div className="mt-3 rounded-xl border border-[var(--color-border)] p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-tertiary)]">
+        <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-tertiary)]">
           Classification
         </p>
         <div className="mt-2.5 flex items-start gap-2.5 text-xs">
@@ -78,7 +78,7 @@ export function DetectionHistoryPanel({ finding }: { finding: SecretFinding | nu
       {/* Scan Timeline sub-box */}
       {showTimeline && (
         <div className="mt-2 rounded-xl border border-[var(--color-border)] p-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-tertiary)]">
+          <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-tertiary)]">
             Scan Timeline
           </p>
 
@@ -141,7 +141,7 @@ export function DetectionHistoryPanel({ finding }: { finding: SecretFinding | nu
                     {/* Row 2: badge + confidence + governing label */}
                     <div className="mt-1.5 flex items-center gap-2">
                       <span
-                        className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${VALUE_STYLES[entry.value] ?? VALUE_STYLES["uncertain"]}`}
+                        className={`rounded-full border px-1.5 py-0.5 text-2xs font-medium ${VALUE_STYLES[entry.value] ?? VALUE_STYLES["uncertain"]}`}
                       >
                         {VALUE_ICONS[entry.value]}
                         {VALUE_LABELS[entry.value] ?? entry.value}
@@ -153,7 +153,7 @@ export function DetectionHistoryPanel({ finding }: { finding: SecretFinding | nu
                       )}
                       {isGoverning && (
                         <span
-                          className="ml-auto text-[10px] font-medium text-[var(--color-accent)]"
+                          className="ml-auto text-2xs font-medium text-[var(--color-accent)]"
                           title="Highest-confidence result — takes priority over more recent scans"
                         >
                           Effective

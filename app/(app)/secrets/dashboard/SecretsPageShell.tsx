@@ -27,10 +27,10 @@ const RUNNING_STATUSES = new Set<SecretScanRun["status"]>(["queued", "running", 
 
 function SecretIcon() {
   return (
-    <div className="p-1.5 bg-blue-50 dark:bg-blue-950 rounded-lg">
+    <div className="p-1.5 bg-[var(--color-accent-subtle)] rounded-lg">
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        className="w-5 h-5 text-blue-500"
+        className="w-5 h-5 text-[var(--color-accent)]"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -182,7 +182,7 @@ export function SecretsPageShell({ orgs, initialTab, canEdit, prerequisitesMet }
 
   const controls = (
     <div className="flex items-center gap-3">
-      {error && <span className="text-xs text-red-500 mr-2">{error}</span>}
+      {error && <span className="text-xs text-[var(--color-severity-critical)] mr-2">{error}</span>}
       <div className="text-right text-xs space-y-0.5">
         <p className="text-[var(--color-text-secondary)]">
           {isRunning ? "Scanning..." : isRefreshing ? "Starting scan..." : `Last scanned: ${timestamp}`}
@@ -195,7 +195,7 @@ export function SecretsPageShell({ orgs, initialTab, canEdit, prerequisitesMet }
           type="button"
           onClick={handleCancelScan}
           disabled={isCancelling}
-          className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400"
+          className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2 text-sm font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical)]/15 disabled:opacity-50"
         >
           Cancel Scan
         </button>
@@ -206,14 +206,14 @@ export function SecretsPageShell({ orgs, initialTab, canEdit, prerequisitesMet }
           <button
             onClick={() => handleRefresh()}
             disabled={isRefreshing}
-            className="rounded-l-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            className="rounded-l-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             {isRefreshing ? "Starting..." : "Refresh"}
           </button>
           <button
             onClick={() => setShowDepthMenu(!showDepthMenu)}
             disabled={isRefreshing}
-            className="rounded-r-lg border-l border-[var(--color-accent-hover)] bg-[var(--color-accent)] px-2 py-2 text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            className="rounded-r-lg border-l border-[var(--color-accent-hover)] bg-[var(--color-accent)] px-2 py-2 text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             ▾
           </button>

@@ -43,7 +43,7 @@ export function SaveBar({ dirty, saved = false, count, onSave, onDiscard, saving
         type="button"
         onClick={onSave}
         disabled={saving}
-        className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {saving && (
           <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">

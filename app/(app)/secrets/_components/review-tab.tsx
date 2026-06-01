@@ -107,7 +107,7 @@ export function ReviewTab({
       {/* Backdrop — dark on mobile, transparent on desktop; clicking it closes the drawer */}
       {activeFinding !== null && (
         <div
-          className="fixed inset-0 z-30 bg-black/20 xl:bg-transparent"
+          className="fixed inset-0 z-30 bg-[var(--color-overlay)] xl:bg-transparent"
           onClick={onClosePreview}
           aria-hidden="true"
         />

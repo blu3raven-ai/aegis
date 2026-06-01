@@ -62,7 +62,7 @@ export function MobileSidebar(props: MobileSidebarProps) {
     <>
       {/* Backdrop overlay */}
       <div
-        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-200 ${
+        className={`fixed inset-0 z-40 bg-[var(--color-overlay-strong)] transition-opacity duration-200 ${
           visible ? "opacity-100" : "opacity-0"
         }`}
         onClick={() => setOpen(false)}

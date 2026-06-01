@@ -7,9 +7,9 @@ interface ResourceGaugeProps {
 }
 
 function gaugeColor(percent: number): string {
-  if (percent >= 90) return "bg-red-500"
-  if (percent >= 70) return "bg-amber-400"
-  return "bg-emerald-500"
+  if (percent >= 90) return "bg-[var(--color-severity-critical)]"
+  if (percent >= 70) return "bg-[var(--color-state-pending)]"
+  return "bg-[var(--color-status-ok)]"
 }
 
 export function ResourceGauge({ label, percent, detail }: ResourceGaugeProps) {

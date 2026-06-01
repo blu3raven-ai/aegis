@@ -53,7 +53,7 @@ export function ResourceAutocomplete({
         placeholder={placeholder}
         className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
       />
-      {error && <p className="text-xs text-amber-600 dark:text-amber-400">{error}</p>}
+      {error && <p className="text-xs text-[var(--color-state-pending)]">{error}</p>}
       {showSuggestions && suggestions.length > 0 && (
         <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg">
           {suggestions.map((suggestion) => (

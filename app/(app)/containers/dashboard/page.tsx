@@ -49,9 +49,9 @@ export default async function ContainerScanningDashboardPage({ searchParams }: P
 
 function ContainerIcon() {
   return (
-    <div className="p-1.5 bg-blue-50 dark:bg-blue-950 rounded-lg">
+    <div className="p-1.5 bg-[var(--color-accent-subtle)] rounded-lg">
       <svg
-        className="w-5 h-5 text-blue-500"
+        className="w-5 h-5 text-[var(--color-accent)]"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"

@@ -23,7 +23,7 @@ export function UpgradeBanner({ requiredTier, feature }: UpgradeBannerProps) {
       </p>
       <Link
         href="/settings/license"
-        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
       >
         Upgrade plan
       </Link>

@@ -127,19 +127,19 @@ export function ToolSettingsForm({
             Enabled
           </label>
           {!canEdit && (
-            <p className="max-w-[220px] text-right text-xs text-amber-600 dark:text-amber-400">
+            <p className="max-w-[220px] text-right text-xs text-[var(--color-state-pending)]">
               Only owners and admins can edit tool settings.
             </p>
           )}
           {computedDisableEnable && (
-            <p className="max-w-[220px] text-right text-xs text-amber-600 dark:text-amber-400">
+            <p className="max-w-[220px] text-right text-xs text-[var(--color-state-pending)]">
               {computedDisableEnable.reason}
             </p>
           )}
         </div>
       </div>
 
-      <fieldset disabled={!isEnabled || !canEdit} className="space-y-4 disabled:opacity-50 disabled:grayscale-[0.5]">
+      <fieldset disabled={!isEnabled || !canEdit} className="space-y-4 disabled:opacity-50">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {fields.map((field) => (
             <div key={field.key}>
@@ -149,7 +149,7 @@ export function ToolSettingsForm({
                     type="checkbox"
                     checked={values[field.key] === "true"}
                     onChange={(e) => setFieldValue(field.key, e.target.checked ? "true" : "false")}
-                    className="mt-0.5 h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(---color-accent)]/30"
+                    className="mt-0.5 h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]/30"
                   />
                   <span>
                     <span className="block font-medium">{field.label}</span>
@@ -158,7 +158,7 @@ export function ToolSettingsForm({
                 </label>
               ) : (
                 <>
-                  <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">{field.label}</label>
+                  <label className="mb-2 block text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">{field.label}</label>
                   <input
                     type={field.type}
                     min={field.type === "number" ? 1 : undefined}
@@ -176,7 +176,7 @@ export function ToolSettingsForm({
       </fieldset>
 
       {error && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 px-3 py-2.5 text-sm text-red-700 dark:text-red-400">
+        <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}

@@ -14,7 +14,7 @@ interface NoSourcesBannerProps {
  */
 export function NoSourcesBanner({ sourceLabel, sourceHref, toolLabel }: NoSourcesBannerProps) {
   return (
-    <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
       <div className="mx-auto max-w-md text-center">
         {/* Icon */}
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)]/10">
@@ -41,7 +41,7 @@ export function NoSourcesBanner({ sourceLabel, sourceHref, toolLabel }: NoSource
 
         <Link
           href={sourceHref}
-          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-[var(--color-accent-on)] transition-opacity hover:opacity-90"
         >
           <svg
             className="h-4 w-4"

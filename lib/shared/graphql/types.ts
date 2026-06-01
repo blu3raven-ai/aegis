@@ -98,6 +98,11 @@ export interface GqlDependenciesFindingDetail {
   fixedAt: string | null
   dismissedReason: string | null
   repoFullName: string
+  // Commit attribution (PR #35)
+  introducedByCommitSha?: string | null
+  introducedByAuthor?: string | null
+  introducedAt?: string | null
+  introducedByPrUrl?: string | null
 }
 
 export interface GqlSeverityBucket {
@@ -257,6 +262,11 @@ export interface GqlCodeScanningFinding {
   aiReview?: GqlCodeScanningAiReview | null
   codeFlows?: GqlCodeScanningCodeFlow[] | null
   reachability?: GqlCodeScanningReachability | null
+  // Commit attribution (PR #35)
+  introducedByCommitSha?: string | null
+  introducedByAuthor?: string | null
+  introducedAt?: string | null
+  introducedByPrUrl?: string | null
 }
 
 export interface GqlCodeScanningFindingsConnection {

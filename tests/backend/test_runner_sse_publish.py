@@ -17,7 +17,8 @@ async def test_sync_progress_publishes_event():
     received = []
 
     async def consume():
-        async for event in bus.subscribe(user_id="u1", role="admin", orgs=["test-org"]):
+        _, gen = bus.subscribe(user_id="u1", role="admin", orgs=["test-org"])
+        async for event in gen:
             received.append(event)
             break
 
@@ -54,7 +55,8 @@ async def test_sync_progress_publishes_log_tail_trimmed():
     received = []
 
     async def consume():
-        async for event in bus.subscribe(user_id="u2", role="admin", orgs=["org-x"]):
+        _, gen = bus.subscribe(user_id="u2", role="admin", orgs=["org-x"])
+        async for event in gen:
             received.append(event)
             break
 
@@ -90,7 +92,8 @@ async def test_unknown_job_type_does_not_publish():
     received = []
 
     async def consume():
-        async for event in bus.subscribe(user_id="u3", role="admin", orgs=["org-z"]):
+        _, gen = bus.subscribe(user_id="u3", role="admin", orgs=["org-z"])
+        async for event in gen:
             received.append(event)
             break
 

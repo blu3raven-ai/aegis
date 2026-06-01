@@ -120,6 +120,16 @@ def start_runs(
         tool_label="container",
         update_run_fn=update_container_scanning_run,
     )
+    if status == 202:
+        from src.shared.event_emit_helpers import emit_manual_rescan
+        for org in orgs:
+            emit_manual_rescan(
+                org_id=org,
+                repo_id=None,
+                scanner_type="containers",
+                full=(scan_mode == "full"),
+                source_component="containers.router",
+            )
     return JSONResponse(payload, status_code=status)
 
 

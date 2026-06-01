@@ -31,6 +31,40 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
+def _try_incremental_container_scan(image_digest: str, image_pull_ref: str) -> list[dict[str, Any]] | None:
+    """Return findings if an incremental container scan succeeded; None to fall through.
+
+    Guarded by AEGIS_USE_INCREMENTAL_CONTAINER=true (default: false) so existing
+    full-scan behaviour is unchanged when the flag is absent.
+
+    Any exception — including NotImplementedError from adapter stubs — is
+    caught; the caller gets None and the full scan runs instead.
+    """
+    if os.getenv("AEGIS_USE_INCREMENTAL_CONTAINER", "false").lower() != "true":
+        return None
+    try:
+        from src.containers.baseline_delta import ContainerBaselineDelta
+        from src.dependencies.sbom_cache import ContainerSbomCache
+        from src.containers.grype_adapter import run_grype
+        from src.containers.syft_adapter import run_syft
+
+        engine = ContainerBaselineDelta(
+            sbom_cache=ContainerSbomCache(),
+            syft_runner=run_syft,
+            grype_runner=run_grype,
+        )
+        result = engine.scan(image_digest=image_digest, image_pull_ref=image_pull_ref)
+        logger.info(
+            "incremental container scan: cached=%s findings=%d",
+            result.cached,
+            len(result.findings),
+        )
+        return result.findings
+    except Exception:
+        logger.exception("incremental container scan failed; falling through to full scan")
+        return None
+
+
 def _resolve_registry_username(registry: str, token: str) -> str:
     """Resolve registry username when not explicitly configured."""
     import urllib.request
@@ -76,6 +110,44 @@ def _get_previous_digests(org: str) -> dict[str, str]:
         return {s["repo"]: s.get("commit_sha", "") for s in stored if s.get("commit_sha")}
     except Exception:
         return {}
+
+
+def _finalize_incremental_container_scan(
+    org: str,
+    run_id: str,
+    findings: list[dict[str, Any]],
+) -> None:
+    """Persist incremental findings and mark the run complete.
+
+    Called inline when every image in a scan was served from the SBOM cache,
+    bypassing the scanner runner entirely.
+    """
+    if findings:
+        ctx = ScanContext(tool="container_scanning", org=org, run_id=run_id)
+        new_findings = _apply_lifecycle(container_scanning_hooks, ctx, findings)
+
+        if new_findings:
+            try:
+                from src.notifications.emitter import notify_new_critical_findings
+                notify_new_critical_findings("container_scanning", org, new_findings)
+            except Exception:
+                logger.warning("Failed to emit new finding notifications", exc_info=True)
+
+            from src.shared.event_emit_helpers import emit_finding_created
+            for finding in new_findings:
+                emit_finding_created(
+                    org_id=org,
+                    finding=finding,
+                    scanner_type="containers",
+                    source_component="containers.scanner",
+                )
+
+    update_container_scanning_run(org, run_id, {
+        "status": "completed",
+        "finishedAt": now_iso(),
+        "findingsCount": len(findings),
+        "progress": {"percent": 100, "stage": "completed"},
+    })
 
 
 def _execute_via_runner(
@@ -326,6 +398,15 @@ def ingest_container_from_minio(org: str, run_id: str) -> int:
             except Exception:
                 logger.warning("Failed to emit new finding notifications", exc_info=True)
 
+            from src.shared.event_emit_helpers import emit_finding_created
+            for finding in new_findings:
+                emit_finding_created(
+                    org_id=org,
+                    finding=finding,
+                    scanner_type="containers",
+                    source_component="containers.scanner",
+                )
+
     logger.info(
         "Ingested %d container findings for org=%s run=%s",
         len(findings),
@@ -442,6 +523,28 @@ def _run_full_or_sbom(
             "scannedRepos": 0,
         },
     })
+
+    # Attempt incremental path per image — each image has its own digest-based
+    # cache key. If ALL images hit the cache, the runner is skipped entirely.
+    # Any image without a known digest falls through to the runner below.
+    if scan_mode == "full":
+        incremental_hits: list[dict[str, Any]] = []
+        skipped_images: list[str] = []
+        for img in all_images:
+            digest = prev_digests.get(img, "")
+            if digest:
+                hit = _try_incremental_container_scan(
+                    image_digest=digest,
+                    image_pull_ref=img,
+                )
+                if hit is not None:
+                    incremental_hits.extend(hit)
+                    skipped_images.append(img)
+
+        if skipped_images and len(skipped_images) == len(all_images):
+            # Every image was served from cache — finalize without the runner
+            _finalize_incremental_container_scan(org, run_id, incremental_hits)
+            return
 
     result = _execute_via_runner(org, run_id, config, docker_images, scan_mode, registry_auths=registry_auths, prev_digests=prev_digests)
     if not result or result.get("status") in ("failed", "cancelled"):

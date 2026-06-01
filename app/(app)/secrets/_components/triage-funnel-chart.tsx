@@ -17,9 +17,9 @@ export function TriageFunnelChart({ trend }: { trend: SecretsTrendEntry[] }) {
   return (
     <div className="space-y-4">
       {[
-        { label: "Newly detected this period", value: newlyDetected, color: "bg-blue-500/20 text-blue-600 border-blue-500/50" },
-        { label: `Triaged (${resolved} rotated · ${fpDelta} marked FP)`, value: reviewed, color: "bg-amber-500/20 text-amber-600 border-amber-500/50" },
-        { label: "Rotated / remediated", value: resolved, color: "bg-emerald-500/20 text-emerald-600 border-emerald-500/50" },
+        { label: "Newly detected this period", value: newlyDetected, color: "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)] border-[var(--color-severity-low-border)]" },
+        { label: `Triaged (${resolved} rotated · ${fpDelta} marked FP)`, value: reviewed, color: "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)] border-[var(--color-severity-medium-border)]" },
+        { label: "Rotated / remediated", value: resolved, color: "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)] border-[var(--color-status-ok-border)]" },
       ].map((step) => (
         <div key={step.label} className="group relative">
           <div className="mb-1 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">

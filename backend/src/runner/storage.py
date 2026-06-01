@@ -31,8 +31,6 @@ def _runner_to_dict(runner: Runner) -> dict[str, Any]:
         "diskUsedGb": runner.disk_used_gb,
         "diskTotalGb": runner.disk_total_gb,
         "cores": runner.cores,
-        "activeContainers": runner.active_containers,
-        "scannerImages": runner.scanner_images,
         "jobsCompleted": runner.jobs_completed or 0,
     }
 
@@ -328,10 +326,6 @@ def update_runner_metrics(runner_id: str, metrics: dict[str, Any]) -> None:
             runner.disk_total_gb = metrics["diskTotalGb"]
         if metrics.get("cores") is not None:
             runner.cores = metrics["cores"]
-        if "activeContainers" in metrics:
-            runner.active_containers = metrics["activeContainers"]
-        if "scannerImages" in metrics:
-            runner.scanner_images = metrics["scannerImages"]
         if metrics.get("os") and not runner.os:
             runner.os = metrics["os"]
         if metrics.get("arch") and not runner.arch:

@@ -12,9 +12,9 @@ export default async function VerifyPage() {
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm">
           <div className="mb-6 text-center">
             <div className="mb-4 flex justify-center">
-              <div className="rounded-xl bg-blue-50 p-3 dark:bg-blue-950">
+              <div className="rounded-xl bg-[var(--color-accent-subtle)] p-3">
                 <svg
-                  className="h-7 w-7 text-blue-500"
+                  className="h-7 w-7 text-[var(--color-accent)]"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"

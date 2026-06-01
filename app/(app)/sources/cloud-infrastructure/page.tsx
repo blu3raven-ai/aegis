@@ -26,7 +26,7 @@ export default async function CloudInfrastructurePage() {
         org="No accounts connected"
       />
       <main className="mx-auto max-w-7xl px-6 py-8">
-        <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
           <div className="max-w-lg">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
               In development

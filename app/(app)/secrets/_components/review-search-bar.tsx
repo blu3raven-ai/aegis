@@ -145,10 +145,12 @@ export function ReviewSearchBar({
 
       {/* Classification chips + view toggle */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-[var(--color-text-secondary)]">Classification:</span>
-        {Object.entries(CLASSIFICATION_FILTER_LABELS).map(([value, label]) => (
-          <ToggleChip key={value} label={label} active={classificationFilter.includes(value)} onClick={() => onClassificationFilterChange(value)} />
-        ))}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by classification">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Classification:</span>
+          {Object.entries(CLASSIFICATION_FILTER_LABELS).map(([value, label]) => (
+            <ToggleChip key={value} label={label} active={classificationFilter.includes(value)} onClick={() => onClassificationFilterChange(value)} />
+          ))}
+        </div>
         {viewModes && viewMode && onViewModeChange && (
           <div className="ml-auto">
             <ViewModeToggle modes={viewModes} active={viewMode} onChange={onViewModeChange} />
@@ -175,7 +177,7 @@ export function ReviewSearchBar({
             type="button"
             onClick={() => onBulkReview("confirmed")}
             disabled={selectedCount === 0}
-            className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 disabled:opacity-50"
+            className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--color-severity-critical)] disabled:opacity-50"
           >
             Confirm keys
           </button>
@@ -183,7 +185,7 @@ export function ReviewSearchBar({
             type="button"
             onClick={() => onBulkReview("false_positive")}
             disabled={selectedCount === 0}
-            className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400 disabled:opacity-50"
+            className="rounded-lg border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--color-status-ok)] disabled:opacity-50"
           >
             False Positive
           </button>
@@ -191,7 +193,7 @@ export function ReviewSearchBar({
             type="button"
             onClick={() => onBulkReview("action_taken")}
             disabled={selectedCount === 0}
-            className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-400 disabled:opacity-50"
+            className="rounded-lg border border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent)] disabled:opacity-50"
           >
             Action Taken
           </button>

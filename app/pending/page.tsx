@@ -16,7 +16,7 @@ export default async function PendingPage() {
         An administrator can grant access by assigning you to the right teams and resources.
       </p>
       <form action="/api/logout" method="post" className="mt-8">
-        <button className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white">
+        <button className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)]">
           Log out
         </button>
       </form>

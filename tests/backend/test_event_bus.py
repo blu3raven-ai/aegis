@@ -10,7 +10,8 @@ async def test_subscribe_receives_published_event():
     received = []
 
     async def consume():
-        async for event in bus.subscribe(user_id="u1", role="admin", orgs=["org-a"]):
+        _, gen = bus.subscribe(user_id="u1", role="admin", orgs=["org-a"])
+        async for event in gen:
             received.append(event)
             break  # just consume one
 
@@ -37,7 +38,8 @@ async def test_org_scope_filtering():
     received = []
 
     async def consume():
-        async for event in bus.subscribe(user_id="u1", role="viewer", orgs=["org-a"]):
+        _, gen = bus.subscribe(user_id="u1", role="viewer", orgs=["org-a"])
+        async for event in gen:
             received.append(event)
             break
 
@@ -71,7 +73,8 @@ async def test_admin_only_event_filtered_for_non_admin():
     received = []
 
     async def consume():
-        async for event in bus.subscribe(user_id="u1", role="viewer", orgs=["org-a"]):
+        _, gen = bus.subscribe(user_id="u1", role="viewer", orgs=["org-a"])
+        async for event in gen:
             received.append(event)
             break
 
@@ -109,8 +112,8 @@ async def test_max_connections_per_user():
 
     # Start 3 subscriptions as background tasks so they register
     for _ in range(3):
-        sub = bus.subscribe(user_id="u1", role="admin", orgs=["org-a"])
-        t = asyncio.create_task(consume(sub))
+        _, gen = bus.subscribe(user_id="u1", role="admin", orgs=["org-a"])
+        t = asyncio.create_task(consume(gen))
         tasks.append(t)
 
     # Give all 3 tasks a moment to start and register their subscriber
@@ -140,7 +143,8 @@ async def test_publish_from_sync_thread():
     bus.set_loop(loop)
 
     async def consume():
-        async for event in bus.subscribe(user_id="u1", role="admin", orgs=["org-a"]):
+        _, gen = bus.subscribe(user_id="u1", role="admin", orgs=["org-a"])
+        async for event in gen:
             received.append(event)
             break
 

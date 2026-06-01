@@ -49,6 +49,11 @@ class DependenciesFinding:
     current_version: Optional[str]
     manifest_path: Optional[str]
     ghsa_id: Optional[str]
+    # Commit attribution (§5.6)
+    introduced_by_commit_sha: Optional[str] = None
+    introduced_by_author: Optional[str] = None
+    introduced_at: Optional[str] = None
+    introduced_by_pr_url: Optional[str] = None
 
 
 @strawberry.type
@@ -79,6 +84,11 @@ class DependenciesFindingDetail:
     fixed_at: Optional[str]
     dismissed_reason: Optional[str]
     repo_full_name: str
+    # Commit attribution (§5.6)
+    introduced_by_commit_sha: Optional[str] = None
+    introduced_by_author: Optional[str] = None
+    introduced_at: Optional[str] = None
+    introduced_by_pr_url: Optional[str] = None
 
 
 @strawberry.type
@@ -257,6 +267,10 @@ def dependencies_findings(
             current_version=f.get("current_version"),
             manifest_path=(dep.get("manifest_path") or None),
             ghsa_id=adv.get("ghsa_id") or None,
+            introduced_by_commit_sha=f.get("introduced_by_commit_sha"),
+            introduced_by_author=f.get("introduced_by_author"),
+            introduced_at=f.get("introduced_at"),
+            introduced_by_pr_url=f.get("introduced_by_pr_url"),
         ))
 
     return DependenciesFindingsConnection(
@@ -329,6 +343,10 @@ def dependencies_finding_detail(
         fixed_at=alert.get("fixed_at"),
         dismissed_reason=alert.get("dismissed_reason"),
         repo_full_name=(alert.get("repository") or {}).get("full_name", ""),
+        introduced_by_commit_sha=alert.get("introduced_by_commit_sha"),
+        introduced_by_author=alert.get("introduced_by_author"),
+        introduced_at=alert.get("introduced_at"),
+        introduced_by_pr_url=alert.get("introduced_by_pr_url"),
     )
 
 

@@ -38,7 +38,7 @@ export function RepoRiskScatterChart({ findings, onSelectRepository }: { finding
             type="button"
             onClick={() => onSelectRepository(repo.name)}
             title={`${repo.name}: ${repo.count} findings, risk ${repo.score}`}
-            className="group relative rounded-full bg-blue-500/20 ring-1 ring-blue-500/50 transition-all hover:bg-blue-500 hover:ring-blue-500"
+            className="group relative rounded-full bg-[var(--color-accent-subtle)] ring-1 ring-[var(--color-accent-border)] transition-all hover:bg-[var(--color-accent)] hover:ring-[var(--color-accent)]"
             style={{
               left: `${(repo.count / maxCount) * 80 + 10}%`,
               bottom: `${(repo.score / maxScore) * 80 + 10}%`,
@@ -47,14 +47,14 @@ export function RepoRiskScatterChart({ findings, onSelectRepository }: { finding
               position: "absolute",
             }}
           >
-            <span className="absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-[var(--color-surface-raised)] px-2 py-1 text-[10px] text-[var(--color-text-primary)] shadow-lg ring-1 ring-[var(--color-border)] group-hover:block">
+            <span className="absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded bg-[var(--color-surface-raised)] px-2 py-1 text-2xs text-[var(--color-text-primary)] shadow-lg ring-1 ring-[var(--color-border)] group-hover:block">
               {repo.name}
             </span>
           </button>
         ))}
       </div>
-      <div className="absolute bottom-0 left-0 -translate-x-1/2 translate-y-full pt-2 text-[10px] text-[var(--color-text-secondary)]">Volume</div>
-      <div className="absolute left-0 top-0 -translate-x-full -translate-y-1/2 rotate-[-90deg] pr-2 text-[10px] text-[var(--color-text-secondary)]">Risk</div>
+      <div className="absolute bottom-0 left-0 -translate-x-1/2 translate-y-full pt-2 text-2xs text-[var(--color-text-secondary)]">Volume</div>
+      <div className="absolute left-0 top-0 -translate-x-full -translate-y-1/2 rotate-[-90deg] pr-2 text-2xs text-[var(--color-text-secondary)]">Risk</div>
     </div>
   )
 }

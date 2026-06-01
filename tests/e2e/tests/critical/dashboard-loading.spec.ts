@@ -34,7 +34,7 @@ test.describe("Dashboard loading with real data", () => {
     const tabs = ["Review", "Insights", "Health", "Overview"]
     for (const tab of tabs) {
       await page.locator("button", { hasText: tab }).click()
-      await expect(page.locator("button", { hasText: tab })).toHaveClass(/text-white/, { timeout: 5000 })
+      await expect(page.locator("button", { hasText: tab })).toHaveClass(/text-\[var\(--color-accent-on\)\]/, { timeout: 5000 })
     }
   })
 })

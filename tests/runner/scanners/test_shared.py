@@ -1,0 +1,177 @@
+"""Tests for ported lib.sh helpers."""
+from __future__ import annotations
+
+import json
+import subprocess
+import tempfile
+from pathlib import Path
+from unittest import mock
+
+import pytest
+
+from runner.scanners import _shared
+
+
+@pytest.mark.parametrize("url,expected", [
+    ("https://github.com/acme/widget.git", "widget"),
+    ("https://github.com/acme/widget", "widget"),
+    ("https://github.com/acme/widget/", "widget"),
+    ("https://github.com/acme/widget.git/", "widget"),
+])
+def test_repo_name_from_url(url, expected):
+    assert _shared.repo_name_from_url(url) == expected
+
+
+def test_parse_repos_comma_separated():
+    assert _shared.parse_repos("https://x/a.git,https://x/b.git") == [
+        "https://x/a.git", "https://x/b.git",
+    ]
+
+
+def test_parse_repos_newline_separated():
+    assert _shared.parse_repos("https://x/a.git\nhttps://x/b.git") == [
+        "https://x/a.git", "https://x/b.git",
+    ]
+
+
+def test_parse_repos_strips_empty():
+    assert _shared.parse_repos("https://x/a.git,,\nhttps://x/b.git\n") == [
+        "https://x/a.git", "https://x/b.git",
+    ]
+
+
+def test_parse_repos_from_file(tmp_path):
+    p = tmp_path / "repos.txt"
+    p.write_text("https://x/a.git\nhttps://x/b.git\n")
+    assert _shared.parse_repos(str(p)) == ["https://x/a.git", "https://x/b.git"]
+
+
+def test_parse_repos_skips_filesystem_check_for_long_input(monkeypatch):
+    """Multi-MB or CSV/newline input should never touch the filesystem."""
+    calls = {"count": 0}
+    real_is_file = Path.is_file
+
+    def tracking_is_file(self):
+        calls["count"] += 1
+        return real_is_file(self)
+
+    monkeypatch.setattr(Path, "is_file", tracking_is_file)
+
+    long_csv = ",".join(f"https://x/{i}.git" for i in range(10))
+    result = _shared.parse_repos(long_csv)
+    assert len(result) == 10
+    assert calls["count"] == 0
+
+    multiline = "https://x/a.git\nhttps://x/b.git"
+    _shared.parse_repos(multiline)
+    assert calls["count"] == 0
+
+    huge = "x" * 5000
+    _shared.parse_repos(huge)
+    assert calls["count"] == 0
+
+
+@pytest.mark.parametrize("bad_url", [
+    "git@github.com:acme/widget.git",
+    "ssh://git@github.com/acme/widget.git",
+    "file:///tmp/repo",
+    "git://github.com/acme/widget.git",
+    "http://github.com/acme/widget.git",
+])
+def test_clone_repo_rejects_non_https(bad_url, tmp_path):
+    with pytest.raises(_shared.InsecureURLError):
+        _shared.clone_repo(bad_url, tmp_path / "dest")
+
+
+def test_clone_repo_injects_token(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    _shared.clone_repo("https://github.com/acme/widget.git", tmp_path / "dest", token="abc123")
+
+    assert "https://x-access-token:abc123@github.com/acme/widget.git" in captured["cmd"]
+
+
+@pytest.mark.parametrize("bad_url", [
+    "https://user@github.com/acme/widget.git",
+    "https://user:pass@github.com/acme/widget.git",
+])
+def test_clone_repo_rejects_urls_with_userinfo(bad_url, tmp_path):
+    with pytest.raises(_shared.InsecureURLError):
+        _shared.clone_repo(bad_url, tmp_path / "dest", token="abc")
+
+
+def test_clone_repo_scrubs_token_from_error_message(monkeypatch, tmp_path):
+    """Token must not appear in the raised exception when clone fails."""
+    def fake_run(cmd, **kwargs):
+        raise subprocess.CalledProcessError(
+            returncode=128,
+            cmd=cmd,
+            stderr="fatal: could not read from https://x-access-token:SECRET_TOKEN@github.com/acme/widget.git\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(_shared.GitCloneError) as exc_info:
+        _shared.clone_repo(
+            "https://github.com/acme/widget.git",
+            tmp_path / "dest",
+            token="SECRET_TOKEN",
+        )
+    assert "SECRET_TOKEN" not in str(exc_info.value)
+    assert "SECRET_TOKEN" not in repr(exc_info.value)
+
+
+def test_clone_repo_no_token_no_injection(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    _shared.clone_repo("https://github.com/acme/widget.git", tmp_path / "dest")
+
+    assert not any("x-access-token" in part for part in captured["cmd"])
+
+
+def test_log_scanning_emits_exact_marker(capsys):
+    _shared.log_scanning("acme/widget")
+    out = capsys.readouterr().out
+    assert out == "[+] Scanning repo: acme/widget\n"
+
+
+def test_log_scanning_image_emits_exact_marker(capsys):
+    _shared.log_scanning_image("alpine:3.18")
+    out = capsys.readouterr().out
+    assert out == "[+] Scanning image: alpine:3.18\n"
+
+
+def test_log_finished_emits_exact_marker(capsys):
+    _shared.log_finished("acme/widget")
+    out = capsys.readouterr().out
+    assert out == "[✓] Finished: acme/widget\n"
+
+
+def test_setup_output_dir_creates_path(tmp_path):
+    result = _shared.setup_output_dir("job-123", base_dir=tmp_path)
+    assert result == tmp_path / "job-123"
+    assert result.exists()
+
+
+def test_setup_output_dir_idempotent(tmp_path):
+    _shared.setup_output_dir("job-123", base_dir=tmp_path)
+    result = _shared.setup_output_dir("job-123", base_dir=tmp_path)
+    assert result.exists()
+
+
+def test_register_output_writes_manifest(tmp_path):
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    f = out_dir / "x.json"
+    f.write_text("{}")
+    _shared.register_output(out_dir, f, "acme/widget")
+    assert (out_dir / "_manifest.jsonl").exists()

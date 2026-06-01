@@ -108,7 +108,7 @@ export function SecretsSetupForm({
   return (
     <div className="space-y-6">
       {!canEdit && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700 dark:border-amber-900/30 dark:bg-amber-900/10 dark:text-amber-400">
+        <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-2.5 text-xs text-[var(--color-state-pending)]">
           Only owners and admins can edit tool settings.
         </div>
       )}
@@ -123,7 +123,7 @@ export function SecretsSetupForm({
 
       {/* Default Scan Depth — primary config, shown first */}
       <SettingsCard eyebrow="Scanner Config" title="Default Scan Depth" subtitle="Choose the default scanning depth for new scans.">
-      <fieldset disabled={!canEdit} className="space-y-3 disabled:opacity-50 disabled:grayscale-[0.5]">
+      <fieldset disabled={!canEdit} className="space-y-3 disabled:opacity-50">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {(
             [
@@ -191,7 +191,7 @@ export function SecretsSetupForm({
               />
               <div className="mt-1 flex justify-between">
                 {WINDOW_STEPS.map((s) => (
-                  <span key={s.value} className="text-[10px] text-[var(--color-text-secondary)]">
+                  <span key={s.value} className="text-2xs text-[var(--color-text-secondary)]">
                     {s.label.replace("Last ", "")}
                   </span>
                 ))}
@@ -206,7 +206,7 @@ export function SecretsSetupForm({
       </SettingsCard>
 
       <SettingsCard eyebrow="Scanner Config" title="Scanner Settings">
-      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50 disabled:grayscale-[0.5]">
+      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                 Scan concurrency
@@ -231,7 +231,7 @@ export function SecretsSetupForm({
       </SettingsCard>
 
       <SettingsCard eyebrow="Automation" title="Scheduled Scans">
-      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50 disabled:grayscale-[0.5]">
+      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
           <div className="space-y-4">
             <label className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm">
               <input
@@ -307,7 +307,7 @@ export function SecretsSetupForm({
       </SettingsCard>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}

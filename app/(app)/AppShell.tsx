@@ -12,12 +12,14 @@ import type { GqlSeverityCounts } from "@/lib/shared/graphql/types"
 import { AppSidebar } from "./AppSidebar"
 import type { AppSidebarProps } from "./AppSidebar"
 import type { ScanCompletedEvent } from "@/lib/shared/sse-types"
+import { getOnboardingState } from "@/lib/client/onboarding-api"
 
 type SidebarConfig = Omit<AppSidebarProps, "open" | "setSearchOpen">
 
 function AppShellInner({ children, sidebarProps }: { children: React.ReactNode; sidebarProps: SidebarConfig }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [counts, setCounts] = useState<{ dependencies?: number; containerScanning?: number; codeScanning?: number; secrets?: number }>({})
+  const [onboardingComplete, setOnboardingComplete] = useState(true)
 
   const fetchDependenciesCounts = useCallback(async () => {
     try {
@@ -70,11 +72,21 @@ function AppShellInner({ children, sidebarProps }: { children: React.ReactNode; 
     if (data.tool === "secrets") void fetchSecretsCounts()
   })
 
+  useEffect(() => {
+    const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
+    getOnboardingState(orgId)
+      .then((s) => setOnboardingComplete(s.dismissed))
+      .catch(() => {
+        // On error assume complete so we don't nag users unnecessarily
+        setOnboardingComplete(true)
+      })
+  }, [])
+
   return (
     <MobileSidebarProvider>
       <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
-        <AppSidebar {...sidebarProps} counts={counts} open={searchOpen} setSearchOpen={setSearchOpen} />
-        <MobileSidebar {...sidebarProps} counts={counts} collapsed={false} />
+        <AppSidebar {...sidebarProps} counts={counts} open={searchOpen} setSearchOpen={setSearchOpen} onboardingComplete={onboardingComplete} />
+        <MobileSidebar {...sidebarProps} counts={counts} collapsed={false} onboardingComplete={onboardingComplete} />
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           <AppHeader open={searchOpen} setSearchOpen={setSearchOpen} />
           <main className="flex-1 min-w-0 overflow-y-auto">

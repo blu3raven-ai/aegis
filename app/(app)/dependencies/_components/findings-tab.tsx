@@ -266,7 +266,7 @@ export function DependenciesFindingsTab({
       {selectedFinding && (
         <>
           <div
-            className="fixed inset-0 z-30 bg-black/20 xl:hidden"
+            className="fixed inset-0 z-30 bg-[var(--color-overlay)] xl:hidden"
             onClick={handleClose}
           />
           <div
@@ -357,7 +357,7 @@ export function DependenciesFindingsTab({
               Clear
             </button>
             {bulkError && (
-              <span className="text-xs text-red-400">{bulkError}</span>
+              <span className="text-xs text-[var(--color-severity-critical)]">{bulkError}</span>
             )}
           </div>
         )}

@@ -40,7 +40,7 @@ data/
 settings.*.json
 
 # python runtime/build artifacts
-backend/**/__pycache__/
+__pycache__/
 backend/.pytest_cache/
 backend/**/*.egg-info/
 *.pyc
@@ -57,3 +57,8 @@ e2e/.auth/
 e2e/test-results/
 e2e/playwright-report/
 .env.test
+
+# Internal architecture/process docs MUST NOT be committed.
+# These live under .claude/ instead (gitignored).
+backend/docs/
+docs/internal/

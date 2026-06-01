@@ -25,6 +25,7 @@ from src.shared.finding_queries import (
     delete_decision,
 )
 from src.shared.paths import normalize_org
+from src.shared.git_attribution import attribute_to_commit
 
 VALID_DISMISS_REASONS: frozenset[str] = frozenset([
     "Fix started",
@@ -64,6 +65,14 @@ class LifecycleHooks(abc.ABC):
     def has_fix(self, raw: dict) -> bool:
         return False
 
+    def extract_file_location(self, raw: dict) -> tuple[str, int] | None:
+        """Return (file_path, line) for git blame attribution, or None if not applicable.
+
+        Override in hooks for scanners that produce line-level findings. The
+        default returns None, which skips attribution for that scanner.
+        """
+        return None
+
 
 class ScanContext:
 
@@ -86,6 +95,35 @@ def _sanitize_for_pg(obj: Any) -> Any:
         return [_sanitize_for_pg(v) for v in obj]
     return obj
 
+def _run_attribution(
+    hooks: LifecycleHooks,
+    raw: dict,
+    checkout_path: Any,
+) -> "tuple[str | None, str | None, Any, str | None]":
+    """Attempt commit attribution for a new finding; return 4-tuple of attribution fields.
+
+    Never raises — any failure returns (None, None, None, None) so the
+    calling scan continues unimpeded.
+    """
+    if checkout_path is None:
+        return None, None, None, None
+    location = hooks.extract_file_location(raw)
+    if location is None:
+        return None, None, None, None
+    file_path, line = location
+    if not file_path or not line:
+        return None, None, None, None
+    try:
+        from pathlib import Path as _Path
+        attr = attribute_to_commit(_Path(checkout_path), file_path, line)
+        if attr is None:
+            return None, None, None, None
+        return attr.commit_sha, attr.author_email, attr.authored_at, attr.pr_url
+    except Exception:
+        logger.debug("commit attribution failed", exc_info=True)
+        return None, None, None, None
+
+
 def apply_lifecycle(
     hooks: LifecycleHooks,
     ctx: ScanContext,
@@ -93,6 +131,7 @@ def apply_lifecycle(
 ) -> list[dict[str, Any]]:
     """Diff current scan against DB state and apply transitions. Returns new findings."""
     new_findings: list[dict[str, Any]] = []
+    checkout_path = ctx.extra.get("checkout_path")
 
     async def _run(session: AsyncSession) -> None:
         now = _utcnow()
@@ -171,10 +210,17 @@ def apply_lifecycle(
 
             else:
                 new_state = hooks.initial_state(raw)
+                sha, author, authored_at, pr_url = _run_attribution(
+                    hooks, raw, checkout_path
+                )
                 f = await upsert_finding(
                     session, tool=ctx.tool, org=ctx.org, repo=repo,
                     identity_key=key, state=new_state, severity=severity,
                     detail=detail, first_seen_at=now,
+                    introduced_by_commit_sha=sha,
+                    introduced_by_author=author,
+                    introduced_at=authored_at,
+                    introduced_by_pr_url=pr_url,
                 )
                 await insert_event(
                     session, finding_id=f.id, tool=ctx.tool, org=ctx.org,

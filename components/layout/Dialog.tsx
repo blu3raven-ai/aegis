@@ -43,10 +43,10 @@ export function Dialog({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/60 transition-opacity" 
+      <div
+        className="fixed inset-0 bg-[var(--color-overlay-strong)] transition-opacity"
         onClick={onClose}
-        aria-hidden="true" 
+        aria-hidden="true"
       />
 
       {/* Dialog */}
@@ -94,9 +94,9 @@ export function Dialog({
             <button
               type="button"
               autoFocus
-              className={`rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors ${
-                variant === "danger" 
-                  ? "bg-red-500 hover:bg-red-600" 
+              className={`rounded-lg px-4 py-2 text-sm font-semibold text-[var(--color-on-danger)] transition-colors ${
+                variant === "danger"
+                  ? "bg-[var(--color-severity-critical)] hover:opacity-90"
                   : "bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)]"
               }`}
               onClick={() => {

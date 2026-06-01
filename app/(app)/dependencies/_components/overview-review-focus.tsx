@@ -2,10 +2,10 @@ import type { AnalyticsPayload } from "@/lib/shared/dashboard-analytics"
 import type { OpenFindingsFilterOpts } from "@/lib/shared/dependencies/utils"
 
 const SEV_META: Record<string, { tone: string; note: string }> = {
-  critical: { tone: "bg-red-500",    note: "Could cause serious impact" },
-  high:     { tone: "bg-orange-500", note: "Needs attention soon" },
-  medium:   { tone: "bg-amber-400",  note: "Plan into upcoming work" },
-  low:      { tone: "bg-blue-400",   note: "Lower business impact" },
+  critical: { tone: "bg-[var(--color-severity-critical)]", note: "Could cause serious impact" },
+  high:     { tone: "bg-[var(--color-severity-high)]",     note: "Needs attention soon" },
+  medium:   { tone: "bg-[var(--color-severity-medium)]",   note: "Plan into upcoming work" },
+  low:      { tone: "bg-[var(--color-severity-low)]",      note: "Lower business impact" },
 }
 
 function BreakdownRow({
@@ -107,7 +107,7 @@ export function OverviewReviewFocus({
                   count={`${item.count} issues`}
                   percentage={item.percentage}
                   tone={meta.tone}
-                  note={isActive ? "Filtered ✓" : meta.note}
+                  note={isActive ? "Filtered" : meta.note}
                 />
               </button>
             )

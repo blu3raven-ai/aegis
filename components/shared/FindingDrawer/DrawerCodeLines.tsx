@@ -35,7 +35,7 @@ export function DrawerCodeLines({
                 ref={i === highlightIdx ? hlRef : undefined}
                 className={i === highlightIdx ? `${hlRowCls} text-orange-700 dark:text-orange-100` : ""}
               >
-                <td className="select-none w-9 text-right pr-3 pl-2 font-[family-name:var(--font-jetbrains-mono)] text-[10px] text-[var(--color-text-secondary)]/35 leading-relaxed align-top py-[1px] whitespace-nowrap">
+                <td className="select-none w-9 text-right pr-3 pl-2 font-[family-name:var(--font-jetbrains-mono)] text-2xs text-[var(--color-text-secondary)]/35 leading-relaxed align-top py-[1px] whitespace-nowrap">
                   {startLine + i}
                 </td>
                 <td className="pr-3 align-top py-[1px]">

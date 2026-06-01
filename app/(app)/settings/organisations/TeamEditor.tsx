@@ -115,7 +115,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
         {isEditing ? (
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+              <label className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
                 Team Name
               </label>
               <input
@@ -127,7 +127,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+              <label className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
                 Description
               </label>
               <textarea
@@ -138,13 +138,13 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
                 placeholder="What does this team do?"
               />
             </div>
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            {error && <p className="text-xs text-[var(--color-severity-critical)]">{error}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleSave}
                 disabled={submitting}
-                className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+                className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
               >
                 {submitting ? "Saving..." : "Save Changes"}
               </button>
@@ -169,7 +169,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
               <div className="flex flex-1 items-center gap-3 min-w-0">
                 <h2 className="text-xl font-bold text-[var(--color-text-primary)] truncate">{team.name}</h2>
                 {team.source && (
-                  <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-500 whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1 rounded bg-[var(--color-accent-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-accent)] whitespace-nowrap">
                     Synced from source
                   </span>
                 )}
@@ -189,7 +189,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
                       type="button"
                       onClick={() => setShowDeleteDialog(true)}
                       disabled={submitting}
-                      className="rounded-lg p-1.5 text-red-400 hover:bg-red-500/10 hover:text-red-500 transition-colors disabled:opacity-50"
+                      className="rounded-lg p-1.5 text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)] transition-colors disabled:opacity-50"
                       aria-label="Delete team"
                     >
                       {ICON_TRASH}
@@ -210,14 +210,14 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-6 border-b border-[var(--color-border)] flex gap-1">
         <button
           type="button"
           onClick={() => setTab("repositories")}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`-mb-px border-b-2 px-3 py-2.5 text-sm transition-colors ${
             tab === "repositories"
-              ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
-              : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+              ? "border-[var(--color-accent)] font-semibold text-[var(--color-text-primary)]"
+              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
           }`}
         >
           Repositories
@@ -225,10 +225,10 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
         <button
           type="button"
           onClick={() => setTab("images")}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+          className={`-mb-px border-b-2 px-3 py-2.5 text-sm transition-colors ${
             tab === "images"
-              ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
-              : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+              ? "border-[var(--color-accent)] font-semibold text-[var(--color-text-primary)]"
+              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
           }`}
         >
           Container Registry

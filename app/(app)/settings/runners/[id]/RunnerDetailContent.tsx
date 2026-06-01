@@ -12,13 +12,6 @@ import { sectionHeadingClass } from "@/lib/shared/settings-styles"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function timeAgo(iso: string): string {
-  const sec = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (sec < 60) return `${sec}s ago`
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
-  return `${Math.floor(sec / 3600)}h ago`
-}
-
 function formatDuration(start: string | null, end: string | null): string {
   if (!start) return "—"
   const endMs = end ? new Date(end).getTime() : Date.now()
@@ -56,10 +49,10 @@ function SettingsRow({
 // ─── Status badge ───────────────────────────────────────────────────────────
 
 const STATUS_DOT: Record<string, string> = {
-  online: "bg-emerald-500",
-  stale: "bg-amber-400",
-  offline: "bg-gray-400",
-  pending_approval: "bg-blue-400",
+  online: "bg-[var(--color-status-ok)]",
+  stale: "bg-[var(--color-state-pending)]",
+  offline: "bg-[var(--color-text-tertiary)]",
+  pending_approval: "bg-[var(--color-accent)]",
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -72,8 +65,8 @@ const STATUS_LABEL: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-sm font-medium">
-      <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status] ?? "bg-gray-400"}`} />
-      <span className={status === "online" ? "text-emerald-500" : "text-[var(--color-text-secondary)]"}>
+      <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status] ?? "bg-[var(--color-text-tertiary)]"}`} />
+      <span className={status === "online" ? "text-[var(--color-status-ok)]" : "text-[var(--color-text-secondary)]"}>
         {STATUS_LABEL[status] ?? status}
       </span>
     </span>
@@ -83,12 +76,12 @@ function StatusBadge({ status }: { status: string }) {
 // ─── Job status colors ──────────────────────────────────────────────────────
 
 const JOB_STATUS_CLASS: Record<string, string> = {
-  completed: "text-emerald-500",
-  failed: "text-red-500",
-  running: "text-blue-500",
-  assigned: "text-blue-400",
-  queued: "text-gray-400",
-  cancelled: "text-amber-400",
+  completed: "text-[var(--color-status-ok)]",
+  failed: "text-[var(--color-severity-critical)]",
+  running: "text-[var(--color-accent)]",
+  assigned: "text-[var(--color-accent)]",
+  queued: "text-[var(--color-text-tertiary)]",
+  cancelled: "text-[var(--color-state-pending)]",
 }
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -176,7 +169,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
         <Link href="/settings/runners" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline">
           <ChevronLeft /> Back to Runners
         </Link>
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
           Runner not found
         </div>
       </div>
@@ -186,7 +179,6 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
   const platform = runner.os
     ? `${runner.os.charAt(0).toUpperCase() + runner.os.slice(1)} / ${runner.arch}`
     : null
-  const activeCount = (runner.activeContainers || []).length
   const completedCount = recentJobs.filter((j) => j.status === "completed").length
   const failedCount = recentJobs.filter((j) => j.status === "failed").length
   const lastPing = runner.lastHeartbeatAt
@@ -224,7 +216,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
         <div className={cardClass}>
           <SettingsRow label="Status" hint="Current connection state">
             <div className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${lastPing != null && lastPing < 60 ? "bg-emerald-500" : "bg-gray-400"}`} />
+              <span className={`h-2 w-2 rounded-full ${lastPing != null && lastPing < 60 ? "bg-[var(--color-status-ok)]" : "bg-[var(--color-text-tertiary)]"}`} />
               <span className="text-sm text-[var(--color-text-primary)]" title={runner.lastHeartbeatAt ? new Date(runner.lastHeartbeatAt).toLocaleString() : ""}>
                 {lastPing != null && lastPing < 60 ? "Connected" : "Disconnected"}
                 {lastPing != null && ` · last ping ${lastPing}s ago`}
@@ -257,41 +249,6 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
         </div>
       </div>
 
-      {/* ── Active Containers ──────────────────────────────────────────────── */}
-      <div>
-        <p className={sectionHeadingClass}>
-          Active Containers {activeCount > 0 && <span className="ml-1 font-normal">{activeCount} of {runner.maxConcurrent}</span>}
-        </p>
-        {activeCount === 0 ? (
-          <div className={`${cardClass} px-5 py-4`}>
-            <p className="text-sm text-[var(--color-text-secondary)]">No containers running</p>
-          </div>
-        ) : (
-          <div className={`${cardClass} overflow-x-auto`}>
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-                <tr>
-                  <th className="px-4 py-2.5 font-semibold text-[var(--color-text-secondary)]">Name</th>
-                  <th className="px-4 py-2.5 font-semibold text-[var(--color-text-secondary)]">Tool</th>
-                  <th className="px-4 py-2.5 font-semibold text-[var(--color-text-secondary)]">Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runner.activeContainers.map((c, i) => (
-                  <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2.5 font-mono text-[var(--color-text-primary)]">{c.name}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-text-secondary)]">{c.tool}</td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-text-secondary)]">
-                      {c.startedAt ? timeAgo(c.startedAt) : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
       {/* ── Heartbeat History ──────────────────────────────────────────────── */}
       <div>
         <p className={sectionHeadingClass}>Heartbeat History (last 1h)</p>
@@ -319,7 +276,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
                   <tr key={job.id} className="border-b border-[var(--color-border)] last:border-0">
                     <td className="px-4 py-2.5 text-[var(--color-text-primary)]">{job.jobType}</td>
                     <td className="px-4 py-2.5 text-[var(--color-text-secondary)]">{job.org}</td>
-                    <td className={`px-4 py-2.5 font-medium ${JOB_STATUS_CLASS[job.status] ?? "text-gray-400"}`}>
+                    <td className={`px-4 py-2.5 font-medium ${JOB_STATUS_CLASS[job.status] ?? "text-[var(--color-text-tertiary)]"}`}>
                       {job.status}
                     </td>
                     <td className="px-4 py-2.5 tabular-nums text-[var(--color-text-secondary)]">
@@ -363,7 +320,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
                 type="text"
                 value={runnerName}
                 onChange={(e) => setRunnerName(e.target.value)}
-                className="w-full max-w-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+                className="w-full max-w-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
               />
             </SettingsRow>
           </div>

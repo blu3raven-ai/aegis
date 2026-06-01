@@ -1,0 +1,42 @@
+name: Alembic single head
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/alembic.ini'
+      - 'backend/pyproject.toml'
+      - '.github/workflows/alembic-single-head.yml'
+  push:
+    branches: [main-v2, main]
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/alembic.ini'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install uv
+        run: pip install uv
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          uv sync
+      - name: Assert exactly one alembic head
+        run: |
+          cd backend
+          heads_output=$(uv run alembic heads 2>/dev/null)
+          count=$(printf '%s\n' "$heads_output" | grep -c '(head)' || true)
+          if [ "$count" -ne 1 ]; then
+            echo "ERROR: expected exactly 1 alembic head, found $count"
+            printf '%s\n' "$heads_output"
+            exit 1
+          fi
+          echo "OK: 1 alembic head"
+          printf '%s\n' "$heads_output"

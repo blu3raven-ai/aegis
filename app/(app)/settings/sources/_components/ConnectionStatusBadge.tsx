@@ -5,8 +5,8 @@ import type { ConnectionStatus } from "@/lib/shared/sources-types"
 const STATUS_CONFIG: Record<ConnectionStatus, { label: string; color: string; animate?: boolean }> = {
   connected: { label: "Connected", color: "var(--color-status-ok)" },
   syncing: { label: "Syncing", color: "var(--color-accent)", animate: true },
-  error: { label: "Error", color: "var(--color-status-error, #ef4444)" },
-  disconnected: { label: "Disconnected", color: "var(--color-status-error, #ef4444)" },
+  error: { label: "Error", color: "var(--color-severity-critical)" },
+  disconnected: { label: "Disconnected", color: "var(--color-severity-critical)" },
   "not-synced": { label: "Not synced", color: "var(--color-text-secondary)" },
 }
 

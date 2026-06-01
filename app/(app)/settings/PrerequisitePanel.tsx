@@ -34,12 +34,12 @@ function CopyableCodeBlock({ command }: { command: string }) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md bg-gray-900/80 px-3 py-2">
-      <code className="text-[13px] font-mono text-gray-300 select-all">{command}</code>
+    <div className="flex items-center justify-between gap-3 rounded-md bg-[var(--color-bg)] px-3 py-2">
+      <code className="text-[13px] font-mono text-[var(--color-text-secondary)] select-all">{command}</code>
       <button
         type="button"
         onClick={handleCopy}
-        className="shrink-0 text-[11px] text-gray-500 transition-colors hover:text-gray-300"
+        className="shrink-0 text-[11px] text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
       >
         {copied ? "Copied!" : "Copy"}
       </button>
@@ -66,15 +66,15 @@ export function PrerequisitePanel({
     <div
       className={`rounded-lg border p-4 space-y-3 ${
         allPass
-          ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20"
+          ? "border-[var(--color-state-fixed-border)] bg-[var(--color-state-fixed-subtle)]"
           : anyFail
-          ? "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20"
-          : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40"
+          ? "border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)]"
+          : "border-[var(--color-border)] bg-[var(--color-surface-raised)]"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+          <p className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
             {title}
           </p>
           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{description}</p>
@@ -83,7 +83,7 @@ export function PrerequisitePanel({
           type="button"
           onClick={onRefresh}
           disabled={isRefreshing}
-          className="shrink-0 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-40"
+          className="shrink-0 text-xs text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] disabled:opacity-40"
         >
           {isRefreshing ? "Checking…" : "Re-check"}
         </button>
@@ -101,16 +101,16 @@ export function PrerequisitePanel({
               <span
                 className={`text-sm font-medium ${
                   item.status === "pass"
-                    ? "text-emerald-700 dark:text-emerald-400"
+                    ? "text-[var(--color-state-fixed)]"
                     : item.status === "fail"
-                    ? "text-amber-700 dark:text-amber-400"
-                    : "text-gray-500 dark:text-gray-400"
+                    ? "text-[var(--color-state-pending)]"
+                    : "text-[var(--color-text-tertiary)]"
                 }`}
               >
                 {item.label}
               </span>
               {item.detail && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.detail}</p>
+                <p className="text-xs text-[var(--color-text-tertiary)] mt-0.5">{item.detail}</p>
               )}
               {item.status === "fail" && item.fix && (
                 <div className="mt-3 space-y-2">
@@ -137,16 +137,16 @@ export function PrerequisitePanel({
 
       {installCommand && onCopyInstallCommand && (
         <div>
-          <p className="text-xs text-amber-700 dark:text-amber-400">
+          <p className="text-xs text-[var(--color-state-pending)]">
             {installLabel}
           </p>
-          <div className="mt-2 flex items-center justify-between gap-3 rounded bg-gray-900 px-3 py-2 font-mono text-xs text-gray-300">
+          <div className="mt-2 flex items-center justify-between gap-3 rounded bg-[var(--color-bg)] px-3 py-2 font-mono text-xs text-[var(--color-text-secondary)]">
             <span className="truncate">{installCommand}</span>
             <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={onCopyInstallCommand}
-                className="text-gray-400 transition-colors hover:text-white"
+                className="text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
               >
                 {copyState === "copied" ? "Copied" : "Copy"}
               </button>
@@ -154,7 +154,7 @@ export function PrerequisitePanel({
                 <span
                   role="status"
                   aria-live="polite"
-                  className="absolute -top-9 right-0 whitespace-nowrap rounded bg-gray-950 px-2 py-1 text-[11px] font-medium text-white shadow-lg ring-1 ring-white/10"
+                  className="absolute -top-9 right-0 whitespace-nowrap rounded bg-[var(--color-bg)] px-2 py-1 text-[11px] font-medium text-[var(--color-text-primary)] shadow-lg ring-1 ring-[var(--color-border)]"
                 >
                   {copyState === "copied" ? "Copied to clipboard" : "Copy failed"}
                 </span>
@@ -168,10 +168,10 @@ export function PrerequisitePanel({
         <p
           className={`border-t pt-2 text-xs ${
             allPass
-              ? "border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400"
+              ? "border-[var(--color-state-fixed-border)] text-[var(--color-state-fixed)]"
               : anyFail
-              ? "border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"
-              : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400"
+              ? "border-[var(--color-state-pending-border)] text-[var(--color-state-pending)]"
+              : "border-[var(--color-border)] text-[var(--color-text-tertiary)]"
           }`}
         >
           {summary}
@@ -186,7 +186,7 @@ export function PrerequisitePanel({
 function CheckIcon() {
   return (
     <svg
-      className="w-4 h-4 text-emerald-600 dark:text-emerald-400"
+      className="w-4 h-4 text-[var(--color-state-fixed)]"
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -200,7 +200,7 @@ function CheckIcon() {
 function XIcon() {
   return (
     <svg
-      className="w-4 h-4 text-amber-600 dark:text-amber-400"
+      className="w-4 h-4 text-[var(--color-state-pending)]"
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -217,7 +217,7 @@ function XIcon() {
 
 function SpinnerIcon() {
   return (
-    <svg className="w-4 h-4 text-gray-400 animate-spin" fill="none" viewBox="0 0 24 24">
+    <svg className="w-4 h-4 text-[var(--color-text-tertiary)] animate-spin" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path
         className="opacity-75"

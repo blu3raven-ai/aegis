@@ -26,7 +26,7 @@ function CopyableBlock({ text, label }: { text: string; label: string }) {
         title="Click to copy"
       >
         <code className="block break-all">{text}</code>
-        <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]">
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)]">
           {copied ? "Copied" : "Copy"}
         </span>
       </div>
@@ -78,7 +78,7 @@ export function AddRunnerModal({ portalUrl, onClose }: Props) {
   const expired = remainingSeconds <= 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)]" onClick={onClose}>
       <div
         className="mx-4 w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
@@ -100,14 +100,14 @@ export function AddRunnerModal({ portalUrl, onClose }: Props) {
         </div>
 
         {error ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+          <div className="mt-4 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical)]">
             {error}
           </div>
         ) : (
           <div className="mt-6 space-y-4">
             {/* Token expiry countdown */}
-            <div className={`flex items-center gap-2 text-xs font-medium ${expired ? "text-red-500" : "text-[var(--color-text-secondary)]"}`}>
-              <span className={`h-2 w-2 rounded-full ${expired ? "bg-red-500" : "bg-emerald-500"}`} />
+            <div className={`flex items-center gap-2 text-xs font-medium ${expired ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-secondary)]"}`}>
+              <span className={`h-2 w-2 rounded-full ${expired ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-status-ok)]"}`} />
               {expired
                 ? "Token expired — close and generate a new one"
                 : `Token expires in ${minutes}:${String(seconds).padStart(2, "0")}`

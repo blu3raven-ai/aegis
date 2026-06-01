@@ -1,77 +1,73 @@
-"""Job queue: create, assign, update status/progress, re-queue stale jobs."""
+"""Legacy module-level job queue API.
+
+Kept as a thin backward-compat shim for existing call sites.  New code should
+depend on the ``JobQueue`` Protocol via ``src.runner.queue`` and obtain a
+concrete queue from ``src.runner.queue.factory.get_queue()``.
+
+``read_job`` and ``SENSITIVE_KEYS`` are re-exported here because several call
+sites import them from this module.  They originate in ``src.runner.storage``
+and ``src.runner.queue.file_backed`` respectively but are stable API surface
+as long as this shim exists.
+
+Will be removed once all call sites migrate (Phase 1+).
+
+.. deprecated::
+    Import from ``src.runner.queue`` instead.
+"""
 from __future__ import annotations
 
-import base64
-import hashlib
 import os
 import secrets
 import threading
 from datetime import datetime, timezone
 from typing import Any
 
+from src.runner.encryption import SENSITIVE_KEYS as _SENSITIVE_KEYS, encrypt_env_vars, decrypt_env_vars
 from src.runner.storage import list_jobs, read_job, read_runner, write_job, write_runner
 from src.shared.paths import now_iso
+
+# Explicit re-export so ``from src.runner.jobs import read_job`` keeps working.
+__all__ = [
+    "SENSITIVE_KEYS",
+    "STALE_JOB_SECONDS",
+    "assign_next_job",
+    "cancel_jobs_for_org",
+    "cancel_stale_jobs",
+    "complete_job",
+    "create_job",
+    "fail_job",
+    "read_job",
+    "requeue_stale_jobs",
+    "update_job_progress",
+    "update_job_status",
+]
 
 
 _assign_lock = threading.Lock()
 
 STALE_JOB_SECONDS = 120
 
-SENSITIVE_KEYS = {"GIT_TOKEN", "REGISTRY_TOKEN", "REGISTRY_AUTHS"}
+SENSITIVE_KEYS = _SENSITIVE_KEYS
+
+# Cipher helpers delegated to src.runner.encryption so all queue backends
+# share one implementation and wire-compatible encrypted values.
+_encrypt_env_vars = encrypt_env_vars
+_decrypt_env_vars = decrypt_env_vars
 
 
-def _get_cipher():
-    """Derive a Fernet key from JWT_SHARED_SECRET."""
-    from cryptography.fernet import Fernet
-    secret = os.environ.get("JWT_SHARED_SECRET", "")
-    if not secret:
-        if os.environ.get("FASTAPI_ENV") != "production":
-            import logging
-            secret = secrets.token_hex(32)
-            logging.getLogger(__name__).warning("[security] JWT_SHARED_SECRET not set — using ephemeral key for job encryption")
-        else:
-            raise RuntimeError("JWT_SHARED_SECRET not set — cannot encrypt job env vars")
-    key = base64.urlsafe_b64encode(
-        hashlib.pbkdf2_hmac('sha256', secret.encode(), b'runner-job-env-vars', 100_000)
-    )
-    return Fernet(key)
+# ---------------------------------------------------------------------------
+# _inner helpers — called by both module-level API and PostgresBackedQueue
+# ---------------------------------------------------------------------------
 
-
-def _encrypt_env_vars(env_vars: dict[str, str]) -> dict[str, str]:
-    """Encrypt sensitive env vars before storing in job record."""
-    cipher = _get_cipher()
-    result = {}
-    for key, value in env_vars.items():
-        if key in SENSITIVE_KEYS and value:
-            result[key] = f"ENC:{cipher.encrypt(value.encode()).decode()}"
-        else:
-            result[key] = value
-    return result
-
-
-def _decrypt_env_vars(env_vars: dict[str, str]) -> dict[str, str]:
-    """Decrypt sensitive env vars when assigning job to runner."""
-    cipher = _get_cipher()
-    result = {}
-    for key, value in env_vars.items():
-        if isinstance(value, str) and value.startswith("ENC:"):
-            try:
-                result[key] = cipher.decrypt(value[4:].encode()).decode()
-            except Exception:
-                result[key] = ""  # Decryption failed — empty rather than leak
-        else:
-            result[key] = value
-    return result
-
-
-def create_job(
+def _create_job_inner(
+    *,
     job_type: str,
     org: str,
     run_id: str,
     docker_image: str,
     env_vars: dict[str, str],
     expected_repo_count: int | None = None,
-) -> dict[str, Any]:
+) -> str:
     job_id = f"job-{secrets.token_hex(8)}"
     # Store expected_repo_count in env vars so it survives DB round-trip
     # (RunnerJob model only persists envVars, not arbitrary fields)
@@ -90,10 +86,10 @@ def create_job(
         "envVars": _encrypt_env_vars(env_vars),
     }
     write_job(job)
-    return job
+    return job_id
 
 
-def assign_next_job(runner_id: str) -> dict[str, Any] | None:
+def _assign_next_job_inner(*, runner_id: str) -> dict[str, Any] | None:
     # SECURITY NOTE: This assigns the oldest queued job regardless of org.
     # This is acceptable for single-tenant deployments where all runners are
     # trusted. The Runner model has no org/allowed_orgs field by design.
@@ -118,7 +114,7 @@ def assign_next_job(runner_id: str) -> dict[str, Any] | None:
     return job
 
 
-def update_job_status(job_id: str, status: str, **kwargs: Any) -> dict[str, Any] | None:
+def _update_job_status_inner(job_id: str, status: str, **kwargs: Any) -> dict[str, Any] | None:
     job = read_job(job_id)
     if not job:
         return None
@@ -129,6 +125,60 @@ def update_job_status(job_id: str, status: str, **kwargs: Any) -> dict[str, Any]
         job[key] = value
     write_job(job)
     return job
+
+
+def _complete_job_inner(job_id: str, *, result: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    job = _update_job_status_inner(job_id, "completed")
+    if job and job.get("runnerId"):
+        runner = read_runner(job["runnerId"])
+        if runner:
+            runner["jobsCompleted"] = runner.get("jobsCompleted", 0) + 1
+            write_runner(runner)
+    return job
+
+
+def _fail_job_inner(job_id: str, *, error: str, retryable: bool = False) -> dict[str, Any] | None:
+    status = "queued" if retryable else "failed"
+    return _update_job_status_inner(job_id, status, error=error)
+
+
+def _read_job_inner(job_id: str) -> dict[str, Any] | None:
+    job = read_job(job_id)
+    if job and job.get("envVars"):
+        job["envVars"] = _decrypt_env_vars(job["envVars"])
+    return job
+
+
+# ---------------------------------------------------------------------------
+# Module-level public API — preserved for backward compat
+# ---------------------------------------------------------------------------
+
+def create_job(
+    job_type: str,
+    org: str,
+    run_id: str,
+    docker_image: str,
+    env_vars: dict[str, str],
+    expected_repo_count: int | None = None,
+) -> dict[str, Any]:
+    """Module-level API — preserved for backward compat. Delegates to _inner."""
+    job_id = _create_job_inner(
+        job_type=job_type, org=org, run_id=run_id,
+        docker_image=docker_image, env_vars=env_vars,
+        expected_repo_count=expected_repo_count,
+    )
+    # Callers expect the full job dict back, not just the ID.
+    return read_job(job_id) or {"id": job_id}
+
+
+def assign_next_job(runner_id: str) -> dict[str, Any] | None:
+    """Module-level API — preserved for backward compat. Delegates to _inner."""
+    return _assign_next_job_inner(runner_id=runner_id)
+
+
+def update_job_status(job_id: str, status: str, **kwargs: Any) -> dict[str, Any] | None:
+    """Module-level API — preserved for backward compat. Delegates to _inner."""
+    return _update_job_status_inner(job_id, status, **kwargs)
 
 
 def update_job_progress(job_id: str, log_tail: list[str], progress: dict[str, Any]) -> dict[str, Any] | None:
@@ -143,17 +193,13 @@ def update_job_progress(job_id: str, log_tail: list[str], progress: dict[str, An
 
 
 def complete_job(job_id: str) -> dict[str, Any] | None:
-    job = update_job_status(job_id, "completed")
-    if job and job.get("runnerId"):
-        runner = read_runner(job["runnerId"])
-        if runner:
-            runner["jobsCompleted"] = runner.get("jobsCompleted", 0) + 1
-            write_runner(runner)
-    return job
+    """Module-level API — preserved for backward compat. Delegates to _inner."""
+    return _complete_job_inner(job_id)
 
 
 def fail_job(job_id: str, error: str) -> dict[str, Any] | None:
-    return update_job_status(job_id, "failed", error=error)
+    """Module-level API — preserved for backward compat. Delegates to _inner."""
+    return _fail_job_inner(job_id, error=error)
 
 
 def cancel_jobs_for_org(org: str, job_type: str | None = None) -> list[dict[str, Any]]:

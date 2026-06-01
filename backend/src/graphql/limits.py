@@ -26,8 +26,11 @@ def check_query_depth(query: str, max_depth: int = MAX_QUERY_DEPTH) -> None:
         )
 
 
+MAX_PER_PAGE = 100
+
+
 def clamp_per_page(per_page: int | None) -> int:
-    """Ensure per_page is a positive integer; default to 25 if unset."""
+    """Ensure per_page is a positive integer within allowed bounds; default to 25 if unset."""
     if per_page is None:
         return 25
-    return max(1, per_page)
+    return min(MAX_PER_PAGE, max(1, per_page))

@@ -151,7 +151,7 @@ export function ToolRefreshControls({
 
   return (
     <div className="flex items-center gap-3">
-      {error && <span className="text-xs text-red-500 mr-2">{error}</span>}
+      {error && <span className="text-xs text-[var(--color-severity-critical)] mr-2">{error}</span>}
       <div className="text-right text-xs space-y-0.5">
         <p className="text-[var(--color-text-secondary)]">
           {isRunning ? "Scanning..." : isRefreshing ? "Starting scan..." : `Last scanned: ${timestamp}`}
@@ -164,7 +164,7 @@ export function ToolRefreshControls({
           type="button"
           onClick={() => void handleCancel()}
           disabled={isCancelling}
-          className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 transition-colors dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400"
+          className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-sm font-medium text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] disabled:opacity-50 transition-colors"
         >
           Cancel Scan
         </button>
@@ -177,7 +177,7 @@ export function ToolRefreshControls({
               type="button"
               onClick={() => void handleRefresh("full")}
               disabled={isRefreshing}
-              className="rounded-l-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+              className="rounded-l-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
             >
               {isRefreshing ? "Starting..." : "Refresh"}
             </button>
@@ -185,7 +185,7 @@ export function ToolRefreshControls({
               type="button"
               onClick={() => setShowModeMenu(!showModeMenu)}
               disabled={isRefreshing}
-              className="rounded-r-lg border-l border-[var(--color-accent-hover)] bg-[var(--color-accent)] px-2 py-2 text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+              className="rounded-r-lg border-l border-[var(--color-accent-hover)] bg-[var(--color-accent)] px-2 py-2 text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
             >
               &#9662;
             </button>
@@ -216,7 +216,7 @@ export function ToolRefreshControls({
             type="button"
             onClick={() => void handleRefresh()}
             disabled={isRefreshing}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             {isRefreshing ? "Starting..." : "Refresh"}
           </button>

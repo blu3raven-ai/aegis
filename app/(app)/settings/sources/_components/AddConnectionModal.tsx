@@ -192,11 +192,11 @@ export function AddConnectionModal({
       onClick={onClose}
     >
       {/* Scrim */}
-      <div className="fixed inset-0 bg-black/60 transition-opacity" aria-hidden="true" />
+      <div className="fixed inset-0 bg-[var(--color-overlay-strong)] transition-opacity" aria-hidden="true" />
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)]"
+        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)]"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -243,7 +243,7 @@ export function AddConnectionModal({
                       className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors ${
                         isSelected
                           ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
-                          : "border-[var(--color-border)] hover:border-blue-300 hover:bg-[var(--color-surface-raised)]"
+                          : "border-[var(--color-border)] hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
                       }`}
                     >
                       <span className={isSelected ? "text-[var(--color-accent)]" : "text-[var(--color-text-secondary)]"}>
@@ -288,7 +288,7 @@ export function AddConnectionModal({
                           {guide.requiredScopes.map((scope) => (
                             <span
                               key={scope}
-                              className="inline-block rounded bg-[var(--color-accent)]/10 px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--color-accent)]"
+                              className="inline-block rounded bg-[var(--color-accent-subtle)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--color-accent)]"
                             >
                               {scope}
                             </span>
@@ -304,7 +304,7 @@ export function AddConnectionModal({
               <div className="mb-4">
                 <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
                   Display Name{" "}
-                  <span className="text-xs font-normal text-[var(--color-text-secondary)]">
+                  <span className="text-xs font-normal text-[var(--color-text-tertiary)]">
                     (optional)
                   </span>
                 </label>
@@ -313,7 +313,7 @@ export function AddConnectionModal({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={SOURCE_TYPE_LABELS[selectedType]}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none transition-colors focus:ring-1 focus:ring-[var(--color-accent)] placeholder:text-[var(--color-text-secondary)]"
+                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 placeholder:text-[var(--color-text-secondary)]"
                 />
               </div>
 
@@ -326,7 +326,7 @@ export function AddConnectionModal({
                     <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
                       {field.label}
                       {field.required && (
-                        <span className="ml-0.5 text-red-500">*</span>
+                        <span className="ml-0.5 text-[var(--color-severity-critical)]">*</span>
                       )}
                     </label>
                     <div className="relative">
@@ -340,7 +340,7 @@ export function AddConnectionModal({
                             [field.key]: e.target.value,
                           }))
                         }
-                        className={`w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none transition-colors focus:ring-1 focus:ring-[var(--color-accent)] placeholder:text-[var(--color-text-secondary)] ${isPassword ? "pr-14" : ""}`}
+                        className={`w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 placeholder:text-[var(--color-text-secondary)] ${isPassword ? "pr-14" : ""}`}
                       />
                       {isPassword && (
                         <button
@@ -369,13 +369,13 @@ export function AddConnectionModal({
 
               {/* Error */}
               {error && (
-                <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-red-500/20 bg-red-500/10 px-3.5 py-3">
-                  <svg className="mt-0.5 h-4 w-4 shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
+                  <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                   </svg>
                   <div>
-                    <p className="text-sm font-medium text-red-500">Connection failed</p>
-                    <p className="mt-0.5 text-xs text-red-400">{error}</p>
+                    <p className="text-sm font-medium text-[var(--color-severity-critical)]">Connection failed</p>
+                    <p className="mt-0.5 text-xs text-[var(--color-severity-critical)]">{error}</p>
                   </div>
                 </div>
               )}
@@ -398,7 +398,7 @@ export function AddConnectionModal({
                 type="button"
                 disabled={!selectedType}
                 onClick={handleNext}
-                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-40"
+                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-40"
               >
                 Next
               </button>
@@ -416,7 +416,7 @@ export function AddConnectionModal({
                 type="submit"
                 form="add-connection-form"
                 disabled={testing}
-                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
               >
                 {testing ? "Testing\u2026" : "Test & Connect"}
               </button>

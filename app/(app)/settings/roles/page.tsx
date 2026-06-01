@@ -136,18 +136,18 @@ function RolesSettingsContent() {
 
   if (isLoading && roles.length === 0) {
     return (
-      <div className="mx-auto max-w-6xl p-6 lg:p-10">
+      <div className="mx-auto max-w-5xl p-6 lg:p-10">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 bg-[var(--color-bg-tertiary)] rounded" />
-          <div className="h-4 w-96 bg-[var(--color-bg-tertiary)] rounded" />
-          <div className="h-64 bg-[var(--color-bg-tertiary)] rounded-lg" />
+          <div className="h-8 w-48 bg-[var(--color-surface-raised)] rounded" />
+          <div className="h-4 w-96 bg-[var(--color-surface-raised)] rounded" />
+          <div className="h-64 bg-[var(--color-surface-raised)] rounded-lg" />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-6 lg:p-10 space-y-6">
+    <div className="mx-auto max-w-5xl p-6 lg:p-10 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
@@ -160,7 +160,7 @@ function RolesSettingsContent() {
         {!selectedRole && !isCreating && (
           <button
             onClick={handleCreate}
-            className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+            className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -172,7 +172,7 @@ function RolesSettingsContent() {
       </div>
 
       {error && (
-        <div className="mb-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+        <div className="mb-6 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}
@@ -220,11 +220,11 @@ function RolesSettingsContent() {
 export default function RolesSettingsPage() {
   return (
     <Suspense fallback={
-      <div className="mx-auto max-w-6xl p-6 lg:p-10">
+      <div className="mx-auto max-w-5xl p-6 lg:p-10">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 bg-[var(--color-bg-tertiary)] rounded" />
-          <div className="h-4 w-96 bg-[var(--color-bg-tertiary)] rounded" />
-          <div className="h-64 bg-[var(--color-bg-tertiary)] rounded-lg" />
+          <div className="h-8 w-48 bg-[var(--color-surface-raised)] rounded" />
+          <div className="h-4 w-96 bg-[var(--color-surface-raised)] rounded" />
+          <div className="h-64 bg-[var(--color-surface-raised)] rounded-lg" />
         </div>
       </div>
     }>

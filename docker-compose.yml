@@ -33,12 +33,26 @@ services:
       - minio_data:/data
     networks:
       - internal
-      - scanner
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       timeout: 5s
       retries: 3
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-127.0.0.1:6379}:6379"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   backend:
     build: ./backend
@@ -54,6 +68,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       RUNNER_S3_SECRET_KEY: ${RUNNER_S3_SECRET_KEY:?Set RUNNER_S3_SECRET_KEY in .env}
+      REDIS_URL: redis://redis:6379/0
       FASTAPI_ENV: production
     deploy:
       resources:
@@ -76,6 +91,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   runner:
     build: ./runner
@@ -87,19 +104,14 @@ services:
       S3_ACCESS_KEY: runner-svc
       S3_SECRET_KEY: ${RUNNER_S3_SECRET_KEY:?Set RUNNER_S3_SECRET_KEY in .env}
       S3_BUCKET: ${S3_BUCKET:-scans}
-      SCANNER_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_scanner
-      SCANNER_WORKSPACE_VOLUME: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_runner-workspace
+      REDIS_URL: redis://redis:6379/0
     deploy:
       resources:
         limits:
           memory: 2G
     volumes:
-      # SECURITY: Docker socket required for scanner orchestration.
-      # In production, use a Docker API proxy (e.g., Tecnativa/docker-socket-proxy)
-      # to restrict allowed operations to container create/start/stop/rm only.
-      - /var/run/docker.sock:/var/run/docker.sock
       - runner-workspace:/workspace
-      - ./scanners:/scanners:ro
+      - aegis-grype-cache:/home/aegis/.cache/grype
     networks:
       - internal
     restart: unless-stopped
@@ -107,6 +119,8 @@ services:
       backend:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   frontend:
@@ -140,10 +154,10 @@ services:
 networks:
   internal:
     driver: bridge
-  scanner:
-    driver: bridge
 
 volumes:
   pgdata:
   minio_data:
+  redis_data:
   runner-workspace:
+  aegis-grype-cache:

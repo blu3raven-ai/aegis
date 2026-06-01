@@ -206,7 +206,7 @@ export function ScopeConfigContent({
           </svg>
           Back to {categoryLabel}
         </Link>
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
           {fetchError}
         </div>
       </div>
@@ -245,7 +245,7 @@ export function ScopeConfigContent({
       </Link>
 
       {/* Connection header card */}
-      <div className="flex items-center justify-between rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
         <div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
             {loaded.name}
@@ -301,7 +301,7 @@ export function ScopeConfigContent({
                   onChange={(e) => setNewToken(e.target.value)}
                   placeholder="Enter new token"
                   autoFocus
-                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 />
                 <button
                   type="button"
@@ -341,7 +341,7 @@ export function ScopeConfigContent({
               value={syncSchedule}
               onChange={(e) => setSyncSchedule(e.target.value as SyncSchedule)}
               disabled={!canEdit}
-              className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none focus:ring-1 focus:ring-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {SYNC_SCHEDULE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -355,7 +355,7 @@ export function ScopeConfigContent({
 
       {/* Save error */}
       {saveError && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
           {saveError}
         </div>
       )}

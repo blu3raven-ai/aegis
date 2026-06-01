@@ -18,13 +18,13 @@ const SIZE_CLASSES = {
 function buttonClass(tone: "red" | "emerald" | "blue" | "slate", size: "sm" | "md") {
   const base = `rounded-lg border font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${SIZE_CLASSES[size]}`
   if (tone === "red") {
-    return `${base} border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40`
+    return `${base} border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)] hover:opacity-90`
   }
   if (tone === "emerald") {
-    return `${base} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/40`
+    return `${base} border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)] hover:opacity-90`
   }
   if (tone === "blue") {
-    return `${base} border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40`
+    return `${base} border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] text-[var(--color-accent)] hover:opacity-90`
   }
   return `${base} border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-primary)] hover:bg-[var(--color-border)]`
 }

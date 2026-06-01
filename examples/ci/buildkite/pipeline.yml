@@ -1,0 +1,40 @@
+# Aegis scan + PR gate for Buildkite.
+#
+# Required environment variables (set in Buildkite > Pipelines > Settings > Environment):
+#   AEGIS_API_TOKEN — store via a secrets backend (e.g. AWS Secrets Manager)
+#   AEGIS_BASE_URL
+
+steps:
+  - label: ":shield: Install Aegis CLI"
+    key: install
+    command: pip install aegis-cli && aegis --version
+    agents:
+      queue: default
+
+  - label: ":mag: Run Aegis scan"
+    key: scan
+    depends_on: install
+    command: aegis scan --scanner dependencies --wait --json > aegis-findings.json
+    artifact_paths:
+      - aegis-findings.json
+    env:
+      AEGIS_API_TOKEN: ${AEGIS_API_TOKEN}
+      AEGIS_BASE_URL: ${AEGIS_BASE_URL}
+    agents:
+      queue: default
+
+  - wait: ~
+    continue_on_failure: false
+
+  # Non-zero exit code from `aegis decide` fails the build and blocks the merge.
+  - label: ":traffic_light: Gate on findings"
+    key: decide
+    depends_on: scan
+    command: |
+      buildkite-agent artifact download aegis-findings.json .
+      aegis decide --block-on critical --exit-code
+    env:
+      AEGIS_API_TOKEN: ${AEGIS_API_TOKEN}
+      AEGIS_BASE_URL: ${AEGIS_BASE_URL}
+    agents:
+      queue: default

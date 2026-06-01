@@ -156,7 +156,7 @@ export function CodeScanningSetupForm({
   return (
     <div className="space-y-6">
       {!canEdit && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700 dark:border-amber-900/30 dark:bg-amber-900/10 dark:text-amber-400">
+        <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-2.5 text-xs text-[var(--color-state-pending)]">
           Only owners and admins can edit tool settings.
         </div>
       )}
@@ -172,7 +172,7 @@ export function CodeScanningSetupForm({
 
       {/* Default Rulesets — primary config, shown first */}
       <SettingsCard eyebrow="Rulesets" title="Default Rulesets" subtitle="Select the security rule packs to apply during each scan. Language and framework packs are always included automatically.">
-      <fieldset disabled={!canEdit} className="space-y-3 disabled:opacity-50 disabled:grayscale-[0.5]">
+      <fieldset disabled={!canEdit} className="space-y-3 disabled:opacity-50">
         <RulesetPicker
           selected={values.rulesets}
           onChange={(rulesets) => setValues({ ...values, rulesets })}
@@ -183,7 +183,7 @@ export function CodeScanningSetupForm({
       </SettingsCard>
 
       <SettingsCard eyebrow="Scanner Config" title="Scanner Settings">
-      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50 disabled:grayscale-[0.5]">
+      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Scan concurrency</label>
             <input
@@ -204,7 +204,7 @@ export function CodeScanningSetupForm({
       </SettingsCard>
 
       <SettingsCard eyebrow="AI Review" title="AI Review Assistant">
-      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50 disabled:grayscale-[0.5]">
+      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
           <label className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm">
             <input
               type="checkbox"
@@ -281,7 +281,7 @@ export function CodeScanningSetupForm({
       </SettingsCard>
 
       <SettingsCard eyebrow="Automation" title="Scheduled Scans">
-      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50 disabled:grayscale-[0.5]">
+      <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
           <label className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm">
             <input
               type="checkbox"
@@ -355,7 +355,7 @@ export function CodeScanningSetupForm({
       </SettingsCard>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}

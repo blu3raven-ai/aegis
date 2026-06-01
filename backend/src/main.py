@@ -29,10 +29,39 @@ from src.license.router import router as license_router
 from src.runner.admin_router import admin_router as runner_admin_router
 from src.runner.router import router as runner_router
 from src.notifications.router import router as notifications_router
+from src.notifications.admin_router import router as notifications_admin_router
+from src.notifications.rules_router import router as notification_rules_router
+from src.notifications.signing_secrets_router import router as signing_secrets_router
 from src.auth.internal_router import internal_auth_router
 from src.shared.events_router import events_router
 from src.shared.sbom_router import router as sbom_router
+from src.argus.webhook import router as argus_webhook_router
+from src.integrations.github_webhook import router as github_webhook_router
+from src.integrations.gitlab_webhook import router as gitlab_webhook_router
+from src.integrations.bitbucket_webhook import router as bitbucket_webhook_router
 from src.graphql.schema import create_graphql_router
+from src.correlation.router import router as chains_router
+from src.correlation.admin_router import router as correlation_admin_router
+from src.correlation.temporal_router import router as temporal_router
+from src.health.router import router as health_router
+from src.repos.router import router as repos_router
+from src.argus.connector import get_argus_connector
+from src.sbom.router import router as sbom_export_router
+from src.api_keys.middleware import try_api_key_auth
+from src.api_keys.router import router as api_keys_router
+from src.audit_log.middleware import AuditMiddleware
+from src.audit_log.router import router as audit_router
+from src.onboarding.router import router as onboarding_router
+from src.compliance.router import router as compliance_router
+from src.search.router import router as search_router
+from src.fleet.router import router as fleet_router
+from src.sla.router import router as sla_router
+from src.exports.router import router as exports_router
+from src.findings.router import router as findings_router
+from src.kev.router import router as kev_router
+from src.epss.router import router as epss_router
+from src.activity.router import router as activity_router
+from src.decisions.router import router as decisions_router
 
 
 # Load .env.local into the process environment immediately so that 
@@ -156,7 +185,46 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     _stale_cleanup_thread = _threading.Thread(target=_stale_job_cleanup_loop, daemon=True, name="stale-job-cleanup")
     _stale_cleanup_thread.start()
 
+    # Start the correlation engine when explicitly enabled. Defaults to dormant
+    # so the existing behavior is fully preserved for unconfigured deployments.
+    if os.getenv("AEGIS_CORRELATION_ENABLED", "false").lower() == "true":
+        from src.correlation.engine import CorrelationEngine
+        from src.correlation.rules import register_builtin_rules
+        from src.shared.config import load_redis_stream_config
+        _stream_cfg = load_redis_stream_config()
+        _redis_cfg = {"url": os.getenv("REDIS_URL", "redis://localhost:6379/0")}
+        _correlation_engine = CorrelationEngine(
+            stream_config=_stream_cfg,
+            redis_config=_redis_cfg,
+            argus=get_argus_connector(),
+        )
+        register_builtin_rules(_correlation_engine)
+        _correlation_engine.start()
+        app.state.correlation_engine = _correlation_engine
+        logging.getLogger(__name__).info("correlation.engine: started via AEGIS_CORRELATION_ENABLED")
+
+    # Start the notification event router when explicitly enabled. Defaults to
+    # dormant so deployments without Redis or external destinations are unaffected.
+    if os.getenv("AEGIS_NOTIFICATIONS_ENABLED", "false").lower() == "true":
+        from src.notifications.router_event import NotificationEventRouter
+        from src.shared.config import load_redis_stream_config
+        _notif_stream_cfg = load_redis_stream_config()
+        _notification_router = NotificationEventRouter(_notif_stream_cfg)
+        _notification_router.start()
+        app.state.notification_router = _notification_router
+        logging.getLogger(__name__).info("notification.router: started via AEGIS_NOTIFICATIONS_ENABLED")
+
     yield
+
+    # Graceful shutdown for the notification router if it was started
+    _notification_router_inst = getattr(app.state, "notification_router", None)
+    if _notification_router_inst is not None:
+        _notification_router_inst.stop()
+
+    # Graceful shutdown for the correlation engine if it was started
+    _correlation_engine_inst = getattr(app.state, "correlation_engine", None)
+    if _correlation_engine_inst is not None:
+        _correlation_engine_inst.stop()
 
     get_scheduler().stop()
     await engine.dispose()
@@ -183,7 +251,7 @@ app = FastAPI(
 @app.middleware("http")
 async def require_jwt(request: Request, call_next):
     # Health check and documentation paths (if enabled) are always open
-    open_paths = {"/health", "/settings/api/sources/internal-orgs"}
+    open_paths = {"/health", "/health/ready", "/health/live", "/settings/api/sources/internal-orgs"}
     enabled = _is_docs_enabled()
     if enabled:
         # Include common variants and static assets needed by Swagger/ReDoc
@@ -200,6 +268,10 @@ async def require_jwt(request: Request, call_next):
 
     # Runner agent endpoints use their own auth (runner Bearer tokens, not JWT)
     if path.startswith("/runner/api/"):
+        return await call_next(request)
+
+    # SCM webhook endpoints authenticate via HMAC signatures, not JWTs
+    if path.startswith("/integrations/"):
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization")
@@ -219,10 +291,13 @@ async def require_jwt(request: Request, call_next):
         request.state.user_role = claims.get("role")
         request.state.user_role_id = claims.get("roleId")
     except ValueError:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Unauthorized"},
-        )
+        # JWT verification failed — try API key auth before giving up
+        api_key_row = await try_api_key_auth(request, token)
+        if api_key_row is None:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Unauthorized"},
+            )
 
     # License tier resolution
     license_key = read_license_key()
@@ -233,6 +308,10 @@ async def require_jwt(request: Request, call_next):
     return await call_next(request)
 
 
+app.add_middleware(AuditMiddleware)
+
+app.include_router(audit_router)
+app.include_router(api_keys_router)
 app.include_router(dependencies_router)
 app.include_router(container_scanning_router)
 app.include_router(code_scanning_router)
@@ -246,9 +325,33 @@ app.include_router(runner_admin_router)
 app.include_router(runner_router)
 app.include_router(license_router)
 app.include_router(notifications_router)
+app.include_router(notifications_admin_router)
+app.include_router(notification_rules_router)
+app.include_router(signing_secrets_router)
 app.include_router(internal_auth_router)
 app.include_router(events_router)
 app.include_router(sbom_router)
+app.include_router(sbom_export_router)
+app.include_router(argus_webhook_router)
+app.include_router(github_webhook_router)
+app.include_router(gitlab_webhook_router)
+app.include_router(bitbucket_webhook_router)
+app.include_router(chains_router)
+app.include_router(correlation_admin_router)
+app.include_router(temporal_router)
+app.include_router(health_router)
+app.include_router(onboarding_router)
+app.include_router(sla_router)
+app.include_router(repos_router)
+app.include_router(compliance_router)
+app.include_router(search_router)
+app.include_router(fleet_router)
+app.include_router(exports_router)
+app.include_router(findings_router)
+app.include_router(kev_router)
+app.include_router(epss_router)
+app.include_router(activity_router)
+app.include_router(decisions_router)
 
 # Test seed endpoint — non-production only
 if os.getenv("TEST_SEED_ENABLED", "").lower() in ("1", "true", "yes") and \
@@ -261,6 +364,3 @@ _graphql_router = create_graphql_router()
 app.include_router(_graphql_router, prefix="/graphql")
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"ok": "true"}

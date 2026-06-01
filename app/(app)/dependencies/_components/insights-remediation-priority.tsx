@@ -44,7 +44,7 @@ export function InsightsRemediationPriority({
                     {row.ecosystem}
                   </p>
                 </div>
-                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${SEV_BADGE[row.severity]}`}>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-bold uppercase tracking-wider ${SEV_BADGE[row.severity]}`}>
                   {row.severity}
                 </span>
               </div>
@@ -60,7 +60,7 @@ export function InsightsRemediationPriority({
 
               <div className="mt-3 flex items-center justify-between border-t border-[var(--color-border)] pt-3 text-[11px]">
                 <span className="text-[var(--color-text-secondary)]">
-                  Patch: <span className="font-medium text-emerald-400">{row.patchVersion || "None"}</span>
+                  Patch: <span className="font-medium text-[var(--color-state-fixed)]">{row.patchVersion || "None"}</span>
                 </span>
                 <span className="font-medium text-[var(--color-accent)] group-hover:underline">
                   View alerts →
