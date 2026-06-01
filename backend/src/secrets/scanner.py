@@ -473,6 +473,15 @@ def ingest_findings(
             import logging
             logging.getLogger(__name__).warning("Failed to emit new finding notifications", exc_info=True)
 
+        from src.shared.event_emit_helpers import emit_finding_created
+        for finding in new_findings:
+            emit_finding_created(
+                org_id=org,
+                finding=finding,
+                scanner_type="secrets",
+                source_component="secrets.scanner",
+            )
+
     repo_to_sha = _repo_to_latest_sha_from_list(merged)
     return None, repo_to_sha
 
@@ -592,6 +601,75 @@ def apply_run_transition(current: dict[str, Any], next_status: str, patch: dict[
 
 MAX_SCAN_DURATION_SECONDS = 12 * 60 * 60
 RUN_UPDATE_INTERVAL_SECONDS = 1.2
+
+
+def _try_incremental_secrets_scan(
+    repo_id: str,
+    checkout_path: Path,
+    baseline_sha: str | None,
+    head_sha: str,
+    detector_version: str,
+) -> list[dict[str, Any]] | None:
+    """Return findings if an incremental secrets scan succeeded; None to fall through.
+
+    Guarded by AEGIS_USE_INCREMENTAL_SECRETS=true (default: false) so existing
+    full-scan behaviour is unchanged when the flag is absent.
+
+    Any exception — including NotImplementedError from adapter stubs — is
+    caught; the caller gets None and the full scan runs instead.
+    """
+    if os.getenv("AEGIS_USE_INCREMENTAL_SECRETS", "false").lower() != "true":
+        return None
+    try:
+        from src.secrets.baseline_delta import SecretsBaselineDelta, SecretFinding
+        from src.secrets.verified_secrets_cache import VerifiedSecretsCache
+        from src.secrets.trufflehog_adapter import run_trufflehog
+
+        engine = SecretsBaselineDelta(
+            cache=VerifiedSecretsCache(),
+            trufflehog_runner=run_trufflehog,
+        )
+        result = engine.scan(
+            repo_id=repo_id,
+            checkout_path=checkout_path,
+            baseline_sha=baseline_sha,
+            head_sha=head_sha,
+            detector_version=detector_version,
+        )
+        logger.info(
+            "incremental secrets scan: commits=%d cached_verifications=%d new=%d findings=%d",
+            result.commits_scanned,
+            result.cached_verifications,
+            result.new_verifications,
+            len(result.findings),
+        )
+        # Serialize SecretFinding dataclasses to plain dicts for the ingest path
+        return [vars(f) if isinstance(f, SecretFinding) else f for f in result.findings]
+    except Exception:
+        logger.exception("incremental secrets scan failed; falling through to full scan")
+        return None
+
+
+def _finalize_incremental_secrets_scan(
+    org: str,
+    run_id: str,
+    findings: list[dict[str, Any]],
+    scan_depth: str,
+) -> None:
+    """Persist incremental findings and mark the secrets run complete.
+
+    Called inline when the incremental engine has already produced a findings
+    list, bypassing the scanner runner.
+    """
+    if findings:
+        ingest_findings(org, run_id, findings, scan_depth)
+
+    update_secret_run(org, run_id, {
+        "status": "completed",
+        "finishedAt": now_iso(),
+        "findingsCount": len(findings),
+        "progress": {"percent": 100, "stage": "completed"},
+    })
 
 
 def _execute_via_runner(
@@ -768,6 +846,20 @@ def execute_secret_scan_once(
                 return mark_run_cancelled(org, run_id)
 
             repo_urls_str = ",".join(source.repo_urls)
+
+            # Attempt incremental path — falls through to the runner when the
+            # flag is unset, adapters are stubs, or no baseline SHA is known.
+            incremental_findings = _try_incremental_secrets_scan(
+                repo_id=f"{org}/{source_idx}",
+                checkout_path=Path("/nonexistent"),
+                baseline_sha=None,
+                head_sha=run_id,
+                detector_version=resolved_scan_depth,
+            )
+            if incremental_findings is not None:
+                _finalize_incremental_secrets_scan(org, run_id, incremental_findings, resolved_scan_depth)
+                succeeded_sources.append(source_idx)
+                continue
 
             result = _execute_via_runner(
                 org=org,

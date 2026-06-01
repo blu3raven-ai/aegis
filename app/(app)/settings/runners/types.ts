@@ -19,13 +19,6 @@ export interface RunnerDetail extends Runner {
   memoryTotalGb: number | null
   diskUsedGb: number | null
   diskTotalGb: number | null
-  activeContainers: ActiveContainer[]
-}
-
-export interface ActiveContainer {
-  name: string
-  tool: string
-  startedAt: string
 }
 
 export interface RunnerJob {

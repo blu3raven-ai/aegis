@@ -200,6 +200,11 @@ def _finding_to_dependencies_alert(f: Finding, decision: Decision | None = None)
         "dismissed_reason": decision.reason if decision else None,
         "dismissed_comment": decision.comment if decision else None,
         "state_changed_at": _dt_to_iso(f.updated_at),
+        # Commit attribution (§5.6)
+        "introduced_by_commit_sha": getattr(f, "introduced_by_commit_sha", None),
+        "introduced_by_author": getattr(f, "introduced_by_author", None),
+        "introduced_at": _dt_to_iso(getattr(f, "introduced_at", None)),
+        "introduced_by_pr_url": getattr(f, "introduced_by_pr_url", None),
         "current_version": detail.get("currentVersion"),
         "repository": {"name": (f.repo or "").rsplit("/", 1)[-1], "full_name": f.repo or ""},
         "dependency": {
@@ -549,6 +554,11 @@ def _finding_to_secret_dict(f: Finding, decision: Decision | None = None) -> dic
         "secretIdentity": f.identity_key or detail.get("secretIdentity", ""),
         "severity": f.severity or "",
         "state": f.state,
+        # Commit attribution (§5.6)
+        "introduced_by_commit_sha": getattr(f, "introduced_by_commit_sha", None),
+        "introduced_by_author": getattr(f, "introduced_by_author", None),
+        "introduced_at": _dt_to_iso(getattr(f, "introduced_at", None)),
+        "introduced_by_pr_url": getattr(f, "introduced_by_pr_url", None),
     }
     if decision:
         result["dismissed_at"] = _dt_to_iso(decision.decided_at)
@@ -749,6 +759,11 @@ def _finding_to_code_scanning_dict(f: Finding, decision: Decision | None = None)
         # AI review context fields
         "language": detail.get("language", ""),
         "file_class": detail.get("fileClass", ""),
+        # Commit attribution (§5.6)
+        "introduced_by_commit_sha": getattr(f, "introduced_by_commit_sha", None),
+        "introduced_by_author": getattr(f, "introduced_by_author", None),
+        "introduced_at": _dt_to_iso(getattr(f, "introduced_at", None)),
+        "introduced_by_pr_url": getattr(f, "introduced_by_pr_url", None),
     }
     # Optional large fields
     for key in ("code_flows", "code_window", "imports", "reachability"):

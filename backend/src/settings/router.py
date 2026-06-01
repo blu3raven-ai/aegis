@@ -279,112 +279,51 @@ def _validate_password_change(
     return True, body.new_password
 
 
+# Heartbeat freshness threshold for a healthy runner.
+_RUNNER_HEALTHY_HEARTBEAT_SECONDS = 60
+
+
+def _evaluate_prerequisites_for_tool(tool: str, runners: list[dict]) -> dict:
+    """Return prerequisites response for a scanner tool.
+
+    Post embedded-migration, all scanner tools share the same prerequisite:
+    at least one runner has heartbeated within the last 60 seconds.
+    """
+    now = datetime.now(timezone.utc)
+    for runner in runners:
+        last_seen_iso = runner.get("lastSeen")
+        if not last_seen_iso:
+            continue
+        try:
+            last_seen = datetime.fromisoformat(last_seen_iso.replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        if (now - last_seen).total_seconds() <= _RUNNER_HEALTHY_HEARTBEAT_SECONDS:
+            return {"status": "ready", "runnerName": runner.get("name", "runner")}
+
+    return {"status": "no_runner"}
+
+
 def _runner_based_prerequisites(tool: str) -> ScannerPrerequisitesResponse:
-    """Check if any online runner has the scanner image ready."""
+    """Check if at least one runner is online to satisfy scanner prerequisites."""
     from src.runner.registry import list_approved_online_runners
 
     runners = list_approved_online_runners()
-    if not runners:
-        return ScannerPrerequisitesResponse(
-            docker_image_present=False,
-            signature_valid=False,
-            scanner_status="no_runner",
-            error="No runner connected",
-        )
+    result = _evaluate_prerequisites_for_tool(tool, runners)
 
-    # Map tool names to scanner_images keys
-    tool_key_map = {
-        "dependencies": "dependencies",
-        "codeScanning": "code_scanning",
-        "code_scanning": "code_scanning",
-        "secrets": "secrets",
-        "container-scanning": "container_scanning",
-        "containerScanning": "container_scanning",
-    }
-    scanner_key = tool_key_map.get(tool, tool)
-
-    # Find the best status across all runners
-    best_status = ""
-    best_runner: dict = {}
-
-    for runner in runners:
-        images = runner.get("scannerImages") or {}
-        scanner_info = images.get(scanner_key, {})
-        status = scanner_info.get("status", "")
-
-        if status == "ready":
-            return ScannerPrerequisitesResponse(
-                docker_image_present=True,
-                signature_valid=True,
-                image_name=scanner_info.get("image", ""),
-                registry_image=scanner_info.get("registryImage", ""),
-                scanner_status="ready",
-                scanner_source=scanner_info.get("source"),
-                runner_name=runner.get("name", ""),
-                runner_platform=f"{runner.get('os', '')}/{runner.get('arch', '')}",
-            )
-
-        # Track the "best" non-ready status for reporting
-        if not best_status or status in ("building",):
-            best_status = status
-            best_runner = runner
-
-    runner_name = best_runner.get("name", "runner")
-    best_images = best_runner.get("scannerImages") or {}
-    best_scanner_info = best_images.get(scanner_key, {})
-    image_name = best_scanner_info.get("image", "")
-    registry_image = best_scanner_info.get("registryImage", "")
-
-    if best_status == "building":
-        return ScannerPrerequisitesResponse(
-            docker_image_present=False,
-            signature_valid=False,
-            image_name=image_name,
-            registry_image=registry_image,
-            scanner_status="building",
-            runner_name=runner_name,
-            error=f"Building on {runner_name}",
-        )
-
-    if best_status == "invalid":
+    if result["status"] == "ready":
         return ScannerPrerequisitesResponse(
             docker_image_present=True,
-            signature_valid=False,
-            image_name=image_name,
-            registry_image=registry_image,
-            scanner_status="invalid",
-            runner_name=runner_name,
-            error="Signature verification failed",
-        )
-
-    if best_status == "build_failed":
-        return ScannerPrerequisitesResponse(
-            docker_image_present=False,
-            signature_valid=False,
-            image_name=image_name,
-            registry_image=registry_image,
-            scanner_status="build_failed",
-            runner_name=runner_name,
-            error="Build failed",
-        )
-
-    if best_status == "pull_failed":
-        return ScannerPrerequisitesResponse(
-            docker_image_present=False,
-            signature_valid=False,
-            image_name=image_name,
-            registry_image=registry_image,
-            scanner_status="pull_failed",
-            runner_name=runner_name,
-            error="Failed to pull from registry",
+            signature_valid=True,
+            scanner_status="ready",
+            runner_name=result.get("runnerName", ""),
         )
 
     return ScannerPrerequisitesResponse(
         docker_image_present=False,
         signature_valid=False,
-        scanner_status="missing",
-        runner_name=runner_name,
-        error="Scanner image not found",
+        scanner_status="no_runner",
+        error="No runner connected",
     )
 
 

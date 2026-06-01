@@ -57,6 +57,13 @@ class CodeScanningHooks(LifecycleHooks):
                 detail[key] = val
         return detail
 
+    def extract_file_location(self, raw: dict) -> tuple[str, int] | None:
+        file_path = raw.get("file_path") or ""
+        line = raw.get("start_line") or 0
+        if file_path and line:
+            return file_path, int(line)
+        return None
+
     def should_mark_fixed(self, identity_key: str, prev_detail: dict, **kwargs) -> bool:
         active_rule_ids = kwargs.get("active_rule_ids")
         if active_rule_ids is None:

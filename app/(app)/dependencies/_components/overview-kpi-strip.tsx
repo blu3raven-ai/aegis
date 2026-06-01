@@ -32,28 +32,28 @@ export function OverviewKpiStrip({
         label="Urgent"
         value={String(urgent)}
         note="Critical + High open"
-        valueClass="text-red-400"
+        valueClass="text-[var(--color-severity-critical)]"
         onClick={() => onOpenFindingsFiltered?.({ severity: ["critical", "high"] })}
       />
       <KpiCard
         label="Deferred"
         value={String(deferredCount)}
         note="No patch available yet"
-        valueClass="text-orange-400"
+        valueClass="text-[var(--color-severity-high)]"
         onClick={() => onOpenFindingsFiltered?.({ state: "deferred" })}
       />
       <KpiCard
         label="Stale (>30d)"
         value={String(staleCount)}
         note="Open and unpatched >30 days"
-        valueClass="text-amber-400"
+        valueClass="text-[var(--color-severity-medium)]"
         onClick={() => onOpenFindingsFiltered?.({ state: "open", ageBucket: "30d+" })}
       />
       <KpiCard
         label="Fixed Recently"
         value={String(fixed30d)}
         note="Closed in last 30 days"
-        valueClass="text-emerald-400"
+        valueClass="text-[var(--color-state-fixed)]"
         onClick={() => onOpenFindingsFiltered?.({ state: "fixed" })}
       />
     </div>

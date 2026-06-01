@@ -7,6 +7,7 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from threading import Lock
 from typing import Any, Literal
 
@@ -32,6 +33,43 @@ from src.storage import update_dependencies_run
 logger = logging.getLogger(__name__)
 
 DEPENDENCIES_SCANNER_IMAGE = "aegis/scanner-dependencies:latest"
+
+
+def _try_incremental_dep_scan(repo_id: str, checkout_path: Path) -> list[dict[str, Any]] | None:
+    """Return findings if an incremental dependency scan succeeded; None to fall through.
+
+    Guarded by AEGIS_USE_INCREMENTAL_DEPS=true (default: false) so existing
+    full-scan behaviour is unchanged when the flag is absent.
+
+    Any exception — including NotImplementedError from adapter stubs — is
+    caught and logged; the caller always gets None on failure so the full-scan
+    path runs instead.
+    """
+    if os.getenv("AEGIS_USE_INCREMENTAL_DEPS", "false").lower() != "true":
+        return None
+    try:
+        from src.dependencies.baseline_delta import DepsBaselineDelta
+        from src.dependencies.sbom_cache import SbomCache
+        from src.dependencies.grype_adapter import run_grype
+        from src.dependencies.syft_adapter import run_syft
+
+        engine = DepsBaselineDelta(
+            sbom_cache=SbomCache(),
+            syft_runner=run_syft,
+            grype_runner=run_grype,
+        )
+        result = engine.scan(repo_id=repo_id, checkout_path=checkout_path)
+        logger.info(
+            "incremental dep scan: cached=%s findings=%d",
+            result.cached,
+            len(result.findings),
+        )
+        return result.findings
+    except Exception:
+        logger.exception("incremental dep scan failed; falling through to full scan")
+        return None
+
+
 DEPENDENCIES_DATA_DIR = DATA_DIR / "dependencies"
 MAX_SCAN_DURATION_SECONDS = 12 * 60 * 60
 
@@ -108,6 +146,50 @@ class InMemoryScanRuntime:
             if not job:
                 return {"active": False, "runId": None}
             return {"active": True, "runId": job.run_id}
+
+
+def _finalize_incremental_dep_scan(org: str, run_id: str, findings: list[dict[str, Any]]) -> None:
+    """Persist incremental findings and mark the run complete.
+
+    Mirrors the finalisation steps in ingest_dependencies_from_minio but is
+    called inline (no MinIO round-trip) when the incremental engine has already
+    produced a findings list.
+    """
+    new_findings: list[dict[str, Any]] = []
+    if findings:
+        ctx = ScanContext(tool="dependencies", org=org, run_id=run_id)
+        new_findings = _apply_lifecycle(dependencies_hooks, ctx, findings)
+
+    if new_findings:
+        try:
+            from src.notifications.emitter import notify_new_critical_findings
+            notify_new_critical_findings("dependencies", org, new_findings)
+        except Exception:
+            logger.warning("Failed to emit new finding notifications", exc_info=True)
+
+        from src.shared.event_emit_helpers import emit_finding_created
+        for finding in new_findings:
+            emit_finding_created(
+                org_id=org,
+                finding=finding,
+                scanner_type="dependencies",
+                source_component="dependencies.scanner",
+            )
+
+    sev_counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
+    for f in findings:
+        sev = (f.get("security_advisory") or {}).get("severity", "").lower()
+        if sev in sev_counts:
+            sev_counts[sev] += 1
+        sev_counts["total"] += 1
+
+    update_dependencies_run(org, run_id, {
+        "status": "completed",
+        "finishedAt": now_iso(),
+        "findingsCount": len(findings),
+        "counts": sev_counts,
+        "progress": {"percent": 100, "stage": "completed"},
+    })
 
 
 def _download_scan_output_from_minio(org: str, run_id: str) -> dict[str, dict[str, Any]]:
@@ -278,6 +360,15 @@ def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
         except Exception:
             logger.warning("Failed to emit new finding notifications", exc_info=True)
 
+        from src.shared.event_emit_helpers import emit_finding_created
+        for finding in new_findings:
+            emit_finding_created(
+                org_id=org,
+                finding=finding,
+                scanner_type="dependencies",
+                source_component="dependencies.scanner",
+            )
+
     sev_counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
     for f in all_findings:
         sev = (f.get("security_advisory") or {}).get("severity", "").lower()
@@ -396,6 +487,21 @@ def execute_dependencies_scan_once(
                 return None
 
             repo_urls_str = ",".join(source.repo_urls)
+
+            # Attempt incremental path — falls through to the runner when the
+            # flag is unset, adapters are stubs, or the cache is cold.
+            # repo_id uses org+index as a stable cache namespace per source;
+            # checkout_path is a sentinel (adapter stubs raise NotImplementedError
+            # before touching the filesystem).
+            incremental_findings = _try_incremental_dep_scan(
+                repo_id=f"{org}/{source_idx}",
+                checkout_path=Path("/nonexistent"),
+            )
+            if incremental_findings is not None:
+                # Cache hit — skip runner; finalize directly
+                _finalize_incremental_dep_scan(org, run_id, incremental_findings)
+                succeeded_sources.append(source_idx)
+                continue
 
             result = _execute_via_runner(
                 org=org,

@@ -8,9 +8,9 @@ import type { SecretsCoverageGap, SecretsHealthRunEntry } from "@/lib/shared/sec
 
 
 const DEPTH_META: Record<string, { label: string; className: string }> = {
-  light: { label: "Light", className: "bg-blue-500/10 text-blue-400" },
-  deep: { label: "Deep", className: "bg-purple-500/10 text-purple-400" },
-  ai_enhanced: { label: "AI Enhanced", className: "bg-emerald-500/10 text-emerald-400" },
+  light: { label: "Light", className: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]" },
+  deep: { label: "Deep", className: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]" },
+  ai_enhanced: { label: "AI Enhanced", className: "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)]" },
 }
 
 function depthMeta(depth: string | undefined) {
@@ -121,7 +121,7 @@ export function HealthTab({
                       {s.hitRate === null ? (
                         <span className="text-xs text-[var(--color-text-secondary)]">—</span>
                       ) : (
-                        <span className={`font-semibold ${s.hitRate >= 70 ? "text-emerald-400" : s.hitRate >= 30 ? "text-amber-400" : "text-red-400"}`}>
+                        <span className={`font-semibold ${s.hitRate >= 70 ? "text-[var(--color-state-fixed)]" : s.hitRate >= 30 ? "text-[var(--color-state-pending)]" : "text-[var(--color-severity-critical)]"}`}>
                           {s.hitRate}%
                         </span>
                       )}

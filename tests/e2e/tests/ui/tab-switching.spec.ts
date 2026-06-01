@@ -13,16 +13,16 @@ test.describe("Dashboard tab switching", () => {
     await expect(page.locator("button", { hasText: "Overview" })).toBeVisible()
 
     await page.locator("button", { hasText: "Review" }).click()
-    await expect(page.locator("button", { hasText: "Review" })).toHaveClass(/text-white/)
+    await expect(page.locator("button", { hasText: "Review" })).toHaveClass(/text-\[var\(--color-accent-on\)\]/)
 
     await page.locator("button", { hasText: "Insights" }).click()
-    await expect(page.locator("button", { hasText: "Insights" })).toHaveClass(/text-white/)
+    await expect(page.locator("button", { hasText: "Insights" })).toHaveClass(/text-\[var\(--color-accent-on\)\]/)
 
     await page.locator("button", { hasText: "Health" }).click()
-    await expect(page.locator("button", { hasText: "Health" })).toHaveClass(/text-white/)
+    await expect(page.locator("button", { hasText: "Health" })).toHaveClass(/text-\[var\(--color-accent-on\)\]/)
 
     await page.locator("button", { hasText: "Settings" }).click()
-    await expect(page.locator("button", { hasText: "Settings" })).toHaveClass(/text-white/)
+    await expect(page.locator("button", { hasText: "Settings" })).toHaveClass(/text-\[var\(--color-accent-on\)\]/)
   })
 
   test("Dependencies dashboard loads overview tab", async ({ page }) => {

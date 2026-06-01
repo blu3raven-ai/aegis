@@ -46,14 +46,14 @@ export function PermissionGroup({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between px-1">
-        <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+        <h4 className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
           {label}
         </h4>
         <button
           type="button"
           onClick={handleToggleGroup}
           disabled={disabled}
-          className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] disabled:opacity-50"
+          className="text-2xs font-bold uppercase tracking-wider text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] disabled:opacity-50"
         >
           {allSelected ? "Unselect All" : "Select All"}
         </button>

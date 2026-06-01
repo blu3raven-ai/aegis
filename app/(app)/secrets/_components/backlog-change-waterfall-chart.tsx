@@ -43,7 +43,7 @@ export function BacklogChangeWaterfallChart({ trend }: { trend: SecretsTrendEntr
   ]
 
   return (
-    <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--color-text-secondary)]">Period Change</p>
       <h3 className="mt-2 text-2xl font-semibold text-[var(--color-text-primary)]">What changed this period</h3>
       <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
@@ -53,21 +53,21 @@ export function BacklogChangeWaterfallChart({ trend }: { trend: SecretsTrendEntr
       <div className="mt-5 space-y-4">
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Starting backlog</p>
-          <p className="mt-2 text-3xl font-semibold text-[var(--color-text-primary)]">+{latest.startingBacklog}</p>
+          <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">+{latest.startingBacklog}</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 p-4">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-orange-200">Increased backlog</p>
-            <p className="mt-2 text-3xl font-semibold text-orange-100">+{latest.newlyDetected}</p>
-            <p className="mt-2 text-sm text-orange-100/80">Newly detected secrets added this period</p>
+          <div className="rounded-2xl border border-[var(--color-severity-high-border)] bg-[var(--color-severity-high-subtle)] p-4">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--color-severity-high)]">Increased backlog</p>
+            <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-severity-high)]">+{latest.newlyDetected}</p>
+            <p className="mt-2 text-sm text-[var(--color-severity-high)]">Newly detected secrets added this period</p>
           </div>
-          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-200">Reduced backlog</p>
-            <p className="mt-2 text-3xl font-semibold text-emerald-100">
+          <div className="rounded-2xl border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] p-4">
+            <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--color-status-ok)]">Reduced backlog</p>
+            <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-status-ok)]">
               -{latest.resolved + latest.otherRemoved}
             </p>
-            <p className="mt-2 text-sm text-emerald-100/80">
+            <p className="mt-2 text-sm text-[var(--color-status-ok)]">
               {latest.resolved} resolved and {latest.otherRemoved} marked as noise
             </p>
           </div>
@@ -75,7 +75,7 @@ export function BacklogChangeWaterfallChart({ trend }: { trend: SecretsTrendEntr
 
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
           <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Ending backlog</p>
-          <p className="mt-2 text-4xl font-semibold text-[var(--color-text-primary)]">+{latest.endingBacklog}</p>
+          <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">+{latest.endingBacklog}</p>
         </div>
       </div>
     </div>

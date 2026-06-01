@@ -453,7 +453,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+        <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}
@@ -470,7 +470,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
         {canEdit && (
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+            className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)]"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -493,7 +493,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
             Create a member account with a password. The user can reset their password from account settings.
           </p>
           {dialogError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+            <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
               {dialogError}
             </div>
           )}
@@ -505,7 +505,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                 required
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:border-[var(--color-accent)] focus:outline-none"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="Enter username"
               />
             </div>
@@ -516,7 +516,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                 required
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:border-[var(--color-accent)] focus:outline-none"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="name@example.com"
               />
             </div>
@@ -527,7 +527,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:border-[var(--color-accent)] focus:outline-none"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="Set a password"
               />
             </div>
@@ -536,7 +536,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
               <select
                 value={newRoleId}
                 onChange={(e) => setNewRoleId(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:border-[var(--color-accent)] focus:outline-none"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
               >
                 {roles.map(role => (
                   <option key={role.id} value={role.id}>{role.name}</option>
@@ -555,7 +555,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-[var(--color-accent)] px-6 py-2 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50"
+              className="rounded-lg bg-[var(--color-accent)] px-6 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)] disabled:opacity-50"
             >
               {submitting ? "Creating..." : "Create User"}
             </button>
@@ -574,7 +574,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
               Enter a new password for <strong>{showResetPassword?.username}</strong>.
             </p>
             {dialogError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+              <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
                 {dialogError}
               </div>
             )}
@@ -585,7 +585,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                 required
                 value={resetPasswordValue}
                 onChange={(e) => setResetPasswordValue(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:border-[var(--color-accent)] focus:outline-none"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="Enter new password"
               />
             </div>
@@ -601,7 +601,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
             <button
               type="submit"
               disabled={submitting}
-              className="rounded-lg bg-[var(--color-accent)] px-6 py-2 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50"
+              className="rounded-lg bg-[var(--color-accent)] px-6 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)] disabled:opacity-50"
             >
               {submitting ? "Resetting..." : "Reset Password"}
             </button>
@@ -630,12 +630,12 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                       <span className="font-medium text-[var(--color-text-primary)]">{user.username}</span>
                       <span className="text-xs text-[var(--color-text-secondary)]">{user.email || "No email"}</span>
                       {user.status === "disabled" && (
-                        <span className="mt-1 inline-flex w-fit items-center rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-400 border border-red-500/20">
+                        <span className="mt-1 inline-flex w-fit items-center rounded-full border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-critical)]">
                           Disabled
                         </span>
                       )}
                       {user.status === "pending" && (
-                        <span className="mt-1 inline-flex w-fit items-center rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400 border border-red-500/20">
+                        <span className="mt-1 inline-flex w-fit items-center rounded-full border border-[var(--color-severity-medium)]/30 bg-[var(--color-severity-medium)]/10 px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-medium)]">
                           Pending activation
                         </span>
                       )}
@@ -647,7 +647,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                         value={user.roleId || ""}
                         onChange={(e) => void handleRoleChange(user, e.target.value)}
                         disabled={mutatingUserId === user.id}
-                        className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs focus:border-[var(--color-accent)] focus:outline-none"
+                        className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                       >
                         {roles.map(role => (
                           <option key={role.id} value={role.id}>{role.name}</option>
@@ -660,7 +660,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                     )}
                   </td>
                   <td className="px-4 py-4">
-                    <span className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-gray-500/10 px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]">
+                    <span className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)]">
                       Password
                     </span>
                   </td>
@@ -709,7 +709,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                             className={`text-xs font-medium transition-colors ${
                               user.id === currentUserId || (user.role === "owner" && currentUserRole !== "owner")
                                 ? "text-[var(--color-text-secondary)] opacity-30 cursor-not-allowed"
-                                : user.status === "disabled" ? "text-emerald-500 hover:text-emerald-400" : "text-amber-500 hover:text-amber-400"
+                                : user.status === "disabled" ? "text-[var(--color-status-ok)] hover:opacity-80" : "text-[var(--color-severity-medium)] hover:opacity-80"
                             }`}
                           >
                             {user.status === "active" ? "Disable" : user.status === "pending" ? "Activate" : "Enable"}
@@ -718,7 +718,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                             onClick={() => void handleDeleteUser(user)}
                             disabled={user.id === currentUserId || (currentUserRole !== "owner" && user.role === "owner")}
                             aria-label={`Delete ${user.username}`}
-                            className="text-[var(--color-text-secondary)] hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path d={TRASH_ICON} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
@@ -734,7 +734,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                     <td colSpan={6} className="px-6 py-4">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Team memberships</h4>
+                          <h4 className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Team memberships</h4>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                           {teams.map(team => {
@@ -745,18 +745,18 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                                 <div className="flex flex-col min-w-0">
                                   <span className="truncate text-sm font-medium">{team.name}</span>
                                   {isMember && member!.source === "github" && (
-                                    <span className="text-[10px] text-[var(--color-text-secondary)]">Synced</span>
+                                    <span className="text-2xs text-[var(--color-text-secondary)]">Synced</span>
                                   )}
                                   {isMember && member!.source === "manual" && (
-                                    <span className="text-[10px] text-[var(--color-text-secondary)]">Source: Manual</span>
+                                    <span className="text-2xs text-[var(--color-text-secondary)]">Source: Manual</span>
                                   )}
                                 </div>
                                 <button
                                   onClick={() => isMember ? handleRemoveTeamMember(team.id, user.id) : handleAddTeamMember(team.id, user.id)}
                                   disabled={isMember && member!.source === "github"}
                                   className={`ml-2 text-xs font-medium transition-colors ${
-                                    isMember 
-                                      ? "text-red-500 hover:text-red-400 disabled:opacity-30" 
+                                    isMember
+                                      ? "text-[var(--color-severity-critical)] hover:opacity-80 disabled:opacity-30"
                                       : "text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
                                   }`}
                                 >
@@ -775,10 +775,10 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                     <td colSpan={6} className="px-6 py-4">
                       <div className="space-y-6">
                         <div className="space-y-4">
-                          <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Direct Access</h4>
+                          <h4 className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Direct Access</h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-[10px] font-bold uppercase text-[var(--color-text-secondary)]">Grant Repository Access</label>
+                              <label className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Grant Repository Access</label>
                               <ResourceAutocomplete
                                 value={directRepoValue}
                                 placeholder="Search repositories..."
@@ -789,7 +789,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="text-[10px] font-bold uppercase text-[var(--color-text-secondary)]">Grant Image Access</label>
+                              <label className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Grant Image Access</label>
                               <ResourceAutocomplete
                                 value={directImageValue}
                                 placeholder="Search images..."
@@ -803,7 +803,7 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                         </div>
 
                         <div className="space-y-3">
-                          <h4 className="text-[10px] font-bold uppercase text-[var(--color-text-secondary)]">Effective Direct Grants</h4>
+                          <h4 className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Effective Direct Grants</h4>
                           <div className="flex flex-wrap gap-2">
                             {directGrants.filter(g => g.userId === user.id).length === 0 && (
                               <p className="text-xs text-[var(--color-text-secondary)] italic">No direct grants for this user.</p>
@@ -812,14 +812,14 @@ export function UsersSettingsForm({ canEdit = true }: { canEdit?: boolean }) {
                               <div key={`${grant.resourceType}-${grant.resourceKey}-${idx}`} className="group flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1">
                                 <div className="flex flex-col mr-2">
                                   <span className="text-xs font-medium">{grant.resourceKey}</span>
-                                  <span className="text-[10px] text-[var(--color-text-secondary)]">
+                                  <span className="text-2xs text-[var(--color-text-secondary)]">
                                     {grant.resourceType === "repository" ? "Repo" : "Image"} • {grant.source === "github-direct" ? "Synced" : "Manual"}
                                   </span>
                                 </div>
                                 {grant.source === "manual-direct" && (
                                   <button
                                     onClick={() => void handleRemoveDirectGrant(user.id, grant.resourceType, grant.resourceKey)}
-                                    className="text-[var(--color-text-secondary)] hover:text-red-500"
+                                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical)]"
                                   >
                                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

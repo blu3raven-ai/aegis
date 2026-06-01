@@ -77,6 +77,11 @@ export interface CodeScanningFinding {
       snippet?: string | null
     }>
   }
+  // Commit attribution (PR #35)
+  introduced_by_commit_sha?: string | null
+  introduced_by_author?: string | null
+  introduced_at?: string | null
+  introduced_by_pr_url?: string | null
 }
 
 export interface CodeScanningAnalytics {

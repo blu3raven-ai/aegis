@@ -20,6 +20,6 @@ describe("AppHeader right slot", () => {
     assert.ok(src.includes("<HeaderCTAs"), "should render HeaderCTAs")
   })
   it("has vertical divider between pill group and icon group", () => {
-    assert.ok(src.includes("h-4 w-px"), "should have vertical divider")
+    assert.ok(src.includes("h-5 w-px"), "should have vertical divider sized to match 36px icon-button row")
   })
 })

@@ -175,7 +175,7 @@ export function ScannerClassificationPanel({ finding }: { finding: SecretFinding
                       </div>
                       <div className="mt-1.5 flex items-center gap-2">
                         <span
-                          className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${VALUE_STYLES[entry.value] ?? VALUE_STYLES["uncertain"]}`}
+                          className={`rounded-full border px-1.5 py-0.5 text-2xs font-medium ${VALUE_STYLES[entry.value] ?? VALUE_STYLES["uncertain"]}`}
                         >
                           {VALUE_ICONS[entry.value]}
                           {VALUE_LABELS[entry.value] ?? entry.value}
@@ -187,7 +187,7 @@ export function ScannerClassificationPanel({ finding }: { finding: SecretFinding
                         )}
                         {isGoverning && (
                           <span
-                            className="ml-auto text-[10px] font-medium text-[var(--color-accent)]"
+                            className="ml-auto text-2xs font-medium text-[var(--color-accent)]"
                             title="Highest-confidence result — takes priority over more recent scans"
                           >
                             Effective

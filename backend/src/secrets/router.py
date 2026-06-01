@@ -147,6 +147,16 @@ def start_runs(
 
         threading.Thread(target=run_sequentially, daemon=True).start()
 
+        from src.shared.event_emit_helpers import emit_manual_rescan
+        for org in orgs:
+            emit_manual_rescan(
+                org_id=org,
+                repo_id=None,
+                scanner_type="secrets",
+                full=False,
+                source_component="secrets.router",
+            )
+
     if "error" in payload:
         return JSONResponse({"error": str(payload["error"])}, status_code=status_code)
     return JSONResponse(payload, status_code=status_code)

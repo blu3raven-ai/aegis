@@ -48,11 +48,11 @@ export function SecretsKpiStrip({ trend, findings }: { trend: SecretsTrendEntry[
   return (
     <div className="grid gap-4 md:grid-cols-3">
       {cards.map((card) => (
-        <div key={card.label} className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+        <div key={card.label} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             {card.label}
           </p>
-          <p className="mt-3 text-4xl font-semibold leading-none text-[var(--color-text-primary)]">{card.value}</p>
+          <p className="mt-3 text-2xl font-semibold leading-none text-[var(--color-text-primary)]">{card.value}</p>
           <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{card.support}</p>
         </div>
       ))}

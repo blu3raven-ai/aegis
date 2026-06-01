@@ -1,0 +1,66 @@
+# Aegis scan + PR gate for Azure Pipelines.
+#
+# Required pipeline variables (set in Azure DevOps > Pipelines > Library):
+#   AEGIS_API_TOKEN — mark as secret
+#   AEGIS_BASE_URL
+#
+# Trigger on pull requests to the main branches.
+trigger: none
+pr:
+  branches:
+    include:
+      - main
+      - main-*
+      - develop
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  SCANNER_TYPE: dependencies
+  BLOCK_ON: critical
+
+stages:
+  - stage: Security
+    displayName: Security Gate
+    jobs:
+      - job: AegisScan
+        displayName: Scan
+        steps:
+          - checkout: self
+
+          - script: pip install aegis-cli
+            displayName: Install Aegis CLI
+
+          - script: aegis --version
+            displayName: Verify CLI install
+            env:
+              AEGIS_API_TOKEN: $(AEGIS_API_TOKEN)
+              AEGIS_BASE_URL: $(AEGIS_BASE_URL)
+
+          - script: aegis scan --scanner $(SCANNER_TYPE) --wait --json > aegis-findings.json
+            displayName: Run scan
+            env:
+              AEGIS_API_TOKEN: $(AEGIS_API_TOKEN)
+              AEGIS_BASE_URL: $(AEGIS_BASE_URL)
+
+          - publish: aegis-findings.json
+            artifact: aegis-findings
+            condition: always()
+
+      - job: AegisDecide
+        displayName: Decide (gate)
+        dependsOn: AegisScan
+        steps:
+          - download: current
+            artifact: aegis-findings
+
+          - script: pip install aegis-cli
+            displayName: Install Aegis CLI
+
+          # Non-zero exit code from `aegis decide` fails the stage and blocks completion.
+          - script: aegis decide --block-on $(BLOCK_ON) --exit-code
+            displayName: Gate on findings
+            env:
+              AEGIS_API_TOKEN: $(AEGIS_API_TOKEN)
+              AEGIS_BASE_URL: $(AEGIS_BASE_URL)

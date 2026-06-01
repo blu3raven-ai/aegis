@@ -73,8 +73,17 @@ async def upsert_finding(
     detail: dict,
     first_seen_at: datetime | None = None,
     fixed_at: datetime | None = None,
+    introduced_by_commit_sha: str | None = None,
+    introduced_by_author: str | None = None,
+    introduced_at: datetime | None = None,
+    introduced_by_pr_url: str | None = None,
 ) -> Finding:
-    """Insert or update a finding by (tool, org, identity_key)."""
+    """Insert or update a finding by (tool, org, identity_key).
+
+    Attribution fields are only set on insert (the introducing commit doesn't
+    change when a finding resurfaces). Callers may omit them; they default to
+    NULL, which is valid and indicates attribution was unavailable at ingest.
+    """
     now = _utcnow()
     result = await session.execute(
         select(Finding).where(
@@ -109,9 +118,26 @@ async def upsert_finding(
             last_seen_at=now,
             created_at=now,
             updated_at=now,
+            introduced_by_commit_sha=introduced_by_commit_sha,
+            introduced_by_author=introduced_by_author,
+            introduced_at=introduced_at,
+            introduced_by_pr_url=introduced_by_pr_url,
         )
         session.add(finding)
         await session.flush()
+
+        # Derive and persist compliance mappings for the new finding.
+        # Runs inside the same session/transaction so no extra round-trip.
+        try:
+            from src.compliance.auto_mapper import apply_finding_mappings
+            await apply_finding_mappings(session, finding)
+        except Exception:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "compliance auto-mapping failed for finding %d; skipping",
+                finding.id, exc_info=True,
+            )
+
         return finding
 
 

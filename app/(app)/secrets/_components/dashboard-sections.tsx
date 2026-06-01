@@ -35,11 +35,11 @@ export function StatCard({
   valueClass: string
 }) {
   return (
-    <div className="flex flex-col rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+    <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         {label}
       </p>
-      <p className={`mt-3 text-4xl font-semibold leading-none tabular-nums ${valueClass}`}>{value}</p>
+      <p className={`mt-3 text-2xl font-semibold leading-none tabular-nums ${valueClass}`}>{value}</p>
       <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{note}</p>
     </div>
   )
@@ -61,7 +61,7 @@ export function NewKeyReviewQueue({
   onPreview: (finding: SecretFinding) => void
 }) {
   return (
-    <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--color-text-secondary)]">New Key Review Queue</p>
@@ -162,7 +162,7 @@ export function CommitTimelineChart({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
+      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-[var(--color-text-primary)]">Commit month trend</p>
@@ -173,16 +173,16 @@ export function CommitTimelineChart({
               {total} keys
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1">
-              <span className="h-2 w-2 rounded-full bg-orange-500" /> New
+              <span className="h-2 w-2 rounded-full bg-[var(--color-severity-high)]" /> New
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1">
-              <span className="h-2 w-2 rounded-full bg-red-500" /> Confirmed
+              <span className="h-2 w-2 rounded-full bg-[var(--color-severity-critical)]" /> Confirmed
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" /> False positive
+              <span className="h-2 w-2 rounded-full bg-[var(--color-status-ok)]" /> False positive
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1">
-              <span className="h-2 w-2 rounded-full bg-blue-500" /> Action taken
+              <span className="h-2 w-2 rounded-full bg-[var(--color-accent)]" /> Action taken
             </span>
           </div>
         </div>
@@ -205,10 +205,10 @@ export function CommitTimelineChart({
                     style={{ width: `${width}%` }}
                     title={`${entry.newCount} new, ${entry.confirmedCount} confirmed, ${entry.falsePositiveCount} false positive, ${entry.actionTakenCount} action taken`}
                   >
-                    {entry.newCount > 0 && <span className="h-full bg-orange-500" style={{ width: `${newWidth}%` }} />}
-                    {entry.confirmedCount > 0 && <span className="h-full bg-red-500" style={{ width: `${confirmedWidth}%` }} />}
-                    {entry.falsePositiveCount > 0 && <span className="h-full bg-emerald-500" style={{ width: `${falsePositiveWidth}%` }} />}
-                    {entry.actionTakenCount > 0 && <span className="h-full bg-blue-500" style={{ width: `${actionTakenWidth}%` }} />}
+                    {entry.newCount > 0 && <span className="h-full bg-[var(--color-severity-high)]" style={{ width: `${newWidth}%` }} />}
+                    {entry.confirmedCount > 0 && <span className="h-full bg-[var(--color-severity-critical)]" style={{ width: `${confirmedWidth}%` }} />}
+                    {entry.falsePositiveCount > 0 && <span className="h-full bg-[var(--color-status-ok)]" style={{ width: `${falsePositiveWidth}%` }} />}
+                    {entry.actionTakenCount > 0 && <span className="h-full bg-[var(--color-accent)]" style={{ width: `${actionTakenWidth}%` }} />}
                   </div>
                 </div>
                 <span className="text-right font-mono text-xs text-[var(--color-text-secondary)]">
@@ -219,7 +219,7 @@ export function CommitTimelineChart({
           })}
         </div>
         {unknownCount > 0 && (
-          <p className="mt-4 text-xs text-amber-600 dark:text-amber-300">
+          <p className="mt-4 text-xs text-[var(--color-severity-medium)]">
             {unknownCount} key{unknownCount === 1 ? "" : "s"} without commit date hidden from chart.
           </p>
         )}

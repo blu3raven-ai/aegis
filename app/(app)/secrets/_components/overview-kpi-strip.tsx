@@ -37,28 +37,28 @@ export function SecretsOverviewKpiStrip({
         label="Confirmed"
         value={String(funnel.confirmedCount)}
         note="Verified real, needs rotation"
-        valueClass="text-red-400"
+        valueClass="text-[var(--color-severity-critical)]"
         onClick={() => onOpenReviewFiltered({ status: "confirmed" })}
       />
       <KpiCard
         label="New"
         value={String(funnel.newCount)}
         note="Awaiting triage"
-        valueClass="text-orange-400"
+        valueClass="text-[var(--color-severity-high)]"
         onClick={() => onOpenReviewFiltered({ status: "new" })}
       />
       <KpiCard
         label="Stale (>30d)"
         value={String(staleCount)}
         note="Confirmed and unresolved >30 days"
-        valueClass="text-amber-400"
+        valueClass="text-[var(--color-severity-medium)]"
         onClick={() => onOpenReviewFiltered({ status: "confirmed", ageBucket: "30d+" })}
       />
       <KpiCard
         label="Resolved Recently"
         value={String(resolvedRecentlyCount)}
         note="Action taken in last 30 days"
-        valueClass="text-emerald-400"
+        valueClass="text-[var(--color-status-ok)]"
         onClick={() => onOpenReviewFiltered({ status: "action_taken" })}
       />
     </div>

@@ -58,11 +58,11 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex gap-2">
                     {role.isSystem ? (
-                      <span className="inline-flex items-center rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-500 border border-blue-500/20 uppercase tracking-tight">
+                      <span className="inline-flex items-center rounded-full bg-[var(--color-accent-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-accent)] border border-[var(--color-accent-border)] uppercase tracking-tight">
                         System
                       </span>
                     ) : (
-                      <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500 border border-emerald-500/20 uppercase tracking-tight">
+                      <span className="inline-flex items-center rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-state-fixed)] border border-[var(--color-state-fixed-border)] uppercase tracking-tight">
                         Custom
                       </span>
                     )}
@@ -96,7 +96,7 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                         onDeleteRole(role.id)
                       }}
                       disabled={role.isLocked || role.id === "role_owner"}
-                      className="p-1.5 text-[var(--color-text-secondary)] hover:text-red-500 hover:bg-red-500/10 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       title={role.isLocked || role.id === "role_owner" ? "This role is protected and cannot be deleted" : "Delete role"}
                       aria-label="Delete role"
                     >

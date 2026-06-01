@@ -64,7 +64,7 @@ export function OverviewAttentionStrip({
     <div className="grid gap-4 xl:grid-cols-3">
 
       {/* ── Backlog age breakdown ──────────────────────────────────────────── */}
-      <div className="flex flex-col rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--color-text-secondary)]">Backlog Age</p>
         <h3 className="mt-2 text-xl font-semibold text-[var(--color-text-primary)]">Age Breakdown</h3>
         <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
@@ -72,7 +72,7 @@ export function OverviewAttentionStrip({
         </p>
         <div className="mt-5">
           {openCount === 0 ? (
-            <p className="text-sm text-emerald-400">No open findings at this time.</p>
+            <p className="text-sm text-[var(--color-state-fixed)]">No open findings at this time.</p>
           ) : (
             <AgeBucketBar
               ageBuckets={ageBuckets}
@@ -85,7 +85,7 @@ export function OverviewAttentionStrip({
         <button
           type="button"
           onClick={() => onOpenFindingsFiltered({ state: "open" })}
-          className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-blue-300"
+          className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-[var(--color-accent)]"
         >
           <span>
             <span className="block text-sm font-semibold text-[var(--color-text-primary)]">
@@ -97,7 +97,7 @@ export function OverviewAttentionStrip({
       </div>
 
       {/* ── Top repos with gradient bars ──────────────────────────────────── */}
-      <div className="flex flex-col rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--color-text-secondary)]">Triage Signal</p>
         <h3 className="mt-2 text-xl font-semibold text-[var(--color-text-primary)]">Top {entityLabel === "image" ? "Images" : "Repos"} by Critical/High</h3>
         <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
@@ -117,7 +117,7 @@ export function OverviewAttentionStrip({
                     repository: repo.name.split("/").pop() ?? repo.name,
                   })
                 }
-                className="flex w-full flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-blue-300"
+                className="flex w-full flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-[var(--color-accent)]"
               >
                 <div className="flex w-full items-center justify-between gap-3">
                   <span className="min-w-0">
@@ -137,7 +137,7 @@ export function OverviewAttentionStrip({
                 </div>
                 <div className="mt-2 h-2.5 w-full rounded-full bg-[var(--color-surface-raised)]">
                   <div
-                    className="h-2.5 rounded-full bg-gradient-to-r from-[var(--color-accent-subtle)] via-[var(--color-accent)] to-cyan-400"
+                    className="h-2.5 rounded-full bg-[var(--color-accent)]"
                     style={{ width: `${Math.max((repo.open / maxRepoOpen) * 100, 8)}%` }}
                   />
                 </div>
@@ -148,7 +148,7 @@ export function OverviewAttentionStrip({
         <button
           type="button"
           onClick={() => onOpenFindingsFiltered({ state: "open" })}
-          className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-blue-300"
+          className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-[var(--color-accent)]"
         >
           <span>
             <span className="block text-sm font-semibold text-[var(--color-text-primary)]">All findings</span>
@@ -158,7 +158,7 @@ export function OverviewAttentionStrip({
       </div>
 
       {/* ── Review Focus ────────────────────────────────────────────────────── */}
-      <div className="flex flex-col rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
         <OverviewReviewFocus
           analytics={analytics as unknown as AnalyticsPayload | null}
           activeSeverity={activeSeverity}

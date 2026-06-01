@@ -1,0 +1,44 @@
+name: Runner unit tests
+
+on:
+  pull_request:
+    paths:
+      - 'runner/**'
+      - 'tests/runner/**'
+      - '.github/workflows/scanner-http-integration.yml'
+  push:
+    branches: [main-v2, main]
+    paths:
+      - 'runner/**'
+      - 'tests/runner/**'
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: runner-unit-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runner-unit-tests:
+    name: runner-unit-tests
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install runner package and test dependencies
+        run: |
+          pip install --quiet pytest
+          pip install --quiet -e runner/
+
+      - name: Run runner unit tests
+        run: python -m pytest tests/runner/ -q --tb=short

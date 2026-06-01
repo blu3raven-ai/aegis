@@ -46,7 +46,7 @@ function groupNotifications(
 
 const SEVERITY_CONFIG: Record<string, { dot: string; label: string }> = {
   info: { dot: "bg-[var(--color-accent)]", label: "Info" },
-  warning: { dot: "bg-amber-500", label: "Warning" },
+  warning: { dot: "bg-[var(--color-state-pending)]", label: "Warning" },
   error: { dot: "bg-[var(--color-severity-critical)]", label: "Critical" },
 }
 
@@ -299,7 +299,7 @@ export function NotificationsContent() {
 
         {/* Loading */}
         {isLoading ? (
-          <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
@@ -307,7 +307,7 @@ export function NotificationsContent() {
           </div>
         ) : !error && notifications.length === 0 ? (
           /* Empty state */
-          <div className="rounded-[28px] border-2 border-dashed border-[var(--color-border)] px-6 py-16 text-center">
+          <div className="rounded-2xl border-2 border-dashed border-[var(--color-border)] px-6 py-16 text-center">
             <svg
               className="mx-auto h-10 w-10 text-[var(--color-text-secondary)]"
               viewBox="0 0 24 24"
@@ -324,7 +324,7 @@ export function NotificationsContent() {
             </p>
             <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
               {filter === "unread"
-                ? "You're all caught up!"
+                ? "No notifications."
                 : "Notifications will appear here as scans complete and findings are detected."}
             </p>
           </div>
@@ -336,7 +336,7 @@ export function NotificationsContent() {
                 <p className="mb-3 text-[0.6875rem] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                   {group.label}
                 </p>
-                <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)]">
+                <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
                   {group.items.map((n) => {
                     const sev = SEVERITY_CONFIG[n.severity] ?? SEVERITY_CONFIG.info
                     const isActive = focusedId === n.id

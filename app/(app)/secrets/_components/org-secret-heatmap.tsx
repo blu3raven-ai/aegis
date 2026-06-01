@@ -30,7 +30,7 @@ export function OrgSecretHeatmap({
   function cellStyle(count: number) {
     if (count === 0) return { backgroundColor: "transparent" }
     const intensity = Math.sqrt(count / maxCount)
-    return { backgroundColor: `rgba(249,115,22,${0.12 + intensity * 0.68})` }
+    return { backgroundColor: `rgb(from var(--color-severity-high) r g b / ${0.12 + intensity * 0.68})` }
   }
 
   const orgTotals = new Map<string, number>()
@@ -104,7 +104,7 @@ export function OrgSecretHeatmap({
           <span className="text-xs text-[var(--color-text-secondary)]">Low</span>
           <div className="flex h-1.5 w-24 overflow-hidden rounded-full">
             {[0.12, 0.28, 0.44, 0.60, 0.80].map((opacity) => (
-              <div key={opacity} className="flex-1" style={{ backgroundColor: `rgba(249,115,22,${opacity})` }} />
+              <div key={opacity} className="flex-1" style={{ backgroundColor: `rgb(from var(--color-severity-high) r g b / ${opacity})` }} />
             ))}
           </div>
           <span className="text-xs text-[var(--color-text-secondary)]">High</span>

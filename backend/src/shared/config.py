@@ -10,6 +10,14 @@ from src.shared.paths import repo_root
 
 ENV_PATH = repo_root() / ".env.local"
 
+# Keys that must be redacted when logging or displaying config
+_SENSITIVE_KEYS = {
+    "aiApiKey", "nvdApiKey", "ghsaApiKey",
+    "argusApiKey", "argusEndpoint", "argusWebhookSecret",
+    "redisPassword",
+    "githubWebhookSecret", "gitlabWebhookSecret", "bitbucketWebhookSecret",
+}
+
 
 def parse_org_list(raw: str) -> list[str]:
     by_key: dict[str, str] = {}
@@ -355,9 +363,6 @@ def _redact_config(config: dict[str, Any]) -> dict[str, Any]:
     if isinstance(tools, dict):
         tools_copy = {**tools}
 
-        # Keys that must be redacted per tool section
-        _SENSITIVE_KEYS = {"aiApiKey", "nvdApiKey", "ghsaApiKey", "argusApiKey", "argusEndpoint"}
-
         for tool_name in ("codeScanning", "dependencies", "containerScanning", "secrets"):
             tool_cfg = tools_copy.get(tool_name)
             if not isinstance(tool_cfg, dict):
@@ -656,3 +661,15 @@ def get_runner_mode() -> str:
     """Return 'local' or 'remote'."""
     config = read_app_config()
     return (config.get("runners") or {}).get("mode", "local")
+
+
+def load_redis_stream_config() -> dict:
+    """Load Redis Streams configuration from environment.
+
+    Values are read at call time (not import) so tests can override via env.
+    """
+    return {
+        "url": os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        "stream_prefix": os.getenv("EVENT_STREAM_PREFIX", "aegis.events."),
+        "max_len": int(os.getenv("EVENT_STREAM_MAX_LEN", "100000")),
+    }

@@ -42,6 +42,11 @@ class SecretFinding:
     confirmed_at: Optional[str]
     resolved_at: Optional[str]
     detected_at: Optional[str]
+    # Commit attribution (§5.6)
+    introduced_by_commit_sha: Optional[str] = None
+    introduced_by_author: Optional[str] = None
+    introduced_at: Optional[str] = None
+    introduced_by_pr_url: Optional[str] = None
 
 
 @strawberry.type
@@ -233,6 +238,10 @@ def secret_findings(
             confirmed_at=f.get("confirmedAt"),
             resolved_at=f.get("resolvedAt"),
             detected_at=f.get("detectedAt"),
+            introduced_by_commit_sha=f.get("introduced_by_commit_sha"),
+            introduced_by_author=f.get("introduced_by_author"),
+            introduced_at=f.get("introduced_at"),
+            introduced_by_pr_url=f.get("introduced_by_pr_url"),
         )
         for f in page_items
     ]

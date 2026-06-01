@@ -133,6 +133,11 @@ class CodeScanningFinding:
     ai_review: Optional[CodeScanningAiReview] = None
     code_flows: Optional[list[CodeScanningCodeFlow]] = None
     reachability: Optional[CodeScanningReachability] = None
+    # Commit attribution (§5.6)
+    introduced_by_commit_sha: Optional[str] = None
+    introduced_by_author: Optional[str] = None
+    introduced_at: Optional[str] = None
+    introduced_by_pr_url: Optional[str] = None
 
 
 @strawberry.type
@@ -319,6 +324,10 @@ def code_scanning_findings(
             ai_review=_make_ai_review(f.get("ai_review")),
             code_flows=_make_code_flows(f.get("code_flows")),
             reachability=_make_reachability(f.get("reachability")),
+            introduced_by_commit_sha=f.get("introduced_by_commit_sha"),
+            introduced_by_author=f.get("introduced_by_author"),
+            introduced_at=f.get("introduced_at"),
+            introduced_by_pr_url=f.get("introduced_by_pr_url"),
         )
         for f in page_items
     ]

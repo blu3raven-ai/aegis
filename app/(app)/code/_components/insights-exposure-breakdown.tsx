@@ -3,17 +3,17 @@
 import type { GqlCodeScanningAnalytics } from "@/lib/shared/graphql/types"
 
 const SEV_COLOURS: Record<string, string> = {
-  critical: "bg-red-500",
-  high: "bg-orange-500",
-  medium: "bg-amber-400",
-  low: "bg-blue-400",
+  critical: "bg-[var(--color-severity-critical)]",
+  high: "bg-[var(--color-severity-high)]",
+  medium: "bg-[var(--color-severity-medium)]",
+  low: "bg-[var(--color-severity-low)]",
 }
 
 const STATE_COLOURS: Record<string, string> = {
-  open: "bg-green-500",
-  dismissed: "bg-gray-400",
-  fixed: "bg-emerald-500",
-  awaiting_fix: "bg-amber-500",
+  open: "bg-[var(--color-status-ok)]",
+  dismissed: "bg-[var(--color-state-dismissed)]",
+  fixed: "bg-[var(--color-state-fixed)]",
+  awaiting_fix: "bg-[var(--color-state-pending)]",
 }
 
 const STATE_LABELS: Record<string, string> = {
@@ -74,7 +74,7 @@ export function InsightsExposureBreakdown({
   return (
     <section className="space-y-6">
       <div className="border-t border-[var(--color-border)] pt-12">
-        <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">Exposure Breakdown</h2>
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Exposure Breakdown</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           What is the current severity and state of all findings?
         </p>
@@ -84,17 +84,17 @@ export function InsightsExposureBreakdown({
       <div className="grid gap-4 sm:grid-cols-5">
         {[
           { label: "Total", value: totalAll, colour: "text-[var(--color-text-primary)]", note: "All findings" },
-          { label: "Open", value: sb.open, colour: "text-green-400", note: "Needs attention" },
+          { label: "Open", value: sb.open, colour: "text-[var(--color-status-ok)]", note: "Needs attention" },
           { label: "Dismissed", value: sb.dismissed, colour: "text-[var(--color-text-secondary)]", note: "Reviewed" },
-          { label: "Fixed", value: sb.fixed, colour: "text-emerald-400", note: "Resolved" },
-          { label: "Awaiting Fix", value: sb.awaitingFix, colour: "text-amber-400", note: "Fix in progress" },
+          { label: "Fixed", value: sb.fixed, colour: "text-[var(--color-state-fixed)]", note: "Resolved" },
+          { label: "Awaiting Fix", value: sb.awaitingFix, colour: "text-[var(--color-state-pending)]", note: "Fix in progress" },
         ].map(({ label, value, colour, note }) => (
           <div
             key={label}
-            className="flex flex-col rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 shadow-[0_28px_80px_rgba(15,23,42,0.06)]"
+            className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 shadow-[0_28px_80px_rgba(15,23,42,0.06)]"
           >
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{label}</p>
-            <p className={`mt-3 text-4xl font-semibold leading-none tabular-nums ${colour}`}>{value}</p>
+            <p className={`mt-3 text-2xl font-semibold leading-none tabular-nums ${colour}`}>{value}</p>
             <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{note}</p>
           </div>
         ))}

@@ -125,8 +125,14 @@ export function computeScannerPrereqItems(data: {
   runner_name?: string | null
   runner_platform?: string | null
 }): ScannerPrerequisiteState {
+  // When the API doesn't yet return scanner_status but the image is present and
+  // signature-verified, treat it as ready so callers get a "pass" result with
+  // runner info rather than the generic "loading" fallback.
+  const effectiveStatus =
+    data.scanner_status ?? (data.dockerImagePresent && data.signatureValid ? "ready" : null)
+
   const info = scannerStatusToItem(
-    data.scanner_status, data.error, data.runner_name, data.runner_platform,
+    effectiveStatus, data.error, data.runner_name, data.runner_platform,
     data.scanner_source, data.imageName, data.registryImage,
   )
   const items: PrerequisiteItem[] = [

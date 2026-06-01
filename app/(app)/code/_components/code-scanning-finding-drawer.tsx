@@ -7,6 +7,7 @@ import {
   DrawerStatusBanner,
   DrawerSection,
   DrawerDetailGrid,
+  DrawerAttribution,
   DrawerFooter,
   DismissPopover,
   DrawerCodeLines,
@@ -255,6 +256,16 @@ const repoBaseUrl = finding?.repo_html_url || null
             <DrawerDetailGrid items={briefDetails} />
           </DrawerSection>
 
+          {/* ── Attribution ── */}
+          <DrawerAttribution
+            fields={{
+              introduced_by_commit_sha: finding.introduced_by_commit_sha,
+              introduced_by_author: finding.introduced_by_author,
+              introduced_at: finding.introduced_at,
+              introduced_by_pr_url: finding.introduced_by_pr_url,
+            }}
+          />
+
           {/* ── 2. Vulnerability Details ── */}
           <DrawerSection label="Vulnerability Details">
             {finding.cwe?.length ? (
@@ -284,7 +295,7 @@ const repoBaseUrl = finding?.repo_html_url || null
                         {`CWE-${num}`}{entry.name ? ` · ${entry.name}` : ""}
                       </p>
                       {entry.likelihood && likelihoodColor && (
-                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${likelihoodColor}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-2xs font-semibold ${likelihoodColor}`}>
                           {entry.likelihood} exploit likelihood
                         </span>
                       )}
@@ -299,17 +310,17 @@ const repoBaseUrl = finding?.repo_html_url || null
                               <div className="flex flex-wrap gap-x-3 gap-y-1">
                                 {c.scope.length > 0 && (
                                   <div className="flex flex-wrap items-center gap-1">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Scope</span>
+                                    <span className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Scope</span>
                                     {c.scope.map((s) => (
-                                      <span key={s} className="rounded-full bg-[var(--color-border)]/50 px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]">{s}</span>
+                                      <span key={s} className="rounded-full bg-[var(--color-border)]/50 px-1.5 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)]">{s}</span>
                                     ))}
                                   </div>
                                 )}
                                 {c.impact.length > 0 && (
                                   <div className="flex flex-wrap items-center gap-1">
-                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Impact</span>
+                                    <span className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">Impact</span>
                                     {c.impact.map((i) => (
-                                      <span key={i} className="rounded-full border border-[var(--color-severity-high)]/30 bg-[var(--color-severity-high)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-severity-high)]">{i}</span>
+                                      <span key={i} className="rounded-full border border-[var(--color-severity-high)]/30 bg-[var(--color-severity-high)]/15 px-1.5 py-0.5 text-2xs font-semibold text-[var(--color-severity-high)]">{i}</span>
                                     ))}
                                   </div>
                                 )}
@@ -465,7 +476,7 @@ const repoBaseUrl = finding?.repo_html_url || null
                                   </p>
                                   <div className="ml-auto flex shrink-0 items-center gap-1.5">
                                     {isEntry && (
-                                      <span className="rounded-full bg-[var(--color-accent)]/10 px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-accent)]">entry</span>
+                                      <span className="rounded-full bg-[var(--color-accent)]/10 px-1.5 py-0.5 text-2xs font-medium text-[var(--color-accent)]">entry</span>
                                     )}
                                     {stepUrl && (
                                       <a href={stepUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold text-[var(--color-accent)] hover:underline" aria-label={`View ${step.file}:${step.line} (opens in new tab)`}>

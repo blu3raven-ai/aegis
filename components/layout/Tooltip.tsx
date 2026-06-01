@@ -31,7 +31,7 @@ export function Tooltip({ content, children }: TooltipProps) {
   }, [])
 
   return (
-    <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
+    <div className="relative" onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}>
       {children}
       {visible && (
         <div

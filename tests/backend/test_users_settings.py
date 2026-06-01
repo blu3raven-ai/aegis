@@ -211,11 +211,12 @@ def test_post_users_creates_user_hashes_password_and_writes_audit(client):
     assert len(created["passwordHash"].split(":")[2]) == 32
     assert len(created["passwordHash"].split(":")[3]) == 128
 
-    # Verify audit event
+    # Verify audit event — filter by domain action since middleware also auto-audits
     audit = _get_audit_events()
-    assert audit[-1]["action"] == "user.created"
-    assert audit[-1]["target"] == created["id"]
-    assert audit[-1]["metadata"] == {"username": "NewUser", "email": "new@example.com", "role": "viewer"}
+    user_events = [e for e in audit if e["action"].startswith("user.")]
+    assert user_events[-1]["action"] == "user.created"
+    assert user_events[-1]["target"] == created["id"]
+    assert user_events[-1]["metadata"] == {"username": "NewUser", "email": "new@example.com", "role": "viewer"}
 
 
 def test_post_users_rejects_case_insensitive_duplicate_usernames(client):
@@ -327,7 +328,8 @@ def test_post_enable_sets_user_active_and_audits(client, monkeypatch):
     assert user["status"] == "active"
 
     audit = _get_audit_events()
-    assert audit[-1]["action"] == "user.enabled"
+    user_events = [e for e in audit if e["action"].startswith("user.")]
+    assert user_events[-1]["action"] == "user.enabled"
 
 
 def test_patch_role_requires_owner_for_owner_target(client, monkeypatch):
@@ -505,9 +507,10 @@ def test_delete_user_removes_user_and_writes_audit(client, monkeypatch):
     assert [user["id"] for user in users] == ["usr_admin"]
 
     audit = _get_audit_events()
-    assert audit[-1]["action"] == "user.deleted"
-    assert audit[-1]["target"] == "usr_user"
-    assert audit[-1]["metadata"] == {"username": "user", "role": "viewer"}
+    user_events = [e for e in audit if e["action"].startswith("user.")]
+    assert user_events[-1]["action"] == "user.deleted"
+    assert user_events[-1]["target"] == "usr_user"
+    assert user_events[-1]["metadata"] == {"username": "user", "role": "viewer"}
 
 
 def test_delete_user_rejects_non_admin(client, monkeypatch):

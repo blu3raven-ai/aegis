@@ -74,7 +74,9 @@ def test_get_scan_start_date_returns_none_when_empty():
 def test_read_pool_returns_empty_when_missing(tmp_path):
     from src.secrets.pool import read_pool
 
-    assert read_pool(tmp_path / "missing.pool.jsonl") == {}
+    # read_pool is DB-backed; path is ignored. Filter by an unused org so we
+    # get a deterministic empty result regardless of other tests' DB state.
+    assert read_pool(tmp_path / "missing.pool.jsonl", org="__no_such_org__") == {}
 
 
 def test_read_pool_returns_empty_on_corrupt_file(tmp_path):
@@ -83,7 +85,9 @@ def test_read_pool_returns_empty_on_corrupt_file(tmp_path):
     path = tmp_path / "example-org.pool.jsonl"
     path.write_text("not json\n", encoding="utf-8")
 
-    assert read_pool(path) == {}
+    # read_pool is DB-backed; corrupt-file path is irrelevant. Scope to a
+    # fresh org for a deterministic empty result.
+    assert read_pool(path, org="__no_such_org__") == {}
 
 
 

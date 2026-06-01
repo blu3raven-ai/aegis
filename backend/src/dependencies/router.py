@@ -126,6 +126,16 @@ def start_runs(
         update_run_fn=update_dependencies_run,
         skip_connection_check=(scan_mode == "advisories_only"),
     )
+    if status == 202:
+        from src.shared.event_emit_helpers import emit_manual_rescan
+        for org in orgs:
+            emit_manual_rescan(
+                org_id=org,
+                repo_id=None,
+                scanner_type="dependencies",
+                full=(scan_mode == "full"),
+                source_component="dependencies.router",
+            )
     return JSONResponse(payload, status_code=status)
 
 

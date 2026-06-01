@@ -7,7 +7,15 @@ and containers are torn down when tests finish.
 from __future__ import annotations
 
 import os
+import sys
 import asyncio
+
+# Ensure `backend/` is on sys.path so `from src.X import Y` resolves when
+# pytest is invoked from the project root (where backend/pyproject.toml's
+# pythonpath = ["."] is not in effect).
+_BACKEND_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "backend")
+if _BACKEND_DIR not in sys.path:
+    sys.path.insert(0, os.path.normpath(_BACKEND_DIR))
 
 import pytest
 

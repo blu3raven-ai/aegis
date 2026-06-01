@@ -5,13 +5,17 @@ its own runtime, execution function, and run CRUD callbacks.
 """
 from __future__ import annotations
 
+import os
 import random
 import threading
 import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
 from src.shared.config import get_github_token_for_org, org_has_source_connections
 from src.shared.event_bus import Event, get_event_bus
+from src.shared.event_emit_helpers import emit_scan_completed, emit_scan_failed, emit_scan_started
 from src.shared.paths import now_iso
 
 
@@ -68,34 +72,88 @@ def start_multi_org_scan(
     first_run_id = _generate_run_id()
     create_run_fn(first_org, first_run_id)
 
-    def run_sequentially() -> None:
+    def _run_one_org(org_name: str, token: str, run_id: str) -> None:
+        """Execute one org's scan and emit lifecycle events.
+
+        Failures are caught and emitted as scan.failed so they never propagate
+        to sibling workers running concurrently.
+        """
+        emit_scan_started(
+            org_id=org_name,
+            scan_id=run_id,
+            repo_id=None,
+            scanner_type=tool_label,
+            trigger_event_id=str(uuid.uuid4()),
+        )
+        scan_start_ts = time.time()
+        try:
+            result = execute_fn(org_name, token, run_id, **execute_kwargs, runtime=runtime)
+        except Exception as exc:
+            emit_scan_failed(
+                org_id=org_name,
+                scan_id=run_id,
+                error=str(exc),
+                retryable=False,
+            )
+            return
+        duration_ms = int((time.time() - scan_start_ts) * 1000)
+        if result is None:
+            emit_scan_failed(
+                org_id=org_name,
+                scan_id=run_id,
+                error="scan returned no result",
+                retryable=False,
+            )
+        else:
+            emit_scan_completed(
+                org_id=org_name,
+                scan_id=run_id,
+                duration_ms=duration_ms,
+                findings_count=0,
+            )
+        if on_org_complete:
+            on_org_complete(org_name)
+
+    def run_concurrently() -> None:
+        # Pre-assign run IDs so the response is consistent with what callers
+        # already received in the 202 body (run IDs are embedded in the queue).
+        org_runs: list[tuple[str, str, str]] = []
         for i, (org_name, token) in enumerate(captured_queue):
-            if i == 0:
-                run_id = first_run_id
-            else:
-                if runtime.is_cancelled(first_run_id):
-                    break
-                run_id = _generate_run_id()
+            run_id = first_run_id if i == 0 else _generate_run_id()
+            if i > 0:
                 create_run_fn(org_name, run_id)
+            org_runs.append((org_name, token, run_id))
 
-            execute_fn(org_name, token, run_id, **execute_kwargs, runtime=runtime)
-            if on_org_complete:
-                on_org_complete(org_name)
+        max_workers = min(len(org_runs), int(os.getenv("MULTI_ORG_CONCURRENCY", "8")))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_run_one_org, org_name, token, run_id): (org_name, run_id)
+                for org_name, token, run_id in org_runs
+                # Respect a pre-flight cancellation; already-running workers are
+                # not interrupted (cancellation on running futures is a no-op).
+                if not runtime.is_cancelled(first_run_id)
+            }
+            for future in futures:
+                org_name, run_id = futures[future]
+                try:
+                    future.result()
+                except Exception:
+                    # Exceptions are already handled inside _run_one_org;
+                    # this is a safety net that keeps the pool draining.
+                    pass
 
-            if runtime.is_cancelled(run_id):
-                # Cancel all remaining queued orgs
-                if update_run_fn:
-                    for rem_org, _ in captured_queue[i + 1:]:
-                        rem_run_id = _generate_run_id()
-                        create_run_fn(rem_org, rem_run_id)
-                        update_run_fn(rem_org, rem_run_id, {
-                            "status": "cancelled",
-                            "finishedAt": now_iso(),
-                            "error": "Cancelled by user",
-                        })
-                break
+        # Mark any orgs that were skipped due to a pre-flight cancellation.
+        if update_run_fn:
+            submitted_orgs = {org for org, run_id in futures.values()}
+            for org_name, _, run_id in org_runs:
+                if org_name not in submitted_orgs:
+                    update_run_fn(org_name, run_id, {
+                        "status": "cancelled",
+                        "finishedAt": now_iso(),
+                        "error": "Cancelled by user",
+                    })
 
-    threading.Thread(target=run_sequentially, daemon=True).start()
+    threading.Thread(target=run_concurrently, daemon=True).start()
 
     return {
         "runs": [{"org": o, "queued": True} for o, _ in org_queue],

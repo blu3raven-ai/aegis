@@ -73,7 +73,7 @@ Whether you're a solo developer running your first security scan or an enterpris
 | Backend | FastAPI (async Python), Strawberry GraphQL, SQLAlchemy |
 | Database | PostgreSQL 16 |
 | Object Storage | MinIO (S3-compatible) — SBOMs, scan artifacts |
-| Scanners | Docker containers — Syft, Grype, Opengrep, TruffleHog, BetterLeaks |
+| Scanners | Embedded in runner image — Syft, Grype, cdxgen, Opengrep, TruffleHog, BetterLeaks |
 | ML | ONNX Runtime — secret classification model |
 | Real-time | Server-Sent Events (SSE) with BroadcastChannel leader election |
 
@@ -94,11 +94,11 @@ Whether you're a solo developer running your first security scan or an enterpris
 |---|---|---|
 | **CPU** | 2 cores | 4+ cores |
 | **RAM** | 4 GB | 8+ GB |
-| **Disk** | 10 GB | 20+ GB (scanner images + scan artifacts) |
+| **Disk** | 10 GB | 20+ GB (runner image + scan artifacts + Grype DB cache) |
 | **Docker** | 20.10+ | Latest stable |
 | **Docker Compose** | v2.0+ | Latest stable |
 
-> Scanner image builds are CPU and memory intensive on first startup. The runner, backend, and frontend containers use 2 GB, 2 GB, and 1 GB memory limits respectively.
+> All scanner tooling is bundled directly into the runner image — no Docker socket mount, no privileged access, no per-scanner container builds. The runner, backend, and frontend containers use 2 GB, 2 GB, and 1 GB memory limits respectively.
 
 ## Quick Start
 
@@ -113,7 +113,7 @@ That's it. Open http://localhost:3000 and log in with `admin` / `admin`.
 
 To start scanning, go to **Sources**, add a GitHub Personal Access Token (PAT), and Aegis will discover and scan all your repositories automatically.
 
-> The first startup takes 5–15 minutes while scanner images are built. Subsequent startups are fast.
+> The first startup builds a single runner image bundling all scanner CLIs. Subsequent startups are fast.
 
 ### Production
 
@@ -147,12 +147,12 @@ See [docs/architecture.md](docs/architecture.md) for a deep dive into the system
 │       ├── runner/         Runner management & job queue
 │       ├── settings/       Configuration & team management
 │       └── shared/         Config, encryption, rate limiting
-├── runner/           Scanner job runner (image management, job execution)
-├── scanners/         Scanner Docker images
-│   ├── dependencies/     Syft + Grype + cdxgen
-│   ├── code-scanning/    Opengrep + tree-sitter
-│   ├── secrets/          TruffleHog + BetterLeaks + ONNX
-│   └── container/        Syft + Grype
+├── runner/           Scanner job runner with embedded scanner modules
+│   └── scanners/
+│       ├── dependencies/     Syft + Grype + cdxgen
+│       ├── code_scanning/    Opengrep + tree-sitter
+│       ├── secrets/          TruffleHog + BetterLeaks + ONNX
+│       └── container/        Syft + Grype
 ├── components/       Shared React components
 ├── lib/              Shared TypeScript utilities
 └── tests/            Backend, frontend, contract, and e2e tests
@@ -174,13 +174,13 @@ See [docs/architecture.md](docs/architecture.md) for a deep dive into the system
 <details>
 <summary><strong>How long does the first startup take?</strong></summary>
 
-The first `docker compose up` builds four scanner Docker images. This can take 5–15 minutes depending on your internet speed and machine. Subsequent startups are fast since images are cached.
+The first `docker compose up` builds the runner image, which bundles all scanner CLIs and Python dependencies. This can take several minutes depending on your internet speed and machine. Subsequent startups are fast since the image is cached.
 </details>
 
 <details>
 <summary><strong>Can I run Aegis without Docker?</strong></summary>
 
-The frontend and backend can run natively (Node.js + Python), but the scanners require Docker since they run as containers. See [docs/development.md](docs/development.md) for the manual setup guide.
+The frontend and backend can run natively (Node.js + Python). The runner can also run natively if all scanner CLIs (Syft, Grype, cdxgen, Opengrep, TruffleHog, BetterLeaks) and Python dependencies are installed locally — see [docs/development.md](docs/development.md).
 </details>
 
 <details>
@@ -204,14 +204,14 @@ docker compose down
 docker compose up -d --build
 ```
 
-Scanner images are rebuilt automatically by the runner on startup if the Dockerfiles have changed.
+The runner image is rebuilt by `docker compose up -d --build` when the runner Dockerfile or sources change.
 </details>
 
 <details>
 <summary><strong>The scan is stuck in "queued" — what do I check?</strong></summary>
 
 1. Check that the runner is running: `docker compose logs runner`
-2. The runner builds scanner images on first start — this can take several minutes
+2. The first run downloads Grype's vulnerability database into the `aegis-grype-cache` volume — this can take a few minutes
 3. If the runner keeps restarting, check `RUNNER_REGISTRATION_TOKEN` matches in both runner and backend configs
 </details>
 
@@ -219,7 +219,7 @@ Scanner images are rebuilt automatically by the runner on startup if the Dockerf
 <summary><strong>How do I reset everything and start fresh?</strong></summary>
 
 ```bash
-docker compose down -v    # removes all volumes (database, MinIO, scanner cache)
+docker compose down -v    # removes all volumes (database, MinIO, Grype DB cache)
 docker compose up -d
 ```
 
@@ -231,6 +231,39 @@ This deletes all data including findings, runs, and uploaded SBOMs.
 
 Community is the full product with no feature limits. Enterprise adds organizational infrastructure — SSO, MFA, audit logs, and third-party integrations — for companies that need governance and compliance controls.
 </details>
+
+## Production Configuration
+
+### Feature flags (env vars)
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AEGIS_CORRELATION_ENABLED` | `false` | Enable the correlation engine on app startup |
+| `JOB_QUEUE_BACKEND` | `file` | `file` / `postgres` / `redis` |
+| `RUNNER_DISPATCH_MODE` | `poll` | `poll` (5s loop) / `subscription` (Redis pub/sub) |
+| `RUNNER_EXEC_MODE` | `per_job` | `per_job` (existing) / `warm_pool` (long-running containers) |
+| `MULTI_ORG_CONCURRENCY` | `8` | Max concurrent orgs in scan orchestration |
+| `AEGIS_CORRELATION_EPSS_THRESHOLD` | `0.7` | EPSS threshold for severity escalation rule |
+| `ARGUS_ENDPOINT` | (unset) | Argus connector endpoint URL |
+| `ARGUS_API_KEY` | (unset) | Argus API key |
+| `ARGUS_WEBHOOK_SECRET` | (unset) | HMAC secret for Argus → Aegis webhooks |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection (required for subscription/warm_pool/redis-queue modes) |
+| `EVENT_STREAM_PREFIX` | `aegis.events.` | Prefix for durable event bus streams |
+| `EVENT_STREAM_MAX_LEN` | `100000` | Approximate max stream length |
+
+### Health endpoints
+
+- `GET /health` — full component status
+- `GET /health/ready` — k8s readiness probe
+- `GET /health/live` — k8s liveness probe
+
+### Suggested rollout
+
+1. **Phase 0 (default):** Existing behavior, all features dormant. Validates deployment.
+2. **Phase 1:** Switch `JOB_QUEUE_BACKEND=postgres`, `RUNNER_DISPATCH_MODE=subscription`. Validates push dispatch.
+3. **Phase 2:** Existing scanner ingest with per-scanner baseline+delta engines (dormant until wired per scanner).
+4. **Phase 3–4:** `AEGIS_CORRELATION_ENABLED=true` + Argus config. Attack chains materialize; AI scoring enriches findings.
+5. **Phase 5 (warm pool):** `RUNNER_EXEC_MODE=warm_pool` after scanner Dockerfiles support daemon mode.
 
 ## Contributing
 

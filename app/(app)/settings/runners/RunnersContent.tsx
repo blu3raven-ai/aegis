@@ -113,7 +113,7 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
               <span className={`text-sm font-semibold ${mode === "remote" ? "text-[var(--color-accent)]" : "text-[var(--color-text-primary)]"}`}>
                 Remote Runners
               </span>
-              <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-tertiary)]">
+              <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-wider text-[var(--color-text-tertiary)]">
                 In development
               </span>
             </div>
@@ -132,7 +132,7 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
             {runners.length} runner(s) are registered. Switching to local mode means scans will run on this machine instead.
           </p>
           <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => void commitModeChange(confirmModeSwitch)} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700">
+            <button type="button" onClick={() => void commitModeChange(confirmModeSwitch)} className="rounded-lg bg-[var(--color-state-pending)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] hover:brightness-110">
               Switch to local
             </button>
             <button type="button" onClick={() => setConfirmModeSwitch(null)} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)]">

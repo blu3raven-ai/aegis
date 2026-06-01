@@ -7,17 +7,17 @@ import { alertAgeDays, alertPatchVersion, cvssChipClass, formatCvssScore } from 
 const SEV_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
 
 const SEV_DOT: Record<string, string> = {
-  critical: "bg-red-400",
-  high: "bg-orange-400",
-  medium: "bg-amber-400",
-  low: "bg-blue-400",
+  critical: "bg-[var(--color-severity-critical)]",
+  high: "bg-[var(--color-severity-high)]",
+  medium: "bg-[var(--color-severity-medium)]",
+  low: "bg-[var(--color-severity-low)]",
 }
 
 const SEV_TEXT: Record<string, string> = {
-  critical: "text-red-400",
-  high: "text-orange-400",
-  medium: "text-amber-400",
-  low: "text-blue-400",
+  critical: "text-[var(--color-severity-critical)]",
+  high: "text-[var(--color-severity-high)]",
+  medium: "text-[var(--color-severity-medium)]",
+  low: "text-[var(--color-severity-low)]",
 }
 
 // ── Aggregated finding type ──────────────────────────────────────────────────
@@ -91,7 +91,7 @@ export function DependenciesFindingRow({ item, hideColumn }: Props) {
     <div className="px-4 py-3">
       {/* Line 1: severity dot + name + patch + count + age */}
       <div className="flex items-center gap-2.5">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${SEV_DOT[sev] ?? "bg-gray-400"}`} />
+        <span className={`h-2 w-2 shrink-0 rounded-full ${SEV_DOT[sev] ?? "bg-[var(--color-text-tertiary)]"}`} />
         {hideColumn !== "package" && (
           <span className="font-medium text-sm text-[var(--color-text-primary)] whitespace-nowrap">
             {f.dependency.package.name}
@@ -105,7 +105,7 @@ export function DependenciesFindingRow({ item, hideColumn }: Props) {
         {patch ? (
           <span className="whitespace-nowrap font-[family-name:var(--font-jetbrains-mono)] text-xs">
             <span className="text-[var(--color-text-secondary)]">→</span>{" "}
-            <span className="text-emerald-400">{patch}</span>
+            <span className="text-[var(--color-state-fixed)]">{patch}</span>
           </span>
         ) : (
           <span className="whitespace-nowrap font-[family-name:var(--font-jetbrains-mono)] text-xs text-[var(--color-text-secondary)]">

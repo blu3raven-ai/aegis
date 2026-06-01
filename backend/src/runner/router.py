@@ -95,8 +95,6 @@ class HeartbeatRequest(BaseModel):
     diskUsedGb: float | None = None
     diskTotalGb: float | None = None
     cores: int | None = None
-    activeContainers: list[dict[str, Any]] | None = None
-    scannerImages: dict[str, Any] | None = None
     os: str | None = None
     arch: str | None = None
 

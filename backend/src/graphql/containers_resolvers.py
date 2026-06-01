@@ -51,6 +51,11 @@ class ContainerFinding:
     fixed_at: Optional[str]
     current_version: Optional[str]
     manifest_path: Optional[str]
+    # Commit attribution (§5.6)
+    introduced_by_commit_sha: Optional[str] = None
+    introduced_by_author: Optional[str] = None
+    introduced_at: Optional[str] = None
+    introduced_by_pr_url: Optional[str] = None
 
 
 @strawberry.type
@@ -227,6 +232,10 @@ def container_findings(
             fixed_at=f.get("fixed_at"),
             current_version=f.get("current_version"),
             manifest_path=(dep.get("manifest_path") or None),
+            introduced_by_commit_sha=f.get("introduced_by_commit_sha"),
+            introduced_by_author=f.get("introduced_by_author"),
+            introduced_at=f.get("introduced_at"),
+            introduced_by_pr_url=f.get("introduced_by_pr_url"),
         ))
 
     return ContainerFindingsConnection(
