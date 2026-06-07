@@ -12,7 +12,7 @@ import {
 } from "./helpers/schema-parser.mts"
 
 const ROOT = path.resolve(import.meta.dirname, "../..")
-const queriesSource = readFileSync(path.join(ROOT, "lib/shared/graphql/queries.ts"), "utf-8")
+const queriesSource = readFileSync(path.join(ROOT, "frontend/lib/shared/graphql/queries.ts"), "utf-8")
 
 const findingsQueryMatch = queriesSource.match(/export const CONTAINER_FINDINGS_QUERY = `([\s\S]*?)`/)
 assert.ok(findingsQueryMatch, "CONTAINER_FINDINGS_QUERY not found")
@@ -39,7 +39,7 @@ test("CONTAINER_FINDINGS_QUERY filter params match container_findings resolver s
 })
 
 test("GqlContainerFinding TS interface matches CONTAINER_FINDINGS_QUERY selection set", () => {
-  const tsFields = extractTsInterfaceFields("lib/shared/graphql/types.ts", "GqlContainerFinding")
+  const tsFields = extractTsInterfaceFields("frontend/lib/shared/graphql/types.ts", "GqlContainerFinding")
   const queryFields = extractQueryFields(findingsQuery, "containerFindings.items")
   const querySet = new Set(queryFields)
 

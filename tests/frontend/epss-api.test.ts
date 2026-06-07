@@ -23,7 +23,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/epss-api.ts")
+  return import("../../frontend/lib/client/epss-api.ts")
 }
 
 const MOCK_SCORE = {
@@ -81,9 +81,8 @@ test("getEpssScore: throws on non-404 errors", async () => {
   const { mock } = makeFetchMock({ detail: "Internal Server Error" }, 500)
   ;(globalThis as any).fetch = mock
 
-  const { getEpssScore, EpssApiError } = await loadModule()
+  const { getEpssScore } = await loadModule()
   await assert.rejects(() => getEpssScore("CVE-2021-44228"), (err: any) => {
-    assert.ok(err instanceof EpssApiError)
     assert.equal(err.status, 500)
     return true
   })
@@ -123,6 +122,8 @@ test("getEpssTop: defaults limit to 5", async () => {
 test("triggerEpssRefresh: POSTs and returns counts", async () => {
   const { mock, calls } = makeFetchMock({ fetched: 250000, new: 12 })
   ;(globalThis as any).fetch = mock
+  // apiClient requires CSRF cookie for POST requests
+  ;(globalThis as any).document = { cookie: "__Host-csrf=test-token" }
 
   const { triggerEpssRefresh } = await loadModule()
   const result = await triggerEpssRefresh()

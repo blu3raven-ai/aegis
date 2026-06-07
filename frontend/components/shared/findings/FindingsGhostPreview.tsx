@@ -1,0 +1,99 @@
+/**
+ * Dimmed ghost preview rendered when no findings exist and no filters are
+ * active. Mock rows mirror the real FindingsBoardView row shape so users see
+ * what triage will look like once their first scan reports results.
+ */
+
+const SEV_STYLES = {
+  critical: "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical)]",
+  high: "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high)]",
+  medium: "bg-[var(--color-severity-medium)]/10 text-[var(--color-severity-medium)]",
+  low: "bg-[var(--color-severity-low)]/10 text-[var(--color-severity-low)]",
+} as const
+
+type Severity = keyof typeof SEV_STYLES
+
+interface MockRow {
+  severity: Severity
+  title: string
+  repo: string
+  scanner: string
+  age: string
+}
+
+const MOCK_ROWS: Array<{ group: string; rows: MockRow[] }> = [
+  {
+    group: "Dependencies",
+    rows: [
+      { severity: "critical", title: "CVE-0000-0000 — example-package", repo: "example-org/frontend", scanner: "Dependencies", age: "2h" },
+      { severity: "high", title: "Outdated transitive dependency", repo: "example-org/frontend", scanner: "Dependencies", age: "5h" },
+      { severity: "medium", title: "Known advisory in lockfile", repo: "example-org/api", scanner: "Dependencies", age: "1d" },
+    ],
+  },
+  {
+    group: "Containers",
+    rows: [
+      { severity: "high", title: "Container base image CVE", repo: "example-org/api", scanner: "Containers", age: "3h" },
+      { severity: "medium", title: "Outdated OS package in image", repo: "example-org/api", scanner: "Containers", age: "2d" },
+    ],
+  },
+  {
+    group: "Secrets",
+    rows: [
+      { severity: "critical", title: "Exposed API key in commit history", repo: "example-org/infra", scanner: "Secrets", age: "1h" },
+    ],
+  },
+]
+
+function GroupHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div className="flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-2.5">
+      <svg className="h-3 w-3 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+      <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        {label}
+      </span>
+      <span className="text-2xs tabular-nums text-[var(--color-text-tertiary)]">{count}</span>
+    </div>
+  )
+}
+
+function Row({ row }: { row: MockRow }) {
+  return (
+    <div className="flex items-center gap-3 px-5 py-3">
+      <span className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${SEV_STYLES[row.severity]}`}>
+        <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+        {row.severity}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium text-[var(--color-text-primary)]">
+          {row.title}
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--color-text-tertiary)]">
+          <span>{row.repo}</span>
+          <span>·</span>
+          <span>{row.scanner}</span>
+        </div>
+      </div>
+      <span className="shrink-0 text-2xs text-[var(--color-text-tertiary)] tabular-nums">{row.age}</span>
+    </div>
+  )
+}
+
+export function FindingsGhostPreview() {
+  return (
+    <div className="divide-y divide-[var(--color-border)]">
+      {MOCK_ROWS.map((group) => (
+        <div key={group.group}>
+          <GroupHeader label={group.group} count={group.rows.length} />
+          <div className="divide-y divide-[var(--color-border-divider)]">
+            {group.rows.map((row, idx) => (
+              <Row key={`${group.group}-${idx}`} row={row} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}

@@ -12,8 +12,8 @@ import {
 } from "./helpers/schema-parser.mts"
 
 const ROOT = path.resolve(import.meta.dirname, "../..")
-const QUERIES_FILE = "lib/shared/graphql/queries.ts"
-const TYPES_FILE = "lib/shared/graphql/types.ts"
+const QUERIES_FILE = "frontend/lib/shared/graphql/queries.ts"
+const TYPES_FILE = "frontend/lib/shared/graphql/types.ts"
 const RESOLVER_FILE = "backend/src/graphql/secrets_resolvers.py"
 
 const queriesSource = readFileSync(path.join(ROOT, QUERIES_FILE), "utf-8")

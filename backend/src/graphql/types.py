@@ -242,3 +242,66 @@ class SecretsFilterOptions:
     repositories: list[str]
     detectors: list[str]
     sources: list[str]
+
+
+# ── SLA breach summary types ──────────────────────────────────────────────────
+
+@strawberry.type
+class SeverityBreachStat:
+    open: int
+    breached: int
+    breached_pct: float
+
+
+@strawberry.type
+class BreachSummary:
+    critical: SeverityBreachStat
+    high: SeverityBreachStat
+    medium: SeverityBreachStat
+    low: SeverityBreachStat
+
+
+# ── EPSS top findings types ───────────────────────────────────────────────────
+
+@strawberry.type
+class EpssTopFinding:
+    finding_id: int
+    tool: str
+    repo: str
+    severity: str
+    identity_key: str
+    cve: str
+    epss_score: float
+    epss_percentile: float
+    scored_date: Optional[str] = None
+
+
+@strawberry.type
+class EpssTopResponse:
+    findings: list[EpssTopFinding]
+    count: int
+
+
+# ── Source connections types ──────────────────────────────────────────────────
+
+@strawberry.type
+class SourceAuth:
+    org_or_owner: str
+
+
+@strawberry.type
+class SourceConnectionGQL:
+    id: str
+    source_type: str
+    category: str
+    name: str
+    status: str
+    auth: SourceAuth
+    last_synced_at: Optional[str] = None
+    next_sync_at: Optional[str] = None
+    sync_schedule: Optional[str] = None
+
+
+@strawberry.type
+class SourceConnectionsResponse:
+    connections: list[SourceConnectionGQL]

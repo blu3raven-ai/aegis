@@ -64,7 +64,6 @@ def _create_job_inner(
     job_type: str,
     org: str,
     run_id: str,
-    docker_image: str,
     env_vars: dict[str, str],
     expected_repo_count: int | None = None,
 ) -> str:
@@ -82,7 +81,6 @@ def _create_job_inner(
         "runnerId": None,
         "createdAt": now_iso(),
         "completedAt": None,
-        "dockerImage": docker_image,
         "envVars": _encrypt_env_vars(env_vars),
     }
     write_job(job)
@@ -157,14 +155,13 @@ def create_job(
     job_type: str,
     org: str,
     run_id: str,
-    docker_image: str,
     env_vars: dict[str, str],
     expected_repo_count: int | None = None,
 ) -> dict[str, Any]:
-    """Module-level API — preserved for backward compat. Delegates to _inner."""
+    """Module-level API — delegates to _inner."""
     job_id = _create_job_inner(
         job_type=job_type, org=org, run_id=run_id,
-        docker_image=docker_image, env_vars=env_vars,
+        env_vars=env_vars,
         expected_repo_count=expected_repo_count,
     )
     # Callers expect the full job dict back, not just the ID.

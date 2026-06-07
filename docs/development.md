@@ -20,7 +20,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-This starts: PostgreSQL, MinIO (object storage), backend, frontend, and runner with all scanners.
+This starts: PostgreSQL, MinIO (object storage), the unified aegis container (FastAPI + static Next.js export on port 3000), and runner with all scanners.
 
 ## Manual Development Setup
 
@@ -47,10 +47,10 @@ DATABASE_URL=postgresql+asyncpg://app:app@localhost:5432/app \
   uvicorn src.main:app --reload --port 8000
 ```
 
-Or use the npm script:
+Or use the npm script (from `frontend/`):
 
 ```bash
-npm run dev:backend
+cd frontend && npm run dev:backend
 ```
 
 The backend serves the REST API at `http://localhost:8000` and GraphQL at `http://localhost:8000/graphql/api`.
@@ -58,6 +58,7 @@ The backend serves the REST API at `http://localhost:8000` and GraphQL at `http:
 ### 3. Frontend
 
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
@@ -70,8 +71,8 @@ The runner executes scan jobs. It requires Docker to build and run scanner image
 
 ```bash
 cd runner
-pip install -r requirements.txt
-python main.py
+uv sync
+uv run python main.py
 ```
 
 The runner registers with the backend, builds scanner Docker images from `scanners/`, and polls for scan jobs.
@@ -79,7 +80,7 @@ The runner registers with the backend, builds scanner Docker images from `scanne
 ### 5. Start Everything
 
 ```bash
-npm run dev:all    # starts backend + frontend concurrently
+cd frontend && npm run dev:all    # starts backend + frontend concurrently
 ```
 
 ## Environment Variables
@@ -88,8 +89,9 @@ Copy `.env.example` to `.env` and configure:
 
 | Variable | Description |
 |---|---|
-| `JWT_SHARED_SECRET` | Signs API tokens (frontend ↔ backend). Use `openssl rand -base64 32`. |
-| `SESSION_SECRET` | Signs browser session cookies. |
+| `RUNNER_ENCRYPTION_KEY` | Encrypts runner job environment payloads. Use `openssl rand -base64 32`. |
+| `SESSION_SECRET` | Signs browser session cookies. Required — startup fails if missing. |
+| `ALLOWED_HOSTS` | Comma-separated list of allowed hostnames for TrustedHostMiddleware (e.g. `localhost,127.0.0.1`). |
 | `ADMIN_PASSWORD` | Initial admin account password. |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database credentials. |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | Object storage credentials. |
@@ -103,29 +105,25 @@ Tool-specific variables (e.g., `SCA_ENABLED`, `SAST_DOCKER_IMAGE`) can be config
 ### Backend
 
 ```bash
-npm run test:backend
-# or directly:
 cd backend && python -m pytest ../tests/backend/ -v --rootdir=.
 ```
 
 ### Frontend
 
 ```bash
-npm run test:frontend
-# or directly:
-node --test tests/frontend/*.test.ts
+cd frontend && npm run test:frontend
 ```
 
 ### Contract Tests
 
 ```bash
-npm run test:contracts
+cd frontend && npm run test:contracts
 ```
 
 ### E2E Tests
 
 ```bash
-npm run test:e2e
+cd frontend && npm run test:e2e
 ```
 
 Requires Playwright installed (`npx playwright install`).
@@ -134,18 +132,30 @@ Requires Playwright installed (`npx playwright install`).
 
 ```
 aegis/
-├── app/                        Next.js app router
-│   ├── (app)/                  Authenticated app pages
-│   │   ├── home/               Home dashboard
-│   │   ├── dependencies/       Dependencies tool
-│   │   ├── containers/         Container scanning tool
-│   │   ├── code/               Code scanning tool
-│   │   ├── secrets/            Secrets tool
-│   │   ├── sources/            Source management (Git, registries)
-│   │   ├── settings/           Settings pages
-│   │   └── notifications/      Notification center
-│   ├── api/                    Next.js API routes (BFF proxy layer)
-│   └── login/                  Login page
+├── frontend/                   Next.js application
+│   ├── app/                    Next.js app router
+│   │   ├── (app)/              Authenticated app pages
+│   │   │   ├── home/           Home dashboard
+│   │   │   ├── dependencies/   Dependencies tool
+│   │   │   ├── containers/     Container scanning tool
+│   │   │   ├── code/           Code scanning tool
+│   │   │   ├── secrets/        Secrets tool
+│   │   │   ├── sources/        Source management (Git, registries)
+│   │   │   ├── settings/       Settings pages
+│   │   │   └── notifications/  Notification center
+│   │   ├── api/                Next.js API routes (BFF proxy layer)
+│   │   └── login/              Login page
+│   ├── components/             React components
+│   │   ├── providers/          Context providers (SSE, theme)
+│   │   └── shared/             Shared UI components
+│   ├── lib/                    Shared TypeScript code
+│   │   ├── server/             Server-side utilities (app config)
+│   │   └── shared/             Client/server shared utilities
+│   ├── public/                 Static assets
+│   ├── middleware.ts           Next.js middleware
+│   ├── next.config.ts          Next.js configuration
+│   ├── package.json            Frontend dependencies + scripts
+│   └── tsconfig.json           TypeScript configuration
 │
 ├── backend/                    FastAPI backend
 │   └── src/
@@ -173,14 +183,6 @@ aegis/
 │   ├── container/              Syft + Grype (container images)
 │   └── shared/                 Shared scanner utilities (manifest, lib.sh)
 │
-├── components/                 React components
-│   ├── providers/              Context providers (SSE, theme)
-│   └── shared/                 Shared UI components
-│
-├── lib/                        Shared TypeScript code
-│   ├── server/                 Server-side utilities (app config)
-│   └── shared/                 Client/server shared utilities
-│
 ├── tests/
 │   ├── backend/                Python backend tests (pytest)
 │   ├── frontend/               Frontend unit tests (node:test)
@@ -188,6 +190,7 @@ aegis/
 │   └── e2e/                    Playwright end-to-end tests
 │
 ├── docker-compose.yml          Full-stack Docker Compose
+├── Dockerfile                  Combined aegis container (frontend + backend)
 ├── .env.example                Environment variable template
 └── docs/
     ├── README.md               This file
@@ -202,7 +205,7 @@ Each scanning tool follows the same pattern:
 
 1. **Scanner** — `scanners/<tool>/` with Dockerfile, `run.sh`, and scripts
 2. **Backend module** — `backend/src/<tool>/` with router, scanner, store
-3. **Frontend pages** — `app/(app)/<tool>/` with dashboard tabs
+3. **Frontend pages** — `frontend/app/(app)/<tool>/` with dashboard tabs
 4. **GraphQL** — types and resolvers in `backend/src/graphql/`
 5. **Tests** — `tests/backend/test_<tool>.py` and `tests/frontend/<tool>.test.ts`
 

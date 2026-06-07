@@ -15,6 +15,7 @@ Private registry auth is configured up-front from the REGISTRY_AUTHS env var.
 from __future__ import annotations
 
 import concurrent.futures
+import dataclasses
 import json
 import logging
 import os
@@ -22,11 +23,18 @@ import re
 import shutil
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
+    BaseScanConfig,
+    JobEnv,
     ProgressEmitter,
+    ScannerConfigError,
+    TIMEOUT_GRYPE_DB_CHECK,
+    TIMEOUT_GRYPE_DB_UPDATE,
+    TIMEOUT_GRYPE_MATCH,
+    TIMEOUT_SYFT_IMAGE,
     log_finished,
     log_scanning_image,
     parse_repos,
@@ -49,11 +57,6 @@ from runner.scanners.container import (
 logger = logging.getLogger(__name__)
 
 
-_GRYPE_DB_CHECK_TIMEOUT_S = 60.0
-_GRYPE_DB_UPDATE_TIMEOUT_S = 600.0
-_GRYPE_MATCH_TIMEOUT_S = 300.0
-_SYFT_TIMEOUT_S = 900.0
-
 _GRYPE_VULNS_FOUND_RC = 1  # grype convention — not an error
 
 # Mirrors bash validate_image_ref regex: ^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$
@@ -73,6 +76,34 @@ DEFERRED_SCAN_MODES: set[str] = set()
 _UNSUPPORTED_MODE_EXIT_CODE = 2
 
 
+@dataclasses.dataclass(frozen=True)
+class ContainerScanConfig(BaseScanConfig):
+    images: list[str]
+    scan_mode: str
+    scan_platform: str
+    previous_digests_raw: str
+
+    @classmethod
+    def from_job(cls, job: dict[str, Any]) -> "ContainerScanConfig":
+        env = JobEnv(job)
+        scan_mode = env.get("SCAN_MODE", SCAN_MODE_FULL).lower()
+        if scan_mode not in SUPPORTED_SCAN_MODES:
+            raise ScannerConfigError(
+                f"[!] SCAN_MODE={scan_mode!r} is not implemented in the "
+                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_MODES)}. "
+                f"Deferred: {sorted(DEFERRED_SCAN_MODES)}."
+            )
+        return cls(
+            org_label=env.get("ORG_LABEL", "default"),
+            run_id=env.get("RUN_ID", str(job.get("jobId", "unknown"))),
+            concurrency=max(1, env.get_int("CONCURRENCY", 4)),
+            images=parse_repos(env.get("DOCKER_IMAGES")),
+            scan_mode=scan_mode,
+            scan_platform=env.get("SCAN_PLATFORM", "linux/amd64"),
+            previous_digests_raw=env.get("PREVIOUS_DIGESTS", ""),
+        )
+
+
 class ContainerScanner:
     SCANNER_TYPE = "container"
 
@@ -83,70 +114,24 @@ class ContainerScanner:
         on_progress: Callable[[list[str], dict], None] | None = None,
         cancel_event: threading.Event | None = None,
     ) -> ExecutionResult:
-        env_vars: dict[str, str] = (
-            (job.get("dockerArgs") or {}).get("envVars") or {}
-        )
-        images_input = (
-            env_vars.get("DOCKER_IMAGES") or os.environ.get("DOCKER_IMAGES", "")
-        )
-        org_label = (
-            env_vars.get("ORG_LABEL") or os.environ.get("ORG_LABEL") or "default"
-        )
-        scan_platform = (
-            env_vars.get("SCAN_PLATFORM")
-            or os.environ.get("SCAN_PLATFORM")
-            or "linux/amd64"
-        )
-        scan_mode = (
-            env_vars.get("SCAN_MODE")
-            or os.environ.get("SCAN_MODE")
-            or SCAN_MODE_FULL
-        ).lower()
-        previous_digests_raw = (
-            env_vars.get("PREVIOUS_DIGESTS")
-            or os.environ.get("PREVIOUS_DIGESTS")
-            or ""
-        )
-        try:
-            concurrency = int(
-                env_vars.get("CONCURRENCY") or os.environ.get("CONCURRENCY") or "4"
-            )
-        except ValueError:
-            concurrency = 4
-        if concurrency < 1:
-            concurrency = 1
+        env_vars: dict[str, str] = job.get("envVars") or {}
 
         # registry_auth reads REGISTRY_AUTHS from os.environ — promote any
         # job-supplied value before configuration runs.
         if "REGISTRY_AUTHS" in env_vars and "REGISTRY_AUTHS" not in os.environ:
             os.environ["REGISTRY_AUTHS"] = env_vars["REGISTRY_AUTHS"]
 
-        # advisories_only needs S3 creds in os.environ to reach MinIO.
-        for var in (
-            "S3_ENDPOINT",
-            "S3_ACCESS_KEY",
-            "S3_SECRET_KEY",
-            "S3_REGION",
-            "S3_BUCKET",
-        ):
-            if var in env_vars and var not in os.environ:
-                os.environ[var] = env_vars[var]
-        if "ORG_LABEL" not in os.environ:
-            os.environ["ORG_LABEL"] = org_label
-
         out_dir = Path(job_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
         log_tail: list[str] = []
 
-        if scan_mode not in SUPPORTED_SCAN_MODES:
-            message = (
-                f"[!] SCAN_MODE={scan_mode!r} is not implemented in the "
-                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_MODES)}. "
-                f"Deferred: {sorted(DEFERRED_SCAN_MODES)}."
-            )
+        try:
+            cfg = ContainerScanConfig.from_job(job)
+        except ScannerConfigError as exc:
+            message = str(exc)
             logger.error(message)
-            log_tail.append(message)
+            log_tail = [message]
             emitter = ProgressEmitter(on_progress, expected=0)
             emitter.done()
             write_done_marker(out_dir)
@@ -156,7 +141,10 @@ class ContainerScanner:
                 log_tail=log_tail,
             )
 
-        raw_images = parse_repos(images_input)
+        if "ORG_LABEL" not in os.environ:
+            os.environ["ORG_LABEL"] = cfg.org_label
+
+        raw_images = cfg.images
         images: list[str] = []
         for ref in raw_images:
             if _validate_image_ref(ref):
@@ -165,9 +153,9 @@ class ContainerScanner:
                 log_tail.append(f"[!] Invalid image reference: {ref}")
 
         previous_digests = digest_compare.parse_previous_digests(
-            previous_digests_raw
+            cfg.previous_digests_raw
         )
-        if previous_digests_raw and not previous_digests:
+        if cfg.previous_digests_raw and not previous_digests:
             log_tail.append(
                 "[!] PREVIOUS_DIGESTS could not be parsed — proceeding "
                 "without skip-unchanged optimisation"
@@ -199,7 +187,10 @@ class ContainerScanner:
 
         self._ensure_grype_db(cancel_event)
 
-        skip_grype = scan_mode == SCAN_MODE_SBOM_ONLY
+        skip_grype = cfg.scan_mode == SCAN_MODE_SBOM_ONLY
+
+        backend_client = job.get("_backend") if cfg.scan_mode == SCAN_MODE_ADVISORIES_ONLY else None
+        adv_job_id = str(job.get("jobId", "")) if cfg.scan_mode == SCAN_MODE_ADVISORIES_ONLY else ""
 
         def _scan_one(image_ref: str) -> Path | None:
             if cancel_event is not None and cancel_event.is_set():
@@ -210,17 +201,19 @@ class ContainerScanner:
             safe_name = _sanitize_name(image_ref)
             emitter.scanning(safe_name)
             try:
-                if scan_mode == SCAN_MODE_ADVISORIES_ONLY:
+                if cfg.scan_mode == SCAN_MODE_ADVISORIES_ONLY:
                     return self._scan_image_advisories_only(
                         image_ref,
                         out_dir,
                         cancel_event=cancel_event,
                         log_tail=log_tail,
+                        backend_client=backend_client,
+                        job_id=adv_job_id,
                     )
                 return self._scan_image(
                     image_ref,
                     out_dir,
-                    scan_platform=scan_platform,
+                    scan_platform=cfg.scan_platform,
                     cancel_event=cancel_event,
                     previous_digests=previous_digests,
                     log_tail=log_tail,
@@ -237,7 +230,7 @@ class ContainerScanner:
                 emitter.finished(safe_name)
 
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=concurrency
+            max_workers=cfg.concurrency
         ) as pool:
             list(pool.map(_scan_one, images))
 
@@ -248,7 +241,7 @@ class ContainerScanner:
         # on findings.json existing).
         if not skip_grype:
             try:
-                total, errors = normalize.normalize_grype_output(org_label, out_dir)
+                total, errors = normalize.normalize_grype_output(cfg.org_label, out_dir)
                 log_tail.append(
                     f"[+] Normalized {total} container findings ({errors} errors)"
                 )
@@ -276,7 +269,7 @@ class ContainerScanner:
             return
         rc, _, _ = run_tool(
             ["grype", "db", "check"],
-            timeout=_GRYPE_DB_CHECK_TIMEOUT_S,
+            timeout=TIMEOUT_GRYPE_DB_CHECK,
             cancel_event=cancel_event,
         )
         if rc == 0:
@@ -284,7 +277,7 @@ class ContainerScanner:
         logger.info("[+] Updating Grype vulnerability database...")
         rc, _, stderr = run_tool(
             ["grype", "db", "update"],
-            timeout=_GRYPE_DB_UPDATE_TIMEOUT_S,
+            timeout=TIMEOUT_GRYPE_DB_UPDATE,
             cancel_event=cancel_event,
         )
         if rc != 0:
@@ -335,11 +328,20 @@ class ContainerScanner:
                 return None
 
         sbom_path = image_out / "sbom.cdx.json"
-        if not self._run_syft(image_ref, scan_platform, sbom_path, cancel_event):
+        syft_json_path = image_out / "sbom.syft.json"
+        if not self._run_syft(
+            image_ref,
+            scan_platform,
+            sbom_path,
+            cancel_event,
+            syft_json_output=syft_json_path,
+        ):
             log_finished(image_ref)
             return None
 
         register_output(out_dir, sbom_path, safe_name)
+        if syft_json_path.exists() and syft_json_path.stat().st_size > 0:
+            register_output(out_dir, syft_json_path, safe_name)
 
         # Bash run.sh:210-214 — sbom_only: register SBOM, log finished, return.
         # No grype, no findings.json, no digest.txt.
@@ -378,8 +380,10 @@ class ContainerScanner:
         *,
         cancel_event: threading.Event | None,
         log_tail: list[str],
+        backend_client: Any,
+        job_id: str,
     ) -> Path | None:
-        """Run grype against a previously stored SBOM from MinIO.
+        """Run grype against a previously stored SBOM fetched via presigned URL.
 
         Mirrors bash ``scan_advisories_only``: no syft, no image pull. A
         missing SBOM logs loudly but the overall scan continues — matches
@@ -391,7 +395,12 @@ class ContainerScanner:
 
         sbom_path = image_out / "sbom.cdx.json"
         try:
-            download_sbom.download_sbom_for_image(image_ref, sbom_path)
+            download_sbom.download_sbom_for_image(
+                image_ref,
+                sbom_path,
+                backend_client=backend_client,
+                job_id=job_id,
+            )
         except download_sbom.SbomDownloadError as e:
             log_tail.append(f"[!] No stored SBOM for {image_ref}: {e}")
             logger.warning("[!] No stored SBOM for %s: %s", image_ref, e)
@@ -448,22 +457,28 @@ class ContainerScanner:
         scan_platform: str,
         output: Path,
         cancel_event: threading.Event | None,
+        syft_json_output: Path | None = None,
     ) -> bool:
         if shutil.which("syft") is None:
             logger.warning("[!] syft not on PATH - skipping %s", image_ref)
             return False
+        cmd = [
+            "syft",
+            f"registry:{image_ref}",
+            "--platform",
+            scan_platform,
+            "-o",
+            "cyclonedx-json",
+        ]
+        # syft-json carries source.metadata (imageSize, layers, os) which Syft
+        # already collected for the registry pull — getting it as a sidecar
+        # avoids a second registry round-trip in the backend.
+        if syft_json_output is not None:
+            cmd += ["-o", f"syft-json={syft_json_output}"]
+        cmd += ["--parallelism", "2"]
         rc, stdout, stderr = run_tool(
-            [
-                "syft",
-                f"registry:{image_ref}",
-                "--platform",
-                scan_platform,
-                "-o",
-                "cyclonedx-json",
-                "--parallelism",
-                "2",
-            ],
-            timeout=_SYFT_TIMEOUT_S,
+            cmd,
+            timeout=TIMEOUT_SYFT_IMAGE,
             cancel_event=cancel_event,
         )
         if rc != 0:
@@ -484,7 +499,7 @@ class ContainerScanner:
             return False
         rc, stdout, stderr = run_tool(
             ["grype", f"sbom:{sbom}", "-o", "json", "--quiet"],
-            timeout=_GRYPE_MATCH_TIMEOUT_S,
+            timeout=TIMEOUT_GRYPE_MATCH,
             cancel_event=cancel_event,
         )
         if rc in (0, _GRYPE_VULNS_FOUND_RC):

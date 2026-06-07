@@ -27,17 +27,32 @@ logger = logging.getLogger(__name__)
 
 
 def trigger_sla_recompute(org_ids: list[str]) -> None:
-    """Recompute SLA breach status for each org.
+    """Recompute SLA rule violations and fire escalations for each org.
 
     Called by the scheduler at most once per hour. Errors per-org are
     logged and swallowed so one bad org doesn't block the rest.
-    """
-    from src.sla.service import get_sla_service
 
-    service = get_sla_service()
+    The evaluator dual-writes the legacy ``FindingSlaStatus`` table, so the
+    previous ``SlaService.recompute_org`` call is no longer needed here.
+    """
+    from src.rules.sla_evaluator import (
+        evaluate_sla_escalations_for_org,
+        evaluate_sla_rules_for_org,
+    )
+
     for org_id in org_ids:
         try:
-            count = service.recompute_org(org_id)
-            logger.info("SLA recompute: %d findings updated for org %s", count, org_id)
+            result = evaluate_sla_rules_for_org(org_id)
+            logger.info(
+                "SLA evaluator (org=%s): rules=%d findings=%d opened=%d resolved=%d",
+                org_id,
+                result.rules_evaluated,
+                result.findings_checked,
+                result.violations_opened,
+                result.violations_resolved,
+            )
+            fired = evaluate_sla_escalations_for_org(org_id)
+            if fired:
+                logger.info("SLA escalations fired (org=%s): %d", org_id, fired)
         except Exception:
             logger.exception("SLA recompute failed for org %s", org_id)

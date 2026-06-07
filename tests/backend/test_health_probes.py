@@ -9,12 +9,11 @@ import pytest
 from src.health.probes import (
     ProbeResult,
     probe_argus,
+    probe_connected_runners,
     probe_correlation_engine,
     probe_minio,
     probe_postgres,
     probe_recent_scans,
-    probe_redis,
-    probe_connected_runners,
     run_all_probes,
 )
 
@@ -45,40 +44,24 @@ class TestProbePostgres:
         assert "connection refused" in result.error
 
 
-class TestProbeRedis:
-    @pytest.mark.asyncio
-    async def test_ok_when_ping_succeeds(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-        monkeypatch.setenv("EVENT_STREAM_PREFIX", "aegis.events.")
-        mock_client = AsyncMock()
-        mock_client.ping.return_value = True
-        mock_client.keys.return_value = [b"aegis.events.dep_scan", b"aegis.events.secret_scan"]
-        mock_client.aclose = AsyncMock()
-        with patch("redis.asyncio.from_url", return_value=mock_client):
-            result = await probe_redis()
-        assert result.status == "ok"
-        assert result.details["stream_keys"] == 2
+def test_health_does_not_probe_redis():
+    """Regression: redis is no longer a tracked subsystem, so it must not
+    appear in the probe list returned by run_all_probes."""
+    import asyncio
+    from unittest.mock import AsyncMock, patch
 
-    @pytest.mark.asyncio
-    async def test_fail_when_ping_raises(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-        mock_client = AsyncMock()
-        mock_client.ping.side_effect = ConnectionError("refused")
-        mock_client.aclose = AsyncMock()
-        with patch("redis.asyncio.from_url", return_value=mock_client):
-            result = await probe_redis()
-        assert result.status == "fail"
-        assert "refused" in result.error
+    async def _ok():
+        return ProbeResult(name="x", status="ok", duration_ms=0)
 
-    @pytest.mark.asyncio
-    async def test_fail_when_ping_returns_false(self, monkeypatch):
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
-        mock_client = AsyncMock()
-        mock_client.ping.return_value = False
-        mock_client.aclose = AsyncMock()
-        with patch("redis.asyncio.from_url", return_value=mock_client):
-            result = await probe_redis()
-        assert result.status == "fail"
+    with patch("src.health.probes.probe_postgres", _ok), \
+         patch("src.health.probes.probe_minio", _ok), \
+         patch("src.health.probes.probe_connected_runners", _ok), \
+         patch("src.health.probes.probe_recent_scans", _ok), \
+         patch("src.health.probes.probe_correlation_engine", _ok), \
+         patch("src.health.probes.probe_argus", _ok):
+        results = asyncio.run(run_all_probes())
+    names = [r.name for r in results]
+    assert "redis" not in names
 
 
 class TestProbeMinio:
@@ -313,18 +296,17 @@ class TestProbeArgus:
 
 class TestRunAllProbes:
     @pytest.mark.asyncio
-    async def test_returns_all_seven_probes(self):
+    async def test_returns_all_six_probes(self):
         ok = ProbeResult(name="x", status="ok", duration_ms=1, details={})
         async def _ok(*_): return ok
         with patch("src.health.probes.probe_postgres", _ok), \
-             patch("src.health.probes.probe_redis", _ok), \
              patch("src.health.probes.probe_minio", _ok), \
              patch("src.health.probes.probe_connected_runners", _ok), \
              patch("src.health.probes.probe_recent_scans", _ok), \
              patch("src.health.probes.probe_correlation_engine", _ok), \
              patch("src.health.probes.probe_argus", _ok):
             results = await run_all_probes()
-        assert len(results) == 7
+        assert len(results) == 6
         assert all(isinstance(r, ProbeResult) for r in results)
 
     @pytest.mark.asyncio
@@ -333,14 +315,13 @@ class TestRunAllProbes:
         async def _ok(*_): return ok
         async def _boom(*_): raise RuntimeError("kaboom")
         with patch("src.health.probes.probe_postgres", _boom), \
-             patch("src.health.probes.probe_redis", _ok), \
              patch("src.health.probes.probe_minio", _ok), \
              patch("src.health.probes.probe_connected_runners", _ok), \
              patch("src.health.probes.probe_recent_scans", _ok), \
              patch("src.health.probes.probe_correlation_engine", _ok), \
              patch("src.health.probes.probe_argus", _ok):
             results = await run_all_probes()
-        assert len(results) == 7
+        assert len(results) == 6
         postgres_result = next(r for r in results if r.name == "postgres")
         assert postgres_result.status == "fail"
         assert "kaboom" in (postgres_result.error or "")
@@ -359,7 +340,6 @@ class TestRunAllProbes:
             return await coro
         with patch("src.health.probes.asyncio.wait_for", side_effect=_fake_wait_for):
             with patch("src.health.probes.probe_postgres", _ok), \
-                 patch("src.health.probes.probe_redis", _ok), \
                  patch("src.health.probes.probe_minio", _ok), \
                  patch("src.health.probes.probe_connected_runners", _ok), \
                  patch("src.health.probes.probe_recent_scans", _ok), \

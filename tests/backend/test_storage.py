@@ -14,7 +14,7 @@ def isolated_config(tmp_path, monkeypatch):
     import src.settings.roles_store as roles_store
     roles_path = tmp_path / "data" / "settings" / "roles.json"
 
-    monkeypatch.setenv("JWT_SHARED_SECRET", "a" * 64)
+    monkeypatch.setenv("RUNNER_ENCRYPTION_KEY", "a" * 64)
     monkeypatch.setenv("FASTAPI_ENV", "production")
 
     return {

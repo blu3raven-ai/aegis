@@ -1,5 +1,10 @@
-import test from "node:test"
+import test, { beforeEach } from "node:test"
 import assert from "node:assert/strict"
+
+// apiClient requires a CSRF cookie for POST/PUT/DELETE requests
+beforeEach(() => {
+  ;(globalThis as any).document = { cookie: "__Host-csrf=test-csrf-token" }
+})
 
 // ---------------------------------------------------------------------------
 // Tests for SLA policies page data flows (Phase 47).
@@ -25,7 +30,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/sla-api.ts")
+  return import("../../frontend/lib/client/sla-api.ts")
 }
 
 const MOCK_POLICIES = [
@@ -72,11 +77,10 @@ test("save flow: updateSlaPolicy propagates 422 error", async () => {
   const { mock } = makeFetchMock({ detail: "deadline_days must be greater than 0" }, 422)
   ;(globalThis as any).fetch = mock
 
-  const { updateSlaPolicy, SlaApiError } = await loadModule()
+  const { updateSlaPolicy } = await loadModule()
   await assert.rejects(
     () => updateSlaPolicy("acme-org", "critical", { deadline_days: 0, enabled: true }),
     (err: any) => {
-      assert.ok(err instanceof SlaApiError)
       assert.equal(err.status, 422)
       return true
     },

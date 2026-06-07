@@ -5,7 +5,7 @@ semantics, now behind the JobQueue Protocol. The original jobs.py
 re-exports these for backward compat (see jobs.py edit in Task 14).
 
 Encryption note: env-var encryption replicates jobs.py exactly (ENC: prefix,
-PBKDF2-derived Fernet key from JWT_SHARED_SECRET) so job records produced here
+PBKDF2-derived Fernet key from RUNNER_ENCRYPTION_KEY) so job records produced here
 are wire-compatible with records produced by the original jobs.py functions.
 """
 from __future__ import annotations
@@ -18,7 +18,6 @@ from threading import Lock
 from typing import Any
 
 from src.runner.encryption import SENSITIVE_KEYS, encrypt_env_vars, decrypt_env_vars
-from src.runner.queue._notify import publish_queued
 from src.shared.paths import now_iso
 
 _DEFAULT_DIR = Path(os.environ.get("DATA_DIR", "/var/lib/aegis")) / "jobs"
@@ -32,7 +31,7 @@ class FileBackedQueue:
     """Job queue backed by one JSON file per job in a local directory.
 
     Thread-safe for concurrent assign_next calls via an in-process lock.
-    Not safe across multiple processes — use RedisBackedQueue for that.
+    Not safe across multiple processes — use PostgresBackedQueue for that.
     """
 
     def __init__(self, storage_dir: Path | None = None) -> None:
@@ -55,7 +54,6 @@ class FileBackedQueue:
         job_type: str,
         org: str,
         run_id: str,
-        docker_image: str,
         env_vars: dict[str, str],
     ) -> str:
         job_id = f"job-{secrets.token_hex(8)}"
@@ -69,11 +67,9 @@ class FileBackedQueue:
             "createdAt": now_iso(),
             "startedAt": None,
             "completedAt": None,
-            "dockerImage": docker_image,
             "envVars": _encrypt_env_vars(env_vars),
         }
         self._write(self._path(job_id), record)
-        publish_queued(job_type, job_id)
         return job_id
 
     def assign_next(self, runner_id: str) -> dict[str, Any] | None:

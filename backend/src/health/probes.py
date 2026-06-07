@@ -40,36 +40,6 @@ async def probe_postgres() -> ProbeResult:
         )
 
 
-async def probe_redis() -> ProbeResult:
-    """Check connectivity via PING and report stream key count under the event prefix."""
-    import redis.asyncio as aioredis
-
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    stream_prefix = os.getenv("EVENT_STREAM_PREFIX", "aegis.events.")
-
-    t0 = time.monotonic()
-    client = aioredis.from_url(redis_url, socket_connect_timeout=2)
-    try:
-        pong = await client.ping()
-        if not pong:
-            raise RuntimeError("PING returned falsy")
-        stream_keys = await client.keys(f"{stream_prefix}*")
-        elapsed = int((time.monotonic() - t0) * 1000)
-        return ProbeResult(
-            name="redis",
-            status="ok",
-            duration_ms=elapsed,
-            details={"stream_keys": len(stream_keys), "prefix": stream_prefix},
-        )
-    except Exception as exc:
-        elapsed = int((time.monotonic() - t0) * 1000)
-        return ProbeResult(
-            name="redis", status="fail", duration_ms=elapsed, details={}, error=str(exc)
-        )
-    finally:
-        await client.aclose()
-
-
 async def probe_minio() -> ProbeResult:
     """Check connectivity by listing buckets using the project object-store client."""
     import boto3
@@ -197,58 +167,6 @@ async def probe_recent_scans() -> ProbeResult:
         )
 
 
-async def probe_correlation_engine() -> ProbeResult:
-    """Check the correlation engine state via app.state when AEGIS_CORRELATION_ENABLED=true.
-
-    We import the engine singleton lazily — if the module isn't wired into the
-    running app this probe is skipped so it doesn't cause import errors in
-    minimal test environments.
-    """
-    t0 = time.monotonic()
-    enabled = os.getenv("AEGIS_CORRELATION_ENABLED", "false").lower() == "true"
-    if not enabled:
-        elapsed = int((time.monotonic() - t0) * 1000)
-        return ProbeResult(
-            name="correlation_engine",
-            status="skipped",
-            duration_ms=elapsed,
-            details={"reason": "AEGIS_CORRELATION_ENABLED not set"},
-        )
-
-    try:
-        from src.correlation.engine import CorrelationEngine  # noqa: F401
-
-        engine = None
-        try:
-            from src.main import app as _app
-            engine = getattr(_app.state, "correlation_engine", None)
-        except Exception:
-            pass
-
-        if engine is None:
-            elapsed = int((time.monotonic() - t0) * 1000)
-            return ProbeResult(
-                name="correlation_engine",
-                status="degraded",
-                duration_ms=elapsed,
-                details={"reason": "engine not initialised in app.state"},
-            )
-
-        is_running = engine.is_running
-        elapsed = int((time.monotonic() - t0) * 1000)
-        return ProbeResult(
-            name="correlation_engine",
-            status="ok" if is_running else "degraded",
-            duration_ms=elapsed,
-            details={"is_running": is_running},
-        )
-    except Exception as exc:
-        elapsed = int((time.monotonic() - t0) * 1000)
-        return ProbeResult(
-            name="correlation_engine", status="fail", duration_ms=elapsed, details={}, error=str(exc)
-        )
-
-
 async def probe_argus() -> ProbeResult:
     """If ARGUS_ENDPOINT is configured, issue a lightweight GET to confirm reachability.
 
@@ -313,11 +231,9 @@ async def run_all_probes() -> list[ProbeResult]:
     """Run all probes concurrently with a per-probe 5-second timeout."""
     probes: list[tuple[str, Callable[[], Awaitable[ProbeResult]]]] = [
         ("postgres", probe_postgres),
-        ("redis", probe_redis),
         ("minio", probe_minio),
         ("connected_runners", probe_connected_runners),
         ("recent_scans", probe_recent_scans),
-        ("correlation_engine", probe_correlation_engine),
         ("argus", probe_argus),
     ]
 

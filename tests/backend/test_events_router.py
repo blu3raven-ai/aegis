@@ -1,43 +1,9 @@
 import asyncio
-import base64
-import hashlib
-import hmac
-import json
-import time
 
 import pytest
 from httpx import AsyncClient, ASGITransport
 from src.main import app
 from src.shared.event_bus import Event, get_event_bus
-
-
-# ---------------------------------------------------------------------------
-# JWT helpers (mirrors test_jwt.py / test_dependencies_auth.py pattern)
-# ---------------------------------------------------------------------------
-
-_TEST_SECRET = "a" * 64
-
-
-def _b64url(data: bytes | str) -> str:
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
-
-
-def _make_jwt(sub: str = "user-sse-1", role: str = "admin", secret: str = _TEST_SECRET) -> str:
-    now = int(time.time())
-    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}))
-    payload = _b64url(json.dumps({"sub": sub, "role": role, "iat": now, "exp": now + 60}))
-    key = bytes.fromhex(secret) if len(secret) == 64 else secret.encode("utf-8")
-    sig = _b64url(hmac.new(key, f"{header}.{payload}".encode("utf-8"), hashlib.sha256).digest())
-    return f"{header}.{payload}.{sig}"
-
-
-@pytest.fixture
-def auth_headers(monkeypatch):
-    """Provide valid JWT Bearer headers and set the shared secret env var."""
-    monkeypatch.setenv("JWT_SHARED_SECRET", _TEST_SECRET)
-    return {"Authorization": f"Bearer {_make_jwt()}"}
 
 
 # ---------------------------------------------------------------------------
@@ -47,8 +13,10 @@ def auth_headers(monkeypatch):
 @pytest.mark.asyncio
 async def test_sse_stream_requires_auth():
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.get("/events/api/stream")
+    # Use "http://testserver" so TrustedHostMiddleware accepts the Host header.
+    # Without a session cookie the SessionAuthMiddleware returns 401.
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        resp = await client.get("/api/events/stream")
         assert resp.status_code == 401
 
 

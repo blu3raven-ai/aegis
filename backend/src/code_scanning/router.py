@@ -16,14 +16,13 @@ from src.code_scanning.scanner import InMemoryScanRuntime, execute_code_scanning
 from src.settings.router import require_permission, has_permission
 from src.settings.team_access import actor_user_id
 from src.shared.checkpoints import compute_coverage_gaps
-from src.shared.config import build_source_repo_list, get_github_token_for_org, get_code_scanning_scanner_config, get_scan_sources_for_org, org_has_source_connections
+from src.shared.config import build_source_repo_list, get_token_for_org, get_code_scanning_scanner_config, get_scan_sources_for_org, org_has_source_connections
 from src.shared.scan_orchestration import start_multi_org_scan, cancel_multi_org_scan
-from src.shared.rate_limit import rate_limit_scan, rate_limit_by_ip
+from src.shared.rate_limit import rate_limit_scan
 from src.shared.router_helpers import require_orgs, api_error, validate_org
 from src.storage import (
     create_code_scanning_run,
     list_code_scanning_runs,
-    read_code_scanning_findings,
     update_code_scanning_run,
 )
 
@@ -57,12 +56,14 @@ def _slim_finding(finding: dict[str, Any]) -> dict[str, Any]:
         "dismissed_at": finding.get("dismissed_at"),
         "dismissed_by": finding.get("dismissed_by"),
         "dismissed_reason": finding.get("dismissed_reason"),
-        "ai_review": finding.get("ai_review"),
         "language": finding.get("language"),
         "file_class": finding.get("file_class"),
         "code_window": finding.get("code_window"),
         "code_flows": finding.get("code_flows"),
         "reachability": finding.get("reachability"),
+        "engine": finding.get("engine"),
+        "dataflow_trace": finding.get("dataflow_trace"),
+        "rule_ids": finding.get("rule_ids"),
     }
 
 
@@ -96,7 +97,7 @@ def get_latest_run(request: Request, orgs: list[str] = Depends(require_orgs)) ->
     return {"latest": latest, "lastCompleted": last_completed}
 
 
-VALID_SCAN_MODES = {"full", "rules_only", "ai_review_only"}
+VALID_SCAN_MODES = {"full", "rules_only"}
 
 
 @router.post("/runs")
@@ -109,14 +110,9 @@ def start_runs(
     rate_limit_scan(request, "code_scanning")
 
     if scan_mode not in VALID_SCAN_MODES:
-        return api_error("Invalid scan_mode. Must be one of: full, rules_only, ai_review_only", 400)
+        return api_error("Invalid scan_mode. Must be one of: full, rules_only", 400)
 
     scanner_config = get_code_scanning_scanner_config()
-
-    if scan_mode == "ai_review_only":
-        ai_enabled = scanner_config.get("aiReviewEnabled") or scanner_config.get("aiEndpoint")
-        if not ai_enabled:
-            return api_error("AI review is not configured. Set up an AI endpoint in Code Scanning settings.", 400)
 
     payload, status = start_multi_org_scan(
         orgs=orgs,
@@ -127,7 +123,6 @@ def start_runs(
         source_category="code-repositories",
         tool_label="Code Scanning",
         update_run_fn=update_code_scanning_run,
-        skip_connection_check=(scan_mode == "ai_review_only"),
     )
     if status == 202:
         from src.shared.event_emit_helpers import emit_manual_rescan
@@ -171,12 +166,20 @@ async def bulk_review_findings(request: Request) -> JSONResponse:
 
     user_id = actor_user_id(request) or "unknown"
 
+    from src.db.engine import async_session_factory
+    from src.shared.scope import resolve_asset_ids_for_org
+    async with async_session_factory() as db:
+        asset_ids = await resolve_asset_ids_for_org(db, org, asset_type="repo")
+
     updated = 0
     if action == "dismiss":
-        updated = bulk_dismiss("code_scanning", org, identity_keys, reason, user_id)
+        updated = bulk_dismiss(
+            "code_scanning", identity_keys, reason, user_id, asset_ids=asset_ids,
+        )
     else:
         for key in identity_keys:
-            reopen_finding("code_scanning", org, key, user_id)
+            for asset_id in asset_ids:
+                reopen_finding("code_scanning", key, user_id, asset_id=asset_id)
             updated += 1
 
     return JSONResponse({"ok": True, "updated": updated})
@@ -195,7 +198,12 @@ async def dismiss_finding_endpoint(request: Request) -> JSONResponse:
     if reason not in VALID_DISMISS_REASONS:
         return api_error(f"Invalid dismiss reason. Must be one of: {sorted(VALID_DISMISS_REASONS)}", 400)
     user_id = actor_user_id(request) or "unknown"
-    dismiss_finding("code_scanning", org, identity_key, reason, user_id)
+    from src.db.engine import async_session_factory
+    from src.shared.scope import resolve_asset_ids_for_org
+    async with async_session_factory() as db:
+        asset_ids = await resolve_asset_ids_for_org(db, org, asset_type="repo")
+    for asset_id in asset_ids:
+        dismiss_finding("code_scanning", identity_key, reason, user_id, asset_id=asset_id)
 
     return JSONResponse({"ok": True})
 
@@ -210,51 +218,13 @@ async def reopen_finding_endpoint(request: Request) -> JSONResponse:
         return api_error("Missing org or identityKey", 400)
     validate_org(org)
     user_id = actor_user_id(request) or "unknown"
-    reopen_finding("code_scanning", org, identity_key, user_id)
+    from src.db.engine import async_session_factory
+    from src.shared.scope import resolve_asset_ids_for_org
+    async with async_session_factory() as db:
+        asset_ids = await resolve_asset_ids_for_org(db, org, asset_type="repo")
+    for asset_id in asset_ids:
+        reopen_finding("code_scanning", identity_key, user_id, asset_id=asset_id)
 
     return JSONResponse({"ok": True})
 
 
-@router.post("/findings/ai-review")
-async def ai_review_finding_endpoint(request: Request) -> JSONResponse:
-    require_permission(request, "run_scans")
-    rate_limit_by_ip(request, 10, 60)
-    body = await request.json()
-    org = body.get("org")
-    identity_key = body.get("identityKey")
-    if not org or not identity_key:
-        return api_error("Missing org or identityKey", 400)
-
-    from src.shared.config import read_app_config
-
-    config = read_app_config()
-    sast_config = (config.get("tools") or {}).get("codeScanning") or {}
-    if not sast_config.get("aiReviewEnabled"):
-        return api_error("AI review is not enabled", 400)
-
-    findings = read_code_scanning_findings(org)
-    if not findings:
-        return api_error("No findings found", 404)
-
-    target_finding = None
-    for finding in findings:
-        if code_scanning_hooks.compute_identity_key(finding) == identity_key:
-            target_finding = finding
-            break
-
-    if not target_finding:
-        return api_error("Finding not found", 404)
-
-    try:
-        from src.code_scanning.ai_review import review_code_scanning_finding, CodeScanningAiReviewError
-        result = await review_code_scanning_finding(target_finding, sast_config)
-    except CodeScanningAiReviewError as e:
-        return api_error(str(e), 400)
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).exception("AI review failed for %s: %s", identity_key, e)
-        return api_error("AI review failed", 500)
-
-    from src.storage import patch_finding_detail
-    patch_finding_detail("code_scanning", org, identity_key, {"aiReview": result})
-    return JSONResponse({"ok": True, "review": result})

@@ -1,7 +1,7 @@
 """add notification_destinations and notification_deliveries tables for Phase 13
 
 Revision ID: d1e2f3a4b5c6
-Revises: c5d6e7f8a9b0
+Revises: b3c4d5e6f7a8
 Create Date: 2026-05-31 00:00:00.000000
 
 Phase 13: external notification routing. Destinations hold per-org outbound
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision: str = 'd1e2f3a4b5c6'
-down_revision: Union[str, Sequence[str], None] = 'c5d6e7f8a9b0'
+down_revision: Union[str, Sequence[str], None] = 'b3c4d5e6f7a8'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

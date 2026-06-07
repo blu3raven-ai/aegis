@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("JWT_SHARED_SECRET", "0" * 64)
+os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
 from src.activity.service import (  # noqa: E402
     ActivityService,
@@ -233,7 +233,11 @@ def test_list_recent_type_filter_passed_through():
         session = MagicMock()
         # coro_fn is a lambda wrapping ActivityService._query — call it.
         # We override _query to capture kwargs instead.
-        return asyncio.get_event_loop().run_until_complete(coro_fn(session))
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro_fn(session))
+        finally:
+            loop.close()
 
     with patch.object(ActivityService, "_query", new=lambda self, session, **kw: _fake_query(session, **kw)):
         with patch("src.activity.service.run_db", side_effect=_mock_run_db):
@@ -253,7 +257,11 @@ def test_list_recent_repo_filter_passed_through():
 
     def _mock_run_db(coro_fn):
         session = MagicMock()
-        return asyncio.get_event_loop().run_until_complete(coro_fn(session))
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro_fn(session))
+        finally:
+            loop.close()
 
     with patch.object(ActivityService, "_query", new=lambda self, session, **kw: _fake_query(session, **kw)):
         with patch("src.activity.service.run_db", side_effect=_mock_run_db):

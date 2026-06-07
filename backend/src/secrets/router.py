@@ -11,7 +11,7 @@ from src.settings.router import require_permission, has_permission
 from src.settings.team_access import actor_user_id, actor_global_role, user_has_repository_access
 from src.settings.organisations_store import list_teams
 from src.settings.direct_access_store import list_direct_grants
-from src.shared.config import get_github_token_for_org, get_secret_scanner_config
+from src.shared.config import get_token_for_org, get_secret_scanner_config
 from src.shared.router_helpers import require_orgs, filter_by_user_scope
 from src.secrets.pool import read_checkpoints as read_scan_checkpoints
 from src.secrets.scanner import execute_secret_scan_once, InMemoryScanRuntime, mark_run_cancelled
@@ -122,7 +122,7 @@ def start_runs(
 
     payload, status_code = start_secret_runs(
         orgs, scan_depth=scanDepth, runtime_getter=get_runtime,
-        run_launcher=collect_run, get_token_for_org=get_github_token_for_org,
+        run_launcher=collect_run, get_token_for_org=get_token_for_org,
         get_scanner_config=get_secret_scanner_config,
     )
 
@@ -135,7 +135,9 @@ def start_runs(
                 record = read_secret_run(org_name, run_id)
                 if record and record.get("status") == "cancelled":
                     continue
-                execute_secret_scan_once(org_name, token, run_id, runtime=runtime, scanner_config=scanner_config, scan_depth=scan_depth)
+                from src.shared.config import get_source_type_for_org
+                source_type = get_source_type_for_org(org_name, "code-repositories")
+                execute_secret_scan_once(org_name, token, run_id, source_type=source_type, runtime=runtime, scanner_config=scanner_config, scan_depth=scan_depth)
                 _invalidate_cache(org_name)
                 record = read_secret_run(org_name, run_id)
                 if record and record.get("status") == "cancelled":
@@ -199,7 +201,7 @@ def get_code_preview(
 
     payload, status_code = build_code_preview_payload(
         org or "", repo or "", fingerprint or "", commit, filePath, line,
-        get_github_token_for_org=get_github_token_for_org,
+        get_token_for_org=get_token_for_org,
         read_secrets_snapshot=read_secrets_snapshot,
     )
     if "error" in payload:

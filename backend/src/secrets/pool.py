@@ -60,11 +60,15 @@ def write_checkpoint_for_repo(
 
 
 def read_pool(pool_path: Any = None, org: str = "") -> dict[str, dict[str, Any]]:
-    """Read the finding pool from the DB. The path param is ignored (kept for compat)."""
+    """Read the finding pool from the DB. The path param is ignored (kept for compat).
+
+    The org parameter is no longer used for DB filtering after Plan D (Finding.org dropped).
+    Secrets findings have asset_id=NULL and are global per instance.
+    """
     async def _query(session):
         stmt = select(Finding).where(Finding.tool == "secrets")
-        if org:
-            stmt = stmt.where(Finding.org == org.lower())
+        # Secrets are intentionally instance-global — asset_id=NULL by design.
+        # Per-source isolation will require a secrets-specific identity model.
         result = await session.execute(stmt)
         pool: dict[str, dict[str, Any]] = {}
         for f in result.scalars().all():

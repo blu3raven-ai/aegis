@@ -1,9 +1,8 @@
 """Argus → Aegis webhook receiver.
 
 Accepts signed POST payloads from Argus and translates them into internal
-intel events on the durable event bus. This makes Argus a first-class event
-source for the correlation engine without coupling Aegis internals to Argus
-schemas.
+intel events on the durable event bus. This keeps Aegis internals decoupled
+from Argus payload schemas — downstream consumers read from the bus.
 
 Signature verification uses HMAC-SHA256 over the raw request body with the
 shared secret from ARGUS_WEBHOOK_SECRET. Requests without a valid signature

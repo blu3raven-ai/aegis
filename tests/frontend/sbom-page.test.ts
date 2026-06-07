@@ -28,7 +28,7 @@ function makeFetchMock(
 }
 
 async function loadSbomApi() {
-  return import("../../lib/client/sbom-api.ts")
+  return import("../../frontend/lib/client/sbom-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +162,9 @@ test("page: error on 404 for unknown repo", async () => {
   const { fetchSbom } = await loadSbomApi()
   await assert.rejects(
     () => fetchSbom({ repoId: "nonexistent-repo" }),
-    /sbom-api: 404/,
+    (err: any) => {
+      assert.equal(err.status, 404)
+      return true
+    },
   )
 })

@@ -36,10 +36,6 @@ def _make_app(recorder: MagicMock | None = None) -> tuple[FastAPI, MagicMock]:
     def delete_dest(request: Request, dest_id: int):
         return JSONResponse(None, status_code=204)
 
-    @app.post("/api/v1/admin/correlation/reload-rules")
-    def reload_rules(request: Request):
-        return JSONResponse({"ok": True})
-
     @app.get("/health")
     def health():
         return JSONResponse({"ok": True})
@@ -91,16 +87,6 @@ def test_runner_path_not_audited():
     client = TestClient(app)
     client.post("/runner/api/jobs", json={})
     mock_rec.record.assert_not_called()
-
-
-def test_correlation_reload_records_correct_action():
-    app, mock_rec = _make_app()
-    client = TestClient(app)
-    client.post("/api/v1/admin/correlation/reload-rules")
-    mock_rec.record.assert_called_once()
-    kwargs = mock_rec.record.call_args.kwargs
-    assert kwargs["action"] == "correlation.rules.reloaded"
-    assert kwargs["resource_type"] == "correlation_rules"
 
 
 def test_status_code_captured_in_request_context():

@@ -53,11 +53,8 @@ def _make_jwt(sub: str, role: str, secret: str = _TEST_SECRET) -> str:
 
 
 def _client(role: str = "owner") -> TestClient:
-    from src.main import app
-    import os
-    os.environ["JWT_SHARED_SECRET"] = _TEST_SECRET
-    token = _make_jwt(sub="svc-test", role=role)
-    return TestClient(app, headers={"Authorization": f"Bearer {token}"}, raise_server_exceptions=True)
+    from conftest import make_authed_client
+    return make_authed_client(role=role, user_id=f"svc-test-{role}", raise_server_exceptions=True)
 
 
 def test_token_returned_once():
@@ -106,7 +103,7 @@ def test_created_by_recorded():
         "name": "cb-key",
         "scopes": [],
     })
-    assert resp.json()["created_by"] == "svc-test"
+    assert resp.json()["created_by"] == "svc-test-owner"
 
 
 def test_list_isolation():

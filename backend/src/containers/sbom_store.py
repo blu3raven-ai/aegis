@@ -32,8 +32,13 @@ def upsert_sbom(
     image_digest: str | None,
     sbom: dict[str, Any],
     run_id: str,
+    asset_id: str | None = None,
 ) -> None:
-    """Store a CycloneDX SBOM: upload blob to MinIO, upsert Postgres metadata."""
+    """Store a CycloneDX SBOM: upload blob to MinIO, upsert Postgres metadata. asset_id required after Plan D."""
+    if not asset_id:
+        logger.warning("[!] upsert_sbom called without asset_id for %s/%s — skipping DB write", org, image_ref)
+        return
+
     s3_key = _sbom_s3_key(org, image_ref)
 
     upload_to_minio(s3_key, sbom)
@@ -41,7 +46,7 @@ def upsert_sbom(
 
     async def _query(session: AsyncSession):
         result = await session.execute(
-            select(Sbom).where(Sbom.org == org.lower(), Sbom.repo == image_ref)
+            select(Sbom).where(Sbom.asset_id == asset_id)
         )
         existing = result.scalars().first()
         if existing:
@@ -51,8 +56,7 @@ def upsert_sbom(
             existing.scanned_at = datetime.now(timezone.utc)
         else:
             session.add(Sbom(
-                org=org.lower(),
-                repo=image_ref,
+                asset_id=asset_id,
                 commit_sha=image_digest,
                 s3_key=s3_key,
                 run_id=run_id,
@@ -60,14 +64,17 @@ def upsert_sbom(
 
     run_db(_query)
 
-    populate_components(org, image_ref, sbom, source_tool_fn=lambda _: "syft")
+    populate_components(org, image_ref, sbom, source_tool_fn=lambda _: "syft", asset_id=asset_id)
 
 
-def read_sbom(org: str, image_ref: str) -> dict[str, Any] | None:
-    """Fetch stored SBOM metadata + blob from MinIO."""
+def read_sbom(org: str, image_ref: str, asset_id: str | None = None) -> dict[str, Any] | None:
+    """Fetch stored SBOM metadata + blob from MinIO. asset_id required after Plan D."""
+    if not asset_id:
+        return None
+
     async def _query(session: AsyncSession):
         result = await session.execute(
-            select(Sbom).where(Sbom.org == org.lower(), Sbom.repo == image_ref)
+            select(Sbom).where(Sbom.asset_id == asset_id)
         )
         return result.scalars().first()
 
@@ -82,8 +89,7 @@ def read_sbom(org: str, image_ref: str) -> dict[str, Any] | None:
 
     return {
         "metadata": {
-            "org": row.org,
-            "repo": row.repo,
+            "asset_id": row.asset_id,
             "commit_sha": row.commit_sha,
             "s3_key": row.s3_key,
             "scanned_at": row.scanned_at.isoformat() if row.scanned_at else None,
@@ -94,24 +100,37 @@ def read_sbom(org: str, image_ref: str) -> dict[str, Any] | None:
 
 
 def list_stored_sboms(org: str) -> list[dict[str, Any]]:
-    """List all stored SBOMs for an org (for advisories_only mode)."""
+    """List SBOMs for all image assets owned by `org` (e.g. "acme").
+
+    Used by the container scanner's skip-unchanged optimization to look up
+    the previously-scanned digest per image. The returned dicts include
+    `repo` (Asset.display_name, e.g. "img:tag") so callers can key by it.
+    """
+    from src.db.models import Asset
+
     async def _query(session: AsyncSession):
         result = await session.execute(
-            select(Sbom).where(Sbom.org == org.lower())
+            select(Sbom, Asset)
+            .join(Asset, Asset.id == Sbom.asset_id)
+            .where(
+                Asset.external_ref.like(f"%:{org}/%"),
+                Asset.type == "image",
+            )
         )
         return [
             {
-                "repo": r.repo,
-                "commit_sha": r.commit_sha,
-                "s3_key": r.s3_key,
-                "run_id": r.run_id,
+                "asset_id": str(s.asset_id),
+                "repo": a.display_name,
+                "commit_sha": s.commit_sha,
+                "s3_key": s.s3_key,
+                "run_id": s.run_id,
             }
-            for r in result.scalars().all()
+            for s, a in result.all()
         ]
 
     return run_db(_query)
 
 
-def populate_sbom_components(org: str, image_ref: str, sbom: dict[str, Any]) -> int:
+def populate_sbom_components(org: str, image_ref: str, sbom: dict[str, Any], asset_id: str | None = None) -> int:
     """Backward-compatible wrapper for populate_components."""
-    return populate_components(org, image_ref, sbom, source_tool_fn=lambda _: "syft")
+    return populate_components(org, image_ref, sbom, source_tool_fn=lambda _: "syft", asset_id=asset_id)

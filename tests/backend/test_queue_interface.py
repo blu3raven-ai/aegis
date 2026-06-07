@@ -1,8 +1,7 @@
 """Tests for the JobQueue Protocol contract.
 
-Every concrete queue backend must satisfy this contract. Phase 0 ships
-two implementations: FileBackedQueue (wraps current jobs.py) and
-RedisBackedQueue stub.
+Every concrete queue backend must satisfy this contract. Production
+backends today are FileBackedQueue (dev/test) and PostgresBackedQueue.
 """
 from __future__ import annotations
 
@@ -30,7 +29,6 @@ def test_file_backed_queue_satisfies_protocol():
             job_type="dependencies",
             org="acme-org",
             run_id="run-1",
-            docker_image="aegis/scanner-deps:latest",
             env_vars={"FOO": "bar"},
         )
         record = q.get(jid)
@@ -42,9 +40,9 @@ def test_file_backed_queue_satisfies_protocol():
 def test_file_backed_queue_assigns_oldest_first():
     with tempfile.TemporaryDirectory() as tmp:
         q = FileBackedQueue(storage_dir=Path(tmp))
-        j1 = q.create(job_type="t", org="acme", run_id="r1", docker_image="img", env_vars={})
+        j1 = q.create(job_type="t", org="acme", run_id="r1", env_vars={})
         import time; time.sleep(0.01)
-        j2 = q.create(job_type="t", org="acme", run_id="r2", docker_image="img", env_vars={})
+        j2 = q.create(job_type="t", org="acme", run_id="r2", env_vars={})
         assigned = q.assign_next(runner_id="runner-1")
         assert assigned is not None
         assert assigned["id"] == j1
@@ -60,7 +58,7 @@ def test_file_backed_queue_persists_runner_id():
     downstream code (requeue_stale_jobs, complete_job stats) can read it."""
     with tempfile.TemporaryDirectory() as tmp:
         q = FileBackedQueue(storage_dir=Path(tmp))
-        jid = q.create(job_type="t", org="acme", run_id="r1", docker_image="img", env_vars={})
+        jid = q.create(job_type="t", org="acme", run_id="r1", env_vars={})
         q.assign_next(runner_id="runner-xyz")
         record = q.get(jid)
         assert record["runnerId"] == "runner-xyz"
@@ -77,13 +75,12 @@ def test_factory_returns_file_backed_by_default(monkeypatch):
         assert isinstance(q, FileBackedQueue)
 
 
-def test_factory_returns_redis_backed_when_configured(monkeypatch):
+def test_factory_rejects_redis_backend(monkeypatch):
     monkeypatch.setenv("JOB_QUEUE_BACKEND", "redis")
     from src.runner.queue.factory import get_queue, reset_cache
     reset_cache()
-    q = get_queue()
-    from src.runner.queue.redis_backed import RedisBackedQueue
-    assert isinstance(q, RedisBackedQueue)
+    with pytest.raises(ValueError, match="Unknown"):
+        get_queue()
 
 
 def test_factory_returns_postgres_backed_when_configured(monkeypatch):

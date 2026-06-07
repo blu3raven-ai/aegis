@@ -98,3 +98,16 @@ verification before concluding there is a regression:
   backend expects when no findings are generated.
 - ONNX classifier cold-start latency on the first secrets scan is higher than
   the bash baseline, but findings should be identical once the model is loaded.
+
+## Verifying presigned-upload mode
+
+After deploying the embedded scanner + presigned-upload changes:
+
+- [ ] `grep -r "S3_\|boto3" runner/` returns empty — the runner is credential-free.
+- [ ] On the deployed runner host, `env | grep S3_` returns empty.
+- [ ] MinIO admin: `mc admin user list <alias>` shows only the backend service account; no `runner` user.
+- [ ] Run a scan from the portal — confirm:
+  - Backend logs show `POST /runner/api/jobs/<id>/uploads/presign` being hit.
+  - For dependencies `advisories_only`, also: `GET /runner/api/jobs/<id>/sboms`.
+  - MinIO access logs show `PUT` requests with `X-Amz-Signature` query params (presigned), not `Authorization: AWS4-HMAC` headers.
+- [ ] Compare `findings.jsonl` byte-for-byte against the existing baseline — the upload mechanism change must not affect findings content.

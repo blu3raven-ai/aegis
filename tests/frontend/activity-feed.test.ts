@@ -172,7 +172,7 @@ function makeFetchMock(responses: unknown[]) {
 }
 
 async function loadApi() {
-  return import("../../lib/client/activity-api.ts")
+  return import("../../frontend/lib/client/activity-api.ts")
 }
 
 test("load-more: second call includes cursor from first response", async () => {
@@ -213,7 +213,7 @@ test("load-more: no next_cursor means no more pages", async () => {
 // ---------------------------------------------------------------------------
 
 async function loadEventLabels() {
-  return import("../../components/shared/activity/event-labels.ts")
+  return import("../../frontend/components/shared/activity/event-labels.ts")
 }
 
 test("eventTypeLabel returns human label for known types", async () => {

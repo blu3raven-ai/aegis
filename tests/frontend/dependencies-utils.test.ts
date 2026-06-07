@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import type { DependenciesFinding } from "@/lib/shared/dependencies/types"
-import { filterFindingsSimple, cvssChipClass, formatCvssScore } from "../../lib/shared/dependencies/utils.ts"
+import { filterFindingsSimple, cvssChipClass, formatCvssScore } from "../../frontend/lib/shared/dependencies/utils.ts"
 
 test("formatCvssScore returns dash for missing scores", () => {
   assert.equal(formatCvssScore(null), "-")

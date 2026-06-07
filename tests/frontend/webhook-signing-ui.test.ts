@@ -140,7 +140,7 @@ test("Python snippet uses hmac with sha256", async () => {
   const { readFileSync } = await import("node:fs")
   const src = readFileSync(
     new URL(
-      "../../components/shared/notifications/WebhookSigningPanel.tsx",
+      "../../frontend/components/shared/notifications/WebhookSigningPanel.tsx",
       import.meta.url,
     ),
     "utf8",
@@ -153,7 +153,7 @@ test("verification snippet includes sort_keys for canonical JSON", async () => {
   const { readFileSync } = await import("node:fs")
   const src = readFileSync(
     new URL(
-      "../../components/shared/notifications/WebhookSigningPanel.tsx",
+      "../../frontend/components/shared/notifications/WebhookSigningPanel.tsx",
       import.meta.url,
     ),
     "utf8",
@@ -165,7 +165,7 @@ test("verification snippet includes timing-safe comparison", async () => {
   const { readFileSync } = await import("node:fs")
   const src = readFileSync(
     new URL(
-      "../../components/shared/notifications/WebhookSigningPanel.tsx",
+      "../../frontend/components/shared/notifications/WebhookSigningPanel.tsx",
       import.meta.url,
     ),
     "utf8",

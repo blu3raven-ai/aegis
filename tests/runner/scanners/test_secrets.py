@@ -417,7 +417,7 @@ def test_run_scan_empty_repos_returns_clean(tmp_path):
     from runner.scanners.secrets.scanner import SecretsScanner
 
     scanner = SecretsScanner()
-    job = {"jobId": "test-s", "dockerArgs": {"envVars": {"GIT_REPOS": ""}}}
+    job = {"jobId": "test-s", "envVars": {"GIT_REPOS": ""},}
     job_dir = tmp_path / "test-s"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
@@ -444,10 +444,7 @@ def test_run_scan_pre_cancel_returns_137(tmp_path):
     cancel.set()
     job = {
         "jobId": "test-cancel",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/example/a.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/example/a.git"},}
     job_dir = tmp_path / "test-cancel"
     result = scanner.run_scan(job, job_dir=job_dir, cancel_event=cancel)
     assert result.exit_code == CANCELLED_EXIT_CODE
@@ -459,13 +456,10 @@ def test_run_scan_rejects_unsupported_scan_depth(tmp_path):
     scanner = SecretsScanner()
     job = {
         "jobId": "test-depth",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git",
                 "SCAN_DEPTH": "extreme",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "test-depth"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 2
@@ -480,14 +474,11 @@ def test_run_scan_rejects_malformed_start_date(tmp_path):
     scanner = SecretsScanner()
     job = {
         "jobId": "test-date",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git",
                 "SCAN_DEPTH": "deep",
                 "SCAN_START_DATE": "2025/01/01",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "test-date"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 2
@@ -521,13 +512,10 @@ def test_run_scan_honours_concurrency_env(tmp_path, monkeypatch):
     scanner = SecretsScanner()
     job = {
         "jobId": "test-conc",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git,https://github.com/c/d.git",
                 "CONCURRENCY": "7",
-            }
-        },
-    }
+            },}
     scanner.run_scan(job, job_dir=tmp_path / "test-conc")
     assert captured["max_workers"] == 7
 
@@ -549,13 +537,10 @@ def test_run_scan_aggregates_findings(tmp_path, monkeypatch):
     scanner = SecretsScanner()
     job = {
         "jobId": "test-agg",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git\nhttps://github.com/c/d.git",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "test-agg"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
@@ -580,10 +565,7 @@ def test_run_scan_tolerates_clone_failure(tmp_path, monkeypatch):
     scanner = SecretsScanner()
     job = {
         "jobId": "test-fail",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/a/b.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/a/b.git"},}
     job_dir = tmp_path / "test-fail"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
@@ -607,13 +589,10 @@ def test_run_scan_ai_enhanced_invokes_classify_batch(tmp_path, monkeypatch):
     scanner = SecretsScanner()
     job = {
         "jobId": "test-ai",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git",
                 "SCAN_DEPTH": "ai_enhanced",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "test-ai"
     scanner.run_scan(job, job_dir=job_dir)
     assert called == [job_dir]
@@ -634,13 +613,10 @@ def test_run_scan_light_does_not_invoke_classify(tmp_path, monkeypatch):
     scanner = SecretsScanner()
     job = {
         "jobId": "test-light",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git",
                 "SCAN_DEPTH": "light",
-            }
-        },
-    }
+            },}
     scanner.run_scan(job, job_dir=tmp_path / "test-light")
     assert called == []
 
@@ -686,7 +662,7 @@ def test_run_scan_emits_progress(tmp_path):
         captures.append(dict(progress))
 
     scanner = SecretsScanner()
-    job = {"jobId": "p1", "dockerArgs": {"envVars": {"GIT_REPOS": ""}}}
+    job = {"jobId": "p1", "envVars": {"GIT_REPOS": ""},}
     scanner.run_scan(job, job_dir=tmp_path / "p1", on_progress=on_progress)
 
     assert captures, "on_progress was never called"
@@ -710,13 +686,10 @@ def test_run_scan_emits_progress_per_repo(tmp_path, monkeypatch):
     scanner = SecretsScanner()
     job = {
         "jobId": "p2",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://x/a.git,https://x/b.git",
                 "CONCURRENCY": "1",
-            }
-        },
-    }
+            },}
     scanner.run_scan(
         job,
         job_dir=tmp_path / "p2",
@@ -744,13 +717,10 @@ def test_run_scan_emits_progress_done_on_unsupported_depth(tmp_path):
     scanner = SecretsScanner()
     job = {
         "jobId": "p3",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://x/a.git",
                 "SCAN_DEPTH": "bogus",
-            }
-        },
-    }
+            },}
     scanner.run_scan(
         job,
         job_dir=tmp_path / "p3",
@@ -770,8 +740,7 @@ def test_run_scan_emits_progress_done_on_pre_cancel(tmp_path):
     scanner = SecretsScanner()
     job = {
         "jobId": "p4",
-        "dockerArgs": {"envVars": {"GIT_REPOS": "https://x/a.git"}},
-    }
+        "envVars": {"GIT_REPOS": "https://x/a.git"},}
     scanner.run_scan(
         job,
         job_dir=tmp_path / "p4",
@@ -788,6 +757,72 @@ def test_run_scan_progress_callback_exception_does_not_abort(tmp_path):
         raise RuntimeError("boom")
 
     scanner = SecretsScanner()
-    job = {"jobId": "p5", "dockerArgs": {"envVars": {"GIT_REPOS": ""}}}
+    job = {"jobId": "p5", "envVars": {"GIT_REPOS": ""},}
     result = scanner.run_scan(job, job_dir=tmp_path / "p5", on_progress=bad)
     assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# SecretsScanConfig
+# ---------------------------------------------------------------------------
+
+def _secrets_job(env: dict) -> dict:
+    return {"jobId": "job-test", "envVars": env}
+
+
+def test_secrets_config_parses_defaults():
+    from runner.scanners.secrets.scanner import SecretsScanConfig
+    cfg = SecretsScanConfig.from_job(_secrets_job({"GIT_REPOS": "https://x/a.git"}))
+    assert cfg.org_label == "default"
+    assert cfg.concurrency == 4
+    assert cfg.scan_depth == "light"
+    assert cfg.start_date == ""
+    assert cfg.git_token is None
+    assert cfg.repos == ["https://x/a.git"]
+
+
+def test_secrets_config_parses_explicit_values():
+    from runner.scanners.secrets.scanner import SecretsScanConfig
+    cfg = SecretsScanConfig.from_job(_secrets_job({
+        "GIT_REPOS": "https://x/a.git,https://x/b.git",
+        "GIT_TOKEN": "ghp_xyz",
+        "ORG_LABEL": "acme-org",
+        "RUN_ID": "run-7",
+        "CONCURRENCY": "2",
+        "SCAN_DEPTH": "deep",
+        "SCAN_START_DATE": "2024-01-01",
+    }))
+    assert cfg.repos == ["https://x/a.git", "https://x/b.git"]
+    assert cfg.git_token == "ghp_xyz"
+    assert cfg.org_label == "acme-org"
+    assert cfg.run_id == "run-7"
+    assert cfg.concurrency == 2
+    assert cfg.scan_depth == "deep"
+    assert cfg.start_date == "2024-01-01"
+
+
+def test_secrets_config_rejects_unsupported_scan_depth():
+    from runner.scanners._shared import ScannerConfigError
+    from runner.scanners.secrets.scanner import SecretsScanConfig
+    with pytest.raises(ScannerConfigError, match="SCAN_DEPTH"):
+        SecretsScanConfig.from_job(_secrets_job({
+            "GIT_REPOS": "https://x/a.git",
+            "SCAN_DEPTH": "turbo",
+        }))
+
+
+def test_secrets_config_rejects_invalid_start_date_format():
+    from runner.scanners._shared import ScannerConfigError
+    from runner.scanners.secrets.scanner import SecretsScanConfig
+    with pytest.raises(ScannerConfigError, match="SCAN_START_DATE"):
+        SecretsScanConfig.from_job(_secrets_job({
+            "GIT_REPOS": "https://x/a.git",
+            "SCAN_DEPTH": "deep",
+            "SCAN_START_DATE": "01-01-2024",
+        }))
+
+
+def test_secrets_config_run_id_falls_back_to_job_id():
+    from runner.scanners.secrets.scanner import SecretsScanConfig
+    cfg = SecretsScanConfig.from_job({"jobId": "job-77", "envVars": {"GIT_REPOS": "https://x/a.git"}})
+    assert cfg.run_id == "job-77"

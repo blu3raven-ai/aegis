@@ -65,27 +65,27 @@ def generate_upload_url(key: str, expires_in: int = 300, external: bool = False)
     return url
 
 
-def generate_download_url(key: str, expires_in: int = 300) -> str:
+def generate_download_url(key: str, expires_in: int = 300, bucket: str = _S3_BUCKET) -> str:
     """Generate a pre-signed GET URL."""
     return get_s3_client().generate_presigned_url(
         "get_object",
-        Params={"Bucket": _S3_BUCKET, "Key": key},
+        Params={"Bucket": bucket, "Key": key},
         ExpiresIn=expires_in,
     )
 
 
-def upload_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+def upload_bytes(key: str, data: bytes, content_type: str = "application/octet-stream", bucket: str = _S3_BUCKET) -> None:
     get_s3_client().put_object(
-        Bucket=_S3_BUCKET,
+        Bucket=bucket,
         Key=key,
         Body=data,
         ContentType=content_type,
     )
 
 
-def download_bytes(key: str) -> bytes | None:
+def download_bytes(key: str, bucket: str = _S3_BUCKET) -> bytes | None:
     try:
-        response = get_s3_client().get_object(Bucket=_S3_BUCKET, Key=key)
+        response = get_s3_client().get_object(Bucket=bucket, Key=key)
         return response["Body"].read()
     except ClientError as e:
         if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
@@ -100,21 +100,21 @@ def download_json(key: str) -> dict[str, Any] | None:
     return json.loads(data)
 
 
-def delete_prefix(prefix: str) -> int:
+def delete_prefix(prefix: str, bucket: str = _S3_BUCKET) -> int:
     client = get_s3_client()
-    objects = list_objects(prefix)
+    objects = list_objects(prefix, bucket=bucket)
     if not objects:
         return 0
     for key in objects:
-        client.delete_object(Bucket=_S3_BUCKET, Key=key)
+        client.delete_object(Bucket=bucket, Key=key)
     return len(objects)
 
 
-def list_objects(prefix: str) -> list[str]:
+def list_objects(prefix: str, bucket: str = _S3_BUCKET) -> list[str]:
     client = get_s3_client()
     keys: list[str] = []
     paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=_S3_BUCKET, Prefix=prefix):
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             keys.append(obj["Key"])
     return keys

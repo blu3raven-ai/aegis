@@ -6,10 +6,13 @@ are stored in detail.locations[].
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.shared.lifecycle import LifecycleHooks
 from src.secrets.store import build_secret_identity
+
+if TYPE_CHECKING:
+    from src.shared.lifecycle import ScanContext
 
 
 class SecretsHooks(LifecycleHooks):
@@ -48,6 +51,12 @@ class SecretsHooks(LifecycleHooks):
             "aiReasoning": raw.get("aiReasoning"),
             "raw": raw.get("raw") or {},
         }
+
+
+    def canonical_external_ref(self, ctx: "ScanContext", raw: dict[str, Any]) -> tuple[str, str] | None:
+        # Secrets are org-scoped, not repo-scoped. Returning None tells
+        # apply_lifecycle to leave Finding.asset_id NULL for secrets findings.
+        return None
 
 
 secrets_hooks = SecretsHooks()

@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import strawberry
 
-from src.graphql.auth import validate_org_access, GraphQLAuthError
+from src.graphql.auth import GraphQLAuthError
 from src.graphql.limits import clamp_per_page
 from src.graphql.types import (
     SeverityCounts, PageInfo, ClassificationEntry, AgeBucket,
@@ -14,6 +14,7 @@ from src.graphql.types import (
     RemediationStats, CoverageStats, SecretsRepoPriority,
 )
 from src.storage import read_latest_findings
+from src.shared.home_views import get_severity_counts_by_asset_ids
 from src.shared.paths import parse_iso_utc as _parse_dt
 
 
@@ -56,58 +57,35 @@ class SecretFindingsConnection:
     page_info: PageInfo
 
 
-def _load_scoped_findings(org: str, ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Load secret findings with per-request caching and repo-level scope filtering."""
+def _load_scoped_findings(asset_ids: list[str], ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Load secret findings with per-request caching, scoped by asset_ids."""
     if not ctx:
         raise GraphQLAuthError("Unauthorized")
-    validate_org_access(ctx, org)
-    cache_key = f"_secret_findings:{org}"
+    if not asset_ids:
+        return []
     request_cache = ctx.get("_cache")
+    cache_key = f"_secret_findings:asset_ids:{','.join(sorted(asset_ids))}"
     if request_cache is not None and cache_key in request_cache:
-        return request_cache[cache_key]
-    findings = read_latest_findings(org) or []
-    request = ctx.get("request")
-    if request:
-        from src.shared.router_helpers import filter_by_user_scope
-        findings = filter_by_user_scope(request, findings)
+        return list(request_cache[cache_key])
+    # asset_id IS the scope; no further per-repo filtering needed
+    findings = read_latest_findings(asset_ids=asset_ids) or []
     if request_cache is not None:
         request_cache[cache_key] = findings
     return findings
 
 
-def secret_counts(org: str, info_context: dict[str, Any]) -> SeverityCounts:
-    """Count secrets by reviewStatus instead of severity.
-
-    Maps:
-      new           -> total (open)
-      confirmed     -> high
-      false_positive -> (excluded from total)
-      action_taken  -> (excluded from total, same as fixed)
-    """
-    findings = _load_scoped_findings(org, info_context)
-    # Count only findings that are not resolved
-    active_statuses = {"new", "confirmed"}
-    active = [f for f in findings if f.get("reviewStatus") in active_statuses]
-
-    new_count = sum(1 for f in active if f.get("reviewStatus") == "new")
-    confirmed_count = sum(1 for f in active if f.get("reviewStatus") == "confirmed")
-
+def secret_counts(*, asset_ids: list[str], info_context: dict[str, Any]) -> SeverityCounts:
+    counts = get_severity_counts_by_asset_ids(asset_ids, tool="secrets", state="open")
     return SeverityCounts(
-        total=len(active),
-        # Map review statuses to severity buckets semantically:
-        # critical = confirmed (needs immediate action)
-        # high = new (unreviewed, potentially critical)
-        # medium = 0 (secrets don't have medium granularity)
-        # low = 0
-        critical=confirmed_count,
-        high=new_count,
-        medium=0,
-        low=0,
+        total=counts["total"], critical=counts["critical"],
+        high=counts["high"], medium=counts["medium"], low=counts["low"],
     )
 
 
 def secret_findings(
-    org: str,
+    *,
+    asset_ids: list[str],
+    org: Optional[str] = None,
     page: int = 1,
     per_page: int = 25,
     severity: Optional[str] = None,
@@ -124,9 +102,18 @@ def secret_findings(
     last_scan_date: Optional[str] = None,
     info_context: dict[str, Any] | None = None,
 ) -> SecretFindingsConnection:
+    if not asset_ids:
+        return SecretFindingsConnection(
+            items=[], total_count=0,
+            page_info=PageInfo(has_next_page=False, has_previous_page=False, total_pages=0),
+        )
     per_page = clamp_per_page(per_page)
     search = (search or "")[:200]
-    findings = _load_scoped_findings(org, info_context)
+    findings = _load_scoped_findings(asset_ids, info_context)
+    # org is a UI filter to narrow the asset-scoped result to specific orgs
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if (f.get("organization") or "").lower() in wanted]
 
     # For secrets: filter by state maps to reviewStatus
     if state:
@@ -257,11 +244,14 @@ def secret_findings(
     )
 
 
-def secrets_overview(org: str, info_context: dict[str, Any]) -> SecretsOverview:
+def secrets_overview(*, asset_ids: list[str], org: Optional[str] = None, info_context: dict[str, Any]) -> SecretsOverview:
     from datetime import datetime, timezone
     from src.secrets.service_analytics import compute_remediation_metrics, compute_repository_coverage
 
-    findings = _load_scoped_findings(org, info_context)
+    findings = _load_scoped_findings(asset_ids, info_context)
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if (f.get("organization") or "").lower() in wanted]
     now = datetime.now(timezone.utc)
 
     unique_keys: set[str] = set()
@@ -287,8 +277,9 @@ def secrets_overview(org: str, info_context: dict[str, Any]) -> SecretsOverview:
     # Remediation & coverage (count only git repos, not container images)
     from src.shared.config import get_scan_sources_for_org
     rem = compute_remediation_metrics(findings)
-    sources = get_scan_sources_for_org(org)
-    total_repos = len({url for s in sources for url in s.repo_urls})
+    # Derive orgs from scoped findings for coverage computation
+    scoped_orgs = sorted({(f.get("organization") or "").lower() for f in findings if f.get("organization")})
+    total_repos = len({url for single_org in scoped_orgs for s in get_scan_sources_for_org(single_org) for url in s.repo_urls})
     affected_repos = {
         str(f.get("repository") or "").lower()
         for f in findings
@@ -410,8 +401,11 @@ def secrets_overview(org: str, info_context: dict[str, Any]) -> SecretsOverview:
     )
 
 
-def secrets_filter_options(org: str, info_context: dict[str, Any]) -> SecretsFilterOptions:
-    findings = _load_scoped_findings(org, info_context)
+def secrets_filter_options(*, asset_ids: list[str], org: Optional[str] = None, info_context: dict[str, Any]) -> SecretsFilterOptions:
+    findings = _load_scoped_findings(asset_ids, info_context)
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if (f.get("organization") or "").lower() in wanted]
     organizations = sorted({f.get("organization", "") for f in findings if f.get("organization")})
     repositories = sorted({f.get("repository", "") for f in findings if f.get("repository")})
     detectors = sorted({f.get("detector", "") for f in findings if f.get("detector")})

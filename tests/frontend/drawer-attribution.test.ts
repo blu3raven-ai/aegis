@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 
-import { relativeTime } from "../../lib/shared/relative-time.ts"
+import { relativeTime } from "../../frontend/lib/shared/relative-time.ts"
 
 function makeIso(msAgo: number): string {
   return new Date(Date.now() - msAgo).toISOString()
@@ -71,7 +71,7 @@ test("relativeTime: invalid ISO returns raw input", () => {
 const HERE = new URL(".", import.meta.url).pathname
 const COMPONENT_PATH = resolve(
   HERE,
-  "../../components/shared/FindingDrawer/DrawerAttribution.tsx",
+  "../../frontend/components/shared/FindingDrawer/DrawerAttribution.tsx",
 )
 
 interface AttributionFields {

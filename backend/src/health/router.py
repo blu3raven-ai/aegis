@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 
 from src.health.probes import run_all_probes
 
@@ -21,28 +21,16 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("")
-async def health_check(request: Request) -> dict:
-    """Full component status: correlation engine, Argus, queue backend, runner."""
-    correlation_enabled = os.getenv("AEGIS_CORRELATION_ENABLED", "false").lower() == "true"
+async def health_check() -> dict:
+    """Full component status: Argus, queue backend, runner."""
     argus_endpoint = os.getenv("ARGUS_ENDPOINT", "")
     queue_backend = os.getenv("JOB_QUEUE_BACKEND", "file")
     runner_dispatch = os.getenv("RUNNER_DISPATCH_MODE", "poll")
-
-    # Reflect live engine state when the engine is wired into app.state
-    engine = getattr(request.app.state, "correlation_engine", None)
-    if engine is not None:
-        engine_status = "running" if engine.is_running else "stopped"
-    else:
-        engine_status = "running" if correlation_enabled else "dormant"
 
     return {
         "status": "ok",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "components": {
-            "correlation_engine": {
-                "enabled": correlation_enabled,
-                "status": engine_status,
-            },
             "argus": {
                 "status": "connected" if argus_endpoint else "disabled-fallback-heuristics",
                 "endpoint_configured": bool(argus_endpoint),

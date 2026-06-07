@@ -19,7 +19,7 @@ import { resolve } from "node:path"
 test("ExportFindingsButton component file exists at expected path", () => {
   const componentPath = resolve(
     new URL(".", import.meta.url).pathname,
-    "../../components/shared/findings/ExportFindingsButton.tsx",
+    "../../frontend/components/shared/findings/ExportFindingsButton.tsx",
   )
   assert.ok(existsSync(componentPath), `Component not found at ${componentPath}`)
 })
@@ -29,7 +29,7 @@ test("ExportFindingsButton component file exists at expected path", () => {
 // ---------------------------------------------------------------------------
 
 test("button uses buildFindingsExportUrl to construct CSV download URL", async () => {
-  const { buildFindingsExportUrl } = await import("../../lib/client/exports-api.ts")
+  const { buildFindingsExportUrl } = await import("../../frontend/lib/client/exports-api.ts")
   const url = buildFindingsExportUrl({ severity: "critical" }, "csv")
   const parsed = new URL(url, "http://localhost")
   assert.equal(parsed.searchParams.get("format"), "csv")
@@ -37,14 +37,14 @@ test("button uses buildFindingsExportUrl to construct CSV download URL", async (
 })
 
 test("button uses buildFindingsExportUrl to construct JSON download URL", async () => {
-  const { buildFindingsExportUrl } = await import("../../lib/client/exports-api.ts")
+  const { buildFindingsExportUrl } = await import("../../frontend/lib/client/exports-api.ts")
   const url = buildFindingsExportUrl({ severity: "high" }, "json")
   const parsed = new URL(url, "http://localhost")
   assert.equal(parsed.searchParams.get("format"), "json")
 })
 
 test("button passes empty filters when no severity is active", async () => {
-  const { buildFindingsExportUrl } = await import("../../lib/client/exports-api.ts")
+  const { buildFindingsExportUrl } = await import("../../frontend/lib/client/exports-api.ts")
   const url = buildFindingsExportUrl({}, "csv")
   const parsed = new URL(url, "http://localhost")
   assert.equal(parsed.searchParams.has("severity"), false)

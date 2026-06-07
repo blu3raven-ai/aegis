@@ -1,9 +1,5 @@
-import asyncio
-
 import pytest
-from fastapi.testclient import TestClient
 
-from src.main import app
 from src.settings import organisations_store as store
 
 
@@ -46,7 +42,8 @@ def clean_teams_table():
 
 @pytest.fixture()
 def client():
-    return TestClient(app)
+    from conftest import make_authed_client
+    return make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
 
 def valid_team(**overrides):
@@ -154,69 +151,32 @@ def test_unrelated_team_membership_does_not_grant_repository_access():
     assert user_has_repository_access(teams, "usr_jane", "aegis", "mobile-app") is False
 
 
-# ── JWT helper ────────────────────────────────────────────────────────────────
-
-
-def _b64url(data: bytes | str) -> str:
-    import base64
-
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
-
-
-def _make_jwt(sub: str, role: str, secret: str = "a" * 64) -> str:
-    import hashlib
-    import hmac
-    import json
-    import time
-
-    now = int(time.time())
-    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}))
-    payload = _b64url(json.dumps({"sub": sub, "role": role, "iat": now, "exp": now + 60}))
-    if len(secret) == 64:
-        try:
-            key = bytes.fromhex(secret)
-        except ValueError:
-            key = secret.encode("utf-8")
-    else:
-        key = secret.encode("utf-8")
-    signature = _b64url(hmac.new(key, f"{header}.{payload}".encode("utf-8"), hashlib.sha256).digest())
-    return f"{header}.{payload}.{signature}"
-
-
-def auth_headers(role: str = "admin", sub: str = "usr_admin", secret: str = "a" * 64) -> dict[str, str]:
-    return {"Authorization": f"Bearer {_make_jwt(sub=sub, role=role, secret=secret)}"}
-
-
-def enable_orgs_admin_policy(monkeypatch):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "a" * 64)
 
 
 # ── API endpoint tests ────────────────────────────────────────────────────────
 
 
-def test_list_organisations_requires_view_settings(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_list_organisations_requires_view_settings():
+    from conftest import make_authed_client
+    c = make_authed_client(role="security", user_id="usr_security", raise_server_exceptions=True)
 
-    response = client.get("/settings/api/organisations", headers=auth_headers(role="security"))
+    response = c.get("/settings/api/organisations")
 
     assert response.status_code == 200
     assert response.json() == {"teams": []}
 
 
-def test_create_team_requires_manage_organisations(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_create_team_requires_manage_organisations():
+    from conftest import make_authed_client
+    security_client = make_authed_client(role="security", user_id="usr_security", raise_server_exceptions=True)
+    admin_client = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
-    denied = client.post(
+    denied = security_client.post(
         "/settings/api/organisations",
-        headers=auth_headers(role="security", sub="usr_security"),
         json={"name": "Platform", "description": ""},
     )
-    allowed = client.post(
+    allowed = admin_client.post(
         "/settings/api/organisations",
-        headers=auth_headers(role="admin", sub="usr_admin"),
         json={"name": "Platform", "description": ""},
     )
 
@@ -225,22 +185,18 @@ def test_create_team_requires_manage_organisations(client, monkeypatch):
     assert allowed.json()["team"]["name"] == "Platform"
 
 
-def test_add_member_and_repository_to_team(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_add_member_and_repository_to_team(client):
     created = client.post(
         "/settings/api/organisations",
-        headers=auth_headers(role="admin"),
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
     member_response = client.post(
         f"/settings/api/organisations/{created['id']}/members",
-        headers=auth_headers(role="admin"),
         json={"userId": "usr_jane"},
     )
     repo_response = client.post(
         f"/settings/api/organisations/{created['id']}/repositories",
-        headers=auth_headers(role="admin"),
         json={"repository": "aegis/api-gateway"},
     )
 
@@ -260,13 +216,10 @@ def test_add_member_and_repository_to_team(client, monkeypatch):
         ("delete", "/settings/api/organisations/team_missing/container-images", None, {"image": "ghcr.io/u9u-p/security/secret-scanner"}),
     ],
 )
-def test_missing_team_mutations_return_404(client, monkeypatch, method, path, json_body, params):
-    enable_orgs_admin_policy(monkeypatch)
-
+def test_missing_team_mutations_return_404(client, method, path, json_body, params):
     response = client.request(
         method.upper(),
         path,
-        headers=auth_headers(role="admin"),
         json=json_body,
         params=params,
     )
@@ -275,34 +228,28 @@ def test_missing_team_mutations_return_404(client, monkeypatch, method, path, js
     assert response.json()["detail"] == "Team not found."
 
 
-def test_delete_repository_rejects_invalid_repository_input(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_delete_repository_rejects_invalid_repository_input(client):
     team = client.post(
         "/settings/api/organisations",
-        headers=auth_headers(role="admin"),
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
     response = client.delete(
         f"/settings/api/organisations/{team['id']}/repositories/aegis/api%20gateway",
-        headers=auth_headers(role="admin"),
     )
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Repository must use org/repo format."
 
 
-def test_delete_container_image_rejects_invalid_image_input(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_delete_container_image_rejects_invalid_image_input(client):
     team = client.post(
         "/settings/api/organisations",
-        headers=auth_headers(role="admin"),
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
     response = client.delete(
         f"/settings/api/organisations/{team['id']}/container-images",
-        headers=auth_headers(role="admin"),
         params={"image": "docker.io/aegis/api"},
     )
 
@@ -310,17 +257,14 @@ def test_delete_container_image_rejects_invalid_image_input(client, monkeypatch)
     assert response.json()["detail"] == "Container image must use ghcr.io/org/image format."
 
 
-def test_delete_member_rejects_invalid_user_id(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_delete_member_rejects_invalid_user_id(client):
     team = client.post(
         "/settings/api/organisations",
-        headers=auth_headers(role="admin"),
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
     response = client.delete(
         f"/settings/api/organisations/{team['id']}/members/%20",
-        headers=auth_headers(role="admin"),
     )
 
     assert response.status_code == 400
@@ -328,10 +272,8 @@ def test_delete_member_rejects_invalid_user_id(client, monkeypatch):
 
 
 def test_delete_member_returns_500_on_store_error(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
     team = client.post(
         "/settings/api/organisations",
-        headers=auth_headers(role="admin"),
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
@@ -342,7 +284,6 @@ def test_delete_member_returns_500_on_store_error(client, monkeypatch):
 
     response = client.delete(
         f"/settings/api/organisations/{team['id']}/members/usr_jane",
-        headers=auth_headers(role="admin"),
     )
 
     assert response.status_code == 500
@@ -350,7 +291,6 @@ def test_delete_member_returns_500_on_store_error(client, monkeypatch):
 
 
 def test_repository_search_filters_results(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
     monkeypatch.setattr("src.settings.organisations_router.read_app_config", lambda: {"github": {"orgs": [{"name": "aegis"}]}})
 
     async def fake_fetch_repos(org, token):
@@ -362,24 +302,17 @@ def test_repository_search_filters_results(client, monkeypatch):
     monkeypatch.setattr("src.settings.organisations_router.get_github_token_for_org", lambda org: "token")
     monkeypatch.setattr("src.settings.organisations_router.fetch_org_repos", fake_fetch_repos)
 
-    response = client.get(
-        "/settings/api/resources/repositories?org=aegis&q=api",
-        headers=auth_headers(role="admin"),
-    )
+    response = client.get("/settings/api/resources/repositories?org=aegis&q=api")
 
     assert response.status_code == 200
     assert response.json() == {"repositories": [{"org": "aegis", "repo": "api-gateway", "fullName": "aegis/api-gateway"}]}
 
 
 def test_container_image_search_fails_softly(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
     monkeypatch.setattr("src.settings.organisations_router.read_app_config", lambda: {"github": {"orgs": [{"name": "aegis"}]}})
     monkeypatch.setattr("src.settings.organisations_router.get_github_token_for_org", lambda org: "")
 
-    response = client.get(
-        "/settings/api/resources/container-images?org=aegis&q=api",
-        headers=auth_headers(role="admin"),
-    )
+    response = client.get("/settings/api/resources/container-images?org=aegis&q=api")
 
     assert response.status_code == 200
     assert response.json()["images"] == []
@@ -387,7 +320,6 @@ def test_container_image_search_fails_softly(client, monkeypatch):
 
 
 def test_repository_search_is_case_insensitive_and_caps_results(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
     monkeypatch.setattr("src.settings.organisations_router.read_app_config", lambda: {"github": {"orgs": [{"name": "aegis"}]}})
 
     async def fake_fetch_repos(org, token):
@@ -396,10 +328,7 @@ def test_repository_search_is_case_insensitive_and_caps_results(client, monkeypa
     monkeypatch.setattr("src.settings.organisations_router.get_github_token_for_org", lambda org: "token")
     monkeypatch.setattr("src.settings.organisations_router.fetch_org_repos", fake_fetch_repos)
 
-    response = client.get(
-        "/settings/api/resources/repositories?org=aegis&q=API",
-        headers=auth_headers(role="admin"),
-    )
+    response = client.get("/settings/api/resources/repositories?org=aegis&q=API")
 
     assert response.status_code == 200
     assert len(response.json()["repositories"]) == 25
@@ -407,39 +336,36 @@ def test_repository_search_is_case_insensitive_and_caps_results(client, monkeypa
     assert response.json()["repositories"][-1] == {"org": "aegis", "repo": "api-24", "fullName": "aegis/api-24"}
 
 
-def test_create_team_requires_workspace_admin_v2(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_create_team_requires_workspace_admin_v2():
+    from conftest import make_authed_client
+    c = make_authed_client(role="security", user_id="usr_security", raise_server_exceptions=True)
 
-    response = client.post(
+    response = c.post(
         "/settings/api/organisations",
-        headers=auth_headers(role="security", sub="usr_security"),
         json={"name": "New Team", "description": ""},
     )
     assert response.status_code == 403
 
 
-def test_delete_team_requires_workspace_admin(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_delete_team_requires_workspace_admin():
+    from conftest import make_authed_client
     team = store.create_team({"name": "To Delete", "description": ""})
+    c = make_authed_client(role="security", user_id="usr_security_del", raise_server_exceptions=True)
 
-    response = client.delete(
-        f"/settings/api/organisations/{team['id']}",
-        headers=auth_headers(role="security", sub="usr_security"),
-    )
+    response = c.delete(f"/settings/api/organisations/{team['id']}")
     assert response.status_code == 403
 
 
-def test_list_organisations_includes_sharing_status(client, monkeypatch):
-    enable_orgs_admin_policy(monkeypatch)
+def test_list_organisations_includes_sharing_status():
+    from conftest import make_authed_client
     team1 = store.create_team({"name": "Team1", "description": ""})
     store.upsert_member(team1["id"], "usr_jane")
 
     team2 = store.create_team({"name": "Team2", "description": ""})
 
-    response = client.get(
-        "/settings/api/organisations",
-        headers=auth_headers(role="security", sub="usr_jane"),
-    )
+    # usr_jane has security role and is a member of team1
+    c = make_authed_client(role="security", user_id="usr_jane", raise_server_exceptions=True)
+    response = c.get("/settings/api/organisations")
 
     assert response.status_code == 200
     teams = response.json()["teams"]

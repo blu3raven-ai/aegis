@@ -1,5 +1,10 @@
-import test from "node:test"
+import test, { beforeEach } from "node:test"
 import assert from "node:assert/strict"
+
+// apiClient requires a CSRF cookie for POST/PUT/DELETE requests
+beforeEach(() => {
+  ;(globalThis as any).document = { cookie: "__Host-csrf=test-csrf-token" }
+})
 
 // ---------------------------------------------------------------------------
 // Tests for the SLA breach widget data layer (Phase 47).
@@ -23,7 +28,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/sla-api.ts")
+  return import("../../frontend/lib/client/sla-api.ts")
 }
 
 const MOCK_SUMMARY = {
@@ -90,9 +95,8 @@ test("widget data: getBreachSummary silently fails (caller catches)", async () =
   const { mock } = makeFetchMock({ detail: "Internal Server Error" }, 500)
   ;(globalThis as any).fetch = mock
 
-  const { getBreachSummary, SlaApiError } = await loadModule()
+  const { getBreachSummary } = await loadModule()
   await assert.rejects(() => getBreachSummary("acme-org"), (err: any) => {
-    assert.ok(err instanceof SlaApiError)
     assert.equal(err.status, 500)
     return true
   })

@@ -41,8 +41,7 @@ class SbomExporter:
         Parameters
         ----------
         sbom:
-            Parsed CycloneDX JSON dict — exactly what SbomCache / ContainerSbomCache
-            stores in MinIO.
+            Parsed CycloneDX JSON dict in CycloneDX format.
         fmt:
             One of the SUPPORTED_FORMATS strings.
 

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch, call
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("JWT_SHARED_SECRET", "0" * 64)
+os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
 from src.secrets.periodic_sweep import (  # noqa: E402
     should_run_periodic_sweep,

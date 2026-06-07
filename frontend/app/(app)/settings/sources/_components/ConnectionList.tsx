@@ -1,0 +1,212 @@
+"use client"
+
+import { useEffect, useState, useCallback } from "react"
+import type { SourceCategory, SourceConnection } from "@/lib/shared/sources-types"
+import { CATEGORY_LABELS, CATEGORY_ITEM_LABELS } from "@/lib/shared/sources-types"
+import { listSourceConnections } from "@/lib/client/sources-api"
+import { ConnectionCard } from "./ConnectionCard"
+import { AddConnectionModal } from "./AddConnectionModal"
+import { useLicense } from "@/lib/client/license/client"
+import { TIER_LABELS } from "@/lib/shared/license/types"
+import type { Tier } from "@/lib/shared/license/types"
+import { useSSE } from "@/components/providers/SSEProvider"
+import type { SourceSyncedEvent } from "@/lib/shared/sse-types"
+
+// ─── Category descriptions ────────────────────────────────────────────────────
+
+const CATEGORY_DESCRIPTIONS: Record<SourceCategory, string> = {
+  "code-repositories": "Manage your code host connections and control which repositories are scanned.",
+  "container-registry": "Manage your container registry connections and control which images are scanned.",
+  "cloud-infrastructure": "Manage your cloud infrastructure connections and monitor your cloud resources.",
+}
+
+const CATEGORY_EMPTY_HINTS: Record<SourceCategory, string> = {
+  "code-repositories": "Add a code host connection to start discovering and scanning your repositories.",
+  "container-registry": "Add a container registry connection to start discovering and scanning your images.",
+  "cloud-infrastructure": "Add a cloud infrastructure connection to start monitoring your cloud resources.",
+}
+
+// ─── Skeleton ──────────────────────────────────────────────────────────────────
+
+function SkeletonRow() {
+  return (
+    <div className="flex items-center gap-4 px-5 py-4">
+      <div className="h-8 w-8 shrink-0 animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
+      <div className="flex flex-1 flex-col gap-1.5">
+        <div className="h-3.5 w-36 animate-pulse rounded bg-[var(--color-surface-raised)]" />
+        <div className="h-3 w-24 animate-pulse rounded bg-[var(--color-surface-raised)]" />
+      </div>
+      <div className="h-5 w-20 animate-pulse rounded-full bg-[var(--color-surface-raised)]" />
+    </div>
+  )
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface ConnectionListProps {
+  category: SourceCategory
+  canEdit: boolean
+  initialTotalConnections?: number
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function ConnectionList({ category, canEdit, initialTotalConnections }: ConnectionListProps) {
+  const [connections, setConnections] = useState<SourceConnection[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const { tier, limits, usage, isLoading: licenseLoading } = useLicense()
+  const nextTier: Tier | null = tier === "community" ? "enterprise" : null
+
+  const maxConnections = limits.max_source_connections
+  const currentConnections = licenseLoading && initialTotalConnections != null ? initialTotalConnections : usage.source_connections
+  const remaining = maxConnections != null ? Math.max(0, maxConnections - currentConnections) : null
+  const atLimit = maxConnections != null && currentConnections >= maxConnections
+
+  const itemLabel = CATEGORY_ITEM_LABELS[category]
+
+  // ── load ─────────────────────────────────────────────────────────────────────
+  // silent=true skips the loading skeleton (used for background refreshes)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true)
+    setError(null)
+    const result = await listSourceConnections(category)
+    if (!silent) setIsLoading(false)
+    if (result.ok) {
+      setConnections(result.data.connections)
+    } else {
+      setError(result.error)
+    }
+  }, [category])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  useSSE("source.synced", (data: SourceSyncedEvent) => {
+    void load(true)  // silent refresh
+  })
+
+  return (
+    <div className="space-y-8">
+      {/* Page header — matches Teams style */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+            {CATEGORY_LABELS[category]}
+          </h2>
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+            {CATEGORY_DESCRIPTIONS[category]}
+          </p>
+        </div>
+        {canEdit && (
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={atLimit ? undefined : () => setShowAddModal(true)}
+              disabled={atLimit}
+              className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Connection
+            </button>
+            {atLimit && nextTier && (
+              <a href="/settings/license" className="text-[11px] text-[var(--color-accent)] hover:underline">
+                Requires {TIER_LABELS[nextTier]} plan
+              </a>
+            )}
+            {!atLimit && maxConnections != null && !licenseLoading && (
+              <span className="text-[11px] text-[var(--color-text-secondary)]">
+                {remaining} remaining
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
+          {error}
+        </div>
+      )}
+
+      {/* Loading skeleton — grouped card style */}
+      {isLoading ? (
+        <div>
+          <p className="mb-4 text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            Connections
+          </p>
+          <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+        </div>
+      ) : connections.length === 0 ? (
+        /* Empty state — matches Teams empty style */
+        <div className="rounded-xl border-2 border-dashed border-[var(--color-border)] px-6 py-12 text-center">
+          <svg
+            className="mx-auto h-10 w-10 text-[var(--color-text-secondary)]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m9.86-2.54a4.5 4.5 0 0 0-1.242-7.244l4.5-4.5a4.5 4.5 0 1 0-6.364 6.364L11.5 9.87" />
+          </svg>
+          <p className="mt-3 text-sm font-medium text-[var(--color-text-primary)]">
+            No connections yet
+          </p>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            {CATEGORY_EMPTY_HINTS[category]}
+          </p>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
+            >
+              Add your first connection
+            </button>
+          )}
+        </div>
+      ) : (
+        /* Connections grouped in a card — matches Account section pattern */
+        <div>
+          <p className="mb-4 text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            Connections
+          </p>
+          <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+            {connections.map((conn) => (
+              <ConnectionCard
+                key={conn.id}
+                connection={conn}
+                category={category}
+                canEdit={canEdit}
+                onRefresh={load}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Add connection modal */}
+      {showAddModal && (
+        <AddConnectionModal
+          category={category}
+          onClose={() => setShowAddModal(false)}
+          onCreated={() => {
+            setShowAddModal(false)
+            void load()
+          }}
+        />
+      )}
+    </div>
+  )
+}

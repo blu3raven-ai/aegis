@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { ApiClientError } from "../../frontend/lib/client/api-client.types.ts"
 
 // ---------------------------------------------------------------------------
 // Minimal fetch mock
@@ -20,7 +21,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/sbom-diff-api.ts")
+  return import("../../frontend/lib/client/sbom-diff-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +91,7 @@ test("diffSbomsByRepo throws on non-OK response", async () => {
   const { diffSbomsByRepo } = await loadModule()
   await assert.rejects(
     () => diffSbomsByRepo({ repo_id: "missing", from_hash: "a", to_hash: "b" }),
-    /sbom-diff-api: 404/,
+    (e: unknown) => e instanceof ApiClientError && e.status === 404,
   )
 })
 
@@ -101,7 +102,7 @@ test("diffSbomsByRepo throws on 500 server error", async () => {
   const { diffSbomsByRepo } = await loadModule()
   await assert.rejects(
     () => diffSbomsByRepo({ repo_id: "payments-api", from_hash: "a", to_hash: "b" }),
-    /sbom-diff-api: 500/,
+    (e: unknown) => e instanceof ApiClientError && e.status === 500,
   )
 })
 

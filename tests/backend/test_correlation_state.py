@@ -38,6 +38,13 @@ def _insert_finding(**kwargs) -> int:
 
     async def _ins(session):
         f = Finding(**defaults)
+        from src.shared.finding_queryable_fields import extract_queryable_fields
+        qf = extract_queryable_fields(f.detail or {})
+        f.cve_id = qf["cve_id"]
+        f.file_path = qf["file_path"]
+        f.title = qf["title"]
+        f.rule_name = qf["rule_name"]
+        f.package_name = qf["package_name"]
         session.add(f)
         await session.flush()
         return f.id

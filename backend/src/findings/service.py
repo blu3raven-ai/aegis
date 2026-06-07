@@ -13,13 +13,14 @@ import base64
 import binascii
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Protocol
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, false as sa_false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Finding
+from src.db.models import Asset, Finding, KevEntry, User
+from src.shared.archived_filter import exclude_archived, only_archived
 
 # Internal tool name (DB) -> public scanner shorthand (API surface).
 # Public shorthand matches the CLI/UI vocabulary; the DB uses the longer form
@@ -35,7 +36,9 @@ _PUBLIC_TO_TOOL = {v: k for k, v in _TOOL_TO_PUBLIC.items()}
 VALID_SCANNERS = frozenset(_PUBLIC_TO_TOOL.keys())
 VALID_SEVERITIES = frozenset({"critical", "high", "medium", "low"})
 VALID_STATES = frozenset({"open", "closed", "dismissed", "fixed"})
-VALID_SORTS = frozenset({"severity", "created_at", "updated_at"})
+VALID_SORTS = frozenset(
+    {"severity", "severity_age", "epss", "risk_score", "newest", "oldest", "created_at", "updated_at"}
+)
 
 # Ordering value used to sort severities — higher = more severe.
 _SEVERITY_RANK = {"critical": 4, "high": 3, "medium": 2, "low": 1}
@@ -51,20 +54,38 @@ MAX_Q_LENGTH = 200
 @dataclass
 class FindingsListFilters:
     org_id: str
+    asset_ids: list[str] = field(default_factory=list)
     severity: list[str] | None = None
     scanner: list[str] | None = None
     state: list[str] | None = None
     q: str | None = None
     cve: str | None = None
+    # Exact-match filter against Finding.repo. Single slug ("org/repo") — the
+    # findings page uses a dropdown rather than free-text, so we don't bother
+    # with a multi-value or LIKE form here.
+    repo: str | None = None
     sort: str = "severity"
     direction: str = "desc"
     limit: int = DEFAULT_LIMIT
     cursor: str | None = None
+    # Two-state archived view: None/False → hide archived (default user-facing
+    # behaviour), True → show ONLY archived rows for archive-review surfaces.
+    # There is intentionally no "include both" mode here — compliance flows
+    # belong in the reports endpoint via include_archived=True.
+    archived: bool | None = None
+    first_seen_after: datetime | None = None
+    # PR 4 — More filters popover
+    cwe: str | None = None
+    kev: bool | None = None
+    epss_min: float | None = None
+    risk_score_min: int | None = None
+    assignee_user_id: str | None = None
+    page: int = 1
 
 
 def _normalize_filters(filters: FindingsListFilters) -> FindingsListFilters:
     """Apply caps and lowercase normalisation. Raises ValueError on invalid input."""
-    if not filters.org_id:
+    if not filters.asset_ids and not filters.org_id:
         raise ValueError("org_id is required")
 
     severity = None
@@ -107,17 +128,48 @@ def _normalize_filters(filters: FindingsListFilters) -> FindingsListFilters:
     if filters.cve:
         cve = filters.cve.strip()[:64] or None
 
+    # Same length cap as the legacy Finding.repo column so we never accept a
+    # value that couldn't have matched a real row anyway.
+    repo: str | None = None
+    if filters.repo:
+        repo = filters.repo.strip()[:255] or None
+
+    first_seen_after = filters.first_seen_after  # caller passes a real datetime or None
+
+    cwe = filters.cwe.strip().upper()[:32] if filters.cwe else None
+    kev = bool(filters.kev) if filters.kev is not None else None
+    epss_min = min(max(float(filters.epss_min), 0.0), 1.0) if filters.epss_min is not None else None
+    risk_score_min = (
+        min(max(int(filters.risk_score_min), 0), 100) if filters.risk_score_min is not None else None
+    )
+
+    assignee_user_id: str | None = None
+    if filters.assignee_user_id:
+        assignee_user_id = filters.assignee_user_id.strip()[:255] or None
+
+    page = max(1, int(filters.page or 1))
+
     return FindingsListFilters(
         org_id=filters.org_id,
+        asset_ids=list(filters.asset_ids) if filters.asset_ids else [],
         severity=severity,
         scanner=scanner,
         state=state,
         q=q,
         cve=cve,
+        repo=repo,
         sort=sort,
         direction=direction,
         limit=limit,
         cursor=filters.cursor,
+        archived=filters.archived,
+        first_seen_after=first_seen_after,
+        cwe=cwe,
+        kev=kev,
+        epss_min=epss_min,
+        risk_score_min=risk_score_min,
+        assignee_user_id=assignee_user_id,
+        page=page,
     )
 
 
@@ -142,6 +194,33 @@ def _sort_columns(sort: str, direction: str):
     when the primary sort key has duplicates.
     """
     desc = direction == "desc"
+    if sort == "severity_age":
+        from sqlalchemy import case
+        rank_expr = case(
+            (func.lower(Finding.severity) == "critical", 4),
+            (func.lower(Finding.severity) == "high", 3),
+            (func.lower(Finding.severity) == "medium", 2),
+            (func.lower(Finding.severity) == "low", 1),
+            else_=0,
+        )
+        return [
+            rank_expr.desc() if desc else rank_expr.asc(),
+            Finding.first_seen_at.desc() if desc else Finding.first_seen_at.asc(),
+            Finding.id.desc() if desc else Finding.id.asc(),
+        ]
+    if sort == "newest":
+        return [Finding.first_seen_at.desc(), Finding.id.desc()]
+    if sort == "oldest":
+        return [Finding.first_seen_at.asc(), Finding.id.asc()]
+    if sort == "risk_score":
+        # NULLs land at the end regardless of direction so unscored rows don't
+        # crowd the top of a "Risk score (high to low)" view.
+        primary = (
+            Finding.risk_score.desc().nullslast()
+            if desc
+            else Finding.risk_score.asc().nullslast()
+        )
+        return [primary, Finding.id.desc() if desc else Finding.id.asc()]
     if sort == "severity":
         # Sort by severity rank — Postgres CASE expression so we can use the
         # ordinal rather than the lexicographic order of the severity string.
@@ -229,7 +308,12 @@ def _build_next_cursor(last: Finding, sort: str) -> str:
 
 
 def _build_where_clauses(filters: FindingsListFilters) -> list:
-    clauses: list = [Finding.org == filters.org_id]
+    # Prefer asset-scoped filter; without asset_ids, return no results (fail-closed).
+    if filters.asset_ids:
+        clauses: list = [Finding.asset_id.in_(filters.asset_ids)]
+    else:
+        # Org-only callers no longer have a scope after Plan D; fail closed.
+        clauses = [sa_false()]
     if filters.severity:
         clauses.append(func.lower(Finding.severity).in_(filters.severity))
     if filters.scanner:
@@ -238,61 +322,74 @@ def _build_where_clauses(filters: FindingsListFilters) -> list:
     if filters.state:
         clauses.append(Finding.state.in_(filters.state))
     if filters.cve:
-        # Exact CVE match — checks both possible detail keys used by different
-        # scanner ingest paths (dependencies uses "cve_id", others use "cve").
         cve_upper = filters.cve.upper()
+        clauses.append(Finding.cve_id == cve_upper)
+    if filters.repo:
+        # filters.repo is the human-readable Asset.display_name (e.g. "acme/foo")
         clauses.append(
-            or_(
-                Finding.detail["cve_id"].astext == cve_upper,
-                Finding.detail["cve"].astext == cve_upper,
+            Finding.asset_id.in_(
+                select(Asset.id).where(Asset.display_name == filters.repo)
             )
         )
+    if filters.first_seen_after:
+        clauses.append(Finding.first_seen_at >= filters.first_seen_after)
     if filters.q:
-        # ILIKE on the relevant detail fields and the identity_key fallback.
-        # Length already capped in _normalize_filters so this is bounded.
         like = f"%{filters.q}%"
         clauses.append(
             or_(
                 Finding.identity_key.ilike(like),
-                Finding.repo.ilike(like),
-                Finding.detail["title"].astext.ilike(like),
-                Finding.detail["rule_name"].astext.ilike(like),
-                Finding.detail["package_name"].astext.ilike(like),
-                Finding.detail["file_path"].astext.ilike(like),
-                Finding.detail["path"].astext.ilike(like),
-                Finding.detail["cve_id"].astext.ilike(like),
-                Finding.detail["cve"].astext.ilike(like),
+                Finding.title.ilike(like),
+                Finding.rule_name.ilike(like),
+                Finding.package_name.ilike(like),
+                Finding.file_path.ilike(like),
+                Finding.cve_id.ilike(like),
             )
         )
+
+    if filters.kev is True:
+        kev_subq = select(KevEntry.cve_id)
+        clauses.append(Finding.cve_id.in_(kev_subq))
+
+    if filters.cwe:
+        # JSONB array containment: KevEntry.cwes @> [filters.cwe]
+        cwe_subq = select(KevEntry.cve_id).where(KevEntry.cwes.contains([filters.cwe]))
+        clauses.append(Finding.cve_id.in_(cwe_subq))
+
+    if filters.risk_score_min is not None:
+        clauses.append(Finding.risk_score >= filters.risk_score_min)
+
+    if filters.assignee_user_id:
+        clauses.append(Finding.assignee_user_id == filters.assignee_user_id)
+
     return clauses
 
 
-def _finding_to_dict(finding: Finding) -> dict[str, Any]:
-    """Serialise a Finding to the public response shape.
+class _KevLookup(Protocol):
+    def is_kev(self, cve: str | None) -> bool: ...
+    def first_cwe(self, cve: str | None) -> str | None: ...
 
-    The public response collapses scanner-specific detail fields into the
-    common shape documented by the endpoint. `package` is meaningful only
-    for dependency/container findings; `file_path` and `line` are meaningful
-    only for SAST/secrets findings — both default to None when absent.
-    """
+
+class _NoKev:
+    """No-KEV lookup — used when a query doesn't preload KEV state. Returns all-false."""
+    def is_kev(self, cve: str | None) -> bool:
+        return False
+    def first_cwe(self, cve: str | None) -> str | None:
+        return None
+
+
+def _finding_to_dict(finding: Finding, kev_lookup: _KevLookup | None = None) -> dict[str, Any]:
+    """Serialise a Finding to the public response shape (now including kev + cwe)."""
+    lookup = kev_lookup or _NoKev()
     detail: dict = finding.detail or {}
 
-    title = (
-        detail.get("title")
-        or detail.get("rule_name")
-        or detail.get("package_name")
-        or finding.identity_key
-    )
-
-    cve = detail.get("cve_id") or detail.get("cve") or None
+    title = finding.title or finding.identity_key
 
     package = None
-    pkg_name = detail.get("package_name")
+    pkg_name = finding.package_name
     pkg_version = detail.get("package_version") or detail.get("current_version")
     if pkg_name:
         package = f"{pkg_name}@{pkg_version}" if pkg_version else pkg_name
 
-    file_path = detail.get("file_path") or detail.get("path") or None
     line_raw = detail.get("start_line") or detail.get("line")
     try:
         line = int(line_raw) if line_raw is not None else None
@@ -305,14 +402,18 @@ def _finding_to_dict(finding: Finding) -> dict[str, Any]:
         "severity": (finding.severity or "").lower() or None,
         "state": finding.state,
         "title": title,
-        "cve": cve,
+        "cve": finding.cve_id,
         "package": package,
-        "file_path": file_path,
+        "file_path": finding.file_path,
         "line": line,
         "repo": finding.repo,
         "org_id": finding.org,
         "created_at": finding.created_at.isoformat() if finding.created_at else None,
         "updated_at": finding.updated_at.isoformat() if finding.updated_at else None,
+        "kev": lookup.is_kev(finding.cve_id),
+        "cwe": lookup.first_cwe(finding.cve_id),
+        "risk_score": finding.risk_score,
+        "assignee_user_id": finding.assignee_user_id,
     }
 
 
@@ -337,7 +438,20 @@ async def list_findings(
 
     base_where = and_(*where)
 
+    def _apply_archived_filter(stmt, archived: bool | None):
+        if archived is True:
+            return only_archived(stmt, Finding)
+        return exclude_archived(stmt, Finding)
+
     count_stmt = select(func.count()).select_from(Finding).where(base_where)
+    if filters.epss_min is not None:
+        from src.db.models import EpssScore
+        count_stmt = (
+            count_stmt
+            .join(EpssScore, EpssScore.cve == Finding.cve_id)
+            .where(EpssScore.percentile >= filters.epss_min)
+        )
+    count_stmt = _apply_archived_filter(count_stmt, filters.archived)
     count_result = await session.execute(count_stmt)
     total = int(count_result.scalar() or 0)
 
@@ -345,21 +459,206 @@ async def list_findings(
     if cursor_clause is not None:
         page_where = and_(base_where, cursor_clause)
 
-    page_stmt = (
-        select(Finding)
-        .where(page_where)
-        .order_by(*_sort_columns(filters.sort, filters.direction))
-        .limit(filters.limit + 1)
-    )
+    epss_join_needed = filters.epss_min is not None
+
+    offset = (filters.page - 1) * filters.limit if not filters.cursor else 0
+
+    if filters.sort == "epss":
+        from src.db.models import EpssScore
+        page_stmt = (
+            select(Finding)
+            .outerjoin(EpssScore, EpssScore.cve == Finding.cve_id)
+            .where(page_where)
+            .order_by(
+                EpssScore.percentile.desc().nullslast() if filters.direction == "desc" else EpssScore.percentile.asc().nullsfirst(),
+                Finding.id.desc(),
+            )
+            .offset(offset)
+            .limit(filters.limit + 1)
+        )
+        if filters.epss_min is not None:
+            page_stmt = page_stmt.where(EpssScore.percentile >= filters.epss_min)
+    elif epss_join_needed:
+        from src.db.models import EpssScore
+        page_stmt = (
+            select(Finding)
+            .join(EpssScore, EpssScore.cve == Finding.cve_id)
+            .where(page_where)
+            .where(EpssScore.percentile >= filters.epss_min)
+            .order_by(*_sort_columns(filters.sort, filters.direction))
+            .offset(offset)
+            .limit(filters.limit + 1)
+        )
+    else:
+        page_stmt = (
+            select(Finding)
+            .where(page_where)
+            .order_by(*_sort_columns(filters.sort, filters.direction))
+            .offset(offset)
+            .limit(filters.limit + 1)
+        )
+    page_stmt = _apply_archived_filter(page_stmt, filters.archived)
     page_result = await session.execute(page_stmt)
     rows = list(page_result.scalars().all())
 
     has_more = len(rows) > filters.limit
     page = rows[: filters.limit]
     next_cursor = _build_next_cursor(page[-1], filters.sort) if has_more and page else None
+    if filters.sort in ("severity_age", "epss", "risk_score", "newest", "oldest"):
+        next_cursor = None  # cursor pagination for these sorts is deferred to PR 5 (page-number pagination)
+    if not filters.cursor:
+        next_cursor = None
 
+    cve_ids = [f.cve_id for f in page if f.cve_id]
+    kev_set: set[str] = set()
+    kev_cwes: dict[str, list[str]] = {}
+    if cve_ids:
+        kev_result = await session.execute(
+            select(KevEntry.cve_id, KevEntry.cwes).where(KevEntry.cve_id.in_(cve_ids))
+        )
+        for cve, cwes in kev_result.all():
+            kev_set.add(cve)
+            if isinstance(cwes, list) and cwes:
+                kev_cwes[cve] = [str(c) for c in cwes]
+
+    class _RealKev:
+        def is_kev(self, cve):
+            return bool(cve) and cve in kev_set
+        def first_cwe(self, cve):
+            if not cve:
+                return None
+            cwes = kev_cwes.get(cve)
+            return cwes[0] if cwes else None
+
+    lookup = _RealKev()
     return {
-        "findings": [_finding_to_dict(f) for f in page],
+        "findings": [_finding_to_dict(f, kev_lookup=lookup) for f in page],
         "next_cursor": next_cursor,
         "total_count": total,
     }
+
+
+# Number of days the "fixed this week" bucket looks back. Matches the mock's
+# "Resolved this week" KPI.
+FIXED_WINDOW_DAYS = 7
+
+
+async def summarize_findings(
+    session: AsyncSession,
+    *,
+    asset_ids: list[str] | None = None,
+    org_id: str | None = None,
+) -> dict[str, int]:
+    """Return cross-scanner KPI counts for the findings page.
+
+    All buckets exclude archived rows. `open_*` counts include only rows in
+    state=open; `fixed_recent` counts rows in state=fixed with fixed_at within
+    the trailing FIXED_WINDOW_DAYS window; `dismissed` is all non-archived rows
+    in state=dismissed regardless of age.
+
+    Callers must supply either asset_ids (preferred, asset-scoped path) or
+    org_id (legacy org-scoped path). asset_ids takes precedence.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=FIXED_WINDOW_DAYS)
+    sev = func.lower(Finding.severity)
+    state = func.lower(Finding.state)
+
+    stmt = select(
+        func.count().filter(state == "open").label("open"),
+        func.count().filter(and_(state == "open", sev == "critical")).label("critical"),
+        func.count().filter(and_(state == "open", sev == "high")).label("high"),
+        func.count().filter(and_(state == "open", sev == "medium")).label("medium"),
+        func.count().filter(and_(state == "open", sev == "low")).label("low"),
+        func.count()
+        .filter(and_(state == "fixed", Finding.fixed_at.is_not(None), Finding.fixed_at >= cutoff))
+        .label("fixed_recent"),
+        func.count().filter(state == "dismissed").label("dismissed"),
+    )
+    if asset_ids:
+        stmt = stmt.where(Finding.asset_id.in_(asset_ids))
+    elif org_id:
+        # Org-only callers no longer have a scope after Plan D; fail closed.
+        stmt = stmt.where(sa_false())
+    else:
+        raise ValueError("summarize_findings requires asset_ids or org_id")
+    stmt = exclude_archived(stmt, Finding)
+
+    row = (await session.execute(stmt)).one()
+    return {
+        "open": int(row.open or 0),
+        "critical": int(row.critical or 0),
+        "high": int(row.high or 0),
+        "medium": int(row.medium or 0),
+        "low": int(row.low or 0),
+        "fixed_recent": int(row.fixed_recent or 0),
+        "dismissed": int(row.dismissed or 0),
+        "fixed_window_days": FIXED_WINDOW_DAYS,
+    }
+
+
+async def assign_finding(
+    finding_id: int,
+    assignee_user_id: str | None,
+    session: AsyncSession,
+) -> tuple[Finding, str | None]:
+    """Set or clear the assignee on a finding.
+
+    Returns (finding, previous_assignee). Raises LookupError if the finding
+    does not exist; raises ValueError if assignee_user_id is non-empty but
+    references a user that does not exist.
+    """
+    if assignee_user_id is not None:
+        normalized = assignee_user_id.strip()
+        if len(normalized) > 255:
+            raise ValueError("assignee_user_id exceeds 255 characters")
+        assignee_user_id = normalized or None
+
+    finding = (
+        await session.execute(select(Finding).where(Finding.id == finding_id))
+    ).scalars().first()
+    if finding is None:
+        raise LookupError(f"finding {finding_id} not found")
+
+    if assignee_user_id is not None:
+        user_id = (
+            await session.execute(select(User.id).where(User.id == assignee_user_id))
+        ).scalar_one_or_none()
+        if user_id is None:
+            raise ValueError(f"unknown user: {assignee_user_id}")
+
+    previous = finding.assignee_user_id
+    finding.assignee_user_id = assignee_user_id
+    finding.updated_at = datetime.now(timezone.utc)
+    await session.flush()
+    return finding, previous
+
+
+MAX_ASSIGNABLE_USERS_LIMIT = 50
+
+
+async def list_assignable_users(
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    limit: int = 20,
+) -> list[dict[str, str]]:
+    """Return up to `limit` active users matching `q` on username or email.
+
+    Trims and lowers `q` before the LIKE pattern build so the caller can pass
+    raw input without normalising. Empty/whitespace queries return the first
+    `limit` users by username order.
+    """
+    capped_limit = max(1, min(int(limit or 20), MAX_ASSIGNABLE_USERS_LIMIT))
+    stmt = select(User.id, User.username, User.email).where(User.status == "active")
+    if q:
+        normalized = q.strip()
+        if normalized:
+            like = f"%{normalized}%"
+            stmt = stmt.where(or_(User.username.ilike(like), User.email.ilike(like)))
+    stmt = stmt.order_by(User.username.asc()).limit(capped_limit)
+
+    rows = (await session.execute(stmt)).all()
+    return [
+        {"id": row.id, "username": row.username, "email": row.email or ""}
+        for row in rows
+    ]

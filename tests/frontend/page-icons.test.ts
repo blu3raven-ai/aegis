@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const ROOT = join(import.meta.dirname, "../..")
-const src = readFileSync(join(ROOT, "lib/shared/ui/page-icons.tsx"), "utf8")
+const src = readFileSync(join(ROOT, "frontend/lib/shared/ui/page-icons.tsx"), "utf8")
 
 const EXPECTED_ICONS = [
   "FindingsIcon",
@@ -13,7 +13,6 @@ const EXPECTED_ICONS = [
   "SbomIcon",
   "ComplianceIcon",
   "SourcesIcon",
-  "FleetIcon",
   "InsightsIcon",
   "ActivityIcon",
 ]

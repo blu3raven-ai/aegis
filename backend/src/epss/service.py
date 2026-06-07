@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.db.helpers import run_db
-from src.db.models import EpssScore, Finding
+from src.db.models import Asset, EpssScore, Finding
 
 logger = logging.getLogger(__name__)
 
@@ -75,20 +75,32 @@ class EpssService:
 
         return run_db(_run)
 
-    def top_findings_by_epss(self, org_id: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Return open findings for an org ranked by EPSS score, descending.
+    def top_findings_by_epss(
+        self,
+        org_id: str | None = None,
+        limit: int = 20,
+        *,
+        asset_ids: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return open findings ranked by EPSS score, descending.
 
-        Joins findings against epss_scores on the CVE ID embedded in the
-        finding's detail JSON. Three fallback paths handle the different
-        scanner output shapes (deps `cve`, container `cveId`, and the
-        identity_key fallback for older records).
+        Joins findings against epss_scores on the typed cve_id column.
+        The identity_key fallback covers older records where cve_id was not
+        backfilled.
         """
+        if asset_ids is None and org_id is None:
+            raise ValueError("either org_id or asset_ids is required")
+
+        if asset_ids is not None and not asset_ids:
+            return []
+
         async def _run(session):
-            join_stmt = (
+            base = (
                 sa.select(
                     Finding.id.label("finding_id"),
                     Finding.tool,
-                    Finding.repo,
+                    Finding.asset_id,
+                    Asset.display_name.label("repo"),
                     Finding.severity,
                     Finding.identity_key,
                     EpssScore.cve,
@@ -100,12 +112,66 @@ class EpssService:
                 .join(
                     EpssScore,
                     sa.or_(
-                        sa.cast(Finding.detail["cve"].astext, sa.String) == EpssScore.cve,
-                        sa.cast(Finding.detail["cveId"].astext, sa.String) == EpssScore.cve,
+                        Finding.cve_id == EpssScore.cve,
                         Finding.identity_key.contains(EpssScore.cve),
                     ),
                 )
-                .where(Finding.org == org_id, Finding.state == "open")
+                .join(Asset, Asset.id == Finding.asset_id)
+                .where(Finding.state == "open")
+                .order_by(EpssScore.score.desc(), Finding.id.asc())
+                .limit(limit)
+            )
+
+            if asset_ids is not None:
+                join_stmt = base.where(Finding.asset_id.in_(asset_ids))
+            else:
+                # Org-only callers no longer have a scope after Plan D; fail closed.
+                join_stmt = base.where(sa.false())
+
+            rows = (await session.execute(join_stmt)).fetchall()
+            return [
+                {
+                    "finding_id": r.finding_id,
+                    "tool": r.tool,
+                    "repo": r.repo,
+                    "severity": r.severity,
+                    "identity_key": r.identity_key,
+                    "cve": r.cve,
+                    "epss_score": r.score,
+                    "epss_percentile": r.percentile,
+                    "scored_date": r.scored_date.isoformat() if r.scored_date else None,
+                }
+                for r in rows
+            ]
+
+        return run_db(_run)
+
+    def top_findings_by_asset_ids(self, asset_ids: list[str], limit: int = 20) -> list[dict[str, Any]]:
+        """Return open findings scoped by asset_ids ranked by EPSS score, descending."""
+        async def _run(session):
+            join_stmt = (
+                sa.select(
+                    Finding.id.label("finding_id"),
+                    Finding.tool,
+                    Finding.asset_id,
+                    Asset.display_name.label("repo"),
+                    Finding.severity,
+                    Finding.identity_key,
+                    EpssScore.cve,
+                    EpssScore.score,
+                    EpssScore.percentile,
+                    EpssScore.scored_date,
+                )
+                .select_from(Finding)
+                .join(
+                    EpssScore,
+                    sa.or_(
+                        Finding.cve_id == EpssScore.cve,
+                        Finding.identity_key.contains(EpssScore.cve),
+                    ),
+                )
+                .join(Asset, Asset.id == Finding.asset_id)
+                .where(Finding.asset_id.in_(asset_ids), Finding.state == "open")
                 .order_by(EpssScore.score.desc(), Finding.id.asc())
                 .limit(limit)
             )

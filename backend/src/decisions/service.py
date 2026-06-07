@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Finding
+from src.db.models import Asset, Finding
 
 VALID_SEVERITIES = frozenset({"critical", "high", "medium", "low"})
 DEFAULT_BLOCK_ON: tuple[str, ...] = ("critical",)
@@ -75,7 +75,6 @@ def parse_policy(raw: dict[str, Any] | None) -> DecisionPolicy:
 
 def _finding_to_blocker(finding: Finding) -> dict[str, Any]:
     """Public-shape blocker — same vocabulary as /api/v1/findings rows."""
-    detail = finding.detail or {}
     return {
         "id": str(finding.id),
         "tool": finding.tool,
@@ -83,13 +82,8 @@ def _finding_to_blocker(finding: Finding) -> dict[str, Any]:
         "state": finding.state,
         "repo": finding.repo,
         "identity_key": finding.identity_key,
-        "title": (
-            detail.get("title")
-            or detail.get("rule_name")
-            or detail.get("package_name")
-            or finding.identity_key
-        ),
-        "cve": detail.get("cve_id") or detail.get("cve"),
+        "title": finding.title or finding.identity_key,
+        "cve": finding.cve_id,
     }
 
 
@@ -99,24 +93,34 @@ class DecisionService:
     async def evaluate(
         self,
         *,
-        org_id: str,
+        org_id: str | None = None,
         repo: str | None,
         policy: DecisionPolicy,
         session: AsyncSession,
+        asset_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Return a Go/No-Go verdict for the given org+repo+policy.
 
-        Per-org isolation is mandatory: every query is scoped to ``org_id``.
-        Cross-org access is rejected upstream by ``parse_request``.
+        Per-org isolation is mandatory: every query is scoped to ``org_id``
+        or ``asset_ids``. Cross-org access is rejected upstream.
         """
-        if not org_id:
+        if asset_ids is None and not org_id:
             raise ValueError("org_id is required")
+
+        # Resolve (org_id, repo) -> asset_ids when explicit asset_ids weren't
+        # supplied. CI callers know the owner/repo pair but not the asset UUID
+        # or source_type; match on the trailing segment of external_ref.
+        if asset_ids is None:
+            asset_ids = await self._resolve_asset_ids_from_org_repo(
+                org_id=org_id, repo=repo, session=session,
+            )
 
         blockers = await self._fetch_blockers(
             org_id=org_id,
             repo=repo,
             block_on=policy.block_on,
             session=session,
+            asset_ids=asset_ids,
         )
 
         if blockers:
@@ -139,22 +143,49 @@ class DecisionService:
             "source": "backend",
         }
 
+    async def _resolve_asset_ids_from_org_repo(
+        self, *, org_id: str | None, repo: str | None, session: AsyncSession,
+    ) -> list[str]:
+        """Map a CI caller's (org_id, repo) into asset_ids.
+
+        external_ref format is ``<source_type>:<owner>/<name>``. CI knows
+        owner and (optionally) name; match on the trailing segment so the
+        resolver works for github, gitlab, bitbucket, etc. without the
+        caller having to know which.
+        """
+        if not org_id:
+            return []
+        if repo:
+            suffix = f":{org_id}/{repo}"
+            stmt = select(Asset.id).where(Asset.external_ref.like(f"%{suffix}"))
+        else:
+            # Narrow to all repo assets under this org
+            pattern = f"%:{org_id}/%"
+            stmt = select(Asset.id).where(
+                Asset.external_ref.like(pattern), Asset.type == "repo",
+            )
+        rows = (await session.execute(stmt)).scalars().all()
+        return [str(r) for r in rows]
+
     async def _fetch_blockers(
         self,
         *,
-        org_id: str,
+        org_id: str | None,
         repo: str | None,
         block_on: tuple[str, ...],
         session: AsyncSession,
+        asset_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Read open findings matching the blocking severities for org+repo."""
+        """Read open findings matching the blocking severities, scoped to assets."""
+        if asset_ids is not None and not asset_ids:
+            return []
+
         clauses = [
-            Finding.org == org_id,
             Finding.state == "open",
             func.lower(Finding.severity).in_(block_on),
         ]
-        if repo:
-            clauses.append(Finding.repo == repo)
+        if asset_ids is not None:
+            clauses.append(Finding.asset_id.in_(asset_ids))
 
         stmt = (
             select(Finding)

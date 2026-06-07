@@ -16,7 +16,6 @@ class JobQueue(Protocol):
         job_type: str,
         org: str,
         run_id: str,
-        docker_image: str,
         env_vars: dict[str, str],
     ) -> str:
         """Enqueue a new job; returns its job_id."""

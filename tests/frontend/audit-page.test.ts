@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { ApiClientError } from "../../frontend/lib/client/api-client.types.ts"
 
 // ---------------------------------------------------------------------------
 // Tests for audit-api.ts that simulate page-level integration scenarios:
@@ -22,7 +23,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadAuditApi() {
-  return import("../../lib/client/audit-api.ts")
+  return import("../../frontend/lib/client/audit-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -213,14 +214,14 @@ test("drawer receives event without changes", async () => {
 // Error states
 // ---------------------------------------------------------------------------
 
-test("403 from audit endpoint throws with audit-api prefix", async () => {
+test("403 from audit endpoint throws ApiClientError", async () => {
   const { mock } = makeFetchMock({ detail: "Audit log disabled" }, 403)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listAuditEvents } = await loadAuditApi()
   await assert.rejects(
     () => listAuditEvents({}),
-    /audit-api: 403/,
+    (e: unknown) => e instanceof ApiClientError && e.status === 403,
   )
 })
 

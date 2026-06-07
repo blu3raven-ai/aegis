@@ -5,7 +5,7 @@ from datetime import date, datetime, timezone
 
 import sqlalchemy as sa
 from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -61,8 +61,7 @@ class Team(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     members: Mapped[list[TeamMember]] = relationship(back_populates="team", cascade="all, delete-orphan")
-    repositories: Mapped[list[TeamRepository]] = relationship(back_populates="team", cascade="all, delete-orphan")
-    container_images: Mapped[list[TeamContainerImage]] = relationship(back_populates="team", cascade="all, delete-orphan")
+    assets: Mapped[list[TeamAsset]] = relationship(back_populates="team", cascade="all, delete-orphan")
 
 
 class TeamMember(Base):
@@ -81,46 +80,16 @@ class TeamMember(Base):
     )
 
 
-class TeamRepository(Base):
-    __tablename__ = "team_repositories"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    team_id: Mapped[str] = mapped_column(String(255), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
-    org: Mapped[str] = mapped_column(String(255), nullable=False)
-    repo: Mapped[str] = mapped_column(String(255), nullable=False)
-    source: Mapped[str] = mapped_column(String(50), default="manual")
-
-    team: Mapped[Team] = relationship(back_populates="repositories")
-
-    __table_args__ = (
-        sa.UniqueConstraint("team_id", "org", "repo", name="uq_team_repo_team_org_repo"),
-    )
-
-
-class TeamContainerImage(Base):
-    __tablename__ = "team_container_images"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    team_id: Mapped[str] = mapped_column(String(255), ForeignKey("teams.id", ondelete="CASCADE"), nullable=False)
-    org: Mapped[str] = mapped_column(String(255), default="")
-    image: Mapped[str] = mapped_column(String(512), nullable=False)
-    source: Mapped[str] = mapped_column(String(50), default="manual")
-
-    team: Mapped[Team] = relationship(back_populates="container_images")
-
-    __table_args__ = (
-        sa.UniqueConstraint("team_id", "org", "image", name="uq_team_image_team_org_image"),
-    )
-
-
 class DirectGrant(Base):
     __tablename__ = "direct_grants"
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    org: Mapped[str] = mapped_column(String(255), default="")
-    resource_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    resource_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    asset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
     source: Mapped[str] = mapped_column(String(50), default="manual-direct")
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -204,7 +173,6 @@ class RunnerJob(Base):
     org: Mapped[str] = mapped_column(String(255), default="")
     run_id: Mapped[str] = mapped_column(String(255), default="")
     status: Mapped[str] = mapped_column(String(50), default="pending")
-    docker_image: Mapped[str] = mapped_column(String(512), default="")
     env_vars: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -292,18 +260,25 @@ class ScanRun(Base):
 
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     tool: Mapped[str] = mapped_column(String(30), nullable=False)
-    org: Mapped[str] = mapped_column(String(255), nullable=False)
+    asset_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
     status: Mapped[str] = mapped_column(String(50), default="queued")
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     progress: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+    archived: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.text("false"))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_rule_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         sa.Index("ix_scanrun_tool_status", "tool", "status"),
-        sa.Index("ix_scanrun_tool_org_status", "tool", "org", "status"),
         sa.Index("ix_scanrun_started_at", "started_at"),
+        sa.Index("ix_scanrun_archived", "archived"),
     )
 
 
@@ -318,13 +293,22 @@ class ScanCheckpoint(Base):
 
 
 class Finding(Base):
-    """Unified finding row — one per finding across all scanners."""
+    """Unified finding row — one per finding across all scanners.
+
+    Secrets findings keep asset_id NULL (no repo-level scoping for org-wide
+    secret scanning). The unique constraint on (tool, asset_id, identity_key)
+    handles this correctly — Postgres allows duplicate NULL values in UNIQUE
+    constraints, so secrets deduplicate by (tool, identity_key) effectively.
+    """
     __tablename__ = "findings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tool: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
-    org: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    repo: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    asset_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=True, index=True,
+    )
     identity_key: Mapped[str] = mapped_column(String(512), nullable=False)
     state: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     review_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -332,38 +316,62 @@ class Finding(Base):
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     fixed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    engine: Mapped[str | None] = mapped_column(String(20), nullable=True)
     detail: Mapped[dict] = mapped_column(JSONB, default=dict)
+    detail_blob_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    cve_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    file_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    rule_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    package_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
-    # Commit attribution (§5.6 v1 carve-out from type 4 temporal correlation).
+    # Commit attribution (§5.6).
     # Populated at ingest time from git blame; stays NULL when checkout is unavailable.
     introduced_by_commit_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
     introduced_by_author: Mapped[str | None] = mapped_column(String(255), nullable=True)
     introduced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     introduced_by_pr_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    archived: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.text("false"))
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by_rule_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    risk_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    assignee_user_id: Mapped[str | None] = mapped_column(
+        String(255),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     __table_args__ = (
-        sa.UniqueConstraint("tool", "org", "identity_key", name="uq_finding_tool_org_key"),
-        sa.Index("ix_finding_tool_org_state", "tool", "org", "state"),
-        sa.Index("ix_finding_tool_org_severity", "tool", "org", "severity"),
-        sa.Index("ix_finding_tool_org_repo", "tool", "org", "repo"),
+        sa.UniqueConstraint("tool", "asset_id", "identity_key", name="uq_finding_tool_asset_key"),
+        sa.Index("ix_finding_asset_state", "asset_id", "state"),
+        sa.Index("ix_finding_asset_severity", "asset_id", "severity"),
+        sa.Index("ix_findings_archived", "archived"),
+        sa.Index("ix_finding_asset_assignee", "asset_id", "assignee_user_id"),
+        sa.CheckConstraint(
+            "risk_score IS NULL OR (risk_score >= 0 AND risk_score <= 100)",
+            name="ck_findings_risk_score_range",
+        ),
     )
 
 
 class Sbom(Base):
-    """SBOM metadata per repo — blobs stored in MinIO (sboms bucket)."""
+    """SBOM metadata per asset — blobs stored in MinIO (sboms bucket)."""
     __tablename__ = "sboms"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    org: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    repo: Mapped[str] = mapped_column(String(255), nullable=False)
+    asset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
     commit_sha: Mapped[str | None] = mapped_column(String(255), nullable=True)
     s3_key: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     run_id: Mapped[str] = mapped_column(String(100), nullable=False)
 
     __table_args__ = (
-        sa.UniqueConstraint("org", "repo", name="uq_sbom_org_repo"),
+        sa.UniqueConstraint("asset_id", name="uq_sbom_asset"),
     )
 
 
@@ -371,8 +379,12 @@ class SbomComponent(Base):
     __tablename__ = "sbom_components"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    org: Mapped[str] = mapped_column(String(255))
-    repo: Mapped[str] = mapped_column(String(255))
+    asset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    sbom_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("sboms.id", ondelete="CASCADE"), nullable=True)
     purl: Mapped[str] = mapped_column(String(512))
     name: Mapped[str] = mapped_column(String(255))
     version: Mapped[str] = mapped_column(String(512))
@@ -382,39 +394,28 @@ class SbomComponent(Base):
     scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (
-        sa.Index("idx_sbom_components_name", "org", "name", "ecosystem"),
-        sa.Index("idx_sbom_components_purl", "org", "purl"),
-        sa.UniqueConstraint("org", "repo", "purl", name="uq_sbom_components_org_repo_purl"),
-    )
-
-
-class CacheEntry(Base):
-    """Generic per-tool scan cache row — blobs stored in MinIO."""
-    __tablename__ = "cache_entries"
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    cache_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    cache_key: Mapped[str] = mapped_column(String(512), nullable=False)
-    content_hash: Mapped[str] = mapped_column(String(128), nullable=False)
-    tool_version: Mapped[str] = mapped_column(String(64), nullable=False)
-    rule_pack_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    last_used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    blob_pointer: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-
-    __table_args__ = (
-        sa.UniqueConstraint("cache_type", "cache_key", name="uq_cache_type_key"),
-        sa.Index("ix_cache_entries_last_used_at", "last_used_at"),
+        sa.Index("idx_sbom_components_asset_name", "asset_id", "name", "ecosystem"),
+        sa.Index("idx_sbom_components_asset_purl", "asset_id", "purl"),
+        sa.UniqueConstraint("asset_id", "purl", name="uq_sbom_components_asset_purl"),
     )
 
 
 class Decision(Base):
-    """Human action on a finding — dismiss only. Reopen = delete row."""
+    """Human action on a finding — dismiss only. Reopen = delete row.
+
+    asset_id is NULL for secrets findings (which keep asset_id=NULL on findings).
+    The unique constraint allows NULL asset_id; secrets decisions deduplicate
+    on (tool, identity_key) effectively since Postgres UNIQUE permits duplicate NULLs.
+    """
     __tablename__ = "decisions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tool: Mapped[str] = mapped_column(String(30), nullable=False)
-    org: Mapped[str] = mapped_column(String(255), nullable=False)
+    asset_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
     identity_key: Mapped[str] = mapped_column(String(512), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -424,8 +425,8 @@ class Decision(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (
-        sa.UniqueConstraint("tool", "org", "identity_key", name="uq_decision_tool_org_key"),
-        sa.Index("ix_decision_tool_org", "tool", "org"),
+        sa.UniqueConstraint("tool", "asset_id", "identity_key", name="uq_decision_tool_asset_key"),
+        sa.Index("ix_decisions_asset_identity", "asset_id", "tool", "identity_key"),
     )
 
 
@@ -448,111 +449,6 @@ class FindingEvent(Base):
     __table_args__ = (
         sa.Index("ix_finding_event_finding_id", "finding_id"),
         sa.Index("ix_finding_event_tool_org", "tool", "org"),
-    )
-
-
-class VerifiedSecret(Base):
-    """Verified-secret cache: avoids re-calling live verifiers within TTL window."""
-    __tablename__ = "verified_secrets"
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    detector_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    secret_hash: Mapped[str] = mapped_column(String(128), nullable=False)
-    verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
-    ttl_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-    __table_args__ = (
-        sa.UniqueConstraint("detector_id", "secret_hash", name="uq_detector_secret"),
-        sa.Index("ix_verified_secrets_ttl", "ttl_until"),
-    )
-
-
-class Chain(Base):
-    """Attack chain — groups related findings into a multi-step vulnerability path."""
-    __tablename__ = "chains"
-
-    id: Mapped[str] = mapped_column(String(26), primary_key=True)  # ULID
-    org_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    chain_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    severity: Mapped[str] = mapped_column(String(20), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    last_updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
-    )
-    ai_explanation_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    edges: Mapped[list["ChainEdge"]] = relationship(
-        back_populates="chain", cascade="all, delete-orphan"
-    )
-
-    __table_args__ = (
-        sa.Index("ix_chains_org_id", "org_id"),
-        sa.Index("ix_chains_org_severity", "org_id", "severity"),
-        sa.Index("ix_chains_org_type", "org_id", "chain_type"),
-        sa.Index("ix_chains_status", "status"),
-    )
-
-
-class ChainEdge(Base):
-    """Directed edge between two findings within an attack chain."""
-    __tablename__ = "chain_edges"
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    chain_id: Mapped[str] = mapped_column(
-        String(26), ForeignKey("chains.id", ondelete="CASCADE"), nullable=False
-    )
-    source_finding_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    target_finding_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    edge_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    confidence: Mapped[float] = mapped_column(Float, nullable=False)
-    provenance_rule: Mapped[str] = mapped_column(String(128), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-    chain: Mapped["Chain"] = relationship(back_populates="edges")
-
-    __table_args__ = (
-        sa.UniqueConstraint(
-            "chain_id", "source_finding_id", "target_finding_id", "edge_type",
-            name="uq_chain_edge_dedup",
-        ),
-        sa.Index("ix_chain_edges_chain_id", "chain_id"),
-        sa.Index("ix_chain_edges_source", "source_finding_id"),
-        sa.Index("ix_chain_edges_target", "target_finding_id"),
-    )
-
-
-class TemporalAggregate(Base):
-    """Bucketed time-series aggregate for Phase 11 Type 4 temporal correlation.
-
-    One row per (org, metric_type, dimension_key, bucket_start, bucket_size).
-    Upserts increment `value` in place; the unique constraint enforces
-    one bucket per dimension so writes are idempotent.
-    """
-    __tablename__ = "temporal_aggregates"
-
-    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    org_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    # Identifies which metric this row tracks — e.g. 'findings_introduced', 'mttr'.
-    metric_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    # Composite dimension string: "k1=v1|k2=v2" sorted lexicographically by key.
-    dimension_key: Mapped[str] = mapped_column(String(512), nullable=False)
-    bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    # '1h' | '1d' | '1w'
-    bucket_size: Mapped[str] = mapped_column(String(16), nullable=False)
-    value: Mapped[float] = mapped_column(Float, nullable=False)
-    # Extra context; used by MTTR to persist raw duration samples.
-    # Column is named 'metadata' in the DB but uses 'extra' as the ORM attribute
-    # because SQLAlchemy reserves the name 'metadata' on declarative base classes.
-    extra: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
-
-    __table_args__ = (
-        sa.UniqueConstraint(
-            'org_id', 'metric_type', 'dimension_key', 'bucket_start', 'bucket_size',
-            name='uq_temporal_aggregate_bucket',
-        ),
-        sa.Index('ix_temporal_org_metric_bucket', 'org_id', 'metric_type', 'bucket_start'),
     )
 
 
@@ -656,23 +552,30 @@ class NotificationRule(Base):
 
 
 class Repo(Base):
-    """Per-repo scan-state store — populated by Phase 2 incremental scanning.
+    """Per-asset scan-state store — one row per asset (repo or image).
 
-    One row per (org, repo). `manifest_set_hash` and `last_scanned_sha` drive
-    delta detection. `updated_at` reflects the most recent cache write.
+    `manifest_set_hash` and `last_scanned_sha` drive delta detection.
+    `updated_at` reflects the most recent cache write.
     """
     __tablename__ = "repos"
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    org: Mapped[str] = mapped_column(String(255), nullable=False)
-    repo: Mapped[str] = mapped_column(String(255), nullable=False)
+    asset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
     manifest_set_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_scanned_sha: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    tier: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    archived: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, server_default=sa.text("false"))
+    labels: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    image_registry: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     __table_args__ = (
-        sa.UniqueConstraint("org", "repo", name="uq_repos_org_repo"),
+        sa.UniqueConstraint("asset_id", name="uq_repos_asset"),
     )
 
 
@@ -765,9 +668,100 @@ class FindingSlaStatus(Base):
     breached: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     breach_age_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    asset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
 
     __table_args__ = (
         sa.Index("ix_finding_sla_status_breached", "breached"),
+    )
+
+
+# ── Rules Engine ─────────────────────────────────────────────────────────────
+
+
+class Rule(Base):
+    """Unified rule engine: SLA, scanner coverage, auto-dismiss, data retention.
+
+    Conditions JSONB holds an all/any predicate tree — see rules_engine.conditions
+    for evaluation semantics. Action JSONB is category-discriminated.
+    """
+    __tablename__ = "rules"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    org_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    conditions: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    action: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    last_evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # P4 auto-dismiss dry-run gate fields
+    last_dry_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_dry_run_match_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dry_run_confirmation_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    dry_run_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        sa.Index("ix_rules_org_category", "org_id", "category"),
+        sa.Index("ix_rules_org_enabled", "org_id", "enabled"),
+    )
+
+
+class RuleViolation(Base):
+    """Open / resolved violation event for a rule against a subject."""
+    __tablename__ = "rule_violations"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    rule_id: Mapped[str] = mapped_column(String(64), ForeignKey("rules.id", ondelete="CASCADE"), nullable=False)
+    subject_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    subject_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    context: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    asset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=False, index=True,
+    )
+
+    __table_args__ = (
+        sa.Index("ix_rule_violations_rule_status", "rule_id", "status"),
+        sa.Index("ix_rule_violations_subject", "subject_type", "subject_id"),
+        sa.Index(
+            "uq_rule_violations_open_per_subject",
+            "rule_id", "subject_type", "subject_id",
+            unique=True,
+            postgresql_where=sa.text("status = 'open'"),
+        ),
+    )
+
+
+class RuleKillSwitch(Base):
+    """Per-org, per-category kill switch that halts auto-dismiss when set.
+
+    Row presence means the switch is active — delete the row to re-enable.
+    """
+    __tablename__ = "rule_kill_switches"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    org_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    killed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    killed_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        sa.UniqueConstraint("org_id", "category", name="uq_kill_switch_org_category"),
     )
 
 
@@ -817,3 +811,180 @@ class EpssScore(Base):
     percentile: Mapped[float] = mapped_column(Float, nullable=False)
     scored_date: Mapped[date] = mapped_column(Date(), nullable=False, index=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ── Session auth (unified frontend/backend) ──────────────────────────────────
+
+
+class UserSession(Base):
+    """Server-side session store enabling revocation, rotation, and per-session
+    enumeration in the admin UI — capabilities that stateless signed cookies
+    can't provide. Lookups verify `revoked_at IS NULL AND expires_at > now()`.
+    """
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(255),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revocation_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Eager-load the user in the same SELECT so the gate never issues N+1 queries
+    # when reading session.user.status or attaching session.user to request.state.
+    user: Mapped["User"] = relationship("User", lazy="joined")
+
+    __table_args__ = (
+        sa.Index(
+            "sessions_user_id_idx",
+            "user_id",
+            postgresql_where=sa.text("revoked_at IS NULL"),
+        ),
+        sa.Index(
+            "sessions_expires_at_idx",
+            "expires_at",
+            postgresql_where=sa.text("revoked_at IS NULL"),
+        ),
+    )
+
+
+class RateLimitBucket(Base):
+    """Sliding-window rate-limit counter, keyed by endpoint+actor.
+
+    Key format: "<endpoint>:<actor_kind>:<actor_id>"
+      e.g. "/auth/login:ip:198.51.100.42" or "/auth/login:user:<user-uuid>"
+
+    Server-side state so rate limits survive process restarts and span workers.
+    """
+
+    __tablename__ = "rate_limit_buckets"
+
+    key: Mapped[str] = mapped_column(String(512), primary_key=True)
+    window_start: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    request_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+
+class Report(Base):
+    """On-demand generated security report stored in MinIO."""
+    __tablename__ = "reports"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    org: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    report_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    format: Mapped[str] = mapped_column(String(10), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    filters: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    storage_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        sa.Index("ix_reports_org_created_at", "org", "created_at"),
+        sa.Index("ix_reports_expires_at", "expires_at"),
+    )
+
+
+# ── Saved views (per-user filter/sort/group state) ──────────────────────────
+
+
+class SavedView(Base):
+    """Per-user saved filter/sort/group/page state for a surface (e.g. findings).
+
+    `url_state` is the verbatim query-string param map serialized to JSONB.
+    Default uniqueness is enforced at the service layer.
+    """
+    __tablename__ = "saved_views"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    surface: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    url_state: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "surface", "name", name="uq_saved_views_user_surface_name"),
+        sa.Index("ix_saved_views_user_surface", "user_id", "surface"),
+    )
+
+
+class Asset(Base):
+    """Stable per-resource identity for repos and container images.
+
+    Three ingestion paths converge through `external_ref` — see src/assets/refs.py
+    for the canonical-string contract.
+    """
+    __tablename__ = "assets"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True,
+        server_default=sa.text("gen_random_uuid()"),
+    )
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_ref: Mapped[str] = mapped_column(String(512), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    asset_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    __table_args__ = (
+        sa.UniqueConstraint("external_ref", name="uq_assets_external_ref"),
+        sa.CheckConstraint("type IN ('repo','image')", name="ck_assets_type"),
+        sa.CheckConstraint(
+            "source IN ('source_connection','manual_upload','byo_import')",
+            name="ck_assets_source",
+        ),
+        sa.Index("ix_assets_source_ref", "source_ref"),
+        sa.Index("ix_assets_type", "type"),
+    )
+
+
+class TeamAsset(Base):
+    """RBAC grant: a team can read findings on this asset."""
+    __tablename__ = "team_assets"
+
+    team_id: Mapped[str] = mapped_column(
+        String(255), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True,
+    )
+    asset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True,
+    )
+    source: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+    team: Mapped[Team] = relationship(back_populates="assets")
+    asset: Mapped[Asset] = relationship()
+
+    __table_args__ = (
+        sa.Index("ix_team_assets_asset_id", "asset_id"),
+    )

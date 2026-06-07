@@ -83,10 +83,8 @@ def _clean_rules():
 
 @pytest.fixture
 def client() -> TestClient:
-    os.environ["JWT_SHARED_SECRET"] = _TEST_SECRET
-    from src.main import app
-    token = _make_jwt()
-    return TestClient(app, headers={"Authorization": f"Bearer {token}"}, raise_server_exceptions=True)
+    from conftest import make_authed_client
+    return make_authed_client(role="owner", user_id="notif-rules-owner", raise_server_exceptions=True)
 
 
 # ── Helper to create a destination for FK ────────────────────────────────────

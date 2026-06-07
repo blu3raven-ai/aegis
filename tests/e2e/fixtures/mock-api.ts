@@ -108,7 +108,7 @@ export async function mockGraphQL(page: Page, overrides?: Record<string, unknown
 
 /**
  * Intercept REST API calls used by dashboards.
- * Only intercepts data endpoints — never /api/login or /api/me.
+ * Only intercepts data endpoints — never /auth/login or /auth/me.
  */
 export async function mockSecretsREST(page: Page) {
   await page.route("**/secrets/api/runs?*", (route) =>
@@ -132,9 +132,9 @@ export async function mockSecretsREST(page: Page) {
   )
 }
 
-/** Mock the /api/me endpoint to return a test admin user. */
+/** Mock the /auth/me endpoint to return a test admin user. */
 export async function mockCurrentUser(page: Page, role: "owner" | "viewer" = "owner") {
-  await page.route("**/api/me", (route) =>
+  await page.route("**/auth/me", (route) =>
     route.fulfill({
       json: {
         user: {

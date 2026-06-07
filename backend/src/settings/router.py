@@ -22,7 +22,7 @@ from src.settings.schemas import (
 )
 from src.shared.config import (
     app_config_to_env,
-    get_token_from_source_connections,
+    get_token_for_org,
     read_app_config,
     sync_runtime_env_from_config,
     write_app_config,
@@ -85,8 +85,6 @@ def _validate_ghsa_api_key(api_key: str) -> tuple[bool, str]:
         return False, "Could not validate GitHub PAT. Please try again later."
 
 router = APIRouter(prefix="/settings/api", tags=["settings"])
-
-_SECRETS_DOCKER_IMAGE = "aegis/scanner-secrets:latest"
 
 _VALID_TOOLS = {"dependencies", "containerScanning", "codeScanning", "secrets", "iacSecurity"}
 _NUMERIC_KEYS = {"seconds", "page", "days", "concurrency"}
@@ -156,9 +154,6 @@ def _safe_config(config: dict[str, Any]) -> dict[str, Any]:
         dashboard["sessionSecret"] = ""
     tools = result.get("tools")
     if isinstance(tools, dict):
-        sast_tool = tools.get("codeScanning")
-        if isinstance(sast_tool, dict) and sast_tool.get("aiApiKey"):
-            sast_tool["aiApiKey"] = "[redacted]"
         secrets_tool = tools.get("secrets")
         if isinstance(secrets_tool, dict) and secrets_tool.get("aiApiKey"):
             secrets_tool["aiApiKey"] = "[redacted]"
@@ -313,15 +308,13 @@ def _runner_based_prerequisites(tool: str) -> ScannerPrerequisitesResponse:
 
     if result["status"] == "ready":
         return ScannerPrerequisitesResponse(
-            docker_image_present=True,
-            signature_valid=True,
+            runner_connected=True,
             scanner_status="ready",
             runner_name=result.get("runnerName", ""),
         )
 
     return ScannerPrerequisitesResponse(
-        docker_image_present=False,
-        signature_valid=False,
+        runner_connected=False,
         scanner_status="no_runner",
         error="No runner connected",
     )
@@ -423,34 +416,15 @@ async def save_tool_settings(request: Request, tool: str, body: ToolSettingsRequ
     # Validate scanner prerequisites before enabling
     if body.enabled:
         prereq = _runner_based_prerequisites(tool)
-        if not prereq.docker_image_present or not prereq.signature_valid:
+        if not prereq.runner_connected:
             raise _api_error(
-                prereq.error or "Scanner image is not available. Complete the scanner prerequisites before enabling.",
+                prereq.error or "No runner is connected. Connect a runner before enabling this scanner.",
                 400,
             )
 
     tools = config.setdefault("tools", {})
     tool_config = tools.setdefault(tool, {})
     tool_config["enabled"] = body.enabled
-
-    if tool == "codeScanning":
-        ai_enabled = str(body.settings.get("aiReviewEnabled") or "").strip().lower() == "true"
-        if ai_enabled:
-            from src.license.limits import check_feature
-            check_feature(request, "ai_review")
-            if not body.settings.get("aiBaseUrl", "").strip():
-                raise _api_error("AI Base URL is required when AI review is enabled.", 400)
-            if not body.settings.get("aiModelName", "").strip():
-                raise _api_error("AI Model Name is required when AI review is enabled.", 400)
-        submitted_ai_key = str(body.settings.get("aiApiKey") or "").strip()
-        existing_ai_key = str(tool_config.get("aiApiKey") or "").strip()
-        tool_config["aiReviewEnabled"] = ai_enabled
-        if submitted_ai_key == "[redacted]":
-            tool_config["aiApiKey"] = existing_ai_key
-        else:
-            tool_config["aiApiKey"] = submitted_ai_key
-        if ai_enabled and not tool_config["aiApiKey"]:
-            raise _api_error("AI API Key is required when AI review is enabled.", 400)
 
     if tool == "secrets":
         submitted_ai_key = str(body.settings.get("aiApiKey") or "").strip()
@@ -498,37 +472,27 @@ async def save_tool_settings(request: Request, tool: str, body: ToolSettingsRequ
             "autoRerunEnabled": "autoRerunEnabled",
             "rerunScheduleType": "rerunScheduleType",
             "rerunScheduleValue": "rerunScheduleValue",
-            "retentionDays": "retentionDays",
         },
         "containerScanning": {
             "scanConcurrency": "scanConcurrency",
             "autoRerunEnabled": "autoRerunEnabled",
             "rerunScheduleType": "rerunScheduleType",
             "rerunScheduleValue": "rerunScheduleValue",
-            "retentionDays": "retentionDays",
         },
         "codeScanning": {
             "scanConcurrency": "scanConcurrency",
-            "dockerImage": "dockerImage",
             "rulesets": "rulesets",
-            # aiReviewEnabled and aiApiKey are handled explicitly above (boolean coercion + redacted-key preservation)
-            "aiBaseUrl": "aiBaseUrl",
-            "aiModelName": "aiModelName",
-            "aiAutoClassifyOnScan": "aiAutoClassifyOnScan",
             "autoRerunEnabled": "autoRerunEnabled",
             "rerunScheduleType": "rerunScheduleType",
             "rerunScheduleValue": "rerunScheduleValue",
-            "retentionDays": "retentionDays",
         },
         "secrets": {
             "scanConcurrency": "scanConcurrency",
-            "dockerImage": "dockerImage",
             "scanDepth": "scanDepth",
             "scanHistoryWindow": "scanHistoryWindow",
             "autoRerunEnabled": "autoRerunEnabled",
             "rerunScheduleType": "rerunScheduleType",
             "rerunScheduleValue": "rerunScheduleValue",
-            "retentionDays": "retentionDays",
         },
         "iacSecurity": {
             "autoRerunEnabled": "autoRerunEnabled",
@@ -537,29 +501,14 @@ async def save_tool_settings(request: Request, tool: str, body: ToolSettingsRequ
         },
     }
     for ui_key, config_key in ui_to_config[tool].items():
-        if tool == "secrets" and ui_key == "dockerImage":
-            value = _SECRETS_DOCKER_IMAGE
-        else:
-            value = body.settings.get(ui_key, "").strip()
+        value = body.settings.get(ui_key, "").strip()
         tool_config[config_key] = value
-
-    # Coerce retentionDays string → int
-    if "retentionDays" in tool_config:
-        try:
-            days = int(tool_config["retentionDays"])
-            tool_config["retentionDays"] = max(0, min(90, days))
-        except (ValueError, TypeError):
-            tool_config["retentionDays"] = 0
 
     # Coerce rulesets string → list for Code Scanning
     if tool == "codeScanning" and "rulesets" in tool_config:
         rulesets_raw = tool_config["rulesets"]
         if isinstance(rulesets_raw, str):
             tool_config["rulesets"] = [r.strip() for r in rulesets_raw.split(",") if r.strip()]
-
-    # Coerce aiAutoClassifyOnScan string → bool for Code Scanning
-    if tool == "codeScanning" and "aiAutoClassifyOnScan" in tool_config:
-        tool_config["aiAutoClassifyOnScan"] = str(tool_config["aiAutoClassifyOnScan"]).lower() == "true"
 
     if tool == "secrets" and "scanHistoryWindow" in tool_config:
         if tool_config["scanHistoryWindow"] not in {"all", "30d", "90d", "180d", "365d"}:
@@ -624,7 +573,7 @@ def save_auth_security_settings(request: Request, body: AuthSecuritySettingsRequ
 @router.get("/orgs/{org}/rate-limit", response_model=RateLimitResponse)
 async def get_rate_limit(request: Request, org: str, pat: str | None = None) -> RateLimitResponse:
     require_permission(request, "manage_settings")
-    token = (pat or "").strip() or get_token_from_source_connections(org)
+    token = (pat or "").strip() or get_token_for_org(org)
     if not token:
         raise _api_error(f"No PAT saved for {org}. Enter a token first.", 404)
 

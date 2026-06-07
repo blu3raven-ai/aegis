@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import type { SbomDiffResponse } from "../../lib/client/sbom-diff-api.ts"
+import type { SbomDiffResponse } from "../../frontend/lib/client/sbom-diff-api.ts"
 
 // ---------------------------------------------------------------------------
 // SbomDiffView is a React component — we validate the data-layer logic that

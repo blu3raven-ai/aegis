@@ -4,12 +4,13 @@ Stdout progress markers MUST match the exact strings emitted by the bash
 originals so the runner's ManifestStreamer regex parser continues to work."""
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import subprocess
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
 from runner.scanners import _manifest
@@ -204,3 +205,68 @@ class ProgressEmitter:
         except Exception:  # noqa: BLE001
             # A failed progress emission must never abort the scan.
             logger.debug("on_progress callback raised; ignoring", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# Timeout constants (centralised from per-scanner modules)
+# ---------------------------------------------------------------------------
+
+TIMEOUT_CLONE: float = 300.0
+TIMEOUT_GIT_QUERY: float = 30.0
+TIMEOUT_GRYPE_DB_CHECK: float = 60.0
+TIMEOUT_GRYPE_DB_UPDATE: float = 600.0
+TIMEOUT_GRYPE_MATCH: float = 300.0
+TIMEOUT_SYFT_REPO: float = 600.0    # syft on git repo checkouts
+TIMEOUT_SYFT_IMAGE: float = 900.0   # syft on container images (larger)
+TIMEOUT_CDXGEN: float = 600.0
+TIMEOUT_TRUFFLEHOG: float = 900.0
+TIMEOUT_BETTERLEAKS: float = 900.0
+TIMEOUT_OPENGREP: float = 1800.0
+
+
+# ---------------------------------------------------------------------------
+# Exception hierarchy
+# ---------------------------------------------------------------------------
+
+class ScannerError(Exception):
+    """Base for all scanner-level errors."""
+
+
+class ScannerConfigError(ScannerError):
+    """Job config is invalid — unsupported scan mode/depth, missing required env vars, etc."""
+
+
+class ToolError(ScannerError):
+    """An external tool (syft, grype, trufflehog, opengrep) exited with an error."""
+
+
+# ---------------------------------------------------------------------------
+# JobEnv — typed env-var reader
+# ---------------------------------------------------------------------------
+
+class JobEnv:
+    """Reads env vars from job payload, falling back to os.environ."""
+
+    def __init__(self, job: dict[str, Any]) -> None:
+        self._vars: dict[str, str] = job.get("envVars") or {}
+
+    def get(self, key: str, default: str = "") -> str:
+        return self._vars.get(key) or os.environ.get(key) or default
+
+    def get_int(self, key: str, default: int) -> int:
+        raw = self.get(key)
+        try:
+            return int(raw) if raw else default
+        except ValueError:
+            return default
+
+
+# ---------------------------------------------------------------------------
+# Base config dataclass
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass(frozen=True)
+class BaseScanConfig:
+    org_label: str
+    run_id: str
+    concurrency: int

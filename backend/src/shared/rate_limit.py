@@ -28,3 +28,8 @@ def rate_limit_scan(request: Request, tool: str) -> None:
     """Rate limit scan initiation: 5 scans per tool per 5 minutes."""
     ip = request.client.host if request.client else "unknown"
     rate_limit(f"scan:{tool}:{ip}", 5, 300)
+
+
+def rate_limit_by_runner(runner_id: str, max_requests: int, window_seconds: int) -> None:
+    """Rate limit a runner-keyed endpoint. Raises 429 when exceeded."""
+    rate_limit(f"runner:{runner_id}", max_requests, window_seconds)

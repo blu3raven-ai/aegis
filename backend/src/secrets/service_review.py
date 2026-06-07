@@ -108,9 +108,9 @@ def apply_review_updates(
         status = update.get("status", "new")
         if status in ("false_positive", "action_taken"):
             reason = "Alert is inaccurate" if status == "false_positive" else "Fix started"
-            dismiss_finding("secrets", org, identity_key, reason, user_id or "unknown")
+            dismiss_finding("secrets", identity_key, reason, user_id or "unknown", org=org)
         elif status in ("new", "confirmed"):
-            reopen_finding("secrets", org, identity_key, user_id or "unknown")
+            reopen_finding("secrets", identity_key, user_id or "unknown", org=org)
         set_secret_review_status(org, identity_key, status)
 
     # Return fresh snapshot with resolution timestamps applied

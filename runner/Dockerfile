@@ -13,6 +13,9 @@ ARG BETTERLEAKS_VERSION=1.2.0
 ARG OPENGREP_VERSION=1.20.0
 ARG SEMGREP_RULES_SHA=311ca4e9ba59d700624539bf658e3d29b134ee77
 ARG NODE_MAJOR=22
+ARG JOERN_VERSION=4.0.553
+ARG TEMURIN_VERSION=21.0.11+10
+ARG TEMURIN_VERSION_FILE=21.0.11_10
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -69,6 +72,31 @@ RUN ARCH=$(uname -m) && \
         -o /usr/local/bin/opengrep && \
     chmod +x /usr/local/bin/opengrep
 
+# Adoptium Temurin 21 JDK (arch-aware) — required by joern-cli (JVM-based SAST)
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then JDK_ARCH="aarch64"; else JDK_ARCH="x64"; fi && \
+    TEMURIN_TAG="jdk-${TEMURIN_VERSION}" && \
+    TEMURIN_TAG_ENCODED=$(echo "${TEMURIN_TAG}" | sed 's/+/%2B/g') && \
+    JDK_TARBALL="OpenJDK21U-jdk_${JDK_ARCH}_linux_hotspot_${TEMURIN_VERSION_FILE}.tar.gz" && \
+    curl -fsSL "https://github.com/adoptium/temurin21-binaries/releases/download/${TEMURIN_TAG_ENCODED}/${JDK_TARBALL}" \
+        -o /tmp/jdk.tar.gz && \
+    curl -fsSL "https://github.com/adoptium/temurin21-binaries/releases/download/${TEMURIN_TAG_ENCODED}/${JDK_TARBALL}.sha256.txt" \
+        -o /tmp/jdk.tar.gz.sha256 && \
+    echo "$(awk '{print $1}' /tmp/jdk.tar.gz.sha256)  /tmp/jdk.tar.gz" | sha256sum -c - && \
+    mkdir -p /opt/java/openjdk && \
+    tar -xzf /tmp/jdk.tar.gz -C /opt/java/openjdk --strip-components=1 && \
+    rm /tmp/jdk.tar.gz /tmp/jdk.tar.gz.sha256
+
+# joern-cli — arch-neutral JVM zip, sha512 verified
+RUN curl -fsSL "https://github.com/joernio/joern/releases/download/v${JOERN_VERSION}/joern-cli.zip" \
+        -o /tmp/joern.zip && \
+    curl -fsSL "https://github.com/joernio/joern/releases/download/v${JOERN_VERSION}/joern-cli.zip.sha512" \
+        -o /tmp/joern.zip.sha512 && \
+    echo "$(awk '{print $1}' /tmp/joern.zip.sha512)  /tmp/joern.zip" | sha512sum -c - && \
+    mkdir -p /opt/joern && \
+    unzip -q /tmp/joern.zip -d /opt/joern && \
+    rm /tmp/joern.zip /tmp/joern.zip.sha512
+
 # semgrep-rules — pinned SHA, security subset only, .git stripped
 RUN git clone --no-checkout --filter=blob:none \
         https://github.com/semgrep/semgrep-rules.git /opt/semgrep-rules && \
@@ -92,10 +120,15 @@ RUN git clone --no-checkout --filter=blob:none \
           /opt/semgrep-rules/Pipfile \
           /opt/semgrep-rules/Pipfile.lock
 
-# Python deps (installed into a self-contained prefix for clean copy)
+# Python deps installed from the lockfile so the runtime image pins the same
+# transitive graph that local `uv sync` resolves to.
+RUN pip install --no-cache-dir uv==0.9.21
+
 WORKDIR /build
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv export --frozen --no-dev --no-emit-project --output-file=/tmp/requirements.txt && \
+    uv pip install --system --prefix=/install -r /tmp/requirements.txt
 
 # ─── Model exporter stage (quantizes secrets-sentinel to ONNX INT8) ──────────
 # Heavy ML libs (torch CPU, optimum, exporters) are isolated to this stage and
@@ -121,7 +154,9 @@ FROM python:3.11-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     SEMGREP_RULES_PATH=/opt/semgrep-rules \
-    RUNNER_WORKSPACE=/workspace
+    RUNNER_WORKSPACE=/workspace \
+    JAVA_HOME=/opt/java/openjdk \
+    PATH=/opt/java/openjdk/bin:/opt/joern/joern-cli:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Minimal runtime deps:
 #   git        — repository clone
@@ -145,6 +180,10 @@ COPY --from=builder \
 
 # Semgrep rules bundle
 COPY --from=builder /opt/semgrep-rules /opt/semgrep-rules
+
+# OpenJDK 21 (Adoptium Temurin) + joern-cli — JVM-based SAST engine
+COPY --from=builder /opt/java/openjdk /opt/java/openjdk
+COPY --from=builder /opt/joern /opt/joern
 
 # Node.js runtime for cdxgen
 COPY --from=builder /usr/bin/node /usr/bin/node

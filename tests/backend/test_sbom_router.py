@@ -1,20 +1,19 @@
 """Tests for SBOM export REST endpoints — Phase 18.
 
-Uses a minimal FastAPI app with only the sbom export router so there's no
-lifespan overhead, no auth middleware, and no scheduler.  SbomCache and
-ContainerSbomCache are exercised against the real testcontainer Postgres +
-MinIO instances spun up by conftest.py.
+Uses a minimal FastAPI app with only the sbom export router.  SBOMs are seeded
+directly into MinIO at the runner-owned paths and served back through the
+rewired router.  Exercises a real testcontainer Postgres + MinIO round-trip.
 """
 from __future__ import annotations
+
+import json
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
 
-from src.dependencies.sbom_cache import SbomCache, ContainerSbomCache, _CACHE_TYPE, _CACHE_TYPE_CONTAINER
-from src.db.helpers import run_db
-from src.db.models import CacheEntry
+from src.shared.object_store import upload_bytes, get_s3_client
+from src.containers.sbom_store import upsert_sbom as container_upsert_sbom
 from src.sbom.router import router as sbom_export_router
 
 
@@ -39,36 +38,54 @@ SAMPLE_SBOM: dict = {
     "dependencies": [],
 }
 
-REPO_ID = "example-org/payments-api"
-# TestClient sends path segments literally; the :path converter captures them.
+ORG = "example-org"
+REPO = "payments-api"
+REPO_ID = f"{ORG}/{REPO}"
 REPO_URL = f"/api/v1/sboms/repo/{REPO_ID}"
 HISTORY_URL = f"/api/v1/sboms/repo/{REPO_ID}/history"
 
-HASH_V1 = "aabbcc" * 10 + "aa"  # 62-char placeholder
-HASH_V2 = "ddeeff" * 10 + "dd"
-TOOL_VER = "syft-1.2.0"
+RUN_ID_V1 = "auto-1748700000000"
+RUN_ID_V2 = "auto-1748800000000"  # higher → newer
 
 IMAGE_DIGEST = "sha256:deadbeef" + "0" * 55
+IMAGE_REF = "registry.example.com/myapp:latest"
+
+
+def _dep_key(org: str, run_id: str, repo: str) -> str:
+    """Runner-owned MinIO key for a dependency SBOM."""
+    return f"dependencies/{org}/{run_id}/{repo}/sbom.cdx.json"
+
+
+def _upload_dep_sbom(org: str, run_id: str, repo: str, sbom: dict) -> str:
+    """Upload a dependency SBOM at the runner-owned path; returns the key."""
+    key = _dep_key(org, run_id, repo)
+    upload_bytes(key, json.dumps(sbom).encode(), content_type="application/json")
+    return key
 
 
 @pytest.fixture(autouse=True)
-def _clean_cache_entries():
-    """Remove test rows before each test."""
-    async def _del(session):
+def _clean_minio():
+    """Delete test objects and Sbom rows before each test for isolation."""
+    import os
+    from src.db.helpers import run_db
+    from src.db.models import Sbom
+    from sqlalchemy import delete
+
+    # Remove Sbom rows for test image digest so container lookups start clean
+    async def _del_sboms(session):
         await session.execute(
-            delete(CacheEntry).where(
-                CacheEntry.cache_type.in_([_CACHE_TYPE, _CACHE_TYPE_CONTAINER]),
-                CacheEntry.cache_key.startswith("example-org"),
-            )
-        )
-        await session.execute(
-            delete(CacheEntry).where(
-                CacheEntry.cache_type == _CACHE_TYPE_CONTAINER,
-                CacheEntry.cache_key.startswith("sha256:deadbeef"),
-            )
+            delete(Sbom).where(Sbom.commit_sha == IMAGE_DIGEST)
         )
 
-    run_db(_del)
+    run_db(_del_sboms)
+
+    s3 = get_s3_client()
+    bucket = os.environ.get("S3_BUCKET", "scans")
+    for run_id in (RUN_ID_V1, RUN_ID_V2):
+        try:
+            s3.delete_object(Bucket=bucket, Key=_dep_key(ORG, run_id, REPO))
+        except Exception:
+            pass
     yield
 
 
@@ -87,13 +104,9 @@ def test_export_repo_sbom_not_found(client: TestClient):
 
 
 def test_export_repo_sbom_cyclonedx_json(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
-    resp = client.get(
-        REPO_URL,
-        params={"format": "cyclonedx-json"},
-    )
+    resp = client.get(REPO_URL, params={"format": "cyclonedx-json"})
     assert resp.status_code == 200
     assert "application/vnd.cyclonedx+json" in resp.headers["content-type"]
     data = resp.json()
@@ -102,49 +115,35 @@ def test_export_repo_sbom_cyclonedx_json(client: TestClient):
 
 
 def test_export_repo_sbom_spdx_json(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
-    resp = client.get(
-        REPO_URL,
-        params={"format": "spdx-json"},
-    )
+    resp = client.get(REPO_URL, params={"format": "spdx-json"})
     assert resp.status_code == 200
     assert "spdx" in resp.headers["content-type"]
-    import json
     data = json.loads(resp.content)
     assert data["spdxVersion"] == "SPDX-2.3"
 
 
 def test_export_repo_sbom_cyclonedx_xml(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
-    resp = client.get(
-        REPO_URL,
-        params={"format": "cyclonedx-xml"},
-    )
+    resp = client.get(REPO_URL, params={"format": "cyclonedx-xml"})
     assert resp.status_code == 200
     assert "xml" in resp.headers["content-type"]
     assert b"axios" in resp.content
 
 
 def test_export_repo_sbom_spdx_tag_value(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
-    resp = client.get(
-        REPO_URL,
-        params={"format": "spdx-tag-value"},
-    )
+    resp = client.get(REPO_URL, params={"format": "spdx-tag-value"})
     assert resp.status_code == 200
     assert "text/plain" in resp.headers["content-type"]
     assert b"SPDXVersion" in resp.content
 
 
 def test_export_repo_sbom_default_format_is_cyclonedx_json(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
     resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}")
     assert resp.status_code == 200
@@ -153,19 +152,13 @@ def test_export_repo_sbom_default_format_is_cyclonedx_json(client: TestClient):
 
 
 def test_export_repo_sbom_unknown_format_returns_400(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
-    resp = client.get(
-        f"/api/v1/sboms/repo/{REPO_ID}",
-        params={"format": "csv"},
-    )
+    resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}", params={"format": "csv"})
     assert resp.status_code == 400
 
 
 def test_export_repo_sbom_returns_latest_when_multiple(client: TestClient):
-    import time
-    cache = SbomCache()
     sbom_v1 = dict(SAMPLE_SBOM)
     sbom_v1["metadata"] = dict(SAMPLE_SBOM["metadata"])
     sbom_v1["metadata"]["timestamp"] = "2025-01-01T00:00:00Z"
@@ -174,17 +167,18 @@ def test_export_repo_sbom_returns_latest_when_multiple(client: TestClient):
     sbom_v2["metadata"] = dict(SAMPLE_SBOM["metadata"])
     sbom_v2["metadata"]["timestamp"] = "2025-06-01T00:00:00Z"
 
-    cache.put(REPO_ID, HASH_V1, sbom_v1, TOOL_VER)
-    time.sleep(0.05)  # ensure distinct created_at
-    cache.put(REPO_ID, HASH_V2, sbom_v2, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, sbom_v1)
+    _upload_dep_sbom(ORG, RUN_ID_V2, REPO, sbom_v2)
 
     resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}")
     assert resp.status_code == 200
+    # RUN_ID_V2 sorts higher → should return the v2 SBOM
+    data = resp.json()
+    assert data["metadata"]["timestamp"] == "2025-06-01T00:00:00Z"
 
 
 def test_export_repo_sbom_content_disposition_header(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
     resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}")
     assert "content-disposition" in resp.headers
@@ -194,13 +188,39 @@ def test_export_repo_sbom_content_disposition_header(client: TestClient):
 # ── /image/{image_digest} ─────────────────────────────────────────────────────
 
 def test_export_image_sbom_not_found(client: TestClient):
-    resp = client.get(f"/api/v1/sboms/image/sha256:nonexistent")
+    resp = client.get("/api/v1/sboms/image/sha256:nonexistent")
     assert resp.status_code == 404
+    # No DB row for this digest
+    assert "No SBOM found" in resp.json()["detail"]
+
+
+def test_export_image_sbom_blob_missing(client: TestClient):
+    """Test when DB row exists but MinIO blob is missing."""
+    from src.db.helpers import run_db
+    from src.db.models import Sbom
+
+    # Create a DB row pointing to a non-existent MinIO key
+    missing_s3_key = "container_scanning/example-org/auto-1748700000000/app/sbom.cdx.json"
+
+    async def _insert_sbom(session):
+        session.add(Sbom(
+            org="example-org",
+            repo=IMAGE_REF,
+            commit_sha=IMAGE_DIGEST,
+            s3_key=missing_s3_key,
+            run_id=RUN_ID_V1,
+        ))
+
+    run_db(_insert_sbom)
+
+    resp = client.get(f"/api/v1/sboms/image/{IMAGE_DIGEST}")
+    assert resp.status_code == 404
+    # DB row exists but blob is missing
+    assert "SBOM blob not found" in resp.json()["detail"]
 
 
 def test_export_image_sbom_cyclonedx_json(client: TestClient):
-    container_cache = ContainerSbomCache()
-    container_cache.put_by_digest(IMAGE_DIGEST, SAMPLE_SBOM, TOOL_VER)
+    container_upsert_sbom(ORG, IMAGE_REF, IMAGE_DIGEST, SAMPLE_SBOM, RUN_ID_V1)
 
     resp = client.get(
         f"/api/v1/sboms/image/{IMAGE_DIGEST}",
@@ -212,15 +232,13 @@ def test_export_image_sbom_cyclonedx_json(client: TestClient):
 
 
 def test_export_image_sbom_spdx_json(client: TestClient):
-    container_cache = ContainerSbomCache()
-    container_cache.put_by_digest(IMAGE_DIGEST, SAMPLE_SBOM, TOOL_VER)
+    container_upsert_sbom(ORG, IMAGE_REF, IMAGE_DIGEST, SAMPLE_SBOM, RUN_ID_V1)
 
     resp = client.get(
         f"/api/v1/sboms/image/{IMAGE_DIGEST}",
         params={"format": "spdx-json"},
     )
     assert resp.status_code == 200
-    import json
     data = json.loads(resp.content)
     assert data["spdxVersion"] == "SPDX-2.3"
 
@@ -234,38 +252,38 @@ def test_history_empty_when_no_entries(client: TestClient):
 
 
 def test_history_returns_entries(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
     resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}/history")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 1
-    assert data[0]["manifest_set_hash"] == HASH_V1
-    assert data[0]["blob_pointer"] is not None
+    assert data[0]["run_id"] == RUN_ID_V1
+    assert data[0]["key"] == _dep_key(ORG, RUN_ID_V1, REPO)
     assert "created_at" in data[0]
+    # Regression guard: old field names must not appear
+    assert "manifest_set_hash" not in data[0]
+    assert "blob_pointer" not in data[0]
+    assert "content_hash" not in data[0]
+    assert "tool_version" not in data[0]
 
 
 def test_history_multiple_versions(client: TestClient):
-    import time
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
-    time.sleep(0.05)
-    cache.put(REPO_ID, HASH_V2, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
+    _upload_dep_sbom(ORG, RUN_ID_V2, REPO, SAMPLE_SBOM)
 
     resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}/history")
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 2
-    # Most recent first
-    assert data[0]["manifest_set_hash"] == HASH_V2
-    assert data[1]["manifest_set_hash"] == HASH_V1
+    # Most recent run_id first (lex-sort descending)
+    assert data[0]["run_id"] == RUN_ID_V2
+    assert data[1]["run_id"] == RUN_ID_V1
 
 
 def test_history_respects_limit(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
-    cache.put(REPO_ID, HASH_V2, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
+    _upload_dep_sbom(ORG, RUN_ID_V2, REPO, SAMPLE_SBOM)
 
     resp = client.get(
         f"/api/v1/sboms/repo/{REPO_ID}/history",
@@ -284,11 +302,10 @@ def test_history_limit_out_of_range_returns_422(client: TestClient):
 
 
 def test_history_entry_has_all_expected_fields(client: TestClient):
-    cache = SbomCache()
-    cache.put(REPO_ID, HASH_V1, SAMPLE_SBOM, TOOL_VER)
+    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
 
     resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}/history")
     data = resp.json()
     entry = data[0]
-    for field in ("manifest_set_hash", "created_at", "blob_pointer", "content_hash", "tool_version"):
+    for field in ("run_id", "created_at", "key"):
         assert field in entry, f"Field '{field}' missing from history entry"

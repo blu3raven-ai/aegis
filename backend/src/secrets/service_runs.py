@@ -10,7 +10,7 @@ from src.secrets.scanner import (
     reconcile_expected_repos,
 )
 from src.shared.config import (
-    get_github_token_for_org,
+    get_token_for_org,
     get_secret_scanner_config,
     org_has_source_connections,
 )
@@ -120,7 +120,7 @@ def start_secret_runs(
         [str, str, str, InMemoryScanRuntime, dict[str, str], str | None],
         None,
     ] | None = None,
-    get_token_for_org: Callable[[str], str | None] = get_github_token_for_org,
+    get_token_for_org: Callable[[str], str | None] = get_token_for_org,
     get_scanner_config: Callable[[], dict[str, str]] = get_secret_scanner_config,
 ) -> tuple[dict[str, Any], int]:
     parsed_orgs = parse_org_values(orgs)

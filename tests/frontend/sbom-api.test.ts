@@ -21,7 +21,7 @@ function makeFetchMock(body: unknown, status = 200, isText = false) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/sbom-api.ts")
+  return import("../../frontend/lib/client/sbom-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +88,10 @@ test("fetchSbomHistory throws on non-OK response", async () => {
   const { fetchSbomHistory } = await loadModule()
   await assert.rejects(
     () => fetchSbomHistory("unknown-repo"),
-    /sbom-api: 404/,
+    (err: any) => {
+      assert.equal(err.status, 404)
+      return true
+    },
   )
 })
 
@@ -135,7 +138,10 @@ test("fetchSbom throws on non-OK response", async () => {
   const { fetchSbom } = await loadModule()
   await assert.rejects(
     () => fetchSbom({ repoId: "payments-api" }),
-    /sbom-api: 500/,
+    (err: any) => {
+      assert.equal(err.status, 500)
+      return true
+    },
   )
 })
 

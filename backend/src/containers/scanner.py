@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Literal
 
+from src.containers.image_metadata import extract_image_metadata
 from src.containers.lifecycle import container_scanning_hooks
 from src.containers.sbom_store import upsert_sbom, list_stored_sboms
 from src.shared.config import get_container_scanner_config, get_scan_sources_for_org
@@ -22,47 +23,12 @@ from src.storage import (
 
 logger = logging.getLogger(__name__)
 
-CONTAINER_SCANNER_IMAGE = "aegis/scanner-container:latest"
 CONTAINER_SCANNING_DATA_DIR = DATA_DIR / "container_scanning"
 MAX_SCAN_DURATION_SECONDS = 12 * 60 * 60
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
-
-
-def _try_incremental_container_scan(image_digest: str, image_pull_ref: str) -> list[dict[str, Any]] | None:
-    """Return findings if an incremental container scan succeeded; None to fall through.
-
-    Guarded by AEGIS_USE_INCREMENTAL_CONTAINER=true (default: false) so existing
-    full-scan behaviour is unchanged when the flag is absent.
-
-    Any exception — including NotImplementedError from adapter stubs — is
-    caught; the caller gets None and the full scan runs instead.
-    """
-    if os.getenv("AEGIS_USE_INCREMENTAL_CONTAINER", "false").lower() != "true":
-        return None
-    try:
-        from src.containers.baseline_delta import ContainerBaselineDelta
-        from src.dependencies.sbom_cache import ContainerSbomCache
-        from src.containers.grype_adapter import run_grype
-        from src.containers.syft_adapter import run_syft
-
-        engine = ContainerBaselineDelta(
-            sbom_cache=ContainerSbomCache(),
-            syft_runner=run_syft,
-            grype_runner=run_grype,
-        )
-        result = engine.scan(image_digest=image_digest, image_pull_ref=image_pull_ref)
-        logger.info(
-            "incremental container scan: cached=%s findings=%d",
-            result.cached,
-            len(result.findings),
-        )
-        return result.findings
-    except Exception:
-        logger.exception("incremental container scan failed; falling through to full scan")
-        return None
 
 
 def _resolve_registry_username(registry: str, token: str) -> str:
@@ -112,44 +78,6 @@ def _get_previous_digests(org: str) -> dict[str, str]:
         return {}
 
 
-def _finalize_incremental_container_scan(
-    org: str,
-    run_id: str,
-    findings: list[dict[str, Any]],
-) -> None:
-    """Persist incremental findings and mark the run complete.
-
-    Called inline when every image in a scan was served from the SBOM cache,
-    bypassing the scanner runner entirely.
-    """
-    if findings:
-        ctx = ScanContext(tool="container_scanning", org=org, run_id=run_id)
-        new_findings = _apply_lifecycle(container_scanning_hooks, ctx, findings)
-
-        if new_findings:
-            try:
-                from src.notifications.emitter import notify_new_critical_findings
-                notify_new_critical_findings("container_scanning", org, new_findings)
-            except Exception:
-                logger.warning("Failed to emit new finding notifications", exc_info=True)
-
-            from src.shared.event_emit_helpers import emit_finding_created
-            for finding in new_findings:
-                emit_finding_created(
-                    org_id=org,
-                    finding=finding,
-                    scanner_type="containers",
-                    source_component="containers.scanner",
-                )
-
-    update_container_scanning_run(org, run_id, {
-        "status": "completed",
-        "finishedAt": now_iso(),
-        "findingsCount": len(findings),
-        "progress": {"percent": 100, "stage": "completed"},
-    })
-
-
 def _execute_via_runner(
     org: str,
     run_id: str,
@@ -185,19 +113,10 @@ def _execute_via_runner(
         if argus_api_key:
             env_vars["ARGUS_API_KEY"] = argus_api_key
 
-    # advisories_only needs S3 read access to download stored SBOMs
-    if scan_mode == "advisories_only":
-        env_vars["S3_ENDPOINT"] = os.getenv("S3_ENDPOINT", "")
-        env_vars["S3_ACCESS_KEY"] = os.getenv("S3_ACCESS_KEY", "")
-        env_vars["S3_SECRET_KEY"] = os.getenv("S3_SECRET_KEY", "")
-        env_vars["S3_BUCKET"] = "sboms"
-
-    image = config.get("dockerImage") or config.get("image") or CONTAINER_SCANNER_IMAGE
     job = create_job(
         job_type="container_scanning",
         org=org,
         run_id=run_id,
-        docker_image=image,
         env_vars=env_vars,
     )
     job_id = job["id"]
@@ -226,7 +145,7 @@ def _execute_via_runner(
 def _download_scan_output_from_minio(
     org: str, run_id: str
 ) -> dict[str, dict[str, Any]]:
-    """Download SBOMs from object store. Returns {image_name: {sbom, digest}}."""
+    """Download SBOMs from object store. Returns {image_name: {sbom, syft_json, digest}}."""
     from src.shared.object_store import list_objects, download_json, download_bytes
 
     prefix = f"container_scanning/{org}/{run_id}/"
@@ -247,7 +166,7 @@ def _download_scan_output_from_minio(
         filename = parts[1]
 
         if image_safe_name not in image_sboms:
-            image_sboms[image_safe_name] = {"sbom": None, "digest": None}
+            image_sboms[image_safe_name] = {"sbom": None, "syft_json": None, "digest": None}
 
         if filename == "sbom.cdx.json":
             sbom = download_json(key)
@@ -255,6 +174,11 @@ def _download_scan_output_from_minio(
                 image_sboms[image_safe_name]["sbom"] = sbom
             else:
                 logger.warning("Failed to read SBOM from %s", key)
+
+        elif filename == "sbom.syft.json":
+            syft_json = download_json(key)
+            if syft_json:
+                image_sboms[image_safe_name]["syft_json"] = syft_json
 
         elif filename == "digest.txt":
             blob = download_bytes(key)
@@ -336,7 +260,43 @@ def _fallback_ingest_per_image(org: str, run_id: str, prefix: str) -> list[dict[
     return findings
 
 
-def ingest_container_from_minio(org: str, run_id: str) -> int:
+def _apply_image_enrichment(
+    findings: list[dict[str, Any]],
+    image_sboms: dict[str, dict[str, Any]],
+) -> None:
+    """Mutate findings in-place to carry layerCount / sizeBytes / baseOs.
+
+    Looks up by image digest; findings whose digest has no matching scan output
+    are left untouched (the API serializer treats absent keys as null).
+    """
+    by_digest: dict[str, dict[str, Any]] = {}
+    for data in image_sboms.values():
+        digest = data.get("digest")
+        if not digest:
+            continue
+        enrichment = extract_image_metadata(
+            data.get("syft_json"),
+            data.get("sbom"),
+        )
+        if any(v is not None for v in enrichment.values()):
+            by_digest[digest] = enrichment
+
+    if not by_digest:
+        return
+
+    for finding in findings:
+        digest = finding.get("imageDigest") or finding.get("commit_sha")
+        if not digest:
+            continue
+        enrichment = by_digest.get(digest)
+        if not enrichment:
+            continue
+        for key, value in enrichment.items():
+            if value is not None:
+                finding[key] = value
+
+
+def ingest_container_from_minio(org: str, run_id: str, source_type: str | None = None) -> int:
     """Ingest scan results from object store after runner completion. Returns finding count."""
     from src.shared.object_store import find_findings_jsonl
 
@@ -369,6 +329,8 @@ def ingest_container_from_minio(org: str, run_id: str) -> int:
         digest = data.get("digest")
         upsert_sbom(org, image_ref, digest, sbom, run_id)
 
+    _apply_image_enrichment(findings, image_sboms)
+
     nvd_enabled = config.get("nvdEnabled") in (True, "true")
     nvd_api_key = config.get("nvdApiKey", "")
     ghsa_enabled = config.get("ghsaEnabled") in (True, "true")
@@ -388,6 +350,7 @@ def ingest_container_from_minio(org: str, run_id: str) -> int:
             tool="container_scanning",
             org=org,
             run_id=run_id,
+            source_type=source_type,
         )
         new_findings = _apply_lifecycle(container_scanning_hooks, ctx, findings)
 
@@ -436,6 +399,7 @@ def execute_container_scan_once(
     token: str | None,
     run_id: str,
     *,
+    source_type: str | None = None,
     scanner_config: dict[str, Any] | None = None,
     mode: str = "full",
     scan_mode: str = "full",
@@ -523,28 +487,6 @@ def _run_full_or_sbom(
             "scannedRepos": 0,
         },
     })
-
-    # Attempt incremental path per image — each image has its own digest-based
-    # cache key. If ALL images hit the cache, the runner is skipped entirely.
-    # Any image without a known digest falls through to the runner below.
-    if scan_mode == "full":
-        incremental_hits: list[dict[str, Any]] = []
-        skipped_images: list[str] = []
-        for img in all_images:
-            digest = prev_digests.get(img, "")
-            if digest:
-                hit = _try_incremental_container_scan(
-                    image_digest=digest,
-                    image_pull_ref=img,
-                )
-                if hit is not None:
-                    incremental_hits.extend(hit)
-                    skipped_images.append(img)
-
-        if skipped_images and len(skipped_images) == len(all_images):
-            # Every image was served from cache — finalize without the runner
-            _finalize_incremental_container_scan(org, run_id, incremental_hits)
-            return
 
     result = _execute_via_runner(org, run_id, config, docker_images, scan_mode, registry_auths=registry_auths, prev_digests=prev_digests)
     if not result or result.get("status") in ("failed", "cancelled"):

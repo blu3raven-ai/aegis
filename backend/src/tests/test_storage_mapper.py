@@ -22,6 +22,11 @@ def _make_finding(detail: dict) -> MagicMock:
     f.updated_at = datetime(2024, 1, 1, tzinfo=timezone.utc)
     f.repo = "acme-org/some-image"
     f.detail = detail
+    # hydrate_detail() short-circuits when _hydrated_detail is set; default
+    # MagicMock auto-creates it as a child mock, which breaks the lean-only
+    # code path the mapper exercises. Force the cache miss + no-blob branch.
+    f._hydrated_detail = None
+    f.detail_blob_key = None
     return f
 
 

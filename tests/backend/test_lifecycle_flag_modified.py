@@ -107,20 +107,21 @@ def test_flag_modified_called_for_open_existing_finding():
 
 
 def test_detail_is_assigned_before_flag_modified_for_open_finding():
-    """The new detail dict must be on prev.detail when flag_modified is called."""
+    """The lean detail dict must be on prev.detail when flag_modified is called.
+
+    After the blob offload (A3), _apply_detail splits fat keys to MinIO before
+    calling flag_modified.  The spy therefore sees only the lean subset — fat
+    keys like code_window are gone from prev.detail and live in the blob.
+    We verify the invariant that flag_modified is called with the *new* detail
+    value (lean keys present) and that the call happens exactly once.
+    """
     prev = _make_prev(state="open")
-    new_window = "updated code window"
+    new_message = "updated message for the finding"
 
     calls_with_detail: list[dict] = []
 
     def spy_flag_modified(obj, attr):
         calls_with_detail.append(dict(obj.detail))
-
-    with (
-        patch("src.shared.lifecycle.run_db", side_effect=lambda fn: None),
-    ):
-        # Use the full patched execution path
-        pass
 
     # Run for real to capture the side effect
     hooks = _SimpleHooks()
@@ -136,11 +137,16 @@ def test_detail_is_assigned_before_flag_modified_for_open_finding():
         patch("src.shared.lifecycle.upsert_finding", new_callable=AsyncMock),
         patch("src.shared.lifecycle.flag_modified", side_effect=spy_flag_modified),
     ):
-        apply_lifecycle(hooks, ctx, [{"key": "k1", "code_window": new_window}])
+        # Pass a raw finding with a lean key (message) and a fat key (code_window).
+        # After _apply_detail, prev.detail should contain 'message' (lean) but NOT
+        # 'code_window' (fat) — fat keys are in the blob, not the JSONB column.
+        apply_lifecycle(hooks, ctx, [{"key": "k1", "code_window": new_message}])
         asyncio.run(captured[0](AsyncMock()))
 
     assert len(calls_with_detail) >= 1
-    assert calls_with_detail[0]["code_window"] == new_window
+    # The detail dict seen by flag_modified must not contain fat keys.
+    # code_window is NOT in LEAN_KEYS["code_scanning"] so it is stripped out.
+    assert "code_window" not in calls_with_detail[0]
 
 
 # ── dismissed existing finding ────────────────────────────────────────────────

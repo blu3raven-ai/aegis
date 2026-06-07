@@ -51,10 +51,33 @@ class EventBus:
         self._next_id = 0
         self._event_counter = 0
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._listeners: dict[int, Any] = {}
+        self._listener_counter = 0
 
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         """Store the main event loop for sync->async bridging."""
         self._loop = loop
+
+    def register_listener(self, callback: Any) -> int:
+        """Register a synchronous callback to receive all published events.
+
+        Returns a token (int) that can be passed to unregister_listener() to stop
+        receiving events. The callback will be called with each Event object,
+        synchronously during publish().
+
+        If the callback raises an exception, it is logged and does not affect
+        other listeners or the publish() call.
+        """
+        with self._lock:
+            token = self._listener_counter
+            self._listener_counter += 1
+            self._listeners[token] = callback
+            return token
+
+    def unregister_listener(self, token: int) -> None:
+        """Stop receiving events for a registered listener token."""
+        with self._lock:
+            self._listeners.pop(token, None)
 
     def _count_user_connections(self, user_id: str) -> int:
         return sum(1 for s in self._subscribers.values() if s.user_id == user_id)
@@ -138,6 +161,15 @@ class EventBus:
             for sub_id in dead:
                 self._subscribers.pop(sub_id, None)
                 logger.debug("Removed stale/dead subscriber %d", sub_id)
+
+            # Fan out to synchronous listeners
+            listeners = list(self._listeners.values())
+
+        for cb in listeners:
+            try:
+                cb(event)
+            except Exception:
+                logger.exception("EventBus listener raised — continuing")
 
     def publish_sync(self, event: Event) -> None:
         """Publish from a synchronous (non-async) thread context."""

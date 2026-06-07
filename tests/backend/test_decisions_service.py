@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.db.models import Finding
+from src.shared.finding_queryable_fields import extract_queryable_fields
 from src.decisions.service import (
     DEFAULT_BLOCK_ON,
     DecisionPolicy,
@@ -48,6 +49,12 @@ def _make_finding(
     f.updated_at = base
     f.first_seen_at = base
     f.last_seen_at = base
+    qf = extract_queryable_fields(f.detail or {})
+    f.cve_id = qf["cve_id"]
+    f.file_path = qf["file_path"]
+    f.title = qf["title"]
+    f.rule_name = qf["rule_name"]
+    f.package_name = qf["package_name"]
     return f
 
 

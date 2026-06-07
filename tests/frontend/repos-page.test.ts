@@ -22,7 +22,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadApi() {
-  return import("../../lib/client/repos-api.ts")
+  return import("../../frontend/lib/client/repos-api.ts")
 }
 
 const SUMMARY = {
@@ -113,7 +113,10 @@ test("getRepo re-throws on 500", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { getRepo } = await loadApi()
-  await assert.rejects(() => getRepo("acme-org/broken"), /repos-api: 500/)
+  await assert.rejects(() => getRepo("acme-org/broken"), (err: any) => {
+    assert.equal(err.status, 500)
+    return true
+  })
 })
 
 // ---------------------------------------------------------------------------

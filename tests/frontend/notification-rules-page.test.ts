@@ -1,5 +1,10 @@
-import test from "node:test"
+import test, { beforeEach } from "node:test"
 import assert from "node:assert/strict"
+
+// apiClient requires a CSRF cookie for POST/PUT/DELETE requests
+beforeEach(() => {
+  ;(globalThis as any).document = { cookie: "__Host-csrf=test-csrf-token" }
+})
 
 // ---------------------------------------------------------------------------
 // Tests for the notification routing rules page data flows, exercised through
@@ -33,7 +38,7 @@ function makeNoContentMock() {
 }
 
 async function loadModule() {
-  return import("../../lib/client/notification-rules-api.ts")
+  return import("../../frontend/lib/client/notification-rules-api.ts")
 }
 
 // ── Page load ────────────────────────────────────────────────────────────────

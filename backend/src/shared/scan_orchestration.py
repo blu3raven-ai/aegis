@@ -13,7 +13,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
-from src.shared.config import get_github_token_for_org, org_has_source_connections
+from src.shared.config import get_token_for_org, org_has_source_connections
 from src.shared.event_bus import Event, get_event_bus
 from src.shared.event_emit_helpers import emit_scan_completed, emit_scan_failed, emit_scan_started
 from src.shared.paths import now_iso
@@ -52,7 +52,9 @@ def start_multi_org_scan(
     Returns:
         Tuple of (response_dict, http_status_code).
     """
-    org_queue: list[tuple[str, str]] = []
+    from src.shared.config import get_source_type_for_org
+
+    org_queue: list[tuple[str, str, str]] = []
 
     for org_name in orgs:
         if not skip_connection_check and not org_has_source_connections(org_name, categories=[source_category]):
@@ -61,18 +63,19 @@ def start_multi_org_scan(
         if runtime.probe(org_name)["active"]:
             return {"error": f"{tool_label} scan already running for {org_name}"}, 409
 
-        token = get_github_token_for_org(org_name) or ""
-        org_queue.append((org_name, token))
+        token = get_token_for_org(org_name) or ""
+        source_type = get_source_type_for_org(org_name, source_category)
+        org_queue.append((org_name, token, source_type))
 
     if not org_queue:
         return {"runs": [], "message": "No organizations to scan"}, 200
 
     captured_queue = list(org_queue)
-    first_org, _ = captured_queue[0]
+    first_org = captured_queue[0][0]
     first_run_id = _generate_run_id()
     create_run_fn(first_org, first_run_id)
 
-    def _run_one_org(org_name: str, token: str, run_id: str) -> None:
+    def _run_one_org(org_name: str, token: str, source_type: str, run_id: str) -> None:
         """Execute one org's scan and emit lifecycle events.
 
         Failures are caught and emitted as scan.failed so they never propagate
@@ -87,7 +90,7 @@ def start_multi_org_scan(
         )
         scan_start_ts = time.time()
         try:
-            result = execute_fn(org_name, token, run_id, **execute_kwargs, runtime=runtime)
+            result = execute_fn(org_name, token, run_id, source_type=source_type, **execute_kwargs, runtime=runtime)
         except Exception as exc:
             emit_scan_failed(
                 org_id=org_name,
@@ -117,18 +120,18 @@ def start_multi_org_scan(
     def run_concurrently() -> None:
         # Pre-assign run IDs so the response is consistent with what callers
         # already received in the 202 body (run IDs are embedded in the queue).
-        org_runs: list[tuple[str, str, str]] = []
-        for i, (org_name, token) in enumerate(captured_queue):
+        org_runs: list[tuple[str, str, str, str]] = []
+        for i, (org_name, token, source_type) in enumerate(captured_queue):
             run_id = first_run_id if i == 0 else _generate_run_id()
             if i > 0:
                 create_run_fn(org_name, run_id)
-            org_runs.append((org_name, token, run_id))
+            org_runs.append((org_name, token, source_type, run_id))
 
         max_workers = min(len(org_runs), int(os.getenv("MULTI_ORG_CONCURRENCY", "8")))
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
             futures = {
-                pool.submit(_run_one_org, org_name, token, run_id): (org_name, run_id)
-                for org_name, token, run_id in org_runs
+                pool.submit(_run_one_org, org_name, token, source_type, run_id): (org_name, run_id)
+                for org_name, token, source_type, run_id in org_runs
                 # Respect a pre-flight cancellation; already-running workers are
                 # not interrupted (cancellation on running futures is a no-op).
                 if not runtime.is_cancelled(first_run_id)
@@ -145,7 +148,7 @@ def start_multi_org_scan(
         # Mark any orgs that were skipped due to a pre-flight cancellation.
         if update_run_fn:
             submitted_orgs = {org for org, run_id in futures.values()}
-            for org_name, _, run_id in org_runs:
+            for org_name, _, _, run_id in org_runs:
                 if org_name not in submitted_orgs:
                     update_run_fn(org_name, run_id, {
                         "status": "cancelled",
@@ -156,7 +159,7 @@ def start_multi_org_scan(
     threading.Thread(target=run_concurrently, daemon=True).start()
 
     return {
-        "runs": [{"org": o, "queued": True} for o, _ in org_queue],
+        "runs": [{"org": o, "queued": True} for o, _, _ in org_queue],
         "message": f"Started {len(org_queue)} {tool_label} scan(s)",
     }, 202
 

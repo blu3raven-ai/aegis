@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("JWT_SHARED_SECRET", "0" * 64)
+os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
 from src.activity.router import router as activity_router  # noqa: E402
 from src.activity.service import ActivityEvent, ActivityService  # noqa: E402

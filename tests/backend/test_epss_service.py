@@ -163,15 +163,19 @@ def test_top_findings_by_epss_orders_by_score_desc():
 
     # Seed matching findings
     async def _seed(session):
+        from src.shared.finding_queryable_fields import extract_queryable_fields
         for i, cve in enumerate(["CVE-2024-RNK00001", "CVE-2024-RNK00002", "CVE-2024-RNK00003"]):
+            detail = {"cve": cve}
             f = Finding(
                 tool="deps",
                 org=org,
                 identity_key=f"epss-rank-{i}",
                 state="open",
                 severity="high",
-                detail={"cve": cve},
+                detail=detail,
             )
+            qf = extract_queryable_fields(detail)
+            f.cve_id = qf["cve_id"]
             session.add(f)
         await session.commit()
 
@@ -198,15 +202,18 @@ def test_top_findings_by_epss_respects_limit():
     ])
 
     async def _seed(session):
+        from src.shared.finding_queryable_fields import extract_queryable_fields
         for i in range(5):
+            detail = {"cve": f"CVE-2024-LIM{10000 + i}"}
             f = Finding(
                 tool="deps",
                 org=org,
                 identity_key=f"epss-limit-{i}",
                 state="open",
                 severity="high",
-                detail={"cve": f"CVE-2024-LIM{10000 + i}"},
+                detail=detail,
             )
+            f.cve_id = extract_queryable_fields(detail)["cve_id"]
             session.add(f)
         await session.commit()
 
@@ -230,14 +237,18 @@ def test_top_findings_by_epss_excludes_closed():
     ])
 
     async def _seed(session):
-        session.add(Finding(
+        from src.shared.finding_queryable_fields import extract_queryable_fields
+        detail = {"cve": "CVE-2024-CLS00001"}
+        f = Finding(
             tool="deps",
             org=org,
             identity_key="epss-closed",
             state="closed",
             severity="high",
-            detail={"cve": "CVE-2024-CLS00001"},
-        ))
+            detail=detail,
+        )
+        f.cve_id = extract_queryable_fields(detail)["cve_id"]
+        session.add(f)
         await session.commit()
 
     run_db(_seed)

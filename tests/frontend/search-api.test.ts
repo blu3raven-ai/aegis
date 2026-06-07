@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { ApiClientError } from "../../frontend/lib/client/api-client.types.ts"
 
 interface FetchCall {
   url: string
@@ -19,7 +20,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/search-api.ts")
+  return import("../../frontend/lib/client/search-api.ts")
 }
 
 test("search builds correct URL for a basic query", async () => {
@@ -100,8 +101,13 @@ test("search returns parsed SearchResults", async () => {
 test("search throws on non-OK response", async () => {
   const { mock } = makeFetchMock({ detail: "Unauthorized" }, 401)
   globalThis.fetch = mock as unknown as typeof fetch
+  // Suppress window.location.assign that apiClient triggers on 401
+  globalThis.window = { location: { assign: () => {} } } as unknown as Window & typeof globalThis
   const { search } = await loadModule()
-  await assert.rejects(() => search("test"), /401/)
+  await assert.rejects(
+    () => search("test"),
+    (e: unknown) => e instanceof ApiClientError && e.status === 401,
+  )
 })
 
 test("search passes signal to fetch", async () => {

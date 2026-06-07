@@ -141,22 +141,36 @@ class SlaService:
             "computed_at": now,
         }
 
-    def recompute_org(self, org_id: str) -> int:
+    def recompute_org(
+        self, org_id: str | None = None, *, asset_ids: list[str] | None = None
+    ) -> int:
         """Recompute SLA breach status for all active findings in the org.
 
         'Active' means state not in ('fixed', 'dismissed'). Returns count of
         status rows written.
         """
-        policies = self._load_policies_map(org_id)
+        if asset_ids is None and org_id is None:
+            raise ValueError("either org_id or asset_ids is required")
+
+        if org_id is not None:
+            policies = self._load_policies_map(org_id)
+        else:
+            # No org-level policy lookup when scoping by asset_ids; use defaults.
+            from src.sla.policy import DEFAULT_POLICIES
+            policies = {
+                p.severity: p for p in DEFAULT_POLICIES
+            }
 
         async def _fetch(session):
-            result = await session.execute(
-                select(Finding)
-                .where(
-                    Finding.org == org_id,
-                    Finding.state.not_in(["fixed", "dismissed"]),
-                )
-            )
+            stmt = select(Finding).where(Finding.state.not_in(["fixed", "dismissed"]))
+            if asset_ids is not None:
+                if not asset_ids:
+                    return []
+                stmt = stmt.where(Finding.asset_id.in_(asset_ids))
+            else:
+                # Org-only callers no longer have a scope after Plan D; fail closed.
+                return []
+            result = await session.execute(stmt)
             return result.scalars().all()
 
         findings = run_db(_fetch)
@@ -195,7 +209,9 @@ class SlaService:
         run_db(_upsert)
         return len(statuses)
 
-    def get_breach_summary(self, org_id: str) -> dict[str, Any]:
+    def get_breach_summary(
+        self, org_id: str | None = None, *, asset_ids: list[str] | None = None
+    ) -> dict[str, Any]:
         """Aggregate open/breached counts per severity for the dashboard widget.
 
         Returns:
@@ -206,12 +222,59 @@ class SlaService:
               "low": {...},
             }
         """
+        if asset_ids is None and org_id is None:
+            raise ValueError("either org_id or asset_ids is required")
+
+        async def _q(session):
+            stmt = (
+                select(Finding.severity, FindingSlaStatus.breached)
+                .join(FindingSlaStatus, FindingSlaStatus.finding_id == Finding.id)
+                .where(Finding.state.not_in(["fixed", "dismissed"]))
+            )
+            if asset_ids is not None:
+                if not asset_ids:
+                    return []
+                stmt = stmt.where(Finding.asset_id.in_(asset_ids))
+            else:
+                # Org-only callers no longer have a scope after Plan D; fail closed.
+                return []
+            result = await session.execute(stmt)
+            return result.all()
+
+        rows = run_db(_q)
+
+        counts: dict[str, dict[str, int]] = {
+            sev: {"open": 0, "breached": 0}
+            for sev in ("critical", "high", "medium", "low")
+        }
+        for severity, breached in rows:
+            sev = (severity or "unknown").lower()
+            if sev not in counts:
+                continue
+            counts[sev]["open"] += 1
+            if breached:
+                counts[sev]["breached"] += 1
+
+        summary: dict[str, Any] = {}
+        for sev, c in counts.items():
+            open_count = c["open"]
+            breached_count = c["breached"]
+            pct = round(breached_count / open_count, 4) if open_count > 0 else 0.0
+            summary[sev] = {
+                "open": open_count,
+                "breached": breached_count,
+                "breached_pct": pct,
+            }
+        return summary
+
+    def summary_by_asset_ids(self, asset_ids: list[str]) -> dict[str, Any]:
+        """Aggregate open/breached counts per severity scoped by asset_ids."""
         async def _q(session):
             result = await session.execute(
                 select(Finding.severity, FindingSlaStatus.breached)
                 .join(FindingSlaStatus, FindingSlaStatus.finding_id == Finding.id)
                 .where(
-                    Finding.org == org_id,
+                    Finding.asset_id.in_(asset_ids),
                     Finding.state.not_in(["fixed", "dismissed"]),
                 )
             )

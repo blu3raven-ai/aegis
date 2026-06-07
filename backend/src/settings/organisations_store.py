@@ -6,10 +6,11 @@ from datetime import datetime, timezone
 from typing import Any, Literal, cast
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import selectinload
 
 from src.db.helpers import run_db
-from src.db.models import Team, TeamMember, TeamRepository, TeamContainerImage
+from src.db.models import Asset, Team, TeamAsset, TeamMember
 from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso
 
 TEAM_SOURCES = {"manual", "github"}
@@ -29,6 +30,17 @@ class OrganisationStoreError(RuntimeError):
     pass
 
 
+def _asset_to_dict(ta: TeamAsset) -> dict[str, Any]:
+    asset = ta.asset
+    return {
+        "assetId": asset.id,
+        "type": asset.type,
+        "displayName": asset.display_name,
+        "externalRef": asset.external_ref,
+        "source": ta.source or "manual",
+    }
+
+
 def _team_to_dict(team: Team) -> dict[str, Any]:
     now = _now_iso()
     return {
@@ -40,14 +52,7 @@ def _team_to_dict(team: Team) -> dict[str, Any]:
             {"userId": m.user_id, "source": m.source or "manual"}
             for m in sorted(team.members, key=lambda m: m.user_id)
         ],
-        "repositories": [
-            {"org": r.org, "repo": r.repo, "source": r.source or "manual"}
-            for r in team.repositories
-        ],
-        "containerImages": [
-            {"image": ci.image, "source": ci.source or "manual"}
-            for ci in team.container_images
-        ],
+        "assets": [_asset_to_dict(ta) for ta in team.assets],
         "createdAt": _dt_to_iso(team.created_at) or now,
         "updatedAt": _dt_to_iso(team.updated_at) or now,
     }
@@ -56,8 +61,7 @@ def _team_to_dict(team: Team) -> dict[str, Any]:
 def _eager_team_query():
     return select(Team).options(
         selectinload(Team.members),
-        selectinload(Team.repositories),
-        selectinload(Team.container_images),
+        selectinload(Team.assets).selectinload(TeamAsset.asset),
     )
 
 
@@ -86,6 +90,34 @@ def normalize_container_image(value: str) -> dict[str, str]:
 
 def _team_name_key(name: str) -> str:
     return name.strip().lower()
+
+
+async def _upsert_team_asset(session, team_id: str, asset_id: str, source: str) -> None:
+    """Insert a TeamAsset row, ignoring conflicts on (team_id, asset_id)."""
+    stmt = pg_insert(TeamAsset).values(
+        team_id=team_id, asset_id=asset_id, source=source,
+    ).on_conflict_do_nothing(index_elements=["team_id", "asset_id"])
+    await session.execute(stmt)
+
+
+async def _resolve_or_create_asset(
+    session,
+    *,
+    external_ref: str,
+    asset_type: str,
+    display_name: str,
+    source: str = "source_connection",
+) -> str:
+    """Return the asset_id for the given external_ref, upserting if needed."""
+    from src.assets.service import upsert_asset
+    from src.assets.service import AssetSource
+    return await upsert_asset(
+        session,
+        type=cast(Any, asset_type),
+        source=cast(AssetSource, source),
+        external_ref=external_ref,
+        display_name=display_name,
+    )
 
 
 def create_team(input_data: dict[str, Any], actor_user_id: str | None = None) -> dict[str, Any]:
@@ -232,33 +264,34 @@ def remove_member(team_id: str, user_id: str) -> dict[str, Any]:
     return run_db(_query)
 
 
-def _repo_key(repo: dict[str, str]) -> tuple[str, str]:
-    return (repo["org"].lower(), repo["repo"].lower())
-
-
-def _repo_key_model(repo: TeamRepository) -> tuple[str, str]:
-    return (repo.org.lower(), repo.repo.lower())
-
-
-def _image_key(image: dict[str, str]) -> str:
-    return image["image"].lower()
-
-
 def add_repository(team_id: str, repository: str, source: str = "manual") -> dict[str, Any]:
     repo = normalize_repository(repository)
     if source not in ATTACHMENT_SOURCES:
         raise OrganisationValidationError(f"Invalid repository source: {source}")
+
+    from src.assets.refs import repo_ref
 
     async def _query(session):
         result = await session.execute(_eager_team_query().where(Team.id == team_id))
         team = result.scalars().first()
         if not team:
             raise OrganisationNotFoundError("Team not found.")
-        key = (repo["org"].lower(), repo["repo"].lower())
-        if key not in {_repo_key_model(r) for r in team.repositories}:
-            team.repositories.append(TeamRepository(team_id=team_id, org=repo["org"], repo=repo["repo"], source=source))
+
+        external_ref = repo_ref("github", repo["org"], repo["repo"])
+        asset_id = await _resolve_or_create_asset(
+            session,
+            external_ref=external_ref,
+            asset_type="repo",
+            display_name=f"{repo['org']}/{repo['repo']}",
+            source="manual_upload",
+        )
+        await _upsert_team_asset(session, team_id=team_id, asset_id=asset_id, source=source)
+
         team.updated_at = datetime.now(timezone.utc)
         await session.flush()
+        # Re-fetch to pick up the new TeamAsset row and its loaded asset
+        result = await session.execute(_eager_team_query().where(Team.id == team_id))
+        team = result.scalars().first()
         return _team_to_dict(team)
 
     return run_db(_query)
@@ -266,16 +299,29 @@ def add_repository(team_id: str, repository: str, source: str = "manual") -> dic
 
 def remove_repository(team_id: str, org: str, repo: str) -> dict[str, Any]:
     repo_value = normalize_repository(f"{org}/{repo}")
-    target = (repo_value["org"].lower(), repo_value["repo"].lower())
+
+    from src.assets.refs import repo_ref
 
     async def _query(session):
         result = await session.execute(_eager_team_query().where(Team.id == team_id))
         team = result.scalars().first()
         if not team:
             raise OrganisationNotFoundError("Team not found.")
-        team.repositories = [r for r in team.repositories if _repo_key_model(r) != target]
+
+        external_ref = repo_ref("github", repo_value["org"], repo_value["repo"])
+        asset_row = (await session.execute(
+            select(Asset).where(Asset.external_ref == external_ref)
+        )).scalar_one_or_none()
+
+        if asset_row is not None:
+            ta = next((a for a in team.assets if a.asset_id == asset_row.id), None)
+            if ta is not None:
+                team.assets.remove(ta)
+
         team.updated_at = datetime.now(timezone.utc)
         await session.flush()
+        result = await session.execute(_eager_team_query().where(Team.id == team_id))
+        team = result.scalars().first()
         return _team_to_dict(team)
 
     return run_db(_query)
@@ -289,10 +335,21 @@ def add_container_image(team_id: str, image: str) -> dict[str, Any]:
         team = result.scalars().first()
         if not team:
             raise OrganisationNotFoundError("Team not found.")
-        if normalized["image"].lower() not in {ci.image.lower() for ci in team.container_images}:
-            team.container_images.append(TeamContainerImage(team_id=team_id, image=normalized["image"]))
+
+        external_ref = _image_to_external_ref(normalized["image"])
+        asset_id = await _resolve_or_create_asset(
+            session,
+            external_ref=external_ref,
+            asset_type="image",
+            display_name=normalized["image"],
+            source="manual_upload",
+        )
+        await _upsert_team_asset(session, team_id=team_id, asset_id=asset_id, source="manual")
+
         team.updated_at = datetime.now(timezone.utc)
         await session.flush()
+        result = await session.execute(_eager_team_query().where(Team.id == team_id))
+        team = result.scalars().first()
         return _team_to_dict(team)
 
     return run_db(_query)
@@ -300,32 +357,64 @@ def add_container_image(team_id: str, image: str) -> dict[str, Any]:
 
 def remove_container_image(team_id: str, image: str) -> dict[str, Any]:
     normalized = normalize_container_image(image)
-    target = normalized["image"].lower()
 
     async def _query(session):
         result = await session.execute(_eager_team_query().where(Team.id == team_id))
         team = result.scalars().first()
         if not team:
             raise OrganisationNotFoundError("Team not found.")
-        team.container_images = [ci for ci in team.container_images if ci.image.lower() != target]
+
+        external_ref = _image_to_external_ref(normalized["image"])
+        asset_row = (await session.execute(
+            select(Asset).where(Asset.external_ref == external_ref)
+        )).scalar_one_or_none()
+
+        if asset_row is not None:
+            ta = next((a for a in team.assets if a.asset_id == asset_row.id), None)
+            if ta is not None:
+                team.assets.remove(ta)
+
         team.updated_at = datetime.now(timezone.utc)
         await session.flush()
+        result = await session.execute(_eager_team_query().where(Team.id == team_id))
+        team = result.scalars().first()
         return _team_to_dict(team)
 
     return run_db(_query)
 
 
+def _image_to_external_ref(image: str) -> str:
+    """Convert a ghcr.io/org/name image string to a canonical external_ref.
+
+    ghcr.io/<org>/<name> → ghcr:<org>/<name>:latest
+    Tag extraction is not supported here; assets ingested via this path default to latest.
+    """
+    from src.assets.refs import image_ref
+    # Strip ghcr.io/ prefix
+    without_registry = image.removeprefix("ghcr.io/")
+    # No tag embedded in the string coming from manual input
+    return image_ref("ghcr", without_registry, "latest")
+
+
 def can_act_on_repository(user_id: str, global_role: str | None, permission: str, org: str, repo: str) -> bool:
+    from src.assets.refs import repo_ref
     from src.settings.router import has_role_permission
     if has_role_permission(global_role, None, "manage_access_scope"):
         return True
 
+    external_ref = repo_ref("github", org, repo)
+
     async def _query(session):
+        asset_row = (await session.execute(
+            select(Asset).where(Asset.external_ref == external_ref)
+        )).scalar_one_or_none()
+        if asset_row is None:
+            return False
         result = await session.execute(_eager_team_query())
         return any(
             any(m.user_id == user_id for m in team.members)
             for team in result.scalars().all()
-            if (org.lower(), repo.lower()) in {_repo_key_model(r) for r in team.repositories}
+            if any(ta.asset_id == asset_row.id for ta in team.assets)
         )
 
     return run_db(_query)
@@ -336,18 +425,27 @@ def can_act_on_container_image(user_id: str, global_role: str | None, permission
     if has_role_permission(global_role, None, "manage_access_scope"):
         return True
 
+    external_ref = _image_to_external_ref(image.strip())
+
     async def _query(session):
+        asset_row = (await session.execute(
+            select(Asset).where(Asset.external_ref == external_ref)
+        )).scalar_one_or_none()
+        if asset_row is None:
+            return False
         result = await session.execute(_eager_team_query())
         return any(
             any(m.user_id == user_id for m in team.members)
             for team in result.scalars().all()
-            if image.strip().lower() in {ci.image.lower() for ci in team.container_images}
+            if any(ta.asset_id == asset_row.id for ta in team.assets)
         )
 
     return run_db(_query)
 
 
 def apply_github_sync_preview(preview: dict[str, Any], actor_user_id: str | None = None) -> None:
+    from src.assets.refs import image_ref, repo_ref
+
     async def _query(session):
         now = datetime.now(timezone.utc)
 
@@ -371,19 +469,32 @@ def apply_github_sync_preview(preview: dict[str, Any], actor_user_id: str | None
                     seen_members.add(uid)
                     session.add(TeamMember(team_id=new_team.id, user_id=uid, source="github"))
 
-            seen_repos: set[tuple[str, str]] = set()
+            seen_asset_refs: set[str] = set()
             for r in t_create.get("repositoriesToAdd", []):
-                key = (r["org"].lower(), r["repo"].lower())
-                if key not in seen_repos:
-                    seen_repos.add(key)
-                    session.add(TeamRepository(team_id=new_team.id, org=r["org"], repo=r["repo"], source="github"))
+                external_ref = repo_ref("github", r["org"], r["repo"])
+                if external_ref not in seen_asset_refs:
+                    seen_asset_refs.add(external_ref)
+                    asset_id = await _resolve_or_create_asset(
+                        session,
+                        external_ref=external_ref,
+                        asset_type="repo",
+                        display_name=f"{r['org']}/{r['repo']}",
+                        source="source_connection",
+                    )
+                    await _upsert_team_asset(session, team_id=new_team.id, asset_id=asset_id, source="github")
 
-            seen_images: set[str] = set()
             for i in t_create.get("containerImagesToAdd", []):
-                img = i["image"].lower()
-                if img not in seen_images:
-                    seen_images.add(img)
-                    session.add(TeamContainerImage(team_id=new_team.id, image=i["image"], source="github"))
+                external_ref = _image_to_external_ref(i["image"])
+                if external_ref not in seen_asset_refs:
+                    seen_asset_refs.add(external_ref)
+                    asset_id = await _resolve_or_create_asset(
+                        session,
+                        external_ref=external_ref,
+                        asset_type="image",
+                        display_name=i["image"],
+                        source="source_connection",
+                    )
+                    await _upsert_team_asset(session, team_id=new_team.id, asset_id=asset_id, source="github")
 
         # 2. Handle teams to update
         for t_update in preview.get("teamsToUpdate", []):
@@ -407,26 +518,52 @@ def apply_github_sync_preview(preview: dict[str, Any], actor_user_id: str | None
                 if m["userId"] not in existing_user_ids:
                     team.members.append(TeamMember(team_id=team.id, user_id=m["userId"], source="github"))
 
-            # Remove repositories
-            remove_repos = {(r["org"].lower(), r["repo"].lower()) for r in t_update.get("repositoriesToRemove", [])}
-            team.repositories = [r for r in team.repositories if _repo_key_model(r) not in remove_repos]
+            # Remove assets by repo external_ref
+            for r in t_update.get("repositoriesToRemove", []):
+                external_ref = repo_ref("github", r["org"], r["repo"])
+                asset_row = (await session.execute(
+                    select(Asset).where(Asset.external_ref == external_ref)
+                )).scalar_one_or_none()
+                if asset_row is not None:
+                    team.assets = [ta for ta in team.assets if ta.asset_id != asset_row.id]
 
-            # Add repositories
-            existing_repos = {_repo_key_model(r) for r in team.repositories}
+            # Add assets by repo external_ref
+            existing_asset_ids = {ta.asset_id for ta in team.assets}
             for r in t_update.get("repositoriesToAdd", []):
-                key = (r["org"].lower(), r["repo"].lower())
-                if key not in existing_repos:
-                    team.repositories.append(TeamRepository(team_id=team.id, org=r["org"], repo=r["repo"], source="github"))
+                external_ref = repo_ref("github", r["org"], r["repo"])
+                asset_id = await _resolve_or_create_asset(
+                    session,
+                    external_ref=external_ref,
+                    asset_type="repo",
+                    display_name=f"{r['org']}/{r['repo']}",
+                    source="source_connection",
+                )
+                if asset_id not in existing_asset_ids:
+                    existing_asset_ids.add(asset_id)
+                    await _upsert_team_asset(session, team_id=team.id, asset_id=asset_id, source="github")
 
-            # Remove container images
-            remove_images = {i["image"].lower() for i in t_update.get("containerImagesToRemove", [])}
-            team.container_images = [ci for ci in team.container_images if ci.image.lower() not in remove_images]
+            # Remove assets by image external_ref
+            for i in t_update.get("containerImagesToRemove", []):
+                external_ref = _image_to_external_ref(i["image"])
+                asset_row = (await session.execute(
+                    select(Asset).where(Asset.external_ref == external_ref)
+                )).scalar_one_or_none()
+                if asset_row is not None:
+                    team.assets = [ta for ta in team.assets if ta.asset_id != asset_row.id]
 
-            # Add container images
-            existing_images = {ci.image.lower() for ci in team.container_images}
+            # Add assets by image external_ref
             for i in t_update.get("containerImagesToAdd", []):
-                if i["image"].lower() not in existing_images:
-                    team.container_images.append(TeamContainerImage(team_id=team.id, image=i["image"], source="github"))
+                external_ref = _image_to_external_ref(i["image"])
+                asset_id = await _resolve_or_create_asset(
+                    session,
+                    external_ref=external_ref,
+                    asset_type="image",
+                    display_name=i["image"],
+                    source="source_connection",
+                )
+                if asset_id not in existing_asset_ids:
+                    existing_asset_ids.add(asset_id)
+                    await _upsert_team_asset(session, team_id=team.id, asset_id=asset_id, source="github")
 
         await session.flush()
 
