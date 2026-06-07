@@ -1,0 +1,323 @@
+@import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  --color-bg:             #f4f7fb;
+  --color-surface:        #ffffff;
+  --color-surface-raised: #fafbfd;
+  --color-bg-section:     #fafbfd;
+  --color-bg-input:       #ffffff;
+  --color-bg-hover:       rgba(15,39,71,0.05);
+
+  --color-navy:           #10233f;
+  --color-navy-hover:     #163b68;
+
+  --color-border:         rgba(15,39,71,0.07);
+  --color-border-medium:  rgba(15,39,71,0.08);
+  --color-border-strong:  rgba(15,39,71,0.12);
+  --color-border-divider: rgba(15,39,71,0.06);
+
+  --color-text-primary:   #0f2747;
+  --color-text-secondary: #64748b;
+  --color-text-tertiary:  #94a3b8;
+  --color-text-muted:     rgba(24,59,104,0.62);
+
+  --color-accent:         #2d7ff9;
+  --color-accent-hover:   #1a6ae8;
+  --color-accent-subtle:  #dbeafe;
+  --color-accent-border:  rgb(45 127 249 / 0.2);
+  --color-accent-deep:    #163b68;
+  --color-accent-ink:     #ffffff;
+  --color-accent-on:      #ffffff;
+
+  --color-on-danger:      #ffffff;
+  --color-status-ok:      #10b981;
+  --color-status-ok-subtle: rgb(16 185 129 / 0.1);
+  --color-status-ok-border: rgb(16 185 129 / 0.3);
+
+  --color-severity-critical:        #ef4444;
+  --color-severity-critical-subtle: rgb(239 68 68 / 0.1);
+  --color-severity-critical-border: rgb(239 68 68 / 0.3);
+
+  --color-severity-high:        #f97316;
+  --color-severity-high-subtle: rgb(249 115 22 / 0.1);
+  --color-severity-high-border: rgb(249 115 22 / 0.3);
+
+  --color-severity-medium:        #fbbf24;
+  --color-severity-medium-subtle: rgb(251 191 36 / 0.12);
+  --color-severity-medium-border: rgb(251 191 36 / 0.3);
+
+  --color-severity-low:        #60a5fa;
+  --color-severity-low-subtle: rgb(96 165 250 / 0.1);
+  --color-severity-low-border: rgb(96 165 250 / 0.3);
+
+  --color-state-dismissed:         #a855f7;
+  --color-state-dismissed-subtle:  rgb(168 85 247 / 0.05);
+  --color-state-dismissed-muted:   rgb(168 85 247 / 0.7);
+  --color-state-dismissed-border:  rgb(168 85 247 / 0.3);
+
+  --color-state-deferred:          #f97316;
+  --color-state-deferred-subtle:   rgb(249 115 22 / 0.05);
+  --color-state-deferred-muted:    rgb(249 115 22 / 0.7);
+  --color-state-deferred-border:   rgb(249 115 22 / 0.3);
+
+  --color-state-fixed:             #10b981;
+  --color-state-fixed-subtle:      rgb(16 185 129 / 0.05);
+  --color-state-fixed-muted:       rgb(16 185 129 / 0.7);
+  --color-state-fixed-border:      rgb(16 185 129 / 0.3);
+
+  --color-verdict-safe:            #10b981;
+  --color-verdict-safe-subtle:     rgb(16 185 129 / 0.1);
+  --color-verdict-safe-border:     rgb(16 185 129 / 0.3);
+
+  --color-verdict-risk:            #ef4444;
+  --color-verdict-risk-subtle:     rgb(239 68 68 / 0.1);
+  --color-verdict-risk-border:     rgb(239 68 68 / 0.3);
+
+  --color-verdict-uncertain:       #f59e0b;
+  --color-verdict-uncertain-subtle: rgb(245 158 11 / 0.1);
+  --color-verdict-uncertain-border: rgb(245 158 11 / 0.3);
+
+  --color-verdict-neutral:         #3b82f6;
+  --color-verdict-neutral-subtle:  rgb(59 130 246 / 0.1);
+  --color-verdict-neutral-border:  rgb(59 130 246 / 0.3);
+
+  --color-argus:                   #a855f7;
+  --color-argus-hover:             #9333ea;
+  --color-argus-subtle:            rgb(168 85 247 / 0.08);
+  --color-argus-border:            rgb(168 85 247 / 0.2);
+  --color-argus-ink:               #ffffff;
+
+  --color-state-pending:           #f59e0b;
+  --color-state-pending-subtle:    rgb(245 158 11 / 0.1);
+  --color-state-pending-border:    rgb(245 158 11 / 0.3);
+
+  --color-scanner-sast-bg:         rgb(168 85 247 / 0.18);
+  --color-scanner-sast-fg:         #a855f7;
+  --color-scanner-deps-bg:         rgb(45 127 249 / 0.18);
+  --color-scanner-deps-fg:         #2d7ff9;
+  --color-scanner-containers-bg:   rgb(16 185 129 / 0.18);
+  --color-scanner-containers-fg:   #10b981;
+  --color-scanner-secrets-bg:      rgb(249 115 22 / 0.18);
+  --color-scanner-secrets-fg:      #f97316;
+  --color-scanner-iac-bg:          rgb(96 165 250 / 0.18);
+  --color-scanner-iac-fg:          #60a5fa;
+  --color-scanner-entry-bg:        rgb(96 165 250 / 0.18);
+  --color-scanner-entry-fg:        #60a5fa;
+  --color-scanner-impact-bg:       rgb(239 68 68 / 0.18);
+  --color-scanner-impact-fg:       #ef4444;
+
+  --color-overlay:                 rgba(15, 39, 71, 0.40);
+  --color-overlay-strong:          rgba(15, 39, 71, 0.55);
+
+  --color-chip-active-bg:          rgba(15, 39, 71, 0.08);
+
+  --color-stat-primary:   #163b68;
+  --color-stat-secondary: #2d7ff9;
+  --color-nav-active:     rgba(15,39,71,0.05);
+
+  --shadow-card:    0 2px 16px rgba(15,39,71,0.06);
+  --shadow-sidebar: 0 2px 12px rgba(15,39,71,0.06);
+  --shadow-nav:     0 4px 12px rgba(15,39,71,0.18);
+  --shadow-header:  0 16px 40px rgba(15,39,71,0.06);
+
+  --gradient-blue:   linear-gradient(135deg, #f8fbff, #edf5ff, #cfe4ff);
+  --gradient-red:    linear-gradient(135deg, #fff8f8, #fff1f0, #fde8e8);
+  --gradient-green:  linear-gradient(135deg, #f0fdf4, #dcfce7, #bbf7d0);
+  --gradient-yellow: linear-gradient(135deg, #fffdf0, #fefce8, #fef9c3);
+  --gradient-purple: linear-gradient(135deg, #faf5ff, #f3e8ff, #e9d5ff);
+}
+
+.dark {
+  --color-bg:             #070d19;
+  --color-surface:        #0C1524;
+  --color-surface-raised: #09101e;
+  --color-bg-section:     #09101e;
+  --color-bg-input:       #0f1e38;
+  --color-bg-hover:       #253348;
+
+  --color-navy:           #0fbcff;
+  --color-navy-hover:     #3dcbff;
+
+  --color-border:         #252A35;
+  --color-border-medium:  #2B3447;
+  --color-border-strong:  #424751;
+  --color-border-divider: #1C253A;
+
+  --color-text-primary:   #F2F2F3;
+  --color-text-secondary: #AFB0B6;
+  --color-text-tertiary:  #848592;
+  --color-text-muted:     #75829A;
+
+  --color-accent:         #0fbcff;
+  --color-accent-hover:   #3dcbff;
+  --color-accent-subtle:  #0f2a4a;
+  --color-accent-border:  rgb(15 188 255 / 0.25);
+  --color-accent-deep:    #B2ECFF;
+  --color-accent-ink:     #070d19;
+  --color-accent-on:      #ffffff;
+
+  --color-on-danger:      #F2F2F3;
+
+  --color-status-ok:        #34d399;
+  --color-status-ok-subtle: rgb(52 211 153 / 0.12);
+  --color-status-ok-border: rgb(52 211 153 / 0.3);
+
+  --color-severity-critical:        #f87171;
+  --color-severity-critical-subtle: rgb(248 113 113 / 0.12);
+  --color-severity-critical-border: rgb(248 113 113 / 0.3);
+
+  --color-severity-high:        #fb923c;
+  --color-severity-high-subtle: rgb(251 146 60 / 0.12);
+  --color-severity-high-border: rgb(251 146 60 / 0.3);
+
+  --color-severity-medium:        #fbbf24;
+  --color-severity-medium-subtle: rgb(251 191 36 / 0.12);
+  --color-severity-medium-border: rgb(251 191 36 / 0.3);
+
+  --color-severity-low:        #60a5fa;
+  --color-severity-low-subtle: rgb(96 165 250 / 0.12);
+  --color-severity-low-border: rgb(96 165 250 / 0.3);
+
+  --color-state-dismissed:         #c084fc;
+  --color-state-dismissed-subtle:  rgb(192 132 252 / 0.08);
+  --color-state-dismissed-muted:   rgb(192 132 252 / 0.7);
+  --color-state-dismissed-border:  rgb(192 132 252 / 0.3);
+
+  --color-state-deferred:          #fb923c;
+  --color-state-deferred-subtle:   rgb(251 146 60 / 0.08);
+  --color-state-deferred-muted:    rgb(251 146 60 / 0.7);
+  --color-state-deferred-border:   rgb(251 146 60 / 0.3);
+
+  --color-state-fixed:             #34d399;
+  --color-state-fixed-subtle:      rgb(52 211 153 / 0.08);
+  --color-state-fixed-muted:       rgb(52 211 153 / 0.7);
+  --color-state-fixed-border:      rgb(52 211 153 / 0.3);
+
+  --color-verdict-safe:            #34d399;
+  --color-verdict-safe-subtle:     rgb(52 211 153 / 0.12);
+  --color-verdict-safe-border:     rgb(52 211 153 / 0.3);
+
+  --color-verdict-risk:            #f87171;
+  --color-verdict-risk-subtle:     rgb(248 113 113 / 0.12);
+  --color-verdict-risk-border:     rgb(248 113 113 / 0.3);
+
+  --color-verdict-uncertain:       #fbbf24;
+  --color-verdict-uncertain-subtle: rgb(251 191 36 / 0.12);
+  --color-verdict-uncertain-border: rgb(251 191 36 / 0.3);
+
+  --color-verdict-neutral:         #60a5fa;
+  --color-verdict-neutral-subtle:  rgb(96 165 250 / 0.12);
+  --color-verdict-neutral-border:  rgb(96 165 250 / 0.3);
+
+  --color-argus:                   #c084fc;
+  --color-argus-hover:             #d8b4fe;
+  --color-argus-subtle:            rgb(192 132 252 / 0.08);
+  --color-argus-border:            rgb(192 132 252 / 0.2);
+  --color-argus-ink:               #070d19;
+
+  --color-state-pending:           #fbbf24;
+  --color-state-pending-subtle:    rgb(251 191 36 / 0.12);
+  --color-state-pending-border:    rgb(251 191 36 / 0.3);
+
+  --color-scanner-sast-bg:         rgb(192 132 252 / 0.18);
+  --color-scanner-sast-fg:         #d4b0fc;
+  --color-scanner-deps-bg:         rgb(15 188 255 / 0.18);
+  --color-scanner-deps-fg:         #5fcdff;
+  --color-scanner-containers-bg:   rgb(52 211 153 / 0.18);
+  --color-scanner-containers-fg:   #6ee0b4;
+  --color-scanner-secrets-bg:      rgb(251 146 60 / 0.18);
+  --color-scanner-secrets-fg:      #ffba7c;
+  --color-scanner-iac-bg:          rgb(96 165 250 / 0.18);
+  --color-scanner-iac-fg:          #93c2fa;
+  --color-scanner-entry-bg:        rgb(96 165 250 / 0.18);
+  --color-scanner-entry-fg:        #93c2fa;
+  --color-scanner-impact-bg:       rgb(248 113 113 / 0.18);
+  --color-scanner-impact-fg:       #ff9b9b;
+
+  --color-overlay:                 rgba(0, 0, 0, 0.55);
+  --color-overlay-strong:          rgba(0, 0, 0, 0.70);
+
+  --color-chip-active-bg:          rgb(255 255 255 / 0.08);
+
+  --color-stat-primary:   #0fbcff;
+  --color-stat-secondary: #3dcbff;
+  --color-nav-active:     #253348;
+
+  --shadow-card:    0 2px 16px rgba(0,0,0,0.40);
+  --shadow-sidebar: 0 2px 12px rgba(0,0,0,0.35);
+  --shadow-nav:     0 4px 12px rgba(0,0,0,0.45);
+  --shadow-header:  0 16px 40px rgba(0,0,0,0.40);
+
+  --gradient-blue:   linear-gradient(135deg, #0C1524, #0f1e38, #1C2F49);
+  --gradient-red:    linear-gradient(135deg, #0C1524, #1a1018, #251419);
+  --gradient-green:  linear-gradient(135deg, #0C1524, #0e1a16, #122218);
+  --gradient-yellow: linear-gradient(135deg, #0C1524, #18160e, #1e1c10);
+  --gradient-purple: linear-gradient(135deg, #0C1524, #150e22, #1a1230);
+}
+
+@theme inline {
+  --color-background: var(--color-bg);
+  --color-foreground: var(--color-text-primary);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+  --font-headline: var(--font-space-grotesk);
+  --font-body-brand: var(--font-manrope);
+  /* Tailwind v4 requires font-size utilities to be registered here.
+     text-[var(--type-2xs)] silently falls back to 16px; use text-2xs instead. */
+  --text-2xs: 0.625rem;
+}
+
+html,
+body {
+  height: 100%;
+  /* Lock the document scroll so anchor navigation inside the app shell
+     (e.g. /settings#members) scrolls the inner <main> container instead of
+     pushing the AppHeader and sidebar out of view. */
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  :focus-visible:where([class*="focus:ring"], [class*="ring-"]) {
+    outline: none;
+  }
+}
+
+:root {
+  --type-2xs:  0.625rem;
+  --type-xs:   0.6875rem;
+  --type-sm:   0.75rem;
+  --type-base: 0.8125rem;
+  --type-md:   0.875rem;
+  --type-lg:   1rem;
+  --type-xl:   1.125rem;
+  --type-2xl:  1.25rem;
+}
+
+@keyframes scan-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes chain-shimmer {
+  0%, 100% { background-position: 200% 0; }
+  50% { background-position: -100% 0; }
+}
+
+@keyframes row-flash {
+  0%   { background: rgba(192,132,252,0.10); }
+  100% { background: transparent; }
+}

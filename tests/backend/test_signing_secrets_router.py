@@ -38,10 +38,8 @@ def _make_jwt(sub: str = "usr_owner", role: str = "owner") -> str:
 
 
 def _client(role: str = "owner") -> TestClient:
-    from src.main import app
-    os.environ["JWT_SHARED_SECRET"] = _TEST_SECRET
-    token = _make_jwt(role=role)
-    return TestClient(app, headers={"Authorization": f"Bearer {token}"}, raise_server_exceptions=True)
+    from conftest import make_authed_client
+    return make_authed_client(role=role, user_id=f"signing-{role}", raise_server_exceptions=True)
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("JWT_SHARED_SECRET", "0" * 64)
+os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
 from src.repos.service import (  # noqa: E402
     RepoService,
@@ -19,6 +19,9 @@ from src.repos.service import (  # noqa: E402
     _truncate,
     _FRESH_WINDOW_DAYS,
 )
+
+_FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+_FAKE_ASSET_ID_2 = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
 
 
 # ── _coverage_status ──────────────────────────────────────────────────────────
@@ -70,7 +73,7 @@ def test_truncate_long():
 def test_list_repos_empty():
     """list_repos returns empty when no repos in DB."""
     with patch("src.repos.service.run_db", return_value=[]):
-        results = RepoService.list_repos()
+        results = RepoService.list_repos(asset_ids=[])
     assert results == []
 
 
@@ -80,27 +83,23 @@ def test_list_repos_filters_has_critical():
     now = datetime.now(timezone.utc)
 
     repo_with_critical = RepoSummary(
-        repo_id="acme-org/api",
-        org="acme-org",
-        repo="api",
+        asset_id=_FAKE_ASSET_ID,
+        display_name="acme-org/api",
         last_scanned_sha="abc1234",
         manifest_set_hash="hash1",
         last_scanned_at=now,
         findings_count_by_severity={"critical": 3, "high": 1, "medium": 0, "low": 0},
-        chains_count=1,
         scanners_with_coverage=["dependencies"],
         coverage_status="fresh",
     )
 
     repo_no_critical = RepoSummary(
-        repo_id="acme-org/worker",
-        org="acme-org",
-        repo="worker",
+        asset_id=_FAKE_ASSET_ID_2,
+        display_name="acme-org/worker",
         last_scanned_sha="bcd2345",
         manifest_set_hash="hash2",
         last_scanned_at=now,
         findings_count_by_severity={"critical": 0, "high": 2, "medium": 1, "low": 5},
-        chains_count=0,
         scanners_with_coverage=["dependencies"],
         coverage_status="fresh",
     )
@@ -108,7 +107,7 @@ def test_list_repos_filters_has_critical():
     all_repos = [repo_with_critical, repo_no_critical]
     filtered = [r for r in all_repos if r.findings_count_by_severity["critical"] > 0]
     assert len(filtered) == 1
-    assert filtered[0].repo == "api"
+    assert filtered[0].display_name == "acme-org/api"
 
 
 def test_coverage_status_in_summary():
@@ -116,38 +115,32 @@ def test_coverage_status_in_summary():
     from src.repos.service import RepoSummary
 
     fresh_repo = RepoSummary(
-        repo_id="acme-org/fresh",
-        org="acme-org",
-        repo="fresh",
+        asset_id=_FAKE_ASSET_ID,
+        display_name="acme-org/fresh",
         last_scanned_sha=None,
         manifest_set_hash=None,
         last_scanned_at=datetime.now(timezone.utc) - timedelta(hours=3),
         findings_count_by_severity={"critical": 0, "high": 0, "medium": 0, "low": 0},
-        chains_count=0,
         scanners_with_coverage=[],
         coverage_status=_coverage_status(datetime.now(timezone.utc) - timedelta(hours=3)),
     )
     stale_repo = RepoSummary(
-        repo_id="acme-org/stale",
-        org="acme-org",
-        repo="stale",
+        asset_id=_FAKE_ASSET_ID_2,
+        display_name="acme-org/stale",
         last_scanned_sha=None,
         manifest_set_hash=None,
         last_scanned_at=datetime.now(timezone.utc) - timedelta(days=30),
         findings_count_by_severity={"critical": 0, "high": 0, "medium": 0, "low": 0},
-        chains_count=0,
         scanners_with_coverage=[],
         coverage_status=_coverage_status(datetime.now(timezone.utc) - timedelta(days=30)),
     )
     never_repo = RepoSummary(
-        repo_id="acme-org/never",
-        org="acme-org",
-        repo="never",
+        asset_id="cccccccc-dddd-eeee-ffff-000000000000",
+        display_name="acme-org/never",
         last_scanned_sha=None,
         manifest_set_hash=None,
         last_scanned_at=None,
         findings_count_by_severity={"critical": 0, "high": 0, "medium": 0, "low": 0},
-        chains_count=0,
         scanners_with_coverage=[],
         coverage_status=_coverage_status(None),
     )
@@ -161,7 +154,7 @@ def test_coverage_status_in_summary():
 
 def test_get_repo_not_found():
     with patch("src.repos.service.run_db", return_value=None):
-        result = RepoService.get_repo("acme-org", "nonexistent")
+        result = RepoService.get_repo(_FAKE_ASSET_ID)
     assert result is None
 
 
@@ -169,17 +162,15 @@ def test_get_repo_not_found():
 
 def test_repo_detail_has_expected_fields():
     """RepoDetail carries all required fields for the API response."""
-    from src.repos.service import RepoDetail, ScanRunRow, FindingRow, ChainRow
+    from src.repos.service import RepoDetail, ScanRunRow, FindingRow
 
     detail = RepoDetail(
-        repo_id="acme-org/payments-api",
-        org="acme-org",
-        repo="payments-api",
+        asset_id=_FAKE_ASSET_ID,
+        display_name="acme-org/payments-api",
         last_scanned_sha="abc1234",
         manifest_set_hash="hash1234",
         last_scanned_at=datetime.now(timezone.utc),
         findings_count_by_severity={"critical": 2, "high": 1, "medium": 3, "low": 0},
-        chains_count=2,
         scanners_with_coverage=["dependencies", "secrets"],
         coverage_status="fresh",
         scan_history=[
@@ -199,25 +190,16 @@ def test_repo_detail_has_expected_fields():
                 severity="critical",
                 state="open",
                 identity_key="CVE-2024-1234",
-                repo="payments-api",
+                asset_id=_FAKE_ASSET_ID,
                 first_seen_at="2026-05-01T00:00:00+00:00",
                 last_seen_at="2026-05-30T00:00:00+00:00",
             )
         ],
-        attached_chains=[
-            ChainRow(
-                id="chain-1",
-                chain_type="exploit_chain",
-                severity="critical",
-                status="open",
-                created_at="2026-05-20T00:00:00+00:00",
-            )
-        ],
     )
 
-    assert detail.repo_id == "acme-org/payments-api"
+    assert detail.asset_id == _FAKE_ASSET_ID
+    assert detail.display_name == "acme-org/payments-api"
     assert detail.coverage_status == "fresh"
     assert len(detail.scan_history) == 1
     assert len(detail.active_findings) == 1
-    assert len(detail.attached_chains) == 1
     assert detail.findings_count_by_severity["critical"] == 2

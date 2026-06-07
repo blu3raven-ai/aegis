@@ -8,7 +8,8 @@ from typing import Any
 from sqlalchemy import case, select
 
 from src.db.helpers import run_db
-from src.db.models import ScanRun, Finding, Decision
+from src.db.models import Asset, ScanRun, Finding, Decision
+from src.shared.archived_filter import exclude_archived, include_archived
 from src.shared.paths import (
     dt_to_iso as _dt_to_iso,
     normalize_org,
@@ -34,6 +35,20 @@ def _now_dt() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _asset_to_repo_dict(asset: Asset | None) -> dict[str, str]:
+    """Render an Asset row as the {name, full_name} shape API responses expect.
+
+    `display_name` is the canonical "owner/repo" form (e.g. "acme/foo") for
+    repo assets; for image assets it's "image:tag". Either way, `name` is the
+    last segment after the final "/".
+    """
+    if asset is None:
+        return {"name": "", "full_name": ""}
+    full = asset.display_name or ""
+    name = full.rsplit("/", 1)[-1] if full else ""
+    return {"name": name, "full_name": full}
+
+
 def _run_to_dict(run: ScanRun) -> dict[str, Any]:
     """Convert ScanRun model to the dict format callers expect."""
     meta = run.metadata_json or {}
@@ -42,7 +57,7 @@ def _run_to_dict(run: ScanRun) -> dict[str, Any]:
         duration_seconds = max(0, int((run.finished_at - run.started_at).total_seconds()))
     return {
         "id": run.id,
-        "org": run.org,
+        "org": meta.get("org_label", ""),  # org_label stored in metadata after Plan D
         "status": run.status or "queued",
         "createdAt": _dt_to_iso(run.started_at) or meta.get("createdAt", now_iso()),
         "startedAt": _dt_to_iso(run.started_at),
@@ -96,11 +111,11 @@ def create_dependencies_run(org_key: str, run_id: str) -> dict[str, Any]:
         session.add(ScanRun(
             id=run_id,
             tool="dependencies",
-            org=org_key,
             status="queued",
             started_at=None,
             progress=run_dict["progress"],
             metadata_json={
+                "org_label": org_key,
                 "createdAt": run_dict["createdAt"],
                 "findingsCount": 0,
                 "repositories": [],
@@ -156,7 +171,10 @@ def list_dependencies_runs(org_key: str) -> list[dict[str, Any]]:
     async def _query(session):
         result = await session.execute(
             select(ScanRun)
-            .where(ScanRun.tool == "dependencies", ScanRun.org == org_key)
+            .where(
+                ScanRun.tool == "dependencies",
+                ScanRun.metadata_json["org_label"].astext == org_key,
+            )
             .order_by(ScanRun.started_at.desc().nullslast())
         )
         return [_run_to_dict(r) for r in result.scalars().all()]
@@ -168,27 +186,35 @@ def list_dependencies_runs(org_key: str) -> list[dict[str, Any]]:
 # Dependencies Findings — read from unified Finding table
 # ---------------------------------------------------------------------------
 
-def read_dependencies_findings(org: str) -> list[dict[str, Any]]:
+def read_dependencies_findings(*, asset_ids: list[str], include_archived_rows: bool = False) -> list[dict[str, Any]]:
+    if not asset_ids:
+        return []
     async def _query(session):
-        org_key = normalize_org(org)
-        # Single query with LEFT JOIN — avoids two full table scans + Python dict join
         stmt = (
-            select(Finding, Decision)
+            select(Finding, Decision, Asset)
             .outerjoin(
                 Decision,
                 (Decision.tool == Finding.tool)
-                & (Decision.org == Finding.org)
+                & (Decision.asset_id == Finding.asset_id)
                 & (Decision.identity_key == Finding.identity_key),
             )
-            .where(Finding.tool == "dependencies", Finding.org == org_key)
+            .join(Asset, Asset.id == Finding.asset_id)
+            .where(Finding.tool == "dependencies", Finding.asset_id.in_(asset_ids))
         )
+        if include_archived_rows:
+            stmt = include_archived(stmt)
+        else:
+            stmt = exclude_archived(stmt, Finding)
         result = await session.execute(stmt)
-        return [_finding_to_dependencies_alert(f, d) for f, d in result.all()]
+        return [_finding_to_dependencies_alert(f, d, a) for f, d, a in result.all()]
     return run_db(_query)
 
 
-def _finding_to_dependencies_alert(f: Finding, decision: Decision | None = None) -> dict[str, Any]:
-    detail = f.detail or {}
+def _finding_to_dependencies_alert(
+    f: Finding, decision: Decision | None = None, asset: Asset | None = None,
+) -> dict[str, Any]:
+    from src.shared.finding_detail_blob import hydrate_detail
+    detail = hydrate_detail(f)
     return {
         "state": f.state,
         "first_seen_at": _dt_to_iso(f.first_seen_at),
@@ -206,14 +232,14 @@ def _finding_to_dependencies_alert(f: Finding, decision: Decision | None = None)
         "introduced_at": _dt_to_iso(getattr(f, "introduced_at", None)),
         "introduced_by_pr_url": getattr(f, "introduced_by_pr_url", None),
         "current_version": detail.get("currentVersion"),
-        "repository": {"name": (f.repo or "").rsplit("/", 1)[-1], "full_name": f.repo or ""},
+        "repository": _asset_to_repo_dict(asset),
         "dependency": {
             "package": {"name": detail.get("packageName", ""), "ecosystem": detail.get("ecosystem", "")},
             "manifest_path": detail.get("manifestPath", ""),
         },
         "security_advisory": {
             "ghsa_id": detail.get("advisoryId", ""),
-            "cve_id": detail.get("cveId"),
+            "cve_id": f.cve_id,
             "summary": detail.get("summary", ""),
             "description": detail.get("description", ""),
             "severity": f.severity or "",
@@ -289,11 +315,11 @@ def create_container_scanning_run(org_key: str, run_id: str) -> dict[str, Any]:
         session.add(ScanRun(
             id=run_id,
             tool="container_scanning",
-            org=org_key,
             status="queued",
             started_at=None,
             progress=run_dict["progress"],
             metadata_json={
+                "org_label": org_key,
                 "createdAt": run_dict["createdAt"],
                 "findingsCount": 0,
                 "repositories": [],
@@ -349,7 +375,10 @@ def list_container_scanning_runs(org_key: str) -> list[dict[str, Any]]:
     async def _query(session):
         result = await session.execute(
             select(ScanRun)
-            .where(ScanRun.tool == "container_scanning", ScanRun.org == org_key)
+            .where(
+                ScanRun.tool == "container_scanning",
+                ScanRun.metadata_json["org_label"].astext == org_key,
+            )
             .order_by(ScanRun.started_at.desc().nullslast())
         )
         return [_run_to_dict(r) for r in result.scalars().all()]
@@ -361,19 +390,24 @@ def list_container_scanning_runs(org_key: str) -> list[dict[str, Any]]:
 # ContainerScanning Findings — read from unified Finding table
 # ---------------------------------------------------------------------------
 
-def read_container_scanning_findings(org: str) -> list[dict[str, Any]]:
+def read_container_scanning_findings(*, asset_ids: list[str], include_archived_rows: bool = False) -> list[dict[str, Any]]:
+    if not asset_ids:
+        return []
     async def _query(session):
-        org_key = normalize_org(org)
         stmt = (
             select(Finding, Decision)
             .outerjoin(
                 Decision,
                 (Decision.tool == Finding.tool)
-                & (Decision.org == Finding.org)
+                & (Decision.asset_id == Finding.asset_id)
                 & (Decision.identity_key == Finding.identity_key),
             )
-            .where(Finding.tool == "container_scanning", Finding.org == org_key)
+            .where(Finding.tool == "container_scanning", Finding.asset_id.in_(asset_ids))
         )
+        if include_archived_rows:
+            stmt = include_archived(stmt)
+        else:
+            stmt = exclude_archived(stmt, Finding)
         result = await session.execute(stmt)
         return [_finding_to_dependencies_alert(f, d) for f, d in result.all()]
     return run_db(_query)
@@ -408,7 +442,7 @@ def _secret_run_to_dict(run: ScanRun) -> dict[str, Any]:
     meta = run.metadata_json or {}
     return {
         "id": run.id,
-        "organization": run.org,
+        "organization": meta.get("org_label", ""),
         "status": run.status or "queued",
         "createdAt": meta.get("createdAt", _dt_to_iso(run.started_at) or now_iso()),
         "startedAt": _dt_to_iso(run.started_at),
@@ -454,10 +488,10 @@ def create_secret_run(org: str, run_id: str) -> dict[str, Any]:
         session.add(ScanRun(
             id=run_id,
             tool="secrets",
-            org=org.lower(),
             status="queued",
             progress=run_dict["progress"],
             metadata_json={
+                "org_label": org.lower(),
                 "createdAt": run_dict["createdAt"],
                 "findingsCount": 0,
                 "logTail": [],
@@ -483,7 +517,8 @@ def update_secret_run(org: str, run_id: str, patch: dict[str, Any]) -> dict[str,
         run = await session.get(ScanRun, run_id)
         if not run:
             # Create it
-            run = ScanRun(id=run_id, tool="secrets", org=org.lower(), status="queued")
+            run = ScanRun(id=run_id, tool="secrets", status="queued",
+                          metadata_json={"org_label": org.lower()})
             session.add(run)
 
         meta = dict(run.metadata_json or {})
@@ -526,7 +561,10 @@ def list_secret_runs(org: str) -> list[dict[str, Any]]:
     async def _query(session):
         result = await session.execute(
             select(ScanRun)
-            .where(ScanRun.tool == "secrets", ScanRun.org == org.lower())
+            .where(
+                ScanRun.tool == "secrets",
+                ScanRun.metadata_json["org_label"].astext == org.lower(),
+            )
             .order_by(
                 case(
                     (ScanRun.status.in_(["queued", "running", "ingesting"]), 0),
@@ -545,11 +583,12 @@ def list_secret_runs(org: str) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def _finding_to_secret_dict(f: Finding, decision: Decision | None = None) -> dict[str, Any]:
-    detail = f.detail or {}
+    from src.shared.finding_detail_blob import hydrate_detail
+    detail = hydrate_detail(f)
     review_status = f.review_status or "new"
     result = {
         **detail,
-        "organization": f.org or "",
+        "organization": detail.get("org", ""),  # org_label stored in detail for secrets
         "reviewStatus": review_status,
         "secretIdentity": f.identity_key or detail.get("secretIdentity", ""),
         "severity": f.severity or "",
@@ -567,20 +606,28 @@ def _finding_to_secret_dict(f: Finding, decision: Decision | None = None) -> dic
     return result
 
 
-def read_latest_findings(org: str) -> list[dict[str, Any]]:
-    """Read all secret findings for an org from the DB."""
+def read_latest_findings(org: str | None = None, *, asset_ids: list[str] | None = None, include_archived_rows: bool = False) -> list[dict[str, Any]]:
+    """Read secret findings from the DB. Secrets have asset_id=NULL; no org filter after Plan D."""
     async def _query(session):
-        org_key = normalize_org(org)
         stmt = (
             select(Finding, Decision)
             .outerjoin(
                 Decision,
                 (Decision.tool == Finding.tool)
-                & (Decision.org == Finding.org)
+                & (Decision.asset_id == Finding.asset_id)
                 & (Decision.identity_key == Finding.identity_key),
             )
-            .where(Finding.tool == "secrets", Finding.org == org_key)
+            .where(Finding.tool == "secrets")
         )
+        if asset_ids is not None:
+            stmt = stmt.where(Finding.asset_id.in_(asset_ids))
+        # Secrets are emitted with asset_id=NULL by design (they aren't bound
+        # to a specific repo asset). Per-source isolation is deferred until a
+        # secrets-specific identity model exists.
+        if include_archived_rows:
+            stmt = include_archived(stmt)
+        else:
+            stmt = exclude_archived(stmt, Finding)
         result = await session.execute(stmt)
         return [_finding_to_secret_dict(f, d) for f, d in result.all()]
 
@@ -599,7 +646,10 @@ def read_secrets_snapshot(org: str) -> dict[str, Any] | None:
     async def _query(session):
         result = await session.execute(
             select(ScanRun)
-            .where(ScanRun.tool == "secrets", ScanRun.org == org.lower())
+            .where(
+                ScanRun.tool == "secrets",
+                ScanRun.metadata_json["org_label"].astext == org.lower(),
+            )
             .order_by(ScanRun.started_at.desc().nullslast())
             .limit(1)
         )
@@ -644,11 +694,11 @@ def create_code_scanning_run(org_key: str, run_id: str) -> dict[str, Any]:
         session.add(ScanRun(
             id=run_id,
             tool="code_scanning",
-            org=org_key,
             status="queued",
             started_at=None,
             progress=run_dict["progress"],
             metadata_json={
+                "org_label": org_key,
                 "createdAt": run_dict["createdAt"],
                 "findingsCount": 0,
                 "logTail": [],
@@ -702,7 +752,10 @@ def list_code_scanning_runs(org_key: str) -> list[dict[str, Any]]:
     async def _query(session):
         result = await session.execute(
             select(ScanRun)
-            .where(ScanRun.tool == "code_scanning", ScanRun.org == org_key)
+            .where(
+                ScanRun.tool == "code_scanning",
+                ScanRun.metadata_json["org_label"].astext == org_key,
+            )
             .order_by(ScanRun.started_at.desc().nullslast())
         )
         return [_run_to_dict(r) for r in result.scalars().all()]
@@ -714,26 +767,35 @@ def list_code_scanning_runs(org_key: str) -> list[dict[str, Any]]:
 # Code Scanning Findings — read from unified Finding table
 # ---------------------------------------------------------------------------
 
-def read_code_scanning_findings(org: str) -> list[dict[str, Any]]:
+def read_code_scanning_findings(*, asset_ids: list[str], include_archived_rows: bool = False) -> list[dict[str, Any]]:
+    if not asset_ids:
+        return []
     async def _query(session):
-        org_key = normalize_org(org)
         stmt = (
-            select(Finding, Decision)
+            select(Finding, Decision, Asset)
             .outerjoin(
                 Decision,
                 (Decision.tool == Finding.tool)
-                & (Decision.org == Finding.org)
+                & (Decision.asset_id == Finding.asset_id)
                 & (Decision.identity_key == Finding.identity_key),
             )
-            .where(Finding.tool == "code_scanning", Finding.org == org_key)
+            .join(Asset, Asset.id == Finding.asset_id)
+            .where(Finding.tool == "code_scanning", Finding.asset_id.in_(asset_ids))
         )
+        if include_archived_rows:
+            stmt = include_archived(stmt)
+        else:
+            stmt = exclude_archived(stmt, Finding)
         result = await session.execute(stmt)
-        return [_finding_to_code_scanning_dict(f, d) for f, d in result.all()]
+        return [_finding_to_code_scanning_dict(f, d, a) for f, d, a in result.all()]
     return run_db(_query)
 
 
-def _finding_to_code_scanning_dict(f: Finding, decision: Decision | None = None) -> dict[str, Any]:
-    detail = f.detail or {}
+def _finding_to_code_scanning_dict(
+    f: Finding, decision: Decision | None = None, asset: Asset | None = None,
+) -> dict[str, Any]:
+    from src.shared.finding_detail_blob import hydrate_detail
+    detail = hydrate_detail(f)
     result: dict[str, Any] = {
         "state": f.state,
         "first_seen_at": _dt_to_iso(f.first_seen_at),
@@ -741,10 +803,10 @@ def _finding_to_code_scanning_dict(f: Finding, decision: Decision | None = None)
         "dismissed_at": _dt_to_iso(decision.decided_at) if decision else None,
         "dismissed_by": decision.decided_by if decision else None,
         "dismissed_reason": decision.reason if decision else None,
-        "repo_full_name": f"{f.org}/{f.repo}" if f.org and f.repo else (f.repo or ""),
+        "repo_full_name": (asset.display_name if asset is not None else ""),
         "rule_id": detail.get("ruleId", ""),
-        "rule_name": detail.get("ruleName", ""),
-        "file_path": detail.get("filePath", ""),
+        "rule_name": f.rule_name or "",
+        "file_path": f.file_path or "",
         "start_line": detail.get("startLine", 0),
         "end_line": detail.get("endLine", 0),
         "severity": f.severity or "",
@@ -755,8 +817,6 @@ def _finding_to_code_scanning_dict(f: Finding, decision: Decision | None = None)
         "snippet": detail.get("snippet", ""),
         "fix_suggestion": detail.get("fixSuggestion"),
         "repo_html_url": detail.get("repoHtmlUrl", ""),
-        "ai_review": detail.get("aiReview"),
-        # AI review context fields
         "language": detail.get("language", ""),
         "file_class": detail.get("fileClass", ""),
         # Commit attribution (§5.6)
@@ -764,6 +824,10 @@ def _finding_to_code_scanning_dict(f: Finding, decision: Decision | None = None)
         "introduced_by_author": getattr(f, "introduced_by_author", None),
         "introduced_at": _dt_to_iso(getattr(f, "introduced_at", None)),
         "introduced_by_pr_url": getattr(f, "introduced_by_pr_url", None),
+        # Engine attribution (column is SOT) + dataflow trace + merged rule ids
+        "engine": getattr(f, "engine", None),
+        "rule_ids": detail.get("ruleIds"),
+        "dataflow_trace": detail.get("dataflowTrace"),
     }
     # Optional large fields
     for key in ("code_flows", "code_window", "imports", "reachability"):
@@ -771,26 +835,6 @@ def _finding_to_code_scanning_dict(f: Finding, decision: Decision | None = None)
         if val:
             result[key] = val
     return result
-
-
-def patch_finding_detail(tool: str, org: str, identity_key: str, patch: dict[str, Any]) -> None:
-    """Merge keys into a finding's detail JSONB. Used for AI review results etc."""
-    async def _query(session):
-        result = await session.execute(
-            select(Finding).where(
-                Finding.tool == tool,
-                Finding.org == normalize_org(org),
-                Finding.identity_key == identity_key,
-            )
-        )
-        finding = result.scalars().first()
-        if finding:
-            detail = dict(finding.detail or {})
-            detail.update(patch)
-            finding.detail = detail
-            finding.updated_at = _now_dt()
-
-    run_db(_query)
 
 
 def empty_code_scanning_snapshot(org: str) -> dict[str, Any]:

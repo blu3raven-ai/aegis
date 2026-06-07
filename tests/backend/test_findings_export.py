@@ -28,6 +28,7 @@ from src.exports.findings_export import (
     stream_findings_json,
 )
 from src.db.models import Finding
+from src.shared.finding_queryable_fields import extract_queryable_fields
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +55,12 @@ def _make_finding(
     f.detail = detail or {"title": f"Finding {id}", "cve_id": "CVE-2026-0001"}
     f.first_seen_at = first_seen_at or datetime(2026, 1, 1, tzinfo=timezone.utc)
     f.last_seen_at = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    qf = extract_queryable_fields(f.detail or {})
+    f.cve_id = qf["cve_id"]
+    f.file_path = qf["file_path"]
+    f.title = qf["title"]
+    f.rule_name = qf["rule_name"]
+    f.package_name = qf["package_name"]
     return f
 
 

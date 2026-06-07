@@ -447,7 +447,7 @@ def test_run_scan_empty_repos_returns_clean(tmp_path):
     from runner.scanners.code_scanning.scanner import CodeScanningScanner
 
     scanner = CodeScanningScanner()
-    job = {"jobId": "test-cs", "dockerArgs": {"envVars": {"GIT_REPOS": ""}}}
+    job = {"jobId": "test-cs", "envVars": {"GIT_REPOS": ""},}
     job_dir = tmp_path / "test-cs"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
@@ -472,10 +472,7 @@ def test_run_scan_pre_cancel_returns_137(tmp_path):
     cancel.set()
     job = {
         "jobId": "x",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/a/b.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/a/b.git"},}
     result = scanner.run_scan(
         job, job_dir=tmp_path / "x", cancel_event=cancel
     )
@@ -534,13 +531,10 @@ def test_run_scan_uses_env_semgrep_rules_path(tmp_path, monkeypatch):
     scanner = CodeScanningScanner()
     job = {
         "jobId": "j",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git",
                 "SEMGREP_RULES_PATH": "/custom/rules",
-            }
-        },
-    }
+            },}
     scanner.run_scan(job, job_dir=tmp_path / "j")
     assert captured["config_args"] == ["--config", "/custom/rules"]
 
@@ -560,10 +554,7 @@ def test_run_scan_uses_process_env_semgrep_rules_path(tmp_path, monkeypatch):
     scanner = CodeScanningScanner()
     job = {
         "jobId": "j",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/a/b.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/a/b.git"},}
     scanner.run_scan(job, job_dir=tmp_path / "j")
     assert captured["config_args"] == ["--config", "/from/env"]
 
@@ -595,13 +586,10 @@ def test_run_scan_honours_concurrency_env(tmp_path, monkeypatch):
     scanner = CodeScanningScanner()
     job = {
         "jobId": "test-conc",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git,https://github.com/c/d.git",
                 "CONCURRENCY": "9",
-            }
-        },
-    }
+            },}
     scanner.run_scan(job, job_dir=tmp_path / "test-conc")
     assert captured["max_workers"] == 9
 
@@ -618,10 +606,7 @@ def test_run_scan_tolerates_clone_failure(tmp_path, monkeypatch):
     scanner = CodeScanningScanner()
     job = {
         "jobId": "test-fail",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/a/b.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/a/b.git"},}
     job_dir = tmp_path / "test-fail"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
@@ -671,13 +656,10 @@ def test_run_scan_aggregates_findings_jsonl(tmp_path, monkeypatch):
     scanner = CodeScanningScanner()
     job = {
         "jobId": "test-agg",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git\nhttps://github.com/c/d.git",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "test-agg"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
@@ -719,7 +701,7 @@ def test_run_scan_emits_progress(tmp_path):
         captures.append(dict(progress))
 
     scanner = CodeScanningScanner()
-    job = {"jobId": "p1", "dockerArgs": {"envVars": {"GIT_REPOS": ""}}}
+    job = {"jobId": "p1", "envVars": {"GIT_REPOS": ""},}
     scanner.run_scan(job, job_dir=tmp_path / "p1", on_progress=on_progress)
 
     assert captures, "on_progress was never called"
@@ -741,13 +723,10 @@ def test_run_scan_emits_progress_per_repo(tmp_path, monkeypatch):
     scanner = CodeScanningScanner()
     job = {
         "jobId": "p2",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://x/a.git,https://x/b.git",
                 "CONCURRENCY": "1",
-            }
-        },
-    }
+            },}
     scanner.run_scan(
         job,
         job_dir=tmp_path / "p2",
@@ -778,8 +757,7 @@ def test_run_scan_emits_progress_done_on_pre_cancel(tmp_path):
     scanner = CodeScanningScanner()
     job = {
         "jobId": "p3",
-        "dockerArgs": {"envVars": {"GIT_REPOS": "https://x/a.git"}},
-    }
+        "envVars": {"GIT_REPOS": "https://x/a.git"},}
     scanner.run_scan(
         job,
         job_dir=tmp_path / "p3",
@@ -796,6 +774,60 @@ def test_run_scan_progress_callback_exception_does_not_abort(tmp_path):
         raise RuntimeError("boom")
 
     scanner = CodeScanningScanner()
-    job = {"jobId": "p4", "dockerArgs": {"envVars": {"GIT_REPOS": ""}}}
+    job = {"jobId": "p4", "envVars": {"GIT_REPOS": ""},}
     result = scanner.run_scan(job, job_dir=tmp_path / "p4", on_progress=bad)
     assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# CodeScanningConfig
+# ---------------------------------------------------------------------------
+
+def _code_job(env: dict) -> dict:
+    return {"jobId": "job-test", "envVars": env}
+
+
+def test_code_config_parses_defaults():
+    from runner.scanners.code_scanning.scanner import CodeScanningConfig
+    cfg = CodeScanningConfig.from_job(_code_job({"GIT_REPOS": "https://x/a.git"}))
+    assert cfg.org_label == "default"
+    assert cfg.concurrency == 4
+    assert cfg.rulesets == ""
+    assert cfg.rules_path == "/opt/semgrep-rules"
+    assert cfg.git_token is None
+    assert cfg.repos == ["https://x/a.git"]
+
+
+def test_code_config_parses_explicit_values():
+    from runner.scanners.code_scanning.scanner import CodeScanningConfig
+    cfg = CodeScanningConfig.from_job(_code_job({
+        "GIT_REPOS": "https://x/a.git",
+        "GIT_TOKEN": "ghp_tok",
+        "ORG_LABEL": "acme-org",
+        "RUN_ID": "run-3",
+        "CONCURRENCY": "3",
+        "RULESETS": "p/python,p/javascript",
+        "SEMGREP_RULES_PATH": "/custom/rules",
+    }))
+    assert cfg.repos == ["https://x/a.git"]
+    assert cfg.git_token == "ghp_tok"
+    assert cfg.org_label == "acme-org"
+    assert cfg.run_id == "run-3"
+    assert cfg.concurrency == 3
+    assert cfg.rulesets == "p/python,p/javascript"
+    assert cfg.rules_path == "/custom/rules"
+
+
+def test_code_config_run_id_falls_back_to_job_id():
+    from runner.scanners.code_scanning.scanner import CodeScanningConfig
+    cfg = CodeScanningConfig.from_job({"jobId": "job-55", "envVars": {"GIT_REPOS": "https://x/a.git"}})
+    assert cfg.run_id == "job-55"
+
+
+def test_code_config_concurrency_bad_value_uses_default():
+    from runner.scanners.code_scanning.scanner import CodeScanningConfig
+    cfg = CodeScanningConfig.from_job(_code_job({
+        "GIT_REPOS": "https://x/a.git",
+        "CONCURRENCY": "bad",
+    }))
+    assert cfg.concurrency == 4

@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import strawberry
 
-from src.graphql.auth import validate_org_access, GraphQLAuthError
+from src.graphql.auth import GraphQLAuthError
 from src.graphql.limits import clamp_per_page
 from src.graphql.types import (
     SeverityCounts, SeverityBucket, AgeBucket, RepoSummary,
@@ -23,6 +23,7 @@ from src.shared.paths import parse_iso_utc as _parse_dt
 from src.storage import read_container_scanning_findings
 from src.shared.analytics import build_analytics, get_counts
 from src.shared.config import get_scan_sources_for_org
+from src.shared.home_views import get_severity_counts_by_asset_ids
 
 
 def _container_images_only(sources: list) -> list[dict[str, Any]]:
@@ -83,46 +84,35 @@ class ContainerAnalytics:
     deferred_findings_count: int
 
 
-def _load_scoped_findings(org: str, ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Load container findings with per-request caching and repo-level scope filtering."""
+def _load_scoped_findings(asset_ids: list[str], ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Load container findings with per-request caching, scoped by asset_ids."""
     if not ctx:
         raise GraphQLAuthError("Unauthorized")
-    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
-    for single_org in orgs:
-        validate_org_access(ctx, single_org)
+    if not asset_ids:
+        return []
     request_cache = ctx.get("_cache")
-    request = ctx.get("request")
-    all_findings: list[dict[str, Any]] = []
-    for single_org in orgs:
-        cache_key = f"_container_findings:{single_org}"
-        if request_cache is not None and cache_key in request_cache:
-            all_findings.extend(request_cache[cache_key])
-            continue
-        findings = read_container_scanning_findings(single_org) or []
-        if request:
-            from src.shared.router_helpers import filter_findings_by_scope
-            findings = filter_findings_by_scope(request, findings)
-        if request_cache is not None:
-            request_cache[cache_key] = findings
-        all_findings.extend(findings)
-    return all_findings
+    cache_key = f"_container_findings:asset_ids:{','.join(sorted(asset_ids))}"
+    if request_cache is not None and cache_key in request_cache:
+        return list(request_cache[cache_key])
+    # asset_id IS the scope; no further per-repo filtering needed
+    findings = read_container_scanning_findings(asset_ids=asset_ids) or []
+    if request_cache is not None:
+        request_cache[cache_key] = findings
+    return findings
 
 
-def container_counts(org: str, info_context: dict[str, Any]) -> SeverityCounts:
-    findings = _load_scoped_findings(org, info_context)
-    open_findings = [f for f in findings if f.get("state") == "open"]
-    counts = get_counts(open_findings)
+def container_counts(*, asset_ids: list[str], info_context: dict[str, Any]) -> SeverityCounts:
+    counts = get_severity_counts_by_asset_ids(asset_ids, tool="container_scanning", state="open")
     return SeverityCounts(
-        total=counts.total,
-        critical=counts.critical,
-        high=counts.high,
-        medium=counts.medium,
-        low=counts.low,
+        total=counts["total"], critical=counts["critical"],
+        high=counts["high"], medium=counts["medium"], low=counts["low"],
     )
 
 
 def container_findings(
-    org: str,
+    *,
+    asset_ids: list[str],
+    org: Optional[str] = None,
     page: int = 1,
     per_page: int = 25,
     severity: Optional[str] = None,
@@ -139,8 +129,17 @@ def container_findings(
     last_scan_date: Optional[str] = None,
     info_context: dict[str, Any] | None = None,
 ) -> ContainerFindingsConnection:
+    if not asset_ids:
+        return ContainerFindingsConnection(
+            items=[], total_count=0,
+            page_info=PageInfo(has_next_page=False, has_previous_page=False, total_pages=0),
+        )
     per_page = clamp_per_page(per_page)
-    findings = _load_scoped_findings(org, info_context)
+    findings = _load_scoped_findings(asset_ids, info_context)
+    # org is a UI filter to narrow the asset-scoped result to specific orgs
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if (f.get("repository") or {}).get("full_name", "").split("/")[0].lower() in wanted]
 
     # Input validation
     if ecosystem:
@@ -249,29 +248,28 @@ def container_findings(
     )
 
 
-def container_filter_options(org: str, info_context: dict[str, Any]) -> FilterOptions:
-    findings = _load_scoped_findings(org, info_context)
+def container_filter_options(*, asset_ids: list[str], org: Optional[str] = None, info_context: dict[str, Any]) -> FilterOptions:
+    findings = _load_scoped_findings(asset_ids, info_context)
     ecosystems = sorted({
         (f.get("dependency") or {}).get("package", {}).get("ecosystem", "")
         for f in findings if (f.get("dependency") or {}).get("package", {}).get("ecosystem")
     })
-    repos = sorted({
-        (f.get("repository") or {}).get("full_name", "")
-        for f in findings if (f.get("repository") or {}).get("full_name")
-    })
-    orgs = sorted({
-        (f.get("repository") or {}).get("full_name", "").split("/")[0]
-        for f in findings if "/" in (f.get("repository") or {}).get("full_name", "")
-    })
+    # Derive repo/org lists from Asset.external_ref (Finding.org/repo dropped in Plan D)
+    from src.graphql.dependencies_resolvers import _scoped_repos_and_orgs
+    repos, orgs = _scoped_repos_and_orgs(asset_ids)
     return FilterOptions(ecosystems=ecosystems, repositories=repos, organizations=orgs)
 
 
-def container_analytics(org: str, info_context: dict[str, Any]) -> ContainerAnalytics:
-    findings = _load_scoped_findings(org, info_context)
+def container_analytics(*, asset_ids: list[str], org: Optional[str] = None, info_context: dict[str, Any]) -> ContainerAnalytics:
+    findings = _load_scoped_findings(asset_ids, info_context)
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if (f.get("repository") or {}).get("full_name", "").split("/")[0].lower() in wanted]
     open_findings = [f for f in findings if f.get("state") == "open"]
     fixed_findings = [f for f in findings if f.get("state") == "fixed"]
 
-    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    # Derive unique orgs from findings for coverage computation
+    orgs = sorted({(f.get("repository") or {}).get("full_name", "").split("/")[0] for f in findings if (f.get("repository") or {}).get("full_name", "").count("/") >= 1})
     seen_images: dict[str, dict[str, Any]] = {}
     for single_org in orgs:
         for r in _container_images_only(get_scan_sources_for_org(single_org)):

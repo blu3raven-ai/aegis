@@ -16,37 +16,37 @@ const HERE = new URL(".", import.meta.url).pathname
 // ── Component files exist ────────────────────────────────────────────────────
 
 test("EpssScoreCell component file exists", () => {
-  const p = resolve(HERE, "../../components/shared/findings/EpssScoreCell.tsx")
+  const p = resolve(HERE, "../../frontend/components/shared/findings/EpssScoreCell.tsx")
   assert.ok(existsSync(p), `Component not found at ${p}`)
 })
 
 test("EpssExposureWidget component file exists", () => {
-  const p = resolve(HERE, "../../components/shared/dashboard/EpssExposureWidget.tsx")
+  const p = resolve(HERE, "../../frontend/components/shared/dashboard/EpssExposureWidget.tsx")
   assert.ok(existsSync(p), `Component not found at ${p}`)
 })
 
 // ── EpssScoreCell label logic (via formatPercentile + epssBucket) ────────────
 
 test("cell logic: high-percentile finding renders bucketed dot color", async () => {
-  const { epssBucket, formatPercentile } = await import("../../lib/client/epss-api.ts")
+  const { epssBucket, formatPercentile } = await import("../../frontend/lib/client/epss-api.ts")
   assert.equal(epssBucket(0.98), "high")
   assert.equal(formatPercentile(0.98), "98%")
 })
 
 test("cell logic: medium-percentile finding renders bucketed dot color", async () => {
-  const { epssBucket, formatPercentile } = await import("../../lib/client/epss-api.ts")
+  const { epssBucket, formatPercentile } = await import("../../frontend/lib/client/epss-api.ts")
   assert.equal(epssBucket(0.74), "medium")
   assert.equal(formatPercentile(0.74), "74%")
 })
 
 test("cell logic: low-percentile finding has no dot", async () => {
-  const { epssBucket, formatPercentile } = await import("../../lib/client/epss-api.ts")
+  const { epssBucket, formatPercentile } = await import("../../frontend/lib/client/epss-api.ts")
   assert.equal(epssBucket(0.42), "none")
   assert.equal(formatPercentile(0.42), "42%")
 })
 
 test("cell logic: missing percentile renders em-dash placeholder", async () => {
-  const { formatPercentile } = await import("../../lib/client/epss-api.ts")
+  const { formatPercentile } = await import("../../frontend/lib/client/epss-api.ts")
   assert.equal(formatPercentile(null), null)
   assert.equal(formatPercentile(undefined), null)
 })

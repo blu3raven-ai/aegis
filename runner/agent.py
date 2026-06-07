@@ -23,6 +23,7 @@ from runner.metrics import (
 )
 from runner.structured_logging import configure_logging, log_with_context
 from runner.graceful_drain import GracefulDrainManager
+from runner.backend_client import BackendClient
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,7 @@ class RunnerAgent:
         )
         self._processed_total: int = 0
         self._processed_lock = threading.Lock()
+        self._backend = BackendClient(portal_url=self.portal_url, auth_token=self.auth_token)
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.auth_token}"}
@@ -301,16 +303,13 @@ class RunnerAgent:
                 pass
 
         from runner.streamer import ManifestStreamer, MAX_FINISH_WAIT
-        from runner.uploader import upload_file
 
         job_dir = WORKSPACE_DIR / job_id
 
         streamer = ManifestStreamer(
             job_dir=job_dir,
-            upload_fn=upload_file,
-            tool=job_type,
-            org=org,
-            run_id=run_id,
+            backend_client=self._backend,
+            job_id=job_id,
         )
 
         streamer_thread = threading.Thread(
@@ -339,6 +338,7 @@ class RunnerAgent:
                 pass
 
         try:
+            job["_backend"] = self._backend
             scanner = get_scanner(job_type)
             result = scanner.run_scan(job, job_dir=job_dir, on_progress=on_progress, cancel_event=cancel_event)
 

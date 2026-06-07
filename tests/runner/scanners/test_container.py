@@ -370,7 +370,7 @@ def test_run_scan_empty_images_returns_clean(tmp_path):
     scanner = ContainerScanner()
     job = {
         "jobId": "test-c-empty",
-        "dockerArgs": {"envVars": {"DOCKER_IMAGES": ""}},
+        "envVars": {"DOCKER_IMAGES": ""},
     }
     job_dir = tmp_path / "test-c-empty"
     result = scanner.run_scan(job, job_dir=job_dir)
@@ -395,7 +395,7 @@ def test_run_scan_rejects_invalid_image_ref(tmp_path):
     scanner = ContainerScanner()
     job = {
         "jobId": "test-bad",
-        "dockerArgs": {"envVars": {"DOCKER_IMAGES": "alpine;rm -rf /,-evil"}},
+        "envVars": {"DOCKER_IMAGES": "alpine;rm -rf /,-evil"},
     }
     job_dir = tmp_path / "test-bad"
     result = scanner.run_scan(job, job_dir=job_dir)
@@ -414,7 +414,7 @@ def test_run_scan_pre_cancel_returns_137(tmp_path):
     cancel.set()
     job = {
         "jobId": "test-cancel",
-        "dockerArgs": {"envVars": {"DOCKER_IMAGES": "alpine:3.18"}},
+        "envVars": {"DOCKER_IMAGES": "alpine:3.18"},
     }
     result = scanner.run_scan(
         job, job_dir=tmp_path / "test-cancel", cancel_event=cancel
@@ -428,12 +428,10 @@ def test_run_scan_rejects_unsupported_scan_mode(tmp_path):
     scanner = ContainerScanner()
     job = {
         "jobId": "test-mode",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "alpine:3.18",
                 "SCAN_MODE": "not_a_real_mode",
-            }
-        },
+            },
     }
     job_dir = tmp_path / "test-mode"
     result = scanner.run_scan(job, job_dir=job_dir)
@@ -509,12 +507,10 @@ def test_run_scan_honours_concurrency_env(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "test-conc",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "alpine:3.18,debian:12",
                 "CONCURRENCY": "5",
-            }
-        },
+            },
     }
     scanner.run_scan(job, job_dir=tmp_path / "test-conc")
     assert captured["max_workers"] == 5
@@ -558,12 +554,10 @@ def test_run_scan_aggregates_findings(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "test-agg",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "alpine:3.18\ndebian:12",
                 "ORG_LABEL": "acme",
-            }
-        },
+            },
     }
     job_dir = tmp_path / "test-agg"
     result = scanner.run_scan(job, job_dir=job_dir)
@@ -591,7 +585,7 @@ def test_run_scan_tolerates_per_image_failure(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "test-fail",
-        "dockerArgs": {"envVars": {"DOCKER_IMAGES": "alpine:3.18"}},
+        "envVars": {"DOCKER_IMAGES": "alpine:3.18"},
     }
     job_dir = tmp_path / "test-fail"
     result = scanner.run_scan(job, job_dir=job_dir)
@@ -624,12 +618,10 @@ def test_run_scan_invokes_registry_auth(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "test-auth",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "alpine:3.18",
                 "REGISTRY_AUTHS": '[{"registry":"ghcr.io","token":"x"}]',
-            }
-        },
+            },
     }
     scanner.run_scan(job, job_dir=tmp_path / "test-auth")
     assert seen["env_val"] == '[{"registry":"ghcr.io","token":"x"}]'
@@ -675,7 +667,7 @@ def test_run_scan_emits_progress(tmp_path):
         captures.append(dict(progress))
 
     scanner = ContainerScanner()
-    job = {"jobId": "p1", "dockerArgs": {"envVars": {"DOCKER_IMAGES": ""}}}
+    job = {"jobId": "p1", "envVars": {"DOCKER_IMAGES": ""}}
     scanner.run_scan(job, job_dir=tmp_path / "p1", on_progress=on_progress)
 
     assert captures, "on_progress was never called"
@@ -704,12 +696,10 @@ def test_run_scan_emits_progress_per_image(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "p2",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "alpine:3.20,debian:12",
                 "CONCURRENCY": "1",
-            }
-        },
+            },
     }
     scanner.run_scan(
         job,
@@ -738,12 +728,10 @@ def test_run_scan_emits_progress_done_on_unsupported_mode(tmp_path):
     scanner = ContainerScanner()
     job = {
         "jobId": "p3",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "alpine:3.20",
                 "SCAN_MODE": "not_a_real_mode",
-            }
-        },
+            },
     }
     scanner.run_scan(
         job,
@@ -764,7 +752,7 @@ def test_run_scan_emits_progress_done_on_pre_cancel(tmp_path):
     scanner = ContainerScanner()
     job = {
         "jobId": "p4",
-        "dockerArgs": {"envVars": {"DOCKER_IMAGES": "alpine:3.20"}},
+        "envVars": {"DOCKER_IMAGES": "alpine:3.20"},
     }
     scanner.run_scan(
         job,
@@ -782,7 +770,7 @@ def test_run_scan_progress_callback_exception_does_not_abort(tmp_path):
         raise RuntimeError("boom")
 
     scanner = ContainerScanner()
-    job = {"jobId": "p5", "dockerArgs": {"envVars": {"DOCKER_IMAGES": ""}}}
+    job = {"jobId": "p5", "envVars": {"DOCKER_IMAGES": ""}}
     result = scanner.run_scan(job, job_dir=tmp_path / "p5", on_progress=bad)
     assert result.exit_code == 0
 
@@ -877,14 +865,12 @@ def test_previous_digests_skips_unchanged_image(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "skip-test",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/img:1.0",
                 "PREVIOUS_DIGESTS": json.dumps(
                     {"gcr.io/proj/img:1.0": "sha256:cafef00d"}
                 ),
-            }
-        },
+            },
     }
     job_dir = tmp_path / "skip-test"
     result = scanner.run_scan(job, job_dir=job_dir)
@@ -917,8 +903,7 @@ def test_previous_digests_skipped_image_still_emits_progress(
     scanner = ContainerScanner()
     job = {
         "jobId": "skip-progress",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/a:1.0,gcr.io/proj/b:1.0",
                 "PREVIOUS_DIGESTS": json.dumps(
                     {
@@ -927,8 +912,7 @@ def test_previous_digests_skipped_image_still_emits_progress(
                     }
                 ),
                 "CONCURRENCY": "1",
-            }
-        },
+            },
     }
     scanner.run_scan(
         job,
@@ -959,14 +943,12 @@ def test_previous_digests_skipped_image_writes_manifest_entry(
     scanner = ContainerScanner()
     job = {
         "jobId": "skip-manifest",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/img:1.0",
                 "PREVIOUS_DIGESTS": json.dumps(
                     {"gcr.io/proj/img:1.0": "sha256:abc"}
                 ),
-            }
-        },
+            },
     }
     job_dir = tmp_path / "skip-manifest"
     scanner.run_scan(job, job_dir=job_dir)
@@ -990,12 +972,10 @@ def test_previous_digests_invalid_json_warns_and_proceeds(tmp_path, monkeypatch)
     scanner = ContainerScanner()
     job = {
         "jobId": "bad-prev",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "alpine:3.18",
                 "PREVIOUS_DIGESTS": "{not-json",
-            }
-        },
+            },
     }
     result = scanner.run_scan(job, job_dir=tmp_path / "bad-prev")
     assert result.exit_code == 0
@@ -1019,7 +999,7 @@ def test_previous_digests_mismatch_still_invokes_syft(tmp_path, monkeypatch):
 
     called: list = []
 
-    def fake_syft(self, image_ref, scan_platform, output, cancel_event):
+    def fake_syft(self, image_ref, scan_platform, output, cancel_event, **_):
         called.append(image_ref)
         output.write_text(
             json.dumps({"metadata": {"component": {"name": image_ref}}})
@@ -1034,14 +1014,12 @@ def test_previous_digests_mismatch_still_invokes_syft(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "mismatch",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/img:1.0",
                 "PREVIOUS_DIGESTS": json.dumps(
                     {"gcr.io/proj/img:1.0": "sha256:OLD"}
                 ),
-            }
-        },
+            },
     }
     scanner.run_scan(job, job_dir=tmp_path / "mismatch")
     assert called == ["gcr.io/proj/img:1.0"]
@@ -1074,7 +1052,7 @@ def test_fetch_registry_digest_uses_sbom_hash_when_present(
         scanner_mod.registry_digest, "fetch_registry_digest", fake_head
     )
 
-    def fake_syft(self, image_ref, scan_platform, output, cancel_event):
+    def fake_syft(self, image_ref, scan_platform, output, cancel_event, **_):
         output.write_text(
             json.dumps(
                 {
@@ -1099,7 +1077,7 @@ def test_fetch_registry_digest_uses_sbom_hash_when_present(
     scanner = ContainerScanner()
     job = {
         "jobId": "sbom-hash",
-        "dockerArgs": {"envVars": {"DOCKER_IMAGES": "gcr.io/proj/img:1.0"}},
+        "envVars": {"DOCKER_IMAGES": "gcr.io/proj/img:1.0"},
     }
     job_dir = tmp_path / "sbom-hash"
     scanner.run_scan(job, job_dir=job_dir)
@@ -1124,7 +1102,7 @@ def test_fetch_registry_digest_falls_back_to_registry_head(tmp_path, monkeypatch
         lambda image_ref, **kw: "sha256:fromregistry",
     )
 
-    def fake_syft(self, image_ref, scan_platform, output, cancel_event):
+    def fake_syft(self, image_ref, scan_platform, output, cancel_event, **_):
         output.write_text(
             json.dumps({"metadata": {"component": {"name": image_ref}}})
         )
@@ -1138,7 +1116,7 @@ def test_fetch_registry_digest_falls_back_to_registry_head(tmp_path, monkeypatch
     scanner = ContainerScanner()
     job = {
         "jobId": "head-fallback",
-        "dockerArgs": {"envVars": {"DOCKER_IMAGES": "gcr.io/proj/img:1.0"}},
+        "envVars": {"DOCKER_IMAGES": "gcr.io/proj/img:1.0"},
     }
     job_dir = tmp_path / "head-fallback"
     scanner.run_scan(job, job_dir=job_dir)
@@ -1383,7 +1361,7 @@ def test_run_scan_advisories_only_skips_syft(tmp_path, monkeypatch):
         lambda self, *a, **kw: syft_calls.append(a) or True,
     )
 
-    def fake_download(image_ref, output_path, *, s3_client=None):
+    def fake_download(image_ref, output_path, *, backend_client, job_id):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
             json.dumps({"metadata": {"component": {"name": image_ref}}})
@@ -1420,13 +1398,12 @@ def test_run_scan_advisories_only_skips_syft(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "adv-only",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": object(),
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/img:1.0",
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
+            },
     }
     result = scanner.run_scan(job, job_dir=tmp_path / "adv-only")
     assert result.exit_code == 0
@@ -1443,7 +1420,7 @@ def test_run_scan_advisories_only_normalizes_findings(tmp_path, monkeypatch):
         scanner_mod.registry_auth, "configure_registry_auth", lambda: 0
     )
 
-    def fake_download(image_ref, output_path, *, s3_client=None):
+    def fake_download(image_ref, output_path, *, backend_client, job_id):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(
             json.dumps({"metadata": {"component": {"name": image_ref}}})
@@ -1481,13 +1458,12 @@ def test_run_scan_advisories_only_normalizes_findings(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "adv-norm",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": object(),
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/img:1.0",
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
+            },
     }
     job_dir = tmp_path / "adv-norm"
     scanner.run_scan(job, job_dir=job_dir)
@@ -1525,13 +1501,12 @@ def test_run_scan_advisories_only_writes_done_marker(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "adv-done",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": object(),
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/img:1.0",
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
+            },
     }
     job_dir = tmp_path / "adv-done"
     scanner.run_scan(job, job_dir=job_dir)
@@ -1548,7 +1523,7 @@ def test_run_scan_advisories_only_emits_progress(tmp_path, monkeypatch):
         scanner_mod.registry_auth, "configure_registry_auth", lambda: 0
     )
 
-    def fake_download(image_ref, output_path, *, s3_client=None):
+    def fake_download(image_ref, output_path, *, backend_client, job_id):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("{}")
         return output_path
@@ -1569,14 +1544,13 @@ def test_run_scan_advisories_only_emits_progress(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     job = {
         "jobId": "adv-progress",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": object(),
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/a:1.0,gcr.io/proj/b:1.0",
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
                 "CONCURRENCY": "1",
-            }
-        },
+            },
     }
     scanner.run_scan(
         job,
@@ -1619,13 +1593,12 @@ def test_run_scan_advisories_only_continues_when_sbom_unavailable(
     scanner = ContainerScanner()
     job = {
         "jobId": "adv-miss",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": object(),
+        "envVars": {
                 "DOCKER_IMAGES": "gcr.io/proj/img:1.0",
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
+            },
     }
     result = scanner.run_scan(job, job_dir=tmp_path / "adv-miss")
     # No SBOM → no grype call.
@@ -1634,44 +1607,77 @@ def test_run_scan_advisories_only_continues_when_sbom_unavailable(
     assert any("No stored SBOM" in line for line in result.log_tail)
 
 
-def test_download_sbom_raises_when_org_label_missing(tmp_path, monkeypatch):
+def test_download_sbom_raises_when_listing_missing_image(tmp_path):
+    """If the backend listing has no entry for the image, raise SbomDownloadError."""
     from runner.scanners.container.download_sbom import (
         SbomDownloadError,
         download_sbom_for_image,
     )
 
-    monkeypatch.delenv("ORG_LABEL", raising=False)
+    class _BackendStub:
+        def list_sbom_downloads(self, job_id):
+            return [{"file": "other__sbom.cdx.json", "url": "https://example/x"}]
+
     with pytest.raises(SbomDownloadError):
         download_sbom_for_image(
-            "gcr.io/proj/img:1.0", tmp_path / "sbom.cdx.json"
+            "gcr.io/proj/img:1.0",
+            tmp_path / "sbom.cdx.json",
+            backend_client=_BackendStub(),
+            job_id="job-1",
         )
 
 
-def test_download_sbom_uses_expected_key(tmp_path, monkeypatch):
-    """Verify the S3 key shape: <org>/<sanitized_ref>/sbom.cdx.json."""
-    from runner.scanners.container.download_sbom import download_sbom_for_image
-
-    monkeypatch.setenv("ORG_LABEL", "acme")
-    monkeypatch.setenv("S3_ENDPOINT", "http://minio:9000")
-    monkeypatch.setenv("S3_ACCESS_KEY", "ak")
-    monkeypatch.setenv("S3_SECRET_KEY", "sk")
-    monkeypatch.setenv("S3_BUCKET", "sboms")
+def test_download_sbom_uses_expected_listing_filename(tmp_path, monkeypatch):
+    """Verify the listing filename shape: <sanitized_ref>__sbom.cdx.json."""
+    from runner.scanners.container import download_sbom as ds_mod
 
     seen: dict = {}
 
+    class _BackendStub:
+        def list_sbom_downloads(self, job_id):
+            seen["job_id"] = job_id
+            return [
+                {
+                    "file": "gcr.io_proj_img_1.0__sbom.cdx.json",
+                    "url": "https://minio.example/signed",
+                },
+                {
+                    "file": "other_image__sbom.cdx.json",
+                    "url": "https://minio.example/other",
+                },
+            ]
+
+    class _FakeResp:
+        status_code = 200
+        content = b'{"metadata": {}}'
+
     class _FakeClient:
-        def download_file(self, bucket, key, dest):
-            seen["bucket"] = bucket
-            seen["key"] = key
-            Path(dest).write_text("{}")
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url):
+            seen["url"] = url
+            return _FakeResp()
+
+    monkeypatch.setattr(ds_mod.httpx, "Client", _FakeClient)
 
     out = tmp_path / "sub" / "sbom.cdx.json"
-    download_sbom_for_image(
-        "gcr.io/proj/img:1.0", out, s3_client=_FakeClient()
+    ds_mod.download_sbom_for_image(
+        "gcr.io/proj/img:1.0",
+        out,
+        backend_client=_BackendStub(),
+        job_id="job-xyz",
     )
-    assert seen["bucket"] == "sboms"
-    assert seen["key"] == "acme/gcr.io_proj_img_1.0/sbom.cdx.json"
+    assert seen["job_id"] == "job-xyz"
+    assert seen["url"] == "https://minio.example/signed"
     assert out.exists()
+    assert out.read_bytes() == b'{"metadata": {}}'
 
 
 # ---------------------------------------------------------------------------
@@ -1691,7 +1697,7 @@ def test_scan_image_skip_grype_returns_none(tmp_path, monkeypatch):
     scanner = ContainerScanner()
     grype_called: list[str] = []
 
-    def fake_run_syft(self, image_ref, scan_platform, output, cancel_event):
+    def fake_run_syft(self, image_ref, scan_platform, output, cancel_event, **_):
         output.write_text(json.dumps({"components": []}))
         return True
 
@@ -1728,7 +1734,7 @@ def test_scan_image_skip_grype_default_false_still_runs_grype(tmp_path, monkeypa
     scanner = ContainerScanner()
     grype_called: list[str] = []
 
-    def fake_run_syft(self, image_ref, scan_platform, output, cancel_event):
+    def fake_run_syft(self, image_ref, scan_platform, output, cancel_event, **_):
         output.write_text(json.dumps({"components": []}))
         return True
 
@@ -1786,10 +1792,10 @@ def test_run_scan_sbom_only_skips_grype_per_image(tmp_path, monkeypatch):
 
     job = {
         "jobId": "sbom-img",
-        "dockerArgs": {"envVars": {
+        "envVars": {
             "DOCKER_IMAGES": "alpine:3.18",
             "SCAN_MODE": "sbom_only",
-        }},
+        },
     }
     job_dir = tmp_path / "sbom-img"
     result = scanner.run_scan(job, job_dir=job_dir)
@@ -1819,10 +1825,10 @@ def test_run_scan_sbom_only_container_emits_progress(tmp_path, monkeypatch):
 
     job = {
         "jobId": "sbom-img-prog",
-        "dockerArgs": {"envVars": {
+        "envVars": {
             "DOCKER_IMAGES": "alpine:3.18,nginx:1.25",
             "SCAN_MODE": "sbom_only",
-        }},
+        },
     }
     scanner.run_scan(
         job, job_dir=tmp_path / "sbom-img-prog",
@@ -1843,3 +1849,56 @@ def test_container_sbom_only_in_supported_modes():
 
     assert "sbom_only" in SUPPORTED_SCAN_MODES
     assert "sbom_only" not in DEFERRED_SCAN_MODES
+
+
+# ---------------------------------------------------------------------------
+# ContainerScanConfig
+# ---------------------------------------------------------------------------
+
+def _container_job(env: dict) -> dict:
+    return {"jobId": "job-test", "envVars": env}
+
+
+def test_container_config_parses_defaults():
+    from runner.scanners.container.scanner import ContainerScanConfig
+    cfg = ContainerScanConfig.from_job(_container_job({"DOCKER_IMAGES": "alpine:3.18"}))
+    assert cfg.org_label == "default"
+    assert cfg.concurrency == 4
+    assert cfg.scan_mode == "full"
+    assert cfg.scan_platform == "linux/amd64"
+    assert cfg.previous_digests_raw == ""
+    assert cfg.images == ["alpine:3.18"]
+
+
+def test_container_config_parses_explicit_values():
+    from runner.scanners.container.scanner import ContainerScanConfig
+    cfg = ContainerScanConfig.from_job(_container_job({
+        "DOCKER_IMAGES": "alpine:3.18,nginx:latest",
+        "ORG_LABEL": "acme-org",
+        "CONCURRENCY": "6",
+        "SCAN_MODE": "advisories_only",
+        "SCAN_PLATFORM": "linux/arm64",
+        "PREVIOUS_DIGESTS": "sha256:abc",
+    }))
+    assert cfg.images == ["alpine:3.18", "nginx:latest"]
+    assert cfg.org_label == "acme-org"
+    assert cfg.concurrency == 6
+    assert cfg.scan_mode == "advisories_only"
+    assert cfg.scan_platform == "linux/arm64"
+    assert cfg.previous_digests_raw == "sha256:abc"
+
+
+def test_container_config_rejects_unsupported_scan_mode():
+    from runner.scanners._shared import ScannerConfigError
+    from runner.scanners.container.scanner import ContainerScanConfig
+    with pytest.raises(ScannerConfigError, match="SCAN_MODE"):
+        ContainerScanConfig.from_job(_container_job({
+            "DOCKER_IMAGES": "alpine:3.18",
+            "SCAN_MODE": "unknown_mode",
+        }))
+
+
+def test_container_config_run_id_falls_back_to_job_id():
+    from runner.scanners.container.scanner import ContainerScanConfig
+    cfg = ContainerScanConfig.from_job({"jobId": "job-88", "envVars": {"DOCKER_IMAGES": "alpine:3.18"}})
+    assert cfg.run_id == "job-88"

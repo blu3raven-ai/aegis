@@ -1,20 +1,19 @@
 """Repos asset management service — Phase 27.
 
-Aggregates repo scan state from the `repos` table, scan_runs, findings, and
-chains into RepoSummary / RepoDetail objects consumed by the REST endpoints.
+Aggregates repo scan state from the `repos` table, scan_runs, and findings
+into RepoSummary / RepoDetail objects consumed by the REST endpoints.
 """
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
-from typing import Any
 
-from sqlalchemy import select, func, and_, case, distinct
+from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.helpers import run_db
-from src.db.models import Repo, ScanRun, Finding, Chain, ChainEdge
+from src.db.models import Asset, Repo, ScanRun, Finding
+from src.shared.archived_filter import exclude_archived
 
 # Scanners considered for coverage tracking — matches tool column values in scan_runs.
 _SCANNER_TYPES = ("dependencies", "code_scanning", "container_scanning", "secrets")
@@ -25,14 +24,12 @@ _FRESH_WINDOW_DAYS = 7
 
 @dataclass
 class RepoSummary:
-    repo_id: str                        # "org/repo"
-    org: str
-    repo: str
+    asset_id: str
+    display_name: str
     last_scanned_sha: str | None
     manifest_set_hash: str | None
     last_scanned_at: datetime | None
     findings_count_by_severity: dict[str, int]
-    chains_count: int
     scanners_with_coverage: list[str]
     coverage_status: str                # 'fresh' | 'stale' | 'never'
     source_url: str | None = None
@@ -55,25 +52,15 @@ class FindingRow:
     severity: str | None
     state: str
     identity_key: str
-    repo: str | None
+    asset_id: str | None
     first_seen_at: str
     last_seen_at: str
-
-
-@dataclass
-class ChainRow:
-    id: str
-    chain_type: str
-    severity: str
-    status: str
-    created_at: str
 
 
 @dataclass
 class RepoDetail(RepoSummary):
     scan_history: list[ScanRunRow] = field(default_factory=list)
     active_findings: list[FindingRow] = field(default_factory=list)
-    attached_chains: list[ChainRow] = field(default_factory=list)
     default_branch: str | None = None
 
 
@@ -92,98 +79,80 @@ def _truncate(value: str | None, length: int) -> str | None:
 
 async def _list_repos_async(
     session: AsyncSession,
-    org_id: str | None,
+    asset_ids: list[str],
     since_days: int | None,
     has_critical: bool | None,
     limit: int,
 ) -> list[RepoSummary]:
     """Core async aggregation query — runs in the db helper thread."""
-    # Fetch all repos, optionally filtered by org.
-    stmt = select(Repo)
-    if org_id:
-        stmt = stmt.where(Repo.org == org_id)
-    stmt = stmt.order_by(Repo.updated_at.desc()).limit(limit)
-    result = await session.execute(stmt)
-    repos = result.scalars().all()
-
-    if not repos:
+    if not asset_ids:
         return []
 
-    # Build a map from (org, repo) to last scan_run per tool.
-    repo_keys = [(r.org, r.repo) for r in repos]
+    # Fetch repos scoped to the provided asset_ids, joined to Asset for display_name.
+    stmt = (
+        select(Repo, Asset.display_name)
+        .join(Asset, Repo.asset_id == Asset.id)
+        .where(Repo.asset_id.in_(asset_ids))
+        .order_by(Repo.updated_at.desc())
+        .limit(limit)
+    )
+    result = await session.execute(stmt)
+    rows = result.all()
 
-    # Subquery: most-recent finished_at per (org, tool, repo-derived).
-    # scan_runs doesn't store repo directly — we join via findings where possible,
-    # but for coverage we rely on the run belonging to the org and the tool type.
-    # We get all completed scan runs per org within the window, then match.
+    if not rows:
+        return []
+
+    repo_asset_ids = [r.Repo.asset_id for r in rows]
+
     since_cutoff: datetime | None = None
     if since_days:
         since_cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
 
-    orgs = list({r.org for r in repos})
-
+    # Most-recent finished_at per (asset_id, tool) from completed scan runs.
     scan_runs_stmt = (
-        select(ScanRun.tool, ScanRun.org, func.max(ScanRun.finished_at).label("last_finished"))
-        .where(ScanRun.org.in_(orgs))
+        select(ScanRun.tool, ScanRun.asset_id, func.max(ScanRun.finished_at).label("last_finished"))
+        .where(ScanRun.asset_id.in_(repo_asset_ids))
         .where(ScanRun.status == "completed")
-        .group_by(ScanRun.tool, ScanRun.org)
+        .group_by(ScanRun.tool, ScanRun.asset_id)
     )
     scan_runs_result = await session.execute(scan_runs_stmt)
-    # Map: org -> tool -> last_finished
+    # Map: asset_id -> tool -> last_finished
     scan_run_map: dict[str, dict[str, datetime]] = {}
-    for tool, org, last_finished in scan_runs_result.all():
-        scan_run_map.setdefault(org, {})[tool] = last_finished
+    for tool, asset_id, last_finished in scan_runs_result.all():
+        scan_run_map.setdefault(asset_id, {})[tool] = last_finished
 
-    # Findings severity counts per (org, repo) — open findings only.
+    # Findings severity counts per asset_id — open findings only.
     finding_counts_stmt = (
         select(
-            Finding.org,
-            Finding.repo,
+            Finding.asset_id,
             Finding.severity,
             func.count(Finding.id).label("cnt"),
         )
-        .where(Finding.org.in_(orgs))
+        .where(Finding.asset_id.in_(repo_asset_ids))
         .where(Finding.state == "open")
-        .group_by(Finding.org, Finding.repo, Finding.severity)
+        .group_by(Finding.asset_id, Finding.severity)
     )
+    finding_counts_stmt = exclude_archived(finding_counts_stmt, Finding)
     finding_result = await session.execute(finding_counts_stmt)
-    # Map: (org, repo) -> severity -> count
-    finding_map: dict[tuple[str, str], dict[str, int]] = {}
-    for org, repo, severity, cnt in finding_result.all():
-        key = (org, repo or "")
-        finding_map.setdefault(key, {})[severity or "unknown"] = cnt
-
-    # Chain counts per org — chains attach to org; we approximate per-repo
-    # by looking at chain edges that reference findings for that repo.
-    chains_stmt = (
-        select(
-            Finding.org,
-            Finding.repo,
-            func.count(distinct(ChainEdge.chain_id)).label("chain_cnt"),
-        )
-        .join(ChainEdge, ChainEdge.source_finding_id == Finding.id)
-        .join(Chain, Chain.id == ChainEdge.chain_id)
-        .where(Finding.org.in_(orgs))
-        .where(Chain.status == "open")
-        .group_by(Finding.org, Finding.repo)
-    )
-    chains_result = await session.execute(chains_stmt)
-    chain_map: dict[tuple[str, str], int] = {}
-    for org, repo, cnt in chains_result.all():
-        chain_map[(org, repo or "")] = cnt
+    # Map: asset_id -> severity -> count
+    finding_map: dict[str, dict[str, int]] = {}
+    for asset_id, severity, cnt in finding_result.all():
+        finding_map.setdefault(asset_id, {})[severity or "unknown"] = cnt
 
     summaries: list[RepoSummary] = []
-    for r in repos:
-        repo_tool_map = scan_run_map.get(r.org, {})
+    for row in rows:
+        r = row.Repo
+        display_name = row.display_name
+        repo_tool_map = scan_run_map.get(r.asset_id, {})
         scanners_with_coverage = [
             t for t in _SCANNER_TYPES if t in repo_tool_map
         ]
 
-        # Most recent completed scan timestamp across all scanners for this org.
+        # Most recent completed scan timestamp across all scanners for this asset.
         tool_timestamps = list(repo_tool_map.values())
         last_scanned_at = max(tool_timestamps) if tool_timestamps else None
 
-        sev_raw = finding_map.get((r.org, r.repo), {})
+        sev_raw = finding_map.get(r.asset_id, {})
         findings_count_by_severity = {
             "critical": sev_raw.get("critical", 0),
             "high": sev_raw.get("high", 0),
@@ -195,22 +164,17 @@ async def _list_repos_async(
         if has_critical is True and findings_count_by_severity["critical"] == 0:
             continue
 
-        chains_count = chain_map.get((r.org, r.repo), 0)
-        repo_id = f"{r.org}/{r.repo}"
-
         # Apply since_days filter: skip repos with no scan or scan older than window.
         if since_cutoff and (last_scanned_at is None or last_scanned_at < since_cutoff):
             continue
 
         summaries.append(RepoSummary(
-            repo_id=repo_id,
-            org=r.org,
-            repo=r.repo,
+            asset_id=r.asset_id,
+            display_name=display_name,
             last_scanned_sha=_truncate(r.last_scanned_sha, 7),
             manifest_set_hash=_truncate(r.manifest_set_hash, 8),
             last_scanned_at=last_scanned_at,
             findings_count_by_severity=findings_count_by_severity,
-            chains_count=chains_count,
             scanners_with_coverage=scanners_with_coverage,
             coverage_status=_coverage_status(last_scanned_at),
         ))
@@ -220,20 +184,24 @@ async def _list_repos_async(
 
 async def _get_repo_async(
     session: AsyncSession,
-    org: str,
-    repo_name: str,
+    asset_id: str,
 ) -> RepoDetail | None:
     result = await session.execute(
-        select(Repo).where(and_(Repo.org == org, Repo.repo == repo_name))
+        select(Repo, Asset.display_name)
+        .join(Asset, Repo.asset_id == Asset.id)
+        .where(Repo.asset_id == asset_id)
     )
-    r = result.scalar_one_or_none()
-    if r is None:
+    row = result.one_or_none()
+    if row is None:
         return None
 
-    # Scan history: last 10 completed runs across all scanner types.
+    r = row.Repo
+    display_name = row.display_name
+
+    # Scan history: last 10 completed runs across all scanner types for this asset.
     scan_history_result = await session.execute(
         select(ScanRun)
-        .where(ScanRun.org == org)
+        .where(ScanRun.asset_id == asset_id)
         .order_by(ScanRun.started_at.desc().nullslast())
         .limit(10)
     )
@@ -260,12 +228,15 @@ async def _get_repo_async(
             findings_count=fc,
         ))
 
-    # Active findings for this repo.
+    # Active findings for this asset.
     findings_result = await session.execute(
-        select(Finding)
-        .where(and_(Finding.org == org, Finding.repo == repo_name, Finding.state == "open"))
-        .order_by(Finding.first_seen_at.desc())
-        .limit(50)
+        exclude_archived(
+            select(Finding)
+            .where(and_(Finding.asset_id == asset_id, Finding.state == "open"))
+            .order_by(Finding.first_seen_at.desc())
+            .limit(50),
+            Finding,
+        )
     )
     findings = findings_result.scalars().all()
 
@@ -276,34 +247,11 @@ async def _get_repo_async(
             severity=f.severity,
             state=f.state,
             identity_key=f.identity_key,
-            repo=f.repo,
+            asset_id=f.asset_id,
             first_seen_at=f.first_seen_at.isoformat(),
             last_seen_at=f.last_seen_at.isoformat(),
         )
         for f in findings
-    ]
-
-    # Chains attached via findings edges.
-    chains_result = await session.execute(
-        select(Chain)
-        .join(ChainEdge, Chain.id == ChainEdge.chain_id)
-        .join(Finding, Finding.id == ChainEdge.source_finding_id)
-        .where(and_(Finding.org == org, Finding.repo == repo_name))
-        .where(Chain.status == "open")
-        .distinct()
-        .limit(20)
-    )
-    chains = chains_result.scalars().all()
-
-    attached_chains: list[ChainRow] = [
-        ChainRow(
-            id=c.id,
-            chain_type=c.chain_type,
-            severity=c.severity,
-            status=c.status,
-            created_at=c.created_at.isoformat(),
-        )
-        for c in chains
     ]
 
     # Per-tool scan map for coverage.
@@ -318,9 +266,12 @@ async def _get_repo_async(
     last_scanned_at = max(tool_timestamps) if tool_timestamps else None
 
     sev_result = await session.execute(
-        select(Finding.severity, func.count(Finding.id))
-        .where(and_(Finding.org == org, Finding.repo == repo_name, Finding.state == "open"))
-        .group_by(Finding.severity)
+        exclude_archived(
+            select(Finding.severity, func.count(Finding.id))
+            .where(and_(Finding.asset_id == asset_id, Finding.state == "open"))
+            .group_by(Finding.severity),
+            Finding,
+        )
     )
     sev_raw = {row[0] or "unknown": row[1] for row in sev_result.all()}
     findings_count_by_severity = {
@@ -330,28 +281,17 @@ async def _get_repo_async(
         "low": sev_raw.get("low", 0),
     }
 
-    chains_count_result = await session.execute(
-        select(func.count(distinct(ChainEdge.chain_id)))
-        .join(Finding, Finding.id == ChainEdge.source_finding_id)
-        .join(Chain, Chain.id == ChainEdge.chain_id)
-        .where(and_(Finding.org == org, Finding.repo == repo_name, Chain.status == "open"))
-    )
-    chains_count = chains_count_result.scalar() or 0
-
     return RepoDetail(
-        repo_id=f"{org}/{repo_name}",
-        org=org,
-        repo=repo_name,
+        asset_id=r.asset_id,
+        display_name=display_name,
         last_scanned_sha=_truncate(r.last_scanned_sha, 7),
         manifest_set_hash=_truncate(r.manifest_set_hash, 8),
         last_scanned_at=last_scanned_at,
         findings_count_by_severity=findings_count_by_severity,
-        chains_count=chains_count,
         scanners_with_coverage=scanner_tools,
         coverage_status=_coverage_status(last_scanned_at),
         scan_history=scan_history,
         active_findings=active_findings,
-        attached_chains=attached_chains,
     )
 
 
@@ -360,19 +300,19 @@ class RepoService:
 
     @staticmethod
     def list_repos(
-        org_id: str | None = None,
+        asset_ids: list[str],
         since_days: int | None = None,
         has_critical: bool | None = None,
         limit: int = 100,
     ) -> list[RepoSummary]:
         async def _run(session: AsyncSession) -> list[RepoSummary]:
-            return await _list_repos_async(session, org_id, since_days, has_critical, min(limit, 500))
+            return await _list_repos_async(session, asset_ids, since_days, has_critical, min(limit, 500))
 
         return run_db(_run)
 
     @staticmethod
-    def get_repo(org: str, repo_name: str) -> RepoDetail | None:
+    def get_repo(asset_id: str) -> RepoDetail | None:
         async def _run(session: AsyncSession) -> RepoDetail | None:
-            return await _get_repo_async(session, org, repo_name)
+            return await _get_repo_async(session, asset_id)
 
         return run_db(_run)

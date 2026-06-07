@@ -10,18 +10,24 @@ output file is recorded in ``_manifest.jsonl`` as it's produced, and the
 from __future__ import annotations
 
 import concurrent.futures
+import dataclasses
+import json
 import logging
-import os
 import shutil
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
+    BaseScanConfig,
     GitCloneError,
     InsecureURLError,
+    JobEnv,
     ProgressEmitter,
+    TIMEOUT_CLONE,
+    TIMEOUT_GIT_QUERY,
+    TIMEOUT_OPENGREP,
     clone_repo,
     log_finished,
     log_scanning,
@@ -35,14 +41,15 @@ from runner.scanners._subprocess import (
     run_tool,
 )
 from runner.scanners.base import ExecutionResult
-from runner.scanners.code_scanning import extract_context, normalize, reachability
+from runner.scanners.code_scanning import (
+    extract_context,
+    joern_adapter,
+    normalize,
+    reachability,
+)
 
 logger = logging.getLogger(__name__)
 
-
-_CLONE_TIMEOUT_S = 300.0
-_GIT_QUERY_TIMEOUT_S = 30.0
-_OPENGREP_TIMEOUT_S = 1800.0
 
 # Opengrep + tree-sitter parse untrusted source; scrub credentials before exec.
 _CODE_SCAN_DROP_ENV = ("GIT_TOKEN",)
@@ -51,6 +58,27 @@ _CODE_SCAN_DROP_ENV = ("GIT_TOKEN",)
 _OPENGREP_FINDINGS_RC = 1
 
 DEFAULT_SEMGREP_RULES_PATH = "/opt/semgrep-rules"
+
+
+@dataclasses.dataclass(frozen=True)
+class CodeScanningConfig(BaseScanConfig):
+    repos: list[str]
+    git_token: str | None
+    rulesets: str
+    rules_path: str
+
+    @classmethod
+    def from_job(cls, job: dict[str, Any]) -> "CodeScanningConfig":
+        env = JobEnv(job)
+        return cls(
+            org_label=env.get("ORG_LABEL", "default"),
+            run_id=env.get("RUN_ID", str(job.get("jobId", "unknown"))),
+            concurrency=max(1, env.get_int("CONCURRENCY", 4)),
+            repos=parse_repos(env.get("GIT_REPOS")),
+            git_token=env.get("GIT_TOKEN") or None,
+            rulesets=env.get("RULESETS", ""),
+            rules_path=env.get("SEMGREP_RULES_PATH", DEFAULT_SEMGREP_RULES_PATH),
+        )
 
 
 class CodeScanningScanner:
@@ -63,40 +91,14 @@ class CodeScanningScanner:
         on_progress: Callable[[list[str], dict], None] | None = None,
         cancel_event: threading.Event | None = None,
     ) -> ExecutionResult:
-        env_vars: dict[str, str] = (
-            (job.get("dockerArgs") or {}).get("envVars") or {}
-        )
-        repos_input = env_vars.get("GIT_REPOS") or os.environ.get("GIT_REPOS", "")
-        git_token = env_vars.get("GIT_TOKEN") or os.environ.get("GIT_TOKEN")
-        org_label = (
-            env_vars.get("ORG_LABEL") or os.environ.get("ORG_LABEL") or "default"
-        )
-        run_id = (
-            env_vars.get("RUN_ID")
-            or os.environ.get("RUN_ID")
-            or str(job.get("jobId", "unknown"))
-        )
-        rulesets = env_vars.get("RULESETS") or os.environ.get("RULESETS", "")
-        rules_path = (
-            env_vars.get("SEMGREP_RULES_PATH")
-            or os.environ.get("SEMGREP_RULES_PATH")
-            or DEFAULT_SEMGREP_RULES_PATH
-        )
-        try:
-            concurrency = int(
-                env_vars.get("CONCURRENCY") or os.environ.get("CONCURRENCY") or "4"
-            )
-        except ValueError:
-            concurrency = 4
-        if concurrency < 1:
-            concurrency = 1
+        cfg = CodeScanningConfig.from_job(job)
 
         out_dir = Path(job_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
         log_tail: list[str] = []
 
-        repos = parse_repos(repos_input)
+        repos = cfg.repos
         emitter = ProgressEmitter(on_progress, expected=len(repos))
 
         if cancel_event is not None and cancel_event.is_set():
@@ -114,7 +116,7 @@ class CodeScanningScanner:
 
         emitter.starting()
 
-        config_args = self._build_config_args(rulesets, rules_path)
+        config_args = self._build_config_args(cfg.rulesets, cfg.rules_path)
 
         def _scan_one(repo_url: str) -> Path | None:
             if cancel_event is not None and cancel_event.is_set():
@@ -125,7 +127,7 @@ class CodeScanningScanner:
                 return self._scan_repo(
                     repo_url,
                     out_dir,
-                    git_token=git_token,
+                    git_token=cfg.git_token,
                     config_args=config_args,
                     cancel_event=cancel_event,
                 )
@@ -146,7 +148,7 @@ class CodeScanningScanner:
                 emitter.finished(repo_name)
 
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=concurrency
+            max_workers=cfg.concurrency
         ) as pool:
             list(pool.map(_scan_one, repos))
 
@@ -154,7 +156,7 @@ class CodeScanningScanner:
 
         try:
             total, errors = normalize.normalize_code_scanning_output(
-                org_label, out_dir, run_id
+                cfg.org_label, out_dir, cfg.run_id
             )
             log_tail.append(
                 f"[+] Normalized {total} code scanning findings ({errors} errors)"
@@ -228,7 +230,7 @@ class CodeScanningScanner:
                 clone_dir,
                 token=git_token,
                 depth=1,
-                timeout=_CLONE_TIMEOUT_S,
+                timeout=TIMEOUT_CLONE,
             )
         except (InsecureURLError, GitCloneError):
             shutil.rmtree(repo_out, ignore_errors=True)
@@ -265,6 +267,24 @@ class CodeScanningScanner:
                     )
                     (repo_out / "reachability.json").write_text("{}")
 
+            joern_findings_path = repo_out / "joern_findings.json"
+            try:
+                joern_result = joern_adapter.run(
+                    repo_path=clone_dir,
+                    workdir=repo_out / "_joern_work",
+                )
+                joern_findings_path.write_text(
+                    json.dumps({
+                        "status": joern_result.status,
+                        "findings": joern_result.findings,
+                    })
+                )
+            except Exception:
+                logger.exception("[!] joern adapter raised for %s", repo_name)
+                joern_findings_path.write_text(
+                    json.dumps({"status": "failed: adapter raised", "findings": []})
+                )
+
             for f in sorted(repo_out.glob("*.json")):
                 register_output(out_dir, f, repo_name)
 
@@ -272,6 +292,7 @@ class CodeScanningScanner:
             return sarif_file if sarif_file.exists() else None
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
+            shutil.rmtree(repo_out / "_joern_work", ignore_errors=True)
 
     def _run_opengrep(
         self,
@@ -300,7 +321,7 @@ class CodeScanningScanner:
         ]
         rc, _, stderr = run_tool(
             args,
-            timeout=_OPENGREP_TIMEOUT_S,
+            timeout=TIMEOUT_OPENGREP,
             drop_env=_CODE_SCAN_DROP_ENV,
             cancel_event=cancel_event,
         )
@@ -322,7 +343,7 @@ class CodeScanningScanner:
     ) -> str:
         rc, stdout, _ = run_tool(
             ["git", "-C", str(clone_dir), "rev-parse", "HEAD"],
-            timeout=_GIT_QUERY_TIMEOUT_S,
+            timeout=TIMEOUT_GIT_QUERY,
             cancel_event=cancel_event,
         )
         if rc != 0:

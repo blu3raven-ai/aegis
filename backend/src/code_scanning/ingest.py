@@ -235,6 +235,15 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                 if "ruleId" in raw or "rule_id" in raw:
                     raw_severity = str(raw.get("severity") or "").lower()
                     raw_confidence = str(raw.get("confidence") or "").lower()
+                    engine = raw.get("engine")
+                    if engine is None:
+                        logger.warning(
+                            "[code-scanning] finding has no `engine` field; defaulting to 'opengrep'. "
+                            "Runner output may be malformed: rule_id=%s file=%s",
+                            raw.get("rule_id", raw.get("ruleId", "")),
+                            raw.get("file_path", raw.get("path", "")),
+                        )
+                        engine = "opengrep"
                     finding = {
                         "repo_full_name": raw.get("repo_full_name", raw.get("repository", "")),
                         "file_path": _strip_temp_prefix(raw.get("file_path", raw.get("path", ""))),
@@ -256,6 +265,8 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                         "language": _derive_language(raw.get("file_path", raw.get("path", ""))),
                         "reachability": raw.get("reachability"),
                         "repo_html_url": raw.get("repo_html_url", ""),
+                        "engine": engine,
+                        "dataflow_trace": raw.get("dataflow_trace") or None,
                         "state": "open",
                         "finding_data": raw,
                     }

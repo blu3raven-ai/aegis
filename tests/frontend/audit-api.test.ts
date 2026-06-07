@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { ApiClientError } from "../../frontend/lib/client/api-client.types.ts"
 
 // ---------------------------------------------------------------------------
 // Minimal fetch mock
@@ -20,7 +21,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/audit-api.ts")
+  return import("../../frontend/lib/client/audit-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +161,7 @@ test("listAuditEvents throws on 404", async () => {
   const { listAuditEvents } = await loadModule()
   await assert.rejects(
     () => listAuditEvents({}),
-    /audit-api: 404/,
+    (e: unknown) => e instanceof ApiClientError && e.status === 404,
   )
 })
 
@@ -171,7 +172,7 @@ test("listAuditEvents throws on 403", async () => {
   const { listAuditEvents } = await loadModule()
   await assert.rejects(
     () => listAuditEvents({}),
-    /audit-api: 403/,
+    (e: unknown) => e instanceof ApiClientError && e.status === 403,
   )
 })
 
@@ -182,7 +183,7 @@ test("listAuditEvents throws on 500", async () => {
   const { listAuditEvents } = await loadModule()
   await assert.rejects(
     () => listAuditEvents({}),
-    /audit-api: 500/,
+    (e: unknown) => e instanceof ApiClientError && e.status === 500,
   )
 })
 

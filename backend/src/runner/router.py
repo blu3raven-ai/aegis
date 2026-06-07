@@ -27,8 +27,9 @@ from src.runner.registry import (
     rotate_auth_token,
 )
 from src.shared.event_bus import Event, get_event_bus
-from src.shared.paths import now_iso
-from src.shared.rate_limit import rate_limit_by_ip
+from src.shared.object_store import generate_download_url, generate_upload_url, list_objects
+from src.shared.paths import now_iso, SAFE_RELATIVE_PATH
+from src.shared.rate_limit import rate_limit_by_ip, rate_limit_by_runner
 
 router = APIRouter(prefix="/runner/api", tags=["runner"])
 
@@ -162,8 +163,7 @@ def poll_next_job(request: Request) -> JSONResponse:
         "type": job.get("jobType", ""),
         "org": job["org"],
         "runId": job["runId"],
-        "dockerImage": job["dockerImage"],
-        "dockerArgs": {"envVars": job.get("envVars", {})},
+        "envVars": job.get("envVars", {}),
         "expectedRepoCount": int(job.get("envVars", {}).get("EXPECTED_REPO_COUNT", 0)) or None,
     })
 
@@ -424,6 +424,78 @@ def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, An
     except Exception:
         import logging
         logging.getLogger(__name__).warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# Upload presign
+# ---------------------------------------------------------------------------
+
+
+class PresignUploadsRequest(BaseModel):
+    files: list[str]
+
+
+@router.post("/jobs/{job_id}/uploads/presign")
+def presign_uploads(job_id: str, body: PresignUploadsRequest, request: Request) -> JSONResponse:
+    runner, err = _require_runner(request)
+    if err:
+        return err
+
+    rate_limit_by_runner(runner["id"], max_requests=200, window_seconds=60)
+
+    job = read_job(job_id)
+    if not job or job.get("runnerId") != runner["id"]:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    if job.get("status") != "running":
+        return JSONResponse({"error": "Job not in running state"}, status_code=409)
+
+    for name in body.files:
+        if not SAFE_RELATIVE_PATH.match(name):
+            return JSONResponse({"error": f"Unsafe filename: {name!r}"}, status_code=400)
+
+    tool = job["jobType"]
+    org = job["org"]
+    run_id = job["runId"]
+
+    urls: list[dict[str, str]] = []
+    for name in body.files:
+        key = f"{tool}/{org}/{run_id}/{name}"
+        urls.append({"file": name, "url": generate_upload_url(key, expires_in=300, external=True)})
+
+    return JSONResponse({"urls": urls, "expiresIn": 300})
+
+
+# ---------------------------------------------------------------------------
+# SBOM list (presigned download URLs)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/jobs/{job_id}/sboms")
+def list_job_sboms(request: Request, job_id: str) -> JSONResponse:
+    runner, err = _require_runner(request)
+    if err:
+        return err
+
+    rate_limit_by_runner(runner["id"], max_requests=200, window_seconds=60)
+
+    job = read_job(job_id)
+    if not job or job.get("runnerId") != runner["id"]:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    if job.get("status") != "running":
+        return JSONResponse({"error": "Job not in running state"}, status_code=409)
+
+    org = job["org"]
+    prefix = f"sboms/{org}/"
+    keys = list_objects(prefix)
+
+    sboms: list[dict[str, str]] = []
+    for key in keys:
+        filename = key[len(prefix):].replace("/", "__")
+        sboms.append({"file": filename, "url": generate_download_url(key, expires_in=300)})
+
+    return JSONResponse({"sboms": sboms, "count": len(sboms), "expiresIn": 300})
 
 
 # ---------------------------------------------------------------------------

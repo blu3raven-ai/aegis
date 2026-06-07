@@ -1,12 +1,11 @@
 """Job queue factory — selects backend by env var.
 
-Phase 1 now includes PostgresBackedQueue, which wraps the production
-jobs.py logic (encryption, status transitions, runner-id persistence,
-stale-job recovery). Recommended backends:
-  - JOB_QUEUE_BACKEND=postgres — PostgresBackedQueue (production, recommended)
+Supported backends:
+  - JOB_QUEUE_BACKEND=postgres — PostgresBackedQueue (production, recommended;
+    wraps jobs.py logic for encryption, status transitions, runner-id
+    persistence, and stale-job recovery).
   - JOB_QUEUE_BACKEND=file (default) — FileBackedQueue (dev/test/local,
-    JSON on disk, NOT the production storage backend)
-  - JOB_QUEUE_BACKEND=redis — RedisBackedQueue (Redis Streams, requires REDIS_URL)
+    JSON on disk, NOT the production storage backend).
 """
 from __future__ import annotations
 
@@ -22,10 +21,7 @@ def get_queue() -> JobQueue:
     if _cached is not None:
         return _cached
     backend = os.getenv("JOB_QUEUE_BACKEND", "file").lower()
-    if backend == "redis":
-        from src.runner.queue.redis_backed import RedisBackedQueue
-        _cached = RedisBackedQueue()
-    elif backend == "postgres":
+    if backend == "postgres":
         from src.runner.queue.postgres_backed import PostgresBackedQueue
         _cached = PostgresBackedQueue()
     elif backend == "file":

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.runner.queue._notify import publish_queued
-
 
 class PostgresBackedQueue:
     def create(
@@ -20,15 +18,13 @@ class PostgresBackedQueue:
         job_type: str,
         org: str,
         run_id: str,
-        docker_image: str,
         env_vars: dict[str, str],
     ) -> str:
         from src.runner.jobs import _create_job_inner
         job_id = _create_job_inner(
             job_type=job_type, org=org, run_id=run_id,
-            docker_image=docker_image, env_vars=env_vars,
+            env_vars=env_vars,
         )
-        publish_queued(job_type, job_id)
         return job_id
 
     def assign_next(self, runner_id: str) -> dict[str, Any] | None:

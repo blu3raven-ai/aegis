@@ -28,7 +28,7 @@ from src.settings.direct_access_store import (
 from src.settings.router import require_permission
 from src.settings.audit import record_event
 from src.settings.schemas import DirectGrantRequest
-from src.shared.config import get_github_token_for_org, read_app_config
+from src.shared.config import get_token_for_org, read_app_config
 from src.shared.github import fetch_org_repos, github_fetch, check_token_permissions
 
 organisations_router = APIRouter(prefix="/settings/api", tags=["organisations"])
@@ -75,7 +75,7 @@ def get_organisations(request: Request) -> JSONResponse:
         user_id = _actor_id(request)
         sharing_index = build_sharing_index(user_id) if user_id else {}
         teams = list_teams()
-        
+
         enriched_teams = []
         for team in teams:
             is_member = sharing_index.get(team["id"], False)
@@ -83,7 +83,7 @@ def get_organisations(request: Request) -> JSONResponse:
                 **team,
                 "isShared": is_member,
             })
-            
+
         return JSONResponse({"teams": enriched_teams})
     except OrganisationStoreError as exc:
         return _json_error(exc, status_code=500)
@@ -281,15 +281,15 @@ def delete_container_image(team_id: str, request: Request, image: str = Query(..
 @organisations_router.get("/resources/repositories")
 async def search_repositories(request: Request, org: str | None = None, q: str = "") -> JSONResponse:
     require_permission(request, "view_settings")
-    
+
     config = read_app_config()
     org_entries = config.get("github", {}).get("orgs") or []
     orgs = [str(entry.get("name") or "") for entry in org_entries if entry.get("name")]
-    
+
     if org:
         if org not in orgs:
             return JSONResponse({"repositories": [], "error": f"Organization {org} is not configured."})
-        token = get_github_token_for_org(org)
+        token = get_token_for_org(org)
         if not token:
             return JSONResponse({"repositories": [], "error": f"No GitHub token configured for {org}."})
         search_targets = [org]
@@ -300,9 +300,9 @@ async def search_repositories(request: Request, org: str | None = None, q: str =
         return JSONResponse({"repositories": [], "error": "No valid organizations found for search."})
 
     import asyncio
-    
+
     async def fetch_one(target_org: str):
-        token = get_github_token_for_org(target_org)
+        token = get_token_for_org(target_org)
         if not token:
             return []
         try:
@@ -316,26 +316,26 @@ async def search_repositories(request: Request, org: str | None = None, q: str =
             return []
 
     results = await asyncio.gather(*(fetch_one(target) for target in search_targets))
-    
+
     all_suggestions = []
     for r in results:
         all_suggestions.extend(r)
-        
+
     return JSONResponse({"repositories": all_suggestions[:50]})
 
 
 @organisations_router.get("/resources/container-images")
 async def search_container_images(request: Request, org: str | None = None, q: str = "") -> JSONResponse:
     require_permission(request, "view_settings")
-    
+
     config = read_app_config()
     org_entries = config.get("github", {}).get("orgs") or []
     orgs = [str(entry.get("name") or "") for entry in org_entries if entry.get("name")]
-    
+
     if org:
         if org not in orgs:
             return JSONResponse({"images": [], "error": f"Organization {org} is not configured."})
-        token = get_github_token_for_org(org)
+        token = get_token_for_org(org)
         if not token:
             return JSONResponse({"images": [], "error": f"No GitHub token configured for {org}."})
         search_targets = [org]
@@ -348,7 +348,7 @@ async def search_container_images(request: Request, org: str | None = None, q: s
     import asyncio
 
     async def fetch_one(target_org: str):
-        token = get_github_token_for_org(target_org)
+        token = get_token_for_org(target_org)
         if not token:
             return []
         try:
@@ -368,11 +368,11 @@ async def search_container_images(request: Request, org: str | None = None, q: s
             return []
 
     results = await asyncio.gather(*(fetch_one(target) for target in search_targets))
-    
+
     all_images = []
     for r in results:
         all_images.extend(r)
-        
+
     return JSONResponse({"images": all_images[:50]})
 
 
@@ -381,46 +381,42 @@ def get_direct_grants(request: Request) -> JSONResponse:
     require_permission(request, "manage_organisations")
     return JSONResponse({"grants": store_list_direct_grants()})
 
+
 @organisations_router.post("/direct-grants")
 def post_direct_grant(body: DirectGrantRequest, request: Request) -> JSONResponse:
     require_permission(request, "manage_organisations")
     actor_id = _actor_id(request)
     store_add_direct_grant(
         user_id=body.userId,
-        resource_type=body.resourceType,
-        resource_key=body.resourceKey,
-        source="manual-direct"
+        asset_id=body.assetId,
+        source="manual-direct",
     )
-    
+
     record_event(
         action="direct_grant.added",
         actor_user_id=actor_id,
         target=body.userId,
         metadata={
-            "resourceType": body.resourceType,
-            "resourceKey": body.resourceKey,
-            "source": "manual-direct"
+            "assetId": body.assetId,
+            "source": "manual-direct",
         }
     )
-    
+
     return JSONResponse({"ok": True})
 
 
-@organisations_router.delete("/direct-grants/{user_id}/{resource_type}/{resource_key:path}")
-def delete_direct_grant(user_id: str, resource_type: str, resource_key: str, request: Request) -> JSONResponse:
+@organisations_router.delete("/direct-grants/{user_id}/{asset_id}")
+def delete_direct_grant(user_id: str, asset_id: str, request: Request) -> JSONResponse:
     require_permission(request, "manage_organisations")
-    
+
     actor_id = _actor_id(request)
-    store_remove_direct_grant(user_id, resource_type, resource_key)
-    
+    store_remove_direct_grant(user_id, asset_id)
+
     record_event(
         action="direct_grant.removed",
         actor_user_id=actor_id,
         target=user_id,
-        metadata={
-            "resourceType": resource_type,
-            "resourceKey": resource_key
-        }
+        metadata={"assetId": asset_id}
     )
-    
+
     return JSONResponse({"ok": True})

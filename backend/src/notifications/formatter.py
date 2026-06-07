@@ -20,8 +20,6 @@ _SEVERITY_EMOJI = {
 }
 
 _EVENT_TITLES: dict[str, str] = {
-    "chain.created": "New attack chain detected",
-    "chain.updated": "Attack chain updated",
     "finding.created": "New finding",
     "finding.severity_changed": "Finding severity changed",
     "intel.exploit_availability_changed": "Exploit availability changed",
@@ -48,11 +46,6 @@ def _summary_line(event: dict[str, Any]) -> str:
     et = event.get("event_type", "")
     payload = event.get("payload", {})
     org = event.get("org_id", "")
-
-    if et in ("chain.created", "chain.updated"):
-        chain_id = payload.get("chain_id", "")
-        sev = payload.get("severity", "")
-        return f"[{org}] {_event_title(et)} — chain {chain_id} (severity: {sev})"
 
     if et in ("finding.created", "finding.severity_changed"):
         title = payload.get("title") or payload.get("rule_name") or payload.get("cve_id") or "finding"
@@ -126,14 +119,7 @@ def format_for_slack(event: dict[str, Any]) -> dict[str, Any]:
 def _payload_fields(event_type: str, payload: dict[str, Any]) -> dict[str, str]:
     """Extracts the most useful payload fields for display per event type."""
     out: dict[str, str] = {}
-    if event_type in ("chain.created", "chain.updated"):
-        if payload.get("chain_type"):
-            out["Type"] = payload["chain_type"]
-        if payload.get("severity"):
-            out["Severity"] = payload["severity"]
-        if payload.get("status"):
-            out["Status"] = payload["status"]
-    elif event_type == "finding.created":
+    if event_type == "finding.created":
         if payload.get("tool"):
             out["Tool"] = payload["tool"]
         if payload.get("severity"):

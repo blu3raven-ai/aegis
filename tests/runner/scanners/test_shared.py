@@ -175,3 +175,119 @@ def test_register_output_writes_manifest(tmp_path):
     f.write_text("{}")
     _shared.register_output(out_dir, f, "acme/widget")
     assert (out_dir / "_manifest.jsonl").exists()
+
+
+# ---------------------------------------------------------------------------
+# JobEnv
+# ---------------------------------------------------------------------------
+
+def test_job_env_reads_from_env_vars():
+    from runner.scanners._shared import JobEnv
+    env = JobEnv({"envVars": {"MY_KEY": "from_job"}})
+    assert env.get("MY_KEY") == "from_job"
+
+
+def test_job_env_falls_back_to_os_environ(monkeypatch):
+    from runner.scanners._shared import JobEnv
+    monkeypatch.setenv("MY_KEY", "from_os")
+    env = JobEnv({"envVars": {}})
+    assert env.get("MY_KEY") == "from_os"
+
+
+def test_job_env_job_payload_takes_priority_over_os_environ(monkeypatch):
+    from runner.scanners._shared import JobEnv
+    monkeypatch.setenv("MY_KEY", "from_os")
+    env = JobEnv({"envVars": {"MY_KEY": "from_job"}})
+    assert env.get("MY_KEY") == "from_job"
+
+
+def test_job_env_returns_default_when_missing():
+    from runner.scanners._shared import JobEnv
+    env = JobEnv({"envVars": {}})
+    assert env.get("MISSING_KEY", "fallback") == "fallback"
+
+
+def test_job_env_get_int_parses_valid():
+    from runner.scanners._shared import JobEnv
+    env = JobEnv({"envVars": {"COUNT": "8"}})
+    assert env.get_int("COUNT", 4) == 8
+
+
+def test_job_env_get_int_returns_default_for_invalid():
+    from runner.scanners._shared import JobEnv
+    env = JobEnv({"envVars": {"COUNT": "not_a_number"}})
+    assert env.get_int("COUNT", 4) == 4
+
+
+def test_job_env_get_int_returns_default_when_missing():
+    from runner.scanners._shared import JobEnv
+    env = JobEnv({"envVars": {}})
+    assert env.get_int("COUNT", 4) == 4
+
+
+def test_job_env_handles_missing_env_vars_key():
+    from runner.scanners._shared import JobEnv
+    env = JobEnv({})
+    assert env.get("KEY", "default") == "default"
+
+
+# ---------------------------------------------------------------------------
+# BaseScanConfig
+# ---------------------------------------------------------------------------
+
+def test_base_scan_config_is_frozen():
+    from runner.scanners._shared import BaseScanConfig
+    cfg = BaseScanConfig(org_label="acme-org", run_id="job-1", concurrency=4)
+    with pytest.raises(Exception):
+        cfg.org_label = "other"  # type: ignore[misc]
+
+
+def test_base_scan_config_stores_fields():
+    from runner.scanners._shared import BaseScanConfig
+    cfg = BaseScanConfig(org_label="acme-org", run_id="job-1", concurrency=4)
+    assert cfg.org_label == "acme-org"
+    assert cfg.run_id == "job-1"
+    assert cfg.concurrency == 4
+
+
+# ---------------------------------------------------------------------------
+# Exception hierarchy
+# ---------------------------------------------------------------------------
+
+def test_scanner_config_error_is_scanner_error():
+    from runner.scanners._shared import ScannerConfigError, ScannerError
+    assert issubclass(ScannerConfigError, ScannerError)
+
+
+def test_tool_error_is_scanner_error():
+    from runner.scanners._shared import ScannerError, ToolError
+    assert issubclass(ToolError, ScannerError)
+
+
+def test_scanner_config_error_carries_message():
+    from runner.scanners._shared import ScannerConfigError
+    exc = ScannerConfigError("bad mode 'xyz'")
+    assert "bad mode 'xyz'" in str(exc)
+
+
+# ---------------------------------------------------------------------------
+# Timeout constants
+# ---------------------------------------------------------------------------
+
+def test_timeout_constants_are_positive_floats():
+    from runner.scanners import _shared
+    constants = [
+        _shared.TIMEOUT_CLONE,
+        _shared.TIMEOUT_GIT_QUERY,
+        _shared.TIMEOUT_GRYPE_DB_CHECK,
+        _shared.TIMEOUT_GRYPE_DB_UPDATE,
+        _shared.TIMEOUT_GRYPE_MATCH,
+        _shared.TIMEOUT_SYFT_REPO,
+        _shared.TIMEOUT_SYFT_IMAGE,
+        _shared.TIMEOUT_CDXGEN,
+        _shared.TIMEOUT_TRUFFLEHOG,
+        _shared.TIMEOUT_BETTERLEAKS,
+        _shared.TIMEOUT_OPENGREP,
+    ]
+    for c in constants:
+        assert isinstance(c, float) and c > 0

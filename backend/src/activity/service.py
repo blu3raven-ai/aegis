@@ -238,14 +238,18 @@ class ActivityService:
         cursor_at: datetime | None,
         limit: int,
     ) -> list[ActivityEvent]:
+        from src.db.models import Asset
         stmt = (
-            select(FindingEvent, Finding)
+            select(FindingEvent, Finding, Asset)
             .join(Finding, FindingEvent.finding_id == Finding.id)
+            .join(Asset, Asset.id == Finding.asset_id)
             .where(FindingEvent.org == org_id)
         )
 
+        # repo_id filters on Asset.display_name (canonical "owner/repo" form for
+        # repo assets). Callers pass the same display_name the UI shows.
         if repo_id:
-            stmt = stmt.where(Finding.repo == repo_id)
+            stmt = stmt.where(Asset.display_name == repo_id)
         if since:
             stmt = stmt.where(FindingEvent.created_at >= since)
         if until:
@@ -258,7 +262,7 @@ class ActivityService:
         rows = result.all()
 
         out: list[ActivityEvent] = []
-        for fe, f in rows:
+        for fe, f, asset in rows:
             evt_type = _finding_event_type(fe.from_state, fe.to_state)
             if types and evt_type not in types:
                 continue
@@ -270,8 +274,8 @@ class ActivityService:
                 type=evt_type,
                 occurred_at=ts,
                 actor=fe.actor or fe.triggered_by,
-                repo_id=f.repo,
-                summary=_finding_event_summary(evt_type, f.detail or {}, f.repo),
+                repo_id=asset.display_name if asset is not None else None,
+                summary=_finding_event_summary(evt_type, f.detail or {}, None),
                 payload={
                     "finding_id": f.id,
                     "tool": f.tool,
@@ -296,7 +300,7 @@ class ActivityService:
         limit: int,
     ) -> list[ActivityEvent]:
         stmt = select(ScanRun).where(
-            ScanRun.org == org_id,
+            ScanRun.metadata_json["org_label"].astext == org_id,
             ScanRun.status.in_(["completed", "failed", "error"]),
         )
 

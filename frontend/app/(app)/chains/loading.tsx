@@ -1,0 +1,26 @@
+export default function Loading() {
+  return (
+    <div className="flex h-full flex-col bg-[var(--color-bg)]" aria-busy="true" aria-label="Loading attack chains">
+      <div className="flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
+        <div className="h-9 w-9 rounded-lg bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+        <div className="flex flex-col gap-1.5">
+          <div className="h-5 w-40 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+          <div className="h-3 w-64 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-6 border-b border-[var(--color-border)] px-6 py-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex flex-col gap-2">
+            <div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+            <div className="h-6 w-16 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col gap-4 p-6">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="h-72 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] motion-safe:animate-pulse" />
+        ))}
+      </div>
+    </div>
+  )
+}

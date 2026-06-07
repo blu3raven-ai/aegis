@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const ROOT = join(import.meta.dirname, "../..")
-const src = readFileSync(join(ROOT, "components/layout/PageHeader.tsx"), "utf8")
+const src = readFileSync(join(ROOT, "frontend/components/layout/PageHeader.tsx"), "utf8")
 
 describe("PageHeader", () => {
   it("accepts icon + title + description + controls props", () => {
@@ -22,8 +22,10 @@ describe("PageHeader", () => {
   })
 
   it("places the title in an h1 and the description in a p", () => {
-    assert.ok(/<h1[^>]*>\{title\}<\/h1>/.test(src), "title must be h1")
-    assert.ok(/<p[^>]*>\{subtitle\}<\/p>/.test(src) || /\{subtitle &&[^}]*<p/.test(src), "description must be p")
+    // Title sits inside an h1; a <span> wrapper was introduced so the
+    // optional inline count pill can baseline-align with the title text.
+    assert.ok(/<h1[\s\S]*?\{title\}[\s\S]*?<\/h1>/.test(src), "title must appear inside h1")
+    assert.ok(/\{description &&[^}]*<p/.test(src), "description must be rendered in a p")
   })
 
   it("controls slot is right-aligned via ml-auto", () => {
@@ -36,7 +38,7 @@ describe("PageHeader", () => {
     assert.ok(src.includes("var(--color-text-secondary)"))
   })
 
-  it("keeps backward-compat with deprecated org prop falling back to description", () => {
-    assert.ok(/description \|\| org/.test(src), "subtitle resolution must prefer description, fall back to org")
+  it("no longer ships the deprecated org prop", () => {
+    assert.ok(!/org\?:\s*string/.test(src), "org prop should be removed")
   })
 })

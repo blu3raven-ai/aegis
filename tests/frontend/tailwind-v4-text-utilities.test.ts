@@ -23,7 +23,7 @@ function collectFiles(dir: string, out: string[] = []): string[] {
 const BANNED = /text-\[var\(--type-/
 
 describe("Tailwind v4 text utility compliance", () => {
-  const dirs = ["app", "components", "lib"].map((d) => join(ROOT, d))
+  const dirs = ["frontend/app", "frontend/components", "frontend/lib"].map((d) => join(ROOT, d))
   const files = dirs.flatMap((d) => collectFiles(d))
 
   it("no file uses text-[var(--type-*)] which silently breaks in Tailwind v4", () => {

@@ -26,62 +26,31 @@ def can_review_repository(user_role: str | None, is_member: bool, user_role_id: 
     if not is_member:
         return False
     return has_role_permission(user_role, user_role_id, "review_findings")
-def user_has_repository_access(
-    teams: list[dict[str, Any]], 
-    user_id: str, 
-    org: str, 
-    repo: str,
-    direct_grants: list[dict[str, Any]] | None = None
+
+def user_has_asset_access(
+    teams: list[dict[str, Any]],
+    user_id: str,
+    asset_id: str,
+    direct_grants: list[dict[str, Any]] | None = None,
 ) -> bool:
-    org_key = org.lower()
-    repo_key = repo.lower()
-    
     # Check direct grants first (faster)
     if direct_grants:
-        from src.settings.direct_access_store import user_has_direct_repository_access
-        if user_has_direct_repository_access(direct_grants, user_id, org, repo):
+        from src.settings.direct_access_store import user_has_direct_asset_access
+        if user_has_direct_asset_access(direct_grants, user_id, asset_id):
             return True
 
     for team in teams:
         has_member = any(member["userId"] == user_id for member in team.get("members", []))
-        has_repo = any(
-            item["org"].lower() == org_key and item["repo"].lower() == repo_key
-            for item in team.get("repositories", [])
+        has_asset = any(
+            item["assetId"] == asset_id
+            for item in team.get("assets", [])
         )
-        if has_member and has_repo:
-            return True
-    return False
-
-def user_has_container_image_access(
-    teams: list[dict[str, Any]], 
-    user_id: str, 
-    image: str,
-    direct_grants: list[dict[str, Any]] | None = None
-) -> bool:
-    image_key = image.strip().lower()
-    
-    # Check direct grants first
-    if direct_grants:
-        for grant in direct_grants:
-            if (
-                grant.get("userId") == user_id
-                and grant.get("resourceType") == "containerImage"
-                and grant.get("resourceKey", "").lower() == image_key
-            ):
-                return True
-
-    for team in teams:
-        has_member = any(member["userId"] == user_id for member in team.get("members", []))
-        has_image = any(
-            item.get("image", "").lower() == image_key
-            for item in team.get("containerImages", [])
-        )
-        if has_member and has_image:
+        if has_member and has_asset:
             return True
     return False
 
 def user_has_any_scoped_access(
-    teams: list[dict[str, Any]], 
+    teams: list[dict[str, Any]],
     user_id: str,
     direct_grants: list[dict[str, Any]] | None = None
 ) -> bool:
@@ -93,9 +62,32 @@ def user_has_any_scoped_access(
         has_member = any(member["userId"] == user_id for member in team.get("members", []))
         if not has_member:
             continue
-        if team.get("repositories") or team.get("containerImages"):
+        if team.get("assets"):
             return True
     return False
+
+def user_has_repository_access(
+    teams: list[dict[str, Any]],
+    user_id: str,
+    org: str,
+    repo: str,
+    direct_grants: list[dict[str, Any]] | None = None,
+) -> bool:
+    # Callers that only have (org, repo) and not asset_id cannot perform
+    # asset-level grant checks. Always returns False until those callers are
+    # migrated (Task 3) to pass asset_id.
+    return False
+
+
+def user_has_container_image_access(
+    teams: list[dict[str, Any]],
+    user_id: str,
+    image: str,
+    direct_grants: list[dict[str, Any]] | None = None,
+) -> bool:
+    # Same as user_has_repository_access — pending Task 3 migration.
+    return False
+
 
 def get_effective_team_role_for_repository(teams: list[dict[str, Any]], user_id: str, org: str, repo: str) -> str | None:
     """

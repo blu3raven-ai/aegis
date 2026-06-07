@@ -20,19 +20,29 @@ Grype DB precedence (matches bash run.sh): Argus paid-tier DB (if
 from __future__ import annotations
 
 import concurrent.futures
+import dataclasses
 import json
 import logging
 import os
 import shutil
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
+    BaseScanConfig,
     GitCloneError,
     InsecureURLError,
+    JobEnv,
     ProgressEmitter,
+    ScannerConfigError,
+    TIMEOUT_CDXGEN,
+    TIMEOUT_CLONE,
+    TIMEOUT_GRYPE_DB_CHECK,
+    TIMEOUT_GRYPE_DB_UPDATE,
+    TIMEOUT_GRYPE_MATCH,
+    TIMEOUT_SYFT_REPO,
     clone_repo,
     log_finished,
     log_scanning,
@@ -56,13 +66,6 @@ from runner.scanners.dependencies import (
 logger = logging.getLogger(__name__)
 
 
-_GRYPE_DB_CHECK_TIMEOUT_S = 60.0
-_GRYPE_DB_UPDATE_TIMEOUT_S = 600.0
-_GRYPE_MATCH_TIMEOUT_S = 300.0
-_SYFT_TIMEOUT_S = 600.0
-_CDXGEN_TIMEOUT_S = 600.0
-_CLONE_TIMEOUT_S = 300.0
-
 _GRYPE_VULNS_FOUND_RC = 1  # grype convention — not an error
 
 # SBOM tools may invoke lockfile install scripts inside untrusted repos —
@@ -83,6 +86,32 @@ _UNSUPPORTED_MODE_EXIT_CODE = 2
 _SBOM_INPUT_SUBDIR = "_sbom_input"
 
 
+@dataclasses.dataclass(frozen=True)
+class DependenciesScanConfig(BaseScanConfig):
+    repos: list[str]
+    git_token: str | None
+    scan_mode: str
+
+    @classmethod
+    def from_job(cls, job: dict[str, Any]) -> "DependenciesScanConfig":
+        env = JobEnv(job)
+        scan_mode = env.get("SCAN_MODE", SCAN_MODE_FULL).lower()
+        if scan_mode not in SUPPORTED_SCAN_MODES:
+            raise ScannerConfigError(
+                f"[!] SCAN_MODE={scan_mode!r} is not implemented in the "
+                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_MODES)}. "
+                f"Deferred: {sorted(DEFERRED_SCAN_MODES)}."
+            )
+        return cls(
+            org_label=env.get("ORG_LABEL", "default"),
+            run_id=env.get("RUN_ID", str(job.get("jobId", "unknown"))),
+            concurrency=max(1, env.get_int("CONCURRENCY", 4)),
+            repos=parse_repos(env.get("GIT_REPOS")),
+            git_token=env.get("GIT_TOKEN") or None,
+            scan_mode=scan_mode,
+        )
+
+
 class DependenciesScanner:
     SCANNER_TYPE = "dependencies"
 
@@ -93,46 +122,19 @@ class DependenciesScanner:
         on_progress: Callable[[list[str], dict], None] | None = None,
         cancel_event: threading.Event | None = None,
     ) -> ExecutionResult:
-        env_vars: dict[str, str] = (
-            (job.get("dockerArgs") or {}).get("envVars") or {}
-        )
-        repos_input = env_vars.get("GIT_REPOS") or os.environ.get("GIT_REPOS", "")
-        git_token = env_vars.get("GIT_TOKEN") or os.environ.get("GIT_TOKEN")
-        org_label = (
-            env_vars.get("ORG_LABEL") or os.environ.get("ORG_LABEL") or "default"
-        )
-        run_id = (
-            env_vars.get("RUN_ID")
-            or os.environ.get("RUN_ID")
-            or str(job.get("jobId", "unknown"))
-        )
-        scan_mode = (
-            env_vars.get("SCAN_MODE")
-            or os.environ.get("SCAN_MODE")
-            or SCAN_MODE_FULL
-        ).lower()
-        try:
-            concurrency = int(
-                env_vars.get("CONCURRENCY") or os.environ.get("CONCURRENCY") or "4"
-            )
-        except ValueError:
-            concurrency = 4
-        if concurrency < 1:
-            concurrency = 1
+        env_vars: dict[str, str] = job.get("envVars") or {}
 
         out_dir = Path(job_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
         log_tail: list[str] = []
 
-        if scan_mode not in SUPPORTED_SCAN_MODES:
-            message = (
-                f"[!] SCAN_MODE={scan_mode!r} is not implemented in the "
-                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_MODES)}. "
-                f"Deferred: {sorted(DEFERRED_SCAN_MODES)}."
-            )
+        try:
+            cfg = DependenciesScanConfig.from_job(job)
+        except ScannerConfigError as exc:
+            message = str(exc)
             logger.error(message)
-            log_tail.append(message)
+            log_tail = [message]
             emitter = ProgressEmitter(on_progress, expected=0)
             emitter.done()
             write_done_marker(out_dir)
@@ -142,49 +144,37 @@ class DependenciesScanner:
                 log_tail=log_tail,
             )
 
-        # advisories_only needs S3 creds + ORG_LABEL in os.environ so the
-        # boto3-based downloader can read MinIO.
-        if scan_mode == SCAN_MODE_ADVISORIES_ONLY:
-            for var in (
-                "S3_ENDPOINT",
-                "S3_ACCESS_KEY",
-                "S3_SECRET_KEY",
-                "S3_REGION",
-            ):
-                if var in env_vars and var not in os.environ:
-                    os.environ[var] = env_vars[var]
-            if "ORG_LABEL" not in os.environ:
-                os.environ["ORG_LABEL"] = org_label
-
         # Promote ARGUS_* into the process env so download_argus_db can pick
         # them up without re-threading job state.
         for var in ("ARGUS_API_KEY", "ARGUS_ENDPOINT"):
             if var in env_vars and var not in os.environ:
                 os.environ[var] = env_vars[var]
 
-        if scan_mode == SCAN_MODE_ADVISORIES_ONLY:
+        if cfg.scan_mode == SCAN_MODE_ADVISORIES_ONLY:
             return self._run_advisories_only(
                 out_dir=out_dir,
-                org_label=org_label,
-                run_id=run_id,
-                concurrency=concurrency,
+                org_label=cfg.org_label,
+                run_id=cfg.run_id,
+                concurrency=cfg.concurrency,
+                backend_client=job["_backend"],
+                job_id=job["jobId"],
                 on_progress=on_progress,
                 cancel_event=cancel_event,
                 log_tail=log_tail,
             )
 
-        if scan_mode == SCAN_MODE_SBOM_ONLY:
+        if cfg.scan_mode == SCAN_MODE_SBOM_ONLY:
             return self._run_sbom_only(
-                repos_input=repos_input,
+                repos=cfg.repos,
                 out_dir=out_dir,
-                git_token=git_token,
-                concurrency=concurrency,
+                git_token=cfg.git_token,
+                concurrency=cfg.concurrency,
                 on_progress=on_progress,
                 cancel_event=cancel_event,
                 log_tail=log_tail,
             )
 
-        repos = parse_repos(repos_input)
+        repos = cfg.repos
         emitter = ProgressEmitter(on_progress, expected=len(repos))
 
         if cancel_event is not None and cancel_event.is_set():
@@ -214,7 +204,7 @@ class DependenciesScanner:
                 return self._scan_repo(
                     repo_url,
                     out_dir,
-                    git_token=git_token,
+                    git_token=cfg.git_token,
                     custom_db_path=custom_db_path,
                     cancel_event=cancel_event,
                 )
@@ -235,7 +225,7 @@ class DependenciesScanner:
                 emitter.finished(repo_name)
 
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=concurrency
+            max_workers=cfg.concurrency
         ) as pool:
             list(pool.map(_scan_one, repos))
 
@@ -245,7 +235,7 @@ class DependenciesScanner:
         # helper (which already walks the target dir).
         try:
             total, errors = normalize.normalize_grype_output(
-                org_label, out_dir, run_id
+                cfg.org_label, out_dir, cfg.run_id
             )
             log_tail.append(
                 f"[+] Normalized {total} SCA findings ({errors} errors)"
@@ -271,6 +261,8 @@ class DependenciesScanner:
         org_label: str,
         run_id: str,
         concurrency: int,
+        backend_client: Any,
+        job_id: str,
         on_progress: Callable[[list[str], dict], None] | None,
         cancel_event: threading.Event | None,
         log_tail: list[str],
@@ -301,19 +293,12 @@ class DependenciesScanner:
 
         sbom_dir = out_dir / _SBOM_INPUT_SUBDIR
         try:
-            sbom_count = download_sboms.download_sboms(sbom_dir)
-        except download_sboms.SbomDownloadError as e:
-            message = f"[!] advisories_only: SBOM download failed: {e}"
-            log_tail.append(message)
-            logger.warning(message)
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=_UNSUPPORTED_MODE_EXIT_CODE,
-                job_dir=out_dir,
-                log_tail=log_tail[-50:],
+            sbom_count = download_sboms.download_sboms(
+                backend_client=backend_client,
+                job_id=job_id,
+                output_dir=sbom_dir,
             )
-        except Exception as e:  # noqa: BLE001 — boto3 raises a wide tree
+        except Exception as e:  # noqa: BLE001
             message = f"[!] advisories_only: SBOM download error: {e}"
             log_tail.append(message)
             logger.exception("[!] advisories_only: SBOM download error")
@@ -409,7 +394,7 @@ class DependenciesScanner:
     def _run_sbom_only(
         self,
         *,
-        repos_input: str,
+        repos: list[str],
         out_dir: Path,
         git_token: str | None,
         concurrency: int,
@@ -424,7 +409,6 @@ class DependenciesScanner:
         ``findings.jsonl`` is written — bash produces no per-repo
         ``findings.json`` in this mode so the aggregate file is absent too.
         """
-        repos = parse_repos(repos_input)
         emitter = ProgressEmitter(on_progress, expected=len(repos))
 
         if cancel_event is not None and cancel_event.is_set():
@@ -567,7 +551,7 @@ class DependenciesScanner:
             return
         rc, _, _ = run_tool(
             ["grype", "db", "check"],
-            timeout=_GRYPE_DB_CHECK_TIMEOUT_S,
+            timeout=TIMEOUT_GRYPE_DB_CHECK,
             cancel_event=cancel_event,
         )
         if rc == 0:
@@ -575,7 +559,7 @@ class DependenciesScanner:
         logger.info("[+] Updating Grype vulnerability database...")
         rc, _, stderr = run_tool(
             ["grype", "db", "update"],
-            timeout=_GRYPE_DB_UPDATE_TIMEOUT_S,
+            timeout=TIMEOUT_GRYPE_DB_UPDATE,
             cancel_event=cancel_event,
         )
         if rc != 0:
@@ -603,7 +587,7 @@ class DependenciesScanner:
         clone_dir = repo_out / "_checkout"
         try:
             clone_repo(
-                repo_url, clone_dir, token=git_token, timeout=_CLONE_TIMEOUT_S
+                repo_url, clone_dir, token=git_token, timeout=TIMEOUT_CLONE
             )
         finally:
             pass
@@ -686,7 +670,7 @@ class DependenciesScanner:
                 "--parallelism",
                 "2",
             ],
-            timeout=_SYFT_TIMEOUT_S,
+            timeout=TIMEOUT_SYFT_REPO,
             drop_env=_SBOM_TOOL_DROP_ENV,
             cancel_event=cancel_event,
         )
@@ -707,7 +691,7 @@ class DependenciesScanner:
             return False
         rc, _, stderr = run_tool(
             ["cdxgen", "-o", str(output), str(target), "--no-recurse"],
-            timeout=_CDXGEN_TIMEOUT_S,
+            timeout=TIMEOUT_CDXGEN,
             drop_env=_SBOM_TOOL_DROP_ENV,
             cancel_event=cancel_event,
         )
@@ -851,7 +835,7 @@ class DependenciesScanner:
         if custom_db_path and custom_db_path.exists():
             args.extend(["--db", str(custom_db_path)])
         rc, stdout, stderr = run_tool(
-            args, timeout=_GRYPE_MATCH_TIMEOUT_S, cancel_event=cancel_event
+            args, timeout=TIMEOUT_GRYPE_MATCH, cancel_event=cancel_event
         )
         # Exit 1 = vulnerabilities found (not an error)
         if rc in (0, _GRYPE_VULNS_FOUND_RC):

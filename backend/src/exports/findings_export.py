@@ -18,7 +18,8 @@ from uuid import UUID
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Finding
+from src.db.models import Asset, Finding
+from src.shared.archived_filter import exclude_archived, include_archived
 
 # Columns emitted in every export — ordered for human readability.
 EXPORT_COLUMNS = [
@@ -34,8 +35,6 @@ EXPORT_COLUMNS = [
     "last_seen_at",
     "status",
     "assignee",
-    "chain_role",
-    "chain_id",
 ]
 
 _BATCH_SIZE = 500
@@ -63,7 +62,12 @@ def _build_where_clauses(filters: FindingFilters) -> list:
     if filters.status:
         clauses.append(Finding.state.in_(filters.status))
     if filters.repo_id:
-        clauses.append(Finding.repo == filters.repo_id)
+        # repo_id is the human-readable Asset.display_name (e.g. "acme/foo")
+        clauses.append(
+            Finding.asset_id.in_(
+                select(Asset.id).where(Asset.display_name == filters.repo_id)
+            )
+        )
     if filters.since:
         clauses.append(Finding.first_seen_at >= filters.since)
     if filters.until:
@@ -78,31 +82,32 @@ def _finding_to_row(finding: Finding) -> dict[str, Any]:
         "id": finding.id,
         "severity": finding.severity or "",
         "scanner": finding.tool,
-        # Prefer a human-readable title from the detail blob; fall back to identity key.
-        "title": detail.get("title") or detail.get("rule_name") or detail.get("package_name") or finding.identity_key,
-        "cve_id": detail.get("cve_id") or detail.get("cve") or "",
+        "title": finding.title or finding.identity_key,
+        "cve_id": finding.cve_id or "",
         "repo": finding.repo or "",
-        "file_path": detail.get("file_path") or detail.get("path") or "",
+        "file_path": finding.file_path or "",
         "line": detail.get("start_line") or detail.get("line") or "",
         "first_seen_at": finding.first_seen_at.isoformat() if finding.first_seen_at else "",
         "last_seen_at": finding.last_seen_at.isoformat() if finding.last_seen_at else "",
         "status": finding.state,
-        # Chain correlation fields — populated by the correlation engine via detail.
         "assignee": detail.get("assignee") or "",
-        "chain_role": detail.get("chain_role") or "",
-        "chain_id": detail.get("chain_id") or "",
     }
 
 
 async def count_findings(
     filters: FindingFilters,
     session: AsyncSession,
+    include_archived_rows: bool = False,
 ) -> int:
     """Return the total number of findings matching the filters."""
     where = _build_where_clauses(filters)
     stmt = select(func.count()).select_from(Finding)
     if where:
         stmt = stmt.where(and_(*where))
+    if include_archived_rows:
+        stmt = include_archived(stmt)
+    else:
+        stmt = exclude_archived(stmt, Finding)
     result = await session.execute(stmt)
     return result.scalar_one()
 
@@ -110,6 +115,7 @@ async def count_findings(
 async def stream_findings_csv(
     filters: FindingFilters,
     session: AsyncSession,
+    include_archived_rows: bool = False,
 ) -> AsyncIterator[bytes]:
     """Yield CSV bytes — header first, then rows streamed in batches of 500."""
     # Emit the header row first so clients can begin parsing immediately.
@@ -122,6 +128,12 @@ async def stream_findings_csv(
     stmt = select(Finding).order_by(Finding.id)
     if where:
         stmt = stmt.where(and_(*where))
+    # Same default-exclude contract as the /findings list and reports — archived
+    # rows are hidden unless the caller explicitly opts in.
+    if include_archived_rows:
+        stmt = include_archived(stmt)
+    else:
+        stmt = exclude_archived(stmt, Finding)
 
     async with session.stream(stmt) as result:
         async for partition in result.partitions(_BATCH_SIZE):
@@ -137,6 +149,7 @@ async def stream_findings_csv(
 async def stream_findings_json(
     filters: FindingFilters,
     session: AsyncSession,
+    include_archived_rows: bool = False,
 ) -> AsyncIterator[bytes]:
     """Yield newline-delimited JSON (JSONL) bytes — one finding per line.
 
@@ -147,6 +160,10 @@ async def stream_findings_json(
     stmt = select(Finding).order_by(Finding.id)
     if where:
         stmt = stmt.where(and_(*where))
+    if include_archived_rows:
+        stmt = include_archived(stmt)
+    else:
+        stmt = exclude_archived(stmt, Finding)
 
     async with session.stream(stmt) as result:
         async for partition in result.partitions(_BATCH_SIZE):

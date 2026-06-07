@@ -169,15 +169,16 @@ def test_normalize_grype_output_handles_no_findings(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_download_sboms_raises_when_org_label_missing(monkeypatch):
-    from runner.scanners.dependencies.download_sboms import (
-        SbomDownloadError,
-        download_sboms,
-    )
+def test_download_sboms_delegates_to_backend_client(tmp_path):
+    from unittest.mock import MagicMock, patch
 
-    monkeypatch.delenv("ORG_LABEL", raising=False)
-    with pytest.raises(SbomDownloadError):
-        download_sboms("/tmp/never-used")
+    from runner.scanners.dependencies.download_sboms import download_sboms
+
+    backend = MagicMock()
+    backend.list_sbom_downloads.return_value = []
+    count = download_sboms(backend_client=backend, job_id="j1", output_dir=tmp_path)
+    assert count == 0
+    backend.list_sbom_downloads.assert_called_once_with("j1")
 
 
 @pytest.mark.integration
@@ -288,8 +289,7 @@ def test_run_scan_empty_repos_returns_clean(tmp_path):
     scanner = DependenciesScanner()
     job = {
         "jobId": "test-123",
-        "dockerArgs": {"envVars": {"GIT_REPOS": ""}},
-    }
+        "envVars": {"GIT_REPOS": ""},}
     job_dir = tmp_path / "test-123"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert isinstance(result, ExecutionResult)
@@ -323,10 +323,7 @@ def test_run_scan_respects_pre_set_cancel(tmp_path, monkeypatch):
     cancel.set()
     job = {
         "jobId": "test-cancel",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/example/repo.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/example/repo.git"},}
     job_dir = tmp_path / "test-cancel"
     result = scanner.run_scan(job, job_dir=job_dir, cancel_event=cancel)
     assert result.exit_code == CANCELLED_EXIT_CODE
@@ -368,13 +365,10 @@ def test_run_scan_honours_concurrency_env(tmp_path, monkeypatch):
     scanner = DependenciesScanner()
     job = {
         "jobId": "test-conc",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git,https://github.com/c/d.git",
                 "CONCURRENCY": "7",
-            }
-        },
-    }
+            },}
     scanner.run_scan(job, job_dir=tmp_path / "test-conc")
     assert captured["max_workers"] == 7
 
@@ -417,13 +411,10 @@ def test_run_scan_aggregates_findings(tmp_path, monkeypatch):
     scanner = DependenciesScanner()
     job = {
         "jobId": "test-agg",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git\nhttps://github.com/c/d.git",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "test-agg"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
@@ -452,10 +443,7 @@ def test_run_scan_tolerates_clone_failure(tmp_path, monkeypatch):
     scanner = DependenciesScanner()
     job = {
         "jobId": "test-fail",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/a/b.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/a/b.git"},}
     job_dir = tmp_path / "test-fail"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
@@ -469,13 +457,10 @@ def test_run_scan_rejects_unsupported_scan_mode(tmp_path):
     scanner = DependenciesScanner()
     job = {
         "jobId": "test-mode",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/example/a.git",
                 "SCAN_MODE": "not_a_real_mode",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "test-mode"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 2
@@ -633,7 +618,7 @@ def test_run_scan_emits_progress(tmp_path):
         captures.append(dict(progress))
 
     scanner = DependenciesScanner()
-    job = {"jobId": "p1", "dockerArgs": {"envVars": {"GIT_REPOS": ""}}}
+    job = {"jobId": "p1", "envVars": {"GIT_REPOS": ""},}
     scanner.run_scan(job, job_dir=tmp_path / "p1", on_progress=on_progress)
 
     assert captures, "on_progress was never called"
@@ -670,13 +655,10 @@ def test_run_scan_emits_progress_per_repo(tmp_path, monkeypatch):
     scanner = DependenciesScanner()
     job = {
         "jobId": "p2",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://x/a.git,https://x/b.git",
                 "CONCURRENCY": "1",
-            }
-        },
-    }
+            },}
     scanner.run_scan(job, job_dir=tmp_path / "p2", on_progress=on_progress)
 
     assert all(c["expectedRepos"] == 2 for c in captures)
@@ -700,13 +682,10 @@ def test_run_scan_emits_progress_done_on_unsupported_mode(tmp_path):
     scanner = DependenciesScanner()
     job = {
         "jobId": "p3",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://x/a.git",
                 "SCAN_MODE": "not_a_real_mode",
-            }
-        },
-    }
+            },}
     scanner.run_scan(
         job,
         job_dir=tmp_path / "p3",
@@ -727,8 +706,7 @@ def test_run_scan_emits_progress_done_on_pre_cancel(tmp_path):
     scanner = DependenciesScanner()
     job = {
         "jobId": "p4",
-        "dockerArgs": {"envVars": {"GIT_REPOS": "https://x/a.git"}},
-    }
+        "envVars": {"GIT_REPOS": "https://x/a.git"},}
     scanner.run_scan(
         job,
         job_dir=tmp_path / "p4",
@@ -746,7 +724,7 @@ def test_run_scan_progress_callback_exception_does_not_abort(tmp_path):
         raise RuntimeError("boom")
 
     scanner = DependenciesScanner()
-    job = {"jobId": "p5", "dockerArgs": {"envVars": {"GIT_REPOS": ""}}}
+    job = {"jobId": "p5", "envVars": {"GIT_REPOS": ""},}
     result = scanner.run_scan(job, job_dir=tmp_path / "p5", on_progress=bad)
     assert result.exit_code == 0
 
@@ -965,14 +943,11 @@ def test_run_scan_uses_argus_db_when_creds_set(tmp_path, monkeypatch):
     scanner = DependenciesScanner()
     job = {
         "jobId": "argus-1",
-        "dockerArgs": {
-            "envVars": {
+        "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git",
                 "ARGUS_API_KEY": "k",
                 "ARGUS_ENDPOINT": "https://argus.example.com",
-            }
-        },
-    }
+            },}
     scanner.run_scan(job, job_dir=tmp_path / "argus-1")
     assert captured_db == [argus_marker]
     # vunnel must NOT be consulted when Argus succeeds — Argus > vunnel.
@@ -1014,10 +989,7 @@ def test_run_scan_falls_back_to_vunnel_db_when_argus_download_fails(
     scanner = DependenciesScanner()
     job = {
         "jobId": "argus-fallback",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/a/b.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/a/b.git"},}
     scanner.run_scan(job, job_dir=tmp_path / "argus-fallback")
     assert captured_db == [vunnel_marker]
 
@@ -1054,10 +1026,7 @@ def test_run_scan_falls_back_to_default_db_when_neither_available(
     scanner = DependenciesScanner()
     job = {
         "jobId": "no-db",
-        "dockerArgs": {
-            "envVars": {"GIT_REPOS": "https://github.com/a/b.git"}
-        },
-    }
+        "envVars": {"GIT_REPOS": "https://github.com/a/b.git"},}
     scanner.run_scan(job, job_dir=tmp_path / "no-db")
     assert captured_db == [None]
 
@@ -1079,6 +1048,7 @@ def test_advisories_only_is_supported_mode():
 
 
 def _fake_download_two_sboms(sbom_dir):
+    sbom_dir = Path(sbom_dir)
     sbom_dir.mkdir(parents=True, exist_ok=True)
     (sbom_dir / "acme__widget.json").write_text(
         json.dumps({"components": [{"name": "lodash", "version": "4.17.20"}]})
@@ -1087,6 +1057,10 @@ def _fake_download_two_sboms(sbom_dir):
         json.dumps({"components": [{"name": "flask", "version": "1.0"}]})
     )
     return 2
+
+
+def _fake_download_two_sboms_kw(*, backend_client, job_id, output_dir):
+    return _fake_download_two_sboms(output_dir)
 
 
 def test_run_scan_advisories_only_skips_clone_and_syft(tmp_path, monkeypatch):
@@ -1108,10 +1082,7 @@ def test_run_scan_advisories_only_skips_clone_and_syft(tmp_path, monkeypatch):
         lambda **kw: None,
     )
 
-    def fake_download(output_dir):
-        return _fake_download_two_sboms(Path(output_dir))
-
-    monkeypatch.setattr(scanner_mod.download_sboms, "download_sboms", fake_download)
+    monkeypatch.setattr(scanner_mod.download_sboms, "download_sboms", _fake_download_two_sboms_kw)
 
     clone_calls: list = []
     syft_calls: list = []
@@ -1134,16 +1105,17 @@ def test_run_scan_advisories_only_skips_clone_and_syft(tmp_path, monkeypatch):
         or True,
     )
 
+    from unittest.mock import MagicMock
+    backend = MagicMock()
+
     scanner = DependenciesScanner()
     job = {
         "jobId": "adv-skip",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": backend,
+        "envVars": {
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     result = scanner.run_scan(job, job_dir=tmp_path / "adv-skip")
     assert result.exit_code == 0
     assert clone_calls == []
@@ -1182,22 +1154,23 @@ def test_run_scan_advisories_only_downloads_sboms_from_minio(
 
     captured: list = []
 
-    def fake_download(output_dir):
+    def fake_download(*, backend_client, job_id, output_dir):
         captured.append(Path(output_dir))
-        return _fake_download_two_sboms(Path(output_dir))
+        return _fake_download_two_sboms(output_dir)
 
     monkeypatch.setattr(scanner_mod.download_sboms, "download_sboms", fake_download)
+
+    from unittest.mock import MagicMock
+    backend = MagicMock()
 
     scanner = DependenciesScanner()
     job = {
         "jobId": "adv-dl",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": backend,
+        "envVars": {
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "adv-dl"
     scanner.run_scan(job, job_dir=job_dir)
     assert len(captured) == 1
@@ -1228,7 +1201,7 @@ def test_run_scan_advisories_only_runs_grype_against_downloaded_sboms(
     monkeypatch.setattr(
         scanner_mod.download_sboms,
         "download_sboms",
-        lambda output_dir: _fake_download_two_sboms(Path(output_dir)),
+        _fake_download_two_sboms_kw,
     )
 
     grype_calls: list = []
@@ -1240,16 +1213,17 @@ def test_run_scan_advisories_only_runs_grype_against_downloaded_sboms(
 
     monkeypatch.setattr(DependenciesScanner, "_run_grype", fake_grype)
 
+    from unittest.mock import MagicMock
+    backend = MagicMock()
+
     scanner = DependenciesScanner()
     job = {
         "jobId": "adv-grype",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": backend,
+        "envVars": {
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     scanner.run_scan(job, job_dir=tmp_path / "adv-grype")
     assert len(grype_calls) == 2
     # Each grype call must point at a per-repo sbom.cdx.json inside the
@@ -1279,7 +1253,7 @@ def test_run_scan_advisories_only_emits_progress(tmp_path, monkeypatch):
     monkeypatch.setattr(
         scanner_mod.download_sboms,
         "download_sboms",
-        lambda output_dir: _fake_download_two_sboms(Path(output_dir)),
+        _fake_download_two_sboms_kw,
     )
     monkeypatch.setattr(
         DependenciesScanner,
@@ -1290,18 +1264,19 @@ def test_run_scan_advisories_only_emits_progress(tmp_path, monkeypatch):
         or True,
     )
 
+    from unittest.mock import MagicMock
+    backend = MagicMock()
+
     captures: list[dict] = []
     scanner = DependenciesScanner()
     job = {
         "jobId": "adv-prog",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": backend,
+        "envVars": {
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
                 "CONCURRENCY": "1",
-            }
-        },
-    }
+            },}
     scanner.run_scan(
         job,
         job_dir=tmp_path / "adv-prog",
@@ -1334,7 +1309,7 @@ def test_run_scan_advisories_only_writes_done_marker(tmp_path, monkeypatch):
     monkeypatch.setattr(
         scanner_mod.download_sboms,
         "download_sboms",
-        lambda output_dir: _fake_download_two_sboms(Path(output_dir)),
+        _fake_download_two_sboms_kw,
     )
     monkeypatch.setattr(
         DependenciesScanner,
@@ -1345,16 +1320,17 @@ def test_run_scan_advisories_only_writes_done_marker(tmp_path, monkeypatch):
         or True,
     )
 
+    from unittest.mock import MagicMock
+    backend = MagicMock()
+
     scanner = DependenciesScanner()
     job = {
         "jobId": "adv-done",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": backend,
+        "envVars": {
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "adv-done"
     scanner.run_scan(job, job_dir=job_dir)
     manifest = (job_dir / "_manifest.jsonl").read_text()
@@ -1368,7 +1344,6 @@ def test_run_scan_advisories_only_fails_loudly_when_sboms_unavailable(
     must exit with code 2 — an empty findings file would silently overwrite
     the previous run."""
     from runner.scanners.dependencies import scanner as scanner_mod
-    from runner.scanners.dependencies.download_sboms import SbomDownloadError
     from runner.scanners.dependencies.scanner import DependenciesScanner
 
     monkeypatch.setattr(
@@ -1385,23 +1360,24 @@ def test_run_scan_advisories_only_fails_loudly_when_sboms_unavailable(
         lambda **kw: None,
     )
 
-    def raise_err(output_dir):
-        raise SbomDownloadError("no MinIO creds")
+    def raise_err(*, backend_client, job_id, output_dir):
+        raise RuntimeError("backend unavailable")
 
     monkeypatch.setattr(
         scanner_mod.download_sboms, "download_sboms", raise_err
     )
 
+    from unittest.mock import MagicMock
+    backend = MagicMock()
+
     scanner = DependenciesScanner()
     job = {
         "jobId": "adv-fail",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": backend,
+        "envVars": {
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "adv-fail"
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 2
@@ -1432,7 +1408,7 @@ def test_run_scan_advisories_only_fails_loudly_when_no_sboms_returned(
         lambda **kw: None,
     )
 
-    def empty_download(output_dir):
+    def empty_download(*, backend_client, job_id, output_dir):
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         return 0
 
@@ -1440,16 +1416,17 @@ def test_run_scan_advisories_only_fails_loudly_when_no_sboms_returned(
         scanner_mod.download_sboms, "download_sboms", empty_download
     )
 
+    from unittest.mock import MagicMock
+    backend = MagicMock()
+
     scanner = DependenciesScanner()
     job = {
         "jobId": "adv-empty",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": backend,
+        "envVars": {
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     result = scanner.run_scan(job, job_dir=tmp_path / "adv-empty")
     assert result.exit_code == 2
     assert any("no SBOMs available" in line for line in result.log_tail)
@@ -1478,7 +1455,7 @@ def test_run_scan_advisories_only_normalizes_findings_into_jsonl(
     monkeypatch.setattr(
         scanner_mod.download_sboms,
         "download_sboms",
-        lambda output_dir: _fake_download_two_sboms(Path(output_dir)),
+        _fake_download_two_sboms_kw,
     )
 
     def fake_grype(self, sbom, out, db, ce):
@@ -1506,16 +1483,17 @@ def test_run_scan_advisories_only_normalizes_findings_into_jsonl(
 
     monkeypatch.setattr(DependenciesScanner, "_run_grype", fake_grype)
 
+    from unittest.mock import MagicMock
+    backend = MagicMock()
+
     scanner = DependenciesScanner()
     job = {
         "jobId": "adv-norm",
-        "dockerArgs": {
-            "envVars": {
+        "_backend": backend,
+        "envVars": {
                 "SCAN_MODE": "advisories_only",
                 "ORG_LABEL": "acme",
-            }
-        },
-    }
+            },}
     job_dir = tmp_path / "adv-norm"
     scanner.run_scan(job, job_dir=job_dir)
     out_file = job_dir / "findings.jsonl"
@@ -1676,12 +1654,11 @@ def test_run_scan_sbom_only_skips_grype_and_writes_done(tmp_path, monkeypatch):
 
     job = {
         "jobId": "sbom-test",
-        "dockerArgs": {"envVars": {
+        "envVars": {
             "GIT_REPOS": "https://github.com/example/a.git",
             "SCAN_MODE": "sbom_only",
             "CONCURRENCY": "1",
-        }},
-    }
+        },}
     job_dir = tmp_path / "sbom-test"
     result = scanner.run_scan(job, job_dir=job_dir)
 
@@ -1712,11 +1689,10 @@ def test_run_scan_sbom_only_emits_progress_done(tmp_path, monkeypatch):
 
     job = {
         "jobId": "sbom-prog",
-        "dockerArgs": {"envVars": {
+        "envVars": {
             "GIT_REPOS": "https://github.com/example/a.git,https://github.com/example/b.git",
             "SCAN_MODE": "sbom_only",
-        }},
-    }
+        },}
     scanner.run_scan(
         job, job_dir=tmp_path / "sbom-prog",
         on_progress=lambda log, prog: progress_events.append(dict(prog)),
@@ -1736,3 +1712,68 @@ def test_run_scan_sbom_only_in_supported_modes():
 
     assert "sbom_only" in SUPPORTED_SCAN_MODES
     assert "sbom_only" not in DEFERRED_SCAN_MODES
+
+
+# ---------------------------------------------------------------------------
+# DependenciesScanConfig
+# ---------------------------------------------------------------------------
+
+def _deps_job(env: dict) -> dict:
+    return {"jobId": "job-test", "envVars": env}
+
+
+def test_deps_config_parses_defaults(monkeypatch):
+    monkeypatch.delenv("ORG_LABEL", raising=False)
+    monkeypatch.delenv("CONCURRENCY", raising=False)
+    monkeypatch.delenv("SCAN_MODE", raising=False)
+    monkeypatch.delenv("GIT_TOKEN", raising=False)
+    from runner.scanners.dependencies.scanner import DependenciesScanConfig
+    cfg = DependenciesScanConfig.from_job(_deps_job({"GIT_REPOS": "https://x/a.git"}))
+    assert cfg.org_label == "default"
+    assert cfg.concurrency == 4
+    assert cfg.scan_mode == "full"
+    assert cfg.git_token is None
+    assert cfg.repos == ["https://x/a.git"]
+
+
+def test_deps_config_parses_explicit_values():
+    from runner.scanners.dependencies.scanner import DependenciesScanConfig
+    cfg = DependenciesScanConfig.from_job(_deps_job({
+        "GIT_REPOS": "https://x/a.git,https://x/b.git",
+        "GIT_TOKEN": "ghp_abc",
+        "ORG_LABEL": "acme-org",
+        "RUN_ID": "run-42",
+        "CONCURRENCY": "8",
+        "SCAN_MODE": "sbom_only",
+    }))
+    assert cfg.repos == ["https://x/a.git", "https://x/b.git"]
+    assert cfg.git_token == "ghp_abc"
+    assert cfg.org_label == "acme-org"
+    assert cfg.run_id == "run-42"
+    assert cfg.concurrency == 8
+    assert cfg.scan_mode == "sbom_only"
+
+
+def test_deps_config_rejects_unsupported_scan_mode():
+    from runner.scanners._shared import ScannerConfigError
+    from runner.scanners.dependencies.scanner import DependenciesScanConfig
+    with pytest.raises(ScannerConfigError, match="SCAN_MODE"):
+        DependenciesScanConfig.from_job(_deps_job({
+            "GIT_REPOS": "https://x/a.git",
+            "SCAN_MODE": "invalid_mode",
+        }))
+
+
+def test_deps_config_run_id_falls_back_to_job_id():
+    from runner.scanners.dependencies.scanner import DependenciesScanConfig
+    cfg = DependenciesScanConfig.from_job({"jobId": "job-99", "envVars": {"GIT_REPOS": "https://x/a.git"}})
+    assert cfg.run_id == "job-99"
+
+
+def test_deps_config_concurrency_bad_value_uses_default():
+    from runner.scanners.dependencies.scanner import DependenciesScanConfig
+    cfg = DependenciesScanConfig.from_job(_deps_job({
+        "GIT_REPOS": "https://x/a.git",
+        "CONCURRENCY": "not_a_number",
+    }))
+    assert cfg.concurrency == 4

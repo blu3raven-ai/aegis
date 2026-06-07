@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import false as sa_false, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.compliance.models import (
@@ -63,9 +63,37 @@ async def list_controls_for_framework(
 async def get_framework_summary(
     session: AsyncSession,
     framework: str,
-    org_id: str,
+    org_id: str | None = None,
+    *,
+    asset_ids: list[str] | None = None,
 ) -> list[ControlSummaryItem]:
-    """Return per-control finding and chain counts for an org."""
+    """Return per-control finding counts.
+
+    Supply either ``org_id`` (legacy path) or ``asset_ids`` (asset-identity path).
+    """
+    if asset_ids is None and org_id is None:
+        raise ValueError("either org_id or asset_ids is required")
+
+    if asset_ids is not None and not asset_ids:
+        controls = await list_controls_for_framework(session, framework)
+        return [
+            ControlSummaryItem(
+                framework=framework,
+                control_id=ctrl.control_id,
+                title=ctrl.title,
+                category=ctrl.category,
+                finding_count=0,
+                highest_severity=None,
+            )
+            for ctrl in controls
+        ]
+
+    if asset_ids is not None:
+        finding_scope = Finding.asset_id.in_(asset_ids)
+    else:
+        # Org-only callers no longer have a scope after Plan D; fail closed.
+        finding_scope = sa_false()
+
     finding_rows = await session.execute(
         select(
             ComplianceControlMapping.control_id,
@@ -75,29 +103,12 @@ async def get_framework_summary(
         .where(
             ComplianceControlMapping.framework == framework,
             ComplianceControlMapping.finding_id.isnot(None),
-            Finding.org == org_id,
+            finding_scope,
             Finding.state.in_(("open", "deferred")),
         )
         .group_by(ComplianceControlMapping.control_id)
     )
     finding_counts: dict[str, int] = {r.control_id: r.cnt for r in finding_rows.all()}
-
-    from src.db.models import Chain
-    chain_rows = await session.execute(
-        select(
-            ComplianceControlMapping.control_id,
-            func.count(ComplianceControlMapping.id).label("cnt"),
-        )
-        .join(Chain, ComplianceControlMapping.chain_id == Chain.id)
-        .where(
-            ComplianceControlMapping.framework == framework,
-            ComplianceControlMapping.chain_id.isnot(None),
-            Chain.org_id == org_id,
-            Chain.status.in_(("open",)),
-        )
-        .group_by(ComplianceControlMapping.control_id)
-    )
-    chain_counts: dict[str, int] = {r.control_id: r.cnt for r in chain_rows.all()}
 
     sev_rows = await session.execute(
         select(ComplianceControlMapping.control_id, Finding.severity)
@@ -105,7 +116,7 @@ async def get_framework_summary(
         .where(
             ComplianceControlMapping.framework == framework,
             ComplianceControlMapping.finding_id.isnot(None),
-            Finding.org == org_id,
+            finding_scope,
             Finding.state.in_(("open", "deferred")),
         )
     )
@@ -122,7 +133,6 @@ async def get_framework_summary(
             title=ctrl.title,
             category=ctrl.category,
             finding_count=finding_counts.get(ctrl.control_id, 0),
-            chain_count=chain_counts.get(ctrl.control_id, 0),
             highest_severity=_highest(sev_by_control.get(ctrl.control_id, [])),
         )
         for ctrl in controls
@@ -163,16 +173,33 @@ async def get_findings_for_control(
     session: AsyncSession,
     framework: str,
     control_id: str,
-    org_id: str,
+    org_id: str | None = None,
+    *,
+    asset_ids: list[str] | None = None,
 ) -> list[FindingBrief]:
-    """Return open findings mapped to a specific control for an org."""
+    """Return open findings mapped to a specific control.
+
+    Supply either ``org_id`` (legacy path) or ``asset_ids`` (asset-identity path).
+    """
+    if asset_ids is None and org_id is None:
+        raise ValueError("either org_id or asset_ids is required")
+
+    if asset_ids is not None and not asset_ids:
+        return []
+
+    if asset_ids is not None:
+        finding_scope = Finding.asset_id.in_(asset_ids)
+    else:
+        # Org-only callers no longer have a scope after Plan D; fail closed.
+        finding_scope = sa_false()
+
     rows = await session.execute(
         select(ComplianceControlMapping, Finding)
         .join(Finding, ComplianceControlMapping.finding_id == Finding.id)
         .where(
             ComplianceControlMapping.framework == framework,
             ComplianceControlMapping.control_id == control_id,
-            Finding.org == org_id,
+            finding_scope,
             Finding.state.in_(("open", "deferred")),
         )
         .order_by(Finding.severity.asc().nullslast(), Finding.id.desc())

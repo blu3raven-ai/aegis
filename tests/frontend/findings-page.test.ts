@@ -35,11 +35,11 @@ function makeErrorFetchMock(status = 500) {
 }
 
 async function loadApi() {
-  return import("../../lib/client/findings-api.ts")
+  return import("../../frontend/lib/client/findings-api.ts")
 }
 
 async function loadMapper() {
-  return import("../../lib/shared/findings/row-mapper.ts")
+  return import("../../frontend/lib/shared/findings/row-mapper.ts")
 }
 
 function makeApiFinding(overrides: Record<string, unknown> = {}) {
@@ -192,13 +192,26 @@ test("severity filter: empty severity array is omitted from URL", async () => {
 })
 
 // ---------------------------------------------------------------------------
-// Cursor pagination — "Load more" carries the previous next_cursor forward
+// Page-number pagination — second call forwards `page` in the query string
 // ---------------------------------------------------------------------------
 
-test("pagination: second call carries cursor from first response", async () => {
+test("pagination: page=1 is omitted from URL (default)", async () => {
+  const { mock, calls } = makeFetchMock([
+    { findings: [makeApiFinding()], next_cursor: null, total_count: 1 },
+  ])
+  ;(globalThis as any).fetch = mock
+
+  const { listFindings } = await loadApi()
+  await listFindings({ orgId: "acme-org", limit: 2, page: 1 })
+
+  const url = new URL(calls[0].url, "http://localhost")
+  assert.equal(url.searchParams.get("page"), "1")
+})
+
+test("pagination: second call carries page=N in the URL", async () => {
   const page1 = {
     findings: [makeApiFinding({ id: "f-1" }), makeApiFinding({ id: "f-2" })],
-    next_cursor: "cursor-page-2",
+    next_cursor: null,
     total_count: 3,
   }
   const page2 = {
@@ -212,30 +225,28 @@ test("pagination: second call carries cursor from first response", async () => {
 
   const { listFindings } = await loadApi()
 
-  const r1 = await listFindings({ orgId: "acme-org", limit: 2 })
-  assert.equal(r1.next_cursor, "cursor-page-2")
+  await listFindings({ orgId: "acme-org", limit: 2, page: 1 })
+  const r2 = await listFindings({ orgId: "acme-org", limit: 2, page: 2 })
 
-  const r2 = await listFindings({
-    orgId: "acme-org",
-    limit: 2,
-    cursor: r1.next_cursor!,
-  })
-  assert.equal(r2.next_cursor, null)
   assert.equal(r2.findings.length, 1)
+  assert.equal(r2.total_count, 3)
 
   const url2 = new URL(calls[1].url, "http://localhost")
-  assert.equal(url2.searchParams.get("cursor"), "cursor-page-2")
+  assert.equal(url2.searchParams.get("page"), "2")
+  assert.equal(url2.searchParams.get("limit"), "2")
 })
 
-test("pagination: null next_cursor signals end of list", async () => {
-  const { mock } = makeFetchMock([
+test("pagination: page is omitted from URL when not provided", async () => {
+  const { mock, calls } = makeFetchMock([
     { findings: [makeApiFinding()], next_cursor: null, total_count: 1 },
   ])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
-  const resp = await listFindings({ orgId: "acme-org" })
-  assert.equal(resp.next_cursor, null)
+  await listFindings({ orgId: "acme-org" })
+
+  const url = new URL(calls[0].url, "http://localhost")
+  assert.equal(url.searchParams.has("page"), false)
 })
 
 // ---------------------------------------------------------------------------

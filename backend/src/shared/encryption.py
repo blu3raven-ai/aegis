@@ -1,6 +1,6 @@
 """Shared Fernet encryption utilities for application-level field encryption.
 
-Derives a deterministic Fernet key from JWT_SHARED_SECRET. Used to encrypt
+Derives a deterministic Fernet key from RUNNER_ENCRYPTION_KEY. Used to encrypt
 sensitive fields (source connection auth, TOTP secrets) at rest in the database.
 
 Backward compatibility: callers should check for the "gAAAAA" (Fernet) prefix
@@ -23,22 +23,26 @@ _cipher = None
 
 
 def _get_cipher():
-    """Derive a Fernet key from JWT_SHARED_SECRET."""
+    """Derive a Fernet key from RUNNER_ENCRYPTION_KEY.
+
+    Backwards-compat: JWT_SHARED_SECRET is accepted for one transitional
+    release. Remove the fallback in the next maintenance window.
+    """
     global _cipher
     if _cipher is not None:
         return _cipher
 
     from cryptography.fernet import Fernet
 
-    secret = os.environ.get("JWT_SHARED_SECRET", "")
+    secret = os.environ.get("RUNNER_ENCRYPTION_KEY") or os.environ.get("JWT_SHARED_SECRET", "")
     if not secret:
         if os.environ.get("FASTAPI_ENV") != "production":
             secret = secrets.token_hex(32)
             _logger.warning(
-                "[security] JWT_SHARED_SECRET not set — using ephemeral key for field encryption"
+                "[security] RUNNER_ENCRYPTION_KEY not set — using ephemeral key for field encryption"
             )
         else:
-            raise RuntimeError("JWT_SHARED_SECRET not set — cannot encrypt sensitive fields")
+            raise RuntimeError("RUNNER_ENCRYPTION_KEY not set — cannot encrypt sensitive fields")
 
     key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
     _cipher = Fernet(key)

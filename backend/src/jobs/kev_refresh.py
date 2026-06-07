@@ -15,9 +15,6 @@ Wiring options (choose one per deployment):
        refresh_kev_catalog() from an admin CLI entrypoint.  This module
        is importable with no side effects — the refresh only runs when
        refresh_kev_catalog() is explicitly called.
-
-  3. --refresh-kev CLI flag:
-       See cli/aegis_cli/commands/kev.py `aegis kev refresh` (admin).
 """
 from __future__ import annotations
 
@@ -45,8 +42,21 @@ def refresh_kev_catalog() -> dict:
     service = KevService()
     new_count = service.upsert_catalog(entries)
 
-    logger.info("kev_refresh: done — %d new entries added", new_count)
-    return {"fetched": len(entries), "new": new_count}
+    # KEV state changes bump risk_score for every finding whose CVE was
+    # added or removed — recompute across orgs so the UI reflects the feed.
+    from src.db.helpers import run_db
+    from src.findings.risk_score import recompute_finding_risk_scores
+
+    async def _rescore(session):
+        return await recompute_finding_risk_scores(session)
+
+    rescored = run_db(_rescore)
+
+    logger.info(
+        "kev_refresh: done — %d new entries added, %d findings rescored",
+        new_count, rescored,
+    )
+    return {"fetched": len(entries), "new": new_count, "rescored": rescored}
 
 
 if __name__ == "__main__":

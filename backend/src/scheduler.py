@@ -136,9 +136,36 @@ class AutoRerunScheduler:
         ):
             self._trigger_code_scanning(code_scanning, all_orgs)
 
+        # Midnight UTC: write daily posture snapshots
+        if now.hour == 0 and now.minute == 0:
+            self._take_posture_snapshots(all_orgs)
+
+    def _take_posture_snapshots(self, all_orgs: list[str]) -> None:
+        import threading
+
+        def _run_for_org(org: str) -> None:
+            try:
+                from src.posture.service import get_posture_snapshot, upsert_posture_snapshot
+                payload = get_posture_snapshot(org=org)
+                upsert_posture_snapshot(org=org, payload=payload)
+                logger.info("Posture snapshot written for org %s", org)
+            except Exception:
+                logger.exception("Failed to write posture snapshot for org %s", org)
+
+        for org in all_orgs:
+            threading.Thread(
+                target=_run_for_org,
+                args=(org,),
+                daemon=True,
+                name=f"posture-snapshot-{org}",
+            ).start()
+
     def _trigger_dependencies(self, dependencies_config: dict[str, Any], all_orgs: list[str]) -> None:
         import threading
-        from src.shared.config import get_github_token_for_org, get_dependencies_scanner_config, org_has_source_connections
+        from src.shared.config import (
+            get_token_for_org, get_dependencies_scanner_config,
+            get_source_type_for_org, org_has_source_connections,
+        )
         from src.dependencies.scanner import execute_dependencies_scan_once
         from src.dependencies.router import _dependencies_runtime
         from src.storage import create_dependencies_run
@@ -156,21 +183,25 @@ class AutoRerunScheduler:
             if _dependencies_runtime.probe(org)["active"]:
                 logger.info("Dependencies auto-rerun: scan already running for %s, skipping", org)
                 continue
-            token = get_github_token_for_org(org) or ""
+            source_type = get_source_type_for_org(org, "code-repositories")
+            token = get_token_for_org(org) or ""
             run_id = f"auto-{int(time.time() * 1000)}"
             create_dependencies_run(org, run_id)
             logger.info("Dependencies auto-rerun triggered for %s (run %s)", org, run_id)
             thread = threading.Thread(
                 target=execute_dependencies_scan_once,
                 args=(org, token, run_id),
-                kwargs={"scanner_config": scanner_config, "mode": "incremental", "runtime": _dependencies_runtime},
+                kwargs={"source_type": source_type, "scanner_config": scanner_config, "mode": "incremental", "runtime": _dependencies_runtime},
                 daemon=True,
             )
             thread.start()
 
     def _trigger_container_scanning(self, ct_config: dict[str, Any], all_orgs: list[str]) -> None:
         import threading
-        from src.shared.config import get_github_token_for_org, get_container_scanner_config, org_has_source_connections
+        from src.shared.config import (
+            get_token_for_org, get_container_scanner_config,
+            get_source_type_for_org, org_has_source_connections,
+        )
         from src.containers.scanner import execute_container_scan_once
         from src.containers.router import _container_scanning_runtime
         from src.storage import create_container_scanning_run
@@ -188,14 +219,15 @@ class AutoRerunScheduler:
             if _container_scanning_runtime.probe(org)["active"]:
                 logger.info("Container scanning auto-rerun: scan already running for %s, skipping", org)
                 continue
-            token = get_github_token_for_org(org) or ""
+            source_type = get_source_type_for_org(org, "container-images")
+            token = get_token_for_org(org) or ""
             run_id = f"auto-{int(time.time() * 1000)}"
             create_container_scanning_run(org, run_id)
             logger.info("Container scanning auto-rerun triggered for %s (run %s)", org, run_id)
             thread = threading.Thread(
                 target=execute_container_scan_once,
                 args=(org, token, run_id),
-                kwargs={"scanner_config": scanner_config, "mode": "incremental", "runtime": _container_scanning_runtime},
+                kwargs={"source_type": source_type, "scanner_config": scanner_config, "mode": "incremental", "runtime": _container_scanning_runtime},
                 daemon=True,
             )
             thread.start()
@@ -213,7 +245,10 @@ class AutoRerunScheduler:
 
     def _trigger_code_scanning(self, code_scanning_config: dict[str, Any], all_orgs: list[str]) -> None:
         import threading
-        from src.shared.config import get_github_token_for_org, get_code_scanning_scanner_config, org_has_source_connections
+        from src.shared.config import (
+            get_token_for_org, get_code_scanning_scanner_config,
+            get_source_type_for_org, org_has_source_connections,
+        )
         from src.code_scanning.scanner import execute_code_scanning_scan_once
         from src.code_scanning.router import _code_scanning_runtime
         from src.storage import create_code_scanning_run
@@ -231,14 +266,15 @@ class AutoRerunScheduler:
             if _code_scanning_runtime.probe(org)["active"]:
                 logger.info("Code scanning auto-rerun: scan already running for %s, skipping", org)
                 continue
-            token = get_github_token_for_org(org) or ""
+            source_type = get_source_type_for_org(org, "code-repositories")
+            token = get_token_for_org(org) or ""
             run_id = f"auto-{int(time.time() * 1000)}"
             create_code_scanning_run(org, run_id)
             logger.info("Code scanning auto-rerun triggered for %s (run %s)", org, run_id)
             thread = threading.Thread(
                 target=execute_code_scanning_scan_once,
                 args=(org, token, run_id),
-                kwargs={"scanner_config": scanner_config, "runtime": _code_scanning_runtime},
+                kwargs={"source_type": source_type, "scanner_config": scanner_config, "runtime": _code_scanning_runtime},
                 daemon=True,
             )
             thread.start()

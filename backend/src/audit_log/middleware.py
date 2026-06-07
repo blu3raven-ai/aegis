@@ -29,7 +29,6 @@ _AUDIT_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _AUDITABLE_PREFIXES = (
     "/api/v1/notifications/",
     "/api/v1/admin/",
-    "/api/v1/correlation/",
     "/api/v1/integrations/",
     "/api/v1/audit/",
     "/settings/api/",
@@ -39,7 +38,6 @@ _AUDITABLE_PREFIXES = (
 #   POST   /api/v1/notifications/destinations      → notification.destination.created
 #   PUT    /api/v1/notifications/destinations/42   → notification.destination.updated
 #   DELETE /api/v1/notifications/destinations/42   → notification.destination.deleted
-#   POST   /api/v1/admin/correlation/reload-rules  → admin.correlation.reload_rules
 #
 # The mapping below handles known high-value paths explicitly; everything else
 # falls back to a generic "<segment>.<method>" name.
@@ -48,7 +46,6 @@ _EXPLICIT_ACTION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("POST",   "/api/v1/notifications/destinations"):       ("notification.destination.created",  "notification_destination"),
     ("PUT",    r"/api/v1/notifications/destinations/\d+"):  ("notification.destination.updated",  "notification_destination"),
     ("DELETE", r"/api/v1/notifications/destinations/\d+"):  ("notification.destination.deleted",  "notification_destination"),
-    ("POST",   "/api/v1/admin/correlation/reload-rules"):   ("correlation.rules.reloaded",         "correlation_rules"),
     ("POST",   "/argus/webhook"):                           ("argus.webhook.received",             "argus_event"),
 }
 

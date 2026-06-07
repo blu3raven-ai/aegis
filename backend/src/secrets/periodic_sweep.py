@@ -109,7 +109,6 @@ def enqueue_full_history_scan(repo_id: str) -> None:
         return
 
     config = get_secret_scanner_config()
-    docker_image = config.get("image") or "aegis/scanner-secrets:latest"
     concurrency = config.get("concurrency") or "4"
 
     for source in repo_sources:
@@ -130,7 +129,6 @@ def enqueue_full_history_scan(repo_id: str) -> None:
             job_type="secrets",
             org=org,
             run_id=run_id,
-            docker_image=docker_image,
             env_vars=env_vars,
             expected_repo_count=len(source.repo_urls),
         )

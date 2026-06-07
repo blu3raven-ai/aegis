@@ -13,20 +13,27 @@ Per-repo work runs through a ThreadPoolExecutor; outputs are normalised into
 from __future__ import annotations
 
 import concurrent.futures
+import dataclasses
 import json
 import logging
-import os
 import re
 import shutil
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
+    BaseScanConfig,
     GitCloneError,
     InsecureURLError,
+    JobEnv,
     ProgressEmitter,
+    ScannerConfigError,
+    TIMEOUT_CLONE,
+    TIMEOUT_GIT_QUERY,
+    TIMEOUT_TRUFFLEHOG,
+    TIMEOUT_BETTERLEAKS,
     clone_repo,
     log_finished,
     log_scanning,
@@ -45,11 +52,6 @@ from runner.scanners.secrets import classify, enrich_context, normalize
 logger = logging.getLogger(__name__)
 
 
-_CLONE_TIMEOUT_S = 300.0
-_GIT_QUERY_TIMEOUT_S = 30.0
-_TRUFFLEHOG_TIMEOUT_S = 900.0
-_BETTERLEAKS_TIMEOUT_S = 900.0
-
 # Secrets tooling pulls in untrusted source; scrub credentials before exec.
 _SECRETS_TOOL_DROP_ENV = ("GIT_TOKEN",)
 
@@ -62,6 +64,42 @@ _UNSUPPORTED_DEPTH_EXIT_CODE = 2
 _START_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+@dataclasses.dataclass(frozen=True)
+class SecretsScanConfig(BaseScanConfig):
+    repos: list[str]
+    git_token: str | None
+    scan_depth: str
+    start_date: str
+
+    @classmethod
+    def from_job(cls, job: dict[str, Any]) -> "SecretsScanConfig":
+        env = JobEnv(job)
+        scan_depth = env.get("SCAN_DEPTH", SCAN_DEPTH_LIGHT).lower()
+        if scan_depth not in SUPPORTED_SCAN_DEPTHS:
+            raise ScannerConfigError(
+                f"[!] SCAN_DEPTH={scan_depth!r} is not implemented in the "
+                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_DEPTHS)}."
+            )
+        start_date = env.get("SCAN_START_DATE", "")
+        if (
+            scan_depth in (SCAN_DEPTH_DEEP, SCAN_DEPTH_AI)
+            and start_date
+            and not _START_DATE_RE.match(start_date)
+        ):
+            raise ScannerConfigError(
+                f"[!] SCAN_START_DATE={start_date!r} must be YYYY-MM-DD"
+            )
+        return cls(
+            org_label=env.get("ORG_LABEL", "default"),
+            run_id=env.get("RUN_ID", str(job.get("jobId", "unknown"))),
+            concurrency=max(1, env.get_int("CONCURRENCY", 4)),
+            repos=parse_repos(env.get("GIT_REPOS")),
+            git_token=env.get("GIT_TOKEN") or None,
+            scan_depth=scan_depth,
+            start_date=start_date,
+        )
+
+
 class SecretsScanner:
     SCANNER_TYPE = "secrets"
 
@@ -72,50 +110,17 @@ class SecretsScanner:
         on_progress: Callable[[list[str], dict], None] | None = None,
         cancel_event: threading.Event | None = None,
     ) -> ExecutionResult:
-        env_vars: dict[str, str] = (
-            (job.get("dockerArgs") or {}).get("envVars") or {}
-        )
-        repos_input = env_vars.get("GIT_REPOS") or os.environ.get("GIT_REPOS", "")
-        git_token = env_vars.get("GIT_TOKEN") or os.environ.get("GIT_TOKEN")
-        org_label = (
-            env_vars.get("ORG_LABEL") or os.environ.get("ORG_LABEL") or "default"
-        )
-        run_id = (
-            env_vars.get("RUN_ID")
-            or os.environ.get("RUN_ID")
-            or str(job.get("jobId", "unknown"))
-        )
-        scan_depth = (
-            env_vars.get("SCAN_DEPTH")
-            or os.environ.get("SCAN_DEPTH")
-            or SCAN_DEPTH_LIGHT
-        ).lower()
-        start_date = (
-            env_vars.get("SCAN_START_DATE")
-            or os.environ.get("SCAN_START_DATE")
-            or ""
-        )
-        try:
-            concurrency = int(
-                env_vars.get("CONCURRENCY") or os.environ.get("CONCURRENCY") or "4"
-            )
-        except ValueError:
-            concurrency = 4
-        if concurrency < 1:
-            concurrency = 1
-
         out_dir = Path(job_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
         log_tail: list[str] = []
 
-        if scan_depth not in SUPPORTED_SCAN_DEPTHS:
-            message = (
-                f"[!] SCAN_DEPTH={scan_depth!r} is not implemented in the "
-                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_DEPTHS)}."
-            )
+        try:
+            cfg = SecretsScanConfig.from_job(job)
+        except ScannerConfigError as exc:
+            message = str(exc)
             logger.error(message)
-            log_tail.append(message)
+            log_tail = [message]
             emitter = ProgressEmitter(on_progress, expected=0)
             emitter.done()
             write_done_marker(out_dir)
@@ -125,26 +130,7 @@ class SecretsScanner:
                 log_tail=log_tail,
             )
 
-        if (
-            scan_depth in (SCAN_DEPTH_DEEP, SCAN_DEPTH_AI)
-            and start_date
-            and not _START_DATE_RE.match(start_date)
-        ):
-            message = (
-                f"[!] SCAN_START_DATE={start_date!r} must be YYYY-MM-DD"
-            )
-            logger.error(message)
-            log_tail.append(message)
-            emitter = ProgressEmitter(on_progress, expected=0)
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=_UNSUPPORTED_DEPTH_EXIT_CODE,
-                job_dir=out_dir,
-                log_tail=log_tail,
-            )
-
-        repos = parse_repos(repos_input)
+        repos = cfg.repos
         emitter = ProgressEmitter(on_progress, expected=len(repos))
 
         if cancel_event is not None and cancel_event.is_set():
@@ -171,9 +157,9 @@ class SecretsScanner:
                 return self._scan_repo(
                     repo_url,
                     out_dir,
-                    git_token=git_token,
-                    scan_depth=scan_depth,
-                    start_date=start_date,
+                    git_token=cfg.git_token,
+                    scan_depth=cfg.scan_depth,
+                    start_date=cfg.start_date,
                     cancel_event=cancel_event,
                 )
             except InsecureURLError as e:
@@ -193,7 +179,7 @@ class SecretsScanner:
                 emitter.finished(repo_name)
 
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=concurrency
+            max_workers=cfg.concurrency
         ) as pool:
             list(pool.map(_scan_one, repos))
 
@@ -201,7 +187,7 @@ class SecretsScanner:
 
         # AI classification runs once across every betterleaks_raw.json the
         # ai_enhanced pass emitted - matches the bash batch pattern.
-        if scan_depth == SCAN_DEPTH_AI:
+        if cfg.scan_depth == SCAN_DEPTH_AI:
             try:
                 count = classify.classify_batch(out_dir)
                 log_tail.append(f"[+] Classified {count} secrets findings")
@@ -211,7 +197,7 @@ class SecretsScanner:
 
         try:
             total, errors = normalize.normalize_secrets_output(
-                org_label, out_dir, run_id
+                cfg.org_label, out_dir, cfg.run_id
             )
             log_tail.append(
                 f"[+] Normalized {total} secrets findings ({errors} errors)"
@@ -259,7 +245,7 @@ class SecretsScanner:
                 clone_dir,
                 token=git_token,
                 depth=clone_depth,
-                timeout=_CLONE_TIMEOUT_S,
+                timeout=TIMEOUT_CLONE,
             )
         except (InsecureURLError, GitCloneError):
             shutil.rmtree(repo_out, ignore_errors=True)
@@ -319,7 +305,7 @@ class SecretsScanner:
                 "--results=verified,unverified,unknown",
                 "--json",
             ],
-            timeout=_TRUFFLEHOG_TIMEOUT_S,
+            timeout=TIMEOUT_TRUFFLEHOG,
             drop_env=_SECRETS_TOOL_DROP_ENV,
             cancel_event=cancel_event,
         )
@@ -372,7 +358,7 @@ class SecretsScanner:
 
         rc, stdout, stderr = run_tool(
             args,
-            timeout=_TRUFFLEHOG_TIMEOUT_S,
+            timeout=TIMEOUT_TRUFFLEHOG,
             drop_env=_SECRETS_TOOL_DROP_ENV,
             cancel_event=cancel_event,
         )
@@ -415,7 +401,7 @@ class SecretsScanner:
 
         rc, _, stderr = run_tool(
             args,
-            timeout=_BETTERLEAKS_TIMEOUT_S,
+            timeout=TIMEOUT_BETTERLEAKS,
             drop_env=_SECRETS_TOOL_DROP_ENV,
             cancel_event=cancel_event,
         )
@@ -444,7 +430,7 @@ class SecretsScanner:
     ) -> str:
         rc, stdout, _ = run_tool(
             ["git", "-C", str(clone_dir), "rev-parse", "HEAD"],
-            timeout=_GIT_QUERY_TIMEOUT_S,
+            timeout=TIMEOUT_GIT_QUERY,
             cancel_event=cancel_event,
         )
         if rc != 0:
@@ -466,7 +452,7 @@ class SecretsScanner:
                 f"--after={start_date}",
                 "HEAD",
             ],
-            timeout=_GIT_QUERY_TIMEOUT_S,
+            timeout=TIMEOUT_GIT_QUERY,
             cancel_event=cancel_event,
         )
         if rc != 0:
@@ -489,7 +475,7 @@ class SecretsScanner:
                 f"--until={start_date}",
                 "HEAD",
             ],
-            timeout=_GIT_QUERY_TIMEOUT_S,
+            timeout=TIMEOUT_GIT_QUERY,
             cancel_event=cancel_event,
         )
         if rc != 0:

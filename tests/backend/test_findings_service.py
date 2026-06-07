@@ -13,8 +13,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from src.db.models import Finding
+from src.shared.finding_queryable_fields import extract_queryable_fields
 from src.findings.service import (
     DEFAULT_LIMIT,
+    FIXED_WINDOW_DAYS,
     MAX_LIMIT,
     MAX_Q_LENGTH,
     FindingsListFilters,
@@ -24,6 +26,7 @@ from src.findings.service import (
     _finding_to_dict,
     _normalize_filters,
     list_findings,
+    summarize_findings,
 )
 
 
@@ -57,6 +60,12 @@ def _make_finding(
     f.updated_at = updated_at or base + timedelta(days=id)
     f.first_seen_at = base
     f.last_seen_at = base
+    qf = extract_queryable_fields(f.detail or {})
+    f.cve_id = qf["cve_id"]
+    f.file_path = qf["file_path"]
+    f.title = qf["title"]
+    f.rule_name = qf["rule_name"]
+    f.package_name = qf["package_name"]
     return f
 
 
@@ -148,10 +157,33 @@ def test_where_clauses_adds_one_per_filter():
             state=["open"],
             q="log4j",
             cve="CVE-2021-44228",
+            repo="acme/api",
         )
     )
-    # org + severity + scanner + state + cve + q  = 6
-    assert len(clauses) == 6
+    # org + severity + scanner + state + cve + repo + q = 7
+    assert len(clauses) == 7
+
+
+def test_where_clauses_adds_repo_equality_when_only_repo_set():
+    clauses = _build_where_clauses(FindingsListFilters(org_id="acme", repo="acme/api"))
+    # org + repo = 2
+    assert len(clauses) == 2
+
+
+def test_normalize_strips_and_caps_repo():
+    out = _normalize_filters(
+        FindingsListFilters(org_id="acme", repo="  acme/api  ")
+    )
+    assert out.repo == "acme/api"
+
+    long_repo = "x" * 600
+    out = _normalize_filters(FindingsListFilters(org_id="acme", repo=long_repo))
+    assert out.repo is not None and len(out.repo) <= 255
+
+
+def test_normalize_treats_empty_repo_as_none():
+    out = _normalize_filters(FindingsListFilters(org_id="acme", repo="   "))
+    assert out.repo is None
 
 
 # ---------------------------------------------------------------------------
@@ -372,3 +404,70 @@ async def test_list_findings_created_at_cursor_encodes_ts():
     payload = _decode_cursor(out["next_cursor"])
     assert "ts" in payload
     assert payload["id"] == 4
+
+
+# ---------------------------------------------------------------------------
+# summarize_findings
+# ---------------------------------------------------------------------------
+
+
+class _FakeSummarySession:
+    """Async session double for summarize_findings — returns one labelled row."""
+
+    def __init__(self, counts: dict[str, int]):
+        self._counts = counts
+
+    async def execute(self, stmt):  # noqa: ARG002 — stmt shape isn't asserted here
+        result = MagicMock()
+        row = MagicMock()
+        for key, value in self._counts.items():
+            setattr(row, key, value)
+        result.one.return_value = row
+        return result
+
+
+@pytest.mark.asyncio
+async def test_summarize_findings_returns_all_buckets():
+    session = _FakeSummarySession(
+        {
+            "open": 87,
+            "critical": 7,
+            "high": 23,
+            "medium": 38,
+            "low": 19,
+            "fixed_recent": 47,
+            "dismissed": 14,
+        }
+    )
+    out = await summarize_findings(org_id="acme-org", session=session)
+    assert out == {
+        "open": 87,
+        "critical": 7,
+        "high": 23,
+        "medium": 38,
+        "low": 19,
+        "fixed_recent": 47,
+        "dismissed": 14,
+        "fixed_window_days": FIXED_WINDOW_DAYS,
+    }
+
+
+@pytest.mark.asyncio
+async def test_summarize_findings_coerces_none_to_zero():
+    # COUNT(*) FILTER can return NULL when nothing matches on some Postgres setups.
+    session = _FakeSummarySession(
+        {
+            "open": None,
+            "critical": None,
+            "high": None,
+            "medium": None,
+            "low": None,
+            "fixed_recent": None,
+            "dismissed": None,
+        }
+    )
+    out = await summarize_findings(org_id="acme-org", session=session)
+    assert out["open"] == 0
+    assert out["critical"] == 0
+    assert out["dismissed"] == 0
+    assert out["fixed_window_days"] == FIXED_WINDOW_DAYS

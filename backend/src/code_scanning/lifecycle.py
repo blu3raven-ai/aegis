@@ -4,9 +4,12 @@ Identity key: {repo}:{file_path}:{rule_id}:{start_line}
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.shared.lifecycle import LifecycleHooks
+
+if TYPE_CHECKING:
+    from src.shared.lifecycle import ScanContext
 
 
 class CodeScanningHooks(LifecycleHooks):
@@ -31,9 +34,13 @@ class CodeScanningHooks(LifecycleHooks):
     def extract_severity(self, raw: dict[str, Any]) -> str | None:
         return raw.get("severity")
 
+    def extract_engine(self, raw: dict[str, Any]) -> str | None:
+        return raw.get("engine")
+
     def extract_detail(self, raw: dict[str, Any]) -> dict:
+        rule_id = raw.get("rule_id", "")
         detail: dict[str, Any] = {
-            "ruleId": raw.get("rule_id", ""),
+            "ruleId": rule_id,
             "ruleName": raw.get("rule_name", ""),
             "filePath": raw.get("file_path", ""),
             "startLine": raw.get("start_line", 0),
@@ -55,6 +62,14 @@ class CodeScanningHooks(LifecycleHooks):
             val = raw.get(key)
             if val:
                 detail[key] = val
+        if raw.get("dataflow_trace"):
+            detail["dataflowTrace"] = raw["dataflow_trace"]
+        # Engine is stored on the Finding column (source of truth) — not duplicated here.
+        # ruleIds is always a list (length 1 for single-engine, 2+ for merged) so
+        # downstream consumers see a uniform shape. ruleId is retained for
+        # backwards compatibility with existing storage/activity/lifecycle readers.
+        rule_ids = raw.get("_rule_ids") or ([rule_id] if rule_id else [])
+        detail["ruleIds"] = rule_ids
         return detail
 
     def extract_file_location(self, raw: dict) -> tuple[str, int] | None:
@@ -72,6 +87,17 @@ class CodeScanningHooks(LifecycleHooks):
         if rule_id and rule_id not in active_rule_ids:
             return False
         return True
+
+    def canonical_external_ref(self, ctx: "ScanContext", raw: dict[str, Any]) -> tuple[str, str]:
+        from src.assets.refs import repo_ref
+        repo = self.extract_repo(raw)
+        if not repo:
+            raise ValueError(f"{ctx.tool} finding has no repo: {raw!r}")
+        if ctx.source_type is None:
+            raise ValueError("ScanContext.source_type is required for asset resolution")
+        # extract_repo returns repo_full_name like "owner/repo" — keep only the repo name
+        name = repo.split("/", 1)[-1]
+        return repo_ref(ctx.source_type, ctx.org, name), "repo"
 
 
 # Singleton for import convenience

@@ -15,9 +15,6 @@ Wiring options (choose one per deployment):
        refresh_epss_scores() from an admin CLI entrypoint. This module
        is importable with no side effects — the refresh only runs when
        refresh_epss_scores() is explicitly called.
-
-  3. --refresh CLI flag:
-       See cli/aegis_cli/commands/epss.py `aegis epss refresh` (admin).
 """
 from __future__ import annotations
 
@@ -45,8 +42,21 @@ def refresh_epss_scores() -> dict:
     service = EpssService()
     new_count = service.upsert_scores(rows)
 
-    logger.info("epss_refresh: done — %d new rows added", new_count)
-    return {"fetched": len(rows), "new": new_count}
+    # EPSS percentile flows into risk_score (up to +20) — recompute across
+    # orgs so a feed bump propagates to the UI without waiting for a scan.
+    from src.db.helpers import run_db
+    from src.findings.risk_score import recompute_finding_risk_scores
+
+    async def _rescore(session):
+        return await recompute_finding_risk_scores(session)
+
+    rescored = run_db(_rescore)
+
+    logger.info(
+        "epss_refresh: done — %d new rows added, %d findings rescored",
+        new_count, rescored,
+    )
+    return {"fetched": len(rows), "new": new_count, "rescored": rescored}
 
 
 if __name__ == "__main__":

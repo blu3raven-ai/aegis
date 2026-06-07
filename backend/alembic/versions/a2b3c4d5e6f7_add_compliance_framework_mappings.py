@@ -4,14 +4,14 @@ Revision ID: a2b3c4d5e6f7
 Revises: f9a0b1c2d3e4
 Create Date: 2026-05-31 00:00:00.000000
 
-Phase 29: Compliance framework mapping. Findings and attack chains are
-automatically mapped to SOC 2, ISO 27001, and PCI DSS controls using
-rule-based logic keyed off scanner type, severity, and finding metadata.
+Phase 29: Compliance framework mapping. Findings are automatically mapped
+to SOC 2, ISO 27001, and PCI DSS controls using rule-based logic keyed off
+scanner type, severity, and finding metadata.
 
 Two tables:
   - framework_controls: reference data (static set of controls per framework)
-  - compliance_control_mappings: per-finding / per-chain control mappings
-    with confidence scores and human-readable rationale
+  - compliance_control_mappings: per-finding control mappings with confidence
+    scores and human-readable rationale
 """
 from typing import Sequence, Union
 
@@ -155,7 +155,6 @@ def upgrade() -> None:
         'compliance_control_mappings',
         sa.Column('id', sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column('finding_id', sa.BigInteger(), nullable=True),
-        sa.Column('chain_id', sa.String(26), nullable=True),
         sa.Column('framework', sa.String(64), nullable=False),
         sa.Column('control_id', sa.String(64), nullable=False),
         sa.Column('confidence', sa.Float(), nullable=False),
@@ -164,13 +163,11 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index('ix_compliance_finding', 'compliance_control_mappings', ['finding_id'])
-    op.create_index('ix_compliance_chain', 'compliance_control_mappings', ['chain_id'])
     op.create_index('ix_compliance_framework_control', 'compliance_control_mappings', ['framework', 'control_id'])
 
 
 def downgrade() -> None:
     op.drop_index('ix_compliance_framework_control', table_name='compliance_control_mappings')
-    op.drop_index('ix_compliance_chain', table_name='compliance_control_mappings')
     op.drop_index('ix_compliance_finding', table_name='compliance_control_mappings')
     op.drop_table('compliance_control_mappings')
 

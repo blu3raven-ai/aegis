@@ -47,6 +47,7 @@ async def export_findings(
     repo_id: str | None = Query(default=None, description="Filter to a single repository (owner/name)"),
     since: datetime | None = Query(default=None, description="Only findings first seen on or after this ISO-8601 timestamp"),
     until: datetime | None = Query(default=None, description="Only findings first seen on or before this ISO-8601 timestamp"),
+    include_archived: bool = Query(default=False, description="Include archived findings (compliance opt-in). Defaults to excluding archived rows."),
 ) -> StreamingResponse:
     """Stream findings as a downloadable CSV or JSONL file.
 
@@ -67,14 +68,14 @@ async def export_findings(
     filename = _filename(format, now)
 
     async with get_session() as session:
-        total = await count_findings(filters, session)
+        total = await count_findings(filters, session, include_archived_rows=include_archived)
 
     if format == "csv":
         content_type = "text/csv"
 
         async def _generate():
             async with get_session() as session:
-                async for chunk in stream_findings_csv(filters, session):
+                async for chunk in stream_findings_csv(filters, session, include_archived_rows=include_archived):
                     yield chunk
 
         return StreamingResponse(
@@ -90,7 +91,7 @@ async def export_findings(
 
         async def _generate():
             async with get_session() as session:
-                async for chunk in stream_findings_json(filters, session):
+                async for chunk in stream_findings_json(filters, session, include_archived_rows=include_archived):
                     yield chunk
 
         return StreamingResponse(

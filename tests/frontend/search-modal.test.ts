@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const ROOT = join(import.meta.dirname, "../..")
-const src = readFileSync(join(ROOT, "components/layout/SearchModal.tsx"), "utf8")
-const apiSrc = readFileSync(join(ROOT, "lib/client/search-api.ts"), "utf8")
+const src = readFileSync(join(ROOT, "frontend/components/layout/SearchModal.tsx"), "utf8")
+const apiSrc = readFileSync(join(ROOT, "frontend/lib/client/search-api.ts"), "utf8")
 
 describe("search-api module", () => {
   it("exports SearchHit interface", () => {

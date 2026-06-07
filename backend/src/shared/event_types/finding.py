@@ -1,4 +1,4 @@
-"""Finding and chain lifecycle event types."""
+"""Finding lifecycle event types."""
 from __future__ import annotations
 
 from typing import Literal
@@ -20,11 +20,3 @@ class FindingMergedEvent(Event):
 
 class FindingClosedEvent(Event):
     event_type: Literal["finding.closed"] = "finding.closed"
-
-
-class ChainCreatedEvent(Event):
-    event_type: Literal["chain.created"] = "chain.created"
-
-
-class ChainUpdatedEvent(Event):
-    event_type: Literal["chain.updated"] = "chain.updated"

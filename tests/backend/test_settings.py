@@ -1,9 +1,3 @@
-import json
-import base64
-import hashlib
-import hmac
-import time
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -42,7 +36,7 @@ def isolated_config(tmp_path, monkeypatch):
 
     monkeypatch.setattr(config, "ENV_PATH", env_path)
 
-    monkeypatch.setenv("JWT_SHARED_SECRET", "a" * 64)
+    monkeypatch.setenv("RUNNER_ENCRYPTION_KEY", "a" * 64)
 
     for key in [
         "GITHUB_ORG",
@@ -88,32 +82,9 @@ def isolated_config(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client():
-    c = TestClient(app)
-    # Default to admin auth so tests don't need to pass headers for every call
-    c.headers.update(_auth_headers("admin"))
-    return c
+    from conftest import make_authed_client
+    return make_authed_client(role="admin", user_id="settings-admin")
 
-
-def _b64url(data: bytes | str) -> str:
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
-
-
-def _make_jwt(sub: str, role: str, secret: str, role_id: str | None = None) -> str:
-    now = int(time.time())
-    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}))
-    payload_data = {"sub": sub, "role": role, "iat": now, "exp": now + 60}
-    if role_id:
-        payload_data["roleId"] = role_id
-    payload = _b64url(json.dumps(payload_data))
-    key = bytes.fromhex(secret)
-    signature = _b64url(hmac.new(key, f"{header}.{payload}".encode("utf-8"), hashlib.sha256).digest())
-    return f"{header}.{payload}.{signature}"
-
-
-def _auth_headers(role: str, secret: str = "a" * 64, role_id: str | None = None) -> dict[str, str]:
-    return {"Authorization": f"Bearer {_make_jwt(sub=f'usr_{role}', role=role, secret=secret, role_id=role_id)}"}
 
 
 def _read_last_audit_event(action: str) -> dict | None:
@@ -170,7 +141,7 @@ def test_get_settings_returns_current_config_without_dashboard_secrets(client, i
         }
     )
 
-    response = client.get("/settings/api", headers=_auth_headers("admin"))
+    response = client.get("/settings/api")
     assert response.status_code == 200
     payload = response.json()
     assert payload["dashboard"] == {
@@ -240,11 +211,11 @@ def test_get_settings_rejects_non_admin_users(client, isolated_config, monkeypat
             "tools": {},
         }
     )
-    secret = "a" * 64
     monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", secret)
 
-    response = client.get("/settings/api", headers=_auth_headers("viewer", secret))
+    from conftest import make_authed_client
+    viewer_client = make_authed_client(role="viewer", user_id="settings-viewer-reject")
+    response = viewer_client.get("/settings/api")
 
     assert response.status_code == 403
 
@@ -252,7 +223,6 @@ def test_get_settings_rejects_non_admin_users(client, isolated_config, monkeypat
 def test_patch_tool_settings_rejects_non_admin_users(client, isolated_config, monkeypatch):
     secret = "a" * 64
     monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", secret)
     config.write_app_config(
         {
             "github": {"orgs": []},
@@ -266,9 +236,10 @@ def test_patch_tool_settings_rejects_non_admin_users(client, isolated_config, mo
         }
     )
 
-    response = client.patch(
+    from conftest import make_authed_client
+    viewer_client = make_authed_client(role="viewer", user_id="settings-viewer-patch")
+    response = viewer_client.patch(
         "/settings/api/tools/secrets",
-        headers=_auth_headers("viewer", secret),
         json={
             "enabled": True,
             "settings": {
@@ -477,7 +448,6 @@ async def test_patch_account_updates_username_and_password(client, isolated_conf
                 "enabled": True,
                     "settings": {
                     "scanConcurrency": "8",
-                    "dockerImage": "should-be-ignored",
                     "aiReviewEnabled": "true",
                     "aiApiKey": "sk-new-key",
                     "aiBaseUrl": "https://api.openai.com/v1",
@@ -490,7 +460,6 @@ async def test_patch_account_updates_username_and_password(client, isolated_conf
             {
                 "aiApiKey": "sk-new-key",
                 "aiReviewEnabled": True,
-                "dockerImage": "aegis/scanner-secrets:latest",
                 "enabled": True,
                 "scanConcurrency": "8",
                 "autoRerunEnabled": False,
@@ -519,7 +488,7 @@ def test_patch_tool_settings_persists_tool_config(client, isolated_config, monke
     from src.settings.schemas import ScannerPrerequisitesResponse
     monkeypatch.setattr(
         "src.settings.router._runner_based_prerequisites",
-        lambda tool: ScannerPrerequisitesResponse(docker_image_present=True, signature_valid=True),
+        lambda tool: ScannerPrerequisitesResponse(runner_connected=True),
     )
     config.write_app_config(
         {
@@ -574,10 +543,9 @@ def test_patch_secrets_enables_without_docker_check(client, isolated_config, mon
     from src.settings.schemas import ScannerPrerequisitesResponse
     monkeypatch.setattr(
         "src.settings.router._runner_based_prerequisites",
-        lambda tool: ScannerPrerequisitesResponse(docker_image_present=True, signature_valid=True),
+        lambda tool: ScannerPrerequisitesResponse(runner_connected=True),
     )
     secret = "a" * 64
-    monkeypatch.setenv("JWT_SHARED_SECRET", secret)
     config.write_app_config(
         {
             "github": {
@@ -601,7 +569,6 @@ def test_patch_secrets_enables_without_docker_check(client, isolated_config, mon
 
     response = client.patch(
         "/settings/api/tools/secrets",
-        headers=_auth_headers("admin", secret),
         json={
             "enabled": True,
             "settings": {
@@ -619,10 +586,9 @@ def test_patch_secrets_stores_ai_settings_when_provided(client, isolated_config,
     from src.settings.schemas import ScannerPrerequisitesResponse
     monkeypatch.setattr(
         "src.settings.router._runner_based_prerequisites",
-        lambda tool: ScannerPrerequisitesResponse(docker_image_present=True, signature_valid=True),
+        lambda tool: ScannerPrerequisitesResponse(runner_connected=True),
     )
     secret = "a" * 64
-    monkeypatch.setenv("JWT_SHARED_SECRET", secret)
     config.write_app_config(
         {
             "github": {"orgs": []},
@@ -638,10 +604,8 @@ def test_patch_secrets_stores_ai_settings_when_provided(client, isolated_config,
     )
 
     # Secrets AI settings are stored without server-side validation
-    # (unlike SAST which validates aiBaseUrl/aiModelName/aiApiKey)
     response = client.patch(
         "/settings/api/tools/secrets",
-        headers=_auth_headers("admin", secret),
         json={
             "enabled": True,
             "settings": {
@@ -828,27 +792,20 @@ def test_get_secrets_prerequisites_returns_no_runner_when_offline(client, isolat
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["docker_image_present"] is False
+    assert payload["runner_connected"] is False
     assert payload["scanner_status"] == "no_runner"
     assert payload["error"] is not None
 
 
-def test_get_roles_returns_seeded_roles(client, monkeypatch):
-    secret = "a" * 64
-    monkeypatch.setenv("JWT_SHARED_SECRET", secret)
-
-    response = client.get("/settings/api/roles", headers=_auth_headers("admin", secret))
+def test_get_roles_returns_seeded_roles(client):
+    response = client.get("/settings/api/roles")
     assert response.status_code == 200
     payload = response.json()
     assert any(role["name"] == "Owner" for role in payload["roles"])
 
-def test_post_role_creates_custom_role(client, monkeypatch):
-    secret = "a" * 64
-    monkeypatch.setenv("JWT_SHARED_SECRET", secret)
-
+def test_post_role_creates_custom_role(client):
     response = client.post(
         "/settings/api/roles",
-        headers=_auth_headers("admin", secret),
         json={
             "name": "Results Viewer",
             "description": "Read-only results role.",
@@ -858,29 +815,76 @@ def test_post_role_creates_custom_role(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["role"]["name"] == "Results Viewer"
 
-def test_require_permission_uses_assigned_role_permissions(client, isolated_config, monkeypatch):
+def test_require_permission_uses_assigned_role_permissions(isolated_config, monkeypatch):
     from src.settings import roles_store
+    from src.db.helpers import run_db
+    from src.db.models import User, UserSession
+    from datetime import datetime, timedelta, timezone
+    from conftest import make_authed_client
 
-    secret = "b" * 64
-    monkeypatch.setenv("JWT_SHARED_SECRET", secret)
     monkeypatch.setenv("FASTAPI_ENV", "production")
 
     # Viewer should not be able to get roles
-    response = client.get("/settings/api/roles", headers=_auth_headers("viewer", secret))
+    viewer_client = make_authed_client(role="viewer", user_id="perm-test-viewer")
+    response = viewer_client.get("/settings/api/roles")
     assert response.status_code == 403
 
     # Admin should be able to get roles
-    response = client.get("/settings/api/roles", headers=_auth_headers("admin", secret))
+    admin_client = make_authed_client(role="admin", user_id="perm-test-admin")
+    response = admin_client.get("/settings/api/roles")
     assert response.status_code == 200
 
-    # Custom role via roleId
+    # Custom role via roleId — create a user with the custom role_id set
     custom_role = roles_store.create_role({
-        "name": "Custom",
-        "slug": "custom",
+        "name": "CustomPerm",
+        "slug": "custom-perm",
         "description": "",
         "permissions": ["view_roles"]
     })
 
-    # Using the custom roleId should allow access even if 'role' is viewer
-    response = client.get("/settings/api/roles", headers=_auth_headers("viewer", secret, role_id=custom_role["id"]))
+    # Create user with custom role_id
+    async def _create_custom_user(session):
+        now = datetime.now(timezone.utc)
+        existing_user = await session.get(User, "perm-custom-user")
+        if not existing_user:
+            session.add(User(
+                id="perm-custom-user",
+                username="test-perm-custom-user",
+                email="perm-custom@test.example",
+                password_hash="",
+                role="viewer",
+                role_id=custom_role["id"],
+                status="active",
+                created_at=now,
+                updated_at=now,
+            ))
+        session_id = "test-session-perm-custom-user"
+        existing_sess = await session.get(UserSession, session_id)
+        if not existing_sess:
+            session.add(UserSession(
+                id=session_id,
+                user_id="perm-custom-user",
+                created_at=now,
+                last_seen_at=now,
+                expires_at=now + timedelta(hours=8),
+                user_agent=None,
+                ip_address=None,
+            ))
+    run_db(_create_custom_user)
+
+    import os
+    from src.auth.cookies import SESSION_COOKIE_NAME, CSRF_COOKIE_NAME
+    from src.auth.csrf import compute_csrf_token
+    from src.main import app
+    from fastapi.testclient import TestClient
+    secret = os.environ.get("SESSION_SECRET", "test-only-session-secret-not-for-production")
+    session_id = "test-session-perm-custom-user"
+    csrf_token = compute_csrf_token(session_id, secret=secret)
+    custom_role_client = TestClient(
+        app,
+        cookies={SESSION_COOKIE_NAME: session_id, CSRF_COOKIE_NAME: csrf_token},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    # Using the custom roleId (viewer 'role' string but custom role_id) should allow access
+    response = custom_role_client.get("/settings/api/roles")
     assert response.status_code == 200

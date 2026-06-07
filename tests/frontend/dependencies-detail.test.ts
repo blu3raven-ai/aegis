@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { findingIdentityKey } from "../../lib/shared/dependencies/utils.ts"
-import type { DependenciesFinding } from "../../lib/shared/dependencies/types.ts"
+import { findingIdentityKey } from "../../frontend/lib/shared/dependencies/utils.ts"
+import type { DependenciesFinding } from "../../frontend/lib/shared/dependencies/types.ts"
 
 function makeAdaptedFinding(ghsaId: string, manifestPath: string): DependenciesFinding {
   return {

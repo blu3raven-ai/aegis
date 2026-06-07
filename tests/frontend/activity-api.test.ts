@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { ApiClientError } from "../../frontend/lib/client/api-client.types.ts"
 
 // ---------------------------------------------------------------------------
 // Minimal fetch mock
@@ -20,7 +21,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/activity-api.ts")
+  return import("../../frontend/lib/client/activity-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -135,9 +136,14 @@ test("listActivity returns event list with next_cursor", async () => {
 test("listActivity throws on non-ok response", async () => {
   const { mock } = makeFetchMock({ detail: "Unauthorized" }, 401)
   globalThis.fetch = mock as unknown as typeof fetch
+  // Suppress the window.location.assign call that apiClient triggers on 401
+  globalThis.window = { location: { assign: () => {} } } as unknown as Window & typeof globalThis
 
   const { listActivity } = await loadModule()
-  await assert.rejects(listActivity({}), /activity-api: 401/)
+  await assert.rejects(
+    listActivity({}),
+    (e: unknown) => e instanceof ApiClientError && e.status === 401,
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -170,5 +176,8 @@ test("listActivityTypes throws on non-ok response", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listActivityTypes } = await loadModule()
-  await assert.rejects(listActivityTypes(), /activity-api: 500/)
+  await assert.rejects(
+    listActivityTypes(),
+    (e: unknown) => e instanceof ApiClientError && e.status === 500,
+  )
 })

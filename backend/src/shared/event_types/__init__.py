@@ -9,10 +9,15 @@ from src.shared.event_types.code import (
     ManualRescanEvent,
 )
 from src.shared.event_types.intel import (
+    AnomalyDetectedEvent,
     CvePublishedEvent,
     EpssChangedEvent,
     ExploitAvailabilityChangedEvent,
     RulePackUpdatedEvent,
+)
+from src.shared.event_types.notification import (
+    NotificationDispatchedEvent,
+    NotificationFailedEvent,
 )
 from src.shared.event_types.scan import (
     ScanStartedEvent,
@@ -26,8 +31,6 @@ from src.shared.event_types.finding import (
     FindingSeverityChangedEvent,
     FindingMergedEvent,
     FindingClosedEvent,
-    ChainCreatedEvent,
-    ChainUpdatedEvent,
 )
 
 __all__ = [
@@ -35,12 +38,13 @@ __all__ = [
     "CodePushEvent", "ImagePushEvent",
     "PrOpenedEvent", "PrUpdatedEvent",
     "FileSaveEvent", "ManualRescanEvent",
+    "AnomalyDetectedEvent",
     "CvePublishedEvent", "EpssChangedEvent",
     "ExploitAvailabilityChangedEvent", "RulePackUpdatedEvent",
+    "NotificationDispatchedEvent", "NotificationFailedEvent",
     "ScanStartedEvent", "ScanProgressEvent",
     "ScanFindingEvent", "ScanCompletedEvent",
     "ScanFailedEvent",
     "FindingCreatedEvent", "FindingSeverityChangedEvent",
     "FindingMergedEvent", "FindingClosedEvent",
-    "ChainCreatedEvent", "ChainUpdatedEvent",
 ]

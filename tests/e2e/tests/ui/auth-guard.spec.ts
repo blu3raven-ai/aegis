@@ -93,7 +93,7 @@ test.describe("Auth guard — authenticated access", () => {
   test.use({ storageState: ".auth/admin.json" })
 
   test("authenticated user can reach /findings without redirect to login", async ({ page }) => {
-    await page.route("**/api/me", (route) =>
+    await page.route("**/auth/me", (route) =>
       route.fulfill({
         json: {
           user: {

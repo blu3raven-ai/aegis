@@ -75,6 +75,38 @@ try:
         buckets=(0.05, 0.1, 0.5, 1, 2, 5, 10, 30, 60),
     )
 
+    presign_requests_total = Counter(
+        "presign_requests_total",
+        "Total requests to backend presign endpoints.",
+        ["op", "outcome"],
+    )
+
+    presign_url_expired_total = Counter(
+        "presign_url_expired_total",
+        "Times a presigned URL came back expired and had to be re-minted.",
+    )
+
+    joern_scans_total = Counter(
+        "aegis_joern_scans_total",
+        "Total Joern scans by outcome.",
+        ["outcome"],  # ok | failed | timeout | skipped
+    )
+    joern_scan_duration_seconds = Histogram(
+        "aegis_joern_scan_duration_seconds",
+        "Wall-clock duration of a Joern scan (CPG build + all queries).",
+        buckets=(1, 5, 10, 30, 60, 120, 300, 600, 1800),
+    )
+    joern_cpg_build_duration_seconds = Histogram(
+        "aegis_joern_cpg_build_duration_seconds",
+        "Wall-clock duration of the joern-parse CPG build phase.",
+        buckets=(1, 5, 10, 30, 60, 120, 300, 600),
+    )
+    joern_findings_total = Counter(
+        "aegis_joern_findings_total",
+        "Findings emitted by Joern queries, labelled by CWE.",
+        ["cwe"],
+    )
+
     _PROMETHEUS_AVAILABLE = True
 
 except ImportError:
@@ -91,6 +123,12 @@ except ImportError:
     jobs_processed_total = _noop  # type: ignore[assignment]
     job_duration_seconds = _noop  # type: ignore[assignment]
     job_pickup_latency_seconds = _noop  # type: ignore[assignment]
+    presign_requests_total = _noop  # type: ignore[assignment]
+    presign_url_expired_total = _noop  # type: ignore[assignment]
+    joern_scans_total = _noop  # type: ignore[assignment]
+    joern_scan_duration_seconds = _noop  # type: ignore[assignment]
+    joern_cpg_build_duration_seconds = _noop  # type: ignore[assignment]
+    joern_findings_total = _noop  # type: ignore[assignment]
     _PROMETHEUS_AVAILABLE = False
 
 

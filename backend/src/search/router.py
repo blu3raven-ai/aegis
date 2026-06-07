@@ -1,7 +1,7 @@
 """Global search REST endpoint — Phase 28.
 
-GET /api/v1/search?q=<query>&scope=findings,chains&limit=50
-Returns grouped results across findings, chains, repos, audit events,
+GET /api/v1/search?q=<query>&scope=findings,repos&limit=50
+Returns grouped results across findings, repos, audit events,
 and notification destinations.
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ def global_search(
     scope: list[str] = Query(default_factory=list),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict[str, Any]:
-    """Search across findings, chains, repos, audit events, and destinations.
+    """Search across findings, repos, audit events, and destinations.
 
     Results are scoped to the requesting user's org (passed via the `org`
     query parameter, defaulting to all accessible orgs). Only authenticated
@@ -39,7 +39,7 @@ def global_search(
             content={"query": "", "total": 0, "grouped": {}, "duration_ms": 0}
         )
 
-    # Parse comma-separated scopes sent as a single string, e.g. scope=findings,chains
+    # Parse comma-separated scopes sent as a single string, e.g. scope=findings,repos
     parsed_scopes: list[str] = []
     for s in scope:
         parsed_scopes.extend(part.strip() for part in s.split(",") if part.strip())

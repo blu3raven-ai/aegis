@@ -18,29 +18,19 @@ from src.dependencies.scanner import InMemoryScanRuntime, execute_dependencies_s
 from src.settings.router import require_permission, has_permission
 from src.settings.team_access import actor_user_id
 from src.shared.checkpoints import compute_coverage_gaps
-from src.shared.config import build_source_repo_list, get_github_token_for_org, get_dependencies_scanner_config, get_scan_sources_for_org, org_has_source_connections
+from src.shared.config import build_source_repo_list, get_token_for_org, get_dependencies_scanner_config, get_scan_sources_for_org, org_has_source_connections
 from src.shared.scan_orchestration import start_multi_org_scan, cancel_multi_org_scan
 from src.shared.rate_limit import rate_limit_scan
 from src.shared.router_helpers import require_orgs, api_error, validate_org
 from src.storage import (
     create_dependencies_run,
     list_dependencies_runs,
-    read_dependencies_findings,
     update_dependencies_run,
 )
-from src.db.models import Sbom
 from src.db.helpers import run_db
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-def _has_sboms(org_names: list[str]) -> bool:
-    async def _q(session: AsyncSession):
-        result = await session.execute(
-            select(func.count()).select_from(Sbom).where(Sbom.org.in_([o.lower() for o in org_names]))
-        )
-        return (result.scalar() or 0) > 0
-    return run_db(_q)
 
 router = APIRouter(prefix="/dependencies/api", tags=["dependencies"])
 
@@ -82,7 +72,7 @@ def _enrich_run(run: dict[str, Any] | None) -> dict[str, Any] | None:
 
 
 @router.get("/runs/latest")
-def get_latest_run(request: Request, orgs: list[str] = Depends(require_orgs)) -> dict[str, Any]:
+async def get_latest_run(request: Request, orgs: list[str] = Depends(require_orgs)) -> dict[str, Any]:
     if not has_permission(request, "view_scan_history"):
         return {"latest": None, "lastCompleted": None}
     all_runs: list[dict[str, Any]] = []
@@ -93,7 +83,10 @@ def get_latest_run(request: Request, orgs: list[str] = Depends(require_orgs)) ->
     active_run = next((r for r in all_runs if r.get("status") in ("queued", "running", "ingesting")), None)
     latest = _enrich_run(active_run or (all_runs[0] if all_runs else None))
     last_completed = _enrich_run(next((r for r in all_runs if r.get("status") in ("completed", "completed_with_merge_error")), None))
-    return {"latest": latest, "lastCompleted": last_completed, "hasSboms": _has_sboms(orgs)}
+    from src.dependencies.sbom_store import any_sbom_for_asset_ids
+    from src.shared.scope import resolve_asset_ids_from_request
+    asset_ids = await resolve_asset_ids_from_request(request)
+    return {"latest": latest, "lastCompleted": last_completed, "hasSboms": any_sbom_for_asset_ids(asset_ids)}
 
 
 @router.post("/runs")
@@ -167,14 +160,21 @@ async def bulk_review_findings(request: Request) -> JSONResponse:
 
     user_id = actor_user_id(request) or "unknown"
 
+    from src.db.engine import async_session_factory
+    from src.shared.scope import resolve_asset_ids_for_org
+    async with async_session_factory() as db:
+        asset_ids = await resolve_asset_ids_for_org(db, org, asset_type="repo")
+
     updated = 0
     if action == "dismiss":
-        updated = bulk_dismiss("dependencies", org, identity_keys, reason, user_id)
+        updated = bulk_dismiss(
+            "dependencies", identity_keys, reason, user_id, asset_ids=asset_ids,
+        )
     else:
         for key in identity_keys:
-            reopen_finding("dependencies", org, key, user_id)
+            for asset_id in asset_ids:
+                reopen_finding("dependencies", key, user_id, asset_id=asset_id)
             updated += 1
-
 
     return JSONResponse({"ok": True, "updated": updated})
 
@@ -192,7 +192,12 @@ async def dismiss_finding_endpoint(request: Request) -> JSONResponse:
     if reason not in VALID_DISMISS_REASONS:
         return api_error(f"Invalid dismiss reason. Must be one of: {sorted(VALID_DISMISS_REASONS)}", 400)
     user_id = actor_user_id(request) or "unknown"
-    dismiss_finding("dependencies", org, identity_key, reason, user_id)
+    from src.db.engine import async_session_factory
+    from src.shared.scope import resolve_asset_ids_for_org
+    async with async_session_factory() as db:
+        asset_ids = await resolve_asset_ids_for_org(db, org, asset_type="repo")
+    for asset_id in asset_ids:
+        dismiss_finding("dependencies", identity_key, reason, user_id, asset_id=asset_id)
 
     return JSONResponse({"ok": True})
 
@@ -207,6 +212,11 @@ async def reopen_finding_endpoint(request: Request) -> JSONResponse:
         return api_error("Missing org or identityKey", 400)
     validate_org(org)
     user_id = actor_user_id(request) or "unknown"
-    reopen_finding("dependencies", org, identity_key, user_id)
+    from src.db.engine import async_session_factory
+    from src.shared.scope import resolve_asset_ids_for_org
+    async with async_session_factory() as db:
+        asset_ids = await resolve_asset_ids_for_org(db, org, asset_type="repo")
+    for asset_id in asset_ids:
+        reopen_finding("dependencies", identity_key, user_id, asset_id=asset_id)
 
     return JSONResponse({"ok": True})

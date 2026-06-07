@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 async function loadModule() {
-  return import("../../lib/client/exports-api.ts")
+  return import("../../frontend/lib/client/exports-api.ts")
 }
 
 // ---------------------------------------------------------------------------

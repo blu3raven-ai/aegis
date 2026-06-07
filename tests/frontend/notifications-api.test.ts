@@ -1,5 +1,10 @@
-import test from "node:test"
+import test, { beforeEach } from "node:test"
 import assert from "node:assert/strict"
+
+// apiClient requires a CSRF cookie for POST/PUT/DELETE requests
+beforeEach(() => {
+  ;(globalThis as any).document = { cookie: "__Host-csrf=test-csrf-token" }
+})
 
 // ---------------------------------------------------------------------------
 // Minimal fetch mock
@@ -34,7 +39,7 @@ function makeEmptyMock(status = 204) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/destinations-api.ts")
+  return import("../../frontend/lib/client/destinations-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -97,7 +102,7 @@ test("listDestinations throws on 500", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDestinations } = await loadModule()
-  await assert.rejects(() => listDestinations("example-org"), /destinations-api: 500/)
+  await assert.rejects(() => listDestinations("example-org"), (err: any) => { assert.equal(err.status, 500); return true })
 })
 
 // ---------------------------------------------------------------------------
@@ -147,7 +152,7 @@ test("createDestination throws on 422 validation error", async () => {
         name: "bad",
         config: {},
       }),
-    /destinations-api: 422/,
+    (err: any) => { assert.equal(err.status, 422); return true },
   )
 })
 
@@ -185,7 +190,7 @@ test("updateDestination throws on 404", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { updateDestination } = await loadModule()
-  await assert.rejects(() => updateDestination(999, { name: "x" }), /destinations-api: 404/)
+  await assert.rejects(() => updateDestination(999, { name: "x" }), (err: any) => { assert.equal(err.status, 404); return true })
 })
 
 // ---------------------------------------------------------------------------
@@ -209,7 +214,7 @@ test("deleteDestination throws on 404", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { deleteDestination } = await loadModule()
-  await assert.rejects(() => deleteDestination(999), /destinations-api: 404/)
+  await assert.rejects(() => deleteDestination(999), (err: any) => { assert.equal(err.status, 404); return true })
 })
 
 // ---------------------------------------------------------------------------
@@ -257,7 +262,7 @@ test("listDeliveries throws on 5xx", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDeliveries } = await loadModule()
-  await assert.rejects(() => listDeliveries(1), /destinations-api: 503/)
+  await assert.rejects(() => listDeliveries(1), (err: any) => { assert.equal(err.status, 503); return true })
 })
 
 // ---------------------------------------------------------------------------
@@ -307,6 +312,6 @@ test("testDestination throws typed error on 404", async () => {
   const { testDestination } = await loadModule()
   await assert.rejects(
     () => testDestination(999, "example-org"),
-    /destinations-api: 404/,
+    (err: any) => { assert.equal(err.status, 404); return true },
   )
 })

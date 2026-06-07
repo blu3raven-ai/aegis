@@ -2,7 +2,7 @@
 
 Endpoints:
   GET /api/v1/kev/recent              — recent catalog additions
-  GET /api/v1/kev/exposure-summary    — org-scoped KEV overlap with open findings
+  GET /api/v1/kev/exposure-summary    — scope-aware KEV overlap with open findings
   GET /api/v1/kev/{cve_id}            — single entry lookup
 
 The order of route definitions matters: literal paths (recent, exposure-summary)
@@ -14,10 +14,12 @@ KevService uses run_db() internally — consistent with api_keys and fleet route
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from src.kev.service import KevService
+from src.settings.router import require_permission
+from src.shared.scope import resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/kev", tags=["kev"])
 
@@ -49,9 +51,11 @@ def list_recent(days: int = Query(default=30, ge=1, le=365)) -> JSONResponse:
 
 
 @router.get("/exposure-summary")
-def exposure_summary(org: str = Query(...)) -> JSONResponse:
-    """Compute CISA KEV overlap for an org's open findings."""
-    return JSONResponse(_service.get_exposure_summary(org))
+async def exposure_summary(request: Request) -> JSONResponse:
+    """Compute CISA KEV overlap for the caller's accessible findings."""
+    require_permission(request, "view_findings")
+    asset_ids = await resolve_asset_ids_from_request(request)
+    return JSONResponse(_service.get_exposure_summary(asset_ids=asset_ids))
 
 
 @router.get("/{cve_id}")

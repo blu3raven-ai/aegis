@@ -27,7 +27,7 @@ function makeFetchMock(
 }
 
 async function loadApi() {
-  return import("../../lib/client/compliance-api.ts")
+  return import("../../frontend/lib/client/compliance-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -94,9 +94,9 @@ test("page: all compliant when no findings or chains", async () => {
 
 test("page: switching framework fetches new summary", async () => {
   const { mock, calls } = makeFetchMock((url) => {
-    if (url.includes("/soc2/")) return { body: [{ control_id: "CC6.1", title: "A", category: null, finding_count: 0, chain_count: 0, highest_severity: null }] }
-    if (url.includes("/iso27001/")) return { body: [{ control_id: "A.8.8", title: "B", category: null, finding_count: 1, chain_count: 0, highest_severity: "high" }] }
-    return { body: [] }
+    if (url.includes("/soc2/")) return { body: { framework: "soc2", label: "SOC 2", controls: [{ control_id: "CC6.1", title: "A", category: null, finding_count: 0, chain_count: 0, highest_severity: null }] } }
+    if (url.includes("/iso27001/")) return { body: { framework: "iso27001", label: "ISO 27001", controls: [{ control_id: "A.8.8", title: "B", category: null, finding_count: 1, chain_count: 0, highest_severity: "high" }] } }
+    return { body: { framework: "", label: "", controls: [] } }
   })
   globalThis.fetch = mock as unknown as typeof fetch
 

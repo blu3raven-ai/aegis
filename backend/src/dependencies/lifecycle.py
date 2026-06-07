@@ -4,9 +4,12 @@ Identity key: {repo}::{packageName}::{ecosystem}::{advisoryId}::{manifestPath}
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.shared.lifecycle import LifecycleHooks
+
+if TYPE_CHECKING:
+    from src.shared.lifecycle import ScanContext
 
 
 class DependenciesHooks(LifecycleHooks):
@@ -68,6 +71,17 @@ class DependenciesHooks(LifecycleHooks):
         if isinstance(first_patched, dict):
             return bool(first_patched.get("identifier"))
         return bool(first_patched)
+
+    def canonical_external_ref(self, ctx: "ScanContext", raw: dict[str, Any]) -> tuple[str, str]:
+        from src.assets.refs import repo_ref
+        repo = self.extract_repo(raw)
+        if not repo:
+            raise ValueError(f"{ctx.tool} finding has no repo: {raw!r}")
+        if ctx.source_type is None:
+            raise ValueError("ScanContext.source_type is required for asset resolution")
+        # extract_repo may return "owner/name" (full_name) — keep only the repo name
+        name = repo.split("/", 1)[-1]
+        return repo_ref(ctx.source_type, ctx.org, name), "repo"
 
 
 # Singleton for import convenience

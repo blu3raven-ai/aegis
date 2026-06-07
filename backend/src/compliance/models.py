@@ -33,13 +33,11 @@ class FrameworkControl(Base):
 
 
 class ComplianceControlMapping(Base):
-    """Finding-to-control or chain-to-control mapping row."""
+    """Finding-to-control mapping row."""
     __tablename__ = "compliance_control_mappings"
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
-    # Exactly one of finding_id / chain_id will be non-null per row.
     finding_id: Mapped[int | None] = mapped_column(sa.BigInteger, nullable=True)
-    chain_id: Mapped[str | None] = mapped_column(String(26), nullable=True)
     framework: Mapped[str] = mapped_column(String(64), nullable=False)
     control_id: Mapped[str] = mapped_column(String(64), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
@@ -50,7 +48,6 @@ class ComplianceControlMapping(Base):
 
     __table_args__ = (
         sa.Index('ix_compliance_finding', 'finding_id'),
-        sa.Index('ix_compliance_chain', 'chain_id'),
         sa.Index('ix_compliance_framework_control', 'framework', 'control_id'),
     )
 
@@ -76,7 +73,6 @@ class ComplianceControlMappingSchema(BaseModel):
 
     id: int
     finding_id: int | None
-    chain_id: str | None
     framework: str
     control_id: str
     confidence: float
@@ -91,7 +87,6 @@ class ControlSummaryItem(BaseModel):
     title: str
     category: str | None
     finding_count: int
-    chain_count: int
     highest_severity: str | None
 
 

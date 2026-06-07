@@ -1,7 +1,7 @@
 """add commit attribution columns to findings
 
 Revision ID: b3c4d5e6f7a8
-Revises: a1b2c3d4e5f6
+Revises: 876f112b2034
 Create Date: 2026-05-31 00:00:00.000000
 
 Spec §5.6: commit/PR attribution as a derived field on findings (v1 carve-out
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 
 revision: str = 'b3c4d5e6f7a8'
-down_revision: Union[str, Sequence[str], None] = 'a1b2c3d4e5f6'
+down_revision: Union[str, Sequence[str], None] = '876f112b2034'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

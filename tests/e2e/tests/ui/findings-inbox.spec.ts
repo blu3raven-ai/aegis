@@ -5,7 +5,7 @@ import { mockSSE } from "../../fixtures/mock-backend"
 /**
  * Findings inbox — the unified cross-scanner findings view.
  * All data is served inline from the page's DEMO_FINDINGS constant,
- * so the only API calls we need to stub are /api/me and the SSE stream.
+ * so the only API calls we need to stub are /auth/me and the SSE stream.
  */
 
 test.describe("Findings inbox", () => {

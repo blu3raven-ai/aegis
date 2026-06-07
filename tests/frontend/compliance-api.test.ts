@@ -20,7 +20,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/compliance-api.ts")
+  return import("../../frontend/lib/client/compliance-api.ts")
 }
 
 // ---------------------------------------------------------------------------
@@ -95,25 +95,29 @@ test("listFrameworkControls throws on 500", async () => {
 // getFrameworkSummary
 // ---------------------------------------------------------------------------
 
-test("getFrameworkSummary builds URL without org_id when omitted", async () => {
-  const body = [
-    { control_id: "CC6.1", title: "Logical access", category: null, finding_count: 0, chain_count: 0, highest_severity: null },
-  ]
+test("getFrameworkSummary builds URL with required org_id", async () => {
+  const body = {
+    framework: "soc2",
+    label: "SOC 2",
+    controls: [
+      { control_id: "CC6.1", title: "Logical access", category: null, finding_count: 0, chain_count: 0, highest_severity: null },
+    ],
+  }
   const { mock, calls } = makeFetchMock(body)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { getFrameworkSummary } = await loadModule()
-  const result = await getFrameworkSummary("soc2")
+  const result = await getFrameworkSummary("soc2", "example-org")
 
   const url = new URL(calls[0].url, "http://localhost")
   assert.equal(url.pathname, "/api/v1/compliance/frameworks/soc2/summary")
-  assert.equal(url.searchParams.has("org_id"), false)
+  assert.equal(url.searchParams.get("org_id"), "example-org")
   assert.equal(result.length, 1)
   assert.equal(result[0].finding_count, 0)
 })
 
 test("getFrameworkSummary appends org_id when provided", async () => {
-  const { mock, calls } = makeFetchMock([])
+  const { mock, calls } = makeFetchMock({ framework: "iso27001", label: "ISO 27001", controls: [] })
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { getFrameworkSummary } = await loadModule()
@@ -129,14 +133,14 @@ test("getFrameworkSummary throws on 404", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { getFrameworkSummary } = await loadModule()
-  await assert.rejects(() => getFrameworkSummary("unknown-fw"), /404/)
+  await assert.rejects(() => getFrameworkSummary("unknown-fw", "example-org"), /404/)
 })
 
 // ---------------------------------------------------------------------------
 // getControlFindings
 // ---------------------------------------------------------------------------
 
-test("getControlFindings builds correct URL without org_id", async () => {
+test("getControlFindings builds correct URL with required org_id", async () => {
   const body = {
     framework: "soc2",
     control_id: "CC6.1",
@@ -148,10 +152,11 @@ test("getControlFindings builds correct URL without org_id", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { getControlFindings } = await loadModule()
-  const result = await getControlFindings("soc2", "CC6.1")
+  const result = await getControlFindings("soc2", "CC6.1", "example-org")
 
   const url = new URL(calls[0].url, "http://localhost")
   assert.equal(url.pathname, "/api/v1/compliance/controls/soc2/CC6.1/findings")
+  assert.equal(url.searchParams.get("org_id"), "example-org")
   assert.equal(result.findings.length, 1)
   assert.equal(result.findings[0].severity, "high")
 })
@@ -172,7 +177,7 @@ test("getControlFindings throws on 500", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { getControlFindings } = await loadModule()
-  await assert.rejects(() => getControlFindings("soc2", "CC6.1"), /500/)
+  await assert.rejects(() => getControlFindings("soc2", "CC6.1", "example-org"), /500/)
 })
 
 // ---------------------------------------------------------------------------

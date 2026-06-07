@@ -60,7 +60,7 @@ def test_get_state_includes_all_steps(client):
         resp = client.get(f"/api/v1/onboarding/state?org_id={ORG}")
 
     steps = resp.json()["state"]["steps"]
-    for step_id in ["welcome", "connect_source", "smoke_test", "alerts", "policy"]:
+    for step_id in ["connect_source", "pick_repos", "smoke_test"]:
         assert step_id in steps
 
 
@@ -76,17 +76,17 @@ def test_get_state_reflects_dismissed(client):
 
 def test_complete_step_returns_updated_state(client):
     updated = _make_default_state()
-    updated.steps["welcome"].completed = True
+    updated.steps["connect_source"].completed = True
 
     with patch("src.onboarding.router.complete_step", return_value=updated) as mock_svc:
         resp = client.post(
-            f"/api/v1/onboarding/state/step/welcome?org_id={ORG}",
+            f"/api/v1/onboarding/state/step/connect_source?org_id={ORG}",
             json={"action": "complete", "data": {}},
         )
 
     assert resp.status_code == 200
-    assert resp.json()["state"]["steps"]["welcome"]["completed"] is True
-    mock_svc.assert_called_once_with(ORG, "welcome", {})
+    assert resp.json()["state"]["steps"]["connect_source"]["completed"] is True
+    mock_svc.assert_called_once_with(ORG, "connect_source", {})
 
 
 def test_skip_step_calls_skip_service(client):
@@ -108,7 +108,7 @@ def test_dismiss_step_calls_dismiss_service(client):
 
     with patch("src.onboarding.router.dismiss", return_value=dismissed) as mock_svc:
         resp = client.post(
-            f"/api/v1/onboarding/state/step/policy?org_id={ORG}",
+            f"/api/v1/onboarding/state/step/smoke_test?org_id={ORG}",
             json={"action": "dismiss"},
         )
 

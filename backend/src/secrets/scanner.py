@@ -456,13 +456,17 @@ def ingest_findings(
     run_id: str,
     raw_findings: list[dict[str, Any]],
     scan_depth: str | None = "light",
+    source_type: str | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, str | None] | None]:
     """Normalize, deduplicate, and apply lifecycle. Returns (None, repo_to_sha)."""
     findings = [normalize_finding(run_id, org, finding, scan_depth) for finding in raw_findings]
 
+    # Default-exclude archived rows: archived findings are retired from the
+    # active pool, so a re-detected match should be treated as a fresh finding
+    # rather than resurrecting the archived row.
     previous = read_latest_findings(org)
     merged = merge_pool(findings, previous)
-    ctx = ScanContext(tool="secrets", org=org, run_id=run_id)
+    ctx = ScanContext(tool="secrets", org=org, run_id=run_id, source_type=source_type)
     new_findings = _apply_lifecycle(secrets_hooks, ctx, merged)
 
     if new_findings:
@@ -603,75 +607,6 @@ MAX_SCAN_DURATION_SECONDS = 12 * 60 * 60
 RUN_UPDATE_INTERVAL_SECONDS = 1.2
 
 
-def _try_incremental_secrets_scan(
-    repo_id: str,
-    checkout_path: Path,
-    baseline_sha: str | None,
-    head_sha: str,
-    detector_version: str,
-) -> list[dict[str, Any]] | None:
-    """Return findings if an incremental secrets scan succeeded; None to fall through.
-
-    Guarded by AEGIS_USE_INCREMENTAL_SECRETS=true (default: false) so existing
-    full-scan behaviour is unchanged when the flag is absent.
-
-    Any exception — including NotImplementedError from adapter stubs — is
-    caught; the caller gets None and the full scan runs instead.
-    """
-    if os.getenv("AEGIS_USE_INCREMENTAL_SECRETS", "false").lower() != "true":
-        return None
-    try:
-        from src.secrets.baseline_delta import SecretsBaselineDelta, SecretFinding
-        from src.secrets.verified_secrets_cache import VerifiedSecretsCache
-        from src.secrets.trufflehog_adapter import run_trufflehog
-
-        engine = SecretsBaselineDelta(
-            cache=VerifiedSecretsCache(),
-            trufflehog_runner=run_trufflehog,
-        )
-        result = engine.scan(
-            repo_id=repo_id,
-            checkout_path=checkout_path,
-            baseline_sha=baseline_sha,
-            head_sha=head_sha,
-            detector_version=detector_version,
-        )
-        logger.info(
-            "incremental secrets scan: commits=%d cached_verifications=%d new=%d findings=%d",
-            result.commits_scanned,
-            result.cached_verifications,
-            result.new_verifications,
-            len(result.findings),
-        )
-        # Serialize SecretFinding dataclasses to plain dicts for the ingest path
-        return [vars(f) if isinstance(f, SecretFinding) else f for f in result.findings]
-    except Exception:
-        logger.exception("incremental secrets scan failed; falling through to full scan")
-        return None
-
-
-def _finalize_incremental_secrets_scan(
-    org: str,
-    run_id: str,
-    findings: list[dict[str, Any]],
-    scan_depth: str,
-) -> None:
-    """Persist incremental findings and mark the secrets run complete.
-
-    Called inline when the incremental engine has already produced a findings
-    list, bypassing the scanner runner.
-    """
-    if findings:
-        ingest_findings(org, run_id, findings, scan_depth)
-
-    update_secret_run(org, run_id, {
-        "status": "completed",
-        "finishedAt": now_iso(),
-        "findingsCount": len(findings),
-        "progress": {"percent": 100, "stage": "completed"},
-    })
-
-
 def _execute_via_runner(
     org: str,
     run_id: str,
@@ -699,7 +634,6 @@ def _execute_via_runner(
         job_type="secrets",
         org=org,
         run_id=run_id,
-        docker_image=config.get("image") or "github-secrets",
         env_vars=env_vars,
         expected_repo_count=len(repo_urls.split(",")) if repo_urls else 0,
     )
@@ -775,7 +709,7 @@ def ingest_secrets_from_minio(org: str, run_id: str) -> None:
 
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     if raw_findings:
-        ingest_findings(org, run_id, raw_findings)
+        ingest_findings(org, run_id, raw_findings, source_type=source_type)
 
     update_secret_run(org, run_id, {
         "status": "completed",
@@ -790,6 +724,7 @@ def execute_secret_scan_once(
     token: str,
     run_id: str,
     *,
+    source_type: str | None = None,
     expected_repos: int | None = None,
     scanner_config: dict[str, str] | None = None,
     runtime: InMemoryScanRuntime | None = None,
@@ -846,20 +781,6 @@ def execute_secret_scan_once(
                 return mark_run_cancelled(org, run_id)
 
             repo_urls_str = ",".join(source.repo_urls)
-
-            # Attempt incremental path — falls through to the runner when the
-            # flag is unset, adapters are stubs, or no baseline SHA is known.
-            incremental_findings = _try_incremental_secrets_scan(
-                repo_id=f"{org}/{source_idx}",
-                checkout_path=Path("/nonexistent"),
-                baseline_sha=None,
-                head_sha=run_id,
-                detector_version=resolved_scan_depth,
-            )
-            if incremental_findings is not None:
-                _finalize_incremental_secrets_scan(org, run_id, incremental_findings, resolved_scan_depth)
-                succeeded_sources.append(source_idx)
-                continue
 
             result = _execute_via_runner(
                 org=org,

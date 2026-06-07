@@ -24,7 +24,7 @@ def test_postgres_backed_queue_satisfies_protocol(queue):
     q: JobQueue = queue
     jid = q.create(
         job_type="dependencies", org="acme-org", run_id="run-1",
-        docker_image="aegis/scanner-deps:latest", env_vars={"FOO": "bar"},
+        env_vars={"FOO": "bar"},
     )
     record = q.get(jid)
     assert record is not None
@@ -35,7 +35,7 @@ def test_postgres_backed_queue_assign_persists_runner_id(queue):
     _drain_queued(queue)
     jid = queue.create(
         job_type="t", org="acme", run_id="r1",
-        docker_image="img", env_vars={},
+        env_vars={},
     )
     assigned = queue.assign_next(runner_id="runner-pg-test")
     assert assigned is not None
@@ -50,7 +50,7 @@ def test_postgres_backed_queue_lifecycle(queue):
     _drain_queued(queue)
     jid = queue.create(
         job_type="t", org="acme", run_id="r1",
-        docker_image="img", env_vars={"TOKEN": "value"},
+        env_vars={"TOKEN": "value"},
     )
     queue.assign_next(runner_id="r1")
     queue.mark_started(jid)
@@ -61,11 +61,11 @@ def test_postgres_backed_queue_lifecycle(queue):
 
 def test_postgres_backed_queue_encrypts_sensitive_env_vars(monkeypatch):
     # Set a stable secret so encrypt/decrypt use the same derived key
-    monkeypatch.setenv("JWT_SHARED_SECRET", "test-stable-secret-for-encryption")
+    monkeypatch.setenv("RUNNER_ENCRYPTION_KEY", "test-stable-secret-for-encryption")
     q = PostgresBackedQueue()
     jid = q.create(
         job_type="t", org="acme", run_id="r1",
-        docker_image="img", env_vars={"GIT_TOKEN": "ghp_test_secret_123"},
+        env_vars={"GIT_TOKEN": "ghp_test_secret_123"},
     )
     # Public API returns decrypted
     record = q.get(jid)

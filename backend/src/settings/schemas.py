@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class OrgCredential(BaseModel):
@@ -35,24 +35,16 @@ class RateLimitResponse(BaseModel):
 
 
 class ScannerPrerequisitesResponse(BaseModel):
-    docker_image_present: bool = False
-    signature_valid: bool = False
-    image_name: str = ""
-    registry_image: str = ""
-    signature: str | None = None
-    digest: str | None = None
+    runner_connected: bool = False
     error: str | None = None
-    # Scanner image lifecycle status for richer UI guidance
-    scanner_status: str | None = None  # ready | building | missing | invalid | pull_failed | build_failed | no_runner
-    scanner_source: str | None = None  # local | registry — how the runner acquires images
+    scanner_status: str | None = None  # ready | no_runner
     runner_name: str | None = None
     runner_platform: str | None = None
 
 
 class DirectGrantRequest(BaseModel):
     userId: str
-    resourceType: Literal["repository", "containerImage"]
-    resourceKey: str
+    assetId: str
 
 
 class RoleRequest(BaseModel):
@@ -73,3 +65,22 @@ class AuthSecuritySettingsRequest(BaseModel):
     requireMfaAdmins: bool
     trustedSessionDurationDays: int
     recoveryCodePolicy: Literal["mandatory", "optional", "disabled"]
+
+
+class EmailChangeRequest(BaseModel):
+    """Email may be `null` to clear (modal allows blank submission)."""
+    email: EmailStr | None = None
+
+
+class AvatarChangeRequest(BaseModel):
+    """`avatarUrl` is a `data:image/...;base64,...` URL produced by the modal."""
+    avatarUrl: str
+
+
+class TotpEnrollResponse(BaseModel):
+    qrDataUrl: str
+    secret: str
+
+
+class TotpVerifyRequest(BaseModel):
+    code: str

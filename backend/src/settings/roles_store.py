@@ -36,6 +36,11 @@ BUILTIN_PERMISSION_IDS = {
     "view_audit",
     "manage_organisations",
     "refresh_dashboard",
+    "view_rules",
+    "manage_sla_rules",
+    "manage_scanner_coverage_rules",
+    "manage_auto_dismiss_rules",
+    "manage_data_retention_rules",
 }
 
 

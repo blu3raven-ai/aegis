@@ -65,8 +65,20 @@ def populate_components(
     resource_id: str,
     sbom: dict[str, Any],
     source_tool_fn: Callable[[dict[str, Any]], str | None] | None = None,
+    asset_id: str | None = None,
 ) -> int:
-    """Parse CycloneDX SBOM and upsert components into sbom_components table."""
+    """Parse CycloneDX SBOM and upsert components into sbom_components table.
+
+    asset_id is required after Plan D. The org/resource_id params are kept for
+    backward-compat log messages only.
+    """
+    if not asset_id:
+        logger.warning(
+            "[!] populate_components called without asset_id for %s/%s — skipping",
+            org, resource_id,
+        )
+        return 0
+
     components = sbom.get("components", [])
     if not components:
         logger.debug("[+] No components in SBOM for %s/%s — skipping", org, resource_id)
@@ -95,8 +107,7 @@ def populate_components(
         source_tool = source_tool_fn(comp) if source_tool_fn else None
 
         rows.append({
-            "org": org.lower(),
-            "repo": resource_id,
+            "asset_id": asset_id,
             "purl": purl,
             "name": name,
             "version": version,
@@ -107,7 +118,6 @@ def populate_components(
         })
 
     # Deduplicate by purl — SBOMs can list the same package multiple times
-    # (e.g. actions/checkout@v4 referenced in multiple workflows)
     seen_purls: set[str] = set()
     unique_rows: list[dict[str, Any]] = []
     for row in rows:
@@ -124,8 +134,7 @@ def populate_components(
     async def _query(session):
         await session.execute(
             delete(SbomComponent).where(
-                SbomComponent.org == org.lower(),
-                SbomComponent.repo == resource_id,
+                SbomComponent.asset_id == asset_id,
             )
         )
         session.add_all([SbomComponent(**row) for row in unique_rows])

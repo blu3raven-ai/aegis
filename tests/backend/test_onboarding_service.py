@@ -51,7 +51,7 @@ def test_get_state_deserialises_existing_blob():
         "dismissed": False,
         "steps": {
             "welcome": {"completed": True, "skipped": False, "data": {}},
-            "connect_source": {"completed": False, "skipped": False, "data": {}},
+            "connect_source": {"completed": True, "skipped": False, "data": {"provider": "github"}},
             "smoke_test": {"completed": False, "skipped": False, "data": {}},
             "alerts": {"completed": False, "skipped": False, "data": {}},
             "policy": {"completed": False, "skipped": False, "data": {}},
@@ -62,8 +62,12 @@ def test_get_state_deserialises_existing_blob():
          patch.object(svc, "write_app_config", return_value=None):
         state = svc.get_state("example-org")
 
-    assert state.steps["welcome"].completed is True
-    assert state.steps["connect_source"].completed is False
+    for legacy in ("welcome", "alerts", "policy"):
+        assert legacy not in state.steps
+    assert state.steps["connect_source"].completed is True
+    assert state.steps["connect_source"].data == {"provider": "github"}
+    assert state.steps["smoke_test"].completed is False
+    assert state.steps["pick_repos"].completed is False
 
 
 # ── complete_step ──────────────────────────────────────────────────────────────
@@ -82,9 +86,9 @@ def test_complete_step_marks_step_completed():
     from src.onboarding import service as svc
     with patch.object(svc, "read_app_config", _read), \
          patch.object(svc, "write_app_config", _write):
-        state = svc.complete_step("example-org", "welcome", {})
+        state = svc.complete_step("example-org", "connect_source", {})
 
-    assert state.steps["welcome"].completed is True
+    assert state.steps["connect_source"].completed is True
     assert len(written) == 1
 
 
@@ -160,7 +164,7 @@ def test_is_complete_true_after_dismiss():
         "dismissed": True,
         "steps": {
             step: {"completed": True, "skipped": False, "data": {}}
-            for step in ["welcome", "connect_source", "smoke_test", "alerts", "policy"]
+            for step in ["connect_source", "pick_repos", "smoke_test"]
         },
     }
     from src.onboarding import service as svc

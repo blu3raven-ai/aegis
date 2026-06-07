@@ -20,7 +20,7 @@ function makeFetchMock(body: unknown, status = 200) {
 }
 
 async function loadModule() {
-  return import("../../lib/client/repos-api.ts")
+  return import("../../frontend/lib/client/repos-api.ts")
 }
 
 const SAMPLE_SUMMARY = {
@@ -114,7 +114,10 @@ test("listRepos throws on non-ok response", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listRepos } = await loadModule()
-  await assert.rejects(() => listRepos(), /repos-api: 403/)
+  await assert.rejects(() => listRepos(), (err: any) => {
+    assert.equal(err.status, 403)
+    return true
+  })
 })
 
 // ---------------------------------------------------------------------------

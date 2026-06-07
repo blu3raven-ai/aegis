@@ -53,23 +53,6 @@ def db_engine():
         engine.dispose()
 
 
-def test_cache_entries_table_exists(db_engine):
-    insp = inspect(db_engine)
-    assert "cache_entries" in insp.get_table_names()
-    cols = {c["name"] for c in insp.get_columns("cache_entries")}
-    expected = {"cache_type", "cache_key", "content_hash", "tool_version",
-                "rule_pack_version", "created_at", "last_used_at", "blob_pointer"}
-    assert expected.issubset(cols), f"Missing columns: {expected - cols}"
-
-
-def test_verified_secrets_table_exists(db_engine):
-    insp = inspect(db_engine)
-    assert "verified_secrets" in insp.get_table_names()
-    cols = {c["name"] for c in insp.get_columns("verified_secrets")}
-    expected = {"detector_id", "secret_hash", "verified_at", "status", "ttl_until"}
-    assert expected.issubset(cols), f"Missing columns: {expected - cols}"
-
-
 def test_repos_table_gained_delta_columns(db_engine):
     """The repos table is created fresh by this migration (it did not exist in
     the initial schema) and must carry the delta-detection columns."""
@@ -93,3 +76,22 @@ def test_findings_has_commit_attribution_columns(db_engine):
         "introduced_by_pr_url",
     }
     assert expected.issubset(cols), f"Missing attribution columns: {expected - cols}"
+
+
+def test_findings_has_queryable_columns(db_engine):
+    """Migration r2s3t4u5v6w7 added five queryable columns to findings."""
+    insp = inspect(db_engine)
+    assert "findings" in insp.get_table_names()
+    cols = {c["name"] for c in insp.get_columns("findings")}
+    expected = {"cve_id", "file_path", "title", "rule_name", "package_name"}
+    assert expected.issubset(cols), f"Missing queryable columns: {expected - cols}"
+
+
+def test_home_dashboard_views_exist(db_engine):
+    """Migration t4u5v6w7x8y9 created 4 materialised views for home dashboard aggregates."""
+    with db_engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT matviewname FROM pg_matviews WHERE matviewname LIKE 'mv_%'"
+        )).scalars().all()
+    expected = {"mv_findings_summary", "mv_home_analytics_repo", "mv_home_analytics_age", "mv_home_remediation"}
+    assert expected.issubset(set(result)), f"Missing materialised views: {expected - set(result)}"

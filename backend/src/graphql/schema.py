@@ -36,7 +36,13 @@ from src.graphql.sbom_resolvers import (
     SbomComponentsConnection, SbomFilterOptions, SbomCrossReference, SbomBulkMatch,
     sbom_search, sbom_filter_options, sbom_cross_references, sbom_bulk_lookup,
 )
-from src.graphql.types import SecretsOverview, SecretsFilterOptions, PostureTrendPoint, HomeAnalytics
+from src.graphql.sla_resolvers import sla_breach_summary
+from src.graphql.epss_resolvers import epss_top
+from src.graphql.sources_resolvers import source_connections
+from src.graphql.types import (
+    SecretsOverview, SecretsFilterOptions, PostureTrendPoint, HomeAnalytics,
+    BreachSummary, EpssTopResponse, SourceConnectionsResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,27 +86,16 @@ class AliasLimitExtension(SchemaExtension):
 @strawberry.type
 class Query:
     @strawberry.field
-    def dependencies_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
-        ctx = get_graphql_context(info.context["request"])
-        if org:
-            return dependencies_counts(org=org, info_context=ctx)
-        # No org specified — sum across all user orgs
-        from src.graphql.types import SeverityCounts as SC
-        totals = SC(total=0, critical=0, high=0, medium=0, low=0)
-        for user_org in ctx.get("orgs", []):
-            c = dependencies_counts(org=user_org, info_context=ctx)
-            totals.total += c.total
-            totals.critical += c.critical
-            totals.high += c.high
-            totals.medium += c.medium
-            totals.low += c.low
-        return totals
+    async def dependencies_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return dependencies_counts(asset_ids=asset_ids, info_context=ctx)
 
     @strawberry.field
-    def dependencies_findings(
+    async def dependencies_findings(
         self,
         info: strawberry.types.Info,
-        org: str,
+        org: Optional[str] = None,
         page: int = 1,
         per_page: int = 25,
         severity: Optional[str] = None,
@@ -116,9 +111,10 @@ class Query:
         new_since_last_scan: Optional[bool] = None,
         last_scan_date: Optional[str] = None,
     ) -> DependenciesFindingsConnection:
-        ctx = get_graphql_context(info.context["request"])
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
         return dependencies_findings(
-            org=org, page=page, per_page=per_page,
+            asset_ids=asset_ids, org=org, page=page, per_page=per_page,
             severity=severity, state=state,
             ecosystem=ecosystem, repository=repository, organization=organization,
             package_search=package_search, fix_availability=fix_availability,
@@ -128,46 +124,39 @@ class Query:
         )
 
     @strawberry.field
-    def dependencies_analytics(self, info: strawberry.types.Info, org: str) -> DependenciesAnalytics:
-        ctx = get_graphql_context(info.context["request"])
-        return dependencies_analytics(org=org, info_context=ctx)
+    async def dependencies_analytics(self, info: strawberry.types.Info, org: Optional[str] = None) -> DependenciesAnalytics:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return dependencies_analytics(asset_ids=asset_ids, org=org, info_context=ctx)
 
     @strawberry.field
-    def dependencies_filter_options(self, info: strawberry.types.Info, org: str) -> FilterOptions:
-        ctx = get_graphql_context(info.context["request"])
-        return dependencies_filter_options(org=org, info_context=ctx)
+    async def dependencies_filter_options(self, info: strawberry.types.Info, org: Optional[str] = None) -> FilterOptions:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return dependencies_filter_options(asset_ids=asset_ids, org=org, info_context=ctx)
 
     @strawberry.field
-    def dependencies_finding_detail(
+    async def dependencies_finding_detail(
         self,
         info: strawberry.types.Info,
-        org: str,
-        identity_key: str,
+        org: Optional[str] = None,
+        identity_key: str = "",
     ) -> Optional[DependenciesFindingDetail]:
-        ctx = get_graphql_context(info.context["request"])
-        return dependencies_finding_detail(org=org, identity_key=identity_key, info_context=ctx)
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return dependencies_finding_detail(asset_ids=asset_ids, org=org, identity_key=identity_key, info_context=ctx)
 
     @strawberry.field
-    def code_scanning_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
-        ctx = get_graphql_context(info.context["request"])
-        if org:
-            return code_scanning_counts(org=org, info_context=ctx)
-        from src.graphql.types import SeverityCounts as SC
-        totals = SC(total=0, critical=0, high=0, medium=0, low=0)
-        for user_org in ctx.get("orgs", []):
-            c = code_scanning_counts(org=user_org, info_context=ctx)
-            totals.total += c.total
-            totals.critical += c.critical
-            totals.high += c.high
-            totals.medium += c.medium
-            totals.low += c.low
-        return totals
+    async def code_scanning_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return code_scanning_counts(asset_ids=asset_ids, info_context=ctx)
 
     @strawberry.field
-    def code_scanning_findings(
+    async def code_scanning_findings(
         self,
         info: strawberry.types.Info,
-        org: str,
+        org: Optional[str] = None,
         page: int = 1,
         per_page: int = 25,
         severity: Optional[str] = None,
@@ -182,9 +171,10 @@ class Query:
         new_since_last_scan: Optional[bool] = None,
         last_scan_date: Optional[str] = None,
     ) -> CodeScanningFindingsConnection:
-        ctx = get_graphql_context(info.context["request"])
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
         return code_scanning_findings(
-            org=org, page=page, per_page=per_page,
+            asset_ids=asset_ids, org=org, page=page, per_page=per_page,
             severity=severity, state=state,
             language=language, reachability=reachability, confidence=confidence,
             rule_id=rule_id, repository=repository, age_bucket=age_bucket,
@@ -193,36 +183,28 @@ class Query:
         )
 
     @strawberry.field
-    def code_scanning_analytics(self, info: strawberry.types.Info, org: str) -> CodeScanningAnalytics:
-        ctx = get_graphql_context(info.context["request"])
-        return code_scanning_analytics(org=org, info_context=ctx)
+    async def code_scanning_analytics(self, info: strawberry.types.Info, org: Optional[str] = None) -> CodeScanningAnalytics:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return code_scanning_analytics(asset_ids=asset_ids, org=org, info_context=ctx)
 
     @strawberry.field
-    def code_scanning_filter_options(self, info: strawberry.types.Info, org: str) -> CodeScanningFilterOptions:
-        ctx = get_graphql_context(info.context["request"])
-        return code_scanning_filter_options(org=org, info_context=ctx)
+    async def code_scanning_filter_options(self, info: strawberry.types.Info, org: Optional[str] = None) -> CodeScanningFilterOptions:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return code_scanning_filter_options(asset_ids=asset_ids, org=org, info_context=ctx)
 
     @strawberry.field
-    def container_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
-        ctx = get_graphql_context(info.context["request"])
-        if org:
-            return container_counts(org=org, info_context=ctx)
-        from src.graphql.types import SeverityCounts as SC
-        totals = SC(total=0, critical=0, high=0, medium=0, low=0)
-        for user_org in ctx.get("orgs", []):
-            c = container_counts(org=user_org, info_context=ctx)
-            totals.total += c.total
-            totals.critical += c.critical
-            totals.high += c.high
-            totals.medium += c.medium
-            totals.low += c.low
-        return totals
+    async def container_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return container_counts(asset_ids=asset_ids, info_context=ctx)
 
     @strawberry.field
-    def container_findings(
+    async def container_findings(
         self,
         info: strawberry.types.Info,
-        org: str,
+        org: Optional[str] = None,
         page: int = 1,
         per_page: int = 25,
         severity: Optional[str] = None,
@@ -238,9 +220,10 @@ class Query:
         new_since_last_scan: Optional[bool] = None,
         last_scan_date: Optional[str] = None,
     ) -> ContainerFindingsConnection:
-        ctx = get_graphql_context(info.context["request"])
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
         return container_findings(
-            org=org, page=page, per_page=per_page,
+            asset_ids=asset_ids, org=org, page=page, per_page=per_page,
             severity=severity, state=state,
             ecosystem=ecosystem, repository=repository, organization=organization,
             package_search=package_search, fix_availability=fix_availability,
@@ -250,36 +233,28 @@ class Query:
         )
 
     @strawberry.field
-    def container_analytics(self, info: strawberry.types.Info, org: str) -> ContainerAnalytics:
-        ctx = get_graphql_context(info.context["request"])
-        return container_analytics(org=org, info_context=ctx)
+    async def container_analytics(self, info: strawberry.types.Info, org: Optional[str] = None) -> ContainerAnalytics:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return container_analytics(asset_ids=asset_ids, org=org, info_context=ctx)
 
     @strawberry.field
-    def container_filter_options(self, info: strawberry.types.Info, org: str) -> FilterOptions:
-        ctx = get_graphql_context(info.context["request"])
-        return container_filter_options(org=org, info_context=ctx)
+    async def container_filter_options(self, info: strawberry.types.Info, org: Optional[str] = None) -> FilterOptions:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return container_filter_options(asset_ids=asset_ids, org=org, info_context=ctx)
 
     @strawberry.field
-    def secret_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
-        ctx = get_graphql_context(info.context["request"])
-        if org:
-            return secret_counts(org=org, info_context=ctx)
-        from src.graphql.types import SeverityCounts as SC
-        totals = SC(total=0, critical=0, high=0, medium=0, low=0)
-        for user_org in ctx.get("orgs", []):
-            c = secret_counts(org=user_org, info_context=ctx)
-            totals.total += c.total
-            totals.critical += c.critical
-            totals.high += c.high
-            totals.medium += c.medium
-            totals.low += c.low
-        return totals
+    async def secret_counts(self, info: strawberry.types.Info, org: Optional[str] = None) -> SeverityCounts:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return secret_counts(asset_ids=asset_ids, info_context=ctx)
 
     @strawberry.field
-    def secret_findings(
+    async def secret_findings(
         self,
         info: strawberry.types.Info,
-        org: str,
+        org: Optional[str] = None,
         page: int = 1,
         per_page: int = 25,
         severity: Optional[str] = None,
@@ -295,9 +270,10 @@ class Query:
         new_since_last_scan: Optional[bool] = None,
         last_scan_date: Optional[str] = None,
     ) -> SecretFindingsConnection:
-        ctx = get_graphql_context(info.context["request"])
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
         return secret_findings(
-            org=org, page=page, per_page=per_page,
+            asset_ids=asset_ids, org=org, page=page, per_page=per_page,
             severity=severity, state=state,
             review_status=review_status, detector=detector,
             repository=repository, organization=organization,
@@ -308,27 +284,29 @@ class Query:
         )
 
     @strawberry.field
-    def secrets_overview(self, info: strawberry.types.Info, org: str) -> SecretsOverview:
-        ctx = get_graphql_context(info.context["request"])
-        return secrets_overview(org=org, info_context=ctx)
+    async def secrets_overview(self, info: strawberry.types.Info, org: Optional[str] = None) -> SecretsOverview:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return secrets_overview(asset_ids=asset_ids, org=org, info_context=ctx)
 
     @strawberry.field
-    def secrets_filter_options(self, info: strawberry.types.Info, org: str) -> SecretsFilterOptions:
-        ctx = get_graphql_context(info.context["request"])
-        return secrets_filter_options(org=org, info_context=ctx)
+    async def secrets_filter_options(self, info: strawberry.types.Info, org: Optional[str] = None) -> SecretsFilterOptions:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        return secrets_filter_options(asset_ids=asset_ids, org=org, info_context=ctx)
 
     @strawberry.field
-    def posture_trend(self, info: strawberry.types.Info, days: int = 30) -> list[PostureTrendPoint]:
-        ctx = get_graphql_context(info.context["request"])
+    async def posture_trend(self, info: strawberry.types.Info, days: int = 30) -> list[PostureTrendPoint]:
+        ctx = await get_graphql_context(info.context["request"])
         return posture_trend(days=days, info_context=ctx)
 
     @strawberry.field
-    def home_analytics(self, info: strawberry.types.Info) -> HomeAnalytics:
-        ctx = get_graphql_context(info.context["request"])
+    async def home_analytics(self, info: strawberry.types.Info) -> HomeAnalytics:
+        ctx = await get_graphql_context(info.context["request"])
         return home_analytics(info_context=ctx)
 
     @strawberry.field
-    def sbom_search(
+    async def sbom_search(
         self,
         info: strawberry.types.Info,
         search: Optional[str] = None,
@@ -342,7 +320,7 @@ class Query:
         page: int = 1,
         per_page: int = 50,
     ) -> SbomComponentsConnection:
-        ctx = get_graphql_context(info.context["request"])
+        ctx = await get_graphql_context(info.context["request"])
         return sbom_search(
             search=search, ecosystems=ecosystems, source=source,
             repos=repos, version_op=version_op, version_value=version_value,
@@ -351,19 +329,42 @@ class Query:
         )
 
     @strawberry.field
-    def sbom_filter_options(self, info: strawberry.types.Info) -> SbomFilterOptions:
-        ctx = get_graphql_context(info.context["request"])
+    async def sbom_filter_options(self, info: strawberry.types.Info) -> SbomFilterOptions:
+        ctx = await get_graphql_context(info.context["request"])
         return sbom_filter_options(info_context=ctx)
 
     @strawberry.field
-    def sbom_cross_references(self, info: strawberry.types.Info, purl: str) -> list[SbomCrossReference]:
-        ctx = get_graphql_context(info.context["request"])
+    async def sbom_cross_references(self, info: strawberry.types.Info, purl: str) -> list[SbomCrossReference]:
+        ctx = await get_graphql_context(info.context["request"])
         return sbom_cross_references(purl=purl, info_context=ctx)
 
     @strawberry.field
-    def sbom_bulk_lookup(self, info: strawberry.types.Info, queries: list[str]) -> list[SbomBulkMatch]:
-        ctx = get_graphql_context(info.context["request"])
+    async def sbom_bulk_lookup(self, info: strawberry.types.Info, queries: list[str]) -> list[SbomBulkMatch]:
+        ctx = await get_graphql_context(info.context["request"])
         return sbom_bulk_lookup(queries=queries, info_context=ctx)
+
+    @strawberry.field
+    async def sla_breach_summary(self, info: strawberry.types.Info, org: Optional[str] = None) -> BreachSummary:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        if not asset_ids:
+            from src.graphql.types import SeverityBreachStat
+            zero = SeverityBreachStat(open=0, breached=0, breached_pct=0.0)
+            return BreachSummary(critical=zero, high=zero, medium=zero, low=zero)
+        return sla_breach_summary(asset_ids=asset_ids, info_context=ctx)
+
+    @strawberry.field
+    async def epss_top(self, info: strawberry.types.Info, org: Optional[str] = None, limit: int = 20) -> EpssTopResponse:
+        ctx = await get_graphql_context(info.context["request"])
+        asset_ids = ctx.get("asset_ids") or []
+        if not asset_ids:
+            return EpssTopResponse(findings=[], count=0)
+        return epss_top(asset_ids=asset_ids, limit=limit, info_context=ctx)
+
+    @strawberry.field
+    async def source_connections(self, info: strawberry.types.Info, category: Optional[str] = None) -> SourceConnectionsResponse:
+        ctx = await get_graphql_context(info.context["request"])
+        return source_connections(info_context=ctx, category=category)
 
 
 def create_graphql_router() -> GraphQLRouter:
@@ -388,7 +389,7 @@ def create_graphql_router() -> GraphQLRouter:
 
     return GraphQLRouter(
         schema_instance,
-        path="/api",
+        path="/graphql",
         graphql_ide="graphiql" if is_dev else None,
         allow_queries_via_get=False,
         multipart_uploads_enabled=False,

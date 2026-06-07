@@ -95,22 +95,34 @@ class KevService:
 
         return run_db(_run)
 
-    def get_exposure_summary(self, org_id: str) -> dict[str, Any]:
-        """Compute KEV overlap for an org's open findings.
+    def get_exposure_summary(self, *, asset_ids: list[str]) -> dict[str, Any]:
+        """Compute KEV overlap for the caller's accessible open findings.
 
-        Joins findings against kev_entries on the CVE ID embedded in the
-        finding's detail JSON.  The detail->>'cve' path covers deps and
-        container findings; the identity_key fallback covers older records.
+        Joins findings against kev_entries on the typed cve_id column.
+        The identity_key fallback covers older records where cve_id was not
+        backfilled.
 
         Returns counts and the top KEV-matched findings sorted by occurrence.
+        Empty `asset_ids` yields an empty summary (fail-closed scoping).
         """
+        if not asset_ids:
+            return {
+                "open_findings_total": 0,
+                "open_findings_in_kev": 0,
+                "kev_overdue": 0,
+                "kev_with_ransomware": 0,
+                "top_kev_findings": [],
+            }
+
         today = date.today()
 
         async def _run(session):
+            scope_open = Finding.asset_id.in_(asset_ids)
+
             open_total_result = await session.execute(
                 sa.select(sa.func.count())
                 .select_from(Finding)
-                .where(Finding.org == org_id, Finding.state == "open")
+                .where(scope_open, Finding.state == "open")
             )
             open_findings_total: int = open_total_result.scalar_one() or 0
 
@@ -128,12 +140,11 @@ class KevService:
                 .join(
                     KevEntry,
                     sa.or_(
-                        sa.cast(Finding.detail["cve"].astext, sa.String) == KevEntry.cve_id,
-                        sa.cast(Finding.detail["cveId"].astext, sa.String) == KevEntry.cve_id,
+                        Finding.cve_id == KevEntry.cve_id,
                         Finding.identity_key.contains(KevEntry.cve_id),
                     ),
                 )
-                .where(Finding.org == org_id, Finding.state == "open")
+                .where(scope_open, Finding.state == "open")
                 .group_by(
                     KevEntry.cve_id,
                     KevEntry.vulnerability_name,
