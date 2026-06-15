@@ -37,7 +37,15 @@ _CSRF_BYPASS_PATHS = frozenset({
     "/auth/login",
     "/auth/login/verify",
     "/auth/logout",
+    "/auth/sso/saml/acs",
+    "/auth/sso/oidc/callback",
 })
+
+# Path prefixes that always bypass CSRF — these endpoints use their own
+# auth mechanisms and are never driven by a browser session cookie.
+_CSRF_BYPASS_PREFIXES = (
+    "/scim/v2/",
+)
 
 
 def _hmac(secret: str, message: str) -> str:
@@ -74,7 +82,11 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if request.method in _SAFE_METHODS:
             return await call_next(request)
 
-        if request.url.path in _CSRF_BYPASS_PATHS:
+        path = request.url.path
+        if path in _CSRF_BYPASS_PATHS:
+            return await call_next(request)
+
+        if any(path.startswith(p) for p in _CSRF_BYPASS_PREFIXES):
             return await call_next(request)
 
         session_id = request.cookies.get(SESSION_COOKIE_NAME)

@@ -22,6 +22,9 @@ async def try_api_key_auth(request: Request, token: str) -> object | None:
     request.state.user_role_id = None
     request.state.api_key_id = row.id
     request.state.api_key_scopes = list(row.scopes or [])
+    request.state.api_key_allowed_source_ids = (
+        list(row.allowed_source_ids) if row.allowed_source_ids else None
+    )
 
     # Record last_used_at — best-effort
     try:

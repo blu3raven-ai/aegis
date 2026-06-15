@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import { AdvisorySourcesCopyBar } from "@/components/settings/AdvisorySourcesCopyBar"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { Input } from "@/components/ui/Input"
 import { useRouter } from "next/navigation"
 import { PrerequisitePanel } from "../PrerequisitePanel"
-import { SaveBar } from "../SaveBar"
+import { useSaveBarSection } from "../save-bar/SaveBarProvider"
 import { AdvisorySourcesGrid } from "../_components/AdvisorySourcesGrid"
 import type { PrerequisiteItem } from "@/lib/shared/prerequisite-utils"
 
@@ -161,6 +162,14 @@ export function ContainerScanningSetupForm({
     setSaved(false)
   }
 
+  useSaveBarSection({
+    id: "container-scanning-setup",
+    dirty: isDirty,
+    saving: isPending,
+    onSave: handleSave,
+    onDiscard: handleDiscard,
+  })
+
   // Status determination
   let status: "Setup required" | "Verifying" | "Ready" = "Setup required"
   if (prereqRefreshing) {
@@ -229,12 +238,11 @@ export function ContainerScanningSetupForm({
             <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
               Scan concurrency
             </label>
-            <input
+            <Input
               type="number"
               min="1"
               value={scanConcurrency}
               onChange={(e) => setScanConcurrency(e.target.value)}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
             />
             <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
               Maximum container images scanned in parallel.
@@ -270,11 +278,11 @@ export function ContainerScanningSetupForm({
                       <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                         Scan Time (Daily)
                       </label>
-                      <input
+                      <Input
                         type="time"
                         value={rerunScheduleValue}
                         onChange={(e) => setRerunScheduleValue(e.target.value)}
-                        className="w-full max-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                        className="max-w-[150px]"
                       />
                     </div>
                   ) : (
@@ -282,12 +290,12 @@ export function ContainerScanningSetupForm({
                       <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                         Cron Expression
                       </label>
-                      <input
+                      <Input
                         type="text"
                         value={rerunScheduleValue}
                         onChange={(e) => setRerunScheduleValue(e.target.value)}
                         placeholder="e.g. 0 2 * * *"
-                        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 font-mono"
+                        className="font-mono"
                       />
                       <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
                         Standard cron format (min hour day month weekday).
@@ -327,13 +335,6 @@ export function ContainerScanningSetupForm({
         </div>
       )}
 
-      <SaveBar
-        saved={saved}
-        dirty={isDirty}
-        onSave={handleSave}
-        onDiscard={handleDiscard}
-        saving={isPending}
-      />
     </div>
   )
 }

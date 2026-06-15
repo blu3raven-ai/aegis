@@ -14,6 +14,9 @@
 
 import type { Condition, ConditionOp, LeafCondition } from "@/lib/rules-engine/conditions"
 import type { ConditionFieldSchema } from "@/lib/rules-engine/field-schemas"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
 
 // ── Static option lists ───────────────────────────────────────────────────────
 
@@ -115,59 +118,63 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
     // Boolean fields: always render a select with true/false
     if (inputType === "boolean") {
       return (
-        <select
+        <Select
+          size="sm"
           aria-label="value"
           value={rawVal}
           onChange={(e) => setValue(e.target.value)}
-          className="rounded border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+          className="w-auto"
         >
           <option value="">— select —</option>
           <option value="true">true</option>
           <option value="false">false</option>
-        </select>
+        </Select>
       )
     }
 
     // Select/text fields with suggestions: show dropdown unless using a list op
     if (suggestions.length > 0 && !isListOp(op)) {
       return (
-        <select
+        <Select
+          size="sm"
           aria-label="value"
           value={rawVal}
           onChange={(e) => setValue(e.target.value)}
-          className="rounded border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+          className="w-auto"
         >
           <option value="">— select —</option>
           {suggestions.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
-        </select>
+        </Select>
       )
     }
 
     // Number input
     if (inputType === "number" && !isListOp(op)) {
       return (
-        <input
+        <Input
+          size="sm"
           aria-label="value"
           type="number"
           value={rawVal}
           onChange={(e) => setValue(e.target.value)}
           placeholder="value"
-          className="min-w-[100px] rounded border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+          className="min-w-[100px] w-auto"
         />
       )
     }
 
     // Default: free text
     return (
-      <input
+      <Input
+        size="sm"
         aria-label="value"
         type="text"
         value={rawVal}
         onChange={(e) => setValue(e.target.value)}
         placeholder={isListOp(op) ? "val1, val2, …" : "value"}
-        className="min-w-[120px] rounded border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none"
+        className="min-w-[120px] w-auto"
       />
     )
   }
@@ -175,41 +182,45 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
       {/* Field */}
-      <select
+      <Select
+        size="sm"
         aria-label="field"
         value={field}
         onChange={(e) => setField(e.target.value)}
-        className="rounded border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+        className="w-auto"
       >
         {fields.map((f) => (
           <option key={f.value} value={f.value}>{f.label}</option>
         ))}
-      </select>
+      </Select>
 
       {/* Operator */}
-      <select
+      <Select
+        size="sm"
         aria-label="operator"
         value={op}
         onChange={(e) => setOp(e.target.value as ConditionOp)}
-        className="rounded border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+        className="w-auto"
       >
         {opOptions.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
-      </select>
+      </Select>
 
       {/* Value */}
       {renderValueInput()}
 
       {/* Remove */}
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="xs"
+        iconOnly
         onClick={onRemove}
         aria-label="remove condition"
-        className="ml-auto rounded p-0.5 text-[var(--color-text-tertiary)] hover:bg-[var(--color-severity-critical)]/10 hover:text-[var(--color-severity-critical)]"
+        className="ml-auto hover:bg-[var(--color-severity-critical)]/10 hover:text-[var(--color-severity-critical)]"
       >
         ×
-      </button>
+      </Button>
     </div>
   )
 }
@@ -278,25 +289,28 @@ function GroupNode({ cond, onChange, onRemove, depth = 0, fields, operatorsForFi
     >
       {/* Group header */}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="xs"
           onClick={toggleGroupType}
-          className="rounded-md border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20"
+          className="border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 hover:border-[var(--color-accent)]/40"
         >
           {isAll ? "ALL of" : "ANY of"}
-        </button>
+        </Button>
         <span className="text-xs text-[var(--color-text-tertiary)]">
           {isAll ? "(AND — all conditions must match)" : "(OR — at least one must match)"}
         </span>
         {onRemove && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
+            iconOnly
             onClick={onRemove}
             aria-label="remove group"
-            className="ml-auto rounded p-0.5 text-[var(--color-text-tertiary)] hover:bg-[var(--color-severity-critical)]/10 hover:text-[var(--color-severity-critical)]"
+            className="ml-auto hover:bg-[var(--color-severity-critical)]/10 hover:text-[var(--color-severity-critical)]"
           >
             ×
-          </button>
+          </Button>
         )}
       </div>
 
@@ -336,21 +350,21 @@ function GroupNode({ cond, onChange, onRemove, depth = 0, fields, operatorsForFi
 
       {/* Add buttons */}
       <div className="flex items-center gap-2 pt-1">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="xs"
           onClick={addLeaf}
-          className="rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)]"
         >
           + Condition
-        </button>
+        </Button>
         {depth < 3 && (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="xs"
             onClick={addGroup}
-            className="rounded-md border border-[var(--color-border)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-accent)]"
           >
             + Group
-          </button>
+          </Button>
         )}
       </div>
     </div>

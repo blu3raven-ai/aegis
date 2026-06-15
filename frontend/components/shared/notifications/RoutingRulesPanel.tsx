@@ -13,6 +13,9 @@ import type { NotificationDestination } from "@/lib/client/destinations-api"
 import { listDestinations } from "@/lib/client/destinations-api"
 import { RuleEditorModal } from "./RuleEditorModal"
 import { RulePreview } from "./RulePreview"
+import { Button } from "@/components/ui/Button"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 interface RoutingRulesPanelProps {
   orgId: string
@@ -31,13 +34,13 @@ function relativeTime(iso: string): string {
 
 function SkeletonRow() {
   return (
-    <tr>
+    <Tr>
       {[1, 2, 3, 4, 5].map((i) => (
-        <td key={i} className="px-4 py-3">
+        <Td key={i}>
           <div className="h-4 w-full animate-pulse rounded bg-[var(--color-surface-raised)]" />
-        </td>
+        </Td>
       ))}
-    </tr>
+    </Tr>
   )
 }
 
@@ -139,33 +142,22 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
           </p>
         </div>
         {!loading && !loadError && (
-          <button
-            type="button"
-            onClick={openCreate}
-            className="shrink-0 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]"
-          >
-            + New rule
-          </button>
+          <Button variant="primary" size="md" onClick={openCreate} className="shrink-0">
+            New rule
+          </Button>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-0.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-0.5 w-fit">
-        {(["rules", "preview"] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => setActiveTab(tab)}
-            className={`rounded-md px-4 py-1.5 text-xs font-semibold capitalize transition-colors ${
-              activeTab === tab
-                ? "bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm"
-                : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-            }`}
-          >
-            {tab === "rules" ? "Rules" : "Preview"}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        ariaLabel="Notification routing view"
+        value={activeTab}
+        onChange={setActiveTab}
+        options={[
+          { id: "rules",   label: "Rules" },
+          { id: "preview", label: "Preview" },
+        ]}
+      />
 
       {/* Error state */}
       {loadError && (
@@ -174,13 +166,11 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
             Couldn&apos;t load rules
           </p>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{loadError}</p>
-          <button
-            type="button"
-            onClick={loadAll}
-            className="mt-4 rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
-          >
-            Retry
-          </button>
+          <div className="mt-4">
+            <Button variant="secondary" size="md" onClick={loadAll}>
+              Retry
+            </Button>
+          </div>
         </div>
       )}
 
@@ -194,30 +184,23 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
                 All findings go to every enabled destination. Create a rule to route specific
                 findings to specific channels.
               </p>
-              <button
-                type="button"
-                onClick={openCreate}
-                className="mt-4 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]"
-              >
-                Create first rule
-              </button>
+              <div className="mt-4 inline-flex">
+                <Button variant="primary" size="md" onClick={openCreate}>
+                  Create first rule
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--color-border)]">
+              <Table>
+                <Thead>
+                  <Tr>
                     {["Priority", "Name", "Channel", "Enabled", "Updated", "Actions"].map((h) => (
-                      <th
-                        key={h}
-                        className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-                      >
-                        {h}
-                      </th>
+                      <Th key={h}>{h}</Th>
                     ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--color-border-divider)]">
+                  </Tr>
+                </Thead>
+                <Tbody>
                   {loading ? (
                     <>
                       <SkeletonRow />
@@ -226,70 +209,75 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
                     </>
                   ) : (
                     rules.map((rule) => (
-                      <tr key={rule.id} className="hover:bg-[var(--color-bg-hover)] transition-colors">
+                      <Tr key={rule.id} interactive>
                         {/* Priority */}
-                        <td className="px-4 py-3 tabular-nums text-[var(--color-text-tertiary)] text-xs">
+                        <Td className="tabular-nums text-[var(--color-text-tertiary)] text-xs">
                           {rule.priority}
-                        </td>
+                        </Td>
                         {/* Name */}
-                        <td className="px-4 py-3 font-medium text-[var(--color-text-primary)]">
+                        <Td className="font-medium text-[var(--color-text-primary)]">
                           {rule.name}
-                        </td>
+                        </Td>
                         {/* Channel */}
-                        <td className="px-4 py-3 text-[var(--color-text-secondary)] text-xs">
+                        <Td className="text-[var(--color-text-secondary)] text-xs">
                           {destName(rule.channel_id)}
-                        </td>
+                        </Td>
                         {/* Enabled toggle */}
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
+                        <Td>
+                          <Button
+                            variant="ghost"
+                            size="xs"
                             onClick={() => handleToggle(rule)}
                             aria-label={rule.enabled ? "disable rule" : "enable rule"}
-                            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold ${
+                            className={
                               rule.enabled
-                                ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
-                                : "bg-[var(--color-border)] text-[var(--color-text-tertiary)]"
-                            }`}
+                                ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)] hover:bg-[var(--color-status-ok)]/10 hover:text-[var(--color-status-ok)]"
+                                : "bg-[var(--color-border)] text-[var(--color-text-tertiary)] hover:bg-[var(--color-border)] hover:text-[var(--color-text-tertiary)]"
+                            }
+                            leadingIcon={
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  rule.enabled
+                                    ? "bg-[var(--color-status-ok)]"
+                                    : "bg-[var(--color-text-tertiary)]"
+                                }`}
+                                aria-hidden="true"
+                              />
+                            }
                           >
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                rule.enabled
-                                  ? "bg-[var(--color-status-ok)]"
-                                  : "bg-[var(--color-text-tertiary)]"
-                              }`}
-                              aria-hidden="true"
-                            />
                             {rule.enabled ? "On" : "Off"}
-                          </button>
-                        </td>
+                          </Button>
+                        </Td>
                         {/* Updated */}
-                        <td className="px-4 py-3 text-[var(--color-text-tertiary)] text-xs">
+                        <Td className="text-[var(--color-text-tertiary)] text-xs">
                           {relativeTime(rule.updated_at)}
-                        </td>
+                        </Td>
                         {/* Actions */}
-                        <td className="px-4 py-3">
+                        <Td>
                           <div className="flex items-center gap-2">
-                            <button
-                              type="button"
+                            <Button
+                              variant="ghost"
+                              size="xs"
                               onClick={() => openEdit(rule)}
-                              className="rounded px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+                              className="text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)] hover:text-[var(--color-accent)]"
                             >
                               Edit
-                            </button>
-                            <button
-                              type="button"
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="xs"
                               onClick={() => handleDelete(rule)}
-                              className="rounded px-2 py-1 text-xs font-medium text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical)]/10"
+                              className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
                             >
                               Delete
-                            </button>
+                            </Button>
                           </div>
-                        </td>
-                      </tr>
+                        </Td>
+                      </Tr>
                     ))
                   )}
-                </tbody>
-              </table>
+                </Tbody>
+              </Table>
             </div>
           )}
 

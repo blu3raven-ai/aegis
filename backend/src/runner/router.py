@@ -6,6 +6,8 @@ post progress, and report failures.
 """
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -31,7 +33,7 @@ from src.shared.object_store import generate_download_url, generate_upload_url, 
 from src.shared.paths import now_iso, SAFE_RELATIVE_PATH
 from src.shared.rate_limit import rate_limit_by_ip, rate_limit_by_runner
 
-router = APIRouter(prefix="/runner/api", tags=["runner"])
+router = APIRouter(prefix="/api/v1/runner", tags=["runner"])
 
 
 def _runner_from_request(request: Request) -> dict[str, Any] | None:
@@ -138,7 +140,7 @@ def post_heartbeat(request: Request, body: HeartbeatRequest | None = None) -> JS
 
 
 @router.get("/jobs/next")
-def poll_next_job(request: Request) -> JSONResponse:
+async def poll_next_job(request: Request, wait: int = 0) -> JSONResponse:
     runner, err = _require_runner(request)
     if err:
         return err
@@ -149,23 +151,32 @@ def poll_next_job(request: Request) -> JSONResponse:
     # Re-queue any stale jobs before assigning
     requeue_stale_jobs()
 
-    job = assign_next_job(runner["id"])
-    if not job:
-        from starlette.responses import Response
-        return Response(status_code=204)
+    # Bound wait to a reasonable maximum so a malicious client can't pin a worker forever.
+    wait = max(0, min(wait, 60))
+    poll_interval = 0.25
+    deadline = time.monotonic() + wait
 
-    # Transition scan run from "queued" to "running" now that runner claimed the job
-    _transition_run_to_running(job)
+    while True:
+        job = assign_next_job(runner["id"])
+        if job:
+            # Transition scan run from "queued" to "running" now that runner claimed the job
+            _transition_run_to_running(job)
 
-    # Return job payload (includes decrypted env vars)
-    return JSONResponse({
-        "jobId": job["id"],
-        "type": job.get("jobType", ""),
-        "org": job["org"],
-        "runId": job["runId"],
-        "envVars": job.get("envVars", {}),
-        "expectedRepoCount": int(job.get("envVars", {}).get("EXPECTED_REPO_COUNT", 0)) or None,
-    })
+            # Return job payload (includes decrypted env vars)
+            return JSONResponse({
+                "jobId": job["id"],
+                "type": job.get("jobType", ""),
+                "org": job["org"],
+                "runId": job["runId"],
+                "envVars": job.get("envVars", {}),
+                "expectedRepoCount": int(job.get("envVars", {}).get("EXPECTED_REPO_COUNT", 0)) or None,
+            })
+
+        if wait <= 0 or time.monotonic() >= deadline:
+            from starlette.responses import Response
+            return Response(status_code=204)
+
+        await asyncio.sleep(poll_interval)
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +289,6 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
                 "progress": merged,
                 "logTail": log_tail_trimmed,
             },
-            org=org,
         ))
 
 
@@ -362,7 +372,6 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
         get_event_bus().publish_sync(Event(
             event_type="scan.completed",
             data={"tool": job_type, "org": org, "runId": run_id},
-            org=org,
         ))
         # Emit notifications
         from src.notifications.emitter import notify_scan_completed
@@ -380,7 +389,6 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
         get_event_bus().publish_sync(Event(
             event_type="scan.failed",
             data={"tool": job_type, "org": org, "runId": run_id, "error": str(e)},
-            org=org,
         ))
         from src.notifications.emitter import notify_scan_failed
         notify_scan_failed(job_type, org, run_id, str(e))

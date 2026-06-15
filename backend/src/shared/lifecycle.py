@@ -8,6 +8,7 @@ gated by org-wide kill switch and per-rule rate alarms.
 from __future__ import annotations
 
 import abc
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -34,6 +35,8 @@ from src.shared.home_views_refresher import request_home_views_refresh
 from src.rules.auto_dismiss_matcher import check_auto_dismiss_rules
 from src.rules.rate_alarm import AUTO_DISMISS_EVENT_TRIGGERED_BY, auto_dismiss_event_actor
 from src.rules_engine.subjects import RuleFindingSubject
+
+logger = logging.getLogger(__name__)
 
 VALID_DISMISS_REASONS: frozenset[str] = frozenset([
     "Fix started",
@@ -323,8 +326,8 @@ def apply_lifecycle(
                         detail=detail, first_seen_at=now, engine=engine,
                     )
                     await insert_event(
-                        session, finding_id=f.id, tool=ctx.tool, org=ctx.org,
-                        identity_key=key, from_state=None, to_state="dismissed",
+                        session, finding_id=f.id,
+                        from_state=None, to_state="dismissed",
                         triggered_by="scan", actor=ctx.run_id,
                     )
                 continue
@@ -341,8 +344,8 @@ def apply_lifecycle(
                     _maybe_set_engine(prev, engine)
                     prev.last_seen_at = now
                     await insert_event(
-                        session, finding_id=prev.id, tool=ctx.tool, org=ctx.org,
-                        identity_key=key, from_state="fixed", to_state=new_state,
+                        session, finding_id=prev.id,
+                        from_state="fixed", to_state=new_state,
                         triggered_by="scan", actor=ctx.run_id,
                     )
 
@@ -354,8 +357,8 @@ def apply_lifecycle(
                     _maybe_set_engine(prev, engine)
                     prev.last_seen_at = now
                     await insert_event(
-                        session, finding_id=prev.id, tool=ctx.tool, org=ctx.org,
-                        identity_key=key, from_state="deferred", to_state="open",
+                        session, finding_id=prev.id,
+                        from_state="deferred", to_state="open",
                         triggered_by="scan", actor=ctx.run_id,
                     )
 
@@ -374,7 +377,7 @@ def apply_lifecycle(
                     tool=ctx.tool, severity=severity, repo=repo, detail=detail,
                 )
                 auto_match = await check_auto_dismiss_rules(
-                    session, org_id=ctx.org, subject=subject,
+                    session, subject=subject,
                     tool=ctx.tool, identity_key=key, asset_id=asset_id,
                 )
                 if auto_match is not None:
@@ -385,8 +388,8 @@ def apply_lifecycle(
                         detail=detail, first_seen_at=now, engine=engine,
                     )
                     await insert_event(
-                        session, finding_id=f.id, tool=ctx.tool, org=ctx.org,
-                        identity_key=key, from_state=None, to_state="dismissed",
+                        session, finding_id=f.id,
+                        from_state=None, to_state="dismissed",
                         triggered_by=AUTO_DISMISS_EVENT_TRIGGERED_BY,
                         actor=auto_dismiss_event_actor(auto_match.rule_id),
                         metadata=auto_match.matched_conditions_snapshot,
@@ -429,8 +432,8 @@ def apply_lifecycle(
                     introduced_by_pr_url=pr_url,
                 )
                 await insert_event(
-                    session, finding_id=f.id, tool=ctx.tool, org=ctx.org,
-                    identity_key=key, from_state=None, to_state=new_state,
+                    session, finding_id=f.id,
+                    from_state=None, to_state=new_state,
                     triggered_by="scan", actor=ctx.run_id,
                 )
                 new_findings.append(raw)
@@ -450,8 +453,8 @@ def apply_lifecycle(
                 old_state = prev.state
                 await update_finding_state(session, prev, "fixed", fixed_at=now)
                 await insert_event(
-                    session, finding_id=prev.id, tool=ctx.tool, org=ctx.org,
-                    identity_key=key, from_state=old_state, to_state="fixed",
+                    session, finding_id=prev.id,
+                    from_state=old_state, to_state="fixed",
                     triggered_by="scan", actor=ctx.run_id,
                 )
 
@@ -511,8 +514,8 @@ def dismiss_finding(
             finding.state = "dismissed"
             finding.updated_at = now
             await insert_event(
-                session, finding_id=finding.id, tool=tool, org=norm_org or "",
-                identity_key=identity_key, from_state=old_state, to_state="dismissed",
+                session, finding_id=finding.id,
+                from_state=old_state, to_state="dismissed",
                 triggered_by="user", actor=user_id,
                 metadata={"reason": reason, "comment": comment},
             )
@@ -559,8 +562,8 @@ def reopen_finding(
             finding.state = "open"
             finding.updated_at = now
             await insert_event(
-                session, finding_id=finding.id, tool=tool, org=norm_org or "",
-                identity_key=identity_key, from_state="dismissed", to_state="open",
+                session, finding_id=finding.id,
+                from_state="dismissed", to_state="open",
                 triggered_by="user", actor=user_id,
             )
 
@@ -623,8 +626,8 @@ def bulk_dismiss(
                 finding.state = "dismissed"
                 finding.updated_at = now
                 await insert_event(
-                    session, finding_id=finding.id, tool=tool, org=norm_org or "",
-                    identity_key=key, from_state=old_state, to_state="dismissed",
+                    session, finding_id=finding.id,
+                    from_state=old_state, to_state="dismissed",
                     triggered_by="user", actor=user_id,
                     metadata={"reason": reason, "comment": comment},
                 )

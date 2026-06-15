@@ -1,7 +1,7 @@
 """Event → sender-specific payload formatters.
 
-Each format_for_* function accepts the raw event dict read from the Redis
-stream and returns a dict ready to pass to the corresponding sender.
+Each format_for_* function accepts the raw event dict and returns a dict
+ready to pass to the corresponding sender.
 
 Slack payloads use Block Kit (blocks + fallback text).
 Webhook payloads are a structured JSON envelope.

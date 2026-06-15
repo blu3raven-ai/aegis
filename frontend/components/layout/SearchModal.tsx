@@ -24,7 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/settings/account", label: "Account", category: "Settings" },
   { href: "/settings/users", label: "Members", category: "Settings" },
   { href: "/settings/organisations", label: "Teams", category: "Settings" },
-  { href: "/settings/integrations", label: "Integrations", category: "Settings" },
+  { href: "/notifications", label: "Notifications", category: "Settings" },
   { href: "/settings/dependencies", label: "Dependency Scanning Settings", category: "Settings" },
   { href: "/settings/containers", label: "Container Scanning Settings", category: "Settings" },
   { href: "/settings/code", label: "Code Scanning Settings", category: "Settings" },

@@ -348,7 +348,6 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
     if findings:
         ctx = ScanContext(
             tool="container_scanning",
-            org=org,
             run_id=run_id,
             source_type=source_type,
         )
@@ -364,7 +363,6 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
             from src.shared.event_emit_helpers import emit_finding_created
             for finding in new_findings:
                 emit_finding_created(
-                    org_id=org,
                     finding=finding,
                     scanner_type="containers",
                     source_component="containers.scanner",

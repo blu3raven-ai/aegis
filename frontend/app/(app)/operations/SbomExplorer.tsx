@@ -4,6 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { gqlQuery } from "@/lib/client/graphql-client"
 import { useLicense } from "@/lib/client/license/client"
 import { timeAgo } from "@/lib/shared/time-ago"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { Select } from "@/components/ui/Select"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
+import { Textarea } from "@/components/ui/Textarea"
 
 // ---------------------------------------------------------------------------
 // GraphQL queries
@@ -395,36 +401,31 @@ export function SbomExplorer() {
     <div className="space-y-4">
       {/* Top bar: mode toggle + export */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-          <button
-            type="button"
-            onClick={() => setViewMode("search")}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "search" ? "bg-[var(--color-accent)] text-[var(--color-accent-on)] shadow-sm" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
-          >
-            Search
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("bulk")}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "bulk" ? "bg-[var(--color-accent)] text-[var(--color-accent-on)] shadow-sm" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
-          >
-            Bulk Lookup
-          </button>
-        </div>
+        <SegmentedControl
+          ariaLabel="SBOM view mode"
+          value={viewMode}
+          onChange={setViewMode}
+          options={[
+            { id: "search", label: "Search" },
+            { id: "bulk",   label: "Bulk Lookup" },
+          ]}
+        />
 
         {isEnterprise ? (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={!repos.length}
             onClick={() => { if (repos[0] && data?.items[0]) handleExport(data.items[0].org, repos[0]) }}
             title={repos.length ? `Export CycloneDX SBOM for ${repos[0]}` : "Select a repository to export"}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+            leadingIcon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+            }
           >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
             Export SBOM
-          </button>
+          </Button>
         ) : (
           <a href="/settings/license" className="flex items-center gap-1.5 rounded-lg border border-[var(--color-argus-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-argus)] transition-colors hover:bg-[var(--color-argus-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">
             <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
@@ -452,32 +453,33 @@ export function SbomExplorer() {
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3">
             {/* Row 1: search + multi-selects */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
-                <svg className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                </svg>
-                <input
+              <div className="flex-1">
+                <Input
                   ref={searchInputRef}
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search packages by name, version, or PURL..."
-                  className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] pl-9 pr-3 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+                  leadingIcon={(
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                    </svg>
+                  )}
                 />
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
                 <MultiSelect label="Ecosystems" options={filters?.ecosystems ?? []} selected={ecosystems} onChange={(v) => { setEcosystems(v); setPage(1) }} />
 
-                <select
+                <Select
                   value={source}
                   onChange={(e) => { setSource(e.target.value); setPage(1) }}
-                  className="h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 text-sm text-[var(--color-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+                  className="w-auto"
                 >
                   <option value="">All sources</option>
                   <option value="dependencies">Dependencies</option>
                   <option value="containers">Containers</option>
-                </select>
+                </Select>
 
                 <MultiSelect label="Repositories" options={filters?.repositories ?? []} selected={repos} onChange={(v) => { setRepos(v); setPage(1) }} />
               </div>
@@ -486,61 +488,57 @@ export function SbomExplorer() {
             {/* Row 2: version filter */}
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-medium text-[var(--color-text-secondary)]">Version</span>
-              <select
+              <Select
+                size="sm"
                 value={versionOp}
                 onChange={(e) => { setVersionOp(e.target.value as VersionOp); setPage(1) }}
-                className="h-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 text-xs text-[var(--color-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+                className="w-auto"
               >
                 <option value="">Any</option>
                 <option value="eq">Exact (=)</option>
                 <option value="gte">At least (≥)</option>
                 <option value="lte">At most (≤)</option>
                 <option value="range">Range</option>
-              </select>
+              </Select>
               {versionOp && (
-                <input
+                <Input
+                  size="sm"
                   type="text"
                   value={versionValue}
                   onChange={(e) => { setVersionValue(e.target.value); setPage(1) }}
                   placeholder={versionOp === "range" ? "From (e.g. 1.0.0)" : "e.g. 4.17.21"}
-                  className="h-8 w-36 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 font-mono text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+                  className="w-36 font-mono"
                 />
               )}
               {versionOp === "range" && (
                 <>
                   <span className="text-xs text-[var(--color-text-tertiary)]">to</span>
-                  <input
+                  <Input
+                    size="sm"
                     type="text"
                     value={versionValueEnd}
                     onChange={(e) => { setVersionValueEnd(e.target.value); setPage(1) }}
                     placeholder="To (e.g. 2.0.0)"
-                    className="h-8 w-36 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-2 font-mono text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+                    className="w-36 font-mono"
                   />
                 </>
               )}
 
               <div className="ml-auto flex items-center gap-2">
                 {hasActiveFilters && (
-                  <button type="button" onClick={resetFilters} className="h-8 rounded-lg border border-[var(--color-border)] px-3 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">
+                  <Button variant="secondary" size="sm" onClick={resetFilters}>
                     Clear
-                  </button>
+                  </Button>
                 )}
-                <div className="h-8 flex items-center gap-px rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] p-1">
-                  <button
-                    type="button"
-                    onClick={() => { setFilterLogic("and"); setPage(1) }}
-                    className={`rounded-md px-2 py-0.5 text-2xs font-semibold tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none ${filterLogic === "and" ? "bg-[var(--color-surface-raised)] text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"}`}
-                  >
-                    AND
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setFilterLogic("or"); setPage(1) }}
-                    className={`rounded-md px-2 py-0.5 text-2xs font-semibold tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none ${filterLogic === "or" ? "bg-[var(--color-surface-raised)] text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"}`}
-                  >
-                    OR
-                  </button>
-                </div>
+                <SegmentedControl
+                  ariaLabel="Filter logic"
+                  value={filterLogic}
+                  onChange={(next) => { setFilterLogic(next); setPage(1) }}
+                  options={[
+                    { id: "and", label: "AND" },
+                    { id: "or",  label: "OR" },
+                  ]}
+                />
               </div>
             </div>
 
@@ -562,38 +560,38 @@ export function SbomExplorer() {
           {!error && (
             <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-secondary)]">Package</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-secondary)]">Version</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-secondary)]">Ecosystem</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-secondary)]">Source</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-secondary)]">Repository</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-[var(--color-text-secondary)]">Scanned</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-[var(--color-text-secondary)]">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-border)]">
+                <Table>
+                  <Thead>
+                    <Tr>
+                      <Th>Package</Th>
+                      <Th>Version</Th>
+                      <Th>Ecosystem</Th>
+                      <Th>Source</Th>
+                      <Th>Repository</Th>
+                      <Th>Scanned</Th>
+                      <Th className="text-right">Actions</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody>
                     {loading && !data ? (
                       Array.from({ length: 8 }).map((_, i) => (
-                        <tr key={i}>
+                        <Tr key={i}>
                           {Array.from({ length: 7 }).map((_, j) => (
-                            <td key={j} className="px-4 py-3"><div className="h-4 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" style={{ width: `${45 + ((i * 7 + j) * 13 % 35)}%` }} /></td>
+                            <Td key={j}><div className="h-4 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" style={{ width: `${45 + ((i * 7 + j) * 13 % 35)}%` }} /></Td>
                           ))}
-                        </tr>
+                        </Tr>
                       ))
                     ) : data?.items.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="px-4 py-12 text-center">
+                      <Tr>
+                        <Td colSpan={7} className="px-4 py-12 text-center">
                           <p className="text-sm text-[var(--color-text-secondary)]">
                             {hasActiveFilters ? "No components match your filters." : "No SBOM data available. Run a scan to generate SBOMs."}
                           </p>
                           {hasActiveFilters && (
                             <button type="button" onClick={resetFilters} className="mt-2 text-xs font-medium text-[var(--color-accent)] hover:underline focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">Clear filters</button>
                           )}
-                        </td>
-                      </tr>
+                        </Td>
+                      </Tr>
                     ) : (
                       data?.items.map((item) => (
                         <ComponentRow
@@ -608,8 +606,8 @@ export function SbomExplorer() {
                         />
                       ))
                     )}
-                  </tbody>
-                </table>
+                  </Tbody>
+                </Table>
               </div>
 
               {/* Pagination */}
@@ -617,8 +615,12 @@ export function SbomExplorer() {
                 <div className="flex items-center justify-between border-t border-[var(--color-border)] px-4 py-3">
                   <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">Page {page} of {totalPages}</p>
                   <div className="flex gap-1">
-                    <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">Previous</button>
-                    <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">Next</button>
+                    <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                      Previous
+                    </Button>
+                    <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                      Next
+                    </Button>
                   </div>
                 </div>
               )}
@@ -655,12 +657,12 @@ function BulkLookupPanel({
             Paste package names, PURLs, or a manifest file. Supports package.json, requirements.txt, go.mod, Gemfile, and Cargo.toml.
           </p>
         </div>
-        <textarea
+        <Textarea
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           rows={8}
           placeholder={"lodash\nlog4j-core\npkg:npm/express@4.18.2\nrequests\nflask"}
-          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 font-mono text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none resize-y"
+          className="font-mono text-xs"
         />
         <div className="flex items-center justify-between">
           <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
@@ -757,32 +759,32 @@ function ComponentRow({
 }) {
   return (
     <>
-      <tr className="transition-colors hover:bg-[var(--color-surface-raised)]">
-        <td className="px-4 py-3">
+      <Tr interactive>
+        <Td>
           <button type="button" onClick={onToggle} className="group flex items-center gap-2 text-left focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none focus-visible:rounded">
             <svg className={`h-3.5 w-3.5 shrink-0 text-[var(--color-text-tertiary)] transition-transform ${isExpanded ? "rotate-90" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <path d="m9 18 6-6-6-6" />
             </svg>
             <span className="font-medium text-[var(--color-text-primary)] group-hover:text-[var(--color-accent)]">{item.name}</span>
           </button>
-        </td>
-        <td className="px-4 py-3"><code className="font-mono text-xs text-[var(--color-text-secondary)]">{item.version}</code></td>
-        <td className="px-4 py-3"><EcosystemBadge ecosystem={item.ecosystem} /></td>
-        <td className="px-4 py-3"><SourceBadge sourceTool={item.sourceTool} /></td>
-        <td className="px-4 py-3"><span className="text-xs text-[var(--color-text-secondary)]">{item.repo}</span></td>
-        <td className="px-4 py-3"><span className="text-xs text-[var(--color-text-tertiary)]" title={item.scannedAt}>{timeAgo(item.scannedAt)}</span></td>
-        <td className="px-4 py-3 text-right">
+        </Td>
+        <Td><code className="font-mono text-xs text-[var(--color-text-secondary)]">{item.version}</code></Td>
+        <Td><EcosystemBadge ecosystem={item.ecosystem} /></Td>
+        <Td><SourceBadge sourceTool={item.sourceTool} /></Td>
+        <Td><span className="text-xs text-[var(--color-text-secondary)]">{item.repo}</span></Td>
+        <Td><span className="text-xs text-[var(--color-text-tertiary)]" title={item.scannedAt}>{timeAgo(item.scannedAt)}</span></Td>
+        <Td className="text-right">
           {isEnterprise ? (
-            <button type="button" onClick={() => onExport(item.org, item.repo)} className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-2xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none" title="Download CycloneDX SBOM">Export</button>
+            <Button variant="secondary" size="xs" onClick={() => onExport(item.org, item.repo)} title="Download CycloneDX SBOM">Export</Button>
           ) : (
             <span className="rounded-full bg-[var(--color-argus-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-argus)]" title="SBOM export requires an Enterprise license">Enterprise</span>
           )}
-        </td>
-      </tr>
+        </Td>
+      </Tr>
 
       {isExpanded && (
-        <tr>
-          <td colSpan={7} className="bg-[var(--color-bg)] px-4 py-0">
+        <Tr>
+          <Td colSpan={7} className="bg-[var(--color-bg)] px-4 py-0">
             <div className="py-3 pl-8">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
                 Found in {crossRefsLoading ? "..." : `${crossRefs.length} repositor${crossRefs.length !== 1 ? "ies" : "y"}`}
@@ -802,15 +804,15 @@ function ComponentRow({
                       <SourceBadge sourceTool={r.sourceTool} />
                       <span className="ml-auto text-[var(--color-text-tertiary)]">{timeAgo(r.scannedAt)}</span>
                       {isEnterprise && (
-                        <button type="button" onClick={() => window.open(`/api/sbom/download?${new URLSearchParams({ org: r.org, repo: r.repo })}`, "_blank")} className="rounded border border-[var(--color-border)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">Export</button>
+                        <Button variant="secondary" size="xs" onClick={() => window.open(`/api/sbom/download?${new URLSearchParams({ org: r.org, repo: r.repo })}`, "_blank")}>Export</Button>
                       )}
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          </td>
-        </tr>
+          </Td>
+        </Tr>
       )}
     </>
   )

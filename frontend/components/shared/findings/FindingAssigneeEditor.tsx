@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 
 import { updateFindingAssignee } from "@/lib/client/findings-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 export interface FindingAssigneeEditorProps {
   findingId: string
@@ -67,18 +69,18 @@ export function FindingAssigneeEditor({
 
   return (
     <div ref={rootRef} className="relative inline-block">
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="xs"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-label={currentAssignee ? `Change assignee (${currentAssignee})` : "Set assignee"}
-        className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        trailingIcon={<span aria-hidden className="text-[var(--color-text-tertiary)]">▾</span>}
       >
         <span className={currentAssignee ? "font-[family-name:var(--font-jetbrains-mono)] text-[11px]" : "text-[var(--color-text-secondary)]"}>
           {label}
         </span>
-        <span aria-hidden className="text-[var(--color-text-tertiary)]">▾</span>
-      </button>
+      </Button>
       {open && (
         <div
           role="dialog"
@@ -87,7 +89,8 @@ export function FindingAssigneeEditor({
         >
           <label className="flex flex-col gap-1 text-xs text-[var(--color-text-secondary)]">
             User id
-            <input
+            <Input
+              size="sm"
               type="text"
               autoFocus
               value={input}
@@ -101,7 +104,6 @@ export function FindingAssigneeEditor({
               maxLength={255}
               disabled={saving}
               placeholder="user-xxx"
-              className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] disabled:opacity-60"
             />
           </label>
           {error && (
@@ -111,23 +113,24 @@ export function FindingAssigneeEditor({
           )}
           <div className="mt-3 flex items-center justify-end gap-2">
             {currentAssignee && (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="xs"
                 onClick={() => commit(null)}
                 disabled={saving}
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
               >
                 Clear
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="xs"
               onClick={() => commit(input.trim() || null)}
               disabled={saving}
-              className="rounded-md bg-[var(--color-accent)] px-2 py-1 text-xs font-semibold text-[var(--color-accent-on)] hover:opacity-90 disabled:opacity-50"
+              isLoading={saving}
             >
               {saving ? "Saving…" : "Save"}
-            </button>
+            </Button>
           </div>
         </div>
       )}

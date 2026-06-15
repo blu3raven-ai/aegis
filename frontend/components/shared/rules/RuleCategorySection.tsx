@@ -2,6 +2,7 @@
 
 import type { RuleCategory, RuleSummary } from "@/lib/client/rules-api"
 import { RuleRow } from "./RuleRow"
+import { Button } from "@/components/ui/Button"
 
 interface RuleCategorySectionProps {
   category: RuleCategory
@@ -37,8 +38,8 @@ const ICON_THEME: Record<string, { color: string; bg: string }> = {
     bg: "bg-[var(--color-severity-medium-subtle)]",
   },
   data_retention: {
-    color: "text-[#a78bfa]",
-    bg: "bg-[rgb(167_139_250_/_0.12)]",
+    color: "text-[var(--color-state-dismissed)]",
+    bg: "bg-[var(--color-state-dismissed-subtle)]",
   },
 }
 
@@ -93,13 +94,14 @@ export function RuleCategorySection({
         </div>
         <span className="text-xs text-[var(--color-text-secondary)]">{subtitle}</span>
         {showCreateButton && (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="xs"
             onClick={() => onCreate?.(category)}
-            className="ml-auto inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)]"
+            className="ml-auto"
           >
             + New rule
-          </button>
+          </Button>
         )}
       </div>
 
@@ -139,13 +141,13 @@ export function RuleCategorySection({
             </p>
           </div>
           {showCreateButton && (
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="md"
               onClick={() => onCreate?.(category)}
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             >
               Create rule
-            </button>
+            </Button>
           )}
         </div>
       ) : (

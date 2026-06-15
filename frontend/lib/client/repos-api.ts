@@ -92,6 +92,17 @@ export interface ScanFindingCounts {
   low: number
 }
 
+export interface ScanVerificationSummary {
+  confirmed: number
+  needs_verify: number
+  possible: number
+  ruled_out: number
+  legacy: number
+  tokens_in: number
+  tokens_out: number
+  model: string | null
+}
+
 export interface ScanDetail {
   scan_id: string
   repo_id: string
@@ -104,6 +115,7 @@ export interface ScanDetail {
   finished_at: string | null
   finding_counts: ScanFindingCounts | null
   error: string | null
+  verification_summary?: ScanVerificationSummary | null
 }
 
 // Omitting scanner_types triggers a full scan on the backend; pass an array to restrict.

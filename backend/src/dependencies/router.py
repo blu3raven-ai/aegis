@@ -32,7 +32,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-router = APIRouter(prefix="/dependencies/api", tags=["dependencies"])
+router = APIRouter(prefix="/api/v1/dependencies", tags=["dependencies"])
 
 _dependencies_runtime = InMemoryScanRuntime()
 
@@ -45,11 +45,14 @@ def get_history(request: Request, orgs: list[str] = Depends(require_orgs)) -> di
         return {"history": [], "coverageGaps": []}
     all_runs: list[dict[str, Any]] = []
     coverage_gaps: list[dict[str, Any]] = []
+    from src.assets.service import resolve_repo_asset_ids
     for org_name in orgs:
         all_runs.extend(_enrich_run(r) or r for r in list_dependencies_runs(org_name))
         expected = [r["full_name"] for r in build_source_repo_list(get_scan_sources_for_org(org_name))]
         if expected:
-            coverage_gaps.extend(compute_coverage_gaps("dependencies", org_name, expected))
+            expected_asset_ids = list(resolve_repo_asset_ids(expected).values())
+            if expected_asset_ids:
+                coverage_gaps.extend(compute_coverage_gaps("dependencies", expected_asset_ids))
     all_runs.sort(key=lambda r: r.get("createdAt", ""), reverse=True)
     return {"history": all_runs[:20], "coverageGaps": coverage_gaps}
 
@@ -123,7 +126,6 @@ def start_runs(
         from src.shared.event_emit_helpers import emit_manual_rescan
         for org in orgs:
             emit_manual_rescan(
-                org_id=org,
                 repo_id=None,
                 scanner_type="dependencies",
                 full=(scan_mode == "full"),

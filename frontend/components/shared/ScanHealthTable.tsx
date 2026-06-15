@@ -1,4 +1,5 @@
 import { InsightCard } from "@/components/shared/InsightCard"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { formatScanTimestamp } from "@/lib/shared/utils"
 
 export interface ScanHealthRun {
@@ -20,7 +21,6 @@ export interface ScanHealthRun {
 const MODE_STYLES: Record<string, string> = {
   light: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
   deep: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]",
-  ai_enhanced: "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)]",
   full: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
   sbom_only: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
   advisories_only: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]",
@@ -29,7 +29,6 @@ const MODE_STYLES: Record<string, string> = {
 const MODE_LABELS: Record<string, string> = {
   light: "Light",
   deep: "Deep",
-  ai_enhanced: "AI Enhanced",
   full: "Full",
   sbom_only: "SBOMs only",
   advisories_only: "Advisories only",
@@ -63,28 +62,31 @@ function RunRow({ label, run, showMode }: { label: string; run: ScanHealthRun; s
     : "—"
 
   return (
-    <tr className={run.status === "failed" ? "bg-[var(--color-severity-critical-subtle)]" : "transition-colors hover:bg-[var(--color-surface-raised)]"}>
-      <td className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{label}</td>
-      <td className="px-4 py-3 text-[var(--color-text-primary)]">{formatScanTimestamp(run.startedAt ?? run.createdAt)}</td>
-      <td className="px-4 py-3">
+    <Tr
+      interactive={run.status !== "failed"}
+      className={run.status === "failed" ? "bg-[var(--color-severity-critical-subtle)]" : undefined}
+    >
+      <Td className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{label}</Td>
+      <Td className="text-[var(--color-text-primary)]">{formatScanTimestamp(run.startedAt ?? run.createdAt)}</Td>
+      <Td>
         <span className={`capitalize ${statusColour(run.status)}`}>
           {run.status.replaceAll("_", " ")}
         </span>
-      </td>
+      </Td>
       {showMode && (
-        <td className="px-4 py-3"><ModeBadge mode={run.mode} /></td>
+        <Td><ModeBadge mode={run.mode} /></Td>
       )}
-      <td className="px-4 py-3 text-[var(--color-text-secondary)]">{durationLabel(run.durationSeconds)}</td>
-      <td className="px-4 py-3 text-[var(--color-text-secondary)]">{repos}</td>
-      <td className="px-4 py-3 text-right font-semibold text-[var(--color-text-primary)]">
+      <Td className="text-[var(--color-text-secondary)]">{durationLabel(run.durationSeconds)}</Td>
+      <Td className="text-[var(--color-text-secondary)]">{repos}</Td>
+      <Td className="text-right font-semibold text-[var(--color-text-primary)]">
         {run.findingsCount ?? "—"}
-      </td>
+      </Td>
       {run.error ? (
-        <td className="max-w-xs px-4 py-3 text-xs text-[var(--color-severity-critical)] break-words">{run.error}</td>
+        <Td className="max-w-xs text-xs text-[var(--color-severity-critical)] break-words">{run.error}</Td>
       ) : (
-        <td className="px-4 py-3" />
+        <Td />
       )}
-    </tr>
+    </Tr>
   )
 }
 
@@ -105,20 +107,20 @@ export function ScanHealthTable({
       description={`Status and outcomes of the most recent ${toolLabel} scans.`}
     >
       <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
-        <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
-          <thead className="bg-[var(--color-surface-raised)] text-left text-xs uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-            <tr>
-              <th className="px-4 py-3">Run</th>
-              <th className="px-4 py-3">Started</th>
-              <th className="px-4 py-3">Status</th>
-              {showMode && <th className="px-4 py-3">Mode</th>}
-              <th className="px-4 py-3">Duration</th>
-              <th className="px-4 py-3">Repos</th>
-              <th className="px-4 py-3 text-right">Findings</th>
-              <th className="px-4 py-3">Error</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-border)]">
+        <Table className="min-w-full">
+          <Thead>
+            <Tr>
+              <Th>Run</Th>
+              <Th>Started</Th>
+              <Th>Status</Th>
+              {showMode && <Th>Mode</Th>}
+              <Th>Duration</Th>
+              <Th>Repos</Th>
+              <Th className="text-right">Findings</Th>
+              <Th>Error</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
             {runs.length > 0 ? (
               runs.map((run, i) => (
                 <RunRow
@@ -129,14 +131,14 @@ export function ScanHealthTable({
                 />
               ))
             ) : (
-              <tr>
-                <td colSpan={colCount} className="px-4 py-6 text-center text-sm text-[var(--color-text-secondary)]">
+              <Tr>
+                <Td colSpan={colCount} className="py-6 text-center text-sm text-[var(--color-text-secondary)]">
                   No scan runs yet.
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             )}
-          </tbody>
-        </table>
+          </Tbody>
+        </Table>
       </div>
     </InsightCard>
   )

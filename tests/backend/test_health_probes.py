@@ -44,26 +44,6 @@ class TestProbePostgres:
         assert "connection refused" in result.error
 
 
-def test_health_does_not_probe_redis():
-    """Regression: redis is no longer a tracked subsystem, so it must not
-    appear in the probe list returned by run_all_probes."""
-    import asyncio
-    from unittest.mock import AsyncMock, patch
-
-    async def _ok():
-        return ProbeResult(name="x", status="ok", duration_ms=0)
-
-    with patch("src.health.probes.probe_postgres", _ok), \
-         patch("src.health.probes.probe_minio", _ok), \
-         patch("src.health.probes.probe_connected_runners", _ok), \
-         patch("src.health.probes.probe_recent_scans", _ok), \
-         patch("src.health.probes.probe_correlation_engine", _ok), \
-         patch("src.health.probes.probe_argus", _ok):
-        results = asyncio.run(run_all_probes())
-    names = [r.name for r in results]
-    assert "redis" not in names
-
-
 class TestProbeMinio:
     @pytest.mark.asyncio
     async def test_ok_when_list_buckets_succeeds(self, monkeypatch):

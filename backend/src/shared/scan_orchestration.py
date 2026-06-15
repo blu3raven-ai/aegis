@@ -82,7 +82,6 @@ def start_multi_org_scan(
         to sibling workers running concurrently.
         """
         emit_scan_started(
-            org_id=org_name,
             scan_id=run_id,
             repo_id=None,
             scanner_type=tool_label,
@@ -93,7 +92,6 @@ def start_multi_org_scan(
             result = execute_fn(org_name, token, run_id, source_type=source_type, **execute_kwargs, runtime=runtime)
         except Exception as exc:
             emit_scan_failed(
-                org_id=org_name,
                 scan_id=run_id,
                 error=str(exc),
                 retryable=False,
@@ -102,14 +100,12 @@ def start_multi_org_scan(
         duration_ms = int((time.time() - scan_start_ts) * 1000)
         if result is None:
             emit_scan_failed(
-                org_id=org_name,
                 scan_id=run_id,
                 error="scan returned no result",
                 retryable=False,
             )
         else:
             emit_scan_completed(
-                org_id=org_name,
                 scan_id=run_id,
                 duration_ms=duration_ms,
                 findings_count=0,
@@ -198,7 +194,6 @@ def cancel_multi_org_scan(
             get_event_bus().publish_sync(Event(
                 event_type="scan.failed",
                 data={"tool": job_type, "org": org_name, "runId": result["runId"], "error": "Cancelled by user"},
-                org=org_name,
             ))
         results.append({"org": org_name, "cancelled": True})
 

@@ -12,11 +12,8 @@
  */
 
 import type { AutoDismissAction } from "@/lib/client/rules-api"
-
-const inputClass =
-  "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] aria-[invalid=true]:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:ring-[var(--color-severity-critical)]"
-
-const textareaClass = `${inputClass} min-h-[72px] resize-y`
+import { Input } from "@/components/ui/Input"
+import { Textarea } from "@/components/ui/Textarea"
 
 export const AUTO_DISMISS_DEFAULT: AutoDismissAction = {
   reason: "",
@@ -55,14 +52,14 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
         >
           User-facing dismiss reason
         </label>
-        <textarea
+        <Textarea
           id="auto-dismiss-reason"
           value={value.reason}
           onChange={(e) => onChange({ ...value, reason: e.target.value })}
           placeholder="Auto-dismissed: test fixtures excluded"
-          aria-invalid={reasonInvalid}
+          invalid={reasonInvalid}
           maxLength={200}
-          className={textareaClass}
+          className="min-h-[72px]"
         />
         <div className="mt-1 flex items-center justify-between">
           <p
@@ -87,14 +84,14 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
         >
           Audit note <span className="font-normal normal-case tracking-normal text-[var(--color-text-tertiary)]">(internal, optional)</span>
         </label>
-        <textarea
+        <Textarea
           id="auto-dismiss-audit-note"
           value={value.audit_note ?? ""}
           onChange={(e) => onChange({ ...value, audit_note: e.target.value })}
           placeholder="Hides findings from **/test/** trees"
-          aria-invalid={auditNoteInvalid}
+          invalid={auditNoteInvalid}
           maxLength={500}
-          className={textareaClass}
+          className="min-h-[72px]"
         />
         <div className="mt-1 flex items-center justify-between">
           <p
@@ -125,7 +122,7 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
 
         <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-text-secondary)]">
           <span>Disable this rule if it dismisses more than</span>
-          <input
+          <Input
             id="auto-dismiss-rate-pct"
             type="number"
             min={1}
@@ -136,12 +133,12 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
               const parsed = Number.parseFloat(e.target.value)
               onChange({ ...value, rate_alarm_pct: Number.isFinite(parsed) ? parsed : 0 })
             }}
-            aria-invalid={pctInvalid}
+            invalid={pctInvalid}
             aria-label="Rate alarm percentage threshold"
-            className={`${inputClass} w-20`}
+            className="w-20"
           />
           <span>% of findings within</span>
-          <input
+          <Input
             id="auto-dismiss-rate-window"
             type="number"
             min={5}
@@ -155,9 +152,9 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
                 rate_alarm_window_minutes: Number.isFinite(parsed) ? parsed : 0,
               })
             }}
-            aria-invalid={windowInvalid}
+            invalid={windowInvalid}
             aria-label="Rate alarm window in minutes"
-            className={`${inputClass} w-24`}
+            className="w-24"
           />
           <span>minutes</span>
         </div>

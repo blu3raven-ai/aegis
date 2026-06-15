@@ -48,6 +48,9 @@ import { SlaActionEditor } from "./SlaActionEditor"
 import { ScannerCoverageActionEditor, REQUIRE_DEFAULT } from "./ScannerCoverageActionEditor"
 import { AutoDismissActionEditor, AUTO_DISMISS_DEFAULT } from "./AutoDismissActionEditor"
 import { DryRunConfirmDialog } from "./DryRunConfirmDialog"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Textarea } from "@/components/ui/Textarea"
 import { DataRetentionActionEditor, ARCHIVE_DEFAULT } from "./DataRetentionActionEditor"
 import { RulePreview } from "./RulePreview"
 
@@ -111,8 +114,6 @@ function defaultsForCreate(cat: EditableRuleCategory) {
   }
 }
 
-const inputClass =
-  "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] aria-[invalid=true]:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:ring-[var(--color-severity-critical)]"
 
 export function RuleEditorModal({
   open,
@@ -588,7 +589,7 @@ export function RuleEditorModal({
               >
                 Name
               </label>
-              <input
+              <Input
                 id="sla-rule-name"
                 type="text"
                 required
@@ -596,8 +597,7 @@ export function RuleEditorModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={namePlaceholder}
-                aria-invalid={!!errors.name}
-                className={inputClass}
+                invalid={!!errors.name}
               />
               {errors.name && (
                 <p className="mt-1 text-xs text-[var(--color-severity-critical)]">{errors.name}</p>
@@ -612,15 +612,15 @@ export function RuleEditorModal({
               >
                 Description
               </label>
-              <textarea
+              <Textarea
                 id="sla-rule-description"
                 rows={2}
                 maxLength={500}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder={descriptionPlaceholder}
-                aria-invalid={!!errors.description}
-                className={`${inputClass} resize-none`}
+                invalid={!!errors.description}
+                className="resize-none"
               />
               {errors.description && (
                 <p className="mt-1 text-xs text-[var(--color-severity-critical)]">{errors.description}</p>
@@ -749,14 +749,13 @@ export function RuleEditorModal({
                 >
                   Priority
                 </label>
-                <input
+                <Input
                   id="sla-rule-priority"
                   type="number"
                   min={0}
                   value={priority}
                   onChange={(e) => setPriority(Math.max(0, Number(e.target.value)))}
-                  aria-invalid={!!errors.priority}
-                  className={inputClass}
+                  invalid={!!errors.priority}
                 />
                 <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
                   Lower = higher priority. First match wins.
@@ -816,20 +815,12 @@ export function RuleEditorModal({
               <p className="text-sm text-[var(--color-severity-critical)]">{saveError}</p>
             )}
             <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => { if (!saving) onClose() }}
-                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
-              >
+              <Button variant="secondary" size="md" onClick={() => { if (!saving) onClose() }}>
                 Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving || hasErrors}
-                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
-              >
+              </Button>
+              <Button type="submit" variant="primary" size="md" disabled={saving || hasErrors} isLoading={saving}>
                 {saving ? "Saving…" : submitLabel}
-              </button>
+              </Button>
             </div>
           </div>
         </form>
@@ -873,32 +864,27 @@ export function RuleEditorModal({
                 </span>{" "}
                 to confirm.
               </p>
-              <input
+              <Input
                 type="text"
                 value={deleteConfirmInput}
                 onChange={(e) => setDeleteConfirmInput(e.target.value)}
                 placeholder="delete data retention"
                 autoFocus
-                className={inputClass}
                 aria-label="Delete confirmation phrase"
               />
             </div>
             <div className="flex justify-end gap-3 border-t border-[var(--color-border)] px-6 py-4">
-              <button
-                type="button"
-                onClick={() => resolveDeleteConfirm(false)}
-                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
-              >
+              <Button variant="secondary" size="md" onClick={() => resolveDeleteConfirm(false)}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="destructive"
+                size="md"
                 disabled={deleteConfirmInput !== "delete data retention"}
                 onClick={() => resolveDeleteConfirm(true)}
-                className="rounded-lg bg-[var(--color-severity-critical)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
               >
                 Confirm
-              </button>
+              </Button>
             </div>
           </div>
         </>

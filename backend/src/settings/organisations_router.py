@@ -31,7 +31,7 @@ from src.settings.schemas import DirectGrantRequest
 from src.shared.config import get_token_for_org, read_app_config
 from src.shared.github import fetch_org_repos, github_fetch, check_token_permissions
 
-organisations_router = APIRouter(prefix="/settings/api", tags=["organisations"])
+organisations_router = APIRouter(prefix="/api/v1/settings", tags=["organisations"])
 
 
 class TeamRequest(BaseModel):

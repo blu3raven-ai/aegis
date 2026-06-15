@@ -13,6 +13,9 @@
 import Link from "next/link"
 import type { SlaAction, SlaEscalation } from "@/lib/client/rules-api"
 import type { NotificationDestination } from "@/lib/client/destinations-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
 
 const MAX_ESCALATIONS = 4
 
@@ -21,9 +24,6 @@ interface SlaActionEditorProps {
   destinations: NotificationDestination[]
   onChange: (next: SlaAction) => void
 }
-
-const inputClass =
-  "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] aria-[invalid=true]:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:ring-[var(--color-severity-critical)]"
 
 export function SlaActionEditor({ value, destinations, onChange }: SlaActionEditorProps) {
   const deadlineHours = Math.max(0, Math.floor(value.deadline_days)) * 24
@@ -67,15 +67,15 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
         </label>
         <div className="flex items-center gap-2">
           <span className="text-sm text-[var(--color-text-secondary)]">Fix within</span>
-          <input
+          <Input
             id="sla-deadline"
             type="number"
             min={1}
             step={1}
             value={value.deadline_days}
             onChange={(e) => updateDeadline(e.target.value)}
-            aria-invalid={!(Number.isInteger(value.deadline_days) && value.deadline_days >= 1)}
-            className={`${inputClass} w-24`}
+            invalid={!(Number.isInteger(value.deadline_days) && value.deadline_days >= 1)}
+            className="w-24"
           />
           <span className="text-sm text-[var(--color-text-secondary)]">days</span>
         </div>
@@ -123,7 +123,7 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-[var(--color-text-secondary)]">At</span>
-                  <input
+                  <Input
                     type="number"
                     min={1}
                     step={1}
@@ -134,21 +134,21 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
                         at_hours: Number.isFinite(parsed) ? parsed : 0,
                       })
                     }}
-                    aria-invalid={hoursInvalid}
+                    invalid={hoursInvalid}
                     aria-label={`Escalation ${i + 1} hours`}
-                    className={`${inputClass} w-24`}
+                    className="w-24"
                   />
                   <span className="text-sm text-[var(--color-text-secondary)]">
                     hours → notify
                   </span>
-                  <select
+                  <Select
                     value={esc.channel_id || ""}
                     onChange={(e) =>
                       updateEscalation(i, { channel_id: Number(e.target.value) })
                     }
-                    aria-invalid={channelInvalid}
+                    invalid={channelInvalid}
                     aria-label={`Escalation ${i + 1} channel`}
-                    className={`${inputClass} max-w-[18rem] flex-1`}
+                    className="max-w-[18rem] flex-1"
                   >
                     <option value="">— select channel —</option>
                     {destinations.map((d) => (
@@ -156,14 +156,15 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
                         {d.name} ({d.destination_type})
                       </option>
                     ))}
-                  </select>
-                  <button
-                    type="button"
+                  </Select>
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => removeEscalation(i)}
-                    className="ml-auto rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]"
+                    className="ml-auto"
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
                 <p
                   className={`mt-1 text-[11px] ${
@@ -181,14 +182,15 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
           })}
         </div>
 
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={addEscalation}
           disabled={atCap}
-          className="mt-3 rounded-lg border border-dashed border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-[var(--color-text-secondary)]"
+          className="mt-3 border-dashed"
         >
           + Add escalation step
-        </button>
+        </Button>
       </div>
     </div>
   )

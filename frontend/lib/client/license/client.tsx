@@ -43,7 +43,7 @@ export async function fetchLicenseStatus(): Promise<LicenseStatus> {
     return cachedStatus
   }
   try {
-    const data = await apiClient<LicenseStatus>("/license/api/status")
+    const data = await apiClient<LicenseStatus>("/api/v1/license/status")
     cachedStatus = data
     cacheTimestamp = Date.now()
     return data

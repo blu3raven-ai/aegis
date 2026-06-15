@@ -44,7 +44,10 @@ describe("DismissPopover ARIA and keyboard nav", () => {
     assert.ok(src.includes("onDismiss(reason)"), "should call onDismiss with reason")
   })
 
-  it("trigger uses py-2 for improved touch target", () => {
-    assert.ok(src.includes("py-2"), "trigger should use py-2 touch target")
+  it("trigger uses Button primitive size sm (h-8 ~= py-2 touch target)", () => {
+    assert.ok(
+      src.includes('size="sm"') && src.includes("<Button"),
+      "trigger should route through Button primitive size=sm for h-8 touch target",
+    )
   })
 })

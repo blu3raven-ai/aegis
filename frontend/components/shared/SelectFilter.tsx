@@ -1,5 +1,6 @@
 
 import type { ReactNode } from "react"
+import { Select } from "@/components/ui/Select"
 
 interface SelectFilterProps {
   value: string
@@ -9,12 +10,13 @@ interface SelectFilterProps {
 
 export function SelectFilter({ value, onChange, children }: SelectFilterProps) {
   return (
-    <select
+    <Select
+      size="sm"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text-primary)]"
+      className="w-auto"
     >
       {children}
-    </select>
+    </Select>
   )
 }

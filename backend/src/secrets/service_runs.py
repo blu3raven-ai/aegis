@@ -191,7 +191,6 @@ def cancel_secret_runs(
             get_event_bus().publish_sync(Event(
                 event_type="scan.failed",
                 data={"tool": "secrets", "org": org_name, "runId": cancel_result["runId"], "error": "Cancelled by user"},
-                org=org_name,
             ))
             latest = latest_run_for_org(org_name)
             if latest:
@@ -206,7 +205,6 @@ def cancel_secret_runs(
                 get_event_bus().publish_sync(Event(
                     event_type="scan.failed",
                     data={"tool": "secrets", "org": org_name, "runId": latest["id"], "error": "Cancelled by user"},
-                    org=org_name,
                 ))
             else:
                 result["error"] = (

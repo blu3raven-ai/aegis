@@ -17,7 +17,7 @@ async function fetchSourceConnections(): Promise<SourceConnectionEntry[]> {
     return _cachedConnections
   }
   try {
-    const response = await fetch(`${BACKEND_URL}/settings/api/sources/internal-orgs`, {
+    const response = await fetch(`${BACKEND_URL}/api/v1/settings/sources/internal-orgs`, {
       cache: "no-store",
     })
     if (!response.ok) return _cachedConnections ?? []

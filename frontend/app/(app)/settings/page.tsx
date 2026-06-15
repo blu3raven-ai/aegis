@@ -6,13 +6,11 @@ import { ProfileSection } from "./sections/ProfileSection"
 import { NotificationsPreferencesSection } from "./sections/NotificationsPreferencesSection"
 import { SecuritySessionsSection } from "./sections/SecuritySessionsSection"
 import { OrgGeneralSection } from "./sections/OrgGeneralSection"
-import { MembersSection } from "./sections/MembersSection"
-import { RolesSection } from "./sections/RolesSection"
-import { TeamsSection } from "./sections/TeamsSection"
 import { SsoSection } from "./sections/SsoSection"
 import { AuditLogSection } from "./sections/AuditLogSection"
 import { ApiKeysSection } from "./sections/ApiKeysSection"
 import { RunnersSection } from "./sections/RunnersSection"
+import { LlmSection } from "./sections/LlmSection"
 import { LicenseSection } from "./sections/LicenseSection"
 
 const SETTINGS_ICON = (
@@ -43,18 +41,16 @@ export default function SettingsPage() {
       />
       <div className="flex w-full flex-col gap-8 px-6 pt-6 pb-12 md:flex-row md:items-start">
         <SettingsInPageNav />
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
           <ProfileSection />
           <NotificationsPreferencesSection />
           <SecuritySessionsSection />
           <OrgGeneralSection />
-          <MembersSection />
-          <RolesSection />
-          <TeamsSection />
           <SsoSection />
           <AuditLogSection />
           <ApiKeysSection />
           <RunnersSection />
+          <LlmSection />
           <LicenseSection />
         </div>
       </div>

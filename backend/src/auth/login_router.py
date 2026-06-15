@@ -33,6 +33,7 @@ from src.auth.csrf import compute_csrf_token
 from src.auth.rate_limit import RateLimitService
 from src.auth.session import DEFAULT_TTL_SECONDS, SessionService
 from src.db.models import User
+from src.settings.roles_store import role_kind_from_id
 from src.shared.config import get_session_secret
 from src.shared.passwords import hash_password, verify_password
 from src.shared.totp import verify_totp
@@ -312,7 +313,7 @@ async def _issue_session(
         "user": {
             "id": str(user.id),
             "email": user.email,
-            "role": user.role,
+            "role": role_kind_from_id(user.role_id),
             "status": user.status or "active",
         },
     }

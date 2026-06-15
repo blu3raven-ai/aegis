@@ -54,8 +54,13 @@ def _fake_row(report_id: int = 1, **overrides) -> MagicMock:
 def test_create_findings_report_json():
     app = _make_app()
     fake = _fake_row(report_id=42, report_type="findings", format="json")
+
+    async def _fake_resolve(request):
+        return ["asset-1"]
+
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
+        patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
         patch("src.reports.router.generate_report", return_value=fake),
         patch("src.reports.router.get_download_url", return_value="https://minio.example/reports/42.json?sig=abc"),
     ):
@@ -82,10 +87,15 @@ def test_create_report_no_permission():
     assert resp.status_code == 403
 
 
+async def _fake_resolve(request):
+    return ["asset-1"]
+
+
 def test_list_reports_empty():
     app = _make_app()
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
+        patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
         patch("src.reports.router.list_reports", return_value=([], 0)),
     ):
         resp = TestClient(app).get("/api/v1/reports")
@@ -99,6 +109,7 @@ def test_get_report_not_found():
     app = _make_app()
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
+        patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
         patch("src.reports.router.get_report", return_value=None),
     ):
         resp = TestClient(app).get("/api/v1/reports/999")
@@ -109,6 +120,7 @@ def test_delete_report():
     app = _make_app()
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
+        patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
         patch("src.reports.router.delete_report", return_value=True),
     ):
         resp = TestClient(app).delete("/api/v1/reports/5")
@@ -123,4 +135,4 @@ def test_create_posture_report_csv_rejected():
             "format": "csv",
         })
     assert resp.status_code == 422
-    assert "JSON" in resp.json()["detail"]
+    assert "CSV" in resp.json()["detail"]

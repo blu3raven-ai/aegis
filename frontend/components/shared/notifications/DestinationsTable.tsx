@@ -2,6 +2,8 @@
 
 import type { NotificationDestination, TestSendResult } from "@/lib/client/destinations-api"
 import { DestinationTypeIcon } from "./DestinationTypeIcon"
+import { Button } from "@/components/ui/Button"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -29,13 +31,13 @@ function filterSummary(dest: NotificationDestination): string {
 // Skeleton row for loading state
 function SkeletonRow() {
   return (
-    <tr>
+    <Tr>
       {[1, 2, 3, 4, 5, 6].map((i) => (
-        <td key={i} className="px-4 py-3">
+        <Td key={i}>
           <div className="h-4 w-full animate-pulse rounded bg-[var(--color-surface-raised)]" />
-        </td>
+        </Td>
       ))}
-    </tr>
+    </Tr>
   )
 }
 
@@ -107,20 +109,15 @@ export function DestinationsTable({
 }: DestinationsTableProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[var(--color-border)]">
+      <Table>
+        <Thead>
+          <Tr>
             {["Name", "Type", "Status", "Filters", "Last updated", "Actions"].map((h) => (
-              <th
-                key={h}
-                className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-              >
-                {h}
-              </th>
+              <Th key={h}>{h}</Th>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border-divider)]">
+          </Tr>
+        </Thead>
+        <Tbody>
           {loading ? (
             <>
               <SkeletonRow />
@@ -132,26 +129,27 @@ export function DestinationsTable({
               const testStatus: TestStatus = testStatuses[dest.id] ?? { kind: "idle" }
               const sending = testStatus.kind === "sending"
               return (
-                <tr
+                <Tr
                   key={dest.id}
+                  interactive
                   onClick={() => onRowClick(dest)}
-                  className="cursor-pointer transition-colors hover:bg-[var(--color-bg-hover)]"
+                  className="cursor-pointer"
                 >
                   {/* Name */}
-                  <td className="px-4 py-3 font-medium text-[var(--color-text-primary)]">
+                  <Td className="font-medium text-[var(--color-text-primary)]">
                     {dest.name}
-                  </td>
+                  </Td>
                   {/* Type */}
-                  <td className="px-4 py-3">
+                  <Td>
                     <span className="flex items-center gap-1.5">
                       <DestinationTypeIcon type={dest.destination_type} />
                       <span className="capitalize text-[var(--color-text-secondary)]">
                         {dest.destination_type}
                       </span>
                     </span>
-                  </td>
+                  </Td>
                   {/* Status */}
-                  <td className="px-4 py-3">
+                  <Td>
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold ${
                         dest.enabled
@@ -167,54 +165,53 @@ export function DestinationsTable({
                       />
                       {dest.enabled ? "Active" : "Disabled"}
                     </span>
-                  </td>
+                  </Td>
                   {/* Filters */}
-                  <td className="px-4 py-3 text-[var(--color-text-secondary)] text-xs">
+                  <Td className="text-[var(--color-text-secondary)] text-xs">
                     {filterSummary(dest)}
-                  </td>
+                  </Td>
                   {/* Last updated */}
-                  <td className="px-4 py-3 text-[var(--color-text-tertiary)] text-xs">
+                  <Td className="text-[var(--color-text-tertiary)] text-xs">
                     {relativeTime(dest.updated_at)}
-                  </td>
+                  </Td>
                   {/* Actions */}
-                  <td
-                    className="px-4 py-3"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <Td onClick={(e) => e.stopPropagation()}>
                     <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
+                      <Button
+                        variant="ghost"
+                        size="xs"
                         onClick={() => onEdit(dest)}
-                        className="rounded px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-accent)]"
+                        className="text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)] hover:text-[var(--color-accent)]"
                       >
                         Edit
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
                         onClick={() => onTest(dest)}
                         disabled={sending}
                         aria-label={`Send test notification to ${dest.name}`}
-                        className="rounded px-2 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-border-strong)]"
                       >
                         {sending ? "Sending…" : "Test"}
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="xs"
                         onClick={() => onDelete(dest)}
                         disabled={deletingId === dest.id}
-                        className="rounded px-2 py-1 text-xs font-medium text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical)]/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-severity-critical)]"
+                        className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
                       >
                         {deletingId === dest.id ? "Deleting…" : "Delete"}
-                      </button>
+                      </Button>
                       <TestStatusInline status={testStatus} />
                     </div>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               )
             })
           )}
-        </tbody>
-      </table>
+        </Tbody>
+      </Table>
     </div>
   )
 }

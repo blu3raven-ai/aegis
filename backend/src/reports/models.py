@@ -13,7 +13,7 @@ class FindingsReportFilters(BaseModel):
 
 class GenerateReportRequest(BaseModel):
     report_type: Literal["findings", "posture"]
-    format: Literal["json", "csv"] = "json"
+    format: Literal["json", "csv", "pdf"] = "json"
     title: str | None = None
     filters: FindingsReportFilters | None = None
     # Compliance opt-in — when true, the report includes archived findings
@@ -24,7 +24,6 @@ class GenerateReportRequest(BaseModel):
 
 class ReportSummary(BaseModel):
     id: int
-    org: str
     title: str
     report_type: str
     format: str
@@ -45,3 +44,47 @@ class ReportDetail(ReportSummary):
 class ReportsListResponse(BaseModel):
     reports: list[ReportSummary]
     total: int
+
+
+class ScheduledReportCreate(BaseModel):
+    name: str
+    report_type: Literal["findings", "posture"]
+    format: Literal["json", "csv", "pdf"]
+    schedule_type: Literal["simple", "cron"]
+    schedule_value: str
+    filters: dict | None = None
+    destination_ids: list[int] = []
+    enabled: bool = True
+
+
+class ScheduledReportUpdate(BaseModel):
+    name: str | None = None
+    report_type: Literal["findings", "posture"] | None = None
+    format: Literal["json", "csv", "pdf"] | None = None
+    schedule_type: Literal["simple", "cron"] | None = None
+    schedule_value: str | None = None
+    filters: dict | None = None
+    destination_ids: list[int] | None = None
+    enabled: bool | None = None
+
+
+class ScheduledReportResponse(BaseModel):
+    id: int
+    name: str
+    report_type: str
+    format: str
+    schedule_type: str
+    schedule_value: str
+    filters: dict
+    destination_ids: list[int]
+    created_by: str
+    enabled: bool
+    last_run_at: str | None
+    last_run_status: str | None
+    last_run_error: str | None
+    created_at: str
+    updated_at: str
+
+
+class ScheduledReportsListResponse(BaseModel):
+    items: list[ScheduledReportResponse]

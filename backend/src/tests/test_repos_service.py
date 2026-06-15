@@ -154,7 +154,41 @@ def test_coverage_status_in_summary():
 
 def test_get_repo_not_found():
     with patch("src.repos.service.run_db", return_value=None):
-        result = RepoService.get_repo(_FAKE_ASSET_ID)
+        result = RepoService.get_repo(_FAKE_ASSET_ID, asset_ids=[_FAKE_ASSET_ID])
+    assert result is None
+
+
+def test_get_repo_blocked_when_asset_not_in_scope():
+    """Asset exists but viewer's accessible asset_ids don't include it → None (404)."""
+    import asyncio
+    from src.repos.service import _get_repo_async
+
+    captured = {"queried": False}
+
+    class _FakeSession:
+        async def execute(self, *args, **kwargs):
+            captured["queried"] = True
+            raise AssertionError("DB must not be hit when asset is out of scope")
+
+    result = asyncio.run(
+        _get_repo_async(_FakeSession(), asset_id=_FAKE_ASSET_ID, asset_ids=[_FAKE_ASSET_ID_2])
+    )
+    assert result is None
+    assert captured["queried"] is False
+
+
+def test_get_repo_blocked_when_no_team_membership():
+    """Empty asset_ids (no team membership) → None without DB lookup."""
+    import asyncio
+    from src.repos.service import _get_repo_async
+
+    class _FakeSession:
+        async def execute(self, *args, **kwargs):
+            raise AssertionError("DB must not be hit for empty scope")
+
+    result = asyncio.run(
+        _get_repo_async(_FakeSession(), asset_id=_FAKE_ASSET_ID, asset_ids=[])
+    )
     assert result is None
 
 

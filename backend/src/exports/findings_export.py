@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Asset, Finding
 from src.shared.archived_filter import exclude_archived, include_archived
+from src.shared.scope import apply_scope
 
 # Columns emitted in every export — ordered for human readability.
 EXPORT_COLUMNS = [
@@ -96,6 +97,7 @@ def _finding_to_row(finding: Finding) -> dict[str, Any]:
 
 async def count_findings(
     filters: FindingFilters,
+    asset_ids: list[str],
     session: AsyncSession,
     include_archived_rows: bool = False,
 ) -> int:
@@ -104,6 +106,7 @@ async def count_findings(
     stmt = select(func.count()).select_from(Finding)
     if where:
         stmt = stmt.where(and_(*where))
+    stmt = apply_scope(stmt, asset_ids, column=Finding.asset_id)
     if include_archived_rows:
         stmt = include_archived(stmt)
     else:
@@ -114,6 +117,7 @@ async def count_findings(
 
 async def stream_findings_csv(
     filters: FindingFilters,
+    asset_ids: list[str],
     session: AsyncSession,
     include_archived_rows: bool = False,
 ) -> AsyncIterator[bytes]:
@@ -128,6 +132,7 @@ async def stream_findings_csv(
     stmt = select(Finding).order_by(Finding.id)
     if where:
         stmt = stmt.where(and_(*where))
+    stmt = apply_scope(stmt, asset_ids, column=Finding.asset_id)
     # Same default-exclude contract as the /findings list and reports — archived
     # rows are hidden unless the caller explicitly opts in.
     if include_archived_rows:
@@ -148,6 +153,7 @@ async def stream_findings_csv(
 
 async def stream_findings_json(
     filters: FindingFilters,
+    asset_ids: list[str],
     session: AsyncSession,
     include_archived_rows: bool = False,
 ) -> AsyncIterator[bytes]:
@@ -160,6 +166,7 @@ async def stream_findings_json(
     stmt = select(Finding).order_by(Finding.id)
     if where:
         stmt = stmt.where(and_(*where))
+    stmt = apply_scope(stmt, asset_ids, column=Finding.asset_id)
     if include_archived_rows:
         stmt = include_archived(stmt)
     else:

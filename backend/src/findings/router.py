@@ -28,7 +28,7 @@ from src.settings.audit import record_event
 from src.settings.router import require_permission
 from src.settings.team_access import actor_user_id
 from src.shared.lifecycle import VALID_DISMISS_REASONS, bulk_dismiss, dismiss_finding
-from src.shared.scope import get_user_asset_ids
+from src.shared.scope import get_user_asset_ids, resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1", tags=["findings"])
 
@@ -87,6 +87,10 @@ async def list_findings_endpoint(
     epss_min: float | None = Query(None, ge=0.0, le=1.0, description="Minimum EPSS percentile"),
     risk_score_min: int | None = Query(None, ge=0, le=100, description="Minimum risk score (0-100)"),
     assignee: str | None = Query(None, max_length=255, description="Filter to findings assigned to this user id"),
+    verdict: str | None = Query(
+        None,
+        description="LLM verification verdict filter: confirmed | needs_verify | possible | ruled_out | legacy | all. Default hides ruled_out.",
+    ),
 ) -> dict[str, Any]:
     """Return a cursor-paginated list of findings across all scanners.
 
@@ -120,6 +124,7 @@ async def list_findings_endpoint(
                 risk_score_min=risk_score_min,
                 assignee_user_id=assignee,
                 page=page,
+                verdict=verdict,
             )
             return await list_findings(filters, session)
     except ValueError as exc:
@@ -140,18 +145,21 @@ async def dismiss_finding_by_id_endpoint(finding_id: int, request: Request) -> d
             detail=f"Invalid dismiss reason. Must be one of: {sorted(VALID_DISMISS_REASONS)}",
         )
 
+    asset_ids = await resolve_asset_ids_from_request(request)
+
     async with get_session() as session:
         result = await session.execute(select(Finding).where(Finding.id == finding_id))
         finding = result.scalars().first()
 
-    if finding is None:
+    # 404 (not 403) when the caller can't see the asset — avoids leaking existence.
+    # Secrets findings (asset_id=NULL) have no per-source isolation yet and are
+    # not surfaced through the asset-scoped /findings list, so they are out of
+    # scope for this endpoint.
+    if finding is None or not finding.asset_id or finding.asset_id not in asset_ids:
         raise HTTPException(status_code=404, detail="Finding not found")
 
     user_id = actor_user_id(request) or "unknown"
-    if finding.asset_id:
-        dismiss_finding(finding.tool, finding.identity_key, reason, user_id, comment, asset_id=finding.asset_id)
-    else:
-        dismiss_finding(finding.tool, finding.identity_key, reason, user_id, comment, org=finding.org)
+    dismiss_finding(finding.tool, finding.identity_key, reason, user_id, comment, asset_id=finding.asset_id)
     return {"ok": True}
 
 
@@ -180,27 +188,25 @@ async def bulk_dismiss_findings_endpoint(request: Request) -> dict[str, Any]:
             detail=f"Invalid dismiss reason. Must be one of: {sorted(VALID_DISMISS_REASONS)}",
         )
 
+    asset_ids = await resolve_asset_ids_from_request(request)
+    scope = set(asset_ids)
+
     async with get_session() as session:
         result = await session.execute(select(Finding).where(Finding.id.in_(ids)))
         rows = result.scalars().all()
 
-    # Group identity_keys by (tool, asset_id) for asset-scoped dismiss.
-    # Secrets findings have asset_id=NULL and are grouped by tool alone.
+    # Drop findings whose asset is outside the caller's scope (silently — no
+    # 403 to avoid leaking which ids exist). Secrets findings (asset_id=NULL)
+    # are not surfaced through the asset-scoped list and are excluded here too.
     groups_asset: dict[tuple[str, str], list[str]] = defaultdict(list)
-    groups_secrets: dict[str, list[str]] = defaultdict(list)  # tool -> keys
     for f in rows:
-        if f.asset_id:
+        if f.asset_id and f.asset_id in scope:
             groups_asset[(f.tool, f.asset_id)].append(f.identity_key)
-        else:
-            groups_secrets[f.tool].append(f.identity_key)
 
     user_id = actor_user_id(request) or "unknown"
     updated_total = 0
     for (tool, asset_id), keys in groups_asset.items():
         updated_total += bulk_dismiss(tool, keys, reason, user_id, comment, asset_ids=[asset_id])
-    for tool, keys in groups_secrets.items():
-        # Secrets have no asset_id; bulk_dismiss with secrets=True uses NULL asset_id path
-        updated_total += bulk_dismiss(tool, keys, reason, user_id, comment, secrets=True)
 
     return {"ok": True, "updated": updated_total}
 
@@ -221,9 +227,10 @@ async def assign_finding_endpoint(finding_id: int, request: Request) -> dict[str
     if raw is not None and not isinstance(raw, str):
         raise HTTPException(status_code=400, detail="assignee_user_id must be a string or null")
 
+    asset_ids = await resolve_asset_ids_from_request(request)
     try:
         async with get_session() as session:
-            finding, previous = await assign_finding(finding_id, raw, session)
+            finding, previous = await assign_finding(finding_id, raw, session, asset_ids)
             payload = _finding_to_dict(finding)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

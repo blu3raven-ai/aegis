@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { addOrganisationContainerImage, removeOrganisationContainerImage, searchOrganisationContainerImages } from "@/lib/client/settings-api"
+import { Button } from "@/components/ui/Button"
 import type { OrganisationTeam, ResourceSharingIndex } from "./team-types"
 import { ResourceAutocomplete } from "./ResourceAutocomplete"
 
@@ -70,14 +71,15 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
                   </span>
                 )}
               </div>
-              <button
+              <Button
                 disabled={!canEdit}
-                type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => void removeImage(image.image)}
-                className="rounded-lg border border-[var(--color-severity-critical-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical-subtle)] disabled:opacity-40"
+                className="border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
               >
                 Remove
-              </button>
+              </Button>
             </div>
           )
         })}
@@ -97,14 +99,16 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
             onChange={(next) => void updateValue(next)}
             onPick={(next) => void addImage(next)}
           />
-          <button
+          <Button
+            variant="primary"
+            size="md"
             disabled={!canEdit || !value.trim() || submitting}
-            type="button"
             onClick={() => void addImage()}
-            className="w-full rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            isLoading={submitting}
+            className="w-full"
           >
             {submitting ? "Adding..." : "Add image"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

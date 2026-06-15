@@ -40,8 +40,10 @@ Content-Type mirrors the format:
   spdx-json        → application/spdx+json
   spdx-tag-value   → text/plain
 
-Authentication is enforced by the main.py JWT middleware — no additional
-auth layer needed here.
+Authentication is enforced by the main.py JWT middleware. Each endpoint
+additionally gates on `view_findings` and scopes the lookup to assets the
+caller's team can access — out-of-scope repos/digests return 404 to avoid
+leaking existence.
 
 Convenience path-param aliases (kept for backward compatibility with spec §18):
   GET /api/v1/sboms/repo/{repo_id}         → redirects to ?repo=
@@ -55,16 +57,18 @@ import re
 from datetime import datetime, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import Response
 from sqlalchemy import select
 
 from src.db.helpers import run_db
-from src.db.models import Sbom
+from src.db.models import Asset, Sbom
 from src.sbom.diff import diff_sboms
 from src.sbom.exporter import SbomExporter, UnsupportedFormatError, SUPPORTED_FORMATS
+from src.settings.router import require_permission
 from src.shared.object_store import list_objects, download_json
 from src.shared.sbom_storage import download_from_minio
+from src.shared.scope import resolve_asset_ids_from_request
 
 
 router = APIRouter(prefix="/api/v1/sboms", tags=["sbom-export"])
@@ -124,7 +128,8 @@ def _parse_repo_id(repo_id: str) -> tuple[str, str]:
 # ------------------------------------------------------------------
 
 @router.get("/export")
-def export_sbom(
+async def export_sbom(
+    request: Request,
     repo: Annotated[str | None, Query()] = None,
     image: Annotated[str | None, Query()] = None,
     format: Annotated[str, Query()] = "cyclonedx-json",
@@ -133,6 +138,7 @@ def export_sbom(
 
     Pass exactly one of ``?repo=owner/name`` or ``?image=sha256:…``.
     """
+    require_permission(request, "view_findings")
     if repo is None and image is None:
         raise HTTPException(
             status_code=400,
@@ -145,14 +151,16 @@ def export_sbom(
         )
 
     fmt = _resolve_format(format)
+    asset_ids = await resolve_asset_ids_from_request(request)
 
     if repo is not None:
-        return _export_repo_sbom(repo, fmt)
-    return _export_image_sbom(image, fmt)  # type: ignore[arg-type]
+        return _export_repo_sbom(repo, fmt, asset_ids)
+    return _export_image_sbom(image, fmt, asset_ids)  # type: ignore[arg-type]
 
 
 @router.get("/diff")
-def sbom_diff(
+async def sbom_diff(
+    request: Request,
     repo_id: Annotated[str | None, Query(description="Repository id (owner/name)")] = None,
     from_run_id: Annotated[str | None, Query(description="Source run_id")] = None,
     to_run_id: Annotated[str | None, Query(description="Target run_id")] = None,
@@ -165,18 +173,25 @@ def sbom_diff(
     the same repository, or (image_digest_from + image_digest_to) to compare
     two container image SBOMs.
     """
+    require_permission(request, "view_findings")
+    asset_ids = await resolve_asset_ids_from_request(request)
     if repo_id:
         if not from_run_id or not to_run_id:
             raise HTTPException(
                 status_code=400,
                 detail="from_run_id and to_run_id are required when repo_id is provided.",
             )
+        if not _repo_in_scope(repo_id, asset_ids):
+            raise HTTPException(status_code=404, detail="One or both SBOMs not found.")
         org, repo = _parse_repo_id(repo_id)
         from_sbom = _fetch_sbom_by_run(org, from_run_id, repo)
         to_sbom = _fetch_sbom_by_run(org, to_run_id, repo)
     elif image_digest_from and image_digest_to:
-        from_sbom, _ = _fetch_container_sbom_by_digest(image_digest_from)
-        to_sbom, _ = _fetch_container_sbom_by_digest(image_digest_to)
+        from_sbom, _, from_asset = _fetch_container_sbom_by_digest(image_digest_from)
+        to_sbom, _, to_asset = _fetch_container_sbom_by_digest(image_digest_to)
+        scope = set(asset_ids)
+        if (from_asset and from_asset not in scope) or (to_asset and to_asset not in scope):
+            raise HTTPException(status_code=404, detail="One or both SBOMs not found.")
     else:
         raise HTTPException(
             status_code=400,
@@ -196,11 +211,16 @@ def sbom_diff(
 
 
 @router.get("/history")
-def list_sbom_history(
+async def list_sbom_history(
+    request: Request,
     repo: Annotated[str, Query()],
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
 ) -> list[dict]:
     """List historical SBOM runs for a repository."""
+    require_permission(request, "view_findings")
+    asset_ids = await resolve_asset_ids_from_request(request)
+    if not _repo_in_scope(repo, asset_ids):
+        return []
     return _list_repo_history(repo, limit)
 
 
@@ -213,37 +233,71 @@ def list_sbom_history(
 # ------------------------------------------------------------------
 
 @router.get("/repo/{repo_id:path}/history")
-def list_repo_sbom_history_path(
+async def list_repo_sbom_history_path(
+    request: Request,
     repo_id: str,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
 ) -> list[dict]:
     """List historical SBOM runs for a repository (path-param alias)."""
+    require_permission(request, "view_findings")
+    asset_ids = await resolve_asset_ids_from_request(request)
+    if not _repo_in_scope(repo_id, asset_ids):
+        return []
     return _list_repo_history(repo_id, limit)
 
 
 @router.get("/repo/{repo_id:path}")
-def export_repo_sbom_path(
+async def export_repo_sbom_path(
+    request: Request,
     repo_id: str,
     format: Annotated[str, Query(alias="format")] = "cyclonedx-json",
 ) -> Response:
     """Export the latest SBOM for a repository (path-param alias)."""
+    require_permission(request, "view_findings")
+    asset_ids = await resolve_asset_ids_from_request(request)
     fmt = _resolve_format(format)
-    return _export_repo_sbom(repo_id, fmt)
+    return _export_repo_sbom(repo_id, fmt, asset_ids)
 
 
 @router.get("/image/{image_digest:path}")
-def export_image_sbom_path(
+async def export_image_sbom_path(
+    request: Request,
     image_digest: str,
     format: Annotated[str, Query(alias="format")] = "cyclonedx-json",
 ) -> Response:
     """Export the SBOM for a container image digest (path-param alias)."""
+    require_permission(request, "view_findings")
+    asset_ids = await resolve_asset_ids_from_request(request)
     fmt = _resolve_format(format)
-    return _export_image_sbom(image_digest, fmt)
+    return _export_image_sbom(image_digest, fmt, asset_ids)
 
 
 # ------------------------------------------------------------------
 # Internal helpers — shared by both route styles
 # ------------------------------------------------------------------
+
+def _repo_in_scope(repo_id: str, asset_ids: list[str]) -> bool:
+    """Return True if `repo_id` (owner/name) names an Asset the caller can see.
+
+    Matches the repo Asset by `display_name` (the canonical owner/name form
+    used everywhere in the UI) and intersects with the viewer's scope. Empty
+    scope is fail-closed.
+    """
+    if not asset_ids:
+        return False
+
+    async def _query(session):
+        result = await session.execute(
+            select(Asset.id)
+            .where(Asset.display_name == repo_id)
+            .where(Asset.type == "repo")
+            .where(Asset.id.in_(asset_ids))
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    return run_db(_query) is not None
+
 
 def _latest_repo_sbom_key(org: str, repo: str) -> str | None:
     """Return the MinIO key for the latest SBOM of a repo, or None if absent.
@@ -266,15 +320,15 @@ def _fetch_sbom_by_run(org: str, run_id: str, repo: str) -> dict[str, Any] | Non
     return download_json(key)
 
 
-def _fetch_container_sbom_by_digest(image_digest: str) -> tuple[dict[str, Any] | None, str | None]:
+def _fetch_container_sbom_by_digest(image_digest: str) -> tuple[dict[str, Any] | None, str | None, str | None]:
     """Fetch a container SBOM by image digest via the Sbom index table.
 
     Mirrors the blob uploaded by backend/src/containers/sbom_store.py during ingest.
 
-    Returns: (sbom, reason)
-      - (sbom_dict, None) on success
-      - (None, "no_row") if image_digest not in Sbom table
-      - (None, "blob_missing") if Sbom row exists but MinIO blob is absent
+    Returns: (sbom, reason, asset_id)
+      - (sbom_dict, None, asset_id) on success
+      - (None, "no_row", None) if image_digest not in Sbom table
+      - (None, "blob_missing", asset_id) if Sbom row exists but MinIO blob is absent
     """
     async def _query(session):
         result = await session.execute(
@@ -284,20 +338,26 @@ def _fetch_container_sbom_by_digest(image_digest: str) -> tuple[dict[str, Any] |
 
     row = run_db(_query)
     if row is None:
-        return None, "no_row"
+        return None, "no_row", None
     sbom = download_from_minio(row.s3_key)
     if sbom is None:
-        return None, "blob_missing"
-    return sbom, None
+        return None, "blob_missing", row.asset_id
+    return sbom, None, row.asset_id
 
 
-def _export_repo_sbom(repo_id: str, fmt: str) -> Response:
+def _export_repo_sbom(repo_id: str, fmt: str, asset_ids: list[str]) -> Response:
     """Fetch + export the latest SBOM for a repository."""
     # Strip a trailing /history suffix that could arrive via the path alias
     # if FastAPI routing resolves to this handler instead of the history one.
     # (Defensive — should not happen with correct route ordering.)
     if repo_id.endswith("/history"):
         repo_id = repo_id[: -len("/history")]
+
+    if not _repo_in_scope(repo_id, asset_ids):
+        raise HTTPException(
+            status_code=404,
+            detail=f"No SBOM found for repository '{repo_id}'.",
+        )
 
     org, repo = _parse_repo_id(repo_id)
     key = _latest_repo_sbom_key(org, repo)
@@ -318,19 +378,22 @@ def _export_repo_sbom(repo_id: str, fmt: str) -> Response:
     return _render(sbom, fmt, repo_id)
 
 
-def _export_image_sbom(image_digest: str, fmt: str) -> Response:
+def _export_image_sbom(image_digest: str, fmt: str, asset_ids: list[str]) -> Response:
     """Fetch + export the SBOM for a container image digest."""
-    sbom, reason = _fetch_container_sbom_by_digest(image_digest)
+    sbom, reason, asset_id = _fetch_container_sbom_by_digest(image_digest)
+
+    # 404 (not 403) when the caller can't see the asset — avoids leaking existence.
+    not_found_msg = f"No SBOM found for image digest '{image_digest}'."
+    if asset_id is not None and asset_id not in asset_ids:
+        raise HTTPException(status_code=404, detail=not_found_msg)
 
     if sbom is None:
-        if reason == "blob_missing":
-            detail = f"SBOM blob not found for image digest '{image_digest}'."
-        else:  # reason == "no_row"
-            detail = f"No SBOM found for image digest '{image_digest}'."
-        raise HTTPException(
-            status_code=404,
-            detail=detail,
+        detail = (
+            f"SBOM blob not found for image digest '{image_digest}'."
+            if reason == "blob_missing"
+            else not_found_msg
         )
+        raise HTTPException(status_code=404, detail=detail)
 
     short_digest = image_digest.replace("sha256:", "sha256-")[:20]
     return _render(sbom, fmt, short_digest)

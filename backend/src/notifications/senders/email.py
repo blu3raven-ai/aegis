@@ -20,7 +20,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any
 
-from src.notifications.senders.base import BaseSender, SendResult
+from src.connectors.base import BaseSender, SendResult, TestResult
+from src.connectors.registry import register_connector
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,17 @@ def _smtp_configured() -> bool:
     return bool(os.environ.get("SMTP_HOST"))
 
 
+@register_connector
 class EmailSender(BaseSender):
+    id = "email"
+    name = "Email"
+    category = "notification"
+    description = "Send finding digests to an email distribution list"
+    version = "v1.0"
+    status = "stable"
+    icon_slug = "email"
+    href = "/notifications"
+
     def send(self, payload: dict[str, Any], config: dict[str, Any]) -> SendResult:
         to_addresses: list[str] = config.get("to_addresses") or []
         if not to_addresses:
@@ -73,3 +84,9 @@ class EmailSender(BaseSender):
         except Exception as exc:
             logger.warning("EmailSender.send error: %s", exc)
             return SendResult(success=False, error=str(exc)[:500])
+
+    def test(self) -> TestResult:
+        """OK only when SMTP_HOST is configured. Without it, sends are stubbed."""
+        if not os.environ.get("SMTP_HOST"):
+            return TestResult(ok=False, message="SMTP_HOST is not configured")
+        return TestResult(ok=True)

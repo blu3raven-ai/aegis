@@ -53,12 +53,11 @@ def _utcnow() -> datetime:
 
 
 async def is_kill_switch_active(
-    session: AsyncSession, *, org_id: str, category: str
+    session: AsyncSession, *, category: str
 ) -> bool:
     """Row presence in ``rule_kill_switches`` means the switch is engaged."""
     result = await session.execute(
         select(RuleKillSwitch.id).where(
-            RuleKillSwitch.org_id == org_id,
             RuleKillSwitch.category == category,
         ).limit(1)
     )
@@ -94,20 +93,13 @@ def _snapshot_matched_conditions(
 async def check_auto_dismiss_rules(
     session: AsyncSession,
     *,
-    org_id: str,
     subject: RuleFindingSubject,
     tool: str,
     identity_key: str,
     asset_id: str | None = None,
 ) -> AutoDismissMatch | None:
-    """Evaluate enabled auto-dismiss rules against an incoming finding subject.
-
-    On match: writes the Decision row (side effect) and returns metadata so
-    the caller can write the corresponding FindingEvent once the Finding
-    row exists. Returns None when no rule matches, the kill switch is
-    active, the rate alarm trips, or a Decision already exists.
-    """
-    if await is_kill_switch_active(session, org_id=org_id, category="auto_dismiss"):
+    """Evaluate enabled auto-dismiss rules against an incoming finding subject."""
+    if await is_kill_switch_active(session, category="auto_dismiss"):
         return None
 
     if asset_id is not None:
@@ -133,7 +125,6 @@ async def check_auto_dismiss_rules(
         select(Rule).where(
             Rule.category == "auto_dismiss",
             Rule.enabled == True,  # noqa: E712
-            Rule.org_id == org_id,
         ).order_by(Rule.priority.asc(), Rule.id.asc())
     )
     rules = list(rules_q.scalars().all())
@@ -154,14 +145,13 @@ async def check_auto_dismiss_rules(
             continue
 
         if await should_rate_alarm_block(session, rule):
-            dispatch_rate_alarm(rule, org_id=org_id)
+            dispatch_rate_alarm(rule)
             auto_disable_rule(session, rule, reason="rate_alarm_triggered")
             return None
 
         await write_auto_dismiss_decision(
             session,
             tool=tool,
-            org=org_id,
             asset_id=asset_id,
             identity_key=identity_key,
             rule_id=rule.id,

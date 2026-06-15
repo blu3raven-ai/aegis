@@ -38,7 +38,7 @@ export function ImprovementsList({ improvements }: ImprovementsListProps) {
         </p>
       </header>
 
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+      <div className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
         {improvements.map((row) => {
           const sevKey = severityKey(row.severity)
           const sevLetter = SEVERITY_LETTER[sevKey] ?? "?"

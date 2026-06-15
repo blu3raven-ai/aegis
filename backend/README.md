@@ -5,7 +5,7 @@ This FastAPI service provides the backend API for the Security Portal.
 ## Architecture
 
 - **SCA (Software Composition Analysis)**: `/sca/api/*` - Dependabot alerts, cache management
-- **Secrets Scanning**: `/secrets/api/*` - snapshot, lifecycle, code preview, and review updates
+- **Secrets Scanning**: `/api/v1/secrets/*` - snapshot, lifecycle, code preview, and review updates
 
 The Next.js frontend proxies the FastAPI-owned product routes via rewrites in `next.config.ts`.
 Secrets scan start/cancel, latest run polling, and active run probing are now backend-owned in FastAPI.

@@ -5,11 +5,12 @@ import type { SourceCategory, SourceConnection } from "@/lib/shared/sources-type
 import { CATEGORY_LABELS, CATEGORY_ITEM_LABELS } from "@/lib/shared/sources-types"
 import { listSourceConnections } from "@/lib/client/sources-api"
 import { ConnectionCard } from "./ConnectionCard"
-import { AddConnectionModal } from "./AddConnectionModal"
+import { AddConnectionModal } from "@/components/sources/AddConnectionModal"
 import { useLicense } from "@/lib/client/license/client"
 import { TIER_LABELS } from "@/lib/shared/license/types"
 import type { Tier } from "@/lib/shared/license/types"
 import { useSSE } from "@/components/providers/SSEProvider"
+import { Button } from "@/components/ui/Button"
 import type { SourceSyncedEvent } from "@/lib/shared/sse-types"
 
 // ─── Category descriptions ────────────────────────────────────────────────────
@@ -102,18 +103,20 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
         </div>
         {canEdit && (
           <div className="flex shrink-0 flex-col items-end gap-1">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={atLimit ? undefined : () => setShowAddModal(true)}
               disabled={atLimit}
-              className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              leadingIcon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              }
             >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
               Add Connection
-            </button>
+            </Button>
             {atLimit && nextTier && (
               <a href="/settings/license" className="text-[11px] text-[var(--color-accent)] hover:underline">
                 Requires {TIER_LABELS[nextTier]} plan
@@ -167,13 +170,11 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
             {CATEGORY_EMPTY_HINTS[category]}
           </p>
           {canEdit && (
-            <button
-              type="button"
-              onClick={() => setShowAddModal(true)}
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
-            >
-              Add your first connection
-            </button>
+            <div className="mt-5 inline-flex">
+              <Button variant="primary" size="md" onClick={() => setShowAddModal(true)}>
+                Add your first connection
+              </Button>
+            </div>
           )}
         </div>
       ) : (
@@ -199,7 +200,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
       {/* Add connection modal */}
       {showAddModal && (
         <AddConnectionModal
-          category={category}
+          lockedCategory={category}
           onClose={() => setShowAddModal(false)}
           onCreated={() => {
             setShowAddModal(false)

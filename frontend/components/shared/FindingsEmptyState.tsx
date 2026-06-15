@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/Button"
 
 export function FindingsEmptyState({
   message = "No findings match the current filters.",
@@ -23,13 +24,14 @@ export function FindingsEmptyState({
       </svg>
       <p className="text-sm font-medium text-[var(--color-text-primary)]">{message}</p>
       {onClearFilters && (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onClearFilters}
-          className="mt-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          className="mt-1"
         >
           Clear filters
-        </button>
+        </Button>
       )}
     </div>
   )

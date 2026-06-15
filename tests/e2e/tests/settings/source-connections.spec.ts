@@ -4,7 +4,7 @@ import { mockCurrentUser } from "../../fixtures/mock-api"
 test.describe("Source connections settings", () => {
   test.beforeEach(async ({ page }) => {
     await mockCurrentUser(page)
-    await page.route("**/settings/api/sources**", (route) =>
+    await page.route("**/api/v1/settings/sources**", (route) =>
       route.fulfill({
         json: {
           connections: [

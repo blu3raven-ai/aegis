@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { saveToolSettings } from "@/lib/client/settings-api"
-import { SaveBar } from "../SaveBar"
+import { useSaveBarSection } from "../save-bar/SaveBarProvider"
 import { PrerequisitePanel } from "../PrerequisitePanel"
 import type { PrerequisiteItem } from "@/lib/shared/prerequisite-utils"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { Input } from "@/components/ui/Input"
 
 interface SecretsSetupFormProps {
   initialValues: {
@@ -94,6 +95,14 @@ export function SecretsSetupForm({
     setSaved(false)
   }
 
+  useSaveBarSection({
+    id: "secrets-setup",
+    dirty: isDirty,
+    saving: isPending,
+    onSave: handleSave,
+    onDiscard: handleDiscard,
+  })
+
   return (
     <div className="space-y-6">
       {!canEdit && (
@@ -113,12 +122,11 @@ export function SecretsSetupForm({
       {/* Default Scan Depth — primary config, shown first */}
       <SettingsCard eyebrow="Scanner Config" title="Default Scan Depth" subtitle="Choose the default scanning depth for new scans.">
       <fieldset disabled={!canEdit} className="space-y-3 disabled:opacity-50">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(
             [
               { value: "light", label: "Light", desc: "Scans current code only. Fast — typically completes in minutes." },
               { value: "deep", label: "Deep", desc: "Scans full git history for leaked secrets. Thorough but can take hours on large repos." },
-              { value: "ai_enhanced", label: "AI Enhanced", desc: "Scans full git history with AI-assisted classification to reduce false positives." },
             ] as const
           ).map((opt) => (
             <button
@@ -200,12 +208,11 @@ export function SecretsSetupForm({
               <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                 Scan concurrency
               </label>
-              <input
+              <Input
                 type="number"
                 min="1"
                 value={values.scanConcurrency}
                 onChange={(e) => setValues({ ...values, scanConcurrency: e.target.value })}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
               />
               <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
                 Maximum repositories scanned in parallel.
@@ -241,11 +248,11 @@ export function SecretsSetupForm({
                       <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                         Scan Time (Daily)
                       </label>
-                      <input
+                      <Input
                         type="time"
                         value={values.rerunScheduleValue}
                         onChange={(e) => setValues({ ...values, rerunScheduleValue: e.target.value })}
-                        className="w-full max-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                        className="max-w-[150px]"
                       />
                     </div>
                   ) : (
@@ -253,12 +260,12 @@ export function SecretsSetupForm({
                       <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                         Cron Expression
                       </label>
-                      <input
+                      <Input
                         type="text"
                         value={values.rerunScheduleValue}
                         onChange={(e) => setValues({ ...values, rerunScheduleValue: e.target.value })}
                         placeholder="e.g. 0 2 * * *"
-                        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 font-mono"
+                        className="font-mono"
                       />
                       <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
                         Standard cron format (min hour day month weekday).
@@ -297,13 +304,6 @@ export function SecretsSetupForm({
         </div>
       )}
 
-      <SaveBar
-        saved={saved}
-        dirty={isDirty}
-        onSave={handleSave}
-        onDiscard={handleDiscard}
-        saving={isPending}
-      />
     </div>
   )
 }

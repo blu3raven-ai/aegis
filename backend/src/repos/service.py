@@ -1,6 +1,6 @@
 """Repos asset management service — Phase 27.
 
-Aggregates repo scan state from the `repos` table, scan_runs, and findings
+Aggregates repo scan state from the `assets` table, scan_runs, and findings
 into RepoSummary / RepoDetail objects consumed by the REST endpoints.
 """
 from __future__ import annotations
@@ -12,7 +12,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.helpers import run_db
-from src.db.models import Asset, Repo, ScanRun, Finding
+from src.db.models import Asset, ScanRun, Finding
 from src.shared.archived_filter import exclude_archived
 
 # Scanners considered for coverage tracking — matches tool column values in scan_runs.
@@ -88,21 +88,20 @@ async def _list_repos_async(
     if not asset_ids:
         return []
 
-    # Fetch repos scoped to the provided asset_ids, joined to Asset for display_name.
+    # Fetch assets scoped to the provided asset_ids — scan state lives on Asset.
     stmt = (
-        select(Repo, Asset.display_name)
-        .join(Asset, Repo.asset_id == Asset.id)
-        .where(Repo.asset_id.in_(asset_ids))
-        .order_by(Repo.updated_at.desc())
+        select(Asset)
+        .where(Asset.id.in_(asset_ids))
+        .order_by(Asset.updated_at.desc())
         .limit(limit)
     )
     result = await session.execute(stmt)
-    rows = result.all()
+    assets = result.scalars().all()
 
-    if not rows:
+    if not assets:
         return []
 
-    repo_asset_ids = [r.Repo.asset_id for r in rows]
+    repo_asset_ids = [a.id for a in assets]
 
     since_cutoff: datetime | None = None
     if since_days:
@@ -140,10 +139,8 @@ async def _list_repos_async(
         finding_map.setdefault(asset_id, {})[severity or "unknown"] = cnt
 
     summaries: list[RepoSummary] = []
-    for row in rows:
-        r = row.Repo
-        display_name = row.display_name
-        repo_tool_map = scan_run_map.get(r.asset_id, {})
+    for a in assets:
+        repo_tool_map = scan_run_map.get(a.id, {})
         scanners_with_coverage = [
             t for t in _SCANNER_TYPES if t in repo_tool_map
         ]
@@ -152,7 +149,7 @@ async def _list_repos_async(
         tool_timestamps = list(repo_tool_map.values())
         last_scanned_at = max(tool_timestamps) if tool_timestamps else None
 
-        sev_raw = finding_map.get(r.asset_id, {})
+        sev_raw = finding_map.get(a.id, {})
         findings_count_by_severity = {
             "critical": sev_raw.get("critical", 0),
             "high": sev_raw.get("high", 0),
@@ -169,10 +166,10 @@ async def _list_repos_async(
             continue
 
         summaries.append(RepoSummary(
-            asset_id=r.asset_id,
-            display_name=display_name,
-            last_scanned_sha=_truncate(r.last_scanned_sha, 7),
-            manifest_set_hash=_truncate(r.manifest_set_hash, 8),
+            asset_id=a.id,
+            display_name=a.display_name,
+            last_scanned_sha=_truncate(a.last_scanned_sha, 7),
+            manifest_set_hash=_truncate(a.manifest_set_hash, 8),
             last_scanned_at=last_scanned_at,
             findings_count_by_severity=findings_count_by_severity,
             scanners_with_coverage=scanners_with_coverage,
@@ -185,18 +182,17 @@ async def _list_repos_async(
 async def _get_repo_async(
     session: AsyncSession,
     asset_id: str,
+    asset_ids: list[str],
 ) -> RepoDetail | None:
-    result = await session.execute(
-        select(Repo, Asset.display_name)
-        .join(Asset, Repo.asset_id == Asset.id)
-        .where(Repo.asset_id == asset_id)
-    )
-    row = result.one_or_none()
-    if row is None:
+    # Fail-closed: scope to the viewer's accessible asset_ids. An empty list
+    # (no team membership) yields no matches, returning 404 at the router.
+    if not asset_ids or asset_id not in asset_ids:
         return None
-
-    r = row.Repo
-    display_name = row.display_name
+    asset = (await session.execute(
+        select(Asset).where(Asset.id == asset_id)
+    )).scalar_one_or_none()
+    if asset is None:
+        return None
 
     # Scan history: last 10 completed runs across all scanner types for this asset.
     scan_history_result = await session.execute(
@@ -282,10 +278,10 @@ async def _get_repo_async(
     }
 
     return RepoDetail(
-        asset_id=r.asset_id,
-        display_name=display_name,
-        last_scanned_sha=_truncate(r.last_scanned_sha, 7),
-        manifest_set_hash=_truncate(r.manifest_set_hash, 8),
+        asset_id=asset.id,
+        display_name=asset.display_name,
+        last_scanned_sha=_truncate(asset.last_scanned_sha, 7),
+        manifest_set_hash=_truncate(asset.manifest_set_hash, 8),
         last_scanned_at=last_scanned_at,
         findings_count_by_severity=findings_count_by_severity,
         scanners_with_coverage=scanner_tools,
@@ -311,8 +307,8 @@ class RepoService:
         return run_db(_run)
 
     @staticmethod
-    def get_repo(asset_id: str) -> RepoDetail | None:
+    def get_repo(asset_id: str, asset_ids: list[str]) -> RepoDetail | None:
         async def _run(session: AsyncSession) -> RepoDetail | None:
-            return await _get_repo_async(session, asset_id)
+            return await _get_repo_async(session, asset_id, asset_ids)
 
         return run_db(_run)

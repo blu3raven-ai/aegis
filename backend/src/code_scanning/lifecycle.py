@@ -62,8 +62,6 @@ class CodeScanningHooks(LifecycleHooks):
             val = raw.get(key)
             if val:
                 detail[key] = val
-        if raw.get("dataflow_trace"):
-            detail["dataflowTrace"] = raw["dataflow_trace"]
         # Engine is stored on the Finding column (source of truth) — not duplicated here.
         # ruleIds is always a list (length 1 for single-engine, 2+ for merged) so
         # downstream consumers see a uniform shape. ruleId is retained for

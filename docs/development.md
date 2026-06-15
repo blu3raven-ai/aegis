@@ -178,8 +178,9 @@ aegis/
 │
 ├── scanners/                   Scanner Docker images
 │   ├── dependencies/           Syft + Grype + cdxgen
-│   ├── code-scanning/          Opengrep + tree-sitter
-│   ├── secrets/                TruffleHog + BetterLeaks + ONNX classifier
+│   ├── code-scanning/          Semgrep + tree-sitter (with LLM verification)
+│   ├── secrets/                TruffleHog (with LLM verification)
+│   ├── iac/                    Checkov
 │   ├── container/              Syft + Grype (container images)
 │   └── shared/                 Shared scanner utilities (manifest, lib.sh)
 │

@@ -10,7 +10,7 @@ async function globalTeardown() {
     try {
       const manifest = JSON.parse(fs.readFileSync(SEED_MANIFEST, "utf-8"))
       if (manifest?.seeded) {
-        await fetch("http://localhost:8000/test/seed", {
+        await fetch("http://localhost:8000/api/v1/test/seed", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "teardown", manifest }),

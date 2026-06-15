@@ -55,7 +55,7 @@ export function ReleaseDetailPageContent() {
           title="Release scan not found"
           description={scanId}
         />
-        <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-3 px-6 py-16 text-center">
+        <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 px-6 py-16 text-center">
           <p className="text-sm text-[var(--color-text-secondary)]">
             We couldn&apos;t find a release scan with this ID.
           </p>
@@ -81,7 +81,7 @@ export function ReleaseDetailPageContent() {
         title={headerTitle}
         description={headerSub}
       />
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
+      <div className="flex w-full flex-col gap-6 px-6 py-6">
         <ReleaseVerdictCard
           release={release}
           loading={loading}

@@ -1,5 +1,6 @@
 "use client"
 
+import { Input } from "@/components/ui/Input"
 import type { OrganisationTeam } from "./team-types"
 
 interface TeamListProps {
@@ -15,12 +16,11 @@ export function TeamList({ teams, selectedTeamId, query, onQueryChange, onSelect
 
   return (
     <div className="w-full shrink-0 space-y-4 md:sticky md:top-6 md:w-72 md:self-start lg:w-80">
-      <input
+      <Input
         type="search"
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Search teams…"
-        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
       />
 
       <div className="space-y-1 md:max-h-[calc(100vh-12rem)] md:overflow-y-auto md:pr-2">

@@ -29,13 +29,12 @@ def list_audit_events(
     actor_id: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
-    org_id: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> dict[str, Any]:
-    """Return paginated audit events. Requires manage_settings permission."""
+    """Return paginated audit events."""
     require_permission(request, "manage_settings")
 
     if os.getenv("AEGIS_AUDIT_LOG_ENABLED", "true").lower() == "false":
@@ -55,8 +54,6 @@ def list_audit_events(
             stmt = stmt.where(AuditEvent.resource_type == resource_type)
         if resource_id:
             stmt = stmt.where(AuditEvent.resource_id == resource_id)
-        if org_id:
-            stmt = stmt.where(AuditEvent.org_id == org_id)
         if since:
             stmt = stmt.where(AuditEvent.occurred_at >= since)
         if until:

@@ -1,7 +1,15 @@
-import { redirect } from "next/navigation"
+"use client"
 
-export const metadata = { title: "Secret Scanning" }
+import { FindingsBoardView } from "@/components/shared/findings/FindingsBoardView"
+import { FindingsIcon } from "@/lib/shared/ui/page-icons"
 
 export default function SecretsLandingPage() {
-  redirect("/findings?scanner=secrets")
+  return (
+    <FindingsBoardView
+      pageTitle="Secret Scanning"
+      pageIcon={<FindingsIcon />}
+      pageDescription="Exposed secrets detected across your sources."
+      initialScannerFilter="secrets"
+    />
+  )
 }

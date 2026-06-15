@@ -39,7 +39,7 @@ describe("Releases page — list content + filters", () => {
 
   it("links each row to the repo scan deeplink", () => {
     assert.ok(
-      content.includes("`/repos/${encodeURIComponent(release.repo_id)}?scan_id=${encodeURIComponent(release.scan_id)}`"),
+      content.includes("`/sources/${encodeURIComponent(release.repo_id)}?scan_id=${encodeURIComponent(release.scan_id)}`"),
       "row href must point at the repo scan deeplink",
     )
   })
@@ -47,7 +47,7 @@ describe("Releases page — list content + filters", () => {
   it("renders an empty state with a CTA to trigger a release scan", () => {
     assert.match(content, /No release scans yet/)
     assert.match(content, /Trigger a release scan/)
-    assert.match(content, /href="\/repos"/)
+    assert.match(content, /href="\/sources"/)
   })
 
   it("renders a filtered empty state with a clear-filter affordance", () => {
@@ -57,7 +57,7 @@ describe("Releases page — list content + filters", () => {
 })
 
 describe("Releases page — sidebar wiring", () => {
-  it("does not expose /releases in the sidebar (reached via /repos → Pre-release scan)", () => {
+  it("does not expose /releases in the sidebar (reached via /sources → Pre-release scan)", () => {
     assert.doesNotMatch(sidebar, /href:\s*"\/releases"/)
   })
 })

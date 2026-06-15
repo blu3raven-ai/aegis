@@ -50,7 +50,7 @@ function SecretsIcon() {
 
 const SCANNERS: ScannerSpec[] = [
   { key: "dependencies", label: "Dependencies", matchTools: ["grype", "syft", "trivy", "osv"], icon: <DependenciesIcon /> },
-  { key: "code_scanning", label: "Code scanning", matchTools: ["semgrep", "joern", "codeql", "bandit"], icon: <CodeIcon /> },
+  { key: "code_scanning", label: "Code scanning", matchTools: ["semgrep", "codeql", "bandit"], icon: <CodeIcon /> },
   { key: "secrets", label: "Secrets", matchTools: ["gitleaks", "trufflehog"], icon: <SecretsIcon /> },
   { key: "container_scanning", label: "Container", matchTools: ["trivy", "grype", "syft"], icon: <ContainerIcon /> },
 ]

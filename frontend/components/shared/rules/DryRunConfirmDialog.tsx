@@ -15,6 +15,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { DryRunConfirmation } from "@/lib/client/rules-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 interface DryRunConfirmDialogProps {
   open: boolean
@@ -171,54 +174,44 @@ export function DryRunConfirmDialog({
                 Sample matches ({samples.length})
               </h3>
               <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
-                <table className="w-full border-collapse text-sm">
-                  <thead className="bg-[var(--color-surface-raised)]">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
-                        Severity
-                      </th>
-                      <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
-                        Scanner
-                      </th>
-                      <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
-                        Repo
-                      </th>
-                      <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
-                        File
-                      </th>
-                      <th className="px-3 py-2 text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
-                        CVE
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table className="border-collapse">
+                  <Thead>
+                    <Tr>
+                      <Th className="px-3 py-2">Severity</Th>
+                      <Th className="px-3 py-2">Scanner</Th>
+                      <Th className="px-3 py-2">Repo</Th>
+                      <Th className="px-3 py-2">File</Th>
+                      <Th className="px-3 py-2">CVE</Th>
+                    </Tr>
+                  </Thead>
+                  <Tbody divided={false}>
                     {samples.map((m) => (
-                      <tr
+                      <Tr
                         key={m.finding_id}
                         className="border-t border-[var(--color-border)]"
                       >
-                        <td className={`px-3 py-2 text-sm font-medium ${severityClasses(m.severity)}`}>
+                        <Td className={`px-3 py-2 text-sm font-medium ${severityClasses(m.severity)}`}>
                           {m.severity}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-[var(--color-text-primary)]">
+                        </Td>
+                        <Td className="px-3 py-2 text-sm text-[var(--color-text-primary)]">
                           {m.scanner}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-[var(--color-text-primary)]">
+                        </Td>
+                        <Td className="px-3 py-2 text-sm text-[var(--color-text-primary)]">
                           {m.repo_id}
-                        </td>
-                        <td
+                        </Td>
+                        <Td
                           className="max-w-[16rem] truncate px-3 py-2 text-sm text-[var(--color-text-secondary)]"
                           title={m.file_path ?? ""}
                         >
                           {m.file_path ?? "—"}
-                        </td>
-                        <td className="px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+                        </Td>
+                        <Td className="px-3 py-2 text-sm text-[var(--color-text-secondary)]">
                           {m.cve_id ?? "—"}
-                        </td>
-                      </tr>
+                        </Td>
+                      </Tr>
                     ))}
-                  </tbody>
-                </table>
+                  </Tbody>
+                </Table>
               </div>
             </div>
           )}
@@ -230,7 +223,7 @@ export function DryRunConfirmDialog({
             >
               Type the rule name to confirm
             </label>
-            <input
+            <Input
               id="dry-run-typed-confirm"
               ref={inputRef}
               type="text"
@@ -240,7 +233,7 @@ export function DryRunConfirmDialog({
               onChange={(e) => setTyped(e.target.value)}
               placeholder={ruleName}
               disabled={loading}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-severity-critical)] focus:outline-none focus:ring-1 focus:ring-[var(--color-severity-critical)] disabled:opacity-60"
+              invalid
             />
             <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
               Type <span className="font-mono">{ruleName}</span> to enable. This
@@ -259,23 +252,23 @@ export function DryRunConfirmDialog({
         </div>
 
         <div className="flex justify-end gap-3 border-t border-[var(--color-border)] px-6 py-4">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="md"
             onClick={onCancel}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="destructive"
+            size="md"
             disabled={enableDisabled}
             onClick={() => {
               if (result !== null) onConfirm(result.token)
             }}
-            className="rounded-lg bg-[var(--color-severity-critical)] px-4 py-2 text-sm font-semibold text-[var(--color-on-danger)] hover:opacity-90 disabled:opacity-50"
           >
             Enable rule
-          </button>
+          </Button>
         </div>
       </div>
     </>

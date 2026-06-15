@@ -13,7 +13,7 @@ def source_connections(
     info_context: dict[str, Any],
     category: str | None = None,
 ) -> SourceConnectionsResponse:
-    """Mirror of GET /api/settings/api/sources."""
+    """Mirror of GET /api/v1/settings/sources."""
     if not info_context:
         raise GraphQLAuthError("Unauthorized")
 

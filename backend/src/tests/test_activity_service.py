@@ -146,7 +146,7 @@ def test_list_recent_empty():
     with _patch_service_query([]):
         with patch("src.activity.service.run_db", return_value=[]):
             svc = ActivityService()
-            events, cursor = svc.list_recent("acme-org")
+            events, cursor = svc.list_recent(asset_ids=["a1"])
     assert events == []
     assert cursor is None
 
@@ -166,7 +166,7 @@ def test_list_recent_returns_events():
         svc = ActivityService()
         return await svc._query(
             session,
-            org_id="acme-org",
+            asset_ids=["a1"],
             types=None,
             repo_id=None,
             since=None,
@@ -179,7 +179,7 @@ def test_list_recent_returns_events():
         with patch("src.activity.service.run_db") as mock_run_db:
             mock_run_db.return_value = fake_events
             svc = ActivityService()
-            events, cursor = svc.list_recent("acme-org", limit=10)
+            events, cursor = svc.list_recent(asset_ids=["a1"], limit=10)
 
     assert len(events) == 2
     assert events[0].type == "finding.created"
@@ -196,7 +196,7 @@ def test_list_recent_pagination_has_more():
     with patch.object(ActivityService, "_query", AsyncMock(return_value=fake_events)):
         with patch("src.activity.service.run_db", return_value=fake_events):
             svc = ActivityService()
-            events, cursor = svc.list_recent("acme-org", limit=5)
+            events, cursor = svc.list_recent(asset_ids=["a1"], limit=5)
 
     assert len(events) == 5
     assert cursor is not None
@@ -212,7 +212,7 @@ def test_list_recent_no_more_pages():
     with patch.object(ActivityService, "_query", AsyncMock(return_value=fake_events)):
         with patch("src.activity.service.run_db", return_value=fake_events):
             svc = ActivityService()
-            events, cursor = svc.list_recent("acme-org", limit=10)
+            events, cursor = svc.list_recent(asset_ids=["a1"], limit=10)
 
     assert len(events) == 3
     assert cursor is None
@@ -242,7 +242,7 @@ def test_list_recent_type_filter_passed_through():
     with patch.object(ActivityService, "_query", new=lambda self, session, **kw: _fake_query(session, **kw)):
         with patch("src.activity.service.run_db", side_effect=_mock_run_db):
             svc = ActivityService()
-            svc.list_recent("acme-org", types=["finding.created", "scan.completed"])
+            svc.list_recent(asset_ids=["a1"], types=["finding.created", "scan.completed"])
 
     assert called_with.get("types") == ["finding.created", "scan.completed"]
 
@@ -266,7 +266,7 @@ def test_list_recent_repo_filter_passed_through():
     with patch.object(ActivityService, "_query", new=lambda self, session, **kw: _fake_query(session, **kw)):
         with patch("src.activity.service.run_db", side_effect=_mock_run_db):
             svc = ActivityService()
-            svc.list_recent("acme-org", repo_id="my-repo")
+            svc.list_recent(asset_ids=["a1"], repo_id="my-repo")
 
     assert called_with.get("repo_id") == "my-repo"
 
@@ -277,3 +277,13 @@ def test_supported_types_list():
     assert "integration.connected" in SUPPORTED_TYPES
     assert "kev.added" in SUPPORTED_TYPES
     assert "sla.breached" in SUPPORTED_TYPES
+
+
+def test_list_recent_empty_asset_ids_short_circuits():
+    """Empty asset_ids returns ([], None) without touching the DB — fail-closed."""
+    with patch("src.activity.service.run_db") as mock_run_db:
+        svc = ActivityService()
+        events, cursor = svc.list_recent(asset_ids=[])
+    assert events == []
+    assert cursor is None
+    assert mock_run_db.call_count == 0

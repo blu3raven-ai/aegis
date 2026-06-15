@@ -16,7 +16,7 @@ async def test_sse_stream_requires_auth():
     # Use "http://testserver" so TrustedHostMiddleware accepts the Host header.
     # Without a session cookie the SessionAuthMiddleware returns 401.
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        resp = await client.get("/api/events/stream")
+        resp = await client.get("/api/v1/events/stream")
         assert resp.status_code == 401
 
 

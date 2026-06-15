@@ -36,6 +36,14 @@ def _make_app() -> FastAPI:
     return app
 
 
+async def _resolve_assets(_request):
+    return ["asset-1", "asset-2"]
+
+
+async def _resolve_no_assets(_request):
+    return []
+
+
 @asynccontextmanager
 async def _mock_session():
     """Stand-in for src.db.engine.get_session — yields a MagicMock session.
@@ -141,6 +149,7 @@ def test_list_releases_filters_by_repo_id():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.list_releases", new=AsyncMock(side_effect=_capture)),
     ):
         resp = TestClient(_make_app()).get(
@@ -149,10 +158,53 @@ def test_list_releases_filters_by_repo_id():
 
     assert resp.status_code == 200, resp.text
     assert captured["filters"].repo_id == "test-org/repo-1"
-    assert captured["filters"].org_id == "test-org"
+    assert captured["filters"].asset_ids == ["asset-1", "asset-2"]
     body = resp.json()
     assert len(body["releases"]) == 1
     assert body["releases"][0]["repo_id"] == "test-org/repo-1"
+
+
+def test_list_releases_ignores_legacy_org_id_query_param():
+    """Legacy ?org_id=... param must not influence scoping — it's silently dropped."""
+    captured = {}
+
+    async def _capture(filters, session):
+        captured["filters"] = filters
+        return {"releases": [], "next_cursor": None}
+
+    with (
+        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
+        patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
+        patch("src.releases.router.list_releases", new=AsyncMock(side_effect=_capture)),
+    ):
+        resp = TestClient(_make_app()).get(
+            "/api/v1/releases", params={"org_id": "other-org"}
+        )
+
+    assert resp.status_code == 200
+    assert captured["filters"].asset_ids == ["asset-1", "asset-2"]
+
+
+def test_list_releases_empty_assets_returns_empty():
+    """Viewer with no team access (empty asset_ids) sees no releases — fail-closed."""
+    captured = {}
+
+    async def _capture(filters, session):
+        captured["filters"] = filters
+        return {"releases": [], "next_cursor": None}
+
+    with (
+        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
+        patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_no_assets),
+        patch("src.releases.router.list_releases", new=AsyncMock(side_effect=_capture)),
+    ):
+        resp = TestClient(_make_app()).get("/api/v1/releases")
+
+    assert resp.status_code == 200
+    assert captured["filters"].asset_ids == []
+    assert resp.json()["releases"] == []
 
 
 def test_list_releases_pagination_cursor():
@@ -171,6 +223,7 @@ def test_list_releases_pagination_cursor():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.list_releases", new=AsyncMock(side_effect=_capture)),
     ):
         client = TestClient(_make_app())
@@ -191,6 +244,7 @@ def test_list_releases_rejects_bad_cursor():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch(
             "src.releases.router.list_releases",
             new=AsyncMock(side_effect=ValueError("invalid cursor")),
@@ -225,6 +279,7 @@ def test_get_release_verdict_no_go_when_critical():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
     ):
         resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
@@ -251,6 +306,7 @@ def test_get_release_verdict_warn_when_high_only():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
     ):
         resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
@@ -268,6 +324,7 @@ def test_get_release_verdict_go_when_no_blockers():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
     ):
         resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
@@ -299,6 +356,7 @@ def test_get_release_diff_marks_new_persisted_gone_fixed_correctly():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
     ):
         resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
@@ -329,6 +387,7 @@ def test_get_release_no_baseline_marks_all_new():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
     ):
         resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
@@ -346,6 +405,7 @@ def test_get_release_404_when_not_found():
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.get_release", new=AsyncMock(return_value=None)),
     ):
         resp = TestClient(_make_app()).get("/api/v1/releases/scan-missing")
@@ -353,17 +413,18 @@ def test_get_release_404_when_not_found():
     assert resp.status_code == 404
 
 
-def test_get_release_404_cross_org():
-    """Wrong-org access surfaces as 404 (not 403) to avoid leaking org boundaries.
+def test_get_release_404_out_of_scope():
+    """Out-of-scope access surfaces as 404 (not 403) to avoid leaking access boundaries.
 
-    The service returns None for scans that don't belong to the caller's org,
-    which the router maps to the same 404 used for genuinely missing scans.
+    The service returns None for scans that don't belong to the caller's accessible
+    assets, which the router maps to the same 404 used for genuinely missing scans.
     """
     with (
         patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.releases.router.get_session", _mock_session),
+        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.releases.router.get_release", new=AsyncMock(return_value=None)),
     ):
-        resp = TestClient(_make_app()).get("/api/v1/releases/scan-other-org")
+        resp = TestClient(_make_app()).get("/api/v1/releases/scan-other-team")
 
     assert resp.status_code == 404

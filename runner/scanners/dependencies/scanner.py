@@ -62,8 +62,29 @@ from runner.scanners.dependencies import (
     download_sboms,
     normalize,
 )
+from runner.verification.budget import ScanBudget, make_sca_budget
+from runner.verification.helpers.import_sites import find_import_sites
+from runner.verification.helpers.prefilter import prefilter_sca_finding
+from runner.verification.verifiers.sca import verify_sca_finding
 
 logger = logging.getLogger(__name__)
+
+
+_MIN_VERIFY_SEVERITY = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+def _build_llm_client():
+    """Return an LLM client or None when LLM_API_KEY is unset."""
+    from runner.verification.llm_client import LlmClient
+
+    api_key = os.environ.get("LLM_API_KEY")
+    if not api_key:
+        return None
+    return LlmClient(
+        api_key=api_key,
+        api_base_url=os.environ.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
+        model=os.environ.get("LLM_API_MODEL", "gpt-4o-mini"),
+    )
 
 
 _GRYPE_VULNS_FOUND_RC = 1  # grype convention — not an error
@@ -243,6 +264,14 @@ class DependenciesScanner:
         except Exception as e:  # noqa: BLE001
             log_tail.append(f"[!] Normalization failed: {e}")
             logger.exception("[!] Normalization failed")
+
+        try:
+            self._verify_findings_file(out_dir / "findings.jsonl", out_dir)
+        except Exception:  # noqa: BLE001
+            logger.exception("[!] _verify_findings_file failed (continuing)")
+            log_tail.append("[!] verification step failed; findings unverified")
+
+        self._cleanup_checkouts(out_dir)
 
         write_done_marker(out_dir)
         emitter.done()
@@ -511,6 +540,129 @@ class DependenciesScanner:
         return findings_json if findings_json.exists() else None
 
     # ------------------------------------------------------------------
+    # verification
+    # ------------------------------------------------------------------
+
+    def _verify_findings_file(
+        self, findings_file: Path, out_dir: Path
+    ) -> None:
+        """Read findings.jsonl, run prefilter + verify, rewrite in place."""
+        if not findings_file.exists():
+            return
+
+        raw_findings: list[dict] = []
+        for line in findings_file.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                raw_findings.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("[!] skip non-JSON line in %s", findings_file)
+
+        verified = self._maybe_verify_sca(
+            findings=raw_findings,
+            out_dir=out_dir,
+            llm=_build_llm_client(),
+            scan_budget=make_sca_budget(),
+        )
+
+        with open(findings_file, "w") as f:
+            for finding in verified:
+                f.write(json.dumps(finding, separators=(",", ":")) + "\n")
+
+    def _maybe_verify_sca(
+        self,
+        *,
+        findings: list[dict],
+        out_dir: Path,
+        llm,
+        scan_budget: ScanBudget,
+    ) -> list[dict]:
+        out: list[dict] = []
+        for f in findings:
+            copy = dict(f)
+            metadata: dict = copy.setdefault("verification_metadata", {})
+
+            if llm is None:
+                copy["verdict"] = None
+                metadata["skipped"] = "llm_disabled"
+                out.append(copy)
+                continue
+
+            repo_name = copy.get("repository", "")
+            clone_dir = out_dir / repo_name / "_checkout" if repo_name else None
+            import_sites_dicts: list[dict] = []
+            if (
+                clone_dir is not None
+                and clone_dir.exists()
+                and copy.get("packageName")
+                and copy.get("ecosystem")
+            ):
+                sites = find_import_sites(
+                    clone_dir,
+                    copy["packageName"],
+                    copy["ecosystem"],
+                )
+                import_sites_dicts = [s.to_dict() for s in sites]
+
+            decision = prefilter_sca_finding(
+                copy, import_sites=import_sites_dicts
+            )
+            if decision.skip_llm:
+                copy["verdict"] = decision.verdict
+                metadata["prefilter"] = decision.to_dict()
+                out.append(copy)
+                continue
+
+            if not scan_budget.allow():
+                copy["verdict"] = "possible"
+                metadata["skipped"] = scan_budget.skip_reason
+                out.append(copy)
+                continue
+
+            sev = (copy.get("severity") or "").lower()
+            if sev not in _MIN_VERIFY_SEVERITY:
+                copy["verdict"] = None
+                metadata["skipped"] = "below_severity"
+                out.append(copy)
+                continue
+
+            try:
+                repo_root = (
+                    str(clone_dir) if clone_dir is not None and clone_dir.exists()
+                    else str(out_dir)
+                )
+                result = verify_sca_finding(
+                    finding=copy,
+                    repo_root=repo_root,
+                    llm=llm,
+                    import_sites=import_sites_dicts,
+                )
+                scan_budget.record(
+                    tokens_in=result.tokens_in, tokens_out=result.tokens_out
+                )
+                copy["verdict"] = result.verdict
+                copy["evidence_json"] = result.evidence
+                copy["exploit_chain"] = result.exploit_chain
+                copy["verification_metadata"] = result.verification_metadata
+            except Exception as e:  # noqa: BLE001
+                copy["verdict"] = None
+                metadata["skipped"] = f"llm_error:{type(e).__name__}"
+                logger.exception("[!] sca verification failed for %s", copy.get("advisoryId"))
+
+            out.append(copy)
+        return out
+
+    def _cleanup_checkouts(self, out_dir: Path) -> None:
+        """Remove every per-repo ``_checkout`` directory. Best-effort."""
+        for pattern in ("*/_checkout", "*/*/_checkout"):
+            for checkout in out_dir.glob(pattern):
+                try:
+                    shutil.rmtree(checkout, ignore_errors=True)
+                except OSError as exc:
+                    logger.debug("checkout cleanup failed for %s: %s", checkout, exc)
+
+    # ------------------------------------------------------------------
     # internal helpers
     # ------------------------------------------------------------------
 
@@ -638,7 +790,7 @@ class DependenciesScanner:
         )
 
         log_finished(repo_name)
-        shutil.rmtree(clone_dir, ignore_errors=True)
+        # Clone preserved until _cleanup_checkouts; verifier needs it for import sites.
         return findings_json if findings_json.exists() else None
 
     def _read_head_sha(

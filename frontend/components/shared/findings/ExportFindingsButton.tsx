@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { buildFindingsExportUrl, type FindingExportFilters } from "@/lib/client/exports-api"
+import { Button } from "@/components/ui/Button"
 
 interface ExportFindingsButtonProps {
   /** Active filters from the findings page — forwarded to the export URL. */
@@ -40,39 +41,25 @@ export function ExportFindingsButton({ filters = {} }: ExportFindingsButtonProps
 
   return (
     <div ref={containerRef} className="relative">
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="true"
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border-medium)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] transition-colors"
+        leadingIcon={
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M8 2v8M5 7l3 3 3-3M3 13h10" />
+          </svg>
+        }
+        trailingIcon={
+          <svg className={`transition-transform ${open ? "rotate-180" : ""}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 6l4 4 4-4" />
+          </svg>
+        }
       >
-        <svg
-          className="h-3.5 w-3.5"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.75}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M8 2v8M5 7l3 3 3-3M3 13h10" />
-        </svg>
         Export
-        <svg
-          className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M4 6l4 4 4-4" />
-        </svg>
-      </button>
+      </Button>
 
       {open && (
         <div

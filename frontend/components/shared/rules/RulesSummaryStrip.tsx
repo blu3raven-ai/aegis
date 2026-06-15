@@ -33,8 +33,11 @@ export function RulesSummaryStrip({ stats, loading }: Props) {
 
   const fallbackNote = loading ? "Loading…" : unavailableNote
 
+  // Strip sits inside the page body — no bg/border on the strip itself so it
+  // doesn't visually glue to the PageHeader band above. KpiCard primitives
+  // carry their own surface treatment. Mirrors the Compliance pattern.
   return (
-    <div className="grid grid-cols-2 gap-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)] px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <KpiCard
         label="Active rules"
         value={activeRulesValue}

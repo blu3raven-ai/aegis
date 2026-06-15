@@ -1,6 +1,7 @@
 "use client"
 
 import { Permission } from "@/lib/shared/auth/permissions"
+import { Button } from "@/components/ui/Button"
 
 interface PermissionGroupProps {
   label: string
@@ -49,14 +50,15 @@ export function PermissionGroup({
         <h4 className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           {label}
         </h4>
-        <button
-          type="button"
+        <Button
+          variant="link"
+          size="xs"
           onClick={handleToggleGroup}
           disabled={disabled}
-          className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] disabled:opacity-50"
+          className="font-bold uppercase tracking-[0.14em] text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
         >
           {allSelected ? "Unselect All" : "Select All"}
-        </button>
+        </Button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {permissions.map((p) => (

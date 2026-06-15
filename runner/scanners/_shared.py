@@ -73,8 +73,8 @@ def clone_repo(
     """Clone a git repo. HTTPS-only; injects token via URL rewrite if provided.
 
     ``depth=None`` performs a full-history clone (no ``--depth`` / no
-    ``--single-branch``) — required by the secrets scanner's ``deep`` and
-    ``ai_enhanced`` modes which must walk every commit.
+    ``--single-branch``) — required by the secrets scanner's ``deep`` mode
+    which must walk every commit.
     """
     if not url.startswith("https://"):
         raise InsecureURLError(f"Refused non-HTTPS git URL: {url}")
@@ -220,7 +220,6 @@ TIMEOUT_SYFT_REPO: float = 600.0    # syft on git repo checkouts
 TIMEOUT_SYFT_IMAGE: float = 900.0   # syft on container images (larger)
 TIMEOUT_CDXGEN: float = 600.0
 TIMEOUT_TRUFFLEHOG: float = 900.0
-TIMEOUT_BETTERLEAKS: float = 900.0
 TIMEOUT_OPENGREP: float = 1800.0
 
 
@@ -237,7 +236,7 @@ class ScannerConfigError(ScannerError):
 
 
 class ToolError(ScannerError):
-    """An external tool (syft, grype, trufflehog, opengrep) exited with an error."""
+    """An external tool (syft, grype, trufflehog, semgrep) exited with an error."""
 
 
 # ---------------------------------------------------------------------------
@@ -270,3 +269,22 @@ class BaseScanConfig:
     org_label: str
     run_id: str
     concurrency: int
+
+
+def compute_diff_files(repo_root: str, base_sha: str, head_sha: str) -> list[str]:
+    """Return relative paths of files changed between ``base_sha`` and ``head_sha``.
+
+    Raises ``ValueError`` if either commit is missing from the local clone or
+    if git itself errors. A 30s timeout guards against pathological histories.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", repo_root, "diff", "--name-only", f"{base_sha}..{head_sha}"],
+            capture_output=True, text=True, check=True, timeout=30,
+        )
+    except subprocess.CalledProcessError as e:
+        raise ValueError(f"git diff failed: {e.stderr[:200]}") from e
+    except subprocess.TimeoutExpired as e:
+        raise ValueError("git diff timed out") from e
+
+    return [line.strip() for line in out.stdout.splitlines() if line.strip()]

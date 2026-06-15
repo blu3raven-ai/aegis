@@ -118,7 +118,7 @@ export function SlaBreachWidget({ summary, findingsHref = "/findings" }: SlaBrea
       </div>
 
       <Link
-        href="/rules?category=sla"
+        href="/policies?category=sla"
         className="mt-4 block text-[11px] text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:rounded"
       >
         Manage SLA policies →

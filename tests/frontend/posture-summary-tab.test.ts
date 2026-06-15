@@ -112,7 +112,8 @@ describe("PostureSummaryTab — Beat 4b: Risk by team", () => {
     assert.match(src, /function TeamRiskPanel\(/)
   })
   it("includes Teams|Repos segmented toggle", () => {
-    assert.match(src, /Teams\s*<\/button>[\s\S]+Repos\s*<\/button>/)
+    assert.match(src, /from "@\/components\/ui\/SegmentedControl"/)
+    assert.match(src, /<SegmentedControl[\s\S]+id: "teams"[\s\S]+id: "repos"/)
   })
   it("default team view uses team data", () => {
     assert.match(src, /teamView === "teams"/)

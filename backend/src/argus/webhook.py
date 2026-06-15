@@ -16,14 +16,13 @@ Event type mapping (Argus → internal):
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 import logging
 import os
 
 from fastapi import APIRouter, HTTPException, Request
 
+from src.connectors.webhooks.signature import verify_hmac_sha256
 from src.shared.event_publisher import get_event_publisher
 from src.shared.event_types.intel import (
     CvePublishedEvent,
@@ -57,7 +56,7 @@ async def argus_webhook(request: Request):
     signature = request.headers.get("X-Argus-Signature", "")
     secret = os.getenv("ARGUS_WEBHOOK_SECRET", "")
 
-    if not verify_signature(body, signature, secret):
+    if not verify_hmac_sha256(body, signature, secret):
         logger.warning("argus.webhook: signature verification failed; rejecting request")
         raise HTTPException(status_code=401, detail="Invalid or missing signature")
 
@@ -68,60 +67,40 @@ async def argus_webhook(request: Request):
         raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
 
     event_type = payload.get("event_type", "")
-    org_id = payload.get("org_id", "")
     data = payload.get("data", {})
 
     if event_type not in _HANDLED_EVENT_TYPES:
         logger.info("argus.webhook: received unknown event_type=%s; ignoring", event_type)
         return {"status": "ok", "handled": False}
 
-    _publish_intel_event(event_type, org_id, data)
-    logger.info("argus.webhook: published intel event type=%s org=%s", event_type, org_id)
+    _publish_intel_event(event_type, data)
+    logger.info("argus.webhook: published intel event type=%s", event_type)
     return {"status": "ok", "handled": True}
-
-
-def verify_signature(body: bytes, signature: str, secret: str) -> bool:
-    """Verify HMAC-SHA256 signature of the raw request body.
-
-    The expected format is "sha256=<hex-digest>". Returns False on any
-    mismatch or when the secret is not configured — callers must treat
-    an unconfigured secret as a verification failure.
-    """
-    if not secret:
-        return False
-    expected = "sha256=" + hmac.new(
-        secret.encode("utf-8"), body, hashlib.sha256
-    ).hexdigest()
-    return hmac.compare_digest(expected, signature or "")
 
 
 # ── internal helpers ──────────────────────────────────────────────────────────
 
-def _publish_intel_event(event_type: str, org_id: str, data: dict) -> None:
+def _publish_intel_event(event_type: str, data: dict) -> None:
     """Translate an Argus event into the corresponding internal intel event."""
     publisher = get_event_publisher()
 
     if event_type == "cve_published":
         publisher.publish(CvePublishedEvent(
-            org_id=org_id,
             source_component="argus.webhook",
             payload=data,
         ))
     elif event_type == "epss_changed":
         publisher.publish(EpssChangedEvent(
-            org_id=org_id,
             source_component="argus.webhook",
             payload=data,
         ))
     elif event_type == "exploit_availability_changed":
         publisher.publish(ExploitAvailabilityChangedEvent(
-            org_id=org_id,
             source_component="argus.webhook",
             payload=data,
         ))
     elif event_type == "rule_pack_updated":
         publisher.publish(RulePackUpdatedEvent(
-            org_id=org_id,
             source_component="argus.webhook",
             payload=data,
         ))

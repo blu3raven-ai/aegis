@@ -6,10 +6,21 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from pathlib import Path
 
+from runner.scanners.dependencies import advisory_enrichment
+
 logger = logging.getLogger(__name__)
+
+
+def _enrich_advisories_enabled() -> bool:
+    return os.environ.get("AEGIS_DISABLE_EAGER_ENRICHMENT", "").lower() not in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 def normalize_file(
@@ -113,26 +124,36 @@ def normalize_grype_output(
         raw_dir = legacy_dir
     findings_file = target / "findings.jsonl"
 
-    total = 0
+    findings: list[dict] = []
     errors = 0
-    with open(findings_file, "w") as out:
-        for raw_file in sorted(raw_dir.rglob("findings.json")):
-            repo_dir = raw_file.parent
-            repo = str(repo_dir.relative_to(raw_dir))
-            commit = "HEAD"
-            sha_file = repo_dir / "head-sha.txt"
-            if sha_file.exists():
-                commit = sha_file.read_text().strip() or "HEAD"
-            try:
-                for f in normalize_file(
+    for raw_file in sorted(raw_dir.rglob("findings.json")):
+        repo_dir = raw_file.parent
+        repo = str(repo_dir.relative_to(raw_dir))
+        commit = "HEAD"
+        sha_file = repo_dir / "head-sha.txt"
+        if sha_file.exists():
+            commit = sha_file.read_text().strip() or "HEAD"
+        try:
+            findings.extend(
+                normalize_file(
                     raw_file, org, repo, commit, repo_dir / "manifests"
-                ):
-                    out.write(json.dumps(f, separators=(",", ":")) + "\n")
-                    total += 1
-            except Exception as e:
-                errors += 1
-                logger.warning("[!] Failed: %s - %s", repo, e)
+                )
+            )
+        except Exception as e:
+            errors += 1
+            logger.warning("[!] Failed: %s - %s", repo, e)
 
+    if _enrich_advisories_enabled() and findings:
+        try:
+            attach_advisory_details(findings)
+        except Exception as e:
+            logger.warning("[!] Advisory enrichment failed (non-fatal): %s", e)
+
+    with open(findings_file, "w") as out:
+        for f in findings:
+            out.write(json.dumps(f, separators=(",", ":")) + "\n")
+
+    total = len(findings)
     logger.info(
         "[✓] Normalized %d SCA findings (%d errors) -> %s",
         total,
@@ -140,3 +161,40 @@ def normalize_grype_output(
         findings_file,
     )
     return total, errors
+
+
+def attach_advisory_details(
+    findings: list[dict],
+    *,
+    cache_dir: Path | None = None,
+    nvd_api_key: str | None = None,
+) -> None:
+    """Fetch advisory text from NVD/OSV and attach as ``advisoryDetail``. Mutates in place."""
+    advisory_ids: list[str] = []
+    for f in findings:
+        if f.get("advisoryId"):
+            advisory_ids.append(f["advisoryId"])
+        for alias in f.get("advisoryAliases") or []:
+            if isinstance(alias, str):
+                advisory_ids.append(alias)
+
+    if not advisory_ids:
+        return
+
+    api_key = nvd_api_key if nvd_api_key is not None else os.environ.get("NVD_API_KEY")
+    details = advisory_enrichment.fetch_advisory_details(
+        advisory_ids,
+        cache_dir=cache_dir,
+        nvd_api_key=api_key,
+    )
+    if not details:
+        return
+
+    for f in findings:
+        detail = details.get(f.get("advisoryId", ""))
+        if detail is None:
+            for alias in f.get("advisoryAliases") or []:
+                detail = details.get(alias) if isinstance(alias, str) else None
+                if detail is not None:
+                    break
+        f["advisoryDetail"] = detail.to_dict() if detail else None

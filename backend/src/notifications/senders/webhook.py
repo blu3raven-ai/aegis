@@ -19,13 +19,12 @@ import json
 import logging
 from typing import Any
 
-import httpx
-
-from src.notifications.senders.base import BaseSender, SendResult
+from src.connectors.base import BaseSender, SendResult, TestResult
+from src.connectors.http import default_client
+from src.connectors.registry import register_connector
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT_S = 10
 _LEGACY_SIG_HEADER = "X-Aegis-Signature"
 
 
@@ -39,7 +38,17 @@ def _sign(body: bytes, secret: str) -> str:
 _sign_legacy = _sign
 
 
+@register_connector
 class GenericWebhookSender(BaseSender):
+    id = "generic-webhook"
+    name = "Generic Webhook"
+    category = "notification"
+    description = "POST findings to any HTTPS endpoint with HMAC signing"
+    version = "v1.0"
+    status = "stable"
+    icon_slug = "webhook"
+    href = "/notifications"
+
     def send(self, payload: dict[str, Any], config: dict[str, Any]) -> SendResult:
         url = config.get("url", "")
         if not url:
@@ -71,7 +80,8 @@ class GenericWebhookSender(BaseSender):
                         "HMAC headers via POST /api/v1/notification-channels/<id>/signing-secret"
                     )
 
-            resp = httpx.post(url, content=body, headers=headers, timeout=_TIMEOUT_S)
+            with default_client() as client:
+                resp = client.post(url, content=body, headers=headers)
             if 200 <= resp.status_code < 300:
                 return SendResult(success=True, response_code=resp.status_code)
             return SendResult(
@@ -82,3 +92,6 @@ class GenericWebhookSender(BaseSender):
         except Exception as exc:
             logger.warning("GenericWebhookSender.send error: %s", exc)
             return SendResult(success=False, error=str(exc)[:500])
+
+    def test(self) -> TestResult:
+        return TestResult(ok=True)

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { Button } from "@/components/ui/Button"
 
 
 interface ExternalLinkConfirmProps {
@@ -62,14 +63,14 @@ export function ExternalLinkConfirm({ url, onClose }: ExternalLinkConfirmProps) 
 
         {/* Actions */}
         <div className="mt-5 flex items-center justify-end gap-3">
-          <button
+          <Button
             ref={cancelRef}
-            type="button"
+            variant="secondary"
+            size="md"
             onClick={onClose}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
           >
             Cancel
-          </button>
+          </Button>
           <a
             href={url}
             target="_blank"

@@ -22,6 +22,14 @@ from src.containers.router import router as container_scanning_router
 from src.code_scanning.router import router as code_scanning_router
 from src.secrets.router import router as secrets_router
 from src.settings.account_endpoints import account_router
+from src.settings.branding_endpoints import branding_router
+from src.settings.org_settings_endpoints import org_settings_router
+from src.settings.audit_stream_endpoints import audit_stream_router
+from src.settings.scim_endpoints import scim_admin_router
+from src.settings.sso_endpoints import sso_router
+from src.settings.llm_router import router as llm_settings_router
+from src.settings.llm_usage_router import router as llm_usage_router
+from src.settings.preferences_endpoints import preferences_router
 from src.settings.roles_router import roles_router
 from src.settings.organisations_router import organisations_router
 from src.settings.router import router as settings_router
@@ -35,17 +43,24 @@ from src.notifications.admin_router import router as notifications_admin_router
 from src.notifications.rules_router import router as notification_rules_router
 from src.notifications.signing_secrets_router import router as signing_secrets_router
 from src.auth.login_router import login_router
+from src.auth.sso.saml_router import saml_router
+from src.auth.sso.oidc_router import oidc_router
+from src.auth.sso.public_router import sso_public_router
+from src.settings.roles_store import role_kind_from_id
 from src.shared.events_router import events_router
 from src.shared.sbom_router import router as sbom_router
 from src.argus.webhook import router as argus_webhook_router
 from src.integrations.github_webhook import router as github_webhook_router
 from src.integrations.gitlab_webhook import router as gitlab_webhook_router
 from src.integrations.bitbucket_webhook import router as bitbucket_webhook_router
+import src.integrations.ci_wizards  # noqa: F401 — side-effect: registers @register_connector classes
+import src.runner.catalog_entry  # noqa: F401 — side-effect: registers FederatedRunner
 from src.graphql.schema import create_graphql_router
 from src.health.router import router as health_router
 from src.images.router import router as images_router
 from src.repos.router import router as repos_router
 from src.scans.router import router as scans_router
+from src.scans.trigger_router import router as scans_trigger_router
 from src.posture.router import router as posture_router
 from src.releases.router import router as releases_router
 from src.reports.router import router as reports_router
@@ -54,6 +69,8 @@ from src.api_keys.middleware import try_api_key_auth
 from src.api_keys.router import router as api_keys_router
 from src.audit_log.middleware import AuditMiddleware
 from src.audit_log.router import router as audit_router
+from src.audit_stream.poster import poster_loop
+from src.pr_feedback.poster import poster_loop as pr_feedback_poster_loop
 
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -71,6 +88,7 @@ from src.sla.router import router as sla_router
 from src.rules.router import router as rules_router
 from src.exports.router import router as exports_router
 from src.integrations.router import router as integrations_catalog_router
+from src.connectors.router import router as connectors_router
 from src.findings.router import router as findings_router
 from src.kev.router import router as kev_router
 from src.epss.router import router as epss_router
@@ -80,6 +98,7 @@ from src.saved_views.router import router as saved_views_router
 from src.assets.router import assets_router, scans_router as byo_scans_router
 from src.shared.home_views import refresh_all_home_views
 from src.shared.home_views_refresher import home_views_refresh_worker
+from src.scim.router import scim_router
 
 
 # Load .env.local into the process environment immediately so that 
@@ -136,8 +155,22 @@ async def _reconcile_stale_runs() -> None:
                 pass
 
 
+_audit_stream_stop = asyncio.Event()
+_audit_stream_task: asyncio.Task | None = None
+
+_pr_feedback_stop = asyncio.Event()
+_pr_feedback_task: asyncio.Task | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
+    # Warn early so misconfiguration surfaces at deploy time, not on first use
+    if not os.environ.get("AEGIS_SECRET_ENCRYPTION_KEY"):
+        logger.warning(
+            "AEGIS_SECRET_ENCRYPTION_KEY is not set; SSO/SCIM/audit-streaming "
+            "configuration with encrypted columns will fail at runtime until set."
+        )
+
     # Run Alembic migrations
     subprocess.run(["alembic", "upgrade", "head"], cwd=os.path.dirname(os.path.dirname(__file__)), check=True)
     # Seed defaults if empty
@@ -209,12 +242,41 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
         _notification_router.start()
         app.state.notification_router = _notification_router
 
+    from src.webhooks.event_listener import WebhookScanDispatcher
+    _webhook_dispatcher = WebhookScanDispatcher()
+    _webhook_dispatcher.start()
+    app.state.webhook_dispatcher = _webhook_dispatcher
+
     # Warm the home dashboard MVs once at startup so the first request
     # doesn't see empty data, then start the event-driven refresh worker.
     await asyncio.to_thread(refresh_all_home_views)
     _home_views_refresh_task = asyncio.create_task(home_views_refresh_worker())
 
+    global _audit_stream_task
+    _audit_stream_stop.clear()
+    _audit_stream_task = asyncio.create_task(poster_loop(_audit_stream_stop))
+
+    global _pr_feedback_task
+    _pr_feedback_stop.clear()
+    _pr_feedback_task = asyncio.create_task(pr_feedback_poster_loop(_pr_feedback_stop))
+
     yield
+
+    # Graceful shutdown for the PR feedback poster
+    _pr_feedback_stop.set()
+    if _pr_feedback_task:
+        try:
+            await asyncio.wait_for(_pr_feedback_task, timeout=10.0)
+        except asyncio.TimeoutError:
+            _pr_feedback_task.cancel()
+
+    # Graceful shutdown for the audit-stream poster
+    _audit_stream_stop.set()
+    if _audit_stream_task:
+        try:
+            await asyncio.wait_for(_audit_stream_task, timeout=10.0)
+        except asyncio.TimeoutError:
+            _audit_stream_task.cancel()
 
     # Graceful shutdown for the home views refresh worker
     _home_views_refresh_task.cancel()
@@ -227,6 +289,10 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     _notification_router_inst = getattr(app.state, "notification_router", None)
     if _notification_router_inst is not None:
         _notification_router_inst.stop()
+
+    _webhook_dispatcher_inst = getattr(app.state, "webhook_dispatcher", None)
+    if _webhook_dispatcher_inst is not None:
+        _webhook_dispatcher_inst.stop()
 
     get_scheduler().stop()
     await engine.dispose()
@@ -277,10 +343,39 @@ app = FastAPI(
     title="Security Portal Backend",
     version="0.1.0",
     lifespan=lifespan,
-    docs_url="/docs" if _is_docs_enabled() else None,
-    redoc_url="/redoc" if _is_docs_enabled() else None,
+    docs_url=None,
+    redoc_url=None,
     openapi_url="/openapi.json" if _is_docs_enabled() else None,
 )
+
+
+if _is_docs_enabled():
+    from fastapi.openapi.docs import get_swagger_ui_html
+
+    # Self-hosted swagger-ui-dist@5.32.6 — keeps the strict CSP intact by
+    # avoiding cdn.jsdelivr.net. Refresh with `curl https://cdn.jsdelivr.net/
+    # npm/swagger-ui-dist@<ver>/{swagger-ui-bundle.js,swagger-ui.css,favicon-32x32.png}`.
+    _swagger_assets = Path(__file__).parent / "swagger"
+    app.mount("/swagger", StaticFiles(directory=_swagger_assets), name="swagger-ui")
+
+    @app.get("/docs", include_in_schema=False)
+    async def custom_swagger_ui_html():
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title="Security Portal Backend - Swagger UI",
+            swagger_js_url="/swagger/swagger-ui-bundle.js",
+            swagger_css_url="/swagger/swagger-ui.css",
+            swagger_favicon_url="/swagger/favicon.png",
+        )
+
+
+def _is_integrations_webhook_path(path: str) -> bool:
+    """SCM webhook receivers authenticate via HMAC signatures, not JWTs.
+
+    Scoped to the receiver routes only so future /integrations/* admin/list
+    endpoints still enforce the session/JWT gate.
+    """
+    return path.startswith("/integrations/") and path.endswith("/webhook")
 
 
 @app.middleware("http")
@@ -288,29 +383,34 @@ async def require_jwt(request: Request, call_next):
     # Health check and documentation paths (if enabled) are always open.
     # /login and /pending are open so SessionAuthMiddleware's redirects can
     # resolve to the SPA shell without requiring a Bearer token.
-    open_paths = {"/health", "/health/ready", "/health/live", "/settings/api/sources/internal-orgs",
+    open_paths = {"/health", "/health/ready", "/health/live", "/api/v1/settings/sources/internal-orgs",
                   "/auth/login", "/auth/login/verify", "/auth/logout",
-                  "/login", "/pending"}
+                  "/auth/sso/saml/login", "/auth/sso/saml/acs", "/auth/sso/saml/metadata",
+                  "/auth/sso/oidc/login", "/auth/sso/oidc/callback",
+                  "/login", "/pending", "/api/v1/branding",
+                  "/api/v1/sso/sso-availability"}
     enabled = _is_docs_enabled()
     if enabled:
-        # Include common variants and static assets needed by Swagger/ReDoc
         open_paths.update({
             "/docs", "/docs/",
-            "/redoc", "/redoc/",
             "/openapi.json",
         })
 
-    # Exact match for open paths or prefix match for openapi.json
     path = request.url.path
-    if path in open_paths or (enabled and path.startswith("/openapi.json")):
+    if path in open_paths or (
+        enabled and (path.startswith("/openapi.json") or path.startswith("/swagger/"))
+    ):
+        return await call_next(request)
+
+    # SCIM endpoints authenticate via their own bearer-token dependency
+    if path.startswith("/scim/v2/"):
         return await call_next(request)
 
     # Runner agent endpoints use their own auth (runner Bearer tokens, not JWT)
-    if path.startswith("/runner/api/"):
+    if path.startswith("/api/v1/runner/"):
         return await call_next(request)
 
-    # SCM webhook endpoints authenticate via HMAC signatures, not JWTs
-    if path.startswith("/integrations/"):
+    if _is_integrations_webhook_path(path):
         return await call_next(request)
 
     # PR 4: static asset prefixes are public — browsers need these to load the
@@ -324,8 +424,8 @@ async def require_jwt(request: Request, call_next):
     if getattr(request.state, "session", None) is not None:
         session = request.state.session
         request.state.user_sub = session.user_id
-        request.state.user_role = session.user.role
         request.state.user_role_id = getattr(session.user, "role_id", None)
+        request.state.user_role = role_kind_from_id(request.state.user_role_id)
         # License tier resolution still applies
         license_key = read_license_key()
         tier, license_claims = resolve_current_tier(license_key, EMBEDDED_PUBLIC_KEY)
@@ -378,6 +478,14 @@ app.include_router(code_scanning_router)
 app.include_router(secrets_router)
 app.include_router(roles_router)
 app.include_router(account_router)
+app.include_router(branding_router)
+app.include_router(preferences_router)
+app.include_router(org_settings_router)
+app.include_router(audit_stream_router)
+app.include_router(scim_admin_router)
+app.include_router(sso_router)
+app.include_router(llm_settings_router)
+app.include_router(llm_usage_router)
 app.include_router(settings_router)
 app.include_router(organisations_router)
 app.include_router(sources_router)
@@ -390,6 +498,9 @@ app.include_router(notifications_admin_router)
 app.include_router(notification_rules_router)
 app.include_router(signing_secrets_router)
 app.include_router(login_router)
+app.include_router(saml_router)
+app.include_router(oidc_router)
+app.include_router(sso_public_router)
 app.include_router(events_router)
 app.include_router(sbom_router)
 app.include_router(sbom_export_router)
@@ -404,6 +515,7 @@ app.include_router(rules_router)
 app.include_router(repos_router)
 app.include_router(images_router)
 app.include_router(scans_router)
+app.include_router(scans_trigger_router)
 app.include_router(posture_router)
 app.include_router(releases_router)
 app.include_router(reports_router)
@@ -411,6 +523,7 @@ app.include_router(compliance_router)
 app.include_router(search_router)
 app.include_router(exports_router)
 app.include_router(integrations_catalog_router)
+app.include_router(connectors_router)
 app.include_router(findings_router)
 app.include_router(kev_router)
 app.include_router(epss_router)
@@ -419,6 +532,7 @@ app.include_router(decisions_router)
 app.include_router(saved_views_router)
 app.include_router(assets_router)
 app.include_router(byo_scans_router)
+app.include_router(scim_router)
 
 # Test seed endpoint — non-production only
 if os.getenv("TEST_SEED_ENABLED", "").lower() in ("1", "true", "yes") and \
@@ -447,12 +561,21 @@ if _STATIC_ROOT.exists():
 
     # SPA fallback — any GET not matched by FastAPI routes gets index.html.
     # MUST be the last route registered.
+    _STATIC_ROOT_RESOLVED = _STATIC_ROOT.resolve()
+
     @app.get("/{path:path}")
     async def spa_fallback(path: str) -> FileResponse:
-        if ".." in path.split("/"):
-            from fastapi import HTTPException
+        # Resolve the requested path against the static root and confirm it
+        # still lives inside it — guards against URL-encoded traversal
+        # (e.g. /%2e%2e/etc/passwd) and absolute paths that os.path.join
+        # would silently honour.
+        from fastapi import HTTPException
+        try:
+            candidate = (_STATIC_ROOT_RESOLVED / path).resolve()
+        except (OSError, RuntimeError, ValueError):
             raise HTTPException(status_code=400, detail="invalid path")
-        candidate = _STATIC_ROOT / path
+        if not candidate.is_relative_to(_STATIC_ROOT_RESOLVED):
+            raise HTTPException(status_code=400, detail="invalid path")
         if candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(_STATIC_ROOT / "index.html", media_type="text/html")
+        return FileResponse(_STATIC_ROOT_RESOLVED / "index.html", media_type="text/html")

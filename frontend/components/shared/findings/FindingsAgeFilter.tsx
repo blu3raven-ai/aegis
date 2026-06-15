@@ -1,5 +1,7 @@
 "use client"
 
+import { Select } from "@/components/ui/Select"
+
 export type AgePresetKey = "any" | "24h" | "7d" | "30d"
 
 export const AGE_OPTIONS: { value: AgePresetKey; label: string }[] = [
@@ -28,15 +30,15 @@ export interface FindingsAgeFilterProps {
 
 export function FindingsAgeFilter({ value, onChange }: FindingsAgeFilterProps) {
   return (
-    <select
+    <Select
+      size="sm"
       value={value}
       onChange={(e) => onChange(e.target.value as AgePresetKey)}
       aria-label="Filter by age"
-      className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
     >
       {AGE_OPTIONS.map((opt) => (
         <option key={opt.value} value={opt.value}>Age: {opt.label}</option>
       ))}
-    </select>
+    </Select>
   )
 }

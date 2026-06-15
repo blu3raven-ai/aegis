@@ -1,11 +1,15 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
+import { AttestationExportButton } from "@/components/shared/compliance/AttestationExportButton"
 import { ControlsSummaryTable } from "@/components/shared/compliance/ControlsSummaryTable"
 import { FrameworkCard } from "@/components/shared/compliance/FrameworkCard"
+import { PostureTrendKpiCard } from "@/components/shared/compliance/PostureTrendKpiCard"
 import { KpiCard } from "@/components/shared/KpiCard"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ComplianceIcon } from "@/lib/shared/ui/page-icons"
+import { Button } from "@/components/ui/Button"
+import { FilterChip } from "@/components/ui/FilterChip"
 import {
   listFrameworks,
   getFrameworkSummary,
@@ -13,8 +17,7 @@ import {
   type ComplianceFramework,
   type ControlSummaryItem,
 } from "@/lib/client/compliance-api"
-
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
+import { AddFrameworkModal } from "./AddFrameworkModal"
 
 type StatusFilter = "all" | "unmet" | "partial" | "met"
 
@@ -108,8 +111,11 @@ function StatsStrip({
   const openGapsValueClass = agg !== null && (agg.unmetControls + agg.partialControls) > 0 ? CRITICAL : NEUTRAL
   const passValueClass = agg !== null && agg.totalControls > 0 && agg.metControls === agg.totalControls ? OK : NEUTRAL
 
+  // Strip sits inside the page body — no bg/border on the strip itself so it
+  // doesn't visually glue to the PageHeader band above. KpiCard primitives
+  // carry their own surface treatment.
   return (
-    <div className="grid grid-cols-2 gap-3 border-b border-[var(--color-border-divider)] bg-[var(--color-surface)] px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <KpiCard
         label="Frameworks tracked"
         value={String(frameworks.length)}
@@ -128,12 +134,7 @@ function StatsStrip({
         note={gapsCaption}
         valueClass={openGapsValueClass}
       />
-      <KpiCard
-        label="Next attestation"
-        value="—"
-        note="Tracking ships in a follow-up"
-        valueClass={NEUTRAL}
-      />
+      <PostureTrendKpiCard days={30} />
     </div>
   )
 }
@@ -147,6 +148,7 @@ export default function CompliancePage() {
   const [selected, setSelected] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading")
+  const [addModalOpen, setAddModalOpen] = useState(false)
 
   const fetchSummary = useCallback((id: string) => {
     setErrors((prev) => ({ ...prev, [id]: false }))
@@ -155,7 +157,7 @@ export default function CompliancePage() {
       delete next[id]
       return next
     })
-    getFrameworkSummary(id, ORG_ID)
+    getFrameworkSummary(id)
       .then((items) => setSummaries((prev) => ({ ...prev, [id]: items })))
       .catch(() => setErrors((prev) => ({ ...prev, [id]: true })))
   }, [])
@@ -221,36 +223,23 @@ export default function CompliancePage() {
         description="Map findings to controls · audit-ready exports"
         controls={
           <>
-            <button
-              type="button"
-              disabled
-              title="Coming soon"
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Export attestation
-            </button>
-            <button
-              type="button"
-              disabled
-              title="Coming soon"
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <AttestationExportButton frameworkId={selected} />
+            <Button variant="secondary" size="md" onClick={() => setAddModalOpen(true)}>
               Add framework
-            </button>
+            </Button>
           </>
         }
       />
 
-      {loadState === "ok" && frameworks.length > 0 && (
-        <StatsStrip
-          frameworks={frameworks}
-          summaries={summaries}
-          errors={errors}
-          anyLoading={anyLoading}
-        />
-      )}
-
       <div className="flex flex-col gap-6 p-6">
+        {loadState === "ok" && frameworks.length > 0 && (
+          <StatsStrip
+            frameworks={frameworks}
+            summaries={summaries}
+            errors={errors}
+            anyLoading={anyLoading}
+          />
+        )}
 
         {loadState === "loading" && (
           <>
@@ -298,13 +287,11 @@ export default function CompliancePage() {
             <p className="text-sm text-[var(--color-text-secondary)]">
               Check the backend connection and try again.
             </p>
-            <button
-              type="button"
-              onClick={fetchAll}
-              className="mt-1 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-            >
-              Retry
-            </button>
+            <div className="mt-1">
+              <Button variant="secondary" size="sm" onClick={fetchAll}>
+                Retry
+              </Button>
+            </div>
           </div>
         )}
 
@@ -332,14 +319,9 @@ export default function CompliancePage() {
                 Add a framework to start mapping findings to compliance controls.
               </p>
             </div>
-            <button
-              type="button"
-              disabled
-              title="Coming soon"
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            <Button variant="secondary" size="md" onClick={() => setAddModalOpen(true)}>
               Add framework
-            </button>
+            </Button>
           </div>
         )}
 
@@ -377,32 +359,20 @@ export default function CompliancePage() {
                     <p className="text-sm text-[var(--color-text-secondary)]">
                       Couldn&apos;t load controls for this framework.
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => fetchSummary(selected)}
-                      className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-                    >
+                    <Button variant="secondary" size="sm" onClick={() => fetchSummary(selected)}>
                       Retry
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <>
                     <div className="mb-4 flex flex-wrap gap-1.5">
                       {filterLabels.map(({ key, label }) => (
-                        <button
+                        <FilterChip
                           key={key}
-                          type="button"
-                          aria-pressed={statusFilter === key}
+                          label={label}
+                          active={statusFilter === key}
                           onClick={() => setStatusFilter(key)}
-                          className={[
-                            "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                            statusFilter === key
-                              ? "bg-[var(--color-accent)] text-[var(--color-accent-on)]"
-                              : "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]",
-                          ].join(" ")}
-                        >
-                          {label}
-                        </button>
+                        />
                       ))}
                     </div>
 
@@ -426,6 +396,15 @@ export default function CompliancePage() {
         )}
 
       </div>
+
+      <AddFrameworkModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onCreated={() => {
+          setAddModalOpen(false)
+          fetchAll()
+        }}
+      />
     </div>
   )
 }

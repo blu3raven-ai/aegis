@@ -18,9 +18,8 @@ import type {
   StaleAlertAction,
 } from "@/lib/client/rules-api"
 import type { NotificationDestination } from "@/lib/client/destinations-api"
-
-const inputClass =
-  "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] aria-[invalid=true]:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:ring-[var(--color-severity-critical)]"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
 
 const SCANNER_OPTIONS: { value: ScannerType; label: string }[] = [
   { value: "dependencies", label: "SCA / Dependencies" },
@@ -179,7 +178,7 @@ function StaleAlertFields({
           Stale after
         </label>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             id="stale-after-days"
             type="number"
             min={1}
@@ -192,8 +191,8 @@ function StaleAlertFields({
                 stale_after_days: Number.parseInt(e.target.value, 10) || 0,
               })
             }
-            aria-invalid={daysInvalid}
-            className={`${inputClass} w-24`}
+            invalid={daysInvalid}
+            className="w-24"
           />
           <span className="text-sm text-[var(--color-text-secondary)]">
             days without a completed scan
@@ -224,7 +223,7 @@ function StaleAlertFields({
             </Link>
           </p>
         )}
-        <select
+        <Select
           id="stale-channel"
           value={value.alert_channel_id || ""}
           onChange={(e) =>
@@ -233,8 +232,7 @@ function StaleAlertFields({
               alert_channel_id: Number.parseInt(e.target.value, 10) || 0,
             })
           }
-          aria-invalid={channelInvalid}
-          className={inputClass}
+          invalid={channelInvalid}
         >
           <option value="">Select a destination…</option>
           {enabledDestinations.map((d) => (
@@ -242,7 +240,7 @@ function StaleAlertFields({
               {d.name}
             </option>
           ))}
-        </select>
+        </Select>
         {channelInvalid && (
           <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
             Select a notification destination.

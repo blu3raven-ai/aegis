@@ -1,4 +1,4 @@
-"""SAST finding ingestion — parse SARIF/JSONL output from Opengrep scanner."""
+"""SAST finding ingestion — parse SARIF/JSONL output from semgrep scanner."""
 from __future__ import annotations
 
 import json
@@ -50,20 +50,20 @@ def _derive_language(file_path: str) -> str:
     return _FILE_EXTENSION_TO_LANGUAGE.get(ext, "unknown")
 
 # ---------------------------------------------------------------------------
-# Severity mapping: Opengrep → Portal
+# Severity mapping: SARIF level → Portal
 # ---------------------------------------------------------------------------
 
-def map_severity(opengrep_severity: str, confidence: str) -> str:
-    """Map Opengrep severity + confidence to portal severity.
+def map_severity(sarif_severity: str, confidence: str) -> str:
+    """Map SARIF severity level + rule confidence to portal severity.
 
-    | Opengrep | Confidence   | Portal   |
-    |----------|-------------|----------|
-    | ERROR    | high        | critical |
-    | ERROR    | medium/low  | high     |
-    | WARNING  | any         | medium   |
-    | INFO     | any         | low      |
+    | SARIF   | Confidence   | Portal   |
+    |---------|--------------|----------|
+    | ERROR   | high         | critical |
+    | ERROR   | medium/low   | high     |
+    | WARNING | any          | medium   |
+    | INFO    | any          | low      |
     """
-    sev = opengrep_severity.upper()
+    sev = sarif_severity.upper()
     conf = confidence.lower() if confidence else "medium"
 
     if sev == "ERROR":
@@ -117,10 +117,10 @@ def _parse_sarif_finding(result: dict[str, Any], rule_map: dict[str, dict], repo
     properties = rule_info.get("properties", {})
     confidence = properties.get("confidence", "medium")
 
-    # Map SARIF level to Opengrep severity
-    sarif_to_opengrep = {"error": "ERROR", "warning": "WARNING", "note": "INFO", "none": "INFO"}
-    opengrep_severity = sarif_to_opengrep.get(level.lower(), "WARNING")
-    severity = map_severity(opengrep_severity, confidence)
+    # Map SARIF level to canonical severity token
+    sarif_to_severity = {"error": "ERROR", "warning": "WARNING", "note": "INFO", "none": "INFO"}
+    sarif_severity = sarif_to_severity.get(level.lower(), "WARNING")
+    severity = map_severity(sarif_severity, confidence)
 
     # Extract CWE from rule tags
     tags = properties.get("tags") or []
@@ -238,12 +238,12 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                     engine = raw.get("engine")
                     if engine is None:
                         logger.warning(
-                            "[code-scanning] finding has no `engine` field; defaulting to 'opengrep'. "
+                            "[code-scanning] finding has no `engine` field; defaulting to 'semgrep'. "
                             "Runner output may be malformed: rule_id=%s file=%s",
                             raw.get("rule_id", raw.get("ruleId", "")),
                             raw.get("file_path", raw.get("path", "")),
                         )
-                        engine = "opengrep"
+                        engine = "semgrep"
                     finding = {
                         "repo_full_name": raw.get("repo_full_name", raw.get("repository", "")),
                         "file_path": _strip_temp_prefix(raw.get("file_path", raw.get("path", ""))),
@@ -266,7 +266,6 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                         "reachability": raw.get("reachability"),
                         "repo_html_url": raw.get("repo_html_url", ""),
                         "engine": engine,
-                        "dataflow_trace": raw.get("dataflow_trace") or None,
                         "state": "open",
                         "finding_data": raw,
                     }

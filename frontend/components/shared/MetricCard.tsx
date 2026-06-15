@@ -1,7 +1,7 @@
 export function MetricCard({ label, value }: { label: string; value: string }) {
   const isNA = value === "N/A"
   return (
-    <div className="rounded-2xl bg-[var(--color-surface-raised)] p-4">
+    <div className="rounded-lg bg-[var(--color-surface-raised)] p-4">
       <p className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{label}</p>
       {isNA ? (
         <>

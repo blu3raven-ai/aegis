@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { Button } from "@/components/ui/Button"
 
 interface DismissPopoverProps {
   reasons: readonly string[]
@@ -50,17 +51,17 @@ export function DismissPopover({
 
   return (
     <div className="relative">
-      <button
+      <Button
         ref={triggerRef}
-        type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen(!open)}
         disabled={isLoading}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
       >
         {triggerLabel}
-      </button>
+      </Button>
       {open && (
         <div
           ref={menuRef}

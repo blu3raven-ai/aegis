@@ -13,7 +13,7 @@ export function AdvisorySourcesCopyBar({ sourceLabel, onCopy }: AdvisorySourcesC
 
   if (state === "done") {
     return (
-      <div className="flex items-center gap-2 rounded-2xl border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
+      <div className="flex items-center gap-2 rounded-lg border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
         <svg className="h-4 w-4 text-[var(--color-status-ok)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
@@ -23,7 +23,7 @@ export function AdvisorySourcesCopyBar({ sourceLabel, onCopy }: AdvisorySourcesC
   }
 
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+    <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
       <span className="text-sm text-[var(--color-text-secondary)]">
         {sourceLabel} has advisory sources configured.
       </span>

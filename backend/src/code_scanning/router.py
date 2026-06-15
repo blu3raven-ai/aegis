@@ -1,6 +1,6 @@
 """SAST (Static Application Security Testing) API endpoints.
 
-Docker-based scanning using Opengrep. Mirrors the SCA scanning
+Docker-based scanning using semgrep. Mirrors the SCA scanning
 orchestration pattern: start run -> docker scan -> ingest -> serve dashboard.
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ from src.storage import (
 )
 
 
-router = APIRouter(prefix="/code-scanning/api", tags=["code-scanning"])
+router = APIRouter(prefix="/api/v1/code-scanning", tags=["code-scanning"])
 
 _code_scanning_runtime = InMemoryScanRuntime()
 
@@ -62,7 +62,6 @@ def _slim_finding(finding: dict[str, Any]) -> dict[str, Any]:
         "code_flows": finding.get("code_flows"),
         "reachability": finding.get("reachability"),
         "engine": finding.get("engine"),
-        "dataflow_trace": finding.get("dataflow_trace"),
         "rule_ids": finding.get("rule_ids"),
     }
 
@@ -74,11 +73,14 @@ def get_history(request: Request, orgs: list[str] = Depends(require_orgs)) -> di
         return {"history": [], "coverageGaps": []}
     all_runs: list[dict[str, Any]] = []
     coverage_gaps: list[dict[str, Any]] = []
+    from src.assets.service import resolve_repo_asset_ids
     for org_name in orgs:
         all_runs.extend(list_code_scanning_runs(org_name))
         expected = [r["full_name"] for r in build_source_repo_list(get_scan_sources_for_org(org_name))]
         if expected:
-            coverage_gaps.extend(compute_coverage_gaps("code_scanning", org_name, expected))
+            expected_asset_ids = list(resolve_repo_asset_ids(expected).values())
+            if expected_asset_ids:
+                coverage_gaps.extend(compute_coverage_gaps("code_scanning", expected_asset_ids))
     all_runs.sort(key=lambda r: r.get("createdAt", ""), reverse=True)
     return {"history": all_runs[:20], "coverageGaps": coverage_gaps}
 
@@ -128,7 +130,6 @@ def start_runs(
         from src.shared.event_emit_helpers import emit_manual_rescan
         for org in orgs:
             emit_manual_rescan(
-                org_id=org,
                 repo_id=None,
                 scanner_type="sast",
                 full=(scan_mode == "full"),

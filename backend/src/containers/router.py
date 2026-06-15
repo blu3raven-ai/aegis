@@ -32,7 +32,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-router = APIRouter(prefix="/container-scanning/api", tags=["container-scanning"])
+router = APIRouter(prefix="/api/v1/container-scanning", tags=["container-scanning"])
 
 _container_scanning_runtime = InMemoryScanRuntime()
 
@@ -116,7 +116,6 @@ def start_runs(
         from src.shared.event_emit_helpers import emit_manual_rescan
         for org in orgs:
             emit_manual_rescan(
-                org_id=org,
                 repo_id=None,
                 scanner_type="containers",
                 full=(scan_mode == "full"),

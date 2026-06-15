@@ -1,7 +1,6 @@
-"""CRUD helpers for notification_rules table (Phase 42).
+"""CRUD helpers for notification_rules table.
 
-All DB access is async via the shared session helper. Returns plain dicts so
-the router layer has no coupling to SQLAlchemy internals.
+Returns plain dicts so the router layer has no coupling to SQLAlchemy internals.
 """
 from __future__ import annotations
 
@@ -24,7 +23,6 @@ def _rule_to_dict(rule: NotificationRule) -> dict[str, Any]:
         "priority": rule.priority,
         "channel_id": rule.channel_id,
         "conditions": rule.conditions,
-        "org_id": rule.org_id,
         "created_at": rule.created_at.isoformat() if rule.created_at else None,
         "updated_at": rule.updated_at.isoformat() if rule.updated_at else None,
     }
@@ -38,18 +36,16 @@ def _rule_to_domain(rule: NotificationRule) -> Rule:
         priority=rule.priority,
         channel_id=rule.channel_id,
         conditions=rule.conditions or {},
-        org_id=rule.org_id,
     )
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 
 
-def list_rules(org_id: str) -> list[dict[str, Any]]:
+def list_rules() -> list[dict[str, Any]]:
     async def _q(session):
         result = await session.execute(
             select(NotificationRule)
-            .where(NotificationRule.org_id == org_id)
             .order_by(NotificationRule.priority.asc(), NotificationRule.created_at.asc())
         )
         return [_rule_to_dict(r) for r in result.scalars().all()]
@@ -57,13 +53,10 @@ def list_rules(org_id: str) -> list[dict[str, Any]]:
     return run_db(_q)
 
 
-def get_rule(rule_id: str, org_id: str) -> dict[str, Any] | None:
+def get_rule(rule_id: str) -> dict[str, Any] | None:
     async def _q(session):
         result = await session.execute(
-            select(NotificationRule).where(
-                NotificationRule.id == rule_id,
-                NotificationRule.org_id == org_id,
-            )
+            select(NotificationRule).where(NotificationRule.id == rule_id)
         )
         rule = result.scalars().first()
         return _rule_to_dict(rule) if rule else None
@@ -72,7 +65,6 @@ def get_rule(rule_id: str, org_id: str) -> dict[str, Any] | None:
 
 
 def create_rule(
-    org_id: str,
     name: str,
     channel_id: int,
     conditions: dict[str, Any],
@@ -90,7 +82,6 @@ def create_rule(
             priority=priority,
             channel_id=channel_id,
             conditions=conditions,
-            org_id=org_id,
             created_at=now,
             updated_at=now,
         )
@@ -103,7 +94,6 @@ def create_rule(
 
 def update_rule(
     rule_id: str,
-    org_id: str,
     *,
     name: str | None = None,
     enabled: bool | None = None,
@@ -115,10 +105,7 @@ def update_rule(
 
     async def _q(session):
         result = await session.execute(
-            select(NotificationRule).where(
-                NotificationRule.id == rule_id,
-                NotificationRule.org_id == org_id,
-            )
+            select(NotificationRule).where(NotificationRule.id == rule_id)
         )
         rule = result.scalars().first()
         if rule is None:
@@ -140,13 +127,10 @@ def update_rule(
     return run_db(_q)
 
 
-def delete_rule(rule_id: str, org_id: str) -> bool:
+def delete_rule(rule_id: str) -> bool:
     async def _q(session):
         result = await session.execute(
-            select(NotificationRule).where(
-                NotificationRule.id == rule_id,
-                NotificationRule.org_id == org_id,
-            )
+            select(NotificationRule).where(NotificationRule.id == rule_id)
         )
         rule = result.scalars().first()
         if rule is None:
@@ -157,15 +141,12 @@ def delete_rule(rule_id: str, org_id: str) -> bool:
     return run_db(_q)
 
 
-def get_active_rules_for_org(org_id: str) -> list[Rule]:
+def get_active_rules() -> list[Rule]:
     """Return enabled rules as domain objects, sorted by priority ascending."""
     async def _q(session):
         result = await session.execute(
             select(NotificationRule)
-            .where(
-                NotificationRule.org_id == org_id,
-                NotificationRule.enabled == True,  # noqa: E712
-            )
+            .where(NotificationRule.enabled == True)  # noqa: E712
             .order_by(NotificationRule.priority.asc(), NotificationRule.created_at.asc())
         )
         return [_rule_to_domain(r) for r in result.scalars().all()]

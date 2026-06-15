@@ -11,6 +11,7 @@
 import { Fragment } from "react"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ChainsIcon } from "@/lib/shared/ui/page-icons"
+import { Button } from "@/components/ui/Button"
 
 type Severity = "critical" | "high"
 type Reachability = "public" | "internal"
@@ -556,18 +557,14 @@ function ChainRecommendation({ recommendation }: { recommendation: MockChain["re
       </div>
       <div className="flex flex-wrap gap-2">
         {recommendation.actions.map((action, i) => (
-          <button
+          <Button
             key={i}
-            type="button"
+            variant={action.primary ? "primary" : "secondary"}
+            size="sm"
             disabled
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
-              action.primary
-                ? "bg-[var(--color-accent)] text-[var(--color-accent-on)]"
-                : "border border-[var(--color-border)] text-[var(--color-text-primary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            }`}
           >
             {action.label}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

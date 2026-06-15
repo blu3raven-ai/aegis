@@ -1,5 +1,6 @@
 "use client"
 
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import type { Runner } from "./types"
 
 const STATUS_DOT: Record<string, string> = {
@@ -48,12 +49,9 @@ interface RemoteRunnerListProps {
  * border of its own.
  */
 export function RemoteRunnerList({ runners, onRowClick }: RemoteRunnerListProps) {
-  const thCls =
-    "px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-tertiary)] whitespace-nowrap"
-
   return (
     <div className="overflow-x-auto border-t border-[var(--color-border)]">
-      <table className="w-full table-fixed text-left text-sm">
+      <Table className="table-fixed">
         <colgroup>
           <col className="w-[25%]" />
           <col className="w-[15%]" />
@@ -62,25 +60,26 @@ export function RemoteRunnerList({ runners, onRowClick }: RemoteRunnerListProps)
           <col className="w-[15%]" />
           <col className="w-8" />
         </colgroup>
-        <thead className="bg-[var(--color-surface-2)]">
-          <tr>
-            <th className={thCls}>Runner</th>
-            <th className={thCls}>Status</th>
-            <th className={`${thCls} hidden sm:table-cell`}>Platform</th>
-            <th className={`${thCls} hidden md:table-cell`}>Health</th>
-            <th className={`${thCls} hidden md:table-cell`}>Concurrency</th>
-            <th className={`${thCls} w-8`} />
-          </tr>
-        </thead>
-        <tbody>
+        <Thead>
+          <Tr>
+            <Th className="py-2.5 whitespace-nowrap">Runner</Th>
+            <Th className="py-2.5 whitespace-nowrap">Status</Th>
+            <Th className="py-2.5 whitespace-nowrap hidden sm:table-cell">Platform</Th>
+            <Th className="py-2.5 whitespace-nowrap hidden md:table-cell">Health</Th>
+            <Th className="py-2.5 whitespace-nowrap hidden md:table-cell">Concurrency</Th>
+            <Th className="py-2.5 w-8" />
+          </Tr>
+        </Thead>
+        <Tbody divided={false}>
           {runners.map((r) => (
-            <tr
+            <Tr
               key={r.id}
               onClick={() => onRowClick(r)}
-              className="cursor-pointer border-t border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface-raised)]"
+              interactive
+              className="cursor-pointer border-t border-[var(--color-border)]"
             >
-              <td className="px-4 py-3 font-medium text-[var(--color-text-primary)]">{r.name}</td>
-              <td className="px-4 py-3">
+              <Td className="font-medium text-[var(--color-text-primary)]">{r.name}</Td>
+              <Td>
                 <span className="flex items-center gap-2">
                   <span
                     className={`h-2 w-2 rounded-full ${
@@ -91,17 +90,17 @@ export function RemoteRunnerList({ runners, onRowClick }: RemoteRunnerListProps)
                     {STATUS_LABEL[r.status] ?? r.status}
                   </span>
                 </span>
-              </td>
-              <td className="hidden px-4 py-3 text-[var(--color-text-secondary)] sm:table-cell">
+              </Td>
+              <Td className="hidden text-[var(--color-text-secondary)] sm:table-cell">
                 {r.os ? `${r.os.charAt(0).toUpperCase() + r.os.slice(1)}/${r.arch}` : "—"}
-              </td>
-              <td className="hidden px-4 py-3 md:table-cell">
+              </Td>
+              <Td className="hidden md:table-cell">
                 <MiniHealthBar percent={r.healthPercent} />
-              </td>
-              <td className="hidden px-4 py-3 tabular-nums text-[var(--color-text-secondary)] md:table-cell">
+              </Td>
+              <Td className="hidden tabular-nums text-[var(--color-text-secondary)] md:table-cell">
                 {r.maxConcurrent ?? "—"}
-              </td>
-              <td className="px-4 py-3 text-[var(--color-text-secondary)]">
+              </Td>
+              <Td className="text-[var(--color-text-secondary)]">
                 <svg
                   className="h-4 w-4"
                   viewBox="0 0 24 24"
@@ -111,11 +110,11 @@ export function RemoteRunnerList({ runners, onRowClick }: RemoteRunnerListProps)
                 >
                   <path d="M9 18l6-6-6-6" />
                 </svg>
-              </td>
-            </tr>
+              </Td>
+            </Tr>
           ))}
-        </tbody>
-      </table>
+        </Tbody>
+      </Table>
     </div>
   )
 }

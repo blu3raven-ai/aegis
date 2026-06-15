@@ -25,7 +25,7 @@ export async function fetchNotifications(opts?: {
   const qs = params.toString()
   try {
     return await apiClient<{ notifications: Notification[]; total: number }>(
-      `/notifications/api/list${qs ? `?${qs}` : ""}`,
+      `/api/v1/notifications/list${qs ? `?${qs}` : ""}`,
     )
   } catch {
     return { notifications: [], total: 0 }
@@ -34,7 +34,7 @@ export async function fetchNotifications(opts?: {
 
 export async function fetchUnreadCount(): Promise<number> {
   try {
-    const data = await apiClient<{ count?: number }>("/notifications/api/unread-count")
+    const data = await apiClient<{ count?: number }>("/api/v1/notifications/unread-count")
     return data.count ?? 0
   } catch {
     return 0
@@ -42,12 +42,12 @@ export async function fetchUnreadCount(): Promise<number> {
 }
 
 export async function markNotificationRead(notificationId?: string): Promise<void> {
-  await apiClient("/notifications/api/mark-read", {
+  await apiClient("/api/v1/notifications/mark-read", {
     method: "POST",
     body: { notification_id: notificationId ?? null },
   }).catch(() => {})
 }
 
 export async function deleteNotification(notificationId: string): Promise<void> {
-  await apiClient(`/notifications/api/${notificationId}`, { method: "DELETE" }).catch(() => {})
+  await apiClient(`/api/v1/notifications/${notificationId}`, { method: "DELETE" }).catch(() => {})
 }

@@ -98,12 +98,12 @@ class SearchService:
                 grouped["repos"] = hits
 
         if "audit_events" in active_scopes:
-            hits = self._search_audit_events(query, org_id=org_id, limit=limit)
+            hits = self._search_audit_events(query, limit=limit)
             if hits:
                 grouped["audit_events"] = hits
 
         if "destinations" in active_scopes:
-            hits = self._search_destinations(query, org_id=org_id, limit=limit)
+            hits = self._search_destinations(query, limit=limit)
             if hits:
                 grouped["destinations"] = hits
 
@@ -222,21 +222,23 @@ class SearchService:
         ]
 
     def _search_audit_events(
-        self, query: str, *, org_id: str | None, limit: int
+        self, query: str, *, limit: int
     ) -> list[SearchHit]:
         pat = f"%{query}%"
 
         async def _q(session: AsyncSession):
-            stmt = select(AuditEvent).where(
-                or_(
-                    AuditEvent.action.ilike(pat),
-                    AuditEvent.resource_id.ilike(pat),
-                    AuditEvent.resource_type.ilike(pat),
+            stmt = (
+                select(AuditEvent)
+                .where(
+                    or_(
+                        AuditEvent.action.ilike(pat),
+                        AuditEvent.resource_id.ilike(pat),
+                        AuditEvent.resource_type.ilike(pat),
+                    )
                 )
+                .order_by(AuditEvent.occurred_at.desc().nullslast())
+                .limit(limit)
             )
-            if org_id:
-                stmt = stmt.where(AuditEvent.org_id == org_id)
-            stmt = stmt.order_by(AuditEvent.occurred_at.desc().nullslast()).limit(limit)
             result = await session.execute(stmt)
             return result.scalars().all()
 
@@ -270,7 +272,7 @@ class SearchService:
         return hits
 
     def _search_destinations(
-        self, query: str, *, org_id: str | None, limit: int
+        self, query: str, *, limit: int
     ) -> list[SearchHit]:
         pat = f"%{query}%"
 
@@ -280,10 +282,7 @@ class SearchService:
                     NotificationDestination.name.ilike(pat),
                     NotificationDestination.destination_type.ilike(pat),
                 )
-            )
-            if org_id:
-                stmt = stmt.where(NotificationDestination.org_id == org_id)
-            stmt = stmt.limit(limit)
+            ).limit(limit)
             result = await session.execute(stmt)
             return result.scalars().all()
 
@@ -305,7 +304,6 @@ class SearchService:
                     metadata={
                         "destination_type": r.destination_type,
                         "enabled": r.enabled,
-                        "org_id": r.org_id,
                     },
                 )
             )

@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { PrerequisitePanel } from "../PrerequisitePanel"
-import { SaveBar } from "../SaveBar"
+import { useSaveBarSection } from "../save-bar/SaveBarProvider"
 import type { PrerequisiteItem } from "@/lib/shared/prerequisite-utils"
 import { AdvisorySourcesCopyBar } from "@/components/settings/AdvisorySourcesCopyBar"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { Input } from "@/components/ui/Input"
 import { AdvisorySourcesGrid } from "../_components/AdvisorySourcesGrid"
 
 interface DependenciesSetupFormProps {
@@ -161,6 +162,14 @@ export function DependenciesSetupForm({
     setSaved(false)
   }
 
+  useSaveBarSection({
+    id: "dependencies-setup",
+    dirty: isDirty,
+    saving: isPending,
+    onSave: handleSave,
+    onDiscard: handleDiscard,
+  })
+
   // Status determination
   let status: "Setup required" | "Verifying" | "Ready" = "Setup required"
   if (prereqRefreshing) {
@@ -227,12 +236,11 @@ export function DependenciesSetupForm({
       <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Scan concurrency</label>
-            <input
+            <Input
               type="number"
               min="1"
               value={scanConcurrency}
               onChange={(e) => setScanConcurrency(e.target.value)}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
             />
             <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">Maximum repositories scanned in parallel.</p>
           </div>
@@ -266,11 +274,11 @@ export function DependenciesSetupForm({
                       <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                         Scan Time (Daily)
                       </label>
-                      <input
+                      <Input
                         type="time"
                         value={rerunScheduleValue}
                         onChange={(e) => setRerunScheduleValue(e.target.value)}
-                        className="w-full max-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                        className="max-w-[150px]"
                       />
                     </div>
                   ) : (
@@ -278,12 +286,12 @@ export function DependenciesSetupForm({
                       <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                         Cron Expression
                       </label>
-                      <input
+                      <Input
                         type="text"
                         value={rerunScheduleValue}
                         onChange={(e) => setRerunScheduleValue(e.target.value)}
                         placeholder="e.g. 0 2 * * *"
-                        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 font-mono"
+                        className="font-mono"
                       />
                       <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
                         Standard cron format (min hour day month weekday).
@@ -323,13 +331,6 @@ export function DependenciesSetupForm({
         </div>
       )}
 
-      <SaveBar
-        saved={saved}
-        dirty={isDirty}
-        onSave={handleSave}
-        onDiscard={handleDiscard}
-        saving={isPending}
-      />
     </div>
   )
 }

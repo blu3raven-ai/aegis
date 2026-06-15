@@ -40,3 +40,18 @@ test("NotificationsPreferencesSection groups rows inside a SettingsCard", () => 
   assert.match(SRC, /from\s+"@\/components\/settings\/SettingsRow"/)
   assert.match(SRC, /<SettingsCard/)
 })
+
+test("NotificationsPreferencesSection sources state from useNotificationSettings", () => {
+  assert.match(SRC, /from\s+"@\/lib\/client\/settings\/use-notification-settings"/)
+  assert.match(SRC, /useNotificationSettings\(\)/)
+})
+
+test("NotificationsPreferencesSection registers with the global SaveBar provider", () => {
+  assert.match(SRC, /from\s+"@\/app\/\(app\)\/settings\/save-bar\/SaveBarProvider"/)
+  assert.match(SRC, /useSaveBarSection\(/)
+})
+
+test("NotificationsPreferencesSection no longer hardcodes defaultEnabled", () => {
+  // Defaults now live on the backend.
+  assert.doesNotMatch(SRC, /defaultEnabled/)
+})

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 
 import { FindingAssigneePicker } from "./FindingAssigneePicker"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 export interface FindingsMoreFiltersValues {
   cwe: string | null
@@ -52,14 +54,14 @@ export function FindingsMoreFiltersPopover({ values, onChange }: FindingsMoreFil
 
   return (
     <div ref={rootRef} className="relative inline-block">
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="xs"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
-        className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
       >
         + More filters{activeCount > 0 ? ` (${activeCount})` : ""}
-      </button>
+      </Button>
       {open && (
         <div
           role="dialog"
@@ -79,32 +81,33 @@ export function FindingsMoreFiltersPopover({ values, onChange }: FindingsMoreFil
 
             <label className="flex flex-col gap-1 text-xs text-[var(--color-text-secondary)]">
               CWE
-              <input
+              <Input
+                size="sm"
                 type="text"
                 placeholder="CWE-502"
                 value={values.cwe ?? ""}
                 onChange={(e) => onChange({ cwe: e.target.value || null })}
                 maxLength={32}
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
               />
             </label>
 
             <label className="flex flex-col gap-1 text-xs text-[var(--color-text-secondary)]">
               EPSS ≥
-              <input
+              <Input
+                size="sm"
                 type="number"
                 step={0.05}
                 min={0}
                 max={1}
                 value={values.epssMin ?? ""}
                 onChange={(e) => onChange({ epssMin: e.target.value === "" ? null : Number(e.target.value) })}
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
               />
             </label>
 
             <label className="flex flex-col gap-1 text-xs text-[var(--color-text-secondary)]">
               Risk score ≥
-              <input
+              <Input
+                size="sm"
                 type="number"
                 step={5}
                 min={0}
@@ -113,7 +116,6 @@ export function FindingsMoreFiltersPopover({ values, onChange }: FindingsMoreFil
                 onChange={(e) =>
                   onChange({ riskScoreMin: e.target.value === "" ? null : Number(e.target.value) })
                 }
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
               />
             </label>
 

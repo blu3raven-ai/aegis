@@ -90,27 +90,13 @@ def _empty_sla_result() -> SlaEvaluationResult:
     return SlaEvaluationResult(0, 0, 0, 0, 0)
 
 
-def evaluate_sla_rules_for_org(
-    org_id: str | None = None,
+def evaluate_sla_rules(
     *,
-    asset_ids: list[str] | None = None,
+    asset_ids: list[str],
     now: datetime | None = None,
 ) -> SlaEvaluationResult:
-    """Evaluate every enabled SLA rule against the org's findings.
-
-    Pass ``asset_ids`` to scope by asset identity rather than org string.
-    An empty ``asset_ids`` list returns an empty result immediately.
-
-    For each (rule, matching open finding) pair this opens a ``RuleViolation``
-    if one doesn't already exist, refreshes the stored ``deadline_at`` if the
-    rule's deadline changed, and dual-writes ``FindingSlaStatus`` using the
-    tightest matching rule per finding. Violations whose finding has closed
-    are resolved.
-
-    Load and persist run in a single transaction so concurrent writers cannot
-    sneak findings closed / rules disabled between the two phases.
-    """
-    if asset_ids is not None and not asset_ids:
+    """Evaluate every enabled SLA rule against findings scoped to asset_ids."""
+    if not asset_ids:
         return _empty_sla_result()
 
     current_time = _ensure_aware(now) if now is not None else _utcnow()
@@ -120,20 +106,13 @@ def evaluate_sla_rules_for_org(
             select(Rule).where(
                 Rule.category == "sla",
                 Rule.enabled == True,  # noqa: E712
-                Rule.org_id == org_id,
             )
         )
         rules = list(rules_q.scalars().all())
 
-        if asset_ids is not None:
-            findings_q = await session.execute(
-                select(Finding).where(Finding.asset_id.in_(asset_ids))
-            )
-        else:
-            # Org-only callers no longer have a scope after Plan D; fail closed.
-            findings_q = await session.execute(
-                select(Finding).where(sa.false())
-            )
+        findings_q = await session.execute(
+            select(Finding).where(Finding.asset_id.in_(asset_ids))
+        )
         findings = list(findings_q.scalars().all())
 
         active_findings = [f for f in findings if f.state not in _CLOSED_STATES]
@@ -148,8 +127,8 @@ def evaluate_sla_rules_for_org(
             deadline_days = action.get("deadline_days")
             if not isinstance(deadline_days, int) or deadline_days <= 0:
                 logger.warning(
-                    "SLA evaluator: rule %s for org %s has invalid deadline_days=%r; skipping",
-                    rule.id, org_id, deadline_days,
+                    "SLA evaluator: rule %s has invalid deadline_days=%r; skipping",
+                    rule.id, deadline_days,
                 )
                 skipped_rules += 1
                 continue
@@ -158,8 +137,8 @@ def evaluate_sla_rules_for_org(
             for finding in active_findings:
                 if not finding.severity:
                     logger.warning(
-                        "SLA evaluator: finding %s in org %s has no severity; skipping",
-                        finding.id, org_id,
+                        "SLA evaluator: finding %s has no severity; skipping",
+                        finding.id,
                     )
                     continue
 
@@ -314,19 +293,8 @@ def evaluate_sla_rules_for_org(
     return run_db(_evaluate)
 
 
-def evaluate_sla_escalations_for_org(
-    org_id: str, *, now: datetime | None = None
-) -> int:
-    """Fire un-fired escalations whose ``at_hours`` threshold has elapsed.
-
-    Records the fire time in ``violation.context['escalation_state']`` keyed by
-    ``"{at_hours}h"`` so the same threshold never fires twice for the same
-    violation.
-
-    Destinations are looked up inside the same async session to avoid
-    re-entering ``run_db`` from inside the dedicated event loop (which would
-    deadlock).
-    """
+def evaluate_sla_escalations(*, now: datetime | None = None) -> int:
+    """Fire un-fired escalations whose ``at_hours`` threshold has elapsed."""
     current_time = _ensure_aware(now) if now is not None else _utcnow()
 
     async def _evaluate(session) -> int:
@@ -334,7 +302,6 @@ def evaluate_sla_escalations_for_org(
             select(RuleViolation, Rule)
             .join(Rule, Rule.id == RuleViolation.rule_id)
             .where(
-                Rule.org_id == org_id,
                 Rule.category == "sla",
                 Rule.enabled == True,  # noqa: E712
                 RuleViolation.status == "open",
@@ -345,9 +312,6 @@ def evaluate_sla_escalations_for_org(
         if not pairs:
             return 0
 
-        # Pre-fetch every destination referenced by any escalation in this
-        # batch in a single query so the per-violation loop stays pure (no
-        # additional DB roundtrips per channel).
         needed_channel_ids: set[int] = set()
         for _violation, rule in pairs:
             for esc in (rule.action or {}).get("escalations") or []:
@@ -359,7 +323,6 @@ def evaluate_sla_escalations_for_org(
         if needed_channel_ids:
             dest_q = await session.execute(
                 select(NotificationDestination).where(
-                    NotificationDestination.org_id == org_id,
                     NotificationDestination.id.in_(needed_channel_ids),
                 )
             )
@@ -372,7 +335,6 @@ def evaluate_sla_escalations_for_org(
                 violation=violation,
                 rule=rule,
                 now=current_time,
-                org_id=org_id,
                 destinations_by_channel=destinations_by_channel,
             )
             total_fired += fired
@@ -386,7 +348,6 @@ def _check_and_fire_escalations(
     violation: RuleViolation,
     rule: Rule,
     now: datetime,
-    org_id: str,
     destinations_by_channel: dict[int, NotificationDestination | None],
 ) -> int:
     """Fire any escalation whose ``at_hours`` has elapsed and isn't yet recorded.
@@ -424,13 +385,12 @@ def _check_and_fire_escalations(
         dest = destinations_by_channel.get(channel_id)
         if dest is None or not dest.enabled:
             logger.warning(
-                "SLA escalation: destination %s missing or disabled for org %s (rule %s, violation %s)",
-                channel_id, org_id, rule.id, violation.id,
+                "SLA escalation: destination %s missing or disabled (rule %s, violation %s)",
+                channel_id, rule.id, violation.id,
             )
             continue
 
         _dispatch_escalation(
-            org_id=org_id,
             rule=rule,
             violation=violation,
             channel_id=channel_id,
@@ -447,7 +407,6 @@ def _check_and_fire_escalations(
 
 def _dispatch_escalation(
     *,
-    org_id: str,
     rule: Rule,
     violation: RuleViolation,
     channel_id: int,
@@ -458,7 +417,7 @@ def _dispatch_escalation(
 
     get_event_bus().publish_sync(Event(
         event_type="sla.escalation",
-        org=org_id,
+        org="",
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,
@@ -470,13 +429,13 @@ def _dispatch_escalation(
         },
     ))
     logger.info(
-        "SLA escalation fired: rule=%s violation=%s at_hours=%s channel=%s org=%s",
-        rule.id, violation.id, at_hours, channel_id, org_id,
+        "SLA escalation fired: rule=%s violation=%s at_hours=%s channel=%s",
+        rule.id, violation.id, at_hours, channel_id,
     )
 
 
 __all__ = [
     "SlaEvaluationResult",
-    "evaluate_sla_rules_for_org",
-    "evaluate_sla_escalations_for_org",
+    "evaluate_sla_rules",
+    "evaluate_sla_escalations",
 ]

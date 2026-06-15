@@ -1,0 +1,275 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Sheet } from "@/components/ui/Sheet"
+import { Textarea } from "@/components/ui/Textarea"
+import { ApiClientError } from "@/lib/client/api-client.types"
+import {
+  createFramework,
+  createFrameworkControl,
+  type CreateControlBody,
+} from "@/lib/client/compliance-api"
+
+interface Props {
+  open: boolean
+  onClose: () => void
+  onCreated: () => void
+}
+
+interface DraftControl {
+  control_id: string
+  title: string
+  description: string
+  category: string
+}
+
+const EMPTY_CONTROL: DraftControl = {
+  control_id: "",
+  title: "",
+  description: "",
+  category: "",
+}
+
+function readErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiClientError) {
+    const body = err.body as { detail?: string; error?: string } | null
+    return body?.detail ?? body?.error ?? `${fallback} (HTTP ${err.status})`
+  }
+  return err instanceof Error ? err.message : fallback
+}
+
+export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
+  const [id, setId] = useState("")
+  const [label, setLabel] = useState("")
+  const [description, setDescription] = useState("")
+  const [controls, setControls] = useState<DraftControl[]>([{ ...EMPTY_CONTROL }])
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function updateControl(index: number, patch: Partial<DraftControl>) {
+    setControls((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)))
+  }
+
+  function addControl() {
+    setControls((prev) => [...prev, { ...EMPTY_CONTROL }])
+  }
+
+  function removeControl(index: number) {
+    setControls((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)))
+  }
+
+  function reset() {
+    setId("")
+    setLabel("")
+    setDescription("")
+    setControls([{ ...EMPTY_CONTROL }])
+    setError(null)
+    setSubmitting(false)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true)
+    setError(null)
+
+    const trimmedId = id.trim()
+    const trimmedLabel = label.trim()
+    if (!trimmedId || !trimmedLabel) {
+      setError("framework id and label are required")
+      setSubmitting(false)
+      return
+    }
+
+    const validControls = controls
+      .map((c): CreateControlBody | null => {
+        const cid = c.control_id.trim()
+        const ctitle = c.title.trim()
+        if (!cid || !ctitle) return null
+        return {
+          control_id: cid,
+          title: ctitle,
+          description: c.description.trim() || null,
+          category: c.category.trim() || null,
+        }
+      })
+      .filter((c): c is CreateControlBody => c !== null)
+
+    try {
+      await createFramework({
+        id: trimmedId,
+        label: trimmedLabel,
+        description: description.trim() || null,
+      })
+    } catch (err) {
+      setError(readErrorMessage(err, "failed to create framework"))
+      setSubmitting(false)
+      return
+    }
+
+    try {
+      for (const ctrl of validControls) {
+        await createFrameworkControl(trimmedId, ctrl)
+      }
+      reset()
+      onCreated()
+    } catch (err) {
+      // Framework was created; some controls may have failed. Surface the error
+      // so the user knows and can recreate the missing controls via a future
+      // edit surface.
+      setError(readErrorMessage(err, "framework created but some controls failed to save"))
+      setSubmitting(false)
+    }
+  }
+
+  function handleClose() {
+    if (submitting) return
+    reset()
+    onClose()
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onClose={handleClose}
+      title="New compliance framework"
+      description="Define the framework and seed its initial controls. You can add or edit controls later."
+      size="lg"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <label className="block">
+              <span className="text-xs font-medium text-[var(--color-text-secondary)]">
+                Framework ID
+              </span>
+              <Input
+                size="sm"
+                required
+                value={id}
+                onChange={(e) => setId(e.target.value)}
+                placeholder="acme-2026"
+                pattern="[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?"
+                title="lowercase letters, digits, hyphens; 1–64 chars"
+                className="mt-1 font-mono"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-[var(--color-text-secondary)]">Label</span>
+              <Input
+                size="sm"
+                required
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="ACME 2026"
+                className="mt-1"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="text-xs font-medium text-[var(--color-text-secondary)]">
+              Description (optional)
+            </span>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className="mt-1"
+            />
+          </label>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--color-text-secondary)]">
+                Controls
+              </span>
+              <Button variant="ghost" size="xs" type="button" onClick={addControl}>
+                + Add control
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {controls.map((c, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-12 gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-2"
+                >
+                  <Input
+                    size="sm"
+                    value={c.control_id}
+                    onChange={(e) => updateControl(i, { control_id: e.target.value })}
+                    placeholder="A.1"
+                    className="col-span-2 font-mono"
+                  />
+                  <Input
+                    size="sm"
+                    value={c.title}
+                    onChange={(e) => updateControl(i, { title: e.target.value })}
+                    placeholder="Access controls"
+                    className="col-span-4"
+                  />
+                  <Input
+                    size="sm"
+                    value={c.category}
+                    onChange={(e) => updateControl(i, { category: e.target.value })}
+                    placeholder="Category"
+                    className="col-span-2"
+                  />
+                  <Input
+                    size="sm"
+                    value={c.description}
+                    onChange={(e) => updateControl(i, { description: e.target.value })}
+                    placeholder="Description"
+                    className="col-span-3"
+                  />
+                  <div className="col-span-1 flex justify-center">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      iconOnly
+                      onClick={() => removeControl(i)}
+                      disabled={controls.length <= 1}
+                      aria-label="Remove control"
+                      className="hover:text-[var(--color-severity-critical)]"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-1 text-2xs text-[var(--color-text-secondary)]">
+              Rows with empty ID or title are skipped on save.
+            </p>
+          </div>
+
+          {error && (
+            <p className="rounded-md border border-[var(--color-severity-critical)]/40 bg-[var(--color-severity-critical)]/5 px-3 py-2 text-xs text-[var(--color-severity-critical)]">
+              {error}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="secondary"
+              size="md"
+              type="button"
+              onClick={handleClose}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              type="submit"
+              isLoading={submitting}
+              disabled={submitting || !id.trim() || !label.trim()}
+            >
+              Create framework
+            </Button>
+          </div>
+        </form>
+    </Sheet>
+  )
+}

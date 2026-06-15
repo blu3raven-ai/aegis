@@ -6,12 +6,16 @@ import { join } from "node:path"
 const ROOT = join(import.meta.dirname, "../..")
 const sidebar = readFileSync(join(ROOT, "components/layout/SidebarContent.tsx"), "utf8")
 
-describe("Sidebar — IA: Overview / Reporting / Configuration / Data", () => {
-  it("renders four groups", () => {
-    assert.ok(sidebar.includes('label="Overview"'), "Overview group present")
-    assert.ok(sidebar.includes('label="Reporting"'), "Reporting group present")
-    assert.ok(sidebar.includes('label="Configuration"'), "Configuration group present")
-    assert.ok(sidebar.includes('label="Data"'), "Data group present")
+describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configure", () => {
+  it("renders all five group labels", () => {
+    assert.ok(sidebar.includes('label="Overview"'), "Overview group label present")
+    assert.ok(sidebar.includes('label="Workspace"'), "Workspace group label present")
+    assert.ok(sidebar.includes('label="Inventory"'), "Inventory group label present")
+    assert.ok(sidebar.includes('label="Insights"'), "Insights group label present")
+    assert.ok(sidebar.includes('label="Configure"'), "Configure group label present")
+    assert.ok(!sidebar.includes('label="Configuration"'), "Tail group is labelled Configure, not Configuration")
+    assert.ok(!sidebar.includes('label="Reporting"'), "Reporting renamed to Insights")
+    assert.ok(!sidebar.includes('label="Data"'), "Data renamed to Inventory (ASPM-standard term)")
   })
 
   it("removes the prior Dashboards / Work / Scanners / Library group labels", () => {
@@ -21,7 +25,7 @@ describe("Sidebar — IA: Overview / Reporting / Configuration / Data", () => {
     assert.ok(!sidebar.includes('label="Library"'), "Library group label gone")
   })
 
-  it("Overview group contains Home, Inbox, Findings, Posture in order (Activity intentionally hidden — reached via notification bell)", () => {
+  it("Overview section contains Home, Inbox, Findings, Posture in order (Activity intentionally hidden — reached via notification bell)", () => {
     const block = sidebar.match(/overviewItems[\s\S]*?\];/m)?.[0] ?? ""
     assert.ok(block.length > 0, "overviewItems array present")
     const expected = ["Home", "Inbox", "Findings", "Posture"]
@@ -36,31 +40,34 @@ describe("Sidebar — IA: Overview / Reporting / Configuration / Data", () => {
     assert.ok(!block.includes('label: "Activity"'), "Activity should not appear in sidebar (notification-bell only)")
   })
 
-  it("Reporting group contains Compliance and Reports", () => {
+  it("Insights group contains Compliance and Reports", () => {
     const block = sidebar.match(/reportingItems[\s\S]*?\];/m)?.[0] ?? ""
     assert.ok(block.length > 0, "reportingItems array present")
     for (const label of ["Compliance", "Reports"]) {
-      assert.ok(block.includes(`label: "${label}"`), `Reporting missing item: ${label}`)
+      assert.ok(block.includes(`label: "${label}"`), `Insights missing item: ${label}`)
     }
   })
 
-  it("Configuration group contains Integrations and Rules", () => {
+  it("Configuration section contains Policies, Integrations, Notifications — Rules renamed to Policies per peer vocabulary", () => {
     const cfgRegex = /configurationItems[\s\S]*?\];/m
     const block = sidebar.match(cfgRegex)?.[0] ?? ""
     assert.ok(block.length > 0, "configurationItems array present")
+    assert.ok(block.includes('label: "Policies"'), "Configuration missing item: Policies")
     assert.ok(block.includes('label: "Integrations"'), "Configuration missing item: Integrations")
-    assert.ok(block.includes('label: "Rules"'), "Configuration missing item: Rules")
+    assert.ok(block.includes('label: "Notifications"'), "Configuration missing item: Notifications")
+    assert.ok(!block.includes('label: "Rules"'), "Rules renamed to Policies (Snyk / Apiiro / Endor vocabulary)")
   })
 
-  it("Data group contains Repositories, Images, Chains (Findings lives under Overview, Releases is reached via /repos/[repoId])", () => {
+  it("Inventory group contains Sources and Chains (Images unified into /sources, Findings lives under Overview, Releases is reached via /sources/[id])", () => {
     const dataRegex = /dataItems[\s\S]*?\];/m
     const block = sidebar.match(dataRegex)?.[0] ?? ""
     assert.ok(block.length > 0, "dataItems array present")
-    for (const label of ["Repositories", "Images", "Chains"]) {
-      assert.ok(block.includes(`label: "${label}"`), `Data missing item: ${label}`)
+    for (const label of ["Sources", "Chains"]) {
+      assert.ok(block.includes(`label: "${label}"`), `Inventory missing item: ${label}`)
     }
-    assert.ok(!block.includes('label: "Findings"'), "Findings should not appear in Data (lives under Overview)")
-    assert.ok(!block.includes('label: "Releases"'), "Releases should not appear in Data (reached via /repos/[repoId])")
+    assert.ok(!block.includes('label: "Images"'), "Images should not appear in Inventory (unified into /sources)")
+    assert.ok(!block.includes('label: "Findings"'), "Findings should not appear in Inventory (lives under Overview)")
+    assert.ok(!block.includes('label: "Releases"'), "Releases should not appear in Inventory (reached via /sources/[id])")
   })
 
   it("removes scanner-led items from the sidebar", () => {
@@ -70,7 +77,6 @@ describe("Sidebar — IA: Overview / Reporting / Configuration / Data", () => {
     assert.ok(!sidebar.includes('label: "Secrets"'), "Secrets removed from sidebar")
     assert.ok(!sidebar.includes('label: "IaC Security"'), "IaC Security removed from sidebar")
     assert.ok(!sidebar.includes('label: "SBOM"'), "SBOM removed from sidebar")
-    assert.ok(!sidebar.includes('label: "Sources"'), "Sources removed from sidebar")
   })
 
   it("wires new routes to the right hrefs", () => {
@@ -80,24 +86,13 @@ describe("Sidebar — IA: Overview / Reporting / Configuration / Data", () => {
     assert.ok(sidebar.includes('href: "/compliance"'), "Compliance href present")
     assert.ok(sidebar.includes('href: "/reports"'), "Reports href present")
     assert.ok(sidebar.includes('href: "/integrations"'), "Integrations href present")
-    assert.ok(sidebar.includes('href: "/rules"'), "Rules href present")
-    assert.ok(sidebar.includes('href: "/repos"'), "Repositories href present")
-    assert.ok(sidebar.includes('href: "/images"'), "Images href present")
+    assert.ok(sidebar.includes('href: "/policies"'), "Policies href present")
+    assert.ok(sidebar.includes('href: "/sources"'), "Sources href present")
+    assert.ok(!sidebar.includes('href: "/images"'), "Images href should be absent — unified into /sources")
     assert.ok(sidebar.includes('href: "/findings"'), "Findings href present")
     assert.ok(sidebar.includes('href: "/chains"'), "Chains href present")
     // Activity intentionally absent — reachable via the notification bell only.
     assert.ok(!sidebar.includes('href: "/activity"'), "Activity href intentionally absent from sidebar")
-  })
-
-  it("highlights Repositories on the legacy /sources/{category}/[id] connection detail routes", () => {
-    // The standalone /sources index page was removed when the Add Connection
-    // modal moved in-place to /repos and /images, but the per-connection
-    // detail routes still live under /sources/* — the sidebar item should
-    // stay active there so users don't lose their place in the IA.
-    assert.ok(
-      sidebar.includes('pathname.startsWith("/sources/")'),
-      "isActive should match /sources/* for Repositories item",
-    )
   })
 
   it("does not special-case /operations in isActive (dead after operations/page.tsx was deleted)", () => {
@@ -107,9 +102,12 @@ describe("Sidebar — IA: Overview / Reporting / Configuration / Data", () => {
   })
 
   it("preserves the existing brand, search, tier card, user menu, no visual changes", () => {
-    assert.ok(sidebar.includes("Raven Protocol"), "Raven Protocol eyebrow preserved")
-    assert.ok(sidebar.includes("Blu3Raven"), "Blu3Raven name preserved")
-    assert.ok(sidebar.includes("Aegis — Vulnerability Management Portal"), "Aegis subtitle preserved")
+    // Branding flows through useBranding(). Vendor (NULL name) shows the
+    // hardcoded 3-line identity; customer (any non-null name) shows only
+    // [logo] {name} — no subtitle line.
+    assert.ok(sidebar.includes("useBranding()"), "useBranding hook is wired")
+    assert.ok(sidebar.includes("{brandName}"), "brand name renders from hook")
+    assert.ok(!sidebar.includes("brandSubtitle"), "no subtitle wiring — customer layout is single-line")
     assert.ok(sidebar.includes("--font-space-grotesk"), "Space Grotesk font preserved")
     assert.ok(sidebar.includes("UserMenuButton"), "UserMenuButton preserved")
     assert.ok(sidebar.includes("TIER_LABELS[tier]"), "Tier card preserved")

@@ -34,3 +34,19 @@ test("ProfileSection uses the SettingsCard + SettingsRow primitives", () => {
   assert.match(SRC, /from\s+"@\/components\/settings\/SettingsCard"/)
   assert.match(SRC, /from\s+"@\/components\/settings\/SettingsRow"/)
 })
+
+test("ProfileSection sources persisted preferences from useProfileSettings", () => {
+  assert.match(SRC, /from\s+"@\/lib\/client\/settings\/use-profile-settings"/)
+  assert.match(SRC, /useProfileSettings\(\)/)
+})
+
+test("ProfileSection no longer reads or writes localStorage", () => {
+  assert.doesNotMatch(SRC, /localStorage/)
+  assert.doesNotMatch(SRC, /THEME_STORAGE_KEY/)
+  assert.doesNotMatch(SRC, /TZ_STORAGE_KEY/)
+})
+
+test("ProfileSection registers with the global SaveBar provider", () => {
+  assert.match(SRC, /from\s+"@\/app\/\(app\)\/settings\/save-bar\/SaveBarProvider"/)
+  assert.match(SRC, /useSaveBarSection\(/)
+})

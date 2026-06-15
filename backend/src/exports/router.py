@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
 from src.db.engine import get_session
@@ -22,6 +22,8 @@ from src.exports.findings_export import (
     stream_findings_csv,
     stream_findings_json,
 )
+from src.settings.router import require_permission
+from src.shared.scope import resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/exports", tags=["exports"])
 
@@ -40,6 +42,7 @@ def _filename(fmt: str, ts: datetime) -> str:
 
 @router.get("/findings")
 async def export_findings(
+    request: Request,
     format: Literal["csv", "json"] = Query(default="csv", description="Output format: csv or json (JSONL)"),
     severity: str | None = Query(default=None, description="Comma-separated severities (critical,high,medium,low)"),
     scanner: str | None = Query(default=None, description="Comma-separated scanner types (e.g. dependencies,secrets)"),
@@ -55,6 +58,9 @@ async def export_findings(
     into memory.  The X-Total-Count response header contains the matching row
     count, useful for progress indicators in CLI clients.
     """
+    require_permission(request, "view_findings")
+    asset_ids = await resolve_asset_ids_from_request(request)
+
     filters = FindingFilters(
         severity=_parse_csv_list(severity),
         scanner=_parse_csv_list(scanner),
@@ -68,14 +74,14 @@ async def export_findings(
     filename = _filename(format, now)
 
     async with get_session() as session:
-        total = await count_findings(filters, session, include_archived_rows=include_archived)
+        total = await count_findings(filters, asset_ids, session, include_archived_rows=include_archived)
 
     if format == "csv":
         content_type = "text/csv"
 
         async def _generate():
             async with get_session() as session:
-                async for chunk in stream_findings_csv(filters, session, include_archived_rows=include_archived):
+                async for chunk in stream_findings_csv(filters, asset_ids, session, include_archived_rows=include_archived):
                     yield chunk
 
         return StreamingResponse(
@@ -91,7 +97,7 @@ async def export_findings(
 
         async def _generate():
             async with get_session() as session:
-                async for chunk in stream_findings_json(filters, session, include_archived_rows=include_archived):
+                async for chunk in stream_findings_json(filters, asset_ids, session, include_archived_rows=include_archived):
                     yield chunk
 
         return StreamingResponse(

@@ -136,6 +136,60 @@ def _seed_default_roles(_create_tables):
     run_db(_insert)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _seed_sso_config_singleton(_create_tables):
+    """Seed the SSO config singleton row once per test session.
+
+    The production migration seeds this via INSERT, but tests use
+    create_all which bypasses migrations, so we mirror it here.
+    """
+    from src.db.helpers import run_db
+    from src.db.models import SsoConfig
+
+    async def _insert(session):
+        existing = await session.get(SsoConfig, 1)
+        if not existing:
+            session.add(SsoConfig(id=1))
+
+    run_db(_insert)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _seed_scim_config_singleton(_create_tables):
+    """Seed the SCIM config singleton row once per test session.
+
+    Mirrors _seed_sso_config_singleton — create_all bypasses migrations so
+    the INSERT that normally runs in the alembic upgrade must be reproduced here.
+    """
+    from src.db.helpers import run_db
+    from src.db.models import ScimConfig
+
+    async def _insert(session):
+        existing = await session.get(ScimConfig, 1)
+        if not existing:
+            session.add(ScimConfig(id=1))
+
+    run_db(_insert)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _seed_audit_stream_config_singleton(_create_tables):
+    """Seed the audit-stream config singleton row once per test session.
+
+    Mirrors _seed_scim_config_singleton — create_all bypasses migrations so
+    the INSERT that normally runs in the alembic upgrade must be reproduced here.
+    """
+    from src.db.helpers import run_db
+    from src.db.models import AuditStreamConfig
+
+    async def _insert(session):
+        existing = await session.get(AuditStreamConfig, 1)
+        if not existing:
+            session.add(AuditStreamConfig(id=1))
+
+    run_db(_insert)
+
+
 @pytest.fixture(scope="session")
 def db_url():
     """Return the test database URL."""
@@ -168,12 +222,15 @@ def _make_test_session(user_id: str, role: str = "admin") -> str:
         existing_user = await session.get(User, user_id)
         if not existing_user:
             now = datetime.now(timezone.utc)
+            # Map slug ("admin") to the seeded role PK ("role_admin") so
+            # SessionAuthMiddleware can resolve permissions via role_id FK.
+            role_id = f"role_{role}"
             session.add(User(
                 id=user_id,
                 username=f"test-{user_id}",
                 email=f"{user_id}@test.example",
                 password_hash="",
-                role=role,
+                role_id=role_id,
                 status="active",
                 created_at=now,
                 updated_at=now,

@@ -84,6 +84,19 @@ export const CATEGORY_SOURCE_TYPES: Record<SourceCategory, SourceType[]> = {
   "cloud-infrastructure": [],
 }
 
+export const SOURCE_TYPE_TO_CATEGORY: Record<SourceType, SourceCategory> = {
+  github: "code-repositories",
+  gitlab: "code-repositories",
+  bitbucket: "code-repositories",
+  gitea: "code-repositories",
+  "docker-hub": "container-registry",
+  ghcr: "container-registry",
+  ecr: "container-registry",
+  acr: "container-registry",
+  gcr: "container-registry",
+  "gitlab-registry": "container-registry",
+}
+
 export const CATEGORY_API_SLUGS: Record<SourceCategory, string> = {
   "code-repositories": "code-repositories",
   "container-registry": "container-images",

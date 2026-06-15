@@ -50,7 +50,7 @@ def _make_app(user_id: str, db_session) -> FastAPI:
 async def _seed_user_with_team(db_session) -> tuple[str, str]:
     user_id = f"router-test-{uuid4()}"
     db_session.add(User(id=user_id, username=user_id, email=f"{user_id}@example.com",
-                        password_hash="", role="viewer", status="active"))
+                        password_hash="", status="active"))
     team = Team(id=f"t-{uuid4()}", name="Test Team")
     db_session.add(team)
     await db_session.flush()
@@ -62,7 +62,7 @@ async def _seed_user_with_team(db_session) -> tuple[str, str]:
 async def _seed_user_without_team(db_session) -> str:
     user_id = f"router-test-{uuid4()}"
     db_session.add(User(id=user_id, username=user_id, email=f"{user_id}@example.com",
-                        password_hash="", role="viewer", status="active"))
+                        password_hash="", status="active"))
     await db_session.commit()
     return user_id
 

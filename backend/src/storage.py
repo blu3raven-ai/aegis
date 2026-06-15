@@ -824,10 +824,9 @@ def _finding_to_code_scanning_dict(
         "introduced_by_author": getattr(f, "introduced_by_author", None),
         "introduced_at": _dt_to_iso(getattr(f, "introduced_at", None)),
         "introduced_by_pr_url": getattr(f, "introduced_by_pr_url", None),
-        # Engine attribution (column is SOT) + dataflow trace + merged rule ids
+        # Engine attribution (column is SOT) + merged rule ids
         "engine": getattr(f, "engine", None),
         "rule_ids": detail.get("ruleIds"),
-        "dataflow_trace": detail.get("dataflowTrace"),
     }
     # Optional large fields
     for key in ("code_flows", "code_window", "imports", "reachability"):

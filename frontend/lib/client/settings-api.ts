@@ -34,7 +34,7 @@ type ApiErrorPayload = {
   detail?: unknown
 }
 
-const SETTINGS_API_BASE = "/settings/api"
+const SETTINGS_API_BASE = "/api/v1/settings"
 
 function getErrorMessage(payload: unknown, fallback: string) {
   if (typeof payload === "string" && payload.trim()) return payload
@@ -173,7 +173,7 @@ export async function saveAccountSettings(input: {
   confirmNewPassword?: string
 }): Promise<SaveSettingsResult> {
   try {
-    await apiClient("/settings/api/account", {
+    await apiClient("/api/v1/settings/account", {
       method: "PATCH",
       body: {
         username: input.username,

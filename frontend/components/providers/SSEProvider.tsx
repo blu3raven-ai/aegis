@@ -115,7 +115,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
 
     const jitter = Math.random() * RECONNECT_JITTER_MS
     setTimeout(() => {
-      const es = new EventSource("/api/events/stream")
+      const es = new EventSource("/api/v1/events/stream")
       eventSourceRef.current = es
 
       const eventTypes: SSEEventType[] = [

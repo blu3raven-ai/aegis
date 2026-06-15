@@ -11,7 +11,7 @@ from src.settings.router import require_permission
 from src.shared.router_helpers import require_orgs
 from src.shared.sbom_storage import download_from_minio, safe_s3_segment
 
-router = APIRouter(prefix="/sbom/api", tags=["sbom"])
+router = APIRouter(prefix="/api/v1/sbom", tags=["sbom"])
 
 
 @router.get("/download")

@@ -20,8 +20,6 @@ from src.secrets.lifecycle import secrets_hooks
 from src.secrets.pool import (
     get_scan_start_date,
     merge_pool,
-    read_checkpoints,
-    write_checkpoint_for_repo,
 )
 from src.shared.config import get_scan_sources_for_org, get_secret_scanner_config
 from src.shared.object_store import (
@@ -469,6 +467,12 @@ def ingest_findings(
     ctx = ScanContext(tool="secrets", org=org, run_id=run_id, source_type=source_type)
     new_findings = _apply_lifecycle(secrets_hooks, ctx, merged)
 
+    try:
+        from src.settings.llm_usage import record_usage_from_findings
+        record_usage_from_findings(merged)
+    except Exception:
+        logger.warning("Failed to record LLM usage from secrets ingest", exc_info=True)
+
     if new_findings:
         try:
             from src.notifications.emitter import notify_new_critical_findings
@@ -480,7 +484,6 @@ def ingest_findings(
         from src.shared.event_emit_helpers import emit_finding_created
         for finding in new_findings:
             emit_finding_created(
-                org_id=org,
                 finding=finding,
                 scanner_type="secrets",
                 source_component="secrets.scanner",
@@ -510,8 +513,6 @@ def ingest_normalized_jsonl(
 
 
 def scanner_finding_source(file_name: str) -> str | None:
-    if file_name == "betterleaks.json":
-        return "betterleaks"
     if file_name == "trufflehog.json":
         return "trufflehog"
     return None
@@ -691,7 +692,7 @@ def mark_run_cancelled(org: str, run_id: str) -> dict | None:
     return cancelled
 
 
-def ingest_secrets_from_minio(org: str, run_id: str) -> None:
+def ingest_secrets_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
     """Ingest secret scan results from object store after runner completion."""
     from src.shared.object_store import find_findings_jsonl
 
@@ -783,7 +784,6 @@ def execute_secret_scan_once(
             repo_urls_str = ",".join(source.repo_urls)
 
             result = _execute_via_runner(
-                org=org,
                 run_id=run_id,
                 config=config,
                 repo_urls=repo_urls_str,

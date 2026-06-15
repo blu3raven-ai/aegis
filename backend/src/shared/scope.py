@@ -41,36 +41,6 @@ async def get_user_asset_ids(db: AsyncSession, ctx: dict) -> list[str]:
     return [str(r) for r in rows]
 
 
-async def get_user_orgs(db: AsyncSession, ctx: dict) -> list[str]:
-    """Return the distinct org strings visible to this user.
-
-    Used by SSE subscribers which still filter events by org name (the event bus
-    Event carries `org_id`, not `asset_id`). Derives org strings from Asset rows
-    that belong to the user's accessible assets so that the SSE filter correctly
-    enforces per-user scope.
-
-    A future event-bus refactor could carry `asset_id` natively and skip the
-    org-derivation step entirely; deferred until SSE filtering grows other
-    requirements that justify the change.
-    """
-    asset_ids = await get_user_asset_ids(db, ctx)
-    if not asset_ids:
-        return []
-    # Extract the org segment from external_ref (e.g. "github:owner/repo" -> "owner")
-    stmt = (
-        select(Asset.external_ref)
-        .where(Asset.id.in_(asset_ids))
-        .distinct()
-    )
-    rows = (await db.execute(stmt)).scalars().all()
-    orgs: list[str] = []
-    for ref in rows:
-        if ref and ":" in ref:
-            # "github:owner/repo" -> "owner"
-            parts = ref.split(":", 1)[1].split("/", 1)
-            if parts:
-                orgs.append(parts[0])
-    return list(dict.fromkeys(orgs))  # deduplicate preserving order
 
 
 async def resolve_asset_ids_for_org(db: AsyncSession, org: str, *, asset_type: str | None = None) -> list[str]:

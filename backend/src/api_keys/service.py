@@ -32,7 +32,6 @@ def _hash_token(token: str) -> str:
 # ── Synchronous DB operations ─────────────────────────────────────────────────
 
 def _create_sync(
-    org_id: str,
     name: str,
     scopes: list[str],
     created_by: str | None,
@@ -50,7 +49,6 @@ def _create_sync(
 
     async def _run(session):
         row = ApiKey(
-            org_id=org_id,
             name=name,
             prefix=prefix,
             last_four=last_four,
@@ -68,22 +66,20 @@ def _create_sync(
     return record, token
 
 
-def _list_sync(org_id: str) -> list[ApiKeyRecord]:
+def _list_sync() -> list[ApiKeyRecord]:
     async def _run(session):
         result = await session.execute(
-            select(ApiKey)
-            .where(ApiKey.org_id == org_id)
-            .order_by(ApiKey.created_at.desc())
+            select(ApiKey).order_by(ApiKey.created_at.desc())
         )
         return [ApiKeyRecord.from_orm(r) for r in result.scalars().all()]
 
     return run_db(_run)
 
 
-def _revoke_sync(key_id: int, org_id: str) -> ApiKeyRecord | None:
+def _revoke_sync(key_id: int) -> ApiKeyRecord | None:
     async def _run(session):
         row = await session.get(ApiKey, key_id)
-        if row is None or row.org_id != org_id:
+        if row is None:
             return None
         row.revoked_at = datetime.now(timezone.utc)
         await session.flush()
@@ -120,21 +116,20 @@ def _record_usage_sync(key_id: int) -> None:
 # ── Async wrappers for FastAPI routes ─────────────────────────────────────────
 
 async def create(
-    org_id: str,
     name: str,
     scopes: list[str],
     created_by: str | None,
     expires_in_days: int | None,
 ) -> tuple[ApiKeyRecord, str]:
-    return _create_sync(org_id, name, scopes, created_by, expires_in_days)
+    return _create_sync(name, scopes, created_by, expires_in_days)
 
 
-async def list_keys(org_id: str) -> list[ApiKeyRecord]:
-    return _list_sync(org_id)
+async def list_keys() -> list[ApiKeyRecord]:
+    return _list_sync()
 
 
-async def revoke(key_id: int, org_id: str) -> ApiKeyRecord | None:
-    return _revoke_sync(key_id, org_id)
+async def revoke(key_id: int) -> ApiKeyRecord | None:
+    return _revoke_sync(key_id)
 
 
 async def lookup_by_token(token: str) -> "ApiKey | None":

@@ -24,3 +24,9 @@ export const CHIP_GROUPS = [
   { id: "intel", label: "Intel", types: ["intel.cve.added", "kev.added", "sla.breached"], disabled: false },
   { id: "integrations", label: "Integrations", types: ["integration.connected", "integration.disconnected"], disabled: false },
 ] as const
+
+export function chipTypesFor(chipId: string | null): string[] {
+  if (!chipId) return []
+  const group = CHIP_GROUPS.find((c) => c.id === chipId)
+  return group ? [...group.types] : []
+}

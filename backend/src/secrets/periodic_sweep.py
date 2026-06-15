@@ -127,7 +127,6 @@ def enqueue_full_history_scan(repo_id: str) -> None:
 
         create_job(
             job_type="secrets",
-            org=org,
             run_id=run_id,
             env_vars=env_vars,
             expected_repo_count=len(source.repo_urls),

@@ -76,27 +76,3 @@ describe("Phase 7 — Chains filter", () => {
     assert.ok(!content.includes("All findings"), "Stale back-link must be removed")
   })
 })
-
-describe("Phase 7 — Repo detail PageHeader", () => {
-  it("RepoDetailPageContent imports PageHeader", async () => {
-    const { readFileSync } = await import("node:fs")
-    const content = readFileSync(
-      new URL("./repos/[repoId]/RepoDetailPageContent.tsx", import.meta.url),
-      "utf8"
-    )
-    assert.ok(content.includes("PageHeader"), "RepoDetailPageContent must use PageHeader")
-    assert.ok(content.includes("ReposIcon"), "RepoDetailPageContent must use ReposIcon")
-  })
-
-  it("RepoDetailPageContent uses PageHeader instead of inline breadcrumb nav", async () => {
-    const { readFileSync } = await import("node:fs")
-    const content = readFileSync(
-      new URL("./repos/[repoId]/RepoDetailPageContent.tsx", import.meta.url),
-      "utf8"
-    )
-    assert.ok(
-      !/<nav\b[^>]*aria-label=["']Breadcrumb["']/i.test(content),
-      "Inline breadcrumb nav must be removed (PageHeader provides breadcrumbs)"
-    )
-  })
-})

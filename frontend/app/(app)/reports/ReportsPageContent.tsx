@@ -4,6 +4,14 @@ import { useState, useEffect, useRef } from "react"
 import type { ReportSummary } from "@/lib/client/reports-api"
 import { generateReport, listReports, deleteReport } from "@/lib/client/reports-api"
 import { ReportTemplateGrid, type ReportTemplateId } from "@/components/reports/ReportTemplateGrid"
+import { Button } from "@/components/ui/Button"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { FilterChip } from "@/components/ui/FilterChip"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
+import { ScheduledReportsPanel } from "./ScheduledReportsPanel"
+
+const SEVERITIES = ["critical", "high", "medium", "low"] as const
+type Severity = (typeof SEVERITIES)[number]
 
 function formatBytes(n: number | null): string {
   if (n == null) return "—"
@@ -30,7 +38,8 @@ export function ReportsPageContent() {
 
   // Generate form
   const [reportType, setReportType] = useState<"findings" | "posture">("findings")
-  const [format, setFormat] = useState<"json" | "csv">("csv")
+  const [format, setFormat] = useState<"json" | "csv" | "pdf">("csv")
+  const [severity, setSeverity] = useState<Severity[]>([])
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
 
@@ -72,9 +81,15 @@ export function ReportsPageContent() {
     setGenerating(true)
     setGenerateError(null)
     try {
+      // Backend rejects posture+csv, so coerce csv->json for posture.
+      const effectiveFormat: "json" | "csv" | "pdf" =
+        reportType === "posture" && format === "csv" ? "json" : format
       const report = await generateReport({
         report_type: reportType,
-        format: reportType === "posture" ? "json" : format,
+        format: effectiveFormat,
+        ...(reportType === "findings" && severity.length > 0
+          ? { filters: { severity } }
+          : {}),
       })
       setReports(prev => [report, ...prev])
       setTotal(prev => prev + 1)
@@ -105,8 +120,8 @@ export function ReportsPageContent() {
   if (listState === "loading") {
     return (
       <div className="px-6 py-5 space-y-5">
-        <div className="animate-pulse rounded-2xl bg-[var(--color-surface-raised)] h-28" />
-        <div className="animate-pulse rounded-2xl bg-[var(--color-surface-raised)] h-40" />
+        <div className="animate-pulse rounded-lg bg-[var(--color-surface-raised)] h-28" />
+        <div className="animate-pulse rounded-lg bg-[var(--color-surface-raised)] h-40" />
       </div>
     )
   }
@@ -114,15 +129,14 @@ export function ReportsPageContent() {
   if (listState === "error") {
     return (
       <div className="px-6 py-5">
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-12 text-center">
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">Could not load reports</p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">The backend may be unavailable. Check that the server is running and try again.</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-4 rounded-lg border border-[var(--color-border)] px-4 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors"
-          >
-            Retry
-          </button>
+          <div className="mt-4 flex justify-center">
+            <Button variant="secondary" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -134,7 +148,7 @@ export function ReportsPageContent() {
 
       <div
         ref={formRef}
-        className={`rounded-2xl border bg-[var(--color-surface)] p-5 transition-shadow ${
+        className={`rounded-lg border bg-[var(--color-surface)] p-5 transition-shadow ${
           formHighlighted
             ? "border-[var(--color-accent)] shadow-[0_0_0_3px_var(--color-accent-subtle)]"
             : "border-[var(--color-border)]"
@@ -144,57 +158,74 @@ export function ReportsPageContent() {
         <form onSubmit={handleGenerate} className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <span className="text-sm text-[var(--color-text-secondary)] w-28">Report type</span>
-            <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
-              {(["findings", "posture"] as const).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setReportType(t)}
-                  className={`px-3 py-1.5 text-sm transition-colors ${
-                    reportType === t
-                      ? "bg-[var(--color-accent)] text-[var(--color-accent-on)] font-semibold"
-                      : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                  }`}
-                >
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              ariaLabel="Report type"
+              value={reportType}
+              onChange={(t) => {
+                setReportType(t as "findings" | "posture")
+                if (t === "posture" && format === "csv") setFormat("json")
+              }}
+              options={[
+                { id: "findings", label: "Findings" },
+                { id: "posture", label: "Posture" },
+              ]}
+            />
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="w-28 text-sm text-[var(--color-text-secondary)]">Format</span>
+            <SegmentedControl
+              ariaLabel="Format"
+              value={format}
+              onChange={(f) => setFormat(f as "json" | "csv" | "pdf")}
+              options={
+                reportType === "findings"
+                  ? [
+                      { id: "csv", label: "CSV" },
+                      { id: "json", label: "JSON" },
+                      { id: "pdf", label: "PDF" },
+                    ]
+                  : [
+                      { id: "json", label: "JSON" },
+                      { id: "pdf", label: "PDF" },
+                    ]
+              }
+            />
           </div>
 
           {reportType === "findings" && (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-[var(--color-text-secondary)] w-28">Format</span>
-              <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
-                {(["csv", "json"] as const).map(f => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setFormat(f)}
-                    className={`px-3 py-1.5 text-sm transition-colors ${
-                      format === f
-                        ? "bg-[var(--color-accent)] text-[var(--color-accent-on)] font-semibold"
-                        : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                    }`}
-                  >
-                    {f.toUpperCase()}
-                  </button>
-                ))}
+            <div className="flex items-start gap-3">
+              <span className="w-28 pt-1 text-sm text-[var(--color-text-secondary)]">Severity</span>
+              <div className="flex flex-wrap gap-1.5">
+                {SEVERITIES.map((s) => {
+                  const active = severity.includes(s)
+                  return (
+                    <FilterChip
+                      key={s}
+                      label={s.charAt(0).toUpperCase() + s.slice(1)}
+                      active={active}
+                      onClick={() =>
+                        setSeverity((prev) =>
+                          active ? prev.filter((x) => x !== s) : [...prev, s],
+                        )
+                      }
+                    />
+                  )
+                })}
               </div>
             </div>
           )}
-          {reportType === "posture" && (
-            <p className="text-xs text-[var(--color-text-secondary)]">Posture reports are exported as JSON only.</p>
-          )}
 
           <div className="flex items-center gap-3">
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="md"
               disabled={generating}
-              className="px-4 py-2 rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-on)] text-sm font-semibold disabled:opacity-50 transition-opacity"
+              isLoading={generating}
             >
               {generating ? "Generating…" : "Generate report"}
-            </button>
+            </Button>
             {generateError && (
               <p className="text-sm text-[var(--color-severity-critical)]">{generateError}</p>
             )}
@@ -202,32 +233,34 @@ export function ReportsPageContent() {
         </form>
       </div>
 
+      <ScheduledReportsPanel />
+
       {deleteError && (
         <p className="text-sm text-[var(--color-severity-critical)]">{deleteError}</p>
       )}
       {reports.length === 0 ? (
         <ReportsEmptyState />
       ) : (
-      <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
-        <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
-          <thead className="bg-[var(--color-surface-raised)] text-left text-xs uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-            <tr>
-              <th className="px-5 py-3">Title</th>
-              <th className="px-5 py-3">Type</th>
-              <th className="px-5 py-3">Format</th>
-              <th className="px-5 py-3">Rows</th>
-              <th className="px-5 py-3">Size</th>
-              <th className="px-5 py-3">Created</th>
-              <th className="px-5 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-border)]">
+      <div className="overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+        <Table className="min-w-full">
+          <Thead>
+            <Tr>
+              <Th className="px-5">Title</Th>
+              <Th className="px-5">Type</Th>
+              <Th className="px-5">Format</Th>
+              <Th className="px-5">Rows</Th>
+              <Th className="px-5">Size</Th>
+              <Th className="px-5">Created</Th>
+              <Th className="px-5">Actions</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
             {(
               reports.map(report => {
                 return (
-                  <tr key={report.id} className="transition-colors hover:bg-[var(--color-surface-raised)]">
-                    <td className="px-5 py-3.5 max-w-xs truncate text-[var(--color-text-primary)]">{report.title}</td>
-                    <td className="px-5 py-3.5">
+                  <Tr key={report.id} interactive>
+                    <Td className="px-5 py-3.5 max-w-xs truncate text-[var(--color-text-primary)]">{report.title}</Td>
+                    <Td className="px-5 py-3.5">
                       <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
                         report.report_type === "findings"
                           ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
@@ -235,45 +268,51 @@ export function ReportsPageContent() {
                       }`}>
                         {report.report_type}
                       </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-xs uppercase text-[var(--color-text-secondary)]">{report.format}</td>
-                    <td className="px-5 py-3.5 tabular-nums text-[var(--color-text-secondary)]">
+                    </Td>
+                    <Td className="px-5 py-3.5 text-xs uppercase text-[var(--color-text-secondary)]">{report.format}</Td>
+                    <Td className="px-5 py-3.5 tabular-nums text-[var(--color-text-secondary)]">
                       {report.row_count ?? "—"}
-                    </td>
-                    <td className="px-5 py-3.5 tabular-nums text-[var(--color-text-secondary)]">
+                    </Td>
+                    <Td className="px-5 py-3.5 tabular-nums text-[var(--color-text-secondary)]">
                       {formatBytes(report.file_size_bytes)}
-                    </td>
-                    <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">
+                    </Td>
+                    <Td className="px-5 py-3.5 text-[var(--color-text-secondary)]">
                       {relativeTime(report.created_at)}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-2">
+                    </Td>
+                    <Td className="px-5 py-3.5">
+                      <div className="flex items-center gap-1">
                         <a
                           href={report.download_url ?? undefined}
                           download
                           target="_blank"
                           rel="noreferrer"
                           aria-disabled={!report.download_url}
-                          className={`text-sm ${report.download_url ? "text-[var(--color-accent)] hover:underline" : "pointer-events-none opacity-40 text-[var(--color-text-secondary)]"}`}
+                          className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-semibold transition-colors ${
+                            report.download_url
+                              ? "text-[var(--color-accent)] hover:bg-[var(--color-bg-hover)]"
+                              : "pointer-events-none opacity-40 text-[var(--color-text-secondary)]"
+                          }`}
                         >
                           Download
                         </a>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="xs"
                           onClick={() => void handleDelete(report.id)}
                           disabled={deletingId === report.id}
-                          className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical)] disabled:opacity-50 transition-colors"
+                          isLoading={deletingId === report.id}
                           aria-label="Delete report"
                         >
-                          {deletingId === report.id ? "…" : "Delete"}
-                        </button>
+                          Delete
+                        </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 )
               })
             )}
-          </tbody>
-        </table>
+          </Tbody>
+        </Table>
       </div>
       )}
     </div>

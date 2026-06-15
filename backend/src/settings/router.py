@@ -84,7 +84,7 @@ def _validate_ghsa_api_key(api_key: str) -> tuple[bool, str]:
         _settings_logger.debug("GHSA key validation failed", exc_info=True)
         return False, "Could not validate GitHub PAT. Please try again later."
 
-router = APIRouter(prefix="/settings/api", tags=["settings"])
+router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 _VALID_TOOLS = {"dependencies", "containerScanning", "codeScanning", "secrets", "iacSecurity"}
 _NUMERIC_KEYS = {"seconds", "page", "days", "concurrency"}

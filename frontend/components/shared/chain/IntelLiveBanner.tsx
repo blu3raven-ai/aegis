@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { ArgusTag } from "./ArgusTag"
+import { Button } from "@/components/ui/Button"
 
 interface IntelLiveBannerProps {
   /** Message pushed from Argus intel — show banner when non-null */
@@ -46,19 +47,23 @@ export function IntelLiveBanner({ message, onDismiss }: IntelLiveBannerProps) {
       />
       <ArgusTag />
       <span className="text-[var(--color-text-primary)]">{message}</span>
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="xs"
+        iconOnly
         onClick={() => {
           setVisible(false)
           onDismiss()
         }}
-        className="ml-auto text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
         aria-label="Dismiss intel banner"
-      >
-        <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-          <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-        </svg>
-      </button>
+        className="ml-auto text-[var(--color-text-tertiary)]"
+        leadingIcon={
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+          </svg>
+        }
+      />
+
     </div>
   )
 }

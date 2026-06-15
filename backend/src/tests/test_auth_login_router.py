@@ -68,7 +68,6 @@ def _seed(
             username=username,
             email=email,
             password_hash=password_hash,
-            role="viewer",
             status="active",
             totp_secret=totp_secret,
             totp_enabled=totp_enabled,
@@ -206,7 +205,6 @@ def seed_user_with_username_and_password():
             username=username,
             email=email,
             password_hash=_scrypt_hash(password),
-            role="viewer",
             status="active",
         ))
 

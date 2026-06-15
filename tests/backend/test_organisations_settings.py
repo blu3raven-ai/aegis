@@ -160,7 +160,7 @@ def test_list_organisations_requires_view_settings():
     from conftest import make_authed_client
     c = make_authed_client(role="security", user_id="usr_security", raise_server_exceptions=True)
 
-    response = c.get("/settings/api/organisations")
+    response = c.get("/api/v1/settings/organisations")
 
     assert response.status_code == 200
     assert response.json() == {"teams": []}
@@ -172,11 +172,11 @@ def test_create_team_requires_manage_organisations():
     admin_client = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
     denied = security_client.post(
-        "/settings/api/organisations",
+        "/api/v1/settings/organisations",
         json={"name": "Platform", "description": ""},
     )
     allowed = admin_client.post(
-        "/settings/api/organisations",
+        "/api/v1/settings/organisations",
         json={"name": "Platform", "description": ""},
     )
 
@@ -187,16 +187,16 @@ def test_create_team_requires_manage_organisations():
 
 def test_add_member_and_repository_to_team(client):
     created = client.post(
-        "/settings/api/organisations",
+        "/api/v1/settings/organisations",
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
     member_response = client.post(
-        f"/settings/api/organisations/{created['id']}/members",
+        f"/api/v1/settings/organisations/{created['id']}/members",
         json={"userId": "usr_jane"},
     )
     repo_response = client.post(
-        f"/settings/api/organisations/{created['id']}/repositories",
+        f"/api/v1/settings/organisations/{created['id']}/repositories",
         json={"repository": "aegis/api-gateway"},
     )
 
@@ -209,11 +209,11 @@ def test_add_member_and_repository_to_team(client):
 @pytest.mark.parametrize(
     ("method", "path", "json_body", "params"),
     [
-        ("patch", "/settings/api/organisations/team_missing", {"name": "Updated", "description": ""}, None),
-        ("delete", "/settings/api/organisations/team_missing", None, None),
-        ("post", "/settings/api/organisations/team_missing/members", {"userId": "usr_jane"}, None),
-        ("delete", "/settings/api/organisations/team_missing/repositories/aegis/api-gateway", None, None),
-        ("delete", "/settings/api/organisations/team_missing/container-images", None, {"image": "ghcr.io/u9u-p/security/secret-scanner"}),
+        ("patch", "/api/v1/settings/organisations/team_missing", {"name": "Updated", "description": ""}, None),
+        ("delete", "/api/v1/settings/organisations/team_missing", None, None),
+        ("post", "/api/v1/settings/organisations/team_missing/members", {"userId": "usr_jane"}, None),
+        ("delete", "/api/v1/settings/organisations/team_missing/repositories/aegis/api-gateway", None, None),
+        ("delete", "/api/v1/settings/organisations/team_missing/container-images", None, {"image": "ghcr.io/u9u-p/security/secret-scanner"}),
     ],
 )
 def test_missing_team_mutations_return_404(client, method, path, json_body, params):
@@ -230,12 +230,12 @@ def test_missing_team_mutations_return_404(client, method, path, json_body, para
 
 def test_delete_repository_rejects_invalid_repository_input(client):
     team = client.post(
-        "/settings/api/organisations",
+        "/api/v1/settings/organisations",
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
     response = client.delete(
-        f"/settings/api/organisations/{team['id']}/repositories/aegis/api%20gateway",
+        f"/api/v1/settings/organisations/{team['id']}/repositories/aegis/api%20gateway",
     )
 
     assert response.status_code == 400
@@ -244,12 +244,12 @@ def test_delete_repository_rejects_invalid_repository_input(client):
 
 def test_delete_container_image_rejects_invalid_image_input(client):
     team = client.post(
-        "/settings/api/organisations",
+        "/api/v1/settings/organisations",
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
     response = client.delete(
-        f"/settings/api/organisations/{team['id']}/container-images",
+        f"/api/v1/settings/organisations/{team['id']}/container-images",
         params={"image": "docker.io/aegis/api"},
     )
 
@@ -259,12 +259,12 @@ def test_delete_container_image_rejects_invalid_image_input(client):
 
 def test_delete_member_rejects_invalid_user_id(client):
     team = client.post(
-        "/settings/api/organisations",
+        "/api/v1/settings/organisations",
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
     response = client.delete(
-        f"/settings/api/organisations/{team['id']}/members/%20",
+        f"/api/v1/settings/organisations/{team['id']}/members/%20",
     )
 
     assert response.status_code == 400
@@ -273,7 +273,7 @@ def test_delete_member_rejects_invalid_user_id(client):
 
 def test_delete_member_returns_500_on_store_error(client, monkeypatch):
     team = client.post(
-        "/settings/api/organisations",
+        "/api/v1/settings/organisations",
         json={"name": "Platform", "description": ""},
     ).json()["team"]
 
@@ -283,7 +283,7 @@ def test_delete_member_returns_500_on_store_error(client, monkeypatch):
     monkeypatch.setattr("src.settings.organisations_router.remove_member", fail_remove)
 
     response = client.delete(
-        f"/settings/api/organisations/{team['id']}/members/usr_jane",
+        f"/api/v1/settings/organisations/{team['id']}/members/usr_jane",
     )
 
     assert response.status_code == 500
@@ -302,7 +302,7 @@ def test_repository_search_filters_results(client, monkeypatch):
     monkeypatch.setattr("src.settings.organisations_router.get_github_token_for_org", lambda org: "token")
     monkeypatch.setattr("src.settings.organisations_router.fetch_org_repos", fake_fetch_repos)
 
-    response = client.get("/settings/api/resources/repositories?org=aegis&q=api")
+    response = client.get("/api/v1/settings/resources/repositories?org=aegis&q=api")
 
     assert response.status_code == 200
     assert response.json() == {"repositories": [{"org": "aegis", "repo": "api-gateway", "fullName": "aegis/api-gateway"}]}
@@ -312,7 +312,7 @@ def test_container_image_search_fails_softly(client, monkeypatch):
     monkeypatch.setattr("src.settings.organisations_router.read_app_config", lambda: {"github": {"orgs": [{"name": "aegis"}]}})
     monkeypatch.setattr("src.settings.organisations_router.get_github_token_for_org", lambda org: "")
 
-    response = client.get("/settings/api/resources/container-images?org=aegis&q=api")
+    response = client.get("/api/v1/settings/resources/container-images?org=aegis&q=api")
 
     assert response.status_code == 200
     assert response.json()["images"] == []
@@ -328,7 +328,7 @@ def test_repository_search_is_case_insensitive_and_caps_results(client, monkeypa
     monkeypatch.setattr("src.settings.organisations_router.get_github_token_for_org", lambda org: "token")
     monkeypatch.setattr("src.settings.organisations_router.fetch_org_repos", fake_fetch_repos)
 
-    response = client.get("/settings/api/resources/repositories?org=aegis&q=API")
+    response = client.get("/api/v1/settings/resources/repositories?org=aegis&q=API")
 
     assert response.status_code == 200
     assert len(response.json()["repositories"]) == 25
@@ -341,7 +341,7 @@ def test_create_team_requires_workspace_admin_v2():
     c = make_authed_client(role="security", user_id="usr_security", raise_server_exceptions=True)
 
     response = c.post(
-        "/settings/api/organisations",
+        "/api/v1/settings/organisations",
         json={"name": "New Team", "description": ""},
     )
     assert response.status_code == 403
@@ -352,7 +352,7 @@ def test_delete_team_requires_workspace_admin():
     team = store.create_team({"name": "To Delete", "description": ""})
     c = make_authed_client(role="security", user_id="usr_security_del", raise_server_exceptions=True)
 
-    response = c.delete(f"/settings/api/organisations/{team['id']}")
+    response = c.delete(f"/api/v1/settings/organisations/{team['id']}")
     assert response.status_code == 403
 
 
@@ -365,7 +365,7 @@ def test_list_organisations_includes_sharing_status():
 
     # usr_jane has security role and is a member of team1
     c = make_authed_client(role="security", user_id="usr_jane", raise_server_exceptions=True)
-    response = c.get("/settings/api/organisations")
+    response = c.get("/api/v1/settings/organisations")
 
     assert response.status_code == 200
     teams = response.json()["teams"]

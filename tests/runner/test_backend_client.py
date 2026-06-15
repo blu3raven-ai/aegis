@@ -1,11 +1,11 @@
-"""Tests for runner.backend_client — thin HTTP wrapper over backend presign endpoints."""
+"""Tests for runner.clients.backend — thin HTTP wrapper over backend presign endpoints."""
 from __future__ import annotations
 
 import pytest
 import httpx
 from unittest.mock import patch, MagicMock
 
-from runner.backend_client import BackendClient, BackendError
+from runner.clients.backend import BackendClient, BackendError
 
 
 @pytest.fixture

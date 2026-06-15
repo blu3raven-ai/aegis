@@ -30,7 +30,7 @@ def test_sast_router_has_no_ai_review_endpoint():
 
     # POST is the AI review verb per the removed endpoint.
     resp = client.post(
-        "/code-scanning/api/findings/some-key/ai-review",
+        "/api/v1/code-scanning/findings/some-key/ai-review",
         json={},
     )
     # 404 means the route is unregistered. Any other code (200/401/403/etc.)
@@ -61,7 +61,7 @@ def test_code_scanning_finding_dict_omits_ai_review():
         severity = "high"
         first_seen_at = None
         fixed_at = None
-        engine = "opengrep"
+        engine = "semgrep"
         detail = {
             "ruleId": "test-rule",
             "ruleName": "Test",

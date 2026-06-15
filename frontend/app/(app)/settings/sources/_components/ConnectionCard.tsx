@@ -12,6 +12,7 @@ import {
 import { ConnectionStatusBadge } from "./ConnectionStatusBadge"
 import { SourceTypeLogo } from "./SourceTypeLogo"
 import { Dialog } from "@/components/layout/Dialog"
+import { Button } from "@/components/ui/Button"
 import { timeAgo } from "@/lib/shared/time-ago"
 
 // ─── Time helpers ─────────────────────────────────────────────────────────────
@@ -42,11 +43,6 @@ function MetaPill({
     </span>
   )
 }
-
-// ─── Action button style ──────────────────────────────────────────────────────
-
-const actionBtnClass =
-  "rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -215,45 +211,49 @@ export function ConnectionCard({
               className="mt-3 flex flex-wrap items-center gap-2"
               onClick={(e) => e.stopPropagation()}
             >
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 disabled={isSyncing}
+                isLoading={isSyncing}
                 onClick={handleSync}
-                className="rounded-lg border border-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent-subtle)] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="border-[var(--color-accent)] text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)]"
               >
                 {isSyncing ? "Syncing\u2026" : "Sync Now"}
-              </button>
+              </Button>
 
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 disabled={isTesting}
+                isLoading={isTesting}
                 onClick={handleTest}
-                className={actionBtnClass}
               >
                 {isTesting ? "Testing\u2026" : "Test"}
-              </button>
+              </Button>
 
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   navigateToScope()
                 }}
-                className={actionBtnClass}
               >
                 Configure
-              </button>
+              </Button>
 
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={(e) => {
                   e.stopPropagation()
                   setShowDeleteConfirm(true)
                 }}
-                className="rounded-lg border border-[var(--color-severity-critical-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical-subtle)] disabled:opacity-50"
+                className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
               >
                 Delete
-              </button>
+              </Button>
             </div>
           )}
         </div>

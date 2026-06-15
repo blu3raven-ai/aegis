@@ -5,6 +5,9 @@
   --color-bg:             #f4f7fb;
   --color-surface:        #ffffff;
   --color-surface-raised: #fafbfd;
+  /* Alias kept for backwards compatibility — ~20 sites still reference
+     --color-surface-2. New code should use --color-surface-raised. */
+  --color-surface-2:      var(--color-surface-raised);
   --color-bg-section:     #fafbfd;
   --color-bg-input:       #ffffff;
   --color-bg-hover:       rgba(15,39,71,0.05);
@@ -132,6 +135,8 @@
   --color-bg:             #070d19;
   --color-surface:        #0C1524;
   --color-surface-raised: #09101e;
+  /* Alias — see :root for context. */
+  --color-surface-2:      var(--color-surface-raised);
   --color-bg-section:     #09101e;
   --color-bg-input:       #0f1e38;
   --color-bg-hover:       #253348;

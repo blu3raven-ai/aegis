@@ -42,6 +42,18 @@ class FindingCounts(BaseModel):
     low: int = 0
 
 
+class VerificationSummary(BaseModel):
+    """Aggregate LLM verification telemetry for a scan."""
+    confirmed: int = 0
+    needs_verify: int = 0
+    possible: int = 0
+    ruled_out: int = 0
+    legacy: int = 0
+    tokens_in: int = 0
+    tokens_out: int = 0
+    model: str | None = None
+
+
 class ScanSubmissionResponse(BaseModel):
     scan_id: str
     repo_id: str
@@ -65,3 +77,4 @@ class ScanDetailResponse(BaseModel):
     finding_counts: FindingCounts | None = None
     error: str | None = None
     archived: bool = False
+    verification_summary: VerificationSummary | None = None

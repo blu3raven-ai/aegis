@@ -2,6 +2,7 @@
 
 import type { AuditEvent } from "@/lib/client/audit-api"
 import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { ActionBadge } from "./ActionBadge"
 import { ActorBadge } from "./ActorBadge"
 
@@ -34,13 +35,13 @@ function StatusPill({ code }: { code?: number }) {
 
 function SkeletonRow() {
   return (
-    <tr>
+    <Tr>
       {[1, 2, 3, 4, 5, 6].map((i) => (
-        <td key={i} className="px-4 py-3">
+        <Td key={i}>
           <div className="h-4 w-full animate-pulse rounded bg-[var(--color-surface-raised)]" />
-        </td>
+        </Td>
       ))}
-    </tr>
+    </Tr>
   )
 }
 
@@ -67,20 +68,15 @@ export function AuditEventsTable({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[var(--color-border)]">
+      <Table>
+        <Thead>
+          <Tr>
             {["Time", "Actor", "Action", "Resource", "Status", ""].map((h) => (
-              <th
-                key={h}
-                className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-              >
-                {h}
-              </th>
+              <Th key={h}>{h}</Th>
             ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border-divider)]">
+          </Tr>
+        </Thead>
+        <Tbody>
           {loading ? (
             <>
               <SkeletonRow />
@@ -91,32 +87,33 @@ export function AuditEventsTable({
             </>
           ) : (
             events.map((ev) => (
-              <tr
+              <Tr
                 key={ev.id}
                 tabIndex={0}
                 role="button"
+                interactive
                 onClick={() => onRowClick(ev)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onRowClick(ev) }}
-                className="cursor-pointer transition-colors hover:bg-[var(--color-bg-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
+                className="cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
               >
                 {/* Time */}
-                <td className="px-4 py-3 whitespace-nowrap text-xs text-[var(--color-text-tertiary)] tabular-nums">
+                <Td className="whitespace-nowrap text-xs text-[var(--color-text-tertiary)] tabular-nums">
                   {relativeTime(ev.occurred_at)}
-                </td>
+                </Td>
                 {/* Actor */}
-                <td className="px-4 py-3 max-w-[180px]">
+                <Td className="max-w-[180px]">
                   <ActorBadge
                     actorId={ev.actor_id}
                     actorEmail={ev.actor_email}
                     actorRole={ev.actor_role}
                   />
-                </td>
+                </Td>
                 {/* Action */}
-                <td className="px-4 py-3 max-w-[240px]">
+                <Td className="max-w-[240px]">
                   <ActionBadge action={ev.action} />
-                </td>
+                </Td>
                 {/* Resource */}
-                <td className="px-4 py-3 text-xs text-[var(--color-text-secondary)]">
+                <Td className="text-xs text-[var(--color-text-secondary)]">
                   <span className="block truncate max-w-[160px]" title={ev.resource_type}>
                     {ev.resource_type}
                   </span>
@@ -125,22 +122,22 @@ export function AuditEventsTable({
                       {ev.resource_id}
                     </span>
                   )}
-                </td>
+                </Td>
                 {/* Status */}
-                <td className="px-4 py-3">
+                <Td>
                   <StatusPill code={ev.status_code} />
-                </td>
+                </Td>
                 {/* Detail arrow */}
-                <td className="px-4 py-3 text-right text-[var(--color-text-tertiary)]">
+                <Td className="text-right text-[var(--color-text-tertiary)]">
                   <svg className="inline h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
                   </svg>
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             ))
           )}
-        </tbody>
-      </table>
+        </Tbody>
+      </Table>
 
       {!loading && (
         <PaginatedTableFooter

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { listReleases, type ReleaseSummary } from "@/lib/client/releases-api"
 import { relativeTime } from "@/components/shared/releases/_helpers"
+import { Button } from "@/components/ui/Button"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
 
 type Verdict = ReleaseSummary["verdict"]
 
@@ -23,14 +25,14 @@ const VERDICT_ICONS: Record<Verdict, VerdictIcon> = {
   unknown: { glyph: "—", tone: "bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]" },
 }
 
-const VERDICT_FILTERS: { value: VerdictFilter; label: string }[] = [
-  { value: "all",   label: "All" },
-  { value: "go",    label: "GO" },
-  { value: "warn",  label: "WARN" },
-  { value: "no_go", label: "NO-GO" },
+const VERDICT_FILTERS = [
+  { id: "all"   as const, label: "All" },
+  { id: "go"    as const, label: "GO" },
+  { id: "warn"  as const, label: "WARN" },
+  { id: "no_go" as const, label: "NO-GO" },
 ]
 
-const CARD = "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]"
+const CARD = "rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
 
 function triggeredByLabel(release: ReleaseSummary): string {
   const { triggered_by } = release
@@ -40,7 +42,7 @@ function triggeredByLabel(release: ReleaseSummary): string {
 }
 
 function rowHref(release: ReleaseSummary): string {
-  return `/repos/${encodeURIComponent(release.repo_id)}?scan_id=${encodeURIComponent(release.scan_id)}`
+  return `/sources/${encodeURIComponent(release.repo_id)}?scan_id=${encodeURIComponent(release.scan_id)}`
 }
 
 export interface ReleasesPageContentProps {
@@ -79,47 +81,32 @@ export function ReleasesPageContent({ onCountChange }: ReleasesPageContentProps 
   if (listState === "error") {
     return (
       <div className="px-6 py-5">
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-12 text-center">
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">Could not load releases</p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
             The backend may be unavailable. Check that the server is running and try again.
           </p>
-          <button
-            onClick={() => void loadReleases(verdictFilter)}
-            className="mt-4 rounded-lg border border-[var(--color-border)] px-4 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors"
-          >
-            Retry
-          </button>
+          <div className="mt-4 inline-flex">
+            <Button variant="secondary" size="sm" onClick={() => void loadReleases(verdictFilter)}>
+              Retry
+            </Button>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="px-6 py-5 space-y-5">
+    <div className="space-y-5 px-6 py-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
-          {VERDICT_FILTERS.map((f) => {
-            const active = verdictFilter === f.value
-            return (
-              <button
-                key={f.value}
-                type="button"
-                onClick={() => setVerdictFilter(f.value)}
-                aria-pressed={active}
-                className={`px-3 py-1.5 text-sm transition-colors ${
-                  active
-                    ? "bg-[var(--color-accent)] text-[var(--color-accent-on)] font-semibold"
-                    : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                }`}
-              >
-                {f.label}
-              </button>
-            )
-          })}
-        </div>
+        <SegmentedControl
+          ariaLabel="Filter by verdict"
+          value={verdictFilter}
+          onChange={(next) => setVerdictFilter(next as VerdictFilter)}
+          options={VERDICT_FILTERS}
+        />
         {listState === "ok" && releases.length > 0 && (
-          <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+          <p className="text-xs tabular-nums text-[var(--color-text-secondary)]">
             {counts.total} {counts.total === 1 ? "scan" : "scans"} · {counts.blockers} {counts.blockers === 1 ? "blocker" : "blockers"}
           </p>
         )}
@@ -218,13 +205,9 @@ function ReleasesEmptyState({
             Try a different verdict, or clear the filter to see all recent pre-release scans.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClearFilter}
-          className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-        >
+        <Button variant="secondary" size="md" onClick={onClearFilter}>
           Clear filter
-        </button>
+        </Button>
       </div>
     )
   }
@@ -243,11 +226,11 @@ function ReleasesEmptyState({
         </p>
       </div>
       <Link
-        href="/repos"
-        className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        href="/sources"
+        className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3.5 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
       >
         Trigger a release scan
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M5 12h14M13 5l7 7-7 7" />
         </svg>
       </Link>

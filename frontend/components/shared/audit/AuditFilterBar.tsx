@@ -1,6 +1,8 @@
 "use client"
 
 import { FilterTag } from "@/components/shared/FilterTag"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { Select } from "@/components/ui/Select"
 
 export type DateWindow = "7d" | "30d" | "90d" | "all"
 
@@ -37,22 +39,12 @@ export function AuditFilterBar({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Date range chips */}
-      <div className="flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
-        {DATE_CHIPS.map((chip) => (
-          <button
-            key={chip.value}
-            type="button"
-            onClick={() => onChange({ dateWindow: chip.value })}
-            className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-              filters.dateWindow === chip.value
-                ? "bg-[var(--color-accent)] text-[var(--color-accent-on)]"
-                : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
-            }`}
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl<DateWindow>
+        options={DATE_CHIPS.map((c) => ({ id: c.value, label: c.label }))}
+        value={filters.dateWindow}
+        onChange={(v) => onChange({ dateWindow: v })}
+        ariaLabel="Date range"
+      />
 
       {/* Action filter */}
       {knownActions.length > 0 && !filters.action && (
@@ -119,8 +111,9 @@ function SelectChip({
   onSelect: (value: string) => void
 }) {
   return (
-    <select
-      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] cursor-pointer"
+    <Select
+      size="sm"
+      className="w-auto cursor-pointer"
       value=""
       onChange={(e) => {
         if (e.target.value) onSelect(e.target.value)
@@ -132,6 +125,6 @@ function SelectChip({
           {opt}
         </option>
       ))}
-    </select>
+    </Select>
   )
 }

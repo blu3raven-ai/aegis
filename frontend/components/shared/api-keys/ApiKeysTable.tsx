@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
 import type { ApiKey } from "@/lib/client/api-keys-api"
 import { ScopesBadgeList } from "./ScopesBadgeList"
+import { Button } from "@/components/ui/Button"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "—"
@@ -48,13 +49,13 @@ function StatusBadge({ apiKey }: { apiKey: ApiKey }) {
 
 function SkeletonRow() {
   return (
-    <tr className="border-b border-[var(--color-border)]">
+    <Tr className="border-b border-[var(--color-border)]">
       {[1, 2, 3, 4, 5].map((i) => (
-        <td key={i} className="px-4 py-3">
+        <Td key={i}>
           <div className="h-3 rounded bg-[var(--color-surface-raised)] animate-pulse" />
-        </td>
+        </Td>
       ))}
-    </tr>
+    </Tr>
   )
 }
 
@@ -66,28 +67,18 @@ interface ApiKeysTableProps {
 export function ApiKeysTable({ keys, onRevoke }: ApiKeysTableProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-[var(--color-border)]">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-              Name
-            </th>
-            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-              Token
-            </th>
-            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-              Scopes
-            </th>
-            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-              Expires
-            </th>
-            <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
-              Status
-            </th>
-            <th className="px-4 py-2.5" />
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <Thead>
+          <Tr>
+            <Th className="py-2.5">Name</Th>
+            <Th className="py-2.5">Token</Th>
+            <Th className="py-2.5">Scopes</Th>
+            <Th className="py-2.5">Expires</Th>
+            <Th className="py-2.5">Status</Th>
+            <Th className="py-2.5" />
+          </Tr>
+        </Thead>
+        <Tbody divided={false}>
           {keys === null ? (
             <>
               <SkeletonRow />
@@ -95,44 +86,46 @@ export function ApiKeysTable({ keys, onRevoke }: ApiKeysTableProps) {
               <SkeletonRow />
             </>
           ) : keys.length === 0 ? (
-            <tr>
-              <td colSpan={6} className="px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
+            <Tr>
+              <Td colSpan={6} className="py-8 text-center text-sm text-[var(--color-text-secondary)]">
                 No API keys found.
-              </td>
-            </tr>
+              </Td>
+            </Tr>
           ) : (
             keys.map((key) => (
-              <tr key={key.id} className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-surface-raised)] transition-colors">
-                <td className="px-4 py-3 font-medium text-[var(--color-text-primary)]">
+              <Tr key={key.id} interactive className="border-b border-[var(--color-border)] last:border-0">
+                <Td className="font-medium text-[var(--color-text-primary)]">
                   {key.name}
-                </td>
-                <td className="px-4 py-3 font-mono text-[11px] text-[var(--color-text-secondary)]">
+                </Td>
+                <Td className="font-mono text-[11px] text-[var(--color-text-secondary)]">
                   {key.prefix}••••{key.last_four}
-                </td>
-                <td className="px-4 py-3">
+                </Td>
+                <Td>
                   <ScopesBadgeList scopes={key.scopes} />
-                </td>
-                <td className="px-4 py-3 text-xs text-[var(--color-text-secondary)]">
+                </Td>
+                <Td className="text-xs text-[var(--color-text-secondary)]">
                   {expiryLabel(key)}
-                </td>
-                <td className="px-4 py-3">
+                </Td>
+                <Td>
                   <StatusBadge apiKey={key} />
-                </td>
-                <td className="px-4 py-3 text-right">
+                </Td>
+                <Td className="text-right">
                   {!key.revoked_at && (
-                    <button
+                    <Button
+                      variant="link"
+                      size="xs"
                       onClick={() => onRevoke(key)}
-                      className="text-xs text-[var(--color-red)] hover:underline"
+                      className="text-[var(--color-red)] hover:underline hover:text-[var(--color-red)]"
                     >
                       Revoke
-                    </button>
+                    </Button>
                   )}
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             ))
           )}
-        </tbody>
-      </table>
+        </Tbody>
+      </Table>
     </div>
   )
 }

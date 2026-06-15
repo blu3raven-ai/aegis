@@ -35,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (meResult.status === "fulfilled" && meResult.value.user.roleId) {
           try {
             const roleData = await apiClient<{ role: RoleRecord }>(
-              `/settings/api/roles/${encodeURIComponent(meResult.value.user.roleId)}`,
+              `/api/v1/settings/roles/${encodeURIComponent(meResult.value.user.roleId)}`,
             )
             policy = roleData.role
           } catch {

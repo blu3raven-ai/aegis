@@ -6,6 +6,7 @@ import {
   type ScannerPrerequisiteState,
   type PrerequisiteItem,
 } from "@/lib/shared/prerequisite-utils"
+import { Button } from "@/components/ui/Button"
 
 export type { PrerequisiteItem }
 
@@ -36,13 +37,9 @@ function CopyableCodeBlock({ command }: { command: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-md bg-[var(--color-bg)] px-3 py-2">
       <code className="text-[13px] font-mono text-[var(--color-text-secondary)] select-all">{command}</code>
-      <button
-        type="button"
-        onClick={handleCopy}
-        className="shrink-0 text-[11px] text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
-      >
+      <Button variant="link" size="xs" onClick={handleCopy} className="shrink-0">
         {copied ? "Copied!" : "Copy"}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -79,14 +76,9 @@ export function PrerequisitePanel({
           </p>
           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{description}</p>
         </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="shrink-0 text-xs text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] disabled:opacity-40"
-        >
+        <Button variant="link" size="xs" onClick={onRefresh} disabled={isRefreshing} className="shrink-0">
           {isRefreshing ? "Checking…" : "Re-check"}
-        </button>
+        </Button>
       </div>
 
       <ul className="space-y-2">
@@ -143,13 +135,9 @@ export function PrerequisitePanel({
           <div className="mt-2 flex items-center justify-between gap-3 rounded bg-[var(--color-bg)] px-3 py-2 font-mono text-xs text-[var(--color-text-secondary)]">
             <span className="truncate">{installCommand}</span>
             <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={onCopyInstallCommand}
-                className="text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
-              >
+              <Button variant="link" size="xs" onClick={onCopyInstallCommand}>
                 {copyState === "copied" ? "Copied" : "Copy"}
-              </button>
+              </Button>
               {copyState !== "idle" && (
                 <span
                   role="status"

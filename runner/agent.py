@@ -15,19 +15,18 @@ from typing import Any
 
 import httpx
 
-from runner.metrics import (
+from runner.clients.backend import BackendClient
+from runner.core.dispatcher import get_scanner
+from runner.core.graceful_drain import GracefulDrainManager
+from runner.observability.logging import configure_logging, log_with_context
+from runner.observability.metrics import (
     job_duration_seconds,
     job_pickup_latency_seconds,
     jobs_processed_total,
     start_metrics_server,
 )
-from runner.structured_logging import configure_logging, log_with_context
-from runner.graceful_drain import GracefulDrainManager
-from runner.backend_client import BackendClient
 
 logger = logging.getLogger(__name__)
-
-from runner.dispatcher import get_scanner
 
 
 WORKSPACE_DIR = Path(os.environ.get("RUNNER_WORKSPACE", "/workspace"))
@@ -35,7 +34,7 @@ WORKSPACE_DIR = Path(os.environ.get("RUNNER_WORKSPACE", "/workspace"))
 CONFIG_PATH = Path.home() / ".vuln-runner" / "config.json"
 
 HEARTBEAT_INTERVAL = 30  # seconds
-POLL_INTERVAL = 5  # seconds
+POLL_INTERVAL = 1  # seconds
 
 DEFAULT_MAX_CONCURRENT = 2
 
@@ -79,7 +78,7 @@ def load_config() -> dict[str, Any]:
         try:
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
-                    f"{backend_url}/runner/api/register",
+                    f"{backend_url}/api/v1/runner/register",
                     json={
                         "token": registration_token,
                         "name": name,
@@ -131,38 +130,52 @@ class RunnerAgent:
         self._processed_total: int = 0
         self._processed_lock = threading.Lock()
         self._backend = BackendClient(portal_url=self.portal_url, auth_token=self.auth_token)
+        # Shared pooled client — keep-alive avoids a TLS handshake + TCP setup on every
+        # heartbeat/poll/progress call. Per-call timeout= kwargs preserve existing semantics.
+        self._http = httpx.Client(
+            timeout=httpx.Timeout(15.0),
+            limits=httpx.Limits(max_connections=8, max_keepalive_connections=4),
+        )
+        self._disk_check_at = 0.0
+        self._disk_check_result: float | None = None
+        self._disk_check_ttl = 30.0
+        # Async pool so post-job rmtree on populated scanner caches doesn't block
+        # the worker thread from accepting the next job.
+        self._cleanup_pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="aegis-cleanup",
+        )
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.auth_token}"}
 
     def _api(self, path: str) -> str:
-        return f"{self.portal_url}/runner/api{path}"
+        return f"{self.portal_url}/api/v1/runner{path}"
 
     def heartbeat_loop(self) -> None:
         """Send heartbeat with system metrics every HEARTBEAT_INTERVAL seconds."""
-        from runner.metrics import collect_metrics
+        from runner.observability.metrics import collect_metrics
 
         while not self._stop.is_set():
             try:
                 metrics = collect_metrics()
 
-                with httpx.Client(timeout=10.0) as client:
-                    resp = client.post(
-                        self._api("/heartbeat"),
-                        headers=self._headers(),
-                        json=metrics,
-                    )
-                    if resp.status_code == 401:
-                        logger.error("[!] Auth token rejected — re-register this runner")
-                        self._stop.set()
-                        return
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        config = data.get("config", {})
-                        new_max = config.get("maxConcurrent")
-                        if new_max and new_max != self._max_concurrent:
-                            logger.info("[+] Config update: maxConcurrent %d → %d", self._max_concurrent, new_max)
-                            self._max_concurrent = new_max
+                resp = self._http.post(
+                    self._api("/heartbeat"),
+                    headers=self._headers(),
+                    json=metrics,
+                    timeout=10.0,
+                )
+                if resp.status_code == 401:
+                    logger.error("[!] Auth token rejected — re-register this runner")
+                    self._stop.set()
+                    return
+                if resp.status_code == 200:
+                    data = resp.json()
+                    config = data.get("config", {})
+                    new_max = config.get("maxConcurrent")
+                    if new_max and new_max != self._max_concurrent:
+                        logger.info("[+] Config update: maxConcurrent %d → %d", self._max_concurrent, new_max)
+                        self._max_concurrent = new_max
 
             except Exception as e:
                 logger.warning("[!] Heartbeat failed: %s", e)
@@ -244,29 +257,51 @@ class RunnerAgent:
             self._pool = None
         logger.error("[!] Poll loop exited — agent is no longer processing jobs")
 
+    def _cached_disk_free_gb(self) -> float:
+        """Return free space in GB, caching the result for ``_disk_check_ttl`` seconds.
+
+        The fallback value on syscall failure is intentionally generous so a transient
+        filesystem error doesn't pin the runner into "skip poll" forever.
+        """
+        now = time.monotonic()
+        if (
+            self._disk_check_result is not None
+            and now - self._disk_check_at < self._disk_check_ttl
+        ):
+            return self._disk_check_result
+        try:
+            free = shutil.disk_usage(WORKSPACE_DIR).free / (1024**3)
+        except OSError:
+            free = 999.0
+        self._disk_check_result = free
+        self._disk_check_at = now
+        return free
+
     def _poll_job(self) -> dict[str, Any] | None:
         """Poll for the next available job, skipping if disk space is low."""
-        try:
-            free_gb = shutil.disk_usage(WORKSPACE_DIR).free / (1024**3)
-            if free_gb < 2.0:
-                logger.warning("[!] Low disk space (%.1fGB free) — skipping poll", free_gb)
-                return None
-        except OSError:
-            pass
+        free_gb = self._cached_disk_free_gb()
+        if free_gb < 2.0:
+            logger.warning("[!] Low disk space (%.1fGB free) — skipping poll", free_gb)
+            return None
 
         try:
-            with httpx.Client(timeout=10.0) as client:
-                resp = client.get(self._api("/jobs/next"), headers=self._headers())
-                if resp.status_code == 204:
-                    return None
-                if resp.status_code == 403:
-                    return None
-                if resp.status_code == 401:
-                    logger.error("[!] Auth token rejected")
-                    self._stop.set()
-                    return None
-                if resp.status_code == 200:
-                    return resp.json()
+            resp = self._http.get(
+                self._api("/jobs/next?wait=60"),
+                headers=self._headers(),
+                timeout=70.0,
+            )
+            if resp.status_code == 204:
+                return None
+            if resp.status_code == 403:
+                return None
+            if resp.status_code == 401:
+                logger.error("[!] Auth token rejected")
+                self._stop.set()
+                return None
+            if resp.status_code == 200:
+                return resp.json()
+        except httpx.ReadTimeout:
+            return None
         except Exception as e:
             logger.warning("[!] Poll failed: %s", e)
         return None
@@ -302,7 +337,7 @@ class RunnerAgent:
             except (ValueError, TypeError):
                 pass
 
-        from runner.streamer import ManifestStreamer, MAX_FINISH_WAIT
+        from runner.clients.streamer import ManifestStreamer, MAX_FINISH_WAIT
 
         job_dir = WORKSPACE_DIR / job_id
 
@@ -319,21 +354,21 @@ class RunnerAgent:
 
         def on_progress(log_tail, progress):
             try:
-                with httpx.Client(timeout=10.0) as client:
-                    resp = client.post(
-                        self._api(f"/jobs/{job_id}/progress"),
-                        headers=self._headers(),
-                        json={
-                            "logTail": log_tail[-50:],
-                            "progress": {
-                                **progress,
-                                **streamer.get_progress(),
-                            },
+                resp = self._http.post(
+                    self._api(f"/jobs/{job_id}/progress"),
+                    headers=self._headers(),
+                    json={
+                        "logTail": log_tail[-50:],
+                        "progress": {
+                            **progress,
+                            **streamer.get_progress(),
                         },
-                    )
-                    if resp.status_code == 200 and resp.json().get("cancelled"):
-                        logger.info("[!] Job %s cancelled by user — killing container", job_id)
-                        cancel_event.set()
+                    },
+                    timeout=10.0,
+                )
+                if resp.status_code == 200 and resp.json().get("cancelled"):
+                    logger.info("[!] Job %s cancelled by user — killing container", job_id)
+                    cancel_event.set()
             except Exception:
                 pass
 
@@ -380,24 +415,24 @@ class RunnerAgent:
                 return
 
             try:
-                with httpx.Client(timeout=30.0) as client:
-                    resp = client.post(
-                        self._api(f"/jobs/{job_id}/complete"),
-                        headers=self._headers(),
-                        json={"filesUploaded": uploaded, "filesFailed": failed},
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        new_token = data.get("newAuthToken")
-                        if new_token:
-                            self.auth_token = new_token
-                            if CONFIG_PATH.exists():
-                                try:
-                                    cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-                                    cfg["authToken"] = new_token
-                                    save_config(cfg)
-                                except Exception:
-                                    pass
+                resp = self._http.post(
+                    self._api(f"/jobs/{job_id}/complete"),
+                    headers=self._headers(),
+                    json={"filesUploaded": uploaded, "filesFailed": failed},
+                    timeout=30.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    new_token = data.get("newAuthToken")
+                    if new_token:
+                        self.auth_token = new_token
+                        if CONFIG_PATH.exists():
+                            try:
+                                cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+                                cfg["authToken"] = new_token
+                                save_config(cfg)
+                            except Exception:
+                                pass
             except Exception as e:
                 logger.error("[!] Failed to report completion: %s", e)
 
@@ -418,28 +453,30 @@ class RunnerAgent:
                 logger.warning("[!] Streamer did not finish within %ds during cleanup — proceeding", MAX_FINISH_WAIT)
             self._active_jobs.pop(job_id, None)
             if job_dir.exists():
-                shutil.rmtree(job_dir, ignore_errors=True)
+                # Async so the worker thread can immediately accept the next job;
+                # rmtree on a populated semgrep/checkov cache can take many seconds.
+                self._cleanup_pool.submit(shutil.rmtree, job_dir, ignore_errors=True)
 
     def _report_cancelled(self, job_id: str) -> None:
         try:
-            with httpx.Client(timeout=10.0) as client:
-                client.post(
-                    self._api(f"/jobs/{job_id}/fail"),
-                    headers=self._headers(),
-                    json={"error": "Scan cancelled by user", "cancelled": True},
-                )
+            self._http.post(
+                self._api(f"/jobs/{job_id}/fail"),
+                headers=self._headers(),
+                json={"error": "Scan cancelled by user", "cancelled": True},
+                timeout=10.0,
+            )
         except Exception:
             pass
         logger.info("[+] Job %s cancelled by user", job_id)
 
     def _report_failure(self, job_id: str, error: str) -> None:
         try:
-            with httpx.Client(timeout=10.0) as client:
-                client.post(
-                    self._api(f"/jobs/{job_id}/fail"),
-                    headers=self._headers(),
-                    json={"error": error},
-                )
+            self._http.post(
+                self._api(f"/jobs/{job_id}/fail"),
+                headers=self._headers(),
+                json={"error": error},
+                timeout=10.0,
+            )
         except Exception:
             pass
         logger.error("[!] Job %s failed: %s", job_id, error)
@@ -477,6 +514,14 @@ class RunnerAgent:
         drained = self._drain.wait_for_drain()
         if not drained:
             logger.warning("[!] Drain timeout reached — exiting with in-flight jobs still running")
+        try:
+            self._http.close()
+        except Exception:
+            pass
+        try:
+            self._cleanup_pool.shutdown(wait=False)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -492,3 +537,106 @@ def run_poll_loop() -> None:
     _agent.start()
 
 
+# ---------------------------------------------------------------------------
+# CLI entry point — pinned by pyproject.toml as the `vuln-runner` script
+# ---------------------------------------------------------------------------
+
+import platform  # noqa: E402  (kept near CLI to scope the dep visibly)
+import sys  # noqa: E402
+
+import click  # noqa: E402
+
+
+@click.group()
+def cli() -> None:
+    """Vulnerability Scanner Runner Agent"""
+
+
+@cli.command()
+@click.option("--url", required=True, help="Portal URL (e.g., https://portal.example.com)")
+@click.option("--token", required=True, help="Registration token from the portal")
+@click.option("--name", default="", help="Runner name (defaults to hostname)")
+@click.option("--insecure", is_flag=True, help="Allow non-HTTPS connections (dev only)")
+def configure(url: str, token: str, name: str, insecure: bool) -> None:
+    """Register this runner with the portal."""
+    url = url.rstrip("/")
+
+    if not insecure and not url.startswith("https://"):
+        click.echo("Error: Portal URL must use HTTPS. Use --insecure for local development.", err=True)
+        sys.exit(1)
+
+    runner_name = name or platform.node() or "runner"
+
+    click.echo(f"Registering runner '{runner_name}' with {url}...")
+
+    try:
+        # One-shot CLI registration with per-invocation TLS verify setting — kept off the
+        # shared pool so --insecure can't relax verify for runtime backend calls.
+        with httpx.Client(timeout=15.0, verify=not insecure) as client:
+            resp = client.post(
+                f"{url}/api/v1/runner/register",
+                json={
+                    "token": token,
+                    "name": runner_name,
+                    "os": platform.system().lower(),
+                    "arch": platform.machine(),
+                },
+            )
+
+        if resp.status_code != 200:
+            error = resp.json().get("error", resp.text)
+            click.echo(f"Registration failed: {error}", err=True)
+            sys.exit(1)
+
+        data = resp.json()
+        config = {
+            "portalUrl": url,
+            "runnerId": data["runnerId"],
+            "authToken": data["authToken"],
+            "name": runner_name,
+        }
+        save_config(config)
+
+        click.echo(f"Runner registered: {data['runnerId']}")
+        click.echo(f"Status: {data['status']}")
+        click.echo(f"Config saved to: {CONFIG_PATH}")
+        click.echo("")
+        click.echo("Next steps:")
+        click.echo("  1. Ask an admin to approve this runner in Settings > Runners")
+        click.echo("  2. Then run: ./vuln-runner start")
+
+    except httpx.ConnectError:
+        click.echo(f"Error: Could not connect to {url}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.option("--insecure", is_flag=True, help="Allow non-HTTPS connections (dev only)")
+def start(insecure: bool) -> None:
+    """Start the runner agent."""
+    try:
+        config = load_config()
+    except FileNotFoundError as e:
+        click.echo(str(e), err=True)
+        sys.exit(1)
+
+    if not insecure and not config["portalUrl"].startswith("https://"):
+        click.echo("Error: Portal URL must use HTTPS. Use --insecure for local development.", err=True)
+        sys.exit(1)
+
+    agent = RunnerAgent(config)
+
+    click.echo(f"Runner: {config.get('name', 'runner')}")
+    click.echo(f"Portal: {config['portalUrl']}")
+    click.echo("Press Ctrl+C to stop")
+    click.echo("")
+
+    try:
+        agent.start()
+    except KeyboardInterrupt:
+        click.echo("\nStopping runner...")
+        agent.stop()
+
+
+if __name__ == "__main__":
+    cli()

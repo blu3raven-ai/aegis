@@ -1,5 +1,7 @@
 // components/shared/FindingDrawer/DrawerStatusBanner.tsx
 
+import { Button } from "@/components/ui/Button"
+
 export function DrawerStatusBanner({
   state,
   dismissedReason,
@@ -29,13 +31,14 @@ export function DrawerStatusBanner({
           )}
         </div>
         {onReopen && (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onReopen}
-            className="rounded-lg border border-[var(--color-state-dismissed-border)] bg-[var(--color-surface-raised)] px-3 py-1.5 text-xs font-semibold text-[var(--color-state-dismissed)] hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+            className="border-[var(--color-state-dismissed-border)] bg-[var(--color-surface-raised)] text-[var(--color-state-dismissed)] hover:border-[var(--color-state-dismissed-border)] hover:bg-[var(--color-surface)]"
           >
             Reopen
-          </button>
+          </Button>
         )}
       </div>
     )

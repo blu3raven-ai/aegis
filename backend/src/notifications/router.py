@@ -10,7 +10,7 @@ from src.notifications.store import (
     delete_notification,
 )
 
-router = APIRouter(prefix="/notifications/api", tags=["notifications"])
+router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 
 
 @router.get("/list")

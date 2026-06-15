@@ -237,7 +237,7 @@ export function readAppConfig(): AppConfig {
 
 async function _refreshConfigAsync(fallback: AppConfig) {
   // Config is now sourced exclusively from environment variables.
-  // The backend /settings/api endpoint requires auth context not available here.
+  // The backend /api/v1/settings endpoint requires auth context not available here.
   if (!_cachedConfig) {
     _cachedConfig = fallback
     _cacheTime = Date.now()

@@ -2,6 +2,10 @@
 
 import { useState } from "react"
 import { createOrganisationTeam } from "@/lib/client/settings-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Sheet } from "@/components/ui/Sheet"
+import { Textarea } from "@/components/ui/Textarea"
 
 interface CreateTeamPanelProps {
   open: boolean
@@ -14,8 +18,6 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
   const [description, setDescription] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  if (!open) return null
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -34,51 +36,66 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
     setSubmitting(false)
   }
 
+  function handleClose() {
+    onClose()
+    setError(null)
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay-strong)] p-4">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl"
-      >
-        <h2 className="text-xl font-bold text-[var(--color-text-primary)]">Create team</h2>
-        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Set up a team first, then assign members, repositories, and container images from the editor.
-        </p>
-
-        <div className="mt-6 space-y-4">
-          <label className="block space-y-1.5">
-            <span className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Team name</span>
-            <input
-              required
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              autoFocus
-              placeholder="Platform"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
-            />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Description</span>
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              rows={3}
-              placeholder="Owns the shared application platform and supporting services."
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
-            />
-          </label>
-          {error && <p className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-sm text-[var(--color-severity-critical)]">{error}</p>}
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--color-surface-raised)]">
+    <Sheet
+      open={open}
+      onClose={handleClose}
+      title="Create team"
+      description="Set up a team first, then assign members, repositories, and container images from the editor."
+      size="md"
+      dismissGuard={{ isDirty: name.trim() !== "" || description.trim() !== "" }}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="md" onClick={handleClose}>
             Cancel
-          </button>
-          <button disabled={submitting} className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50">
-            {submitting ? "Creating..." : "Create team"}
-          </button>
+          </Button>
+          <Button
+            type="submit"
+            form="create-team-form"
+            variant="primary"
+            size="md"
+            disabled={submitting}
+            isLoading={submitting}
+          >
+            {submitting ? "Creating…" : "Create team"}
+          </Button>
         </div>
+      }
+    >
+      <form id="create-team-form" onSubmit={onSubmit} className="space-y-4">
+        <label className="block space-y-1.5">
+          <span className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Team name</span>
+          <Input
+            required
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoFocus
+            placeholder="Platform"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Description</span>
+          <Textarea
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+            rows={3}
+            placeholder="Owns the shared application platform and supporting services."
+          />
+        </label>
+        {error && (
+          <p
+            role="alert"
+            className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-sm text-[var(--color-severity-critical)]"
+          >
+            {error}
+          </p>
+        )}
       </form>
-    </div>
+    </Sheet>
   )
 }

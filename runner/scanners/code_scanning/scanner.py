@@ -1,6 +1,6 @@
 """CodeScanningScanner - embedded port of scanners/code-scanning/run.sh.
 
-Per-repo flow: shallow clone -> ``opengrep scan`` (SARIF + dataflow) ->
+Per-repo flow: shallow clone -> ``semgrep --sarif`` ->
 :mod:`extract_context` to add code-window/imports/file_class metadata ->
 :mod:`reachability` call-graph analysis -> finally :mod:`normalize`
 aggregates all per-repo SARIF into ``findings.jsonl``. Each per-repo
@@ -13,6 +13,7 @@ import concurrent.futures
 import dataclasses
 import json
 import logging
+import os
 import shutil
 import threading
 from pathlib import Path
@@ -27,7 +28,6 @@ from runner.scanners._shared import (
     ProgressEmitter,
     TIMEOUT_CLONE,
     TIMEOUT_GIT_QUERY,
-    TIMEOUT_OPENGREP,
     clone_repo,
     log_finished,
     log_scanning,
@@ -43,19 +43,84 @@ from runner.scanners._subprocess import (
 from runner.scanners.base import ExecutionResult
 from runner.scanners.code_scanning import (
     extract_context,
-    joern_adapter,
     normalize,
     reachability,
 )
+from runner.verification.budget import ScanBudget
+from runner.verification.pipeline import verify_finding
 
 logger = logging.getLogger(__name__)
 
 
-# Opengrep + tree-sitter parse untrusted source; scrub credentials before exec.
-_CODE_SCAN_DROP_ENV = ("GIT_TOKEN",)
+# Verification gate runs post-normalize, in-place on findings.jsonl.
+_SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+_MIN_VERIFY_SEVERITY = 1  # skip 'info'
 
-# Opengrep convention: rc=1 means "findings present", anything > 1 is a real error.
-_OPENGREP_FINDINGS_RC = 1
+
+def _build_llm_client():
+    """Construct an LLM client from env or return None if BYO key isn't configured."""
+    from runner.verification.llm_client import LlmClient
+
+    api_key = os.getenv("LLM_API_KEY")
+    if not api_key:
+        return None
+    return LlmClient(
+        api_key=api_key,
+        api_base_url=os.getenv("LLM_API_BASE_URL", "https://api.openai.com/v1"),
+        model=os.getenv("LLM_API_MODEL", "gpt-4o-mini"),
+    )
+
+
+def _build_scan_budget() -> ScanBudget:
+    return ScanBudget(
+        scan_budget=int(os.getenv("LLM_TOKEN_BUDGET_PER_SCAN", "200000")),
+        daily_remaining=int(os.getenv("LLM_DAILY_REMAINING", "1000000")),
+    )
+
+
+def _maybe_verify(
+    *, findings: list[dict], repo_root: str, llm, scan_budget: ScanBudget,
+) -> list[dict]:
+    out: list[dict] = []
+    for f in findings:
+        copy = dict(f)
+        sev = _SEVERITY_ORDER.get((f.get("severity") or "").lower(), 0)
+
+        if llm is None:
+            copy["verdict"] = None
+            copy.setdefault("verification_metadata", {})["skipped"] = "llm_disabled"
+            out.append(copy)
+            continue
+
+        if sev < _MIN_VERIFY_SEVERITY:
+            copy["verdict"] = None
+            copy.setdefault("verification_metadata", {})["skipped"] = "below_severity"
+            out.append(copy)
+            continue
+
+        if not scan_budget.allow():
+            copy["verdict"] = "possible"
+            copy.setdefault("verification_metadata", {})["skipped"] = scan_budget.skip_reason
+            out.append(copy)
+            continue
+
+        try:
+            result = verify_finding(finding=f, repo_root=repo_root, llm=llm)
+            scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
+            copy["verdict"] = result.verdict
+            copy["evidence_json"] = result.evidence
+            copy["exploit_chain"] = result.exploit_chain
+            copy["verification_metadata"] = result.verification_metadata
+        except Exception as e:  # noqa: BLE001
+            copy["verdict"] = None
+            copy.setdefault("verification_metadata", {})["skipped"] = f"llm_error:{type(e).__name__}"
+
+        out.append(copy)
+    return out
+
+
+# Semgrep + tree-sitter parse untrusted source; scrub credentials before exec.
+_CODE_SCAN_DROP_ENV = ("GIT_TOKEN",)
 
 DEFAULT_SEMGREP_RULES_PATH = "/opt/semgrep-rules"
 
@@ -66,6 +131,11 @@ class CodeScanningConfig(BaseScanConfig):
     git_token: str | None
     rulesets: str
     rules_path: str
+    # When SCAN_SCOPE="diff_scoped" AND BASE_SHA is set, semgrep runs only over
+    # files changed between BASE_SHA and the repo's HEAD. Empty diff → zero
+    # findings, no scanner invocation.
+    base_sha: str | None
+    scan_scope: str
 
     @classmethod
     def from_job(cls, job: dict[str, Any]) -> "CodeScanningConfig":
@@ -78,6 +148,8 @@ class CodeScanningConfig(BaseScanConfig):
             git_token=env.get("GIT_TOKEN") or None,
             rulesets=env.get("RULESETS", ""),
             rules_path=env.get("SEMGREP_RULES_PATH", DEFAULT_SEMGREP_RULES_PATH),
+            base_sha=env.get("BASE_SHA") or None,
+            scan_scope=env.get("SCAN_SCOPE", "full_tree"),
         )
 
 
@@ -130,6 +202,8 @@ class CodeScanningScanner:
                     git_token=cfg.git_token,
                     config_args=config_args,
                     cancel_event=cancel_event,
+                    base_sha=cfg.base_sha,
+                    scan_scope=cfg.scan_scope,
                 )
             except InsecureURLError as e:
                 log_tail.append(f"[!] {e}")
@@ -165,6 +239,13 @@ class CodeScanningScanner:
             log_tail.append(f"[!] Normalization failed: {e}")
             logger.exception("[!] Normalization failed")
 
+        try:
+            findings_file = out_dir / "findings.jsonl"
+            self._verify_findings_file(findings_file, repo_root=str(out_dir))
+        except Exception:  # noqa: BLE001
+            logger.exception("[!] _verify_findings_file failed (continuing)")
+            log_tail.append("[!] verification step failed; findings unverified")
+
         write_done_marker(out_dir)
         emitter.done()
 
@@ -179,9 +260,38 @@ class CodeScanningScanner:
     # internal helpers
     # ------------------------------------------------------------------
 
+    def _verify_findings_file(self, findings_file: Path, *, repo_root: str) -> None:
+        """Read findings.jsonl, run _maybe_verify, rewrite in place.
+
+        No-op when the file is missing. When the LLM client can't be built
+        (no BYO key configured), every finding is marked skipped=llm_disabled.
+        """
+        if not findings_file.exists():
+            return
+
+        raw_findings: list[dict] = []
+        for line in findings_file.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                raw_findings.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("[!] skip non-JSON line in %s", findings_file)
+
+        verified = _maybe_verify(
+            findings=raw_findings,
+            repo_root=repo_root,
+            llm=_build_llm_client(),
+            scan_budget=_build_scan_budget(),
+        )
+
+        with open(findings_file, "w") as f:
+            for finding in verified:
+                f.write(json.dumps(finding, separators=(",", ":")) + "\n")
+
     @staticmethod
     def _build_config_args(rulesets: str, default_rules_path: str) -> list[str]:
-        """Compute opengrep ``--config`` arguments.
+        """Compute semgrep ``--config`` arguments.
 
         Mirrors the bash original (run.sh):
           - If ``RULESETS`` is empty, use the bundled rules path.
@@ -217,6 +327,8 @@ class CodeScanningScanner:
         git_token: str | None,
         config_args: list[str],
         cancel_event: threading.Event | None,
+        base_sha: str | None = None,
+        scan_scope: str = "full_tree",
     ) -> Path | None:
         repo_name = repo_name_from_url(repo_url)
         repo_out = out_dir / repo_name
@@ -244,9 +356,37 @@ class CodeScanningScanner:
             html_url = self._derive_html_url(repo_url)
             (repo_out / "html_url.txt").write_text(html_url)
 
-            sarif_file = repo_out / "opengrep.json"
-            ok = self._run_opengrep(
-                clone_dir, sarif_file, config_args, cancel_event
+            sarif_file = repo_out / "semgrep.sarif"
+
+            include_files: list[str] | None = None
+            if scan_scope == "diff_scoped" and base_sha and head_sha:
+                from runner.scanners._shared import compute_diff_files
+                try:
+                    include_files = compute_diff_files(str(clone_dir), base_sha, head_sha)
+                    logger.info(
+                        "[+] %s: diff-scoped semgrep (%d files)",
+                        repo_name, len(include_files),
+                    )
+                    if not include_files:
+                        # Empty diff → write minimal SARIF and skip semgrep entirely;
+                        # passing no --include would otherwise fall back to full-tree.
+                        sarif_file.write_text(
+                            '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"semgrep"}},"results":[]}]}'
+                        )
+                        for f in sorted(repo_out.glob("*.json")):
+                            register_output(out_dir, f, repo_name)
+                        log_finished(repo_name)
+                        return sarif_file
+                except ValueError as e:
+                    logger.warning(
+                        "[!] %s: diff resolution failed (%s) — falling back to full-tree",
+                        repo_name, e,
+                    )
+                    include_files = None
+
+            ok = self._run_semgrep(
+                clone_dir, sarif_file, config_args, cancel_event,
+                include_files=include_files,
             )
 
             if ok and sarif_file.exists() and sarif_file.stat().st_size > 0:
@@ -267,24 +407,6 @@ class CodeScanningScanner:
                     )
                     (repo_out / "reachability.json").write_text("{}")
 
-            joern_findings_path = repo_out / "joern_findings.json"
-            try:
-                joern_result = joern_adapter.run(
-                    repo_path=clone_dir,
-                    workdir=repo_out / "_joern_work",
-                )
-                joern_findings_path.write_text(
-                    json.dumps({
-                        "status": joern_result.status,
-                        "findings": joern_result.findings,
-                    })
-                )
-            except Exception:
-                logger.exception("[!] joern adapter raised for %s", repo_name)
-                joern_findings_path.write_text(
-                    json.dumps({"status": "failed: adapter raised", "findings": []})
-                )
-
             for f in sorted(repo_out.glob("*.json")):
                 register_output(out_dir, f, repo_name)
 
@@ -292,51 +414,30 @@ class CodeScanningScanner:
             return sarif_file if sarif_file.exists() else None
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
-            shutil.rmtree(repo_out / "_joern_work", ignore_errors=True)
 
-    def _run_opengrep(
+    def _run_semgrep(
         self,
         clone_dir: Path,
         sarif_file: Path,
         config_args: list[str],
         cancel_event: threading.Event | None,
+        *,
+        include_files: list[str] | None = None,
     ) -> bool:
-        if shutil.which("opengrep") is None:
-            logger.warning(
-                "[!] opengrep not on PATH - skipping %s", sarif_file.parent.name
-            )
-            return False
-        args = [
-            "opengrep",
-            "scan",
-            *config_args,
-            "--sarif",
-            "--dataflow-traces",
-            "-o",
-            str(sarif_file),
-            "--jobs",
-            "4",
-            "--no-git-ignore",
-            str(clone_dir),
-        ]
-        rc, _, stderr = run_tool(
-            args,
-            timeout=TIMEOUT_OPENGREP,
-            drop_env=_CODE_SCAN_DROP_ENV,
-            cancel_event=cancel_event,
-        )
-        if rc > _OPENGREP_FINDINGS_RC:
-            logger.warning(
-                "[!] Opengrep exited with code %d for %s: %s",
-                rc,
-                sarif_file.parent.name,
-                (stderr or "")[-500:].strip(),
-            )
+        """Invoke semgrep --sarif. Returns True if a non-empty SARIF was written."""
+        from runner.scanners.code_scanning.semgrep import run_semgrep_sarif
 
-        if sarif_file.exists() and sarif_file.stat().st_size == 0:
-            sarif_file.unlink()
-            return False
-        return sarif_file.exists()
+        configs: list[str] = []
+        it = iter(config_args)
+        for arg in it:
+            if arg == "--config":
+                configs.append(next(it))
+        result = run_semgrep_sarif(
+            str(clone_dir), sarif_file,
+            configs=configs or None,
+            include_files=include_files,
+        )
+        return result is not None
 
     def _read_head_sha(
         self, clone_dir: Path, cancel_event: threading.Event | None

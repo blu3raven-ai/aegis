@@ -17,7 +17,7 @@ from src.findings.service import (
     assign_finding,
     list_assignable_users,
 )
-from src.db.models import Finding, User
+from src.db.models import Asset, Finding, User
 
 
 class FakeKevLookup:
@@ -206,12 +206,19 @@ def test_normalize_filters_preserves_valid_page():
 
 @pytest_asyncio.fixture
 async def assign_finding_fixture(db_session):
-    """Seed one Finding and two Users; clean up at teardown.
+    """Seed one Asset, one Finding bound to it, and two Users; clean up at teardown.
 
     The conftest db_session commits across tests, so leaked rows would
     otherwise collide with the per-tool unique constraint on identity_key.
     """
-    org = f"org-{uuid4()}"
+    asset = Asset(
+        type="repo",
+        source="source_connection",
+        external_ref=f"github:acme/{uuid4().hex[:8]}",
+        display_name=f"acme/{uuid4().hex[:8]}",
+    )
+    db_session.add(asset)
+    await db_session.flush()
     user_a = User(id=f"user-{uuid4()}", username=f"a-{uuid4()}", email="a@example.com")
     user_b = User(id=f"user-{uuid4()}", username=f"b-{uuid4()}", email="b@example.com")
     finding = Finding(
@@ -221,52 +228,69 @@ async def assign_finding_fixture(db_session):
         severity="critical",
         title="log4j-core",
         detail={},
+        asset_id=str(asset.id),
     )
     db_session.add_all([user_a, user_b, finding])
     await db_session.commit()
-    yield finding, user_a, user_b
+    asset_ids = [str(asset.id)]
+    yield finding, user_a, user_b, asset_ids
     await db_session.execute(delete(Finding).where(Finding.id == finding.id))
     await db_session.execute(delete(User).where(User.id.in_((user_a.id, user_b.id))))
+    await db_session.execute(delete(Asset).where(Asset.id == asset.id))
     await db_session.commit()
 
 
 @pytest.mark.asyncio
 async def test_assign_finding_sets_assignee_for_known_user(db_session, assign_finding_fixture):
-    finding, user_a, _ = assign_finding_fixture
-    updated, previous = await assign_finding(finding.id, user_a.id, db_session)
+    finding, user_a, _, asset_ids = assign_finding_fixture
+    updated, previous = await assign_finding(finding.id, user_a.id, db_session, asset_ids)
     assert previous is None
     assert updated.assignee_user_id == user_a.id
 
 
 @pytest.mark.asyncio
 async def test_assign_finding_clears_assignee_when_null(db_session, assign_finding_fixture):
-    finding, user_a, _ = assign_finding_fixture
-    await assign_finding(finding.id, user_a.id, db_session)
-    updated, previous = await assign_finding(finding.id, None, db_session)
+    finding, user_a, _, asset_ids = assign_finding_fixture
+    await assign_finding(finding.id, user_a.id, db_session, asset_ids)
+    updated, previous = await assign_finding(finding.id, None, db_session, asset_ids)
     assert previous == user_a.id
     assert updated.assignee_user_id is None
 
 
 @pytest.mark.asyncio
 async def test_assign_finding_rejects_unknown_user(db_session, assign_finding_fixture):
-    finding, _, _ = assign_finding_fixture
+    finding, _, _, asset_ids = assign_finding_fixture
     with pytest.raises(ValueError, match="unknown user"):
-        await assign_finding(finding.id, "user-does-not-exist", db_session)
+        await assign_finding(finding.id, "user-does-not-exist", db_session, asset_ids)
 
 
 @pytest.mark.asyncio
 async def test_assign_finding_raises_lookup_error_for_missing_finding(db_session):
     with pytest.raises(LookupError):
-        await assign_finding(99_999_999, None, db_session)
+        await assign_finding(99_999_999, None, db_session, ["any-asset-id"])
 
 
 @pytest.mark.asyncio
 async def test_assign_finding_empty_string_clears_like_null(db_session, assign_finding_fixture):
-    finding, user_a, _ = assign_finding_fixture
-    await assign_finding(finding.id, user_a.id, db_session)
-    updated, previous = await assign_finding(finding.id, "   ", db_session)
+    finding, user_a, _, asset_ids = assign_finding_fixture
+    await assign_finding(finding.id, user_a.id, db_session, asset_ids)
+    updated, previous = await assign_finding(finding.id, "   ", db_session, asset_ids)
     assert previous == user_a.id
     assert updated.assignee_user_id is None
+
+
+@pytest.mark.asyncio
+async def test_assign_finding_404s_when_asset_out_of_scope(db_session, assign_finding_fixture):
+    finding, user_a, _, _ = assign_finding_fixture
+    with pytest.raises(LookupError):
+        await assign_finding(finding.id, user_a.id, db_session, ["unrelated-asset-id"])
+
+
+@pytest.mark.asyncio
+async def test_assign_finding_404s_when_scope_is_empty(db_session, assign_finding_fixture):
+    finding, user_a, _, _ = assign_finding_fixture
+    with pytest.raises(LookupError):
+        await assign_finding(finding.id, user_a.id, db_session, [])
 
 
 # ─── list_assignable_users (DB-backed) ──────────────────────────────────────
@@ -373,3 +397,32 @@ async def test_upsert_finding_accepts_null_asset_id_for_secrets(db_session, _iso
         detail={},
     )
     assert f.asset_id is None
+
+
+# ---------------------------------------------------------------------------
+# Verdict filter normalization
+# ---------------------------------------------------------------------------
+
+def test_normalize_filters_accepts_known_verdict():
+    f = _normalize_filters(FindingsListFilters(org_id="org-1", verdict="confirmed"))
+    assert f.verdict == "confirmed"
+
+
+def test_normalize_filters_accepts_legacy_verdict_filter():
+    f = _normalize_filters(FindingsListFilters(org_id="org-1", verdict="legacy"))
+    assert f.verdict == "legacy"
+
+
+def test_normalize_filters_accepts_all_verdict_filter():
+    f = _normalize_filters(FindingsListFilters(org_id="org-1", verdict="all"))
+    assert f.verdict == "all"
+
+
+def test_normalize_filters_rejects_unknown_verdict():
+    with pytest.raises(ValueError, match="invalid verdict"):
+        _normalize_filters(FindingsListFilters(org_id="org-1", verdict="bogus"))
+
+
+def test_normalize_filters_defaults_verdict_to_none():
+    f = _normalize_filters(FindingsListFilters(org_id="org-1"))
+    assert f.verdict is None

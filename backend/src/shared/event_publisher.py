@@ -18,13 +18,15 @@ class EventPublisher:
         self._sse_bus = sse_bus
 
     def publish(self, event: Event) -> None:
-        # Fan event out to EventBus — triggers both SSE subscribers and
-        # registered listeners (e.g. NotificationEventRouter).
         with event_publish_duration_seconds.labels(event_type=event.event_type).time():
             self._sse_bus.publish_sync(SseEvent(
                 event_type=event.event_type,
-                data={"event_id": event.event_id, "payload": event.payload},
-                org=event.org_id,
+                data={
+                    "event_id": event.event_id,
+                    "org_id": event.org_id,
+                    "source_component": event.source_component,
+                    "payload": event.payload,
+                },
             ))
             record_event_published(event.event_type)
 

@@ -1,4 +1,4 @@
-"""REST endpoint for /api/v1/releases — org-wide pre-release scan list."""
+"""REST endpoint for /api/v1/releases — pre-release scans scoped to the caller's assets."""
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -19,15 +19,9 @@ from src.releases.service import (
     list_releases,
 )
 from src.settings.router import require_permission
+from src.shared.scope import resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/releases", tags=["releases"])
-
-
-def _resolve_org(request: Request) -> str:
-    org = getattr(request.state, "user_org", None) or request.query_params.get("org_id")
-    if not org:
-        raise HTTPException(status_code=400, detail="org_id is required")
-    return org
 
 
 @router.get("", response_model=ReleaseListResponse, summary="List recent pre-release scans")
@@ -40,10 +34,10 @@ async def list_releases_endpoint(
     cursor: str | None = Query(None, description="Opaque pagination token"),
 ) -> ReleaseListResponse:
     require_permission(request, "view_findings")
-    org = _resolve_org(request)
+    asset_ids = await resolve_asset_ids_from_request(request)
 
     filters = ReleaseListFilters(
-        org_id=org,
+        asset_ids=asset_ids,
         repo_id=repo_id,
         status=status,
         verdict=verdict,
@@ -87,13 +81,13 @@ async def list_releases_endpoint(
 )
 async def get_release_endpoint(scan_id: str, request: Request) -> ReleaseDetail:
     require_permission(request, "view_findings")
-    org = _resolve_org(request)
+    asset_ids = await resolve_asset_ids_from_request(request)
 
     async with get_session() as session:
-        detail = await get_release(scan_id=scan_id, org_id=org, session=session)
+        detail = await get_release(scan_id=scan_id, asset_ids=asset_ids, session=session)
 
-    # Wrong-org and missing scan share the 404 surface so org boundaries don't
-    # leak through HTTP status codes — same convention as scans/router.py.
+    # Out-of-scope and missing scan share the 404 surface so access boundaries
+    # don't leak through HTTP status codes — same convention as scans/router.py.
     if detail is None:
         raise HTTPException(status_code=404, detail="Release not found")
 

@@ -24,8 +24,9 @@ test("SettingsInPageNav drops the horizontal divider between buckets", () => {
 
 test("SettingsInPageNav uses anchor links to every section id", () => {
   // No #tokens anchor anymore — the Personal API tokens row consolidated into
-  // the org-level Security & audit > API tokens row.
-  for (const id of ["profile", "notifications", "security", "general", "members", "roles", "teams", "sso", "audit", "api-keys", "runners", "license"]) {
+  // the org-level Security & audit > API tokens row. Members / Roles / Teams
+  // were promoted out of /settings to top-level routes.
+  for (const id of ["profile", "notifications", "security", "general", "sso", "audit", "api-keys", "runners", "llm", "license"]) {
     assert.match(nav, new RegExp(`#${id}\\b`), `expected nav to link to #${id}`)
   }
 })
@@ -45,7 +46,7 @@ test("SettingsInPageNav highlights the active section", () => {
 test("SettingsInPageNav renders an icon alongside every label", () => {
   const itemRe = /\{\s*id:\s*"[^"]+",\s*href:\s*"#[^"]+",\s*label:\s*"[^"]+",\s*icon:\s*ICONS\./g
   const matches = nav.match(itemRe) ?? []
-  assert.equal(matches.length, 12, `expected 12 nav items with icons, found ${matches.length}`)
+  assert.equal(matches.length, 10, `expected 10 nav items with icons, found ${matches.length}`)
 })
 
 test("SettingsInPageNav marks the icon as decorative for screen readers", () => {

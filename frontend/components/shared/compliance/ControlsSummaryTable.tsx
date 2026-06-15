@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { type ControlSummaryItem, deriveControlStatus } from "@/lib/client/compliance-api"
 import { ControlBadge } from "./ControlBadge"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "text-[var(--color-severity-critical)]",
@@ -67,36 +68,27 @@ export function ControlsSummaryTable({ controls, framework, statusFilter = "all"
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[var(--color-border)]">
-            <th className="pb-2 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Control
-            </th>
-            <th className="pb-2 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Title
-            </th>
-            <th className="pb-2 pr-4 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Findings
-            </th>
-            <th className="pb-2 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Highest Severity
-            </th>
-            <th className="pb-2 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Status
-            </th>
-            <th className="pb-2 text-right" />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border)]">
+      <Table>
+        <Thead className="bg-transparent">
+          <Tr>
+            <Th className="px-0 pr-4 pt-0 pb-2">Control</Th>
+            <Th className="px-0 pr-4 pt-0 pb-2">Title</Th>
+            <Th className="px-0 pr-4 pt-0 pb-2 text-right">Findings</Th>
+            <Th className="px-0 pr-4 pt-0 pb-2">Highest Severity</Th>
+            <Th className="px-0 pr-4 pt-0 pb-2">Status</Th>
+            <Th className="px-0 pt-0 pb-2 text-right" />
+          </Tr>
+        </Thead>
+        <Tbody>
           {filtered.map((ctrl) => {
             const href = `/compliance/${framework}/${encodeURIComponent(ctrl.control_id)}`
             return (
-              <tr
+              <Tr
                 key={ctrl.control_id}
-                className="group transition-colors hover:bg-[var(--color-surface-raised)]"
+                interactive
+                className="group"
               >
-                <td className="py-3 pr-4">
+                <Td className="px-0 py-3 pr-4">
                   <Link href={href} className="hover:underline">
                     <ControlBadge framework={framework} controlId={ctrl.control_id} />
                   </Link>
@@ -105,16 +97,16 @@ export function ControlsSummaryTable({ controls, framework, statusFilter = "all"
                       {ctrl.category}
                     </div>
                   )}
-                </td>
-                <td className="py-3 pr-4">
+                </Td>
+                <Td className="px-0 py-3 pr-4">
                   <Link
                     href={href}
                     className="font-medium text-[var(--color-text-primary)] hover:underline"
                   >
                     {ctrl.title}
                   </Link>
-                </td>
-                <td className="py-3 pr-4 text-right font-mono text-[var(--color-text-primary)]">
+                </Td>
+                <Td className="px-0 py-3 pr-4 text-right font-mono text-[var(--color-text-primary)]">
                   {ctrl.finding_count > 0 ? (
                     <Link
                       href={href}
@@ -125,8 +117,8 @@ export function ControlsSummaryTable({ controls, framework, statusFilter = "all"
                   ) : (
                     <span className="text-[var(--color-text-secondary)]">0</span>
                   )}
-                </td>
-                <td className="py-3 pr-4">
+                </Td>
+                <Td className="px-0 py-3 pr-4">
                   {ctrl.highest_severity ? (
                     <span
                       className={`font-medium capitalize ${SEVERITY_COLORS[ctrl.highest_severity] ?? "text-[var(--color-text-secondary)]"}`}
@@ -136,11 +128,11 @@ export function ControlsSummaryTable({ controls, framework, statusFilter = "all"
                   ) : (
                     <span className="text-[var(--color-text-secondary)]">—</span>
                   )}
-                </td>
-                <td className="py-3 pr-4">
+                </Td>
+                <Td className="px-0 py-3 pr-4">
                   <StatusPill ctrl={ctrl} />
-                </td>
-                <td className="py-3 text-right">
+                </Td>
+                <Td className="px-0 py-3 text-right">
                   <Link
                     href={href}
                     className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"
@@ -149,12 +141,12 @@ export function ControlsSummaryTable({ controls, framework, statusFilter = "all"
                   >
                     ›
                   </Link>
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             )
           })}
-        </tbody>
-      </table>
+        </Tbody>
+      </Table>
     </div>
   )
 }

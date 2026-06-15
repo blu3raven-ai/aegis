@@ -1,6 +1,5 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { listFindingsSummary, type FindingsSummary } from "@/lib/client/findings-api"
 import { listSavedViews, type SavedView } from "@/lib/client/saved-views-api"
@@ -60,26 +59,26 @@ const PRESET_QUEUES: QueueItem[] = [
   },
 ]
 
-function filtersMatch(params: URLSearchParams, target: Record<string, string>): boolean {
+// Active-queue highlighting compares the current board state (currentUrlState,
+// passed down from FindingsBoardView) against each queue's filter recipe.
+// "Exact" means every key the queue cares about matches, AND no other
+// meaningful filter is set beyond its defaults.
+function filtersMatch(state: Record<string, string>, target: Record<string, string>): boolean {
   for (const [key, value] of Object.entries(target)) {
-    if (params.get(key) !== value) return false
+    if (state[key] !== value) return false
   }
   return true
 }
 
-function isExactMatch(params: URLSearchParams, target: Record<string, string>): boolean {
-  const meaningfulKeys = new Set(["state", "severity", "scanner", "repo", "q"])
-  if (!filtersMatch(params, target)) return false
-  for (const key of meaningfulKeys) {
+const MEANINGFUL_KEYS = ["state", "severity", "scanner", "repo", "q"] as const
+
+function isExactMatch(state: Record<string, string>, target: Record<string, string>): boolean {
+  if (!filtersMatch(state, target)) return false
+  for (const key of MEANINGFUL_KEYS) {
     if (key in target) continue
-    if (params.get(key) && params.get(key) !== "all") return false
+    if (state[key] && state[key] !== "all") return false
   }
   return true
-}
-
-function buildHref(filters: Record<string, string>): string {
-  const sp = new URLSearchParams(filters)
-  return `/inbox?${sp.toString()}`
 }
 
 function formatCount(n: number | undefined): string | null {
@@ -158,13 +157,13 @@ function QueueSection({
   label,
   items,
   summary,
-  currentParams,
+  currentState,
   onSelect,
 }: {
   label: string
   items: QueueItem[]
   summary: FindingsSummary | null
-  currentParams: URLSearchParams
+  currentState: Record<string, string>
   onSelect: (filters: Record<string, string>) => void
 }) {
   return (
@@ -179,7 +178,7 @@ function QueueSection({
             <QueueButton
               key={item.id}
               item={item}
-              active={isExactMatch(currentParams, item.filters)}
+              active={isExactMatch(currentState, item.filters)}
               count={count}
               onClick={() => onSelect(item.filters)}
             />
@@ -322,17 +321,14 @@ export function InboxQueueSidebar({
   savedViewsRefreshSignal,
   onSavedViewCreated,
 }: InboxQueueSidebarProps) {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const [summary, setSummary] = useState<FindingsSummary | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    listFindingsSummary(ORG_ID)
-      .then((data) => { if (!cancelled) setSummary(data) })
-      .catch(() => { if (!cancelled) setSummary(null) })
-    return () => { cancelled = true }
-  }, [])
+  // Stable key for refetching the summary when the board's filter state changes,
+  // so per-queue counts reflect what's currently visible.
+  const stateKey = useMemo(
+    () => MEANINGFUL_KEYS.map((k) => currentUrlState[k] ?? "").join("|"),
+    [currentUrlState],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -340,13 +336,7 @@ export function InboxQueueSidebar({
       .then((data) => { if (!cancelled) setSummary(data) })
       .catch(() => { /* keep previous summary */ })
     return () => { cancelled = true }
-  }, [searchParams])
-
-  const currentParams = useMemo(() => new URLSearchParams(searchParams.toString()), [searchParams])
-
-  function handleSelect(filters: Record<string, string>) {
-    router.push(buildHref(filters))
-  }
+  }, [stateKey])
 
   return (
     <aside
@@ -357,16 +347,16 @@ export function InboxQueueSidebar({
         label="My work"
         items={MY_WORK_QUEUES}
         summary={summary}
-        currentParams={currentParams}
-        onSelect={handleSelect}
+        currentState={currentUrlState}
+        onSelect={applyView}
       />
       <div className="mx-3 border-t border-[var(--color-border)]" />
       <QueueSection
         label="Presets"
         items={PRESET_QUEUES}
         summary={summary}
-        currentParams={currentParams}
-        onSelect={handleSelect}
+        currentState={currentUrlState}
+        onSelect={applyView}
       />
       <div className="mx-3 border-t border-[var(--color-border)]" />
       <SavedViewsSection

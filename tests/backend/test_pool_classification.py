@@ -20,7 +20,7 @@ def _ai_entry(run_id: str, value: str = "likely_real") -> dict:
     return {
         "value": value,
         "source": "ai",
-        "scanDepth": "ai_enhanced",
+        "scanDepth": "deep",
         "confidence": 0.8,
         "runId": run_id,
         "scannedAt": "2026-04-27T01:00:00Z",
@@ -66,7 +66,7 @@ def test_entries_to_append_allows_different_run_id():
 
 
 def test_entries_to_append_allows_ai_entry_after_scanner_entry():
-    """AI Enhanced run appends ai entry after existing scanner entry."""
+    """Deep run with AI classification appends ai entry after existing scanner entry."""
     from src.secrets.pool import _entries_to_append
     existing = [_scanner_entry("run-1", "light")]
     new = [_ai_entry("run-2")]

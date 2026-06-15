@@ -132,7 +132,6 @@ async def seed_if_empty(session: AsyncSession) -> None:
         username=username,
         email=email,
         password_hash=password_hash,
-        role="owner",
         role_id="role_owner",
         status="active",
         created_at=datetime.now(timezone.utc),

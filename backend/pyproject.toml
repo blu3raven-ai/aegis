@@ -21,6 +21,14 @@ dependencies = [
   "prometheus-client>=0.20.0",
   "idna>=3.15",
   "qrcode[pil]>=7.4",
+  "pysaml2>=7.5.4",
+  "pyopenssl>=24.0.0",
+  "authlib>=1.6.12",
+  "itsdangerous>=2.2.0",
+  "weasyprint>=62,<63",
+  # WeasyPrint 62 is incompatible with pydyf 0.11+ (upstream packaging bug)
+  "pydyf>=0.10,<0.11",
+  "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]

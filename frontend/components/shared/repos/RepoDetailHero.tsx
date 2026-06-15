@@ -27,7 +27,7 @@ export function RepoDetailHero({ repo }: RepoDetailHeroProps) {
   const totalFindings = critical + high + medium + low
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         {/* Title block */}
         <div className="min-w-0">

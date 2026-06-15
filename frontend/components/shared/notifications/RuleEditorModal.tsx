@@ -16,6 +16,9 @@ import type {
 import type { NotificationDestination } from "@/lib/client/destinations-api"
 import { ConditionBuilder } from "@/components/shared/rules-engine/ConditionBuilder"
 import { NOTIFICATION_ROUTING_FIELDS } from "@/lib/rules-engine/field-schemas"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
 
 interface RuleEditorModalProps {
   open: boolean
@@ -98,14 +101,15 @@ export function RuleEditorModal({
           <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">
             {rule ? "Edit rule" : "New routing rule"}
           </h2>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            iconOnly
             onClick={onClose}
             aria-label="close"
-            className="rounded p-1 text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
           >
             ×
-          </button>
+          </Button>
         </div>
 
         {/* Form */}
@@ -120,7 +124,7 @@ export function RuleEditorModal({
               >
                 Rule name
               </label>
-              <input
+              <Input
                 id="rule-name"
                 type="text"
                 required
@@ -128,7 +132,6 @@ export function RuleEditorModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Crits to #sec-incidents"
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               />
             </div>
 
@@ -140,12 +143,11 @@ export function RuleEditorModal({
               >
                 Channel
               </label>
-              <select
+              <Select
                 id="rule-channel"
                 required
                 value={channelId}
                 onChange={(e) => setChannelId(Number(e.target.value))}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               >
                 <option value="">— select channel —</option>
                 {destinations.map((d) => (
@@ -153,7 +155,7 @@ export function RuleEditorModal({
                     {d.name} ({d.destination_type})
                   </option>
                 ))}
-              </select>
+              </Select>
               {destinations.length === 0 && (
                 <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
                   No destinations configured. Add one in Notification destinations first.
@@ -170,13 +172,12 @@ export function RuleEditorModal({
                 >
                   Priority
                 </label>
-                <input
+                <Input
                   id="rule-priority"
                   type="number"
                   min={0}
                   value={priority}
                   onChange={(e) => setPriority(Math.max(0, Number(e.target.value)))}
-                  className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
                 />
                 <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
                   Lower = higher priority. First match wins.
@@ -215,20 +216,22 @@ export function RuleEditorModal({
 
           {/* Footer */}
           <div className="flex justify-end gap-3 border-t border-[var(--color-border)] px-6 py-4">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="md"
               onClick={onClose}
-              className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="primary"
+              size="md"
               disabled={saving || !channelId}
-              className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+              isLoading={saving}
             >
               {saving ? "Saving…" : rule ? "Save changes" : "Create rule"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

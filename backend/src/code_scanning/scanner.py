@@ -133,11 +133,10 @@ def _build_run_output_dir(org: str, run_id: str) -> Path:
     return CODE_SCANNING_DATA_DIR / "raw" / normalize_org(org) / normalize_path_segment(run_id)
 
 
-def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
+def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
     """Ingest code scanning results from object store after runner completion."""
     from src.shared.object_store import find_findings_jsonl
     from src.code_scanning.ingest import ingest_findings_jsonl
-    from src.code_scanning.merge import merge_engine_findings
     import tempfile
 
     data = find_findings_jsonl(f"code_scanning/{org}/{run_id}/")
@@ -154,7 +153,6 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
             tmp_path = tmp.name
         try:
             all_findings = ingest_findings_jsonl(Path(tmp_path))
-            all_findings = merge_engine_findings(all_findings)
         finally:
             os.unlink(tmp_path)
 
@@ -163,6 +161,12 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
     if all_findings:
         ctx = ScanContext(tool="code_scanning", org=org, run_id=run_id, source_type=source_type)
         new_findings = _apply_lifecycle(code_scanning_hooks, ctx, all_findings)
+
+        try:
+            from src.settings.llm_usage import record_usage_from_findings
+            record_usage_from_findings(all_findings)
+        except Exception:
+            logger.warning("Failed to record LLM usage from code_scanning ingest", exc_info=True)
 
     if new_findings:
         try:
@@ -174,7 +178,6 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
         from src.shared.event_emit_helpers import emit_finding_created
         for finding in new_findings:
             emit_finding_created(
-                org_id=org,
                 finding=finding,
                 scanner_type="sast",
                 source_component="code_scanning.scanner",
@@ -194,10 +197,13 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
         "progress": {"percent": 100, "stage": "completed"},
     })
 
-    # Write per-repo checkpoints so coverage gaps can be computed
+    # Write per-asset checkpoints so coverage gaps can be computed
+    from src.assets.service import resolve_repo_asset_ids
     from src.shared.checkpoints import write_checkpoint
-    for repo in build_source_repo_list(get_scan_sources_for_org(org)):
-        write_checkpoint("code_scanning", org, repo["full_name"])
+    repos = build_source_repo_list(get_scan_sources_for_org(org))
+    asset_ids = resolve_repo_asset_ids([r["full_name"] for r in repos])
+    for full_name, asset_id in asset_ids.items():
+        write_checkpoint("code_scanning", asset_id)
 
 
 def execute_code_scanning_scan_once(
@@ -258,7 +264,6 @@ def execute_code_scanning_scan_once(
         )
 
         result = _execute_via_runner(
-            org=org,
             run_id=run_id,
             config=config,
             repo_urls=repo_urls_str,

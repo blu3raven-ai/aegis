@@ -16,7 +16,7 @@ import {
 import { getSourceConnection, updateSourceConnection } from "@/lib/client/sources-api"
 import { ConnectionStatusBadge } from "./ConnectionStatusBadge"
 import { ScopeConfigurator } from "./ScopeConfigurator"
-import { SaveBar } from "@/app/(app)/settings/SaveBar"
+import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
 import { SettingsCard } from "@/components/shared/SettingsCard"
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -30,6 +30,9 @@ const SYNC_SCHEDULE_OPTIONS: { value: SyncSchedule; label: string }[] = [
 ]
 
 import { timeAgo } from "@/lib/shared/time-ago"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
 import { sectionHeadingClass } from "@/lib/shared/settings-styles"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -177,6 +180,15 @@ export function ScopeConfigContent({
     setSaveError(null)
   }
 
+  useSaveBarSection({
+    id: `source-scope:${connectionId}`,
+    dirty: dirty && canEdit,
+    saving,
+    error: saveError,
+    onSave: handleSave,
+    onDiscard: handleDiscard,
+  })
+
   // ─── Loading skeleton ──────────────────────────────────────────────────────
 
   if (loading) {
@@ -282,11 +294,11 @@ export function ScopeConfigContent({
           {/* Org / username — read-only */}
           {orgOrOwner && (
             <SettingsRow label={orgFieldLabel} hint="Set when the connection was created.">
-              <input
+              <Input
                 type="text"
                 value={orgOrOwner}
                 readOnly
-                className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none"
+                className="max-w-sm"
               />
             </SettingsRow>
           )}
@@ -295,41 +307,38 @@ export function ScopeConfigContent({
           <SettingsRow label="Access Token" hint="Used to authenticate API requests.">
             {showTokenInput ? (
               <div className="flex w-full max-w-sm items-center gap-2">
-                <input
+                <Input
                   type="password"
                   value={newToken}
                   onChange={(e) => setNewToken(e.target.value)}
                   placeholder="Enter new token"
                   autoFocus
-                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                  className="flex-1"
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => {
                     setShowTokenInput(false)
                     setNewToken("")
                   }}
-                  className="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)]"
+                  className="shrink-0"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="flex w-full max-w-sm items-center gap-2">
-                <input
+                <Input
                   type="text"
                   value={maskToken(loaded.auth.token)}
                   readOnly
-                  className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 font-mono text-sm text-[var(--color-text-secondary)] outline-none"
+                  className="flex-1 font-mono"
                 />
                 {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() => setShowTokenInput(true)}
-                    className="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
-                  >
+                  <Button variant="secondary" size="sm" onClick={() => setShowTokenInput(true)} className="shrink-0">
                     Change
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -337,18 +346,18 @@ export function ScopeConfigContent({
 
           {/* Sync Schedule */}
           <SettingsRow label="Sync Schedule" hint="How often to re-discover items from this source.">
-            <select
+            <Select
               value={syncSchedule}
               onChange={(e) => setSyncSchedule(e.target.value as SyncSchedule)}
               disabled={!canEdit}
-              className="w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 disabled:cursor-not-allowed disabled:opacity-50"
+              className="max-w-sm"
             >
               {SYNC_SCHEDULE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </SettingsRow>
         </div>
       </SettingsCard>
@@ -359,14 +368,6 @@ export function ScopeConfigContent({
           {saveError}
         </div>
       )}
-
-      {/* SaveBar */}
-      <SaveBar
-        dirty={dirty && canEdit}
-        saving={saving}
-        onSave={handleSave}
-        onDiscard={handleDiscard}
-      />
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { ActivityItem } from "./ActivityItem"
 import { EmptyActivityState } from "./EmptyActivityState"
 import type { ActivityEvent } from "@/lib/client/activity-api"
+import { Button } from "@/components/ui/Button"
 
 // ── Day grouping ──────────────────────────────────────────────────────────────
 
@@ -102,14 +103,15 @@ export function ActivityFeed({
       {/* Load more */}
       {hasMore && onLoadMore && (
         <div className="flex justify-center py-2">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="md"
             onClick={onLoadMore}
             disabled={loadingMore}
-            className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
+            isLoading={loadingMore}
           >
             {loadingMore ? "Loading…" : "Load older events →"}
-          </button>
+          </Button>
         </div>
       )}
     </div>

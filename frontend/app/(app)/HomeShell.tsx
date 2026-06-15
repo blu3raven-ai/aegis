@@ -8,7 +8,7 @@ export function HomeShell() {
   return (
     <>
       <PageHeader icon={<HomeIcon />} title="Home" />
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="px-6 py-8">
         <HomeDashboard />
       </main>
     </>

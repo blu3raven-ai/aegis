@@ -12,9 +12,11 @@ import type {
   GqlHomeDashboard,
 } from "@/lib/shared/graphql/types"
 import { useSSE } from "@/components/providers/SSEProvider"
+import { SetupChecklistCard } from "@/components/shared/SetupChecklistCard"
 import { useCurrentUser } from "@/lib/client/auth"
 import type { SourceConnection } from "@/lib/shared/sources-types"
 import { EmptyOverviewBanner, GhostPreviewWrapper } from "@/components/shared/EmptyOverviewBanner"
+import { Button } from "@/components/ui/Button"
 import { HomeGhostPreview } from "./HomeGhostPreview"
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
@@ -127,7 +129,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
           {card.primaryRepo}
         </span>
         {multiRepo && (
-          <span className="rounded bg-[color-mix(in_srgb,#a78bfa_18%,transparent)] px-1.5 py-0.5 text-2xs font-medium text-[#a78bfa]">
+          <span className="rounded bg-[var(--color-state-dismissed-subtle)] px-1.5 py-0.5 text-2xs font-medium text-[var(--color-state-dismissed)]">
             Affects {card.repoCount} of your repos
           </span>
         )}
@@ -153,33 +155,20 @@ function CveCard({ card }: { card: OpenCveCard }) {
         </p>
       )}
 
-      {/* Actions — mock inherited-actions (primary + ghost + text). Open-fix-PR / Jira
-          stay disabled until those integrations are wired through. */}
+      {/* Open-fix-PR / Jira stay disabled until those integrations are wired through. */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Link
           href={`/findings/${card.primaryFindingId}`}
-          className={`inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] ${LINK_FOCUS}`}
+          className={`inline-flex h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]`}
         >
           Investigate →
         </Link>
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          title="Coming soon"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        <Button variant="secondary" size="sm" disabled title="Coming soon">
           Open fix PR
-        </button>
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          title="Coming soon"
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--color-text-tertiary)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        >
+        </Button>
+        <Button variant="ghost" size="sm" disabled title="Coming soon">
           Create Jira ticket
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -593,14 +582,9 @@ function ErrorBanner({ onRetry, retrying }: { onRetry: () => void; retrying: boo
         </svg>
         <span className="text-[var(--color-text-primary)]">Some data failed to load.</span>
       </div>
-      <button
-        type="button"
-        onClick={onRetry}
-        disabled={retrying}
-        className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none disabled:opacity-50"
-      >
+      <Button variant="secondary" size="sm" onClick={onRetry} isLoading={retrying}>
         {retrying ? "Retrying..." : "Retry"}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -624,11 +608,11 @@ function YourReposList({ repos }: { repos: GqlHomeAnalytics["topRepositories"] }
         {repos.map(repo => {
           const blocked = repo.critical > 0 || repo.high > 0
           const healthy = repo.open === 0
-          const borderClass = blocked
-            ? "border-l-[var(--color-severity-critical)]"
+          const dotClass = blocked
+            ? "bg-[var(--color-severity-critical)]"
             : healthy
-            ? "border-l-[var(--color-status-ok)]"
-            : "border-l-[var(--color-border)]"
+            ? "bg-[var(--color-status-ok)]"
+            : "bg-[var(--color-text-tertiary)]"
           const statusLabel = blocked ? "Blocked" : healthy ? "Healthy" : "Open"
           const detailParts: string[] = []
           if (repo.open > 0) detailParts.push(`${repo.open} ${repo.open === 1 ? "issue" : "issues"}`)
@@ -638,10 +622,11 @@ function YourReposList({ repos }: { repos: GqlHomeAnalytics["topRepositories"] }
           return (
             <Link
               key={repo.name}
-              href={`/repos/${encodeURIComponent(repo.name)}`}
-              className={`group flex items-center gap-3 rounded-lg border border-[var(--color-border)] border-l-4 ${borderClass} bg-[var(--color-surface)] px-4 py-3 transition-colors hover:bg-[var(--color-bg-hover)] ${LINK_FOCUS}`}
+              href={`/sources/${encodeURIComponent(repo.name)}`}
+              className={`group flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 transition-colors hover:bg-[var(--color-bg-hover)] ${LINK_FOCUS}`}
             >
               <span className="sr-only">{statusLabel}: </span>
+              <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
               <span className="flex-1 truncate text-sm font-medium text-[var(--color-text-primary)]" title={repo.name}>
                 {repo.name}
               </span>
@@ -888,6 +873,9 @@ export function HomeDashboard() {
       </div>
 
       <JustIntroducedSection findings={recentFindings} />
+
+      {/* Setup checklist · inline card; self-hides at 100% */}
+      <SetupChecklistCard />
 
       {/* Open in your repos · inherited CVE cards */}
       {openCveCards.length > 0 && <OpenInYourReposSection cards={openCveCards} />}

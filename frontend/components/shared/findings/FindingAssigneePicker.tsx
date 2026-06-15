@@ -6,6 +6,8 @@ import {
   listAssignableUsers,
   type AssignableUser,
 } from "@/lib/client/findings-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 export interface FindingAssigneePickerProps {
   /** Current selected assignee id, or null when unset. */
@@ -87,30 +89,44 @@ export function FindingAssigneePicker({
       {label && (
         <div className="mb-1 text-xs text-[var(--color-text-secondary)]">{label}</div>
       )}
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="xs"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-label={triggerAriaLabel || (value ? `Change assignee (${triggerLabel})` : "Select assignee")}
-        className="inline-flex w-full items-center justify-between gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        className="w-full justify-between"
+        trailingIcon={
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        }
       >
         <span className={value ? "" : "text-[var(--color-text-secondary)]"}>{triggerLabel}</span>
-        <span aria-hidden className="text-[var(--color-text-tertiary)]">▾</span>
-      </button>
+      </Button>
       {open && (
         <div
           role="listbox"
           aria-label="Assignable users"
           className="absolute left-0 top-full z-50 mt-1 w-72 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg"
         >
-          <input
+          <Input
+            size="sm"
             type="search"
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by username or email"
             maxLength={255}
-            className="mb-2 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
+            className="mb-2"
           />
           {value && (
             <button

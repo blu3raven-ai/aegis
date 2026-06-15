@@ -1,5 +1,6 @@
 "use client"
 
+import { Button } from "@/components/ui/Button"
 import { relativeTime } from "@/lib/shared/relative-time"
 import type { SbomFormat } from "@/lib/client/sbom-api"
 import type { SbomHistoryEntry } from "@/lib/client/sbom-api"
@@ -44,30 +45,23 @@ export function SbomHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onHistoryOpen}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          leadingIcon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+          }
         >
-          <svg
-            className="h-3.5 w-3.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-          </svg>
           History
           {historyCount > 0 && (
-            <span className="rounded-full bg-[var(--color-surface-raised)] px-1.5 py-px font-mono text-2xs font-semibold text-[var(--color-text-secondary)]">
+            <span className="rounded-full bg-current/15 px-1.5 py-px font-mono text-2xs font-semibold tabular-nums">
               {historyCount}
             </span>
           )}
-        </button>
+        </Button>
 
         <SbomExportMenu repoName={repoName} onExport={onExport} loading={exportLoading} />
       </div>

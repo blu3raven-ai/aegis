@@ -40,7 +40,7 @@ def _make_app(recorder: MagicMock | None = None) -> tuple[FastAPI, MagicMock]:
     def health():
         return JSONResponse({"ok": True})
 
-    @app.post("/runner/api/jobs")
+    @app.post("/api/v1/runner/jobs")
     def runner_job():
         return JSONResponse({"ok": True})
 
@@ -85,7 +85,7 @@ def test_health_path_not_audited():
 def test_runner_path_not_audited():
     app, mock_rec = _make_app()
     client = TestClient(app)
-    client.post("/runner/api/jobs", json={})
+    client.post("/api/v1/runner/jobs", json={})
     mock_rec.record.assert_not_called()
 
 

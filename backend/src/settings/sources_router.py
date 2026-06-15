@@ -17,7 +17,7 @@ from src.settings.sources_test_connection import test_connection
 from src.settings.router import require_permission
 from src.shared.event_bus import Event, get_event_bus
 
-sources_router = APIRouter(prefix="/settings/api", tags=["sources"])
+sources_router = APIRouter(prefix="/api/v1/settings", tags=["sources"])
 
 _SCHEDULE_HOURS = {"1h": 1, "3h": 3, "6h": 6, "12h": 12, "24h": 24}
 

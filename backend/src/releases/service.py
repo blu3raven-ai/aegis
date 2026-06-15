@@ -43,13 +43,12 @@ _CI_SOURCES = frozenset({"ci", "github_actions", "gitlab_ci", "bitbucket_pipelin
 
 @dataclass
 class ReleaseListFilters:
-    org_id: str | None = None
+    asset_ids: list[str]
     repo_id: str | None = None
     status: str | None = None
     verdict: str | None = None
     limit: int = DEFAULT_LIMIT
     cursor: str | None = None
-    asset_ids: list[str] | None = None
 
 
 @dataclass
@@ -182,9 +181,6 @@ def _row_from_scan(row: ScanRun) -> ReleaseRow:
 
 
 def _normalise_filters(filters: ReleaseListFilters) -> ReleaseListFilters:
-    if filters.asset_ids is None and not filters.org_id:
-        raise ValueError("either org_id or asset_ids is required")
-
     status: str | None = None
     if filters.status:
         status = filters.status.lower()
@@ -198,13 +194,12 @@ def _normalise_filters(filters: ReleaseListFilters) -> ReleaseListFilters:
             raise ValueError(f"invalid verdict: {verdict}")
 
     return ReleaseListFilters(
-        org_id=filters.org_id,
+        asset_ids=filters.asset_ids,
         repo_id=filters.repo_id or None,
         status=status,
         verdict=verdict,
         limit=filters.limit,
         cursor=filters.cursor,
-        asset_ids=filters.asset_ids,
     )
 
 
@@ -242,18 +237,16 @@ async def list_releases(
     raw_filters: ReleaseListFilters,
     session: AsyncSession,
 ) -> dict[str, Any]:
-    """Return paginated pre-release scans for the requesting org."""
+    """Return paginated pre-release scans scoped to the caller's accessible assets."""
     filters = _normalise_filters(raw_filters)
 
-    if filters.asset_ids is not None and not filters.asset_ids:
+    if not filters.asset_ids:
         return {"releases": [], "next_cursor": None}
 
-    where = [ScanRun.tool == "pre_release"]
-    if filters.asset_ids is not None:
-        where.append(ScanRun.asset_id.in_(filters.asset_ids))
-    else:
-        # org_id path: filter via metadata_json since ScanRun.org column is dropped
-        where.append(ScanRun.metadata_json["org_label"].astext == filters.org_id)
+    where = [
+        ScanRun.tool == "pre_release",
+        ScanRun.asset_id.in_(filters.asset_ids),
+    ]
     if filters.status:
         # Reverse the public status onto the raw DB enum so the SQL filter
         # is honest about what we're matching on disk.
@@ -563,18 +556,21 @@ async def _compute_blocker_diff(
 
 async def get_release(
     scan_id: str,
-    org_id: str,
+    asset_ids: list[str],
     session: AsyncSession,
 ) -> ReleaseDetailRow | None:
     """Fetch a single release with its blocker diff against the prior baseline.
 
-    Returns None if the scan is missing or belongs to a different org — the
-    router maps both to 404 so org boundaries don't leak via the response code.
+    Returns None if the scan is missing or sits outside the caller's accessible
+    assets — the router maps both to 404 so access boundaries don't leak via
+    the response code.
     """
+    if not asset_ids:
+        return None
     target = (await session.execute(
         select(ScanRun).where(
             ScanRun.id == scan_id,
-            ScanRun.metadata_json["org_label"].astext == org_id,
+            ScanRun.asset_id.in_(asset_ids),
             ScanRun.tool == "pre_release",
         )
     )).scalar_one_or_none()

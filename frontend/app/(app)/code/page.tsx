@@ -1,7 +1,15 @@
-import { redirect } from "next/navigation"
+"use client"
 
-export const metadata = { title: "Code Scanning" }
+import { FindingsBoardView } from "@/components/shared/findings/FindingsBoardView"
+import { FindingsIcon } from "@/lib/shared/ui/page-icons"
 
 export default function CodeLandingPage() {
-  redirect("/findings?scanner=sast")
+  return (
+    <FindingsBoardView
+      pageTitle="Code Scanning"
+      pageIcon={<FindingsIcon />}
+      pageDescription="Findings from static code analysis."
+      initialScannerFilter="sast"
+    />
+  )
 }

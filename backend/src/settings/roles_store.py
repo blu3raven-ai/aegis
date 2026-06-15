@@ -87,20 +87,35 @@ def get_role(role_id: str) -> dict[str, Any]:
     return result
 
 
+# Stable mapping between seeded role IDs and the kind strings used by
+# request.state.user_role and the API response shape. Built-in role IDs
+# round-trip exactly; everything else (custom roles) shows as "custom".
+_ROLE_ID_TO_KIND = {
+    "role_owner": "owner",
+    "role_admin": "admin",
+    "role_security": "security",
+    "role_viewer": "viewer",
+}
+_ROLE_KIND_TO_ID = {kind: role_id for role_id, kind in _ROLE_ID_TO_KIND.items()}
+
+
+def role_kind_from_id(role_id: str | None) -> str:
+    """Map Role.id → the kind string used by RBAC checks and audit payloads.
+
+    Built-in roles return owner/admin/security/viewer. Custom roles return
+    "custom". Missing role_id falls back to "viewer".
+    """
+    if not role_id:
+        return "viewer"
+    return _ROLE_ID_TO_KIND.get(role_id, "custom")
+
+
 def get_role_by_slug(slug: str) -> dict[str, Any]:
     cached = _role_cache.get(f"slug:{slug}")
     if cached is not None:
         return cached
 
-    # Keeping this for compatibility with legacy 'role' string field.
-    # We map common slugs to seeded IDs.
-    slug_map = {
-        "owner": "role_owner",
-        "admin": "role_admin",
-        "security": "role_security",
-        "viewer": "role_viewer",
-    }
-    role_id = slug_map.get(slug, slug)
+    role_id = _ROLE_KIND_TO_ID.get(slug, slug)
 
     async def _query(session):
         role = await session.get(Role, role_id)

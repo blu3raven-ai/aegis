@@ -7,10 +7,39 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.db.helpers import run_db
 from src.db.models import Asset
 
 AssetType = Literal["repo", "image"]
 AssetSource = Literal["source_connection", "manual_upload", "byo_import"]
+
+
+def resolve_repo_asset_ids(repo_full_names: list[str]) -> dict[str, str]:
+    """Bulk-resolve "owner/name" repo display names to asset_ids.
+
+    Looks up assets of type 'repo' whose ``display_name`` matches. Repos that
+    have no asset row (e.g. discovered by a source connection but never synced)
+    are omitted from the result. Mirrors the dedup behaviour of
+    ``build_source_repo_list`` — if multiple repo assets share a display_name
+    (rare across source types), the result picks one arbitrarily.
+    """
+    if not repo_full_names:
+        return {}
+
+    names = [n for n in repo_full_names if isinstance(n, str) and "/" in n]
+    if not names:
+        return {}
+
+    async def _query(db: AsyncSession) -> list[tuple[str, str]]:
+        result = await db.execute(
+            select(Asset.display_name, Asset.id).where(
+                Asset.type == "repo",
+                Asset.display_name.in_(names),
+            )
+        )
+        return [(name, asset_id) for name, asset_id in result.all()]
+
+    return {name: asset_id for name, asset_id in run_db(_query)}
 
 
 async def upsert_asset(

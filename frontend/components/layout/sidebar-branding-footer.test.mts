@@ -7,14 +7,10 @@ const ROOT = join(import.meta.dirname, "../..")
 const src = readFileSync(join(ROOT, "components/layout/SidebarContent.tsx"), "utf8")
 
 describe("Sidebar branding section", () => {
-  it("contains Raven Protocol eyebrow label", () => {
-    assert.ok(src.includes("Raven Protocol"), "should have Raven Protocol eyebrow")
-  })
-  it("contains Blu3Raven product name", () => {
-    assert.ok(src.includes("Blu3Raven"), "should have Blu3Raven product name")
-  })
-  it("contains Aegis product name in subtitle", () => {
-    assert.ok(src.includes("Aegis — Vulnerability Management Portal"), "should have Aegis subtitle")
+  it("reads branding name from useBranding hook (no subtitle field)", () => {
+    assert.ok(src.includes("useBranding()"), "should call useBranding() for branding values")
+    assert.ok(src.includes("{brandName}"), "should render brandName from the hook")
+    assert.ok(!src.includes("brandSubtitle"), "subtitle is gone — customer layout is single-line")
   })
   it("uses Space Grotesk font variable", () => {
     assert.ok(src.includes("--font-space-grotesk"), "should reference Space Grotesk font variable")
@@ -24,6 +20,9 @@ describe("Sidebar branding section", () => {
   })
   it("does not contain old AI Security Community subtitle", () => {
     assert.ok(!src.includes("AI Security Community"), "old subtitle should be removed")
+  })
+  it("uses isVendor flag to switch between vendor and customer layouts", () => {
+    assert.ok(src.includes("isVendor"), "should branch on the useBranding().isVendor flag")
   })
 })
 

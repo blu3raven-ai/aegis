@@ -43,9 +43,9 @@ describe("RecentReleaseChecksTable triggered-by branching", () => {
 })
 
 describe("RecentReleaseChecksTable row linking", () => {
-  it("links rows to /repos/{id}?tab=scans&scan_id={scan}", () => {
+  it("links rows to /sources/{id}?tab=scans&scan_id={scan}", () => {
     assert.ok(
-      src.includes("`/repos/${encodeURIComponent(release.repo_id)}?tab=scans&scan_id=${encodeURIComponent(release.scan_id)}`"),
+      src.includes("`/sources/${encodeURIComponent(release.repo_id)}?tab=scans&scan_id=${encodeURIComponent(release.scan_id)}`"),
       "should link rows to repo scan tab",
     )
   })

@@ -67,6 +67,7 @@ def _fake_detail() -> ScanDetail:
 
 def test_submit_scan_happy_path():
     with patch("src.settings.router._resolve_effective_permissions", return_value=_WRITER_PERMS), \
+         patch("src.repos.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.repos.router.submit_scan", new=AsyncMock(return_value=_fake_submission())):
         client = TestClient(_make_app())
         resp = client.post(
@@ -99,6 +100,7 @@ def test_submit_scan_unknown_scanner_type():
 
 def test_submit_scan_repo_not_found():
     with patch("src.settings.router._resolve_effective_permissions", return_value=_WRITER_PERMS), \
+         patch("src.repos.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.repos.router.submit_scan", new=AsyncMock(return_value=None)):
         client = TestClient(_make_app())
         resp = client.post(f"/api/v1/repos/{_FAKE_ASSET_ID}/scan", json={"commit_sha": "a" * 40})
@@ -140,3 +142,37 @@ def test_get_scan_missing_org():
         client = TestClient(app)
         resp = client.get("/api/v1/scans/scan-abc")
         assert resp.status_code == 400
+
+
+def test_get_scan_surfaces_verification_summary_when_present():
+    detail = _fake_detail()
+    detail.verification_summary = {
+        "confirmed": 2,
+        "needs_verify": 1,
+        "possible": 0,
+        "ruled_out": 3,
+        "legacy": 0,
+        "tokens_in": 1234,
+        "tokens_out": 567,
+        "model": "claude-sonnet-4-6",
+    }
+    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.scans.router.get_scan", new=AsyncMock(return_value=detail)):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/scans/scan-abc")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["verification_summary"]["confirmed"] == 2
+        assert body["verification_summary"]["ruled_out"] == 3
+        assert body["verification_summary"]["tokens_in"] == 1234
+        assert body["verification_summary"]["model"] == "claude-sonnet-4-6"
+
+
+def test_get_scan_verification_summary_absent_when_legacy():
+    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.scans.router.get_scan", new=AsyncMock(return_value=_fake_detail())):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/scans/scan-abc")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["verification_summary"] is None

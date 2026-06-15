@@ -61,18 +61,18 @@ test("SecretsSetupForm.tsx has scanner verification prerequisite panel", () => {
   assert.match(source, /canEnable/)
 })
 
-test("SecretsSetupForm.tsx has AI Enhanced scan depth card", () => {
+test("SecretsSetupForm.tsx no longer offers AI Enhanced scan depth", () => {
   const source = readFileSync(path.join(dir, "SecretsSetupForm.tsx"), "utf8")
-  assert.match(source, /ai_enhanced/)
-  assert.match(source, /AI Enhanced/)
+  assert.doesNotMatch(source, /ai_enhanced/)
+  assert.doesNotMatch(source, /AI Enhanced/)
 })
 
-test("SecretsSetupForm.tsx scan depth picker uses 3-column grid", () => {
+test("SecretsSetupForm.tsx scan depth picker uses 2-column grid", () => {
   const source = readFileSync(path.join(dir, "SecretsSetupForm.tsx"), "utf8")
-  assert.match(source, /grid-cols-3/)
+  assert.match(source, /grid-cols-2/)
 })
 
-test("SecretsSetupForm.tsx normalizes ai_enhanced as a valid scanDepth", () => {
+test("SecretsSetupForm.tsx normalizes scanDepth to light when unset", () => {
   const source = readFileSync(path.join(dir, "SecretsSetupForm.tsx"), "utf8")
   assert.match(source, /scanDepth: initialValues\.scanDepth \?\? "light"/)
 })

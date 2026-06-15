@@ -2,11 +2,13 @@
 
 import { useEffect } from "react"
 import { useSession } from "@/lib/client/use-session"
+import { useBranding } from "@/lib/client/branding/client"
 import { LoginForm } from "./LoginForm"
 import { BrandLogo } from "@/components/layout/BrandLogo"
 
 export default function LoginPage() {
   const { user, loading } = useSession()
+  const { name: brandName, isVendor } = useBranding()
 
   useEffect(() => {
     if (!loading && user) {
@@ -20,29 +22,40 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-[var(--color-background)] px-4">
       <div className="w-full max-w-sm">
         <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
-          {/* Branding header */}
+          {/* Branding header — vendor identity when name is NULL; customer otherwise */}
           <div className="bg-[var(--color-accent-subtle)] px-8 pb-6 pt-8">
             <div className="flex items-center gap-4">
               <BrandLogo className="h-14 w-14 shrink-0 object-contain" />
-              <div className="flex flex-col">
-                <span
-                  className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
-                  style={{ fontFamily: "var(--font-space-grotesk)" }}
-                >
-                  Raven Protocol
-                </span>
-                <span
-                  className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
-                  style={{ fontFamily: "var(--font-space-grotesk)" }}
-                >
-                  Blu3Raven
-                </span>
-                <span
-                  className="mt-0.5 text-xs text-[var(--color-text-secondary)]"
-                  style={{ fontFamily: "var(--font-manrope)" }}
-                >
-                  Aegis — Vulnerability Management Portal
-                </span>
+              <div className="flex min-w-0 flex-col">
+                {isVendor ? (
+                  <>
+                    <span
+                      className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
+                      style={{ fontFamily: "var(--font-space-grotesk)" }}
+                    >
+                      Raven Protocol
+                    </span>
+                    <span
+                      className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
+                      style={{ fontFamily: "var(--font-space-grotesk)" }}
+                    >
+                      Blu3Raven
+                    </span>
+                    <span
+                      className="mt-0.5 text-xs text-[var(--color-text-secondary)]"
+                      style={{ fontFamily: "var(--font-manrope)" }}
+                    >
+                      Aegis — Vulnerability Management Portal
+                    </span>
+                  </>
+                ) : (
+                  <span
+                    className="truncate text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
+                    style={{ fontFamily: "var(--font-space-grotesk)" }}
+                  >
+                    {brandName}
+                  </span>
+                )}
               </div>
             </div>
           </div>

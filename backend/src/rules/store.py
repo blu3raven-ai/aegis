@@ -1,16 +1,11 @@
-"""Storage layer for unified Rules (SLA, scanner coverage, auto-dismiss, data retention).
-
-Encapsulates all DB access for the Rules feature. Every read enforces cross-org
-isolation by filtering on `org_id`; every write double-checks the row belongs to
-the caller's org before mutating.
-"""
+"""Storage layer for unified Rules (SLA, scanner coverage, auto-dismiss, data retention)."""
 from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 
 from src.db.helpers import run_db
 from src.db.models import Finding, Rule, RuleKillSwitch, RuleViolation
@@ -22,7 +17,6 @@ DRY_RUN_SAMPLE_SIZE = 1000
 
 
 def _new_rule_id(category: str) -> str:
-    """Generate a non-hex-only ID so it's visually distinct from migration seeds."""
     prefix = category.replace("_", "-")
     return f"{prefix}-{secrets.token_urlsafe(8)}"
 
@@ -34,7 +28,6 @@ def _rule_to_dict(
 ) -> dict[str, Any]:
     return {
         "id": rule.id,
-        "org_id": rule.org_id,
         "category": rule.category,
         "name": rule.name,
         "description": rule.description,
@@ -48,8 +41,6 @@ def _rule_to_dict(
         "last_evaluated_at": rule.last_evaluated_at.isoformat() if rule.last_evaluated_at else None,
         "violation_count_open": violation_count_open,
         "violation_count_resolved_30d": violation_count_resolved_30d,
-        # Auto-dismiss dry-run gate metadata. The raw confirmation token is
-        # deliberately not exposed — only its presence (via dry_run_pending).
         "last_dry_run_at": (
             rule.last_dry_run_at.isoformat() if rule.last_dry_run_at else None
         ),
@@ -64,7 +55,6 @@ def _rule_to_dict(
 def _kill_switch_to_dict(ks: RuleKillSwitch) -> dict[str, Any]:
     return {
         "id": ks.id,
-        "org_id": ks.org_id,
         "category": ks.category,
         "killed_at": ks.killed_at.isoformat() if ks.killed_at else None,
         "killed_by": ks.killed_by,
@@ -86,7 +76,6 @@ def _violation_to_dict(v: RuleViolation) -> dict[str, Any]:
 
 
 async def _load_violation_counts(session, rule_ids: list[str]) -> dict[str, tuple[int, int]]:
-    """Return {rule_id: (open_count, resolved_last_30d_count)} for the given rule ids."""
     if not rule_ids:
         return {}
     counts: dict[str, tuple[int, int]] = {rid: (0, 0) for rid in rule_ids}
@@ -118,14 +107,13 @@ async def _load_violation_counts(session, rule_ids: list[str]) -> dict[str, tupl
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 
 
-def list_rules_for_org(
-    org_id: str,
+def list_rules(
     category: str | None = None,
     enabled: bool | None = None,
     q: str | None = None,
 ) -> list[dict[str, Any]]:
     async def _query(session):
-        stmt = select(Rule).where(Rule.org_id == org_id)
+        stmt = select(Rule)
         if category is not None:
             stmt = stmt.where(Rule.category == category)
         if enabled is not None:
@@ -144,12 +132,10 @@ def list_rules_for_org(
     return run_db(_query)
 
 
-def get_rule_by_id(org_id: str, rule_id: str) -> dict[str, Any] | None:
+def get_rule_by_id(rule_id: str) -> dict[str, Any] | None:
     async def _query(session):
         row = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.org_id == org_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id))
         ).scalars().first()
         if row is None:
             return None
@@ -162,7 +148,6 @@ def get_rule_by_id(org_id: str, rule_id: str) -> dict[str, Any] | None:
 
 def create_rule(
     *,
-    org_id: str,
     category: str,
     name: str,
     description: str | None,
@@ -178,7 +163,6 @@ def create_rule(
     async def _query(session):
         rule = Rule(
             id=rule_id,
-            org_id=org_id,
             category=category,
             name=name,
             description=description,
@@ -197,12 +181,7 @@ def create_rule(
     return run_db(_query)
 
 
-def update_rule(org_id: str, rule_id: str, **kwargs: Any) -> dict[str, Any] | None:
-    """Update a rule. Only keys explicitly passed in `kwargs` are written.
-
-    Accepted keys: name, description, enabled, priority, conditions, action.
-    Other keys are rejected with ValueError so typos surface immediately.
-    """
+def update_rule(rule_id: str, **kwargs: Any) -> dict[str, Any] | None:
     allowed = {
         "name",
         "description",
@@ -222,9 +201,7 @@ def update_rule(org_id: str, rule_id: str, **kwargs: Any) -> dict[str, Any] | No
 
     async def _query(session):
         row = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.org_id == org_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id))
         ).scalars().first()
         if row is None:
             return None
@@ -239,12 +216,10 @@ def update_rule(org_id: str, rule_id: str, **kwargs: Any) -> dict[str, Any] | No
     return run_db(_query)
 
 
-def delete_rule(org_id: str, rule_id: str) -> bool:
+def delete_rule(rule_id: str) -> bool:
     async def _query(session):
         row = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.org_id == org_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id))
         ).scalars().first()
         if row is None:
             return False
@@ -254,14 +229,12 @@ def delete_rule(org_id: str, rule_id: str) -> bool:
     return run_db(_query)
 
 
-def toggle_rule(org_id: str, rule_id: str) -> dict[str, Any] | None:
+def toggle_rule(rule_id: str) -> dict[str, Any] | None:
     now = datetime.now(timezone.utc)
 
     async def _query(session):
         row = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.org_id == org_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id))
         ).scalars().first()
         if row is None:
             return None
@@ -275,27 +248,19 @@ def toggle_rule(org_id: str, rule_id: str) -> dict[str, Any] | None:
     return run_db(_query)
 
 
-def summary_for_org(org_id: str) -> dict[str, Any]:
-    """Aggregate counters for the Rules landing-page summary card.
-
-    Returns active_rules, violations_open, coverage_gaps (count of open
-    scanner_coverage violations), and sla_compliance_pct derived from open
-    rule violations on SLA rules.
-    """
+def summary() -> dict[str, Any]:
+    """Aggregate counters for the Rules landing-page summary card."""
     async def _query(session):
         active_rules = (
             await session.execute(
-                select(func.count(Rule.id)).where(
-                    Rule.org_id == org_id, Rule.enabled == True  # noqa: E712
-                )
+                select(func.count(Rule.id)).where(Rule.enabled == True)  # noqa: E712
             )
         ).scalar_one()
 
         violations_open = (
             await session.execute(
                 select(func.count(RuleViolation.id))
-                .join(Rule, Rule.id == RuleViolation.rule_id)
-                .where(Rule.org_id == org_id, RuleViolation.status == "open")
+                .where(RuleViolation.status == "open")
             )
         ).scalar_one()
 
@@ -304,7 +269,6 @@ def summary_for_org(org_id: str) -> dict[str, Any]:
                 select(func.count(RuleViolation.id))
                 .join(Rule, Rule.id == RuleViolation.rule_id)
                 .where(
-                    Rule.org_id == org_id,
                     Rule.category == "sla",
                     RuleViolation.status == "open",
                 )
@@ -315,7 +279,6 @@ def summary_for_org(org_id: str) -> dict[str, Any]:
                 select(func.count(RuleViolation.id))
                 .join(Rule, Rule.id == RuleViolation.rule_id)
                 .where(
-                    Rule.org_id == org_id,
                     Rule.category == "sla",
                     RuleViolation.status == "resolved",
                     RuleViolation.resolved_at
@@ -329,7 +292,6 @@ def summary_for_org(org_id: str) -> dict[str, Any]:
                 select(func.count(RuleViolation.id))
                 .join(Rule, Rule.id == RuleViolation.rule_id)
                 .where(
-                    Rule.org_id == org_id,
                     Rule.category == "scanner_coverage",
                     RuleViolation.status == "open",
                 )
@@ -350,19 +312,14 @@ def summary_for_org(org_id: str) -> dict[str, Any]:
 
 
 def list_violations_for_rule(
-    org_id: str, rule_id: str, limit: int = 50, offset: int = 0
+    rule_id: str, limit: int = 50, offset: int = 0
 ) -> dict[str, Any]:
-    """Return paged violations for a rule. Caller must already have asserted
-    `org_id` ownership via `get_rule_by_id`; the join below is a belt-and-suspenders check.
-    """
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
 
     async def _query(session):
         owned = (
-            await session.execute(
-                select(Rule.id).where(Rule.id == rule_id, Rule.org_id == org_id)
-            )
+            await session.execute(select(Rule.id).where(Rule.id == rule_id))
         ).scalar_one_or_none()
         if owned is None:
             return {"violations": [], "total": 0, "limit": limit, "offset": offset}
@@ -397,27 +354,23 @@ def list_violations_for_rule(
 
 
 def engage_kill_switch(
-    *, org_id: str, category: str, killed_by: str, reason: str | None
+    *, category: str, killed_by: str, reason: str | None
 ) -> dict[str, Any]:
     """Insert a new RuleKillSwitch row.
 
-    Raises ValueError if a switch is already engaged for the (org, category)
-    pair so the router can surface a 409 instead of silently upserting.
+    Raises ValueError if a switch is already engaged for the category so the
+    router can surface a 409 instead of silently upserting.
     """
     async def _query(session):
         existing = (
             await session.execute(
-                select(RuleKillSwitch).where(
-                    RuleKillSwitch.org_id == org_id,
-                    RuleKillSwitch.category == category,
-                )
+                select(RuleKillSwitch).where(RuleKillSwitch.category == category)
             )
         ).scalars().first()
         if existing is not None:
             raise ValueError(f"kill switch already engaged for {category}")
 
         row = RuleKillSwitch(
-            org_id=org_id,
             category=category,
             killed_at=datetime.now(timezone.utc),
             killed_by=killed_by,
@@ -430,14 +383,11 @@ def engage_kill_switch(
     return run_db(_query)
 
 
-def disengage_kill_switch(*, org_id: str, category: str) -> bool:
+def disengage_kill_switch(*, category: str) -> bool:
     async def _query(session):
         row = (
             await session.execute(
-                select(RuleKillSwitch).where(
-                    RuleKillSwitch.org_id == org_id,
-                    RuleKillSwitch.category == category,
-                )
+                select(RuleKillSwitch).where(RuleKillSwitch.category == category)
             )
         ).scalars().first()
         if row is None:
@@ -448,13 +398,11 @@ def disengage_kill_switch(*, org_id: str, category: str) -> bool:
     return run_db(_query)
 
 
-def list_kill_switches(*, org_id: str) -> list[dict[str, Any]]:
+def list_kill_switches() -> list[dict[str, Any]]:
     async def _query(session):
         rows = (
             await session.execute(
-                select(RuleKillSwitch)
-                .where(RuleKillSwitch.org_id == org_id)
-                .order_by(RuleKillSwitch.category.asc())
+                select(RuleKillSwitch).order_by(RuleKillSwitch.category.asc())
             )
         ).scalars().all()
         return [_kill_switch_to_dict(r) for r in rows]
@@ -465,17 +413,10 @@ def list_kill_switches(*, org_id: str) -> list[dict[str, Any]]:
 # ── Dry-run preview ──────────────────────────────────────────────────────────
 
 
-def get_dry_run_state(*, org_id: str, rule_id: str) -> dict[str, Any] | None:
-    """Internal accessor for the router's enable-gate to inspect the raw token
-    and last-run timestamp without exposing them through the public rule dict.
-
-    Returns None if the rule does not exist.
-    """
+def get_dry_run_state(*, rule_id: str) -> dict[str, Any] | None:
     async def _query(session):
         row = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.org_id == org_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id))
         ).scalars().first()
         if row is None:
             return None
@@ -489,12 +430,6 @@ def get_dry_run_state(*, org_id: str, rule_id: str) -> dict[str, Any] | None:
 
 
 def _finding_to_dry_run_subject(finding: Finding, *, age_days: int) -> RuleFindingSubject:
-    """Safe-default subject for dry-run match counting.
-
-    Mirrors sla_evaluator._finding_to_subject: fields requiring joins are left
-    at safe defaults so any rule predicating on them simply won't match — which
-    is the conservative behaviour we want for a pre-enable preview.
-    """
     return RuleFindingSubject(
         finding_id=finding.id,
         severity=(finding.severity or "").lower(),
@@ -512,61 +447,35 @@ def _finding_to_dry_run_subject(finding: Finding, *, age_days: int) -> RuleFindi
 
 
 def preview_auto_dismiss_dry_run(
-    *, org_id: str, rule_id: str, asset_ids: list[str] | None = None
+    *, rule_id: str, asset_ids: list[str]
 ) -> tuple[int, list[dict[str, Any]], str]:
-    """Evaluate the rule's conditions against recent open findings.
-
-    Pass ``asset_ids`` to scope findings by asset identity rather than org string.
-    An empty ``asset_ids`` list returns (0, [], fresh_token) immediately.
-
-    Persists ``last_dry_run_at``, ``last_dry_run_match_count``, and a freshly
-    minted single-use ``dry_run_confirmation_token`` onto the rule row, then
-    returns the total match count, the first 20 sample matches, and the token.
-    Raises ValueError if the rule isn't an auto_dismiss rule (the gate is
-    P4-specific and not auto-routed to other categories).
-    """
+    """Evaluate the rule's conditions against recent open findings scoped to asset_ids."""
     now = datetime.now(timezone.utc)
     token = secrets.token_urlsafe(32)
 
-    if asset_ids is not None and not asset_ids:
+    if not asset_ids:
         return 0, [], token
 
     async def _query(session):
         rule = (
-            await session.execute(
-                select(Rule).where(Rule.id == rule_id, Rule.org_id == org_id)
-            )
+            await session.execute(select(Rule).where(Rule.id == rule_id))
         ).scalars().first()
         if rule is None:
             raise ValueError("rule not found")
         if rule.category != "auto_dismiss":
             raise ValueError("dry-run-and-confirm is only available for auto_dismiss rules")
 
-        if asset_ids is not None:
-            findings = (
-                await session.execute(
-                    select(Finding)
-                    .where(
-                        Finding.asset_id.in_(asset_ids),
-                        Finding.state == "open",
-                    )
-                    .order_by(Finding.first_seen_at.desc())
-                    .limit(DRY_RUN_SAMPLE_SIZE)
+        findings = (
+            await session.execute(
+                select(Finding)
+                .where(
+                    Finding.asset_id.in_(asset_ids),
+                    Finding.state == "open",
                 )
-            ).scalars().all()
-        else:
-            findings = (
-                await session.execute(
-                    select(Finding)
-                    .where(
-                        # Dry-run preview samples across the whole instance —
-                        # caller asked for unscoped evaluation.
-                        Finding.state == "open",
-                    )
-                    .order_by(Finding.first_seen_at.desc())
-                    .limit(DRY_RUN_SAMPLE_SIZE)
-                )
-            ).scalars().all()
+                .order_by(Finding.first_seen_at.desc())
+                .limit(DRY_RUN_SAMPLE_SIZE)
+            )
+        ).scalars().all()
 
         sample_matches: list[dict[str, Any]] = []
         match_count = 0
@@ -597,10 +506,6 @@ def preview_auto_dismiss_dry_run(
         rule.last_dry_run_at = now
         rule.last_dry_run_match_count = match_count
         rule.dry_run_confirmation_token = token
-        # dry_run_confirmed_at is intentionally NOT reset here — it records
-        # when the rule was last legitimately confirmed and must only be set
-        # by the gate consumption path (PUT update). Re-running dry-run just
-        # refreshes the token and match count.
         await session.flush()
 
         return match_count, sample_matches, token

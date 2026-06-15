@@ -20,7 +20,7 @@ from src.runner.storage import list_heartbeats, list_jobs_for_runner, read_runne
 from src.settings.router import require_permission
 from src.shared.config import get_runner_mode, read_app_config, write_app_config
 
-admin_router = APIRouter(prefix="/settings/runners", tags=["runner-admin"])
+admin_router = APIRouter(prefix="/api/v1/runners", tags=["runner-admin"])
 
 
 class RunnerModeRequest(BaseModel):

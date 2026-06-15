@@ -13,6 +13,10 @@ import type {
   PreviewFinding,
 } from "@/lib/client/notification-rules-api"
 import { previewOrg } from "@/lib/client/notification-rules-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 const SEVERITY_OPTIONS = ["critical", "high", "medium", "low", "info"]
 const SCANNER_OPTIONS = ["dependencies", "code_scanning", "secrets", "container_scanning"]
@@ -75,16 +79,15 @@ export function RulePreview({ orgId }: RulePreviewProps) {
           >
             Severity
           </label>
-          <select
+          <Select
             id="preview-severity"
             value={finding.severity ?? "high"}
             onChange={(e) => setFinding((f) => ({ ...f, severity: e.target.value }))}
-            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           >
             {SEVERITY_OPTIONS.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Scanner */}
@@ -95,17 +98,16 @@ export function RulePreview({ orgId }: RulePreviewProps) {
           >
             Scanner
           </label>
-          <select
+          <Select
             id="preview-scanner"
             value={finding.scanner ?? ""}
             onChange={(e) => setFinding((f) => ({ ...f, scanner: e.target.value }))}
-            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           >
             <option value="">Any</option>
             {SCANNER_OPTIONS.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Repo ID */}
@@ -116,13 +118,12 @@ export function RulePreview({ orgId }: RulePreviewProps) {
           >
             Repository ID
           </label>
-          <input
+          <Input
             id="preview-repo-id"
             type="text"
             value={finding.repo_id ?? ""}
             onChange={(e) => setFinding((f) => ({ ...f, repo_id: e.target.value }))}
             placeholder="e.g. repo-abc123"
-            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           />
         </div>
 
@@ -134,26 +135,26 @@ export function RulePreview({ orgId }: RulePreviewProps) {
           >
             Repo labels
           </label>
-          <input
+          <Input
             id="preview-repo-labels"
             type="text"
             value={labelsInput}
             onChange={(e) => setLabelsInput(e.target.value)}
             placeholder="production, backend, …"
-            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
           />
         </div>
       </div>
 
       {/* Run button */}
-      <button
-        type="button"
+      <Button
+        variant="primary"
+        size="md"
         onClick={handleRun}
         disabled={running}
-        className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-60"
+        isLoading={running}
       >
         {running ? "Running…" : "Preview"}
-      </button>
+      </Button>
 
       {/* Error */}
       {error && (
@@ -183,29 +184,24 @@ export function RulePreview({ orgId }: RulePreviewProps) {
               No active rules to evaluate.
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--color-border)]">
+            <Table>
+              <Thead className="bg-transparent">
+                <Tr>
                   {["Priority", "Rule", "Match"].map((h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-                    >
-                      {h}
-                    </th>
+                    <Th key={h} className="py-2">{h}</Th>
                   ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-border-divider)]">
+                </Tr>
+              </Thead>
+              <Tbody>
                 {breakdown.map((row) => (
-                  <tr key={row.rule_id} className={row.matched ? "bg-[var(--color-status-ok)]/5" : ""}>
-                    <td className="px-4 py-2 tabular-nums text-[var(--color-text-tertiary)] text-xs">
+                  <Tr key={row.rule_id} className={row.matched ? "bg-[var(--color-status-ok)]/5" : ""}>
+                    <Td className="py-2 tabular-nums text-[var(--color-text-tertiary)] text-xs">
                       {row.priority}
-                    </td>
-                    <td className="px-4 py-2 font-medium text-[var(--color-text-primary)]">
+                    </Td>
+                    <Td className="py-2 font-medium text-[var(--color-text-primary)]">
                       {row.rule_name}
-                    </td>
-                    <td className="px-4 py-2">
+                    </Td>
+                    <Td className="py-2">
                       {row.matched ? (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-status-ok)]">
                           <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-status-ok)]" aria-hidden="true" />
@@ -214,11 +210,11 @@ export function RulePreview({ orgId }: RulePreviewProps) {
                       ) : (
                         <span className="text-xs text-[var(--color-text-tertiary)]">—</span>
                       )}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 ))}
-              </tbody>
-            </table>
+              </Tbody>
+            </Table>
           )}
         </div>
       )}

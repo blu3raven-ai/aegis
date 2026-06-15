@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}Aegis{% endblock %}</title>
+<style>
+  @page { size: A4; margin: 16mm 12mm 18mm 12mm; @bottom-right { content: counter(page) " / " counter(pages); font: 9pt sans-serif; color: #666; } }
+  body { font-family: "Helvetica", "Arial", sans-serif; font-size: 10pt; color: #111; }
+  h1 { font-size: 18pt; margin: 0 0 4pt 0; }
+  h2 { font-size: 13pt; margin: 12pt 0 4pt 0; border-bottom: 1px solid #ccc; padding-bottom: 2pt; }
+  h3 { font-size: 11pt; margin: 8pt 0 2pt 0; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0; }
+  th, td { padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; border-bottom: 1px solid #d1d5db; }
+  td { border-bottom: 1px solid #eee; }
+  .meta { color: #555; font-size: 9pt; }
+  .badge { display: inline-block; padding: 1pt 5pt; border-radius: 3pt; font-size: 8.5pt; font-weight: 600; }
+  .badge-met { background: #ecfdf5; color: #047857; }
+  .badge-partial { background: #fffbeb; color: #b45309; }
+  .badge-unmet { background: #fef2f2; color: #b91c1c; }
+  .sev-critical { color: #b91c1c; font-weight: 600; }
+  .sev-high { color: #c2410c; font-weight: 600; }
+  .sev-medium { color: #b45309; }
+  .sev-low { color: #047857; }
+  .sev-info { color: #6b7280; }
+  header.brand { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid #111; padding-bottom: 6pt; margin-bottom: 10pt; }
+  header.brand .org { font-weight: 600; }
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+<header class="brand">
+  <span class="org">Aegis Security Portal</span>
+  <span class="meta">Generated {{ generated_at }}</span>
+</header>
+{% block body %}{% endblock %}
+</body>
+</html>

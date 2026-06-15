@@ -10,10 +10,11 @@ export default function InboxPage() {
     <FindingsBoardView
       pageTitle="Inbox"
       pageIcon={<InboxIcon />}
-      pageDescription="Triage open findings from your scanners — newest first, grouped by queue."
+      pageDescription="Triage open findings, newest first."
       initialStateFilter={["open"]}
       showSummaryStrip={false}
       compactHeader
+      flat
       leftSidebar={(api) => (
         <Suspense fallback={null}>
           <InboxQueueSidebar

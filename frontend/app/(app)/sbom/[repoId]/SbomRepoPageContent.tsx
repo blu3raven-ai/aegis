@@ -1,7 +1,7 @@
 "use client"
 
-import Link from "next/link"
 import { use, useCallback, useEffect, useState } from "react"
+import { Button } from "@/components/ui/Button"
 import { SbomHeader } from "@/components/shared/sbom/SbomHeader"
 import { SbomComponentsTable } from "@/components/shared/sbom/SbomComponentsTable"
 import { SbomDependencyTree } from "@/components/shared/sbom/SbomDependencyTree"
@@ -60,13 +60,9 @@ function ErrorState({ repoName, onRetry }: { repoName: string; onRetry: () => vo
           The dependency scanner may not have run yet, or the SBOM is unavailable.
         </p>
       </div>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-      >
+      <Button variant="secondary" size="md" onClick={onRetry}>
         Retry
-      </button>
+      </Button>
     </div>
   )
 }
@@ -154,21 +150,6 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--color-bg)]">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-5 h-11 text-xs">
-        <Link
-          href="/sbom"
-          className="text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-        >
-          SBOM Browser
-        </Link>
-        <svg className="h-3 w-3 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-          <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-        <span className="font-medium text-[var(--color-text-primary)]">{repoName}</span>
-      </div>
-
-      {/* SBOM Header */}
       <SbomHeader
         repoName={repoName}
         latestEntry={latestEntry}

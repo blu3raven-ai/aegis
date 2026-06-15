@@ -38,10 +38,10 @@ function triggeredByLabel(release: ReleaseSummary): string {
 }
 
 function rowHref(release: ReleaseSummary): string {
-  return `/repos/${encodeURIComponent(release.repo_id)}?tab=scans&scan_id=${encodeURIComponent(release.scan_id)}`
+  return `/sources/${encodeURIComponent(release.repo_id)}?tab=scans&scan_id=${encodeURIComponent(release.scan_id)}`
 }
 
-const CARD = "rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]"
+const CARD = "rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
 
 export function RecentReleaseChecksTable({ releases, loading }: RecentReleaseChecksTableProps) {
   return (

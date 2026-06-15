@@ -32,7 +32,7 @@ def test_scan_started_emit_helper_publishes(mock_get_pub):
 @patch("src.shared.event_emit_helpers.get_event_publisher")
 def test_emit_helper_swallows_publish_failure(mock_get_pub, caplog):
     pub = MagicMock()
-    pub.publish.side_effect = RuntimeError("simulated Redis outage")
+    pub.publish.side_effect = RuntimeError("simulated publisher outage")
     mock_get_pub.return_value = pub
 
     from src.shared.event_emit_helpers import emit_scan_started
@@ -162,7 +162,6 @@ def test_emit_helpers_use_real_publisher_when_not_mocked(monkeypatch):
     # Reset singleton to force re-init
     import src.shared.event_publisher as ep_module
     ep_module._publisher = None
-    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
     from src.shared.event_publisher import get_event_publisher
     pub = get_event_publisher()
@@ -175,7 +174,7 @@ def test_full_dual_write_sequence_does_not_raise(mock_get_pub):
     """Simulate a full scan lifecycle via the helpers; assert no exceptions
     propagate even when ALL publisher calls fail."""
     pub = MagicMock()
-    pub.publish.side_effect = RuntimeError("simulated Redis outage")
+    pub.publish.side_effect = RuntimeError("simulated publisher outage")
     mock_get_pub.return_value = pub
 
     from src.shared.event_emit_helpers import (

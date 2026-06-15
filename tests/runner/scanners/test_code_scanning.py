@@ -58,7 +58,7 @@ def test_extract_context_writes_window_and_imports(tmp_path):
     )
     out = tmp_path / "out"
     out.mkdir()
-    _write_minimal_sarif(out / "opengrep.json", [("app.py", 5)])
+    _write_minimal_sarif(out / "semgrep.sarif", [("app.py", 5)])
 
     n = extract_context(clone, out)
     assert n == 1
@@ -77,7 +77,7 @@ def test_extract_context_skips_path_traversal(tmp_path):
     out = tmp_path / "out"
     out.mkdir()
     _write_minimal_sarif(
-        out / "opengrep.json",
+        out / "semgrep.sarif",
         [("../etc/passwd", 1), ("/etc/passwd", 1)],
     )
 
@@ -94,8 +94,8 @@ def test_extract_context_strips_tmp_prefix(tmp_path):
     (clone / "main.py").write_text("a\nb\nc\n")
     out = tmp_path / "out"
     out.mkdir()
-    # Opengrep emits absolute /tmp/tmp.XXXX/main.py — the prefix must be stripped
-    _write_minimal_sarif(out / "opengrep.json", [("/tmp/tmp.AbCd1234/main.py", 2)])
+    # Semgrep emits absolute /tmp/tmp.XXXX/main.py — the prefix must be stripped
+    _write_minimal_sarif(out / "semgrep.sarif", [("/tmp/tmp.AbCd1234/main.py", 2)])
 
     extract_context(clone, out)
     payload = json.loads((out / "context.json").read_text())
@@ -343,7 +343,7 @@ def test_normalize_code_scanning_output_writes_jsonl(tmp_path):
     repo.mkdir()
     (repo / "head-sha.txt").write_text("abc1234\n")
     (repo / "html_url.txt").write_text("https://github.com/acme/repo-a\n")
-    (repo / "opengrep.json").write_text(
+    (repo / "semgrep.sarif").write_text(
         json.dumps(
             _sarif_with(
                 results=[
@@ -380,7 +380,7 @@ def test_normalize_code_scanning_output_uses_compact_separators(tmp_path):
 
     repo = tmp_path / "r"
     repo.mkdir()
-    (repo / "opengrep.json").write_text(
+    (repo / "semgrep.sarif").write_text(
         json.dumps(
             _sarif_with(
                 results=[
@@ -412,7 +412,7 @@ def test_normalize_code_scanning_output_writes_active_rules(tmp_path):
 
     repo = tmp_path / "r"
     repo.mkdir()
-    (repo / "opengrep.json").write_text(
+    (repo / "semgrep.sarif").write_text(
         json.dumps(
             _sarif_with(
                 results=[],
@@ -622,7 +622,7 @@ def test_run_scan_aggregates_findings_jsonl(tmp_path, monkeypatch):
         repo_name = repo_url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
         repo_out = out_dir / repo_name
         repo_out.mkdir(parents=True, exist_ok=True)
-        sarif = repo_out / "opengrep.json"
+        sarif = repo_out / "semgrep.sarif"
         sarif.write_text(
             json.dumps(
                 {

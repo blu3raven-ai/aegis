@@ -6,7 +6,7 @@ const source = readFileSync(new URL("./UsersSettingsForm.tsx", import.meta.url),
 
 test("users table exposes deletion as a trash action", () => {
   assert.match(source, /async function handleDeleteUser\(user: UserEntry\)/)
-  assert.match(source, /apiClient\(`\/settings\/api\/users\/\$\{user\.id\}`,\s*\{[\s\S]*method: "DELETE"[\s\S]*\}/)
+  assert.match(source, /apiClient\(`\/api\/v1\/settings\/users\/\$\{user\.id\}`,\s*\{[\s\S]*method: "DELETE"[\s\S]*\}/)
   assert.match(source, /aria-label=\{`Delete \$\{user\.username\}`\}/)
   assert.match(source, /<path d=\{TRASH_ICON\}/)
   assert.match(source, /You cannot delete your own account/)

@@ -3,6 +3,7 @@
  * but lighter, focused on a single repo's history across scanner types.
  */
 import type { ScanRunRow } from "@/lib/client/repos-api"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 const STATUS_STYLES: Record<string, string> = {
   completed: "text-[var(--color-status-ok)]",
@@ -44,7 +45,7 @@ interface ScanHistoryTimelineProps {
 export function ScanHistoryTimeline({ runs }: ScanHistoryTimelineProps) {
   if (runs.length === 0) {
     return (
-      <div className="rounded-2xl border border-[var(--color-border)] overflow-hidden">
+      <div className="rounded-lg border border-[var(--color-border)] overflow-hidden">
         <div className="bg-[var(--color-surface-raised)] px-5 py-3 flex gap-8">
           {[80, 72, 80, 72, 64].map((w, i) => (
             <div key={i} style={{ width: w }} className="h-3 rounded bg-[var(--color-border)] animate-pulse" />
@@ -67,41 +68,41 @@ export function ScanHistoryTimeline({ runs }: ScanHistoryTimelineProps) {
   }
 
   return (
-    <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
-      <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
-        <thead className="bg-[var(--color-surface-raised)] text-left text-xs uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-          <tr>
-            <th className="px-5 py-3">Scanner</th>
-            <th className="px-5 py-3">Status</th>
-            <th className="px-5 py-3">Started</th>
-            <th className="px-5 py-3">Duration</th>
-            <th className="px-5 py-3 text-right">Findings</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border)]">
+    <div className="overflow-auto rounded-lg border border-[var(--color-border)]">
+      <Table className="min-w-full">
+        <Thead>
+          <Tr>
+            <Th className="px-5">Scanner</Th>
+            <Th className="px-5">Status</Th>
+            <Th className="px-5">Started</Th>
+            <Th className="px-5">Duration</Th>
+            <Th className="px-5 text-right">Findings</Th>
+          </Tr>
+        </Thead>
+        <Tbody>
           {runs.map((run) => (
-            <tr key={run.scan_id} className="transition-colors hover:bg-[var(--color-surface-raised)]">
-              <td className="px-5 py-3.5">
+            <Tr key={run.scan_id} interactive>
+              <Td className="px-5 py-3.5">
                 <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
                   {TOOL_LABELS[run.scanner_type] ?? run.scanner_type}
                 </span>
-              </td>
-              <td className={`px-5 py-3.5 font-medium ${STATUS_STYLES[run.status] ?? "text-[var(--color-text-secondary)]"}`}>
+              </Td>
+              <Td className={`px-5 py-3.5 font-medium ${STATUS_STYLES[run.status] ?? "text-[var(--color-text-secondary)]"}`}>
                 {run.status}
-              </td>
-              <td className="px-5 py-3.5 text-[var(--color-text-secondary)]">
+              </Td>
+              <Td className="px-5 py-3.5 text-[var(--color-text-secondary)]">
                 {relativeTime(run.started_at)}
-              </td>
-              <td className="px-5 py-3.5 tabular-nums text-[var(--color-text-secondary)]">
+              </Td>
+              <Td className="px-5 py-3.5 tabular-nums text-[var(--color-text-secondary)]">
                 {durationLabel(run.duration_ms)}
-              </td>
-              <td className="px-5 py-3.5 text-right tabular-nums font-semibold text-[var(--color-text-primary)]">
+              </Td>
+              <Td className="px-5 py-3.5 text-right tabular-nums font-semibold text-[var(--color-text-primary)]">
                 {run.findings_count}
-              </td>
-            </tr>
+              </Td>
+            </Tr>
           ))}
-        </tbody>
-      </table>
+        </Tbody>
+      </Table>
     </div>
   )
 }

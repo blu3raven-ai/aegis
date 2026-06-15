@@ -15,7 +15,7 @@ import pytest
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, _ROOT)
 
-from runner.graceful_drain import GracefulDrainManager
+from runner.core.graceful_drain import GracefulDrainManager
 
 
 # ---------------------------------------------------------------------------

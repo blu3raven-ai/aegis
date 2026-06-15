@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 
 import type { AttributeDef, EnumOption } from "./types"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 export interface ValuePickerProps {
   attribute: AttributeDef
@@ -89,14 +91,15 @@ function OptionList({
   return (
     <div>
       {searchable && (
-        <input
+        <Input
+          size="sm"
           type="search"
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search…"
           maxLength={64}
-          className="mb-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus-visible:outline-none focus-visible:border-[var(--color-accent)]"
+          className="mb-1"
         />
       )}
       <ul className="max-h-64 overflow-y-auto">
@@ -171,14 +174,15 @@ function AsyncList({
 
   return (
     <div>
-      <input
+      <Input
+        size="sm"
         type="search"
         autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search…"
         maxLength={64}
-        className="mb-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus-visible:outline-none focus-visible:border-[var(--color-accent)]"
+        className="mb-1"
       />
       {loading && (
         <div className="px-2 py-1 text-2xs text-[var(--color-text-secondary)]">Loading…</div>
@@ -251,7 +255,8 @@ function NumericInput({
       <label className="mb-1 block text-2xs text-[var(--color-text-secondary)]">
         Minimum value (≥ threshold)
       </label>
-      <input
+      <Input
+        size="sm"
         type="number"
         autoFocus
         value={draft}
@@ -266,7 +271,6 @@ function NumericInput({
         max={constraints.max}
         step={constraints.step}
         placeholder={placeholder}
-        className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:outline-none focus-visible:outline-none focus-visible:border-[var(--color-accent)]"
       />
       {error && (
         <div role="alert" className="mt-1 text-2xs text-[var(--color-severity-critical)]">
@@ -274,20 +278,20 @@ function NumericInput({
         </div>
       )}
       <div className="mt-2 flex justify-end gap-1">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={onClose}
-          className="rounded-md px-2 py-1 text-2xs text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
         >
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
+          size="xs"
           onClick={commit}
-          className="rounded-md bg-[var(--color-accent)] px-2 py-1 text-2xs font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]"
         >
           Apply
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -314,7 +318,8 @@ function TextInput({
 
   return (
     <div className="p-1">
-      <input
+      <Input
+        size="sm"
         type="text"
         autoFocus
         value={draft}
@@ -324,23 +329,22 @@ function TextInput({
         }}
         placeholder={placeholder}
         maxLength={64}
-        className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus-visible:outline-none focus-visible:border-[var(--color-accent)]"
       />
       <div className="mt-2 flex justify-end gap-1">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={onClose}
-          className="rounded-md px-2 py-1 text-2xs text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
         >
           Cancel
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="primary"
+          size="xs"
           onClick={commit}
-          className="rounded-md bg-[var(--color-accent)] px-2 py-1 text-2xs font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]"
         >
           Apply
-        </button>
+        </Button>
       </div>
     </div>
   )

@@ -19,7 +19,7 @@ from src.storage import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/test", tags=["test-seed"])
+router = APIRouter(prefix="/api/v1/test", tags=["test-seed"])
 
 
 def _is_enabled() -> bool:

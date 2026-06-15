@@ -141,7 +141,7 @@ def test_get_settings_returns_current_config_without_dashboard_secrets(client, i
         }
     )
 
-    response = client.get("/settings/api")
+    response = client.get("/api/v1/settings")
     assert response.status_code == 200
     payload = response.json()
     assert payload["dashboard"] == {
@@ -187,7 +187,7 @@ def test_get_settings_backfills_new_settings_sections_for_legacy_config(client, 
         }
     )
 
-    response = client.get("/settings/api")
+    response = client.get("/api/v1/settings")
 
     assert response.status_code == 200
     payload = response.json()
@@ -215,7 +215,7 @@ def test_get_settings_rejects_non_admin_users(client, isolated_config, monkeypat
 
     from conftest import make_authed_client
     viewer_client = make_authed_client(role="viewer", user_id="settings-viewer-reject")
-    response = viewer_client.get("/settings/api")
+    response = viewer_client.get("/api/v1/settings")
 
     assert response.status_code == 403
 
@@ -239,7 +239,7 @@ def test_patch_tool_settings_rejects_non_admin_users(client, isolated_config, mo
     from conftest import make_authed_client
     viewer_client = make_authed_client(role="viewer", user_id="settings-viewer-patch")
     response = viewer_client.patch(
-        "/settings/api/tools/secrets",
+        "/api/v1/settings/tools/secrets",
         json={
             "enabled": True,
             "settings": {
@@ -289,7 +289,7 @@ async def test_patch_general_updates_username_and_syncs_runtime_env(
     )
 
     response = client.patch(
-        "/settings/api/general",
+        "/api/v1/settings/general",
         json={
             "orgs": [],
             "username": "ops-admin",
@@ -337,7 +337,7 @@ async def test_patch_account_rejects_wrong_current_password(client, isolated_con
     )
 
     response = client.patch(
-        "/settings/api/account",
+        "/api/v1/settings/account",
         json={
             "username": "ops-admin",
             "current_password": "wrong-password",
@@ -381,7 +381,7 @@ async def test_patch_account_updates_username_and_password(client, isolated_conf
     )
 
     response = client.patch(
-        "/settings/api/account",
+        "/api/v1/settings/account",
         json={
             "username": "security-admin",
             "current_password": "current-password",
@@ -523,7 +523,7 @@ def test_patch_tool_settings_persists_tool_config(client, isolated_config, monke
         }
     )
 
-    response = client.patch(f"/settings/api/tools/{tool}", json=payload)
+    response = client.patch(f"/api/v1/settings/tools/{tool}", json=payload)
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
@@ -568,7 +568,7 @@ def test_patch_secrets_enables_without_docker_check(client, isolated_config, mon
     )
 
     response = client.patch(
-        "/settings/api/tools/secrets",
+        "/api/v1/settings/tools/secrets",
         json={
             "enabled": True,
             "settings": {
@@ -605,7 +605,7 @@ def test_patch_secrets_stores_ai_settings_when_provided(client, isolated_config,
 
     # Secrets AI settings are stored without server-side validation
     response = client.patch(
-        "/settings/api/tools/secrets",
+        "/api/v1/settings/tools/secrets",
         json={
             "enabled": True,
             "settings": {
@@ -655,7 +655,7 @@ async def test_get_rate_limit_uses_org_token_and_normalizes_response(client, iso
 
     monkeypatch.setattr(settings_router, "fetch_rate_limit", fake_fetch_rate_limit)
 
-    response = client.get("/settings/api/orgs/Example-Org/rate-limit")
+    response = client.get("/api/v1/settings/orgs/Example-Org/rate-limit")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -780,7 +780,7 @@ def test_get_rate_limit_missing_saved_pat_returns_404(client, isolated_config):
         }
     )
 
-    response = client.get("/settings/api/orgs/no-such-org/rate-limit")
+    response = client.get("/api/v1/settings/orgs/no-such-org/rate-limit")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "No PAT saved for no-such-org. Enter a token first."}
@@ -788,7 +788,7 @@ def test_get_rate_limit_missing_saved_pat_returns_404(client, isolated_config):
 
 def test_get_secrets_prerequisites_returns_no_runner_when_offline(client, isolated_config, monkeypatch):
     """Prerequisites fail when no runner is online."""
-    response = client.get("/settings/api/tools/secrets/prerequisites")
+    response = client.get("/api/v1/settings/tools/secrets/prerequisites")
 
     assert response.status_code == 200
     payload = response.json()
@@ -798,14 +798,14 @@ def test_get_secrets_prerequisites_returns_no_runner_when_offline(client, isolat
 
 
 def test_get_roles_returns_seeded_roles(client):
-    response = client.get("/settings/api/roles")
+    response = client.get("/api/v1/settings/roles")
     assert response.status_code == 200
     payload = response.json()
     assert any(role["name"] == "Owner" for role in payload["roles"])
 
 def test_post_role_creates_custom_role(client):
     response = client.post(
-        "/settings/api/roles",
+        "/api/v1/settings/roles",
         json={
             "name": "Results Viewer",
             "description": "Read-only results role.",
@@ -826,12 +826,12 @@ def test_require_permission_uses_assigned_role_permissions(isolated_config, monk
 
     # Viewer should not be able to get roles
     viewer_client = make_authed_client(role="viewer", user_id="perm-test-viewer")
-    response = viewer_client.get("/settings/api/roles")
+    response = viewer_client.get("/api/v1/settings/roles")
     assert response.status_code == 403
 
     # Admin should be able to get roles
     admin_client = make_authed_client(role="admin", user_id="perm-test-admin")
-    response = admin_client.get("/settings/api/roles")
+    response = admin_client.get("/api/v1/settings/roles")
     assert response.status_code == 200
 
     # Custom role via roleId — create a user with the custom role_id set
@@ -886,5 +886,5 @@ def test_require_permission_uses_assigned_role_permissions(isolated_config, monk
         headers={"X-CSRF-Token": csrf_token},
     )
     # Using the custom roleId (viewer 'role' string but custom role_id) should allow access
-    response = custom_role_client.get("/settings/api/roles")
+    response = custom_role_client.get("/api/v1/settings/roles")
     assert response.status_code == 200

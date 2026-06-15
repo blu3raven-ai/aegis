@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { RuleCategory } from "@/lib/client/rules-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Textarea } from "@/components/ui/Textarea"
 
 interface KillSwitchDialogProps {
   open: boolean
@@ -112,7 +115,7 @@ export function KillSwitchDialog({
             >
               Why are you killing auto-dismiss? (optional)
             </label>
-            <textarea
+            <Textarea
               id="kill-switch-reason"
               ref={reasonRef}
               value={reason}
@@ -120,7 +123,6 @@ export function KillSwitchDialog({
               disabled={loading}
               rows={3}
               maxLength={REASON_MAX}
-              className="w-full resize-y rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] disabled:opacity-60"
               placeholder="Incident response, suspected misconfiguration, etc."
             />
             <p className="mt-1 text-2xs text-[var(--color-text-tertiary)]">
@@ -135,7 +137,7 @@ export function KillSwitchDialog({
             >
               Type to confirm
             </label>
-            <input
+            <Input
               id="kill-switch-confirm"
               type="text"
               autoComplete="off"
@@ -144,7 +146,7 @@ export function KillSwitchDialog({
               onChange={(e) => setTyped(e.target.value)}
               placeholder={requiredPhrase}
               disabled={loading}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-severity-critical)] focus:outline-none focus:ring-1 focus:ring-[var(--color-severity-critical)] disabled:opacity-60"
+              invalid
             />
             <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
               Type <span className="font-mono">{requiredPhrase}</span> to engage
@@ -164,22 +166,23 @@ export function KillSwitchDialog({
         </div>
 
         <div className="flex justify-end gap-3 border-t border-[var(--color-border)] px-6 py-4">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="md"
             onClick={onCancel}
             disabled={loading}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="destructive"
+            size="md"
             disabled={confirmDisabled}
+            isLoading={loading}
             onClick={() => onConfirm(reason.trim())}
-            className="rounded-lg bg-[var(--color-severity-critical)] px-4 py-2 text-sm font-semibold text-[var(--color-on-danger)] hover:opacity-90 disabled:opacity-50"
           >
             {loading ? "Killing…" : "Kill auto-dismiss"}
-          </button>
+          </Button>
         </div>
       </div>
     </>

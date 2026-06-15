@@ -1,5 +1,10 @@
-import { redirect } from "next/navigation"
+import { Suspense } from "react"
+import { PoliciesPageContent } from "./PoliciesPageContent"
 
-export default function PoliciesRedirect() {
-  redirect("/rules")
+export default function PoliciesPage() {
+  return (
+    <Suspense fallback={null}>
+      <PoliciesPageContent />
+    </Suspense>
+  )
 }

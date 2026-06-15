@@ -16,7 +16,7 @@ from src.settings.roles_store import (
 from src.settings.router import require_permission
 from src.settings.schemas import DeleteRoleRequest, RoleRequest
 
-roles_router = APIRouter(prefix="/settings/api/roles", tags=["roles"])
+roles_router = APIRouter(prefix="/api/v1/settings/roles", tags=["roles"])
 
 
 @roles_router.get("")
@@ -100,14 +100,11 @@ def delete_role_api(role_id: str, request: Request, body: DeleteRoleRequest) -> 
                 return False, "Role is assigned to users. Must provide replacementRoleId."
 
             if in_use and replacement:
-                rep_role = get_role(replacement)
-                rep_name = rep_role["name"].lower() if rep_role["id"].startswith("role_") and "-" not in rep_role["id"] else "custom"
                 result = await session.execute(
                     select(User).where(User.role_id == role_id)
                 )
                 for user in result.scalars().all():
                     user.role_id = replacement
-                    user.role = rep_name
                     user.session_version = (user.session_version or 1) + 1
                     user.updated_at = datetime.now(timezone.utc)
 

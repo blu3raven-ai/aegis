@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/shared/KpiCard"
 import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
 import { RepoSummaryRow } from "@/components/shared/repos/RepoSummaryRow"
 import { EmptyReposState } from "@/components/shared/repos/EmptyReposState"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { listRepos, type RepoSummary } from "@/lib/client/repos-api"
 
 import { ReposDisplayOverflow, type ReposSortMode } from "./ReposDisplayOverflow"
@@ -198,42 +199,42 @@ export function RepositoriesPanel({ onCountChange }: RepositoriesPanelProps = {}
         />
       </div>
 
-      <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
+      <main className="flex w-full flex-col gap-6 px-6 py-8">
       <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
-        <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
-          <thead className="bg-[var(--color-surface-raised)] text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
-            <tr>
-              <th className="px-5 py-3">Repo</th>
-              <th className="px-5 py-3">Severity</th>
-              <th className="px-5 py-3">Coverage</th>
-              <th className="px-5 py-3">Scanners</th>
-              <th className="px-5 py-3">Last scan</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-border)]">
+        <Table className="min-w-full">
+          <Thead>
+            <Tr>
+              <Th className="px-5">Repo</Th>
+              <Th className="px-5">Severity</Th>
+              <Th className="px-5">Coverage</Th>
+              <Th className="px-5">Scanners</Th>
+              <Th className="px-5">Last scan</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
             {loading && repos.length === 0 ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} aria-hidden="true">
-                  <td className="px-5 py-4"><div className="h-3 w-40 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></td>
-                  <td className="px-5 py-4"><div className="h-3 w-28 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></td>
-                  <td className="px-5 py-4"><div className="h-3 w-16 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></td>
-                  <td className="px-5 py-4"><div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></td>
-                  <td className="px-5 py-4"><div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></td>
-                </tr>
+                <Tr key={i} aria-hidden="true">
+                  <Td className="px-5 py-4"><div className="h-3 w-40 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
+                  <Td className="px-5 py-4"><div className="h-3 w-28 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
+                  <Td className="px-5 py-4"><div className="h-3 w-16 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
+                  <Td className="px-5 py-4"><div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
+                  <Td className="px-5 py-4"><div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
+                </Tr>
               ))
             ) : paged.length > 0 ? (
               paged.map((repo) => (
                 <RepoSummaryRow key={repo.repo_id} repo={repo} />
               ))
             ) : (
-              <tr>
-                <td colSpan={5} className="py-0">
+              <Tr>
+                <Td colSpan={5} className="py-0">
                   <EmptyReposState filtered={isFiltered} />
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             )}
-          </tbody>
-        </table>
+          </Tbody>
+        </Table>
       </div>
 
       {totalPages > 1 && (

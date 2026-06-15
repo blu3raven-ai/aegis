@@ -1,6 +1,6 @@
 """Symmetric encryption for sensitive job env vars.
 
-Shared by jobs.py, FileBackedQueue, and RedisBackedQueue. Uses Fernet
+Shared by jobs.py and the queue adapters (e.g. FileBackedQueue). Uses Fernet
 over a PBKDF2-HMAC-SHA256 key derived from RUNNER_ENCRYPTION_KEY, with
 salt 'runner-job-env-vars' and 100 000 iterations. Encrypted values
 are prefixed with 'ENC:' so they are wire-compatible across all queue

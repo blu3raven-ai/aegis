@@ -1,8 +1,21 @@
 """GraphQL resolvers for Code Scanning (Static Application Security Testing)."""
 from __future__ import annotations
 
+import json
 import math
 from typing import Any, Optional
+
+
+def _json_or_none(value: Any) -> Optional[str]:
+    """Serialize JSON-shaped values (dict/list) to a string for GraphQL transport."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value)
+    except (TypeError, ValueError):
+        return None
 
 import strawberry
 
@@ -40,14 +53,6 @@ class CodeScanningCodeFlow:
 
 
 @strawberry.type
-class CodeScanningDataflowStep:
-    file: str
-    line: int
-    snippet: str
-    role: str  # "source" | "intermediate" | "sink"
-
-
-@strawberry.type
 class CodeScanningCallChainStep:
     function: str
     file: str
@@ -72,21 +77,6 @@ def _make_code_flows(flows: list | None) -> Optional[list["CodeScanningCodeFlow"
             snippet=flow.get("snippet", ""),
         )
         for flow in flows
-    ]
-
-
-def _make_dataflow_trace(steps: list | None) -> Optional[list["CodeScanningDataflowStep"]]:
-    if not steps:
-        return None
-    return [
-        CodeScanningDataflowStep(
-            file=step.get("file", ""),
-            line=step.get("line") or 0,
-            snippet=step.get("snippet", ""),
-            role=step.get("role", "intermediate"),
-        )
-        for step in steps
-        if isinstance(step, dict)
     ]
 
 
@@ -138,13 +128,17 @@ class CodeScanningFinding:
     code_flows: Optional[list[CodeScanningCodeFlow]] = None
     reachability: Optional[CodeScanningReachability] = None
     engine: Optional[str] = None
-    dataflow_trace: Optional[list[CodeScanningDataflowStep]] = None
     rule_ids: Optional[list[str]] = None
     # Commit attribution (§5.6)
     introduced_by_commit_sha: Optional[str] = None
     introduced_by_author: Optional[str] = None
     introduced_at: Optional[str] = None
     introduced_by_pr_url: Optional[str] = None
+    # evidence_json / verification_metadata are JSON-encoded strings.
+    verdict: Optional[str] = None
+    evidence_json: Optional[str] = None
+    exploit_chain: Optional[str] = None
+    verification_metadata: Optional[str] = None
 
 
 @strawberry.type
@@ -336,12 +330,15 @@ def code_scanning_findings(
             code_flows=_make_code_flows(f.get("code_flows")),
             reachability=_make_reachability(f.get("reachability")),
             engine=f.get("engine"),
-            dataflow_trace=_make_dataflow_trace(f.get("dataflow_trace")),
             rule_ids=f.get("rule_ids"),
             introduced_by_commit_sha=f.get("introduced_by_commit_sha"),
             introduced_by_author=f.get("introduced_by_author"),
             introduced_at=f.get("introduced_at"),
             introduced_by_pr_url=f.get("introduced_by_pr_url"),
+            verdict=f.get("verdict"),
+            evidence_json=_json_or_none(f.get("evidence_json")),
+            exploit_chain=f.get("exploit_chain"),
+            verification_metadata=_json_or_none(f.get("verification_metadata")),
         )
         for f in page_items
     ]

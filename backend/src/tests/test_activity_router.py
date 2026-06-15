@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI, Request
@@ -18,6 +18,9 @@ os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
 from src.activity.router import router as activity_router  # noqa: E402
 from src.activity.service import ActivityEvent, ActivityService  # noqa: E402
+
+
+_VIEWER_PERMS = {"view_findings"}
 
 
 # ── App fixture ───────────────────────────────────────────────────────────────
@@ -36,9 +39,27 @@ def _make_app() -> FastAPI:
     return app
 
 
+async def _resolve_assets(_request):
+    return ["asset-1", "asset-2"]
+
+
+async def _resolve_no_assets(_request):
+    return []
+
+
 @pytest.fixture
 def client():
     return TestClient(_make_app())
+
+
+@pytest.fixture(autouse=True)
+def _default_perms_and_assets():
+    """Default-permit + populated asset_ids for every test — override inside test for the negative cases."""
+    with (
+        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
+        patch("src.activity.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
+    ):
+        yield
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,10 +119,68 @@ def test_list_activity_event_shape(client):
     assert "payload" in e
 
 
+def test_list_activity_scopes_to_caller_assets(client):
+    """The router must resolve viewer asset_ids and pass them to the service."""
+    captured: dict = {}
+
+    def _mock_list(*, asset_ids, **kwargs):
+        captured["asset_ids"] = asset_ids
+        return [], None
+
+    with patch.object(ActivityService, "list_recent", side_effect=_mock_list):
+        client.get("/api/v1/activity")
+
+    assert captured["asset_ids"] == ["asset-1", "asset-2"]
+
+
+def test_list_activity_ignores_legacy_org_id_query_param(client):
+    """Legacy ?org_id=... param must not influence scoping — it's silently dropped."""
+    captured: dict = {}
+
+    def _mock_list(*, asset_ids, **kwargs):
+        captured["asset_ids"] = asset_ids
+        return [], None
+
+    with patch.object(ActivityService, "list_recent", side_effect=_mock_list):
+        client.get("/api/v1/activity?org_id=other-org")
+
+    assert captured["asset_ids"] == ["asset-1", "asset-2"]
+
+
+def test_list_activity_empty_assets_returns_empty(client):
+    """Viewer with no team access (empty asset_ids) sees no events — fail-closed.
+
+    The fallback to org_id="default" that used to exist in the router has been
+    removed; viewers without team access now get an empty feed instead of
+    seeing a magic-string org's data.
+    """
+    captured: dict = {}
+
+    def _mock_list(*, asset_ids, **kwargs):
+        captured["asset_ids"] = asset_ids
+        return [], None
+
+    with (
+        patch("src.activity.router.resolve_asset_ids_from_request", side_effect=_resolve_no_assets),
+        patch.object(ActivityService, "list_recent", side_effect=_mock_list),
+    ):
+        resp = client.get("/api/v1/activity")
+
+    assert resp.status_code == 200
+    assert captured["asset_ids"] == []
+    assert resp.json()["events"] == []
+
+
+def test_list_activity_requires_permission(client):
+    with patch("src.settings.router._resolve_effective_permissions", return_value=set()):
+        resp = client.get("/api/v1/activity")
+    assert resp.status_code == 403
+
+
 def test_list_activity_with_cursor(client):
     captured: dict = {}
 
-    def _mock_list(org_id, *, cursor=None, **kwargs):
+    def _mock_list(*, cursor=None, **kwargs):
         captured["cursor"] = cursor
         return [], None
 
@@ -114,7 +193,7 @@ def test_list_activity_with_cursor(client):
 def test_list_activity_with_types_filter(client):
     captured: dict = {}
 
-    def _mock_list(org_id, *, types=None, **kwargs):
+    def _mock_list(*, types=None, **kwargs):
         captured["types"] = types
         return [], None
 
@@ -127,7 +206,7 @@ def test_list_activity_with_types_filter(client):
 def test_list_activity_with_repo_id_filter(client):
     captured: dict = {}
 
-    def _mock_list(org_id, *, repo_id=None, **kwargs):
+    def _mock_list(*, repo_id=None, **kwargs):
         captured["repo_id"] = repo_id
         return [], None
 
@@ -161,7 +240,7 @@ def test_list_activity_empty(client):
 def test_list_activity_limit_param(client):
     captured: dict = {}
 
-    def _mock_list(org_id, *, limit=50, **kwargs):
+    def _mock_list(*, limit=50, **kwargs):
         captured["limit"] = limit
         return [], None
 
@@ -174,7 +253,7 @@ def test_list_activity_limit_param(client):
 def test_list_activity_since_until_params(client):
     captured: dict = {}
 
-    def _mock_list(org_id, *, since=None, until=None, **kwargs):
+    def _mock_list(*, since=None, until=None, **kwargs):
         captured["since"] = since
         captured["until"] = until
         return [], None

@@ -353,11 +353,34 @@ def build_health_payload(
     now_dt = datetime.now(timezone.utc)
 
     all_runs: list[dict[str, Any]] = []
-    combined_checkpoints: dict[str, dict[str, Any]] = {}
+    # Checkpoints are now keyed by asset_id; resolve display_name for each so
+    # the rest of this function (which compares against finding.repository
+    # strings) keeps its existing shape.
+    asset_id_checkpoints: dict[str, dict[str, Any]] = {}
     for org in orgs:
         all_runs.extend(list_secret_runs(org))
-        for repo, checkpoint in read_checkpoints(org).items():
-            combined_checkpoints[repo] = checkpoint
+        for asset_id, checkpoint in read_checkpoints(org).items():
+            asset_id_checkpoints[asset_id] = checkpoint
+
+    combined_checkpoints: dict[str, dict[str, Any]] = {}
+    if asset_id_checkpoints:
+        from sqlalchemy import select
+        from src.db.helpers import run_db
+        from src.db.models import Asset
+
+        async def _names(session):
+            result = await session.execute(
+                select(Asset.id, Asset.display_name).where(
+                    Asset.id.in_(asset_id_checkpoints.keys())
+                )
+            )
+            return dict(result.all())
+
+        display_by_id = run_db(_names)
+        for asset_id, checkpoint in asset_id_checkpoints.items():
+            name = display_by_id.get(asset_id)
+            if name:
+                combined_checkpoints[name] = checkpoint
 
     all_runs.sort(key=lambda run: str(run.get("createdAt") or ""), reverse=True)
     recent_runs = all_runs[:20]
@@ -400,14 +423,11 @@ def build_health_payload(
     )
 
     raw_hit_rates: list[dict[str, Any]] = []
-    betterleaks_total = 0
     trufflehog_total = 0
     counted_runs = 0
     for run in run_history:
         run_findings = findings_by_run.get(str(run.get("id") or ""), [])
-        betterleaks_count = sum(1 for finding in run_findings if str(finding.get("source") or "").lower() == "betterleaks")
         trufflehog_count = sum(1 for finding in run_findings if str(finding.get("source") or "").lower() == "trufflehog")
-        betterleaks_total += betterleaks_count
         trufflehog_total += trufflehog_count
         counted_runs += 1
         raw_hit_rates.append(
@@ -415,17 +435,14 @@ def build_health_payload(
                 "runId": run.get("id"),
                 "organization": run.get("organization"),
                 "createdAt": run.get("createdAt"),
-                "betterleaksCount": betterleaks_count,
                 "trufflehogCount": trufflehog_count,
             }
         )
 
-    betterleaks_baseline = (betterleaks_total / counted_runs) if counted_runs else 0
     trufflehog_baseline = (trufflehog_total / counted_runs) if counted_runs else 0
     scanner_hit_rates = [
         {
             **item,
-            "betterleaksStatus": _scanner_status(int(item["betterleaksCount"]), betterleaks_baseline),
             "trufflehogStatus": _scanner_status(int(item["trufflehogCount"]), trufflehog_baseline),
         }
         for item in raw_hit_rates
