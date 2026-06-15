@@ -48,7 +48,6 @@ class AuditRecorder:
         resource_type: str,
         resource_id: str | None = None,
         actor: ActorInfo | None = None,
-        org_id: str | None = None,
         changes: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         request: RequestContext | None = None,
@@ -63,7 +62,6 @@ class AuditRecorder:
         async def _write(session):
             session.add(AuditEvent(
                 action=action,
-                org_id=org_id,
                 actor_user_id=actor.user_id,
                 actor_username=actor.username,
                 actor_email=actor.email,

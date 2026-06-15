@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { ApiClientError } from "@/lib/client/api-client.types.ts"
+import { ssoLoginUrl, useSsoAvailability } from "@/lib/client/sso-availability"
 
 export function LoginForm() {
   const router = useRouter()
@@ -12,6 +13,8 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const availability = useSsoAvailability()
+  const ssoHref = ssoLoginUrl(availability?.protocol ?? null)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -52,6 +55,21 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {availability?.enabled && ssoHref && (
+        <>
+          <a
+            href={ssoHref}
+            className="inline-flex w-full items-center justify-center rounded-lg border border-[var(--color-accent)] bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+          >
+            Sign in with SSO
+          </a>
+          <div className="flex items-center gap-3 text-xs text-[var(--color-text-secondary)]">
+            <div className="h-px flex-1 bg-[var(--color-border)]" />
+            or
+            <div className="h-px flex-1 bg-[var(--color-border)]" />
+          </div>
+        </>
+      )}
       <div>
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
           Email or username

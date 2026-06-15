@@ -9,12 +9,48 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
+from src.connectors.base import BaseIngester, TestResult
+from src.connectors.registry import register_connector
+from src.connectors.webhooks.signature import verify_token_eq
 from src.shared.event_publisher import get_event_publisher
 from src.integrations.normalizer import normalize_gitlab_mr, normalize_gitlab_push
-from src.integrations.signature import verify_gitlab_signature
+
+
+@register_connector
+class GitLabIngester(BaseIngester):
+    """Inbound GitLab webhook ingester — Push Hook and Merge Request Hook events."""
+
+    id = "gitlab-webhook"
+    name = "GitLab Webhook"
+    category = "ci"
+    description = "Receive Push Hook and Merge Request Hook events from GitLab"
+    version = "v1.0"
+    status = "stable"
+    icon_slug = "gitlab"
+
+    def signature_header(self) -> str:
+        return "X-Gitlab-Token"
+
+    def verify_signature(self, body: bytes, header: str) -> bool:
+        return verify_token_eq(os.getenv("GITLAB_WEBHOOK_SECRET", ""), header)
+
+    def normalize(self, body: bytes) -> object:
+        """Return the parsed JSON payload. Provider-specific event dispatch
+        happens in the FastAPI route — see gitlab_webhook() below."""
+        import json
+        return json.loads(body)
+
+    def test(self) -> TestResult:
+        if not os.getenv("GITLAB_WEBHOOK_SECRET"):
+            return TestResult(ok=False, message="GITLAB_WEBHOOK_SECRET is not configured")
+        return TestResult(ok=True)
+
+
+_INGESTER = GitLabIngester()
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +69,7 @@ async def gitlab_webhook(
     """Receive a webhook event from GitLab."""
     body = await request.body()
 
-    if not verify_gitlab_signature(body, x_gitlab_token):
+    if not _INGESTER.verify_signature(body, x_gitlab_token):
         logger.warning("gitlab.webhook: token verification failed")
         raise HTTPException(status_code=401, detail="Invalid token")
 

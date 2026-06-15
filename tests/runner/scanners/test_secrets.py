@@ -2,282 +2,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 import threading
 from pathlib import Path
 
 import pytest
-
-
-# ---------------------------------------------------------------------------
-# Task 4.1 — classify.py (ML classifier, lazy imports)
-# ---------------------------------------------------------------------------
-
-
-def test_classify_default_model_path_is_embedded_runner_location(monkeypatch):
-    """Default path must point to the bundle baked into the runner image
-    (``/opt/aegis/secrets-model``). The path can be overridden via the
-    ``SECRETS_MODEL_PATH`` env var; the env reload here proves the override
-    path is the only customisation hook so production stays predictable."""
-    import importlib
-
-    from runner.scanners.secrets import classify as classify_mod
-
-    try:
-        monkeypatch.delenv("SECRETS_MODEL_PATH", raising=False)
-        reloaded = importlib.reload(classify_mod)
-        assert reloaded.DEFAULT_MODEL_PATH == "/opt/aegis/secrets-model"
-
-        monkeypatch.setenv("SECRETS_MODEL_PATH", "/tmp/override-model")
-        reloaded = importlib.reload(classify_mod)
-        assert reloaded.DEFAULT_MODEL_PATH == "/tmp/override-model"
-    finally:
-        monkeypatch.delenv("SECRETS_MODEL_PATH", raising=False)
-        importlib.reload(classify_mod)
-
-
-def test_classify_module_does_not_import_heavy_libs_on_import():
-    """Importing the classify module must NOT load onnxruntime/transformers/numpy.
-
-    These libs together weigh hundreds of MB; the runner agent loads the
-    scanner registry on every job, so eager import would balloon cold start.
-    """
-    code = (
-        "import sys\n"
-        "for mod in list(sys.modules):\n"
-        "    if mod.startswith(('onnxruntime', 'transformers', 'numpy')):\n"
-        "        del sys.modules[mod]\n"
-        "import runner.scanners.secrets.classify  # noqa\n"
-        "assert 'onnxruntime' not in sys.modules, 'onnxruntime leaked at import'\n"
-        "assert 'transformers' not in sys.modules, 'transformers leaked at import'\n"
-        "assert 'numpy' not in sys.modules, 'numpy leaked at import'\n"
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True,
-        text=True,
-        cwd=Path(__file__).resolve().parents[3],
-    )
-    assert result.returncode == 0, (
-        f"stdout={result.stdout!r} stderr={result.stderr!r}"
-    )
-
-
-def test_classify_findings_passes_through_when_model_unavailable(tmp_path):
-    """When the model dir doesn't exist, classify_findings copies input -> output."""
-    from runner.scanners.secrets.classify import classify_findings
-
-    raw = tmp_path / "raw.json"
-    raw.write_text(
-        json.dumps(
-            [
-                {"Secret": "abc", "RuleID": "aws", "File": "a.py", "Line": 1},
-                {"Secret": "def", "RuleID": "github", "File": "b.py", "Line": 5},
-            ]
-        )
-    )
-    out = tmp_path / "out.json"
-    count = classify_findings(raw, out, model_path=str(tmp_path / "no-model"))
-    assert count == 0
-    payload = json.loads(out.read_text())
-    assert payload == json.loads(raw.read_text())
-
-
-def test_classify_findings_empty_input_writes_empty_array(tmp_path):
-    """Empty input -> empty array out, no model load attempted."""
-    from runner.scanners.secrets.classify import classify_findings
-
-    raw = tmp_path / "raw.json"
-    raw.write_text("[]")
-    out = tmp_path / "out.json"
-    count = classify_findings(raw, out, model_path=str(tmp_path / "no-model"))
-    assert count == 0
-    assert json.loads(out.read_text()) == []
-
-
-def test_classify_findings_with_mock_model_annotates(tmp_path):
-    """Pass an in-process callable as the model; verify annotation shape."""
-    from runner.scanners.secrets.classify import classify_findings
-
-    raw = tmp_path / "raw.json"
-    raw.write_text(
-        json.dumps(
-            [
-                {"Secret": "x", "RuleID": "r1", "File": "a", "Line": 1},
-                {"Secret": "y", "RuleID": "r2", "File": "b", "Line": 2},
-            ]
-        )
-    )
-    out = tmp_path / "out.json"
-
-    def fake_model(findings):
-        return [
-            {"label": "label_1", "score": 0.97, "reasoning": "looks real"}
-            for _ in findings
-        ]
-
-    count = classify_findings(raw, out, model=fake_model)
-    assert count == 2
-    annotated = json.loads(out.read_text())
-    assert annotated[0]["ai_classification"] == "likely_real"
-    assert annotated[0]["ai_confidence"] == 0.97
-    assert annotated[0]["ai_reasoning"] == "looks real"
-
-
-def test_classify_batch_pass_through_when_model_unavailable(tmp_path):
-    """Batch mode: pass-through writes betterleaks.json with original findings."""
-    from runner.scanners.secrets.classify import classify_batch
-
-    repo = tmp_path / "repo-a"
-    repo.mkdir()
-    raw = repo / "betterleaks_raw.json"
-    raw.write_text(
-        json.dumps([{"Secret": "s", "RuleID": "r", "File": "f", "Line": 1}])
-    )
-    count = classify_batch(tmp_path, model_path=str(tmp_path / "no-model"))
-    assert count == 0
-    assert not raw.exists()
-    out = repo / "betterleaks.json"
-    assert out.exists()
-    assert len(json.loads(out.read_text())) == 1
-
-
-def test_classify_batch_dedup_via_mock_model(tmp_path):
-    """Mock model receives a single inference batch across repos and applies
-    annotations correctly back to each file."""
-    from runner.scanners.secrets.classify import classify_batch
-
-    for name in ("r1", "r2"):
-        repo = tmp_path / name
-        repo.mkdir()
-        (repo / "betterleaks_raw.json").write_text(
-            json.dumps([{"Secret": name, "RuleID": "rule", "File": "f"}])
-        )
-
-    def fake_model(findings):
-        return [
-            {"label": "label_0", "score": 0.2, "reasoning": ""} for _ in findings
-        ]
-
-    count = classify_batch(tmp_path, model=fake_model)
-    assert count == 2
-    for name in ("r1", "r2"):
-        out = json.loads((tmp_path / name / "betterleaks.json").read_text())
-        assert out[0]["ai_classification"] == "likely_false_positive"
-
-
-# ---------------------------------------------------------------------------
-# Task 4.2 — enrich_context.py
-# ---------------------------------------------------------------------------
-
-
-def _init_git_repo(repo_dir: Path) -> str:
-    """Create a tiny git repo with one commit; return the HEAD SHA."""
-    subprocess.run(
-        ["git", "init", "-q"], cwd=repo_dir, check=True, capture_output=True
-    )
-    subprocess.run(
-        ["git", "config", "user.email", "t@t"],
-        cwd=repo_dir,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "t"],
-        cwd=repo_dir,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "add", "-A"], cwd=repo_dir, check=True, capture_output=True
-    )
-    subprocess.run(
-        ["git", "commit", "-q", "-m", "init"],
-        cwd=repo_dir,
-        check=True,
-        capture_output=True,
-    )
-    rev = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_dir,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return rev.stdout.strip()
-
-
-def test_enrich_adds_context_from_working_tree(tmp_path):
-    """No commit recorded -> fall back to the working tree."""
-    from runner.scanners.secrets.enrich_context import enrich
-
-    (tmp_path / "secrets.py").write_text(
-        "line1\nline2\nAWS_KEY = 'AKIA...'\nline4\nline5\n"
-    )
-    findings = [{"File": "secrets.py", "Line": 3}]
-    enrich(findings, tmp_path, context_lines=1)
-    assert findings[0]["ContextBefore"] == ["line2"]
-    assert findings[0]["ContextAfter"] == ["line4"]
-
-
-def test_enrich_reads_at_commit_when_provided(tmp_path):
-    """When ``Commit`` is set, ``git show`` is used to read the file."""
-    from runner.scanners.secrets.enrich_context import enrich
-
-    (tmp_path / "secrets.py").write_text(
-        "aaa\nbbb\nccc\nDDD = 'x'\neee\nfff\nggg\n"
-    )
-    sha = _init_git_repo(tmp_path)
-    findings = [{"file": "secrets.py", "line": 4, "Commit": sha}]
-    enrich(findings, tmp_path, context_lines=2)
-    assert findings[0]["ContextBefore"] == ["bbb", "ccc"]
-    assert findings[0]["ContextAfter"] == ["eee", "fff"]
-
-
-def test_enrich_rejects_path_traversal(tmp_path):
-    """Findings with ``..`` in path are skipped silently."""
-    from runner.scanners.secrets.enrich_context import _validate_file_path, enrich
-
-    assert not _validate_file_path("../etc/passwd")
-    assert not _validate_file_path("/etc/passwd")
-    (tmp_path / "secrets.py").write_text("a\nb\n")
-    findings = [{"File": "../secrets.py", "Line": 1}]
-    enrich(findings, tmp_path)
-    assert "ContextBefore" not in findings[0]
-    assert "ContextAfter" not in findings[0]
-
-
-def test_enrich_rejects_invalid_commit_ref():
-    from runner.scanners.secrets.enrich_context import _validate_git_ref
-
-    assert _validate_git_ref("abcdef1234")
-    assert _validate_git_ref("a" * 40)
-    assert not _validate_git_ref("abc")  # too short
-    assert not _validate_git_ref("abc; rm -rf /")
-    assert not _validate_git_ref("HEAD")
-
-
-def test_enrich_file_writes_back_in_place(tmp_path):
-    """``enrich_file`` rewrites the JSON file with context fields."""
-    from runner.scanners.secrets.enrich_context import enrich_file
-
-    (tmp_path / "a.py").write_text("x\ny\nSECRET = 'z'\n")
-    findings_path = tmp_path / "raw.json"
-    findings_path.write_text(json.dumps([{"File": "a.py", "Line": 3}]))
-    n = enrich_file(findings_path, tmp_path, context_lines=1)
-    assert n == 1
-    data = json.loads(findings_path.read_text())
-    assert data[0]["ContextBefore"] == ["y"]
-
-
-def test_enrich_file_empty_no_op(tmp_path):
-    from runner.scanners.secrets.enrich_context import enrich_file
-
-    findings_path = tmp_path / "raw.json"
-    findings_path.write_text("[]")
-    assert enrich_file(findings_path, tmp_path) == 0
-    assert findings_path.read_text() == "[]"
 
 
 # ---------------------------------------------------------------------------
@@ -310,36 +38,19 @@ def test_normalize_file_trufflehog_skips_bad_json(tmp_path):
     assert [f["ok"] for f in findings] == [1, 2]
 
 
-def test_normalize_file_betterleaks_array(tmp_path):
-    from runner.scanners.secrets.normalize import normalize_file
-
-    raw = tmp_path / "betterleaks.json"
-    raw.write_text(
-        json.dumps([{"RuleID": "aws"}, {"RuleID": "github"}])
-    )
-    findings = normalize_file(raw, "betterleaks", "repo-1")
-    assert len(findings) == 2
-    for f in findings:
-        assert f["source"] == "betterleaks"
-        assert f["repository"] == "repo-1"
-
-
-def test_normalize_secrets_output_aggregates_both_sources(tmp_path):
+def test_normalize_secrets_output_aggregates_trufflehog(tmp_path):
     from runner.scanners.secrets.normalize import normalize_secrets_output
 
     repo_a = tmp_path / "repo-a"
     repo_a.mkdir()
     (repo_a / "trufflehog.json").write_text('{"DetectorName":"aws"}\n')
-    (repo_a / "betterleaks.json").write_text(
-        json.dumps([{"RuleID": "aws-key"}])
-    )
 
     repo_b = tmp_path / "repo-b"
     repo_b.mkdir()
     (repo_b / "trufflehog.json").write_text('{"DetectorName":"github"}\n')
 
     total, errors = normalize_secrets_output("acme", tmp_path, "run-1")
-    assert total == 3
+    assert total == 2
     assert errors == 0
 
     lines = [
@@ -349,28 +60,6 @@ def test_normalize_secrets_output_aggregates_both_sources(tmp_path):
     by_source = {(f["source"], f["repository"]) for f in lines}
     assert ("trufflehog", "repo-a") in by_source
     assert ("trufflehog", "repo-b") in by_source
-    assert ("betterleaks", "repo-a") in by_source
-
-
-def test_normalize_secrets_output_fallback_to_raw_when_no_classified(tmp_path):
-    """When a repo only has betterleaks_raw.json, normalize falls back to it."""
-    from runner.scanners.secrets.normalize import normalize_secrets_output
-
-    repo = tmp_path / "repo-x"
-    repo.mkdir()
-    (repo / "betterleaks_raw.json").write_text(
-        json.dumps([{"RuleID": "stripe"}])
-    )
-
-    total, errors = normalize_secrets_output("acme", tmp_path, "run-1")
-    assert total == 1
-    assert errors == 0
-    lines = [
-        json.loads(line)
-        for line in (tmp_path / "findings.jsonl").read_text().splitlines()
-    ]
-    assert lines[0]["source"] == "betterleaks"
-    assert lines[0]["repository"] == "repo-x"
 
 
 def test_normalize_secrets_output_no_findings_writes_empty(tmp_path):
@@ -521,7 +210,7 @@ def test_run_scan_honours_concurrency_env(tmp_path, monkeypatch):
 
 
 def test_run_scan_aggregates_findings(tmp_path, monkeypatch):
-    """Per-repo trufflehog.json / betterleaks.json -> aggregated findings.jsonl."""
+    """Per-repo trufflehog.json -> aggregated findings.jsonl."""
     from runner.scanners.secrets.scanner import SecretsScanner
 
     def fake_scan_repo(self, repo_url, out_dir, **kwargs):
@@ -570,55 +259,6 @@ def test_run_scan_tolerates_clone_failure(tmp_path, monkeypatch):
     result = scanner.run_scan(job, job_dir=job_dir)
     assert result.exit_code == 0
     assert any("simulated failure" in line for line in result.log_tail)
-
-
-def test_run_scan_ai_enhanced_invokes_classify_batch(tmp_path, monkeypatch):
-    """ai_enhanced depth must call classify_batch after the pool drains."""
-    from runner.scanners.secrets import scanner as scanner_mod
-    from runner.scanners.secrets.scanner import SecretsScanner
-
-    monkeypatch.setattr(SecretsScanner, "_scan_repo", lambda *a, **kw: None)
-    called: list[Path] = []
-
-    def fake_classify_batch(target_dir, *args, **kwargs):
-        called.append(Path(target_dir))
-        return 0
-
-    monkeypatch.setattr(scanner_mod.classify, "classify_batch", fake_classify_batch)
-
-    scanner = SecretsScanner()
-    job = {
-        "jobId": "test-ai",
-        "envVars": {
-                "GIT_REPOS": "https://github.com/a/b.git",
-                "SCAN_DEPTH": "ai_enhanced",
-            },}
-    job_dir = tmp_path / "test-ai"
-    scanner.run_scan(job, job_dir=job_dir)
-    assert called == [job_dir]
-
-
-def test_run_scan_light_does_not_invoke_classify(tmp_path, monkeypatch):
-    from runner.scanners.secrets import scanner as scanner_mod
-    from runner.scanners.secrets.scanner import SecretsScanner
-
-    monkeypatch.setattr(SecretsScanner, "_scan_repo", lambda *a, **kw: None)
-    called: list[Path] = []
-    monkeypatch.setattr(
-        scanner_mod.classify,
-        "classify_batch",
-        lambda d, *a, **kw: called.append(d),
-    )
-
-    scanner = SecretsScanner()
-    job = {
-        "jobId": "test-light",
-        "envVars": {
-                "GIT_REPOS": "https://github.com/a/b.git",
-                "SCAN_DEPTH": "light",
-            },}
-    scanner.run_scan(job, job_dir=tmp_path / "test-light")
-    assert called == []
 
 
 def test_inject_head_sha_annotates_each_record():

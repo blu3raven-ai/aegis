@@ -1,7 +1,7 @@
 """Scanner-coverage execution path of the unified rules engine.
 
 For each enabled scanner_coverage rule in an org, evaluate it against the
-org's non-archived Repos and upsert RuleViolation rows. Two action types:
+org's non-archived Assets and upsert RuleViolation rows. Two action types:
 
 - require_scanners: open a violation per repo missing any required scanner
   in ``action.required_scanners``; resolve when coverage is added.
@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.db.helpers import run_db
-from src.db.models import Repo, Rule, RuleViolation
+from src.db.models import Asset, Rule, RuleViolation
 from src.rules.repo_subject_loader import load_repo_subject
 from src.rules_engine.conditions import evaluate_condition
 from src.rules_engine.subjects import get_repo_field
@@ -54,18 +54,13 @@ def _empty_scanner_coverage_result() -> ScannerCoverageEvalResult:
     return ScannerCoverageEvalResult(0, 0, 0, 0, 0)
 
 
-def evaluate_scanner_coverage_for_org(
-    org_id: str | None = None,
+def evaluate_scanner_coverage(
     *,
-    asset_ids: list[str] | None = None,
+    asset_ids: list[str],
     now: datetime | None = None,
 ) -> ScannerCoverageEvalResult:
-    """Evaluate every enabled scanner_coverage rule against the org's repos.
-
-    Pass ``asset_ids`` to scope by asset identity rather than org string.
-    An empty ``asset_ids`` list returns an empty result immediately.
-    """
-    if asset_ids is not None and not asset_ids:
+    """Evaluate every enabled scanner_coverage rule against repos scoped to asset_ids."""
+    if not asset_ids:
         return _empty_scanner_coverage_result()
 
     current_time = _ensure_aware(now) if now is not None else _utcnow()
@@ -75,32 +70,23 @@ def evaluate_scanner_coverage_for_org(
             select(Rule).where(
                 Rule.category == "scanner_coverage",
                 Rule.enabled == True,  # noqa: E712
-                Rule.org_id == org_id,
             )
         )
         rules = list(rules_q.scalars().all())
         if not rules:
             return _empty_scanner_coverage_result()
 
-        if asset_ids is not None:
-            repos_q = await session.execute(
-                select(Repo).where(
-                    Repo.asset_id.in_(asset_ids),
-                    Repo.archived == False,  # noqa: E712
-                )
+        assets_q = await session.execute(
+            select(Asset).where(
+                Asset.id.in_(asset_ids),
+                Asset.archived == False,  # noqa: E712
             )
-        else:
-            # Unscoped evaluator runs cover every non-archived repo on the
-            # instance — used for global rule evaluation; per-scope runs go
-            # through the asset_ids branch above.
-            repos_q = await session.execute(
-                select(Repo).where(Repo.archived == False)  # noqa: E712
-            )
-        repos = list(repos_q.scalars().all())
+        )
+        assets = list(assets_q.scalars().all())
 
         subjects = [
-            (repo, await load_repo_subject(repo, session, now=current_time))
-            for repo in repos
+            (asset, await load_repo_subject(asset, session, now=current_time))
+            for asset in assets
         ]
 
         opened = 0
@@ -111,7 +97,7 @@ def evaluate_scanner_coverage_for_org(
             action = rule.action or {}
             action_type = action.get("type")
 
-            for repo, subject in subjects:
+            for asset, subject in subjects:
                 repo_subject_id = subject.repo_id
 
                 try:
@@ -174,7 +160,6 @@ def evaluate_scanner_coverage_for_org(
                         if freshly_opened:
                             opened += 1
                             _dispatch_stale_alert(
-                                org_id=org_id,
                                 rule=rule,
                                 repo_id=repo_subject_id,
                                 action=action,
@@ -201,7 +186,7 @@ def evaluate_scanner_coverage_for_org(
 
         return ScannerCoverageEvalResult(
             rules_evaluated=len(rules),
-            repos_checked=len(repos),
+            repos_checked=len(assets),
             violations_opened=opened,
             violations_resolved=resolved,
             stale_alerts_dispatched=stale_alerts,
@@ -265,7 +250,6 @@ async def _resolve_open_violation(
 
 def _dispatch_stale_alert(
     *,
-    org_id: str,
     rule: Rule,
     repo_id: str,
     action: dict,
@@ -277,7 +261,7 @@ def _dispatch_stale_alert(
     bus = get_event_bus()
     bus.publish_sync(Event(
         event_type="rule.scanner_coverage.stale_alert",
-        org=org_id,
+        org="",
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,
@@ -289,7 +273,7 @@ def _dispatch_stale_alert(
     if action.get("auto_retrigger"):
         bus.publish_sync(Event(
             event_type="rule.scanner_coverage.retrigger_scan",
-            org=org_id,
+            org="",
             data={
                 "rule_id": rule.id,
                 "repo_id": repo_id,
@@ -297,12 +281,12 @@ def _dispatch_stale_alert(
             },
         ))
     logger.info(
-        "Scanner-coverage stale alert dispatched: rule=%s repo=%s org=%s auto_retrigger=%s",
-        rule.id, repo_id, org_id, bool(action.get("auto_retrigger")),
+        "Scanner-coverage stale alert dispatched: rule=%s repo=%s auto_retrigger=%s",
+        rule.id, repo_id, bool(action.get("auto_retrigger")),
     )
 
 
 __all__ = [
     "ScannerCoverageEvalResult",
-    "evaluate_scanner_coverage_for_org",
+    "evaluate_scanner_coverage",
 ]

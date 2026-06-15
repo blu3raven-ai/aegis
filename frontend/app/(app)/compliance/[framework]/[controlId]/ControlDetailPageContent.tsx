@@ -13,8 +13,6 @@ import {
   type ComplianceFindingBrief,
 } from "@/lib/client/compliance-api"
 
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
-
 type LoadState = "loading" | "ok" | "error"
 
 export function ControlDetailPageContent() {
@@ -31,7 +29,7 @@ export function ControlDetailPageContent() {
     setLoadState("loading")
     Promise.all([
       listFrameworkControls(framework),
-      getControlFindings(framework, controlId, ORG_ID),
+      getControlFindings(framework, controlId),
     ])
       .then(([controls, findingsResp]) => {
         const found = controls.find((c) => c.control_id === controlId) ?? null

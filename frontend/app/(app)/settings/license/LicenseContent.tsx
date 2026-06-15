@@ -8,6 +8,8 @@ import { Dialog } from "@/components/layout/Dialog"
 import { sectionHeadingClass } from "@/lib/shared/settings-styles"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { ApiClientError } from "@/lib/client/api-client.types.ts"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 function formatExpiryDate(value: string | number): string {
   const ts = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value
@@ -45,7 +47,7 @@ export function LicenseContent() {
     setActivating(true)
     setActivateMsg(null)
     try {
-      await apiClient("/license/api/activate", {
+      await apiClient("/api/v1/license/activate", {
         method: "POST",
         body: { key: key.trim() },
       })
@@ -70,7 +72,7 @@ export function LicenseContent() {
     setShowRemoveConfirm(false)
     setRemoving(true)
     try {
-      await apiClient("/license/api/remove", { method: "DELETE" })
+      await apiClient("/api/v1/license/remove", { method: "DELETE" })
       invalidateLicenseCache()
       const updated = await fetchLicenseStatus()
       setLocalStatus(updated)
@@ -85,9 +87,9 @@ export function LicenseContent() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-20 motion-safe:animate-pulse rounded-2xl bg-[var(--color-surface-raised)]" />
-        <div className="h-16 motion-safe:animate-pulse rounded-2xl bg-[var(--color-surface-raised)]" />
-        <div className="h-40 motion-safe:animate-pulse rounded-2xl bg-[var(--color-surface-raised)]" />
+        <div className="h-20 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
+        <div className="h-16 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
+        <div className="h-40 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
       </div>
     )
   }
@@ -108,7 +110,7 @@ export function LicenseContent() {
         {/* Current plan */}
         <div>
           <p className={sectionHeadingClass}>Current Plan</p>
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
             <div className="flex items-center gap-3">
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${TIER_COLORS[displayTier]}`}>
                 {TIER_LABELS[displayTier]}
@@ -135,17 +137,17 @@ export function LicenseContent() {
         {/* Activate license */}
         <div>
           <p className={sectionHeadingClass}>Activate License</p>
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
             <div className="flex gap-3">
               <div className="flex-1">
                 <label htmlFor="license-key" className="sr-only">License key</label>
-                <input
+                <Input
                   id="license-key"
                   type="text"
                   value={key}
                   onChange={(e) => setKey(e.target.value)}
                   placeholder="Paste your license key"
-                  className={`h-11 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] ${FOCUS_RING}`}
+                  className="h-11"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void handleActivate()
                   }}
@@ -154,14 +156,16 @@ export function LicenseContent() {
                   Paste the key from your license email. Works for Enterprise and Argus add-on licenses.
                 </p>
               </div>
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => void handleActivate()}
                 disabled={activating || !key.trim()}
-                className={`h-11 shrink-0 rounded-lg bg-[var(--color-accent)] px-4 text-sm font-medium text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed ${FOCUS_RING}`}
+                isLoading={activating}
+                className="h-11 shrink-0"
               >
-                {activating ? "Activating..." : "Activate"}
-              </button>
+                {activating ? "Activating…" : "Activate"}
+              </Button>
             </div>
             {activateMsg && (
               <p className={`mt-3 text-sm ${activateMsg.ok ? "text-[var(--color-status-ok)]" : "text-[var(--color-severity-critical)]"}`}>
@@ -174,7 +178,7 @@ export function LicenseContent() {
         {/* Resource Usage */}
         <div>
           <p className={sectionHeadingClass}>Resource Usage</p>
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
             {([
               { label: "Users", used: displayUsage.users, max: displayLimits.max_users },
               { label: "Source Connections", used: displayUsage.source_connections, max: displayLimits.max_source_connections },
@@ -219,7 +223,7 @@ export function LicenseContent() {
         {displayLicense && (
           <div>
             <p className={sectionHeadingClass}>Remove License</p>
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-[var(--color-text-primary)]">Remove current license</p>
@@ -227,14 +231,16 @@ export function LicenseContent() {
                     Reverts your plan to the Community tier.
                   </p>
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={() => setShowRemoveConfirm(true)}
                   disabled={removing}
-                  className={`rounded-lg border border-[var(--color-severity-critical)]/20 px-4 py-2 text-sm font-medium text-[var(--color-severity-critical)] transition-colors hover:border-[var(--color-severity-critical)]/30 hover:bg-[var(--color-severity-critical)]/5 disabled:opacity-50 ${FOCUS_RING}`}
+                  isLoading={removing}
+                  className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
                 >
-                  {removing ? "Removing..." : "Remove License"}
-                </button>
+                  {removing ? "Removing…" : "Remove License"}
+                </Button>
               </div>
             </div>
           </div>
@@ -243,7 +249,7 @@ export function LicenseContent() {
         {/* Argus add-on */}
         <div>
           <p className={sectionHeadingClass}>Add-ons</p>
-          <div className={`rounded-2xl border px-6 py-5 ${hasArgus ? "border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)]" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
+          <div className={`rounded-lg border px-6 py-5 ${hasArgus ? "border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)]" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">

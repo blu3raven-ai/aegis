@@ -1,19 +1,18 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 import { saveAccountSettings } from "@/lib/client/settings-api"
 import { Modal } from "./Modal"
 
-const cancelBtnClass =
-  "rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)]"
-const saveBtnClass =
-  "rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-
 export function UsernameModal({
+  open,
   initialUsername,
   onClose,
   onSuccess,
 }: {
+  open: boolean
   initialUsername: string
   onClose: () => void
   onSuccess: () => void
@@ -36,27 +35,26 @@ export function UsernameModal({
   }
 
   return (
-    <Modal title="Change username" onClose={onClose}>
+    <Modal open={open} title="Change username" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
             Username
           </label>
-          <input
+          <Input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
             autoFocus
-            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
           />
         </div>
         {error && <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>}
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={cancelBtnClass}>Cancel</button>
-          <button type="submit" disabled={isPending || !username.trim()} className={saveBtnClass}>
+          <Button variant="secondary" size="md" onClick={onClose}>Cancel</Button>
+          <Button type="submit" variant="primary" size="md" isLoading={isPending} disabled={isPending || !username.trim()}>
             {isPending ? "Saving..." : "Save"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

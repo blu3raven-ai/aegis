@@ -20,6 +20,8 @@ import { presetToFirstSeenAfter, type AgePresetKey } from "./FindingsAgeFilter"
 import { type FindingsMoreFiltersValues } from "./FindingsMoreFiltersPopover"
 import { FindingsPagination } from "./FindingsPagination"
 import { EpssScoreCell } from "@/components/shared/findings/EpssScoreCell"
+import { Button } from "@/components/ui/Button"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { FindingDetailActions } from "@/components/shared/findings/FindingDetailActions"
 import { FindingAssigneeEditor } from "@/components/shared/findings/FindingAssigneeEditor"
 import { FindingOriginSection } from "@/components/shared/findings/FindingOriginSection"
@@ -35,8 +37,12 @@ import {
   type FindingScanner,
   type FindingState,
   type FindingsSummary,
+  type VerdictCounts,
 } from "@/lib/client/findings-api"
 import { listRepos, type RepoSummary } from "@/lib/client/repos-api"
+import { EnableLlmBanner } from "@/components/shared/findings/EnableLlmBanner"
+import { VerdictFilterChips } from "@/components/shared/findings/VerdictFilterChips"
+import type { VerdictFilter } from "@/lib/shared/findings/verdicts"
 import {
   mapApiFinding,
   type FindingRow as Finding,
@@ -171,6 +177,12 @@ export interface FindingsBoardViewProps {
   /** Initial state filter applied on first mount. Pass undefined for a state-agnostic view. */
   initialStateFilter?: FindingState[]
   /**
+   * Initial scanner filter applied on first mount. Used by the scanner-led
+   * landing routes (/code, /dependencies, /secrets, /iac, /containers) to
+   * render a pre-narrowed view without polluting the URL with ?scanner=…
+   */
+  initialScannerFilter?: FindingScanner
+  /**
    * Optional queue sidebar rendered to the left of the findings list. When passed as a
    * render-function, the sidebar receives the saved-views API and the header's
    * Views/Save/Manage controls are hidden (the sidebar owns them instead).
@@ -180,6 +192,13 @@ export interface FindingsBoardViewProps {
   showSummaryStrip?: boolean
   /** Compact mock-style filter header inside the list pane instead of the wide filter bar. /inbox opts in. */
   compactHeader?: boolean
+  /**
+   * Render the findings as a flat queue rather than a grouped board.
+   * /inbox uses this to behave like an email inbox (no scanner group
+   * headers, no "show N more" collapse — every visible row renders). The
+   * grouped view stays the canonical /findings shape. Defaults to false.
+   */
+  flat?: boolean
 }
 
 type ScannerFilter = FindingScanner | "all"
@@ -232,10 +251,10 @@ function readFromSet<T extends string>(
   return fallback
 }
 
-export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initialStateFilter, leftSidebar, showSummaryStrip = true, compactHeader = false }: FindingsBoardViewProps) {
+export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initialStateFilter, initialScannerFilter, leftSidebar, showSummaryStrip = true, compactHeader = false, flat = false }: FindingsBoardViewProps) {
   const sidebarOwnsSavedViews = typeof leftSidebar === "function"
   const [sevFilter, setSevFilter] = useState<Severity | "all">("all")
-  const [scannerFilter, setScannerFilter] = useState<ScannerFilter>("all")
+  const [scannerFilter, setScannerFilter] = useState<ScannerFilter>(initialScannerFilter ?? "all")
   const [stateFilter, setStateFilter] = useState<StateFilter>(() => initialStateFromProp(initialStateFilter))
   const [repoFilter, setRepoFilter] = useState<string>("all")
   const [sortKey, setSortKey] = useState<SortKey>("severity_age")
@@ -260,6 +279,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   )
   const [findings, setFindings] = useState<Finding[]>([])
   const [totalCount, setTotalCount] = useState(0)
+  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>(null)
+  const [verdictCounts, setVerdictCounts] = useState<VerdictCounts | undefined>(undefined)
+  const [llmConfigured, setLlmConfigured] = useState<boolean>(true)  // assume configured until known otherwise
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
@@ -372,6 +394,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     state: StateFilter,
     sort: SortKey,
     age: AgePresetKey,
+    verdict: VerdictFilter,
     pageNum: number,
   ) => {
     setLoading(true)
@@ -394,13 +417,16 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         ...(moreFilters.epssMin != null ? { epss_min: moreFilters.epssMin } : {}),
         ...(moreFilters.riskScoreMin != null ? { risk_score_min: moreFilters.riskScoreMin } : {}),
         ...(moreFilters.assigneeUserId ? { assignee: moreFilters.assigneeUserId } : {}),
+        ...(verdict ? { verdict } : {}),
       })
       setFindings(resp.findings.map(mapApiFinding))
       setTotalCount(resp.total_count)
+      setVerdictCounts(resp.verdict_counts)
     } catch {
       setError("Failed to load findings. Please try again.")
       setFindings([])
       setTotalCount(0)
+      setVerdictCounts(undefined)
     } finally {
       setLoading(false)
     }
@@ -410,15 +436,35 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   // empty page-3-of-2-results when they narrow the query.
   useEffect(() => {
     setPage(1)
-  }, [sevFilter, scannerFilter, stateFilter, repoFilter, searchQuery, sortKey, agePreset, moreFilters])
+  }, [sevFilter, scannerFilter, stateFilter, repoFilter, searchQuery, sortKey, agePreset, moreFilters, verdictFilter])
 
   useEffect(() => {
-    void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, page)
-  }, [sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, moreFilters, page, load])
+    void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
+  }, [sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, moreFilters, verdictFilter, page, load])
+
+  // 404 from /settings/llm means no key on file — banner can then prompt setup.
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/v1/settings/llm")
+      .then((r) => {
+        if (cancelled) return
+        if (r.status === 404) {
+          setLlmConfigured(false)
+          return
+        }
+        if (r.ok) setLlmConfigured(true)
+      })
+      .catch(() => {
+        /* network errors leave the banner hidden — fail safe */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleRetry = useCallback(() => {
-    void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, page)
-  }, [load, sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, page])
+    void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
+  }, [load, sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page])
 
   const filtered = findings
 
@@ -437,6 +483,11 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   const clearSelection = useCallback(() => setSelection(new Set()), [])
 
   const groups = useMemo(() => {
+    // Flat queue mode (/inbox) skips the group-by axis entirely and renders
+    // every row in a single unlabelled bucket.
+    if (flat) {
+      return [{ key: "all" as const, label: "", rows: sorted }]
+    }
     const buckets = new Map<string, Finding[]>()
     for (const row of sorted) {
       const key = groupKeyFor(row, groupBy)
@@ -447,7 +498,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     return Array.from(buckets.entries())
       .sort(([a], [b]) => compareGroupKeys(groupBy, a, b))
       .map(([key, rows]) => ({ key, label: groupLabelFor(groupBy, key), rows }))
-  }, [sorted, groupBy])
+  }, [sorted, groupBy, flat])
 
   const showEmpty = !loading && !error && sorted.length === 0
   const showTable = !loading && !error && sorted.length > 0
@@ -547,6 +598,15 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           />
         </div>
 
+        <div className="border-b border-[var(--color-border-divider)] bg-[var(--color-surface)] px-5 py-2.5 space-y-3">
+          <EnableLlmBanner llmConfigured={llmConfigured} />
+          <VerdictFilterChips
+            active={verdictFilter}
+            counts={verdictCounts}
+            onChange={setVerdictFilter}
+          />
+        </div>
+
         {loading && (
           <div className="divide-y divide-[var(--color-border-divider)]" aria-hidden="true">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -564,13 +624,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         {error && (
           <div className="flex items-center justify-between border-b border-[var(--color-border-divider)] px-5 py-3 text-xs text-[var(--color-severity-high)]">
             <span>{error}</span>
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="rounded-md border border-[var(--color-border)] px-2 py-1 text-[11px] font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] transition-colors"
-            >
+            <Button variant="secondary" size="xs" onClick={handleRetry}>
               Retry
-            </button>
+            </Button>
           </div>
         )}
 
@@ -578,7 +634,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           <div className="space-y-4 px-5 py-4">
             <EmptyOverviewBanner />
             <GhostPreviewWrapper>
-              <FindingsGhostPreview />
+              <FindingsGhostPreview flat={flat} />
             </GhostPreviewWrapper>
           </div>
         ) : showEmpty ? (
@@ -602,7 +658,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 onClear={clearSelection}
                 onDismissed={() => {
                   // Refetch to drop the now-dismissed rows.
-                  void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, page)
+                  void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
                   clearSelection()
                 }}
               />
@@ -610,25 +666,29 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
             <div className="divide-y divide-[var(--color-border)]">
               {groups.map((group) => (
                 <div key={`${groupBy}:${group.key}`}>
-                  <FindingsGroupHeader
-                    label={group.label}
-                    severityCounts={groupSeverityCounts(group.rows)}
-                    total={group.rows.length}
-                    expanded={!collapsedGroups.has(group.key)}
-                    onToggle={() => {
-                      setCollapsedGroups((prev) => {
-                        const next = new Set(prev)
-                        if (next.has(group.key)) next.delete(group.key)
-                        else next.add(group.key)
-                        return next
-                      })
-                      setExpandedGroups((prev) => {
-                        const next = new Set(prev); next.delete(group.key); return next
-                      })
-                    }}
-                  />
+                  {!flat && (
+                    <FindingsGroupHeader
+                      label={group.label}
+                      severityCounts={groupSeverityCounts(group.rows)}
+                      total={group.rows.length}
+                      expanded={!collapsedGroups.has(group.key)}
+                      onToggle={() => {
+                        setCollapsedGroups((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(group.key)) next.delete(group.key)
+                          else next.add(group.key)
+                          return next
+                        })
+                        setExpandedGroups((prev) => {
+                          const next = new Set(prev); next.delete(group.key); return next
+                        })
+                      }}
+                    />
+                  )}
                   {!collapsedGroups.has(group.key) && (() => {
-                    const expanded = expandedGroups.has(group.key)
+                    // Flat queue mode renders every row — no progressive
+                    // disclosure since there's only one bucket.
+                    const expanded = flat || expandedGroups.has(group.key)
                     const visible = expanded ? group.rows : group.rows.slice(0, INITIAL_ROWS_PER_GROUP)
                     const hiddenCount = group.rows.length - INITIAL_ROWS_PER_GROUP
                     return (
@@ -643,7 +703,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                             active={selectedFinding?.id === finding.id}
                           />
                         ))}
-                        {!expanded && hiddenCount > 0 && (
+                        {!flat && !expanded && hiddenCount > 0 && (
                           <div
                             onClick={() => setExpandedGroups((prev) => {
                               const next = new Set(prev); next.add(group.key); return next
@@ -682,25 +742,25 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
         {showTable && !compactHeader && (
           <>
-            <table className="w-full border-collapse text-sm">
-              <thead className="sticky top-0 z-10 bg-[var(--color-surface)]">
-                <tr className="border-b border-[var(--color-border)]">
-                  <th className="w-4 px-4 py-2.5" />
-                  <th className="px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Finding</th>
-                  <th className="px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)] hidden md:table-cell">Scanner</th>
-                  <th className="px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)] hidden lg:table-cell">Repository</th>
-                  <th className="px-3 py-2.5 text-left text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Chain</th>
-                  <th className="px-3 py-2.5 text-right text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Risk</th>
-                  <th className="px-3 py-2.5 text-right text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)] hidden sm:table-cell">
+            <Table className="border-collapse">
+              <Thead className="sticky top-0 z-10 bg-[var(--color-surface)]">
+                <Tr>
+                  <Th className="w-4 px-4 py-2.5" />
+                  <Th className="px-3 py-2.5">Finding</Th>
+                  <Th className="px-3 py-2.5 hidden md:table-cell">Scanner</Th>
+                  <Th className="px-3 py-2.5 hidden lg:table-cell">Repository</Th>
+                  <Th className="px-3 py-2.5">Chain</Th>
+                  <Th className="px-3 py-2.5 text-right">Risk</Th>
+                  <Th className="px-3 py-2.5 text-right hidden sm:table-cell">
                     EPSS
-                  </th>
-                  <th className="px-3 py-2.5 text-right text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)] hidden sm:table-cell">Age</th>
-                </tr>
-              </thead>
+                  </Th>
+                  <Th className="px-3 py-2.5 text-right hidden sm:table-cell">Age</Th>
+                </Tr>
+              </Thead>
               {groups.map((group) => (
-                <tbody key={`${groupBy}:${group.key}`} className="divide-y divide-[var(--color-border-divider)]">
-                  <tr className="bg-[var(--color-bg-section)]">
-                    <td colSpan={8} className="px-0 py-0">
+                <Tbody key={`${groupBy}:${group.key}`}>
+                  <Tr className="bg-[var(--color-bg-section)]">
+                    <Td colSpan={8} className="px-0 py-0">
                       <FindingsGroupHeader
                         label={group.label}
                         severityCounts={groupSeverityCounts(group.rows)}
@@ -718,8 +778,8 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                           })
                         }}
                       />
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                   {!collapsedGroups.has(group.key) && (() => {
                     const expanded = expandedGroups.has(group.key)
                     const visible = expanded ? group.rows : group.rows.slice(0, INITIAL_ROWS_PER_GROUP)
@@ -727,8 +787,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                     return (
                       <>
                         {visible.map((finding) => (
-                          <tr
+                          <Tr
                             key={finding.id}
+                            interactive
                             onClick={() => setSelectedFinding(finding)}
                             tabIndex={0}
                             role="button"
@@ -739,19 +800,19 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                                 setSelectedFinding(finding)
                               }
                             }}
-                            className={`cursor-pointer hover:bg-[var(--color-bg-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset ${
+                            className={`cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset ${
                               selectedFinding?.id === finding.id ? "bg-[var(--color-nav-active)]" : ""
                             }`}
                           >
-                            <td className="px-4 py-3">
+                            <Td className="py-3">
                               <span
                                 className="inline-block h-2 w-2 rounded-full"
                                 style={{ background: SEV_COLOR[finding.severity] }}
                                 aria-label={finding.severity}
                               />
-                            </td>
+                            </Td>
 
-                            <td className="px-3 py-3">
+                            <Td className="px-3 py-3">
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className="font-medium text-[var(--color-text-primary)] truncate max-w-[22rem]">
                                   {finding.title}
@@ -768,9 +829,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                                   </span>
                                 )}
                               </div>
-                            </td>
+                            </Td>
 
-                            <td className="px-3 py-3 hidden md:table-cell">
+                            <Td className="px-3 py-3 hidden md:table-cell">
                               <div className="flex items-center gap-2">
                                 <span
                                   className="inline-flex h-4 w-[2.4rem] items-center justify-center rounded text-[9px] font-bold"
@@ -784,37 +845,38 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                                   </span>
                                 )}
                               </div>
-                            </td>
+                            </Td>
 
-                            <td className="px-3 py-3 hidden lg:table-cell">
+                            <Td className="px-3 py-3 hidden lg:table-cell">
                               <span className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)] truncate max-w-[16rem]">
                                 {finding.repo}
                               </span>
-                            </td>
+                            </Td>
 
-                            <td className="px-3 py-3">
+                            <Td className="px-3 py-3">
                               <span className="text-[var(--color-text-tertiary)] text-xs">—</span>
-                            </td>
+                            </Td>
 
-                            <td className="px-3 py-3">
+                            <Td className="px-3 py-3">
                               {finding.riskScore != null ? (
                                 <RiskScoreCell score={finding.riskScore} argus={finding.riskScore >= 70} />
                               ) : (
                                 <span className="text-[var(--color-text-tertiary)] text-xs text-right block">—</span>
                               )}
-                            </td>
+                            </Td>
 
-                            <td className="px-3 py-3 text-right hidden sm:table-cell">
+                            <Td className="px-3 py-3 text-right hidden sm:table-cell">
                               <EpssScoreCell percentile={finding.epssPercentile} />
-                            </td>
+                            </Td>
 
-                            <td className="px-3 py-3 text-right hidden sm:table-cell">
+                            <Td className="px-3 py-3 text-right hidden sm:table-cell">
                               <span className="text-xs text-[var(--color-text-tertiary)]">{finding.age}</span>
-                            </td>
-                          </tr>
+                            </Td>
+                          </Tr>
                         ))}
                         {!expanded && hiddenCount > 0 && (
-                          <tr
+                          <Tr
+                            interactive
                             onClick={() => setExpandedGroups((prev) => {
                               const next = new Set(prev); next.add(group.key); return next
                             })}
@@ -829,19 +891,19 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                             tabIndex={0}
                             role="button"
                             aria-label={`Show ${hiddenCount} more findings in ${group.label}`}
-                            className="cursor-pointer text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset"
+                            className="cursor-pointer text-xs text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset"
                           >
-                            <td colSpan={8} className="px-4 py-2 text-center">
+                            <Td colSpan={8} className="py-2 text-center">
                               {`Show ${group.rows.length - INITIAL_ROWS_PER_GROUP} more ${group.label.toLowerCase()} →`}
-                            </td>
-                          </tr>
+                            </Td>
+                          </Tr>
                         )}
                       </>
                     )
                   })()}
-                </tbody>
+                </Tbody>
               ))}
-            </table>
+            </Table>
 
             <FindingsPagination
               page={page}
@@ -964,7 +1026,7 @@ function statusPillLabel(state: string | undefined): string {
 function statusToneClass(state: string | undefined): string {
   switch (state) {
     case "open":
-      return "bg-[color-mix(in_srgb,#a78bfa_18%,transparent)] text-[#a78bfa]"
+      return "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
     case "fixed":
       return "bg-[color-mix(in_srgb,var(--color-state-fixed)_18%,transparent)] text-[var(--color-state-fixed)]"
     case "dismissed":
@@ -1099,14 +1161,9 @@ function BulkActionBar({
       <span className="text-[var(--color-text-primary)]">
         <span className="font-semibold text-[var(--color-accent)]">{count}</span> selected
       </span>
-      <button
-        type="button"
-        onClick={onClear}
-        disabled={submitting}
-        className="text-[12px] text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] rounded disabled:opacity-50"
-      >
+      <Button variant="ghost" size="xs" onClick={onClear} disabled={submitting}>
         Clear
-      </button>
+      </Button>
       {error && (
         <span className="text-[12px] text-[var(--color-severity-high)]" role="alert">
           {error}
@@ -1237,13 +1294,13 @@ function ActivityTimelineSection({ finding, scannerLabel }: { finding: Finding; 
           className="w-full resize-none bg-transparent text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none"
         />
         <div className="mt-1 flex justify-end">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="xs"
             onClick={postComment}
-            className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-text-primary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
           >
             Add
-          </button>
+          </Button>
         </div>
       </div>
     </section>

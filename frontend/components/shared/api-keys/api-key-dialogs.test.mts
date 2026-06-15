@@ -26,9 +26,14 @@ describe("CreatedKeyDialog token contract", () => {
     )
   })
 
-  it("Done button uses accent + accent-on text contrast", () => {
-    assert.ok(createdSrc.includes("var(--color-accent)"))
-    assert.ok(createdSrc.includes("var(--color-accent-on)"))
+  it("Done button uses the Button primitive primary variant", () => {
+    // After the Button-primitive migration the accent / accent-on tokens are
+    // pinned inside Button.tsx (primary variant). The dialog only needs to
+    // pick that variant.
+    assert.ok(
+      createdSrc.includes('variant="primary"') && createdSrc.includes("<Button"),
+      "Done button must use Button primitive with variant=primary",
+    )
   })
 
   it("does NOT reference the undefined --color-yellow tokens that previously broke rendering", () => {
@@ -48,14 +53,12 @@ describe("CreatedKeyDialog token contract", () => {
 })
 
 describe("RevokeKeyConfirmDialog token contract", () => {
-  it("destructive Revoke button uses severity-critical + on-danger text", () => {
+  it("destructive Revoke button uses the Button primitive destructive variant", () => {
+    // The severity-critical / on-danger tokens are pinned inside Button.tsx
+    // (destructive variant). The dialog only needs to pick that variant.
     assert.ok(
-      revokeSrc.includes("var(--color-severity-critical)"),
-      "destructive bg must use --color-severity-critical",
-    )
-    assert.ok(
-      revokeSrc.includes("var(--color-on-danger)"),
-      "destructive text must use --color-on-danger for contrast",
+      revokeSrc.includes('variant="destructive"') && revokeSrc.includes("<Button"),
+      "destructive Revoke must use Button primitive with variant=destructive",
     )
   })
 
@@ -63,9 +66,11 @@ describe("RevokeKeyConfirmDialog token contract", () => {
     assert.ok(!revokeSrc.includes("var(--color-red)"), "must not reference --color-red (never defined in globals.css)")
   })
 
-  it("Cancel button is restrained (border + secondary text, no fill)", () => {
-    assert.ok(revokeSrc.includes("var(--color-border)"))
-    assert.ok(revokeSrc.includes("var(--color-text-secondary)"))
+  it("Cancel button uses the Button primitive secondary variant (border + secondary text, no fill)", () => {
+    assert.ok(
+      revokeSrc.includes('variant="secondary"') && revokeSrc.includes("<Button"),
+      "Cancel must use Button primitive with variant=secondary",
+    )
   })
 
   it("renders as an accessible modal dialog", () => {

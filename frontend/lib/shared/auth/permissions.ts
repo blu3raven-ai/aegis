@@ -118,7 +118,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   },
   {
     id: "rules",
-    label: "Rules",
+    label: "Policies",
     permissions: [
       { id: "view_rules", label: "View Rules", description: "View rules across all categories." },
       { id: "manage_sla_rules", label: "Manage SLA Rules", description: "Create, edit, and delete SLA rules." },

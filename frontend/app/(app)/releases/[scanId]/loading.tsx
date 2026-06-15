@@ -8,7 +8,7 @@ export default function Loading() {
           <div className="h-3 w-64 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
         </div>
       </div>
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
+      <div className="flex w-full flex-col gap-6 px-6 py-6">
         <div className="h-36 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] motion-safe:animate-pulse" />
         <div className="h-56 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] motion-safe:animate-pulse" />
         <div className="h-40 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] motion-safe:animate-pulse" />

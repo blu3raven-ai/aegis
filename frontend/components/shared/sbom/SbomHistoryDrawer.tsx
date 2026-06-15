@@ -3,6 +3,7 @@
 import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
 import { relativeTime } from "@/lib/shared/relative-time"
 import type { SbomHistoryEntry } from "@/lib/client/sbom-api"
+import { Button } from "@/components/ui/Button"
 
 export function SbomHistoryDrawer({
   open,
@@ -25,16 +26,19 @@ export function SbomHistoryDrawer({
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Version History
         </h2>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
+          iconOnly
           onClick={onClose}
-          className="rounded-lg p-1.5 text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
           aria-label="Close history drawer"
-        >
-          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M6 18 18 6M6 6l12 12" />
-          </svg>
-        </button>
+          leadingIcon={
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          }
+        />
+
       </div>
 
       <div className="flex-1 overflow-y-auto">

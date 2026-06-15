@@ -3,30 +3,34 @@
 import { useState, useEffect } from "react"
 import { RoleRecord, RoleInput } from "@/lib/client/settings-api"
 import { PERMISSION_GROUPS } from "@/lib/shared/auth/permissions"
+import { Input } from "@/components/ui/Input"
+import { Textarea } from "@/components/ui/Textarea"
 import { PermissionGroup } from "./PermissionGroup"
 
 interface RoleEditorProps {
   role: RoleRecord | null
   isCreating?: boolean
   onSave: (role: RoleInput) => Promise<void>
-  onDelete: (roleId: string) => void | Promise<void>
-  onCancel: () => void
   isLoading?: boolean
+  /** Form id used by external Save buttons that submit via the form attribute. */
+  formId?: string
 }
 
-export function RoleEditor({ 
-  role, 
-  isCreating = false, 
-  onSave, 
-  onDelete, 
-  onCancel,
-  isLoading = false
+// Renders only the editor body. Title + Cancel/Delete/Save live on the
+// hosting Sheet's header and footer; this component owns the inputs and the
+// form submit handler, exposed by id so a footer button can drive it.
+export function RoleEditor({
+  role,
+  isCreating = false,
+  onSave,
+  isLoading = false,
+  formId = "role-editor-form",
 }: RoleEditorProps) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [permissions, setPermissions] = useState<string[]>([])
   const [currentId, setCurrentId] = useState("")
-  
+
   useEffect(() => {
     if (role) {
       setName(role.name)
@@ -42,8 +46,8 @@ export function RoleEditor({
   }, [role])
 
   const handleTogglePermission = (id: string) => {
-    setPermissions(prev => 
-      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    setPermissions((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
     )
   }
 
@@ -55,52 +59,21 @@ export function RoleEditor({
   if (!role && !isCreating) return null
 
   const isOwner = role?.id === "role_owner"
-  const isLocked = role?.isLocked || isOwner
+  const isLocked = !!role?.isLocked || isOwner
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
-          {isCreating ? "Create New Role" : `Edit Role: ${role?.name}`}
-        </h2>
-        <div className="flex items-center space-x-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] transition-colors"
-          >
-            Cancel
-          </button>
-          {!isLocked && !isCreating && role && (
-            <button
-              type="button"
-              onClick={() => onDelete(role.id)}
-              className="rounded-lg bg-[var(--color-severity-critical-subtle)] px-4 py-2 text-sm font-semibold text-[var(--color-severity-critical)] border border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
-            >
-              Delete Role
-            </button>
-          )}
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading || isLocked}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50"
-          >
-            {isLoading ? "Saving..." : "Save Role"}
-          </button>
-        </div>
-      </div>
-
       {isLocked && (
         <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3 text-sm text-[var(--color-state-pending)]">
           This is a protected role. It cannot be modified or deleted.
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <form id={formId} onSubmit={handleSubmit} className="space-y-8">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor="role-name" className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Role Name</label>
-            <input
+            <label htmlFor="role-name" className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Role name</label>
+            <Input
               id="role-name"
               type="text"
               value={name}
@@ -108,17 +81,16 @@ export function RoleEditor({
               disabled={isLocked || isLoading}
               required
               placeholder="e.g. Security Auditor"
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
             />
           </div>
           <div className="space-y-1.5">
             <label htmlFor="role-id" className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Role ID</label>
-            <input
+            <Input
               id="role-id"
               type="text"
               value={currentId}
               readOnly
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-mono text-[var(--color-text-secondary)] cursor-default outline-none"
+              className="cursor-default font-mono"
               title="Role ID is automatically generated and cannot be changed"
             />
           </div>
@@ -126,25 +98,25 @@ export function RoleEditor({
 
         <div className="space-y-1.5">
           <label htmlFor="role-desc" className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Description</label>
-          <textarea
+          <Textarea
             id="role-desc"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             disabled={isLocked || isLoading}
             rows={2}
             placeholder="Describe the purpose and access level of this role."
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 resize-none"
+            className="resize-none"
           />
         </div>
 
-        <div className="space-y-6 border-t border-[var(--color-border)] pt-8">
+        <div className="space-y-6 border-t border-[var(--color-border)] pt-6">
           <div className="space-y-1">
             <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Permissions</h3>
             <p className="text-xs text-[var(--color-text-secondary)]">
               Define the capabilities for this role across different system areas.
             </p>
           </div>
-          
+
           <div className="space-y-8">
             {PERMISSION_GROUPS.map((group) => (
               <PermissionGroup

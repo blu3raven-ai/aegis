@@ -12,10 +12,10 @@ test("account settings renders row-based security controls", () => {
   assert.match(page, /redirect\("\/settings#profile"\)/)
   assert.match(account, /Two-factor authentication/)
   assert.match(account, /user\.totpEnabled/)
-  assert.match(account, /apiClient\("\/settings\/api\/account\/totp", \{ method: "DELETE" \}\)/)
+  assert.match(account, /apiClient\("\/api\/v1\/settings\/account\/totp", \{ method: "DELETE" \}\)/)
   assert.match(passwordModal, /New password must be different from your current password\./)
   assert.match(passwordModal, /Save password/)
   assert.match(totpModal, /QR code for authenticator app/)
-  assert.match(totpModal, /apiClient\("\/settings\/api\/account\/totp\/verify"/)
+  assert.match(totpModal, /apiClient\("\/api\/v1\/settings\/account\/totp\/verify"/)
 })
 

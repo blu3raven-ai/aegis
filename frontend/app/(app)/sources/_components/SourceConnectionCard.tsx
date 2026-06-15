@@ -6,6 +6,7 @@ import { SOURCE_TYPE_LABELS, CATEGORY_ITEM_LABELS } from "@/lib/shared/sources-t
 import { syncSourceConnection, deleteSourceConnection } from "@/lib/client/sources-api"
 import { timeAgo } from "@/lib/shared/time-ago"
 import { Dialog } from "@/components/layout/Dialog"
+import { Button } from "@/components/ui/Button"
 
 const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
 
@@ -166,23 +167,25 @@ export function SourceConnectionCard({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
-          <button
-            type="button"
+        <div className="flex shrink-0 items-center gap-3" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="secondary"
+            size="sm"
             disabled={isSyncing}
-            onClick={handleSync}
-            className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] disabled:opacity-50 ${FOCUS_RING}`}
+            isLoading={isSyncing}
+            onClick={(e) => { void handleSync(e) }}
           >
             {isSyncing ? "Syncing\u2026" : "Sync Now"}
-          </button>
+          </Button>
 
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true) }}
-            className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-severity-critical)]/30 hover:text-[var(--color-severity-critical)] ${FOCUS_RING}`}
+            className="hover:border-[var(--color-severity-critical)] hover:text-[var(--color-severity-critical)]"
           >
             Delete
-          </button>
+          </Button>
 
           <StatusBadge status={connection.status} />
         </div>

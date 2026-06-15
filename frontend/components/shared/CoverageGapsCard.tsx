@@ -1,4 +1,5 @@
 import { InsightCard } from "@/components/shared/InsightCard"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 export interface CoverageGap {
   repository: string
@@ -18,24 +19,21 @@ export function CoverageGapsCard({
       description="Repos that haven't been scanned recently or were skipped in the latest run."
     >
       <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
-        <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
-          <thead className="bg-[var(--color-surface-raised)] text-left text-xs uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-            <tr>
-              <th className="px-5 py-3">Repository</th>
-              <th className="px-5 py-3">Reason</th>
-              <th className="px-5 py-3">Last Scanned</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-border)]">
+        <Table className="min-w-full">
+          <Thead>
+            <Tr>
+              <Th className="px-5">Repository</Th>
+              <Th className="px-5">Reason</Th>
+              <Th className="px-5">Last Scanned</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
             {gaps.length > 0 ? (
               gaps.map((gap) => (
-                <tr
-                  key={`${gap.repository}:${gap.reason}`}
-                  className="transition-colors hover:bg-[var(--color-surface-raised)]"
-                >
-                  <td className="px-5 py-4 font-medium text-[var(--color-text-primary)]">{gap.repository}</td>
-                  <td className="px-5 py-4 text-[var(--color-text-secondary)]">{gap.reason.replaceAll("_", " ")}</td>
-                  <td className="px-5 py-4 text-[var(--color-text-secondary)]">
+                <Tr key={`${gap.repository}:${gap.reason}`} interactive>
+                  <Td className="px-5 py-4 font-medium text-[var(--color-text-primary)]">{gap.repository}</Td>
+                  <Td className="px-5 py-4 text-[var(--color-text-secondary)]">{gap.reason.replaceAll("_", " ")}</Td>
+                  <Td className="px-5 py-4 text-[var(--color-text-secondary)]">
                     {gap.lastScannedAt
                       ? new Date(gap.lastScannedAt).toLocaleDateString(undefined, {
                           month: "short",
@@ -43,18 +41,18 @@ export function CoverageGapsCard({
                           year: "numeric",
                         })
                       : "—"}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))
             ) : (
-              <tr>
-                <td colSpan={3} className="px-5 py-6 text-center text-sm text-[var(--color-text-secondary)]">
+              <Tr>
+                <Td colSpan={3} className="px-5 py-6 text-center text-sm text-[var(--color-text-secondary)]">
                   No repository data yet.
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             )}
-          </tbody>
-        </table>
+          </Tbody>
+        </Table>
       </div>
     </InsightCard>
   )

@@ -1,8 +1,8 @@
-"""Normalize opengrep SARIF output to a findings JSONL.
+"""Normalize semgrep SARIF output to a findings JSONL.
 
 Port of scanners/code-scanning/scripts/normalize-code-scanning.py. Walks
-``target_dir`` for per-repo ``opengrep.json`` SARIF files and emits a
-single ``findings.jsonl`` byte-equivalent to the bash original.
+``target_dir`` for per-repo ``semgrep.sarif`` files and emits a single
+``findings.jsonl``.
 """
 from __future__ import annotations
 
@@ -16,11 +16,9 @@ logger = logging.getLogger(__name__)
 
 _TEMP_PREFIX_RE = re.compile(r"^/tmp/tmp\.[^/]*/")
 
-_VALID_SEVERITIES = {"critical", "high", "medium", "low"}
-
 
 def _load_repo_metadata(repo_dir: Path) -> tuple[str, str, dict, dict]:
-    """Load shared per-repo metadata for engine normalization loops.
+    """Load shared per-repo metadata for the semgrep normalization loop.
 
     Returns (commit_sha, html_url, context, reachability) with safe defaults
     when files are absent or malformed.
@@ -164,60 +162,10 @@ def normalize_file(
                 "imports": ctx_entry.get("imports"),
                 "file_class": file_class,
                 "reachability": reachability.get(ctx_key),
-                "engine": "opengrep",
+                "engine": "semgrep",
             })
 
     return findings, file_rules
-
-
-def _normalize_joern_finding(
-    raw: dict[str, Any],
-    repo: str,
-    commit: str,
-    html_url: str,
-    context: dict,
-    reachability: dict,
-) -> dict[str, Any]:
-    """Convert one Joern adapter output entry to the Aegis finding shape."""
-    file_path = raw.get("file", "")
-    start_line = int(raw.get("line", 0) or 0)
-    cwe_raw = raw.get("cwe", "")
-    cwe_list = [cwe_raw] if cwe_raw else []
-
-    stripped_uri = _TEMP_PREFIX_RE.sub("", file_path)
-    ctx_key = f"{stripped_uri}:{start_line}"
-    ctx_entry = context.get(ctx_key, {})
-    file_class = ctx_entry.get("file_class", "source")
-
-    severity = raw.get("severity", "medium")
-    if severity not in _VALID_SEVERITIES:
-        severity = "medium"
-
-    return {
-        "repo_full_name": repo,
-        "file_path": file_path,
-        "start_line": start_line,
-        "end_line": start_line,
-        "rule_id": raw.get("rule_id", ""),
-        "rule_name": raw.get("title", "") or raw.get("rule_id", ""),
-        "severity": severity,
-        "confidence": "high",
-        "category": "security",
-        "cwe": cwe_list,
-        "message": raw.get("title", ""),
-        "snippet": "",
-        "fix_suggestion": None,
-        "commit_sha": commit,
-        "stateCandidate": "open",
-        "code_flows": None,
-        "code_window": ctx_entry.get("code_window"),
-        "imports": ctx_entry.get("imports"),
-        "file_class": file_class,
-        "reachability": reachability.get(ctx_key),
-        "engine": "joern",
-        "dataflow_trace": raw.get("dataflow_trace", []),
-        "repo_html_url": html_url if html_url else None,
-    }
 
 
 def normalize_code_scanning_output(
@@ -233,9 +181,6 @@ def normalize_code_scanning_output(
     """
     target = Path(target_dir)
     raw_dir = target
-    legacy_dir = target / "runs" / run_id / "raw"
-    if legacy_dir.is_dir() and any(legacy_dir.rglob("opengrep.json")):
-        raw_dir = legacy_dir
     findings_file = target / "findings.jsonl"
 
     total = 0
@@ -243,7 +188,7 @@ def normalize_code_scanning_output(
     active_rules: set[str] = set()
 
     with open(findings_file, "w") as out:
-        for raw_file in sorted(raw_dir.rglob("opengrep.json")):
+        for raw_file in sorted(raw_dir.rglob("semgrep.sarif")):
             repo_dir = raw_file.parent
             repo = str(repo_dir.relative_to(raw_dir))
             commit, html_url, context, reachability = _load_repo_metadata(repo_dir)
@@ -254,39 +199,14 @@ def normalize_code_scanning_output(
                 )
                 active_rules.update(file_rules)
                 for f in findings:
+                    f["engine"] = "semgrep"
                     if html_url:
                         f["repo_html_url"] = html_url
                     out.write(json.dumps(f, separators=(",", ":")) + "\n")
                     total += 1
             except Exception as e:  # noqa: BLE001
                 errors += 1
-                logger.warning("[!] Failed: %s - %s", repo, e)
-
-        for joern_file in sorted(raw_dir.rglob("joern_findings.json")):
-            repo_dir = joern_file.parent
-            repo = str(repo_dir.relative_to(raw_dir))
-            commit, html_url, context, reachability = _load_repo_metadata(repo_dir)
-
-            try:
-                payload = json.loads(joern_file.read_text())
-            except Exception as e:  # noqa: BLE001
-                errors += 1
-                logger.warning("[!] Failed joern normalize: %s - %s", repo, e)
-                continue
-
-            for raw in payload.get("findings", []):
-                try:
-                    f = _normalize_joern_finding(
-                        raw, repo, commit, html_url, context, reachability
-                    )
-                except Exception:  # noqa: BLE001
-                    logger.warning("[!] Failed joern entry in %s: %r", repo, raw)
-                    errors += 1
-                    continue
-                if f["file_class"] in ("vendor", "generated"):
-                    continue
-                out.write(json.dumps(f, separators=(",", ":")) + "\n")
-                total += 1
+                logger.warning("[!] Failed semgrep normalize: %s - %s", repo, e)
 
     active_rules_file = Path(target_dir) / "active_rules.json"
     active_rules_file.write_text(json.dumps(sorted(active_rules)))

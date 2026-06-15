@@ -6,6 +6,10 @@ import { TeamImagesTab } from "./TeamImagesTab"
 import { TeamRepositoriesTab } from "./TeamRepositoriesTab"
 import { deleteOrganisationTeam, updateOrganisationTeam } from "@/lib/client/settings-api"
 import { Dialog } from "@/components/layout/Dialog"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { NavTabs } from "@/components/ui/NavTabs"
+import { Textarea } from "@/components/ui/Textarea"
 
 type Tab = "repositories" | "images"
 
@@ -118,10 +122,9 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
               <label className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                 Team Name
               </label>
-              <input
+              <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="e.g. Platform Team"
                 autoFocus
               />
@@ -130,26 +133,28 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
               <label className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                 Description
               </label>
-              <textarea
+              <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 resize-none"
+                className="resize-none"
                 placeholder="What does this team do?"
               />
             </div>
             {error && <p className="text-xs text-[var(--color-severity-critical)]">{error}</p>}
             <div className="flex gap-2">
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleSave}
                 disabled={submitting}
-                className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+                isLoading={submitting}
               >
-                {submitting ? "Saving..." : "Save Changes"}
-              </button>
-              <button
-                type="button"
+                {submitting ? "Saving…" : "Save Changes"}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   setIsEditing(false)
                   setName(team.name)
@@ -157,10 +162,9 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
                   setError(null)
                 }}
                 disabled={submitting}
-                className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -176,24 +180,27 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
               </div>
               {canEdit && (
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    iconOnly
                     onClick={() => setIsEditing(true)}
-                    className="rounded-lg p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] transition-colors"
                     aria-label="Edit team details"
                   >
                     {ICON_PEN}
-                  </button>
+                  </Button>
                   {team.source !== "github" && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
                       onClick={() => setShowDeleteDialog(true)}
                       disabled={submitting}
-                      className="rounded-lg p-1.5 text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)] transition-colors disabled:opacity-50"
                       aria-label="Delete team"
+                      className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
                     >
                       {ICON_TRASH}
-                    </button>
+                    </Button>
                   )}
                 </div>
               )}
@@ -210,30 +217,16 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
         </div>
       </div>
 
-      <div className="mt-6 border-b border-[var(--color-border)] flex gap-1">
-        <button
-          type="button"
-          onClick={() => setTab("repositories")}
-          className={`-mb-px border-b-2 px-3 py-2.5 text-sm transition-colors ${
-            tab === "repositories"
-              ? "border-[var(--color-accent)] font-semibold text-[var(--color-text-primary)]"
-              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-          }`}
-        >
-          Repositories
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("images")}
-          className={`-mb-px border-b-2 px-3 py-2.5 text-sm transition-colors ${
-            tab === "images"
-              ? "border-[var(--color-accent)] font-semibold text-[var(--color-text-primary)]"
-              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-          }`}
-        >
-          Container Registry
-        </button>
-      </div>
+      <NavTabs
+        ariaLabel="Team configuration"
+        tabs={[
+          { id: "repositories", label: "Repositories" },
+          { id: "images", label: "Container Registry" },
+        ]}
+        activeTab={tab}
+        onChange={setTab}
+        containerClassName="mt-6 bg-transparent px-0"
+      />
 
       <div className="mt-6">
         {tab === "repositories" && (

@@ -9,12 +9,48 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
+from src.connectors.base import BaseIngester, TestResult
+from src.connectors.registry import register_connector
+from src.connectors.webhooks.signature import verify_hmac_sha256
 from src.shared.event_publisher import get_event_publisher
 from src.integrations.normalizer import normalize_bitbucket_pr, normalize_bitbucket_push
-from src.integrations.signature import verify_bitbucket_signature
+
+
+@register_connector
+class BitbucketIngester(BaseIngester):
+    """Inbound Bitbucket Cloud webhook ingester — repo:push and pullrequest:* events."""
+
+    id = "bitbucket-webhook"
+    name = "Bitbucket Webhook"
+    category = "ci"
+    description = "Receive repo:push and pull-request events from Bitbucket Cloud"
+    version = "v1.0"
+    status = "stable"
+    icon_slug = "bitbucket"
+
+    def signature_header(self) -> str:
+        return "X-Hub-Signature"
+
+    def verify_signature(self, body: bytes, header: str) -> bool:
+        return verify_hmac_sha256(body, header, os.getenv("BITBUCKET_WEBHOOK_SECRET", ""))
+
+    def normalize(self, body: bytes) -> object:
+        """Return the parsed JSON payload. Provider-specific event dispatch
+        happens in the FastAPI route — see bitbucket_webhook() below."""
+        import json
+        return json.loads(body)
+
+    def test(self) -> TestResult:
+        if not os.getenv("BITBUCKET_WEBHOOK_SECRET"):
+            return TestResult(ok=False, message="BITBUCKET_WEBHOOK_SECRET is not configured")
+        return TestResult(ok=True)
+
+
+_INGESTER = BitbucketIngester()
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +66,7 @@ async def bitbucket_webhook(
     """Receive a signed webhook event from Bitbucket Cloud."""
     body = await request.body()
 
-    if not verify_bitbucket_signature(body, x_hub_signature):
+    if not _INGESTER.verify_signature(body, x_hub_signature):
         logger.warning("bitbucket.webhook: signature verification failed")
         raise HTTPException(status_code=401, detail="Invalid signature")
 

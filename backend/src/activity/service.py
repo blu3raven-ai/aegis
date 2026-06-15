@@ -134,8 +134,8 @@ def _audit_event_type(action: str) -> str:
 class ActivityService:
     def list_recent(
         self,
-        org_id: str,
         *,
+        asset_ids: list[str],
         types: list[str] | None = None,
         repo_id: str | None = None,
         since: datetime | None = None,
@@ -143,7 +143,14 @@ class ActivityService:
         limit: int = _DEFAULT_LIMIT,
         cursor: str | None = None,
     ) -> tuple[list[ActivityEvent], str | None]:
-        """Return (events, next_cursor) for the given org."""
+        """Return (events, next_cursor) scoped to ``asset_ids``.
+
+        Empty ``asset_ids`` short-circuits to an empty page — fail-closed for
+        viewers with no team access.
+        """
+        if not asset_ids:
+            return [], None
+
         limit = max(1, min(limit, _MAX_LIMIT))
 
         # Decode cursor to determine the cutoff point for keyset pagination.
@@ -154,7 +161,7 @@ class ActivityService:
         events = run_db(
             lambda session: self._query(
                 session,
-                org_id=org_id,
+                asset_ids=asset_ids,
                 types=types,
                 repo_id=repo_id,
                 since=since,
@@ -179,7 +186,7 @@ class ActivityService:
     async def _query(
         self,
         session: AsyncSession,
-        org_id: str,
+        asset_ids: list[str],
         types: list[str] | None,
         repo_id: str | None,
         since: datetime | None,
@@ -199,7 +206,7 @@ class ActivityService:
         if want_findings:
             results.extend(
                 await self._query_finding_events(
-                    session, org_id=org_id, types=types,
+                    session, asset_ids=asset_ids, types=types,
                     repo_id=repo_id, since=since, until=until,
                     cursor_at=cursor_at, limit=limit,
                 )
@@ -208,7 +215,7 @@ class ActivityService:
         if want_scans:
             results.extend(
                 await self._query_scan_runs(
-                    session, org_id=org_id, types=types,
+                    session, asset_ids=asset_ids, types=types,
                     repo_id=repo_id, since=since, until=until,
                     cursor_at=cursor_at, limit=limit,
                 )
@@ -217,7 +224,7 @@ class ActivityService:
         if want_audit:
             results.extend(
                 await self._query_audit_events(
-                    session, org_id=org_id, types=types,
+                    session, types=types,
                     since=since, until=until,
                     cursor_at=cursor_at, limit=limit,
                 )
@@ -230,7 +237,7 @@ class ActivityService:
     async def _query_finding_events(
         self,
         session: AsyncSession,
-        org_id: str,
+        asset_ids: list[str],
         types: list[str] | None,
         repo_id: str | None,
         since: datetime | None,
@@ -243,7 +250,7 @@ class ActivityService:
             select(FindingEvent, Finding, Asset)
             .join(Finding, FindingEvent.finding_id == Finding.id)
             .join(Asset, Asset.id == Finding.asset_id)
-            .where(FindingEvent.org == org_id)
+            .where(Finding.asset_id.in_(asset_ids))
         )
 
         # repo_id filters on Asset.display_name (canonical "owner/repo" form for
@@ -291,7 +298,7 @@ class ActivityService:
     async def _query_scan_runs(
         self,
         session: AsyncSession,
-        org_id: str,
+        asset_ids: list[str],
         types: list[str] | None,
         repo_id: str | None,
         since: datetime | None,
@@ -300,7 +307,7 @@ class ActivityService:
         limit: int,
     ) -> list[ActivityEvent]:
         stmt = select(ScanRun).where(
-            ScanRun.metadata_json["org_label"].astext == org_id,
+            ScanRun.asset_id.in_(asset_ids),
             ScanRun.status.in_(["completed", "failed", "error"]),
         )
 
@@ -346,14 +353,19 @@ class ActivityService:
     async def _query_audit_events(
         self,
         session: AsyncSession,
-        org_id: str,
         types: list[str] | None,
         since: datetime | None,
         until: datetime | None,
         cursor_at: datetime | None,
         limit: int,
     ) -> list[ActivityEvent]:
-        # Only surface actions that map to a known activity type.
+        # AuditEvent has no asset_id column — these are org-wide signals (KEV
+        # adds, CVE intel, integration changes) intentionally returned without
+        # asset-level scoping. The empty-asset_ids fail-closed check in
+        # list_recent ensures viewers with no team access never reach this
+        # method, which is the right boundary for the present multi-tenant
+        # model. Per-asset audit scoping would need an audit_events schema
+        # change.
         relevant_actions = [
             "integration.connected",
             "integration.disconnected",
@@ -366,10 +378,7 @@ class ActivityService:
         ]
         stmt = (
             select(AuditEvent)
-            .where(
-                AuditEvent.org_id == org_id,
-                AuditEvent.action.in_(relevant_actions),
-            )
+            .where(AuditEvent.action.in_(relevant_actions))
         )
 
         ts_col = AuditEvent.occurred_at

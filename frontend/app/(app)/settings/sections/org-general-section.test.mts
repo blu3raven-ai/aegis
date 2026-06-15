@@ -18,35 +18,49 @@ test("OrgGeneralSection no longer renders the ComingSoonNote", () => {
 })
 
 test("OrgGeneralSection renders the org-level fields", () => {
-  for (const label of [
-    "Organization name",
-    "Slug",
-    "Logo",
-    "Default time zone",
-    "Data residency",
-    "Security contact",
-  ]) {
+  for (const label of ["Organization name", "Logo"]) {
     assert.match(SRC, new RegExp(`label="${label}"`))
   }
 })
 
-test("OrgGeneralSection sanitises slug input to lowercase + dashes", () => {
-  // The slug is the URL identifier — anything other than [a-z0-9-] must be
-  // stripped on input so we don't end up with surprises in URLs.
-  assert.match(SRC, /toLowerCase\(\)\.replace\(\/\[\^a-z0-9-\]\/g, ""\)/)
+test("OrgGeneralSection drops dead rows", () => {
+  for (const dropped of [
+    'label="Slug"',
+    'label="Data residency"',
+    'label="Subtitle"',
+    'label="Default time zone"',
+    'label="Security contact"',
+    "Locked after the first scan",
+  ]) {
+    assert.doesNotMatch(SRC, new RegExp(dropped))
+  }
 })
 
-test("OrgGeneralSection warns that residency is locked after first scan", () => {
-  // This is a real constraint of the backend's data partitioning; making it
-  // visible in the UI prevents support tickets.
-  assert.match(SRC, /Locked after the first scan/)
+test("OrgGeneralSection sources state from useOrgSettings", () => {
+  assert.match(SRC, /from\s+"@\/lib\/client\/settings\/use-org-settings"/)
+  assert.match(SRC, /useOrgSettings\(\)/)
 })
 
-test("OrgGeneralSection splits identity and defaults into separate cards", () => {
-  // Two SettingsCard inner cards group identity (name/slug/logo) and
-  // defaults (timezone/residency/contact) so the long form reads as two
-  // short cards, each with its own sub-heading.
-  assert.match(SRC, /from\s+"@\/components\/settings\/SettingsCard"/)
-  assert.match(SRC, /heading="Identity"/)
-  assert.match(SRC, /heading="Defaults"/)
+test("OrgGeneralSection registers with the global SaveBar provider", () => {
+  assert.match(SRC, /from\s+"@\/app\/\(app\)\/settings\/save-bar\/SaveBarProvider"/)
+  assert.match(SRC, /useSaveBarSection\(/)
+})
+
+test("OrgGeneralSection wires logo upload and clear via the hook helpers", () => {
+  assert.match(SRC, /setOrgLogo/)
+  assert.match(SRC, /clearOrgLogo/)
+})
+
+test("OrgGeneralSection shows Blu3Raven as the input placeholder only", () => {
+  assert.match(SRC, /placeholder="Blu3Raven"/)
+  assert.doesNotMatch(SRC, /=== "Blu3Raven"/)
+})
+
+test("OrgGeneralSection hints that a blank name uses the default branding", () => {
+  assert.match(SRC, /default Aegis branding/i)
+  assert.match(SRC, /Leave blank/i)
+})
+
+test("OrgGeneralSection clears name to null when input is empty", () => {
+  assert.match(SRC, /name: e\.target\.value \|\| null/)
 })

@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react"
 import { RUNNERS_API } from "@/lib/shared/api-paths"
 import { apiClient } from "@/lib/client/api-client.ts"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { Sheet } from "@/components/ui/Sheet"
 
 interface Props {
+  open: boolean
   portalUrl: string
   onClose: () => void
 }
@@ -35,7 +38,7 @@ function CopyableBlock({ text, label }: { text: string; label: string }) {
   )
 }
 
-export function AddRunnerModal({ portalUrl, onClose }: Props) {
+export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
   const [token, setToken] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [remainingSeconds, setRemainingSeconds] = useState<number>(600)
@@ -43,6 +46,7 @@ export function AddRunnerModal({ portalUrl, onClose }: Props) {
   const [platform, setPlatform] = useState<"linux" | "macos">("linux")
 
   useEffect(() => {
+    if (!open) return
     async function generate() {
       try {
         const data = await apiClient<{ token: string; expiresAt: string }>(RUNNERS_API.tokens, { method: "POST" })
@@ -53,7 +57,7 @@ export function AddRunnerModal({ portalUrl, onClose }: Props) {
       }
     }
     void generate()
-  }, [])
+  }, [open])
 
   useEffect(() => {
     if (!expiresAt) return
@@ -74,81 +78,58 @@ export function AddRunnerModal({ portalUrl, onClose }: Props) {
   const expired = remainingSeconds <= 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)]" onClick={onClose}>
-      <div
-        className="mx-4 w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">Add runner</h3>
-            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              Run these commands on your remote machine.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
-          >
-            Close
-          </button>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Add runner"
+      description="Run these commands on your remote machine."
+      size="md"
+    >
+      {error ? (
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical)]">
+          {error}
         </div>
-
-        {error ? (
-          <div className="mt-4 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical)]">
-            {error}
+      ) : (
+        <div className="space-y-4">
+          {/* Token expiry countdown */}
+          <div className={`flex items-center gap-2 text-xs font-medium ${expired ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-secondary)]"}`}>
+            <span className={`h-2 w-2 rounded-full ${expired ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-status-ok)]"}`} />
+            {expired
+              ? "Token expired — close and generate a new one"
+              : `Token expires in ${minutes}:${String(seconds).padStart(2, "0")}`
+            }
           </div>
-        ) : (
-          <div className="mt-6 space-y-4">
-            {/* Token expiry countdown */}
-            <div className={`flex items-center gap-2 text-xs font-medium ${expired ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-secondary)]"}`}>
-              <span className={`h-2 w-2 rounded-full ${expired ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-status-ok)]"}`} />
-              {expired
-                ? "Token expired — close and generate a new one"
-                : `Token expires in ${minutes}:${String(seconds).padStart(2, "0")}`
-              }
-            </div>
 
-            {/* Platform tabs */}
-            <div className="flex gap-2">
-              {(["linux", "macos"] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPlatform(p)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${
-                    platform === p
-                      ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
-                      : "border-[var(--color-border)] text-[var(--color-text-secondary)]"
-                  }`}
-                >
-                  {p === "linux" ? "Linux" : "macOS"}
-                </button>
-              ))}
-            </div>
+          <SegmentedControl
+            ariaLabel="Platform"
+            value={platform}
+            onChange={setPlatform}
+            options={[
+              { id: "linux", label: "Linux" },
+              { id: "macos", label: "macOS" },
+            ]}
+          />
 
-            <CopyableBlock
-              label="1. Install dependencies"
-              text="pip install httpx click"
-            />
+          <CopyableBlock
+            label="1. Install dependencies"
+            text="pip install httpx click"
+          />
 
-            <CopyableBlock
-              label="2. Configure"
-              text={configureCmd}
-            />
+          <CopyableBlock
+            label="2. Configure"
+            text={configureCmd}
+          />
 
-            <CopyableBlock
-              label="3. Start"
-              text="python -m runner.vuln_runner start"
-            />
+          <CopyableBlock
+            label="3. Start"
+            text="python -m runner.vuln_runner start"
+          />
 
-            <p className="text-xs text-[var(--color-text-secondary)]">
-              After the runner connects, it will appear as "Pending Approval". An admin must approve it before it can receive scan jobs.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
+          <p className="text-xs text-[var(--color-text-secondary)]">
+            After the runner connects, it will appear as &ldquo;Pending Approval&rdquo;. An admin must approve it before it can receive scan jobs.
+          </p>
+        </div>
+      )}
+    </Sheet>
   )
 }

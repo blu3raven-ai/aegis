@@ -2,7 +2,7 @@
 
 Tests verify that _pull_and_dispatch() skips dispatching once drain is active,
 and that stop() triggers drain + waits for in-flight count to reach zero.
-All tests mock I/O so they run without Docker, Redis, or a live backend.
+All tests mock I/O so they run without Docker or a live backend.
 """
 from __future__ import annotations
 
@@ -145,7 +145,7 @@ class TestStopTriggersDrain:
 
 class TestDrainManagerIntegration:
     def test_agent_has_drain_manager(self):
-        from runner.graceful_drain import GracefulDrainManager
+        from runner.core.graceful_drain import GracefulDrainManager
         agent = _make_agent()
         assert isinstance(agent._drain, GracefulDrainManager)
 
@@ -156,6 +156,5 @@ class TestDrainManagerIntegration:
 
     def test_drain_timeout_from_env(self, monkeypatch):
         monkeypatch.setenv("RUNNER_DRAIN_TIMEOUT_SECONDS", "60")
-        with patch.dict(os.environ, {"REDIS_URL": ""}, clear=False):
-            agent = RunnerAgent(_minimal_config())
+        agent = RunnerAgent(_minimal_config())
         assert agent._drain._drain_timeout == 60

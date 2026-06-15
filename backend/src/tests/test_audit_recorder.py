@@ -34,7 +34,6 @@ def test_record_persists_event(recorder):
             resource_type="notification_destination",
             resource_id="42",
             actor=ActorInfo(user_id="user-1", username="alice", email="alice@example.com", role="admin"),
-            org_id="acme-org",
             changes={"before": None, "after": {"name": "slack-dev"}},
             metadata={"extra": "info"},
             request=RequestContext(method="POST", path="/api/v1/notifications/destinations", ip="1.2.3.4", user_agent="test-agent", status_code=201),
@@ -49,7 +48,6 @@ def test_record_persists_event(recorder):
     assert evt.actor_username == "alice"
     assert evt.actor_email == "alice@example.com"
     assert evt.actor_role == "admin"
-    assert evt.org_id == "acme-org"
     assert evt.changes == {"before": None, "after": {"name": "slack-dev"}}
     assert evt.metadata_json == {"extra": "info"}
     assert evt.request_method == "POST"

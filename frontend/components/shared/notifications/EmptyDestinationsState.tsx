@@ -1,5 +1,7 @@
 // Shown when no destinations exist
 
+import { Button } from "@/components/ui/Button"
+
 export function EmptyDestinationsState({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface)] py-16">
@@ -25,13 +27,9 @@ export function EmptyDestinationsState({ onAdd }: { onAdd: () => void }) {
           Route critical events to Slack, a webhook, or email.
         </p>
       </div>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]"
-      >
+      <Button variant="primary" size="md" onClick={onAdd}>
         Add your first destination
-      </button>
+      </Button>
     </div>
   )
 }

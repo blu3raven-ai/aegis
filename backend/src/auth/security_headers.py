@@ -50,6 +50,32 @@ def _build_csp(script_hashes: list[str]) -> str:
     return "; ".join(parts)
 
 
+def _build_docs_csp() -> str:
+    """Relaxed CSP for Swagger UI routes (self-hosted assets at /swagger).
+
+    Swagger UI ships an inline initialiser script and renders via innerHTML,
+    which the strict app-wide CSP (strict-dynamic + Trusted Types) blocks.
+    The exemption is scoped to /docs only; everything else keeps the strict
+    policy. No external host allowlist is needed — bundle + CSS are served
+    from /swagger on the same origin.
+    """
+    return "; ".join([
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https:",
+        "font-src 'self' data:",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "object-src 'none'",
+    ])
+
+
+def _is_docs_path(path: str) -> bool:
+    return path == "/docs" or path.startswith("/docs/")
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Adds defense-in-depth security headers to every response.
 
@@ -64,6 +90,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, *, script_hashes: list[str]) -> None:
         super().__init__(app)
         self._csp = _build_csp(script_hashes)
+        self._docs_csp = _build_docs_csp()
 
     async def dispatch(
         self,
@@ -76,5 +103,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Content-Security-Policy"] = self._csp
+        if _is_docs_path(request.url.path):
+            response.headers["Content-Security-Policy"] = self._docs_csp
+        else:
+            response.headers["Content-Security-Policy"] = self._csp
         return response

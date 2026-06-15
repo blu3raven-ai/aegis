@@ -1,6 +1,7 @@
 "use client"
 
 import { RoleRecord } from "@/lib/client/settings-api"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { format } from "date-fns"
 
 interface RolesTableProps {
@@ -30,32 +31,33 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-[var(--color-surface-raised)]/50 text-[var(--color-text-secondary)] border-b border-[var(--color-border)]">
-            <tr>
-              <th className="px-6 py-3 font-medium uppercase tracking-[0.22em] text-[11px] w-[15%]">Name</th>
-              <th className="px-6 py-3 font-medium uppercase tracking-[0.22em] text-[11px] w-[45%]">Permissions</th>
-              <th className="px-6 py-3 font-medium uppercase tracking-[0.22em] text-[11px] w-[15%]">Type</th>
-              <th className="px-6 py-3 font-medium uppercase tracking-[0.22em] text-[11px] w-[15%]">Created</th>
-              <th className="px-6 py-3 font-medium uppercase tracking-[0.22em] text-right text-[11px] w-[10%]">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-border)]">
+        <Table>
+          <Thead>
+            <Tr>
+              <Th className="px-6 w-[15%]">Name</Th>
+              <Th className="px-6 w-[45%]">Permissions</Th>
+              <Th className="px-6 w-[15%]">Type</Th>
+              <Th className="px-6 w-[15%]">Created</Th>
+              <Th className="px-6 text-right w-[10%]">Actions</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
             {roles.map((role) => (
-              <tr 
-                key={role.id} 
+              <Tr
+                key={role.id}
                 onClick={() => onSelectRole(role)}
-                className="hover:bg-[var(--color-surface-raised)]/30 cursor-pointer transition-colors group"
+                interactive
+                className="cursor-pointer group"
               >
-                <td className="px-6 py-4 font-medium text-[var(--color-text-primary)] whitespace-nowrap">
+                <Td className="px-6 py-4 font-medium text-[var(--color-text-primary)] whitespace-nowrap">
                   {role.name}
-                </td>
-                <td className="px-6 py-4 text-[var(--color-text-secondary)]">
+                </Td>
+                <Td className="px-6 py-4 text-[var(--color-text-secondary)]">
                   <div className="text-xs capitalize" title={role.permissions.join(", ")}>
                     {formatPermissions(role.permissions)}
                   </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                </Td>
+                <Td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex gap-2">
                     {role.isSystem ? (
                       <span className="inline-flex items-center rounded-full bg-[var(--color-accent-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-accent)] border border-[var(--color-accent-border)] uppercase tracking-tight">
@@ -67,11 +69,11 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                       </span>
                     )}
                   </div>
-                </td>
-                <td className="px-6 py-4 text-[var(--color-text-secondary)] whitespace-nowrap text-[11px]">
+                </Td>
+                <Td className="px-6 py-4 text-[var(--color-text-secondary)] whitespace-nowrap text-[11px]">
                   {format(new Date(role.createdAt), "MMM d, yyyy")}
-                </td>
-                <td className="px-6 py-4 text-right whitespace-nowrap">
+                </Td>
+                <Td className="px-6 py-4 text-right whitespace-nowrap">
                   <div className="flex items-center justify-end gap-1">
                     {/* Copy button: greyed out if locked */}
                     <button
@@ -105,11 +107,11 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                       </svg>
                     </button>
                   </div>
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             ))}
-          </tbody>
-        </table>
+          </Tbody>
+        </Table>
       </div>
     </div>
   )

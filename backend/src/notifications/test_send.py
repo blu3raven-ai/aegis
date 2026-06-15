@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from src.notifications.senders.base import BaseSender, SendResult
+from src.connectors.base import BaseSender, SendResult
 from src.notifications.senders.email import EmailSender
 from src.notifications.senders.slack import SlackSender
 from src.notifications.senders.webhook import GenericWebhookSender
@@ -38,7 +38,6 @@ def _test_summary(destination_type: str) -> str:
 def build_test_payload(
     destination_type: str,
     destination_name: str,
-    org_id: str,
 ) -> dict[str, Any]:
     """Return a sender-ready payload for a manual test send.
 
@@ -71,10 +70,7 @@ def build_test_payload(
                     "elements": [
                         {
                             "type": "mrkdwn",
-                            "text": (
-                                f"destination: *{destination_name}* | "
-                                f"org: *{org_id}* | test"
-                            ),
+                            "text": f"destination: *{destination_name}* | test",
                         }
                     ],
                 },
@@ -86,7 +82,6 @@ def build_test_payload(
             "source": "aegis",
             "test": True,
             "event_type": "aegis.test_notification",
-            "org_id": org_id,
             "destination_name": destination_name,
             "timestamp_utc": timestamp,
             "summary": summary,
@@ -97,7 +92,6 @@ def build_test_payload(
             summary,
             "",
             f"Destination: {destination_name}",
-            f"Organisation: {org_id}",
             f"Timestamp: {timestamp}",
         ]
         return {"subject": _TEST_SUBJECT, "body": "\n".join(body_lines)}

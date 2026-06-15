@@ -5,15 +5,15 @@ src.shared.analytics.
 """
 from __future__ import annotations
 
-import json
+from datetime import date as _date
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.helpers import run_db
-from src.db.models import Asset, Finding, Repo
+from src.db.models import Asset, Finding
 from src.shared.analytics import AnalyticsPayload, build_analytics
 from src.shared.archived_filter import exclude_archived
 
@@ -27,11 +27,11 @@ def _finding_to_dict(f: Finding, asset: Asset | None = None) -> dict[str, Any]:
     }
 
 
-def _repo_to_dict(r: Repo, asset: Asset | None = None) -> dict[str, Any]:
+def _asset_to_repo_dict(asset: Asset) -> dict[str, Any]:
     return {
-        "id": r.id,
-        "full_name": (asset.display_name if asset is not None else ""),
-        "archived": False,
+        "id": asset.id,
+        "full_name": asset.display_name or "",
+        "archived": bool(asset.archived),
         "disabled": False,
     }
 
@@ -56,7 +56,7 @@ def get_posture_snapshot(
         if asset_ids is not None:
             finding_filter_open = Finding.asset_id.in_(asset_ids)
             finding_filter_fixed = Finding.asset_id.in_(asset_ids)
-            repo_filter = Repo.asset_id.in_(asset_ids)
+            asset_filter = Asset.id.in_(asset_ids)
         else:
             raise ValueError(
                 "get_posture_snapshot: org-only path not supported after Plan D; supply asset_ids"
@@ -78,15 +78,13 @@ def get_posture_snapshot(
                 Finding,
             )
         )).all()
-        repo_rows = (await session.execute(
-            select(Repo, Asset)
-            .join(Asset, Asset.id == Repo.asset_id)
-            .where(repo_filter)
-        )).all()
+        asset_rows = (await session.execute(
+            select(Asset).where(asset_filter)
+        )).scalars().all()
 
         open_dicts = [_finding_to_dict(f, a) for f, a in open_rows]
         fixed_dicts = [_finding_to_dict(f, a) for f, a in fixed_rows]
-        repo_dicts = [_repo_to_dict(r, a) for r, a in repo_rows]
+        repo_dicts = [_asset_to_repo_dict(a) for a in asset_rows]
 
         return build_analytics(
             open_findings=open_dicts,
@@ -97,26 +95,69 @@ def get_posture_snapshot(
     return run_db(_query)
 
 
-def upsert_posture_snapshot(org: str, payload: AnalyticsPayload) -> None:
-    """Write today's posture snapshot for the org. Safe to call multiple times — upserts."""
-    from dataclasses import asdict
+def compute_and_store_daily_snapshots(*, today: _date | None = None) -> int:
+    """Aggregate open findings per asset for ``today`` and upsert one row per asset.
 
-    # Always midnight UTC so (org, snapshot_at) stays unique per day
-    snap_at = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    payload_dict = asdict(payload)
+    Returns the number of asset rows written. Called daily by the scheduler at
+    midnight UTC; idempotent — calling twice on the same date replaces the row.
+    """
+    from sqlalchemy import case, func
+    from sqlalchemy.dialects.postgresql import insert
 
-    async def _upsert(session: AsyncSession) -> None:
-        await session.execute(
-            text("""
-                INSERT INTO posture_snapshots (org, snapshot_at, payload)
-                VALUES (:org, :snap_at, :payload::jsonb)
-                ON CONFLICT (org, snapshot_at)
-                DO UPDATE SET payload = EXCLUDED.payload
-            """),
-            {"org": org, "snap_at": snap_at, "payload": json.dumps(payload_dict)},
+    from src.db.models import PostureSnapshot
+
+    snapshot_date = today or datetime.now(timezone.utc).date()
+
+    async def _run(session: AsyncSession) -> int:
+        sev = func.lower(Finding.severity)
+        rows = (await session.execute(
+            select(
+                Finding.asset_id,
+                func.coalesce(func.sum(case((sev == "critical", 1), else_=0)), 0).label("critical"),
+                func.coalesce(func.sum(case((sev == "high", 1), else_=0)), 0).label("high"),
+                func.coalesce(func.sum(case((sev == "medium", 1), else_=0)), 0).label("medium"),
+                func.coalesce(func.sum(case((sev == "low", 1), else_=0)), 0).label("low"),
+            )
+            .where(Finding.state == "open", Finding.asset_id.isnot(None))
+            .group_by(Finding.asset_id)
+        )).all()
+
+        if not rows:
+            return 0
+
+        # Simple 0-100 ordering for the trend chart; the full Counts->RiskScore
+        # pipeline lives in src.shared.analytics for live dashboard reads.
+        def _risk(c: int, h: int, m: int, lo: int) -> int:
+            return min(100, c * 10 + h * 5 + m * 2 + lo)
+
+        values = [
+            {
+                "asset_id": r.asset_id,
+                "snapshot_date": snapshot_date,
+                "severity_critical": int(r.critical),
+                "severity_high": int(r.high),
+                "severity_medium": int(r.medium),
+                "severity_low": int(r.low),
+                "risk_score": _risk(int(r.critical), int(r.high), int(r.medium), int(r.low)),
+            }
+            for r in rows
+        ]
+
+        stmt = insert(PostureSnapshot).values(values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["asset_id", "snapshot_date"],
+            set_={
+                "severity_critical": stmt.excluded.severity_critical,
+                "severity_high": stmt.excluded.severity_high,
+                "severity_medium": stmt.excluded.severity_medium,
+                "severity_low": stmt.excluded.severity_low,
+                "risk_score": stmt.excluded.risk_score,
+            },
         )
+        await session.execute(stmt)
+        return len(values)
 
-    run_db(_upsert)
+    return run_db(_run)
 
 
 def get_posture_by_team(
@@ -148,7 +189,7 @@ def get_posture_by_team(
             return []
         finding_filter_open = Finding.asset_id.in_(asset_ids)
         finding_filter_fixed = Finding.asset_id.in_(asset_ids)
-        repo_filter = Repo.asset_id.in_(asset_ids)
+        asset_filter = Asset.id.in_(asset_ids)
 
         # Map team → asset_ids via TeamAsset (replaces legacy TeamRepository)
         team_asset_rows = (await session.execute(
@@ -170,8 +211,8 @@ def get_posture_by_team(
                 Finding,
             )
         )).scalars().all()
-        all_repos = (await session.execute(
-            select(Repo).where(repo_filter)
+        all_assets = (await session.execute(
+            select(Asset).where(asset_filter)
         )).scalars().all()
 
         in_scope_teams = [t for t in teams if t.id in team_assets]
@@ -180,7 +221,7 @@ def get_posture_by_team(
             assets_in_team = set(team_assets[team.id])
             open_dicts = [_finding_to_dict(f) for f in all_open if f.asset_id in assets_in_team]
             fixed_dicts = [_finding_to_dict(f) for f in all_fixed if f.asset_id in assets_in_team]
-            repo_dicts = [_repo_to_dict(r) for r in all_repos if r.asset_id in assets_in_team]
+            repo_dicts = [_asset_to_repo_dict(a) for a in all_assets if a.id in assets_in_team]
 
             payload = build_analytics(
                 open_findings=open_dicts,
@@ -203,49 +244,59 @@ def get_posture_by_team(
 
 
 def get_posture_trend(
-    org: str | None = None,
+    org: str | None = None,  # kept for back-compat, ignored
     days: int = 30,
     *,
     asset_ids: list[str] | None = None,
 ) -> list[dict]:
-    """Return daily posture data points for the last ``days`` days.
+    """Return daily severity totals for the caller's accessible assets.
 
-    The trend table (posture_snapshots) is still keyed by org; when
-    ``asset_ids`` is supplied we recompute the snapshot live from Finding rows
-    rather than reading the pre-computed table, because the table has no
-    asset-scoped rows yet.
+    Asset-scoped: aggregates posture_snapshots rows WHERE asset_id IN asset_ids
+    GROUP BY snapshot_date. Empty asset_ids -> empty result. The legacy org-only
+    path is no longer supported (returns []).
     """
-    if asset_ids is None and org is None:
-        raise ValueError("either org or asset_ids is required")
+    from sqlalchemy import func
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    from src.db.models import PostureSnapshot
+
+    if asset_ids is None or not asset_ids:
+        return []
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date()
 
     async def _query(session: AsyncSession) -> list[dict]:
-        if asset_ids is not None:
-            # asset_ids path: trend table is org-keyed; return empty until the
-            # snapshot table gains asset-scoped rows (tracked separately).
-            return []
-
         rows = (await session.execute(
-            text("""
-                SELECT snapshot_at, payload
-                FROM posture_snapshots
-                WHERE org = :org AND snapshot_at >= :cutoff
-                ORDER BY snapshot_at ASC
-            """),
-            {"org": org, "cutoff": cutoff},
+            select(
+                PostureSnapshot.snapshot_date,
+                func.sum(PostureSnapshot.severity_critical).label("critical"),
+                func.sum(PostureSnapshot.severity_high).label("high"),
+                func.sum(PostureSnapshot.severity_medium).label("medium"),
+                func.sum(PostureSnapshot.severity_low).label("low"),
+                func.avg(PostureSnapshot.risk_score).label("risk_score"),
+            )
+            .where(
+                PostureSnapshot.asset_id.in_(asset_ids),
+                PostureSnapshot.snapshot_date >= cutoff,
+            )
+            .group_by(PostureSnapshot.snapshot_date)
+            .order_by(PostureSnapshot.snapshot_date.asc())
         )).all()
-        return [
-            {
-                "date":       r.snapshot_at.strftime("%Y-%m-%d"),
-                "risk_score": (r.payload.get("riskScore") or {}).get("score", 0),
-                "critical":   (r.payload.get("counts") or {}).get("critical", 0),
-                "high":       (r.payload.get("counts") or {}).get("high", 0),
-                "medium":     (r.payload.get("counts") or {}).get("medium", 0),
-                "low":        (r.payload.get("counts") or {}).get("low", 0),
-                "total":      (r.payload.get("counts") or {}).get("total", 0),
-            }
-            for r in rows
-        ]
+
+        out: list[dict] = []
+        for r in rows:
+            critical = int(r.critical or 0)
+            high = int(r.high or 0)
+            medium = int(r.medium or 0)
+            low = int(r.low or 0)
+            out.append({
+                "date":       r.snapshot_date.strftime("%Y-%m-%d"),
+                "risk_score": int(round(r.risk_score)) if r.risk_score is not None else 0,
+                "critical":   critical,
+                "high":       high,
+                "medium":     medium,
+                "low":        low,
+                "total":      critical + high + medium + low,
+            })
+        return out
 
     return run_db(_query)

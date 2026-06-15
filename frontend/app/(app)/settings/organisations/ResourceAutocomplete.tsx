@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { Input } from "@/components/ui/Input"
 
 interface ResourceAutocompleteProps {
   value: string
@@ -42,7 +43,7 @@ export function ResourceAutocomplete({
 
   return (
     <div className="relative space-y-2" ref={containerRef}>
-      <input
+      <Input
         value={value}
         onChange={(event) => {
           onChange(event.target.value)
@@ -51,7 +52,6 @@ export function ResourceAutocomplete({
         onFocus={handleFocus}
         onClick={() => setShowSuggestions(true)}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
       />
       {error && <p className="text-xs text-[var(--color-state-pending)]">{error}</p>}
       {showSuggestions && suggestions.length > 0 && (

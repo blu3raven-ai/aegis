@@ -286,7 +286,6 @@ def test_timeout_constants_are_positive_floats():
         _shared.TIMEOUT_SYFT_IMAGE,
         _shared.TIMEOUT_CDXGEN,
         _shared.TIMEOUT_TRUFFLEHOG,
-        _shared.TIMEOUT_BETTERLEAKS,
         _shared.TIMEOUT_OPENGREP,
     ]
     for c in constants:

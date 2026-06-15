@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
 
-from src.scans.models import FindingCounts, ScanDetailResponse
+from src.scans.models import FindingCounts, ScanDetailResponse, VerificationSummary
 from src.scans.service import get_scan
 from src.settings.router import require_permission
 
@@ -42,4 +42,8 @@ async def get_scan_endpoint(scan_id: str, request: Request) -> ScanDetailRespons
         finding_counts=FindingCounts(**detail.finding_counts) if detail.finding_counts else None,
         error=detail.error,
         archived=detail.archived,
+        verification_summary=(
+            VerificationSummary(**detail.verification_summary)
+            if detail.verification_summary else None
+        ),
     )

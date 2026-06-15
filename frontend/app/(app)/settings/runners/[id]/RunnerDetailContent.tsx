@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { RUNNERS_API } from "@/lib/shared/api-paths"
 import { apiClient } from "@/lib/client/api-client.ts"
-import { SaveBar } from "@/app/(app)/settings/SaveBar"
+import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
+import { Input } from "@/components/ui/Input"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import type { Runner, RunnerDetail, RunnerJob, HeartbeatEntry } from "../types"
 import { ResourceGauge } from "../ResourceGauge"
 import { HeartbeatGrid } from "../HeartbeatGrid"
@@ -147,6 +149,22 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
     setSaving(false)
   }
 
+  const isDirty =
+    runner != null && (maxConcurrent !== (runner.maxConcurrent ?? 1) || runnerName !== (runner.name ?? ""))
+
+  useSaveBarSection({
+    id: `runner-detail:${runnerId}`,
+    dirty: !!canEdit && isDirty,
+    saving,
+    onSave: handleSave,
+    onDiscard: () => {
+      if (runner) {
+        setMaxConcurrent(runner.maxConcurrent ?? 1)
+        setRunnerName(runner.name ?? "")
+      }
+    },
+  })
+
   // ─── Loading ──────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -261,30 +279,30 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
         <div>
           <p className={sectionHeadingClass}>Recent Jobs</p>
           <div className={`${cardClass} overflow-x-auto`}>
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)]">
-                <tr>
-                  <th className="px-4 py-2.5 font-semibold text-[var(--color-text-secondary)]">Tool</th>
-                  <th className="px-4 py-2.5 font-semibold text-[var(--color-text-secondary)]">Org</th>
-                  <th className="px-4 py-2.5 font-semibold text-[var(--color-text-secondary)]">Status</th>
-                  <th className="px-4 py-2.5 font-semibold text-[var(--color-text-secondary)]">Duration</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="text-xs">
+              <Thead>
+                <Tr>
+                  <Th className="py-2.5">Tool</Th>
+                  <Th className="py-2.5">Org</Th>
+                  <Th className="py-2.5">Status</Th>
+                  <Th className="py-2.5">Duration</Th>
+                </Tr>
+              </Thead>
+              <Tbody divided={false}>
                 {recentJobs.slice(0, 10).map((job) => (
-                  <tr key={job.id} className="border-b border-[var(--color-border)] last:border-0">
-                    <td className="px-4 py-2.5 text-[var(--color-text-primary)]">{job.jobType}</td>
-                    <td className="px-4 py-2.5 text-[var(--color-text-secondary)]">{job.org}</td>
-                    <td className={`px-4 py-2.5 font-medium ${JOB_STATUS_CLASS[job.status] ?? "text-[var(--color-text-tertiary)]"}`}>
+                  <Tr key={job.id} className="border-b border-[var(--color-border)] last:border-0">
+                    <Td className="py-2.5 text-[var(--color-text-primary)]">{job.jobType}</Td>
+                    <Td className="py-2.5 text-[var(--color-text-secondary)]">{job.org}</Td>
+                    <Td className={`py-2.5 font-medium ${JOB_STATUS_CLASS[job.status] ?? "text-[var(--color-text-tertiary)]"}`}>
                       {job.status}
-                    </td>
-                    <td className="px-4 py-2.5 tabular-nums text-[var(--color-text-secondary)]">
+                    </Td>
+                    <Td className="py-2.5 tabular-nums text-[var(--color-text-secondary)]">
                       {formatDuration(job.startedAt, job.completedAt)}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 ))}
-              </tbody>
-            </table>
+              </Tbody>
+            </Table>
           </div>
         </div>
       )}
@@ -315,32 +333,17 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
               </div>
             </SettingsRow>
             <SettingsRow label="Runner name" hint="Display name for this runner.">
-              <input
+              <Input
                 type="text"
                 value={runnerName}
                 onChange={(e) => setRunnerName(e.target.value)}
-                className="w-full max-w-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                className="max-w-xs"
               />
             </SettingsRow>
           </div>
         </div>
       )}
 
-      {/* Sticky save bar */}
-      {canEdit && (
-        <SaveBar
-          dirty={runner != null && (maxConcurrent !== (runner.maxConcurrent ?? 1) || runnerName !== (runner.name ?? ""))}
-          saved={saved}
-          onSave={handleSave}
-          onDiscard={() => {
-            if (runner) {
-              setMaxConcurrent(runner.maxConcurrent ?? 1)
-              setRunnerName(runner.name ?? "")
-            }
-          }}
-          saving={saving}
-        />
-      )}
     </div>
   )
 }

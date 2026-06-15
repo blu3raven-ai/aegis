@@ -58,8 +58,12 @@ describe("release detail content", () => {
     assert.doesNotMatch(content, /onNotifySlack=/)
   })
 
-  it("constrains layout to max-w-7xl like other top-level pages", () => {
-    assert.match(content, /max-w-7xl/)
+  it("stretches the page body to the full AppShell width", () => {
+    // Top-level pages render edge-to-edge under the sticky PageHeader; the
+    // empty-state branch keeps a narrow centered card. No mx-auto max-w-7xl
+    // wrapper on the main content (see DESIGN.md "Page Width").
+    assert.doesNotMatch(content, /mx-auto\s+flex\s+w-full\s+max-w-7xl/)
+    assert.doesNotMatch(content, /mx-auto\s+max-w-7xl/)
   })
 
   it("links not-found fallback to /releases", () => {
@@ -75,9 +79,10 @@ describe("release detail loading skeleton", () => {
 })
 
 describe("release detail error boundary", () => {
-  it("offers a reset action and a Go to releases CTA", () => {
-    assert.match(errorPage, /onClick=\{reset\}/)
-    assert.match(errorPage, /href="\/releases"/)
-    assert.match(errorPage, /Go to releases/)
+  it("delegates to PageErrorFallback with a Go-to-releases secondary action", () => {
+    assert.match(errorPage, /from\s+"@\/components\/shared\/PageErrorFallback"/)
+    assert.match(errorPage, /<PageErrorFallback/)
+    assert.match(errorPage, /href:\s*"\/releases"/)
+    assert.match(errorPage, /label:\s*"Go to releases"/)
   })
 })

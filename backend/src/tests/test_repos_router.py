@@ -130,6 +130,7 @@ def test_list_repos_passes_filters():
 
 def test_get_repo_returns_200():
     with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.repos.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.repos.service.RepoService.get_repo", return_value=_make_detail()):
         client = TestClient(_make_app())
         resp = client.get(f"/api/v1/repos/{_FAKE_ASSET_ID}")
@@ -140,6 +141,7 @@ def test_get_repo_returns_200():
 
 def test_get_repo_detail_shape():
     with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.repos.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.repos.service.RepoService.get_repo", return_value=_make_detail()):
         client = TestClient(_make_app())
         resp = client.get(f"/api/v1/repos/{_FAKE_ASSET_ID}")
@@ -150,6 +152,7 @@ def test_get_repo_detail_shape():
 
 def test_get_repo_not_found():
     with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.repos.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.repos.service.RepoService.get_repo", return_value=None):
         client = TestClient(_make_app())
         resp = client.get(f"/api/v1/repos/{_FAKE_ASSET_ID}")
@@ -157,16 +160,66 @@ def test_get_repo_not_found():
     assert "error" in resp.json()
 
 
-def test_get_repo_calls_service_with_correct_args():
+def test_get_repo_calls_service_with_scope():
     captured: dict = {}
 
-    def fake_get(asset_id):
+    def fake_get(asset_id, asset_ids):
         captured["asset_id"] = asset_id
+        captured["asset_ids"] = asset_ids
         return None
 
     with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.repos.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.repos.service.RepoService.get_repo", side_effect=fake_get):
         client = TestClient(_make_app())
         client.get(f"/api/v1/repos/{_FAKE_ASSET_ID}")
 
     assert captured["asset_id"] == _FAKE_ASSET_ID
+    assert captured["asset_ids"] == [_FAKE_ASSET_ID]
+
+
+def test_get_repo_404_when_asset_not_in_scope():
+    """Viewer with empty scope or non-matching scope must get 404, not detail."""
+    other_asset = "ffffffff-1111-2222-3333-444444444444"
+
+    captured: dict = {}
+
+    def fake_get(asset_id, asset_ids):
+        captured["asset_ids"] = asset_ids
+        # Service sees the out-of-scope asset_id and returns None.
+        return None
+
+    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.repos.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[other_asset])), \
+         patch("src.repos.service.RepoService.get_repo", side_effect=fake_get):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/repos/{_FAKE_ASSET_ID}")
+
+    assert resp.status_code == 404
+    assert captured["asset_ids"] == [other_asset]
+
+
+# ── POST /api/v1/repos/{asset_id}/scan ───────────────────────────────────────
+
+def test_trigger_scan_404_when_asset_not_in_scope():
+    """Caller with run_scans permission but no access to asset_id must get 404."""
+    other_asset = "ffffffff-1111-2222-3333-444444444444"
+
+    called = {"submit_scan": False}
+
+    async def fake_submit_scan(**kwargs):
+        called["submit_scan"] = True
+        return None
+
+    with patch("src.settings.router._resolve_effective_permissions", return_value={"run_scans"}), \
+         patch("src.repos.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[other_asset])), \
+         patch("src.repos.router.submit_scan", new=fake_submit_scan):
+        client = TestClient(_make_app())
+        resp = client.post(
+            f"/api/v1/repos/{_FAKE_ASSET_ID}/scan",
+            json={"commit_sha": "abc1234", "scanner_types": ["dependencies"]},
+        )
+
+    assert resp.status_code == 404
+    # submit_scan must not be reached when scope check rejects.
+    assert called["submit_scan"] is False

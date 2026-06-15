@@ -55,12 +55,12 @@ def test_dependencies_refresh_requires_appropriate_role(monkeypatch):
 
     # Viewer role should be denied
     viewer_client = make_authed_client(role="viewer", user_id="dep-refresh-viewer")
-    response = viewer_client.post("/dependencies/api/runs?org=test-org")
+    response = viewer_client.post("/api/v1/dependencies/runs?org=test-org")
     assert response.status_code == 403
 
     # Admin role should be ALLOWED (returns 202 Accepted)
     admin_client = make_authed_client(role="admin", user_id="dep-refresh-admin")
-    response = admin_client.post("/dependencies/api/runs?org=test-org")
+    response = admin_client.post("/api/v1/dependencies/runs?org=test-org")
     assert response.status_code == 202
 
 
@@ -80,12 +80,12 @@ def test_dependencies_cancel_requires_appropriate_role(monkeypatch):
 
     # Viewer role should be denied
     viewer_client = make_authed_client(role="viewer", user_id="dep-cancel-viewer")
-    response = viewer_client.post("/dependencies/api/runs/cancel?org=test-org")
+    response = viewer_client.post("/api/v1/dependencies/runs/cancel?org=test-org")
     assert response.status_code == 403
 
     # Admin role should be ALLOWED
     admin_client = make_authed_client(role="admin", user_id="dep-cancel-admin")
-    response = admin_client.post("/dependencies/api/runs/cancel?org=test-org")
+    response = admin_client.post("/api/v1/dependencies/runs/cancel?org=test-org")
     assert response.status_code == 200
 
 
@@ -95,5 +95,5 @@ def test_viewer_with_repo_scope_cannot_refresh_cache(monkeypatch):
 
     # Viewer WITH scope should still be denied refresh (privileged action)
     viewer_client = make_authed_client(role="viewer", user_id="dep-scope-viewer")
-    response = viewer_client.post("/dependencies/api/runs?org=octo")
+    response = viewer_client.post("/api/v1/dependencies/runs?org=octo")
     assert response.status_code == 403

@@ -13,6 +13,8 @@ import { apiClient } from "./api-client.ts"
 export type FindingSeverity = "critical" | "high" | "medium" | "low"
 export type FindingScanner = "deps" | "container" | "sast" | "secrets" | "iac"
 export type FindingState = "open" | "closed" | "dismissed" | "fixed"
+export type FindingVerdict = "confirmed" | "needs_verify" | "possible" | "ruled_out"
+export type FindingVerdictFilter = FindingVerdict | "legacy" | "all"
 export type FindingSort =
   | "severity"
   | "created_at"
@@ -48,6 +50,8 @@ export interface Finding {
   risk_score?: number | null
   /** Assigned reviewer's user id, or null when unassigned. */
   assignee_user_id?: string | null
+  /** LLM verification verdict, or null for pre-verification ("legacy") findings. */
+  verdict?: FindingVerdict | null
 }
 
 export interface ListFindingsParams {
@@ -69,12 +73,23 @@ export interface ListFindingsParams {
   epss_min?: number
   risk_score_min?: number
   assignee?: string
+  verdict?: FindingVerdictFilter
+}
+
+export interface VerdictCounts {
+  total: number
+  confirmed: number
+  needs_verify: number
+  possible: number
+  ruled_out: number
+  legacy: number
 }
 
 export interface FindingsListResponse {
   findings: Finding[]
   next_cursor: string | null
   total_count: number
+  verdict_counts?: VerdictCounts
 }
 
 interface RawFinding extends Omit<Finding, "epssPercentile"> {
@@ -85,6 +100,7 @@ interface RawFindingsListResponse {
   findings: RawFinding[]
   next_cursor: string | null
   total_count: number
+  verdict_counts?: VerdictCounts
 }
 
 function normalizeFinding(raw: RawFinding): Finding {
@@ -218,6 +234,7 @@ export async function listFindings(
   if (params.epss_min != null) qs.set("epss_min", String(params.epss_min))
   if (params.risk_score_min != null) qs.set("risk_score_min", String(params.risk_score_min))
   if (params.assignee) qs.set("assignee", params.assignee)
+  if (params.verdict) qs.set("verdict", params.verdict)
   if (params.limit != null) qs.set("limit", String(params.limit))
   if (params.page != null) qs.set("page", String(params.page))
 
@@ -228,5 +245,6 @@ export async function listFindings(
     findings: raw.findings.map(normalizeFinding),
     next_cursor: raw.next_cursor,
     total_count: raw.total_count,
+    verdict_counts: raw.verdict_counts,
   }
 }

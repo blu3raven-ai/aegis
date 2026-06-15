@@ -2,7 +2,7 @@
 
 Endpoints:
   GET  /api/v1/epss/scores/{cve}   — single EPSS score lookup
-  GET  /api/v1/epss/top            — open findings ranked by EPSS for an org
+  GET  /api/v1/epss/top            — open findings ranked by EPSS for the caller's org
   POST /api/v1/epss/refresh        — trigger fetch + upsert (admin)
 
 Route handlers are synchronous (FastAPI runs them in a thread pool) because
@@ -12,16 +12,24 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from src.epss.service import EpssService
+from src.settings.router import require_permission
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/epss", tags=["epss"])
 
 _service = EpssService()
+
+
+def _resolve_org(request: Request) -> str:
+    org = getattr(request.state, "user_org", None) or request.query_params.get("org_id")
+    if not org:
+        raise HTTPException(status_code=400, detail="org_id is required")
+    return org
 
 
 def _score_dict(s) -> dict:
@@ -45,20 +53,23 @@ def get_score(cve: str) -> JSONResponse:
 
 @router.get("/top")
 def top_findings(
-    org_id: str = Query(..., alias="org_id"),
+    request: Request,
     limit: int = Query(default=20, ge=1, le=200),
 ) -> JSONResponse:
-    """List open findings for an org ranked by EPSS score, descending."""
+    """List open findings ranked by EPSS score, descending, for the caller's org."""
+    require_permission(request, "view_findings")
+    org_id = _resolve_org(request)
     findings = _service.top_findings_by_epss(org_id, limit=limit)
     return JSONResponse({"findings": findings, "count": len(findings)})
 
 
 @router.post("/refresh")
-def trigger_refresh() -> JSONResponse:
-    """Trigger an immediate EPSS feed fetch + upsert. Intended for admins.
+def trigger_refresh(request: Request) -> JSONResponse:
+    """Trigger an immediate EPSS feed fetch + upsert. Admin-only.
 
     Fetch failures bubble up as 502 so the caller can decide to retry.
     """
+    require_permission(request, "manage_settings")
     from src.jobs.epss_refresh import refresh_epss_scores
 
     try:

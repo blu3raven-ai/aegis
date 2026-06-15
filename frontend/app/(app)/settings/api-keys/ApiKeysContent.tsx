@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type MutableRefObject } from "react"
 import { listApiKeys, createApiKey, revokeApiKey, type ApiKey, type CreatedApiKey } from "@/lib/client/api-keys-api"
+import { Button } from "@/components/ui/Button"
 import { ApiKeysTable } from "@/components/shared/api-keys/ApiKeysTable"
 import { CreateApiKeyDialog } from "@/components/shared/api-keys/CreateApiKeyDialog"
 import { CreatedKeyDialog } from "@/components/shared/api-keys/CreatedKeyDialog"
@@ -63,12 +64,9 @@ export function ApiKeysContent({ createTriggerRef }: ApiKeysContentProps = {}) {
     <div className="flex flex-col gap-6">
       {!createTriggerRef && (
         <div className="flex items-center justify-between">
-          <button
-            onClick={() => setShowCreate(true)}
-            className="ml-auto rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)]"
-          >
+          <Button variant="primary" size="sm" className="ml-auto" onClick={() => setShowCreate(true)}>
             Create Token
-          </button>
+          </Button>
         </div>
       )}
 

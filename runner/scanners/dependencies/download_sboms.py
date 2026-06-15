@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 
-from runner.backend_client import BackendClient
+from runner.clients.backend import BackendClient
 
 logger = logging.getLogger(__name__)
 

@@ -13,19 +13,18 @@ test("settings page renders SettingsInPageNav", () => {
 })
 
 // Personal API tokens were consolidated into the org-level Security & Audit
-// > API tokens row, so the section no longer renders here.
+// > API tokens row, so the section no longer renders here. Members / Roles /
+// Teams were promoted to top-level routes (/members, /roles, /teams).
 const SECTIONS = [
   "ProfileSection",
   "NotificationsPreferencesSection",
   "SecuritySessionsSection",
   "OrgGeneralSection",
-  "MembersSection",
-  "RolesSection",
-  "TeamsSection",
   "SsoSection",
   "AuditLogSection",
   "ApiKeysSection",
   "RunnersSection",
+  "LlmSection",
   "LicenseSection",
 ] as const
 

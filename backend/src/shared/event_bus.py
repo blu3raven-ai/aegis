@@ -22,7 +22,6 @@ class Event:
     """A single event to be published to SSE clients."""
     event_type: str
     data: dict[str, Any]
-    org: str | None = None
     require_admin: bool = False
     timestamp: float = field(default_factory=time.time)
 
@@ -36,7 +35,6 @@ class Event:
 class _Subscriber:
     user_id: str
     role: str
-    orgs: list[str]
     queue: asyncio.Queue[Event | None]
     created_at: float = field(default_factory=time.time)
     last_read_at: float = field(default_factory=time.time)
@@ -83,20 +81,11 @@ class EventBus:
         return sum(1 for s in self._subscribers.values() if s.user_id == user_id)
 
     def subscribe(
-        self, user_id: str, role: str, orgs: list[str],
+        self, user_id: str, role: str,
     ) -> tuple["_Subscriber", AsyncGenerator[Event, None]]:
         """Return (subscriber, async-generator) for this connection.
 
-        Registration happens immediately (synchronously) when this method is
-        called so that the subscriber is visible to publish() before the caller
-        awaits the first event.  The actual queue-waiting happens inside the
-        returned async generator.
-
-        The subscriber object exposes mutable fields (e.g. ``orgs``) that the
-        caller can update without reconnecting.
-
-        Raises ConnectionError immediately if the per-user connection limit has
-        been reached.
+        Raises ConnectionError if the per-user connection limit is reached.
         """
         with self._lock:
             if self._count_user_connections(user_id) >= MAX_CONNECTIONS_PER_USER:
@@ -110,12 +99,10 @@ class EventBus:
             sub = _Subscriber(
                 user_id=user_id,
                 role=role,
-                orgs=orgs,
                 queue=queue,
             )
             self._subscribers[sub_id] = sub
 
-        # Return both handles; caller iterates the generator and may mutate sub
         return sub, self._drain(sub_id, sub)
 
     async def _drain(
@@ -129,10 +116,6 @@ class EventBus:
                 if event is None:
                     break
                 sub.last_read_at = time.time()
-                # Filter: org scope
-                if event.org and event.org not in sub.orgs:
-                    continue
-                # Filter: admin-only
                 if event.require_admin and not is_admin:
                     continue
                 yield event

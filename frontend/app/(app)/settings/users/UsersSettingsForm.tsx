@@ -21,6 +21,11 @@ import {
   type DirectGrant,
   type RoleRecord,
 } from "@/lib/client/settings-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
+import { Sheet } from "@/components/ui/Sheet"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { Dialog } from "@/components/layout/Dialog"
 import { ResourceAutocomplete } from "../organisations/ResourceAutocomplete"
 
@@ -122,7 +127,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
     setLoading(true)
     try {
       const [usersResult, rolesRes, teamsRes, grantsRes] = await Promise.all([
-        apiClient<{ users?: any[] }>("/settings/api/users").then(
+        apiClient<{ users?: any[] }>("/api/v1/settings/users").then(
           (data) => ({ ok: true as const, data, status: 200 }),
           (err) => ({ ok: false as const, data: null, status: err instanceof ApiClientError ? err.status : 0, body: err instanceof ApiClientError ? err.body : null }),
         ),
@@ -195,7 +200,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
     setSubmitting(true)
     setDialogError(null)
     try {
-      await apiClient("/settings/api/users", {
+      await apiClient("/api/v1/settings/users", {
         method: "POST",
         body: {
           username: newUsername,
@@ -232,7 +237,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
       try {
         const endpoint = user.status === "active" ? "disable" : "enable"
         try {
-          await apiClient(`/settings/api/users/${user.id}/${endpoint}`, { method: "POST" })
+          await apiClient(`/api/v1/settings/users/${user.id}/${endpoint}`, { method: "POST" })
         } catch (err) {
           const fallback = endpoint === "disable" ? "Disable failed" : "Enable failed"
           if (err instanceof ApiClientError) {
@@ -280,7 +285,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
       setError(null)
       try {
         try {
-          await apiClient(`/settings/api/users/${user.id}/role`, {
+          await apiClient(`/api/v1/settings/users/${user.id}/role`, {
             method: "PATCH",
             body: { roleId },
           })
@@ -321,7 +326,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
     setSubmitting(true)
     setDialogError(null)
     try {
-      await apiClient(`/settings/api/users/${showResetPassword.id}/reset-password`, {
+      await apiClient(`/api/v1/settings/users/${showResetPassword.id}/reset-password`, {
         method: "POST",
         body: { password: resetPasswordValue },
       })
@@ -357,7 +362,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
         setError(null)
         try {
           try {
-            await apiClient(`/settings/api/users/${user.id}`, { method: "DELETE" })
+            await apiClient(`/api/v1/settings/users/${user.id}`, { method: "DELETE" })
           } catch (err) {
             if (err instanceof ApiClientError) {
               throw new Error(extractErrorMessage(err.body, "Delete failed"))
@@ -488,100 +493,105 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
           header, so we skip the in-form button row entirely. */}
       {canEdit && !inviteTriggerRef && (
         <div className="flex items-start justify-end gap-4">
-          <button
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)]"
+            leadingIcon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <line x1="19" y1="8" x2="19" y2="14" />
+                <line x1="22" y1="11" x2="16" y2="11" />
+              </svg>
+            }
           >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <line x1="19" y1="8" x2="19" y2="14" />
-              <line x1="22" y1="11" x2="16" y2="11" />
-            </svg>
             Invite User
-          </button>
+          </Button>
         </div>
       )}
 
-      <Dialog
+      <Sheet
         open={showAdd}
         onClose={() => { setShowAdd(false); setDialogError(null) }}
-        title="Create User"
+        title="Invite a member"
+        description="Create an account with a starter password. Members can reset it later from account settings."
+        size="md"
+        dismissGuard={{
+          isDirty: newUsername.trim() !== "" || newEmail.trim() !== "" || newPassword !== "",
+        }}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="md" onClick={() => setShowAdd(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="invite-member-form"
+              variant="primary"
+              size="md"
+              disabled={submitting}
+              isLoading={submitting}
+            >
+              {submitting ? "Creating…" : "Invite member"}
+            </Button>
+          </div>
+        }
       >
-        <form onSubmit={handleCreate} className="space-y-4">
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Create a member account with a password. The user can reset their password from account settings.
-          </p>
+        <form id="invite-member-form" onSubmit={handleCreate} className="space-y-4">
           {dialogError && (
-            <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
+            <div
+              role="alert"
+              className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical)]"
+            >
               {dialogError}
             </div>
           )}
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">Username</label>
-              <input
+              <label className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Username</label>
+              <Input
                 type="text"
                 required
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="Enter username"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">Email Address</label>
-              <input
+              <label className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Email address</label>
+              <Input
                 type="email"
                 required
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="name@example.com"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">Password</label>
-              <input
+              <label className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Password</label>
+              <Input
                 type="password"
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="Set a password"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">Assigned Role</label>
-              <select
+              <label className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Assigned role</label>
+              <Select
                 value={newRoleId}
                 onChange={(e) => setNewRoleId(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
               >
                 {roles.map(role => (
                   <option key={role.id} value={role.id}>{role.name}</option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)] mt-6">
-            <button
-              type="button"
-              onClick={() => setShowAdd(false)}
-              className="rounded-lg px-4 py-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-lg bg-[var(--color-accent)] px-6 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)] disabled:opacity-50"
-            >
-              {submitting ? "Creating..." : "Create User"}
-            </button>
-          </div>
         </form>
-      </Dialog>
+      </Sheet>
 
       <Dialog
         open={showResetPassword !== null}
@@ -600,52 +610,41 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
             )}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">New Password</label>
-              <input
+              <Input
                 type="password"
                 required
                 value={resetPasswordValue}
                 onChange={(e) => setResetPasswordValue(e.target.value)}
-                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                 placeholder="Enter new password"
               />
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)] mt-6">
-            <button
-              type="button"
-              onClick={() => setShowResetPassword(null)}
-              className="rounded-lg px-4 py-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="rounded-lg bg-[var(--color-accent)] px-6 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)] disabled:opacity-50"
-            >
+            <Button variant="ghost" size="md" onClick={() => setShowResetPassword(null)}>Cancel</Button>
+            <Button type="submit" variant="primary" size="md" disabled={submitting} isLoading={submitting}>
               {submitting ? "Resetting..." : "Reset Password"}
-            </button>
+            </Button>
           </div>
         </form>
       </Dialog>
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] border-b border-[var(--color-border)]">
-              <th className="w-[22%] px-5 py-3 font-medium uppercase tracking-[0.22em] text-[11px]">User</th>
-              <th className="w-[12%] px-4 py-3 font-medium uppercase tracking-[0.22em] text-[11px]">Role</th>
-              <th className="w-[10%] px-4 py-3 font-medium uppercase tracking-[0.22em] text-[11px]">Login</th>
-              <th className="w-[10%] px-4 py-3 font-medium uppercase tracking-[0.22em] text-[11px] text-center">Teams</th>
-              <th className="w-[14%] px-4 py-3 font-medium uppercase tracking-[0.22em] text-[11px] text-center whitespace-nowrap">Direct Access</th>
-              <th className="px-5 py-3 font-medium uppercase tracking-[0.22em] text-right text-[11px]">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[var(--color-border)]">
+        <Table>
+          <Thead>
+            <Tr>
+              <Th className="w-[22%] px-5">User</Th>
+              <Th className="w-[12%]">Role</Th>
+              <Th className="w-[10%]">Login</Th>
+              <Th className="w-[10%] text-center">Teams</Th>
+              <Th className="w-[14%] text-center whitespace-nowrap">Direct Access</Th>
+              <Th className="px-5 text-right">Actions</Th>
+            </Tr>
+          </Thead>
+          <Tbody>
             {users.map((user) => (
               <Fragment key={user.id}>
-                <tr className="hover:bg-[var(--color-surface-raised)]/50 transition-colors">
-                  <td className="px-5 py-4">
+                <Tr interactive>
+                  <Td className="px-5 py-4">
                     <div className="flex flex-col">
                       <span className="font-medium text-[var(--color-text-primary)]">{user.username}</span>
                       <span className="text-xs text-[var(--color-text-secondary)]">{user.email || "No email"}</span>
@@ -660,39 +659,39 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                         </span>
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-4">
+                  </Td>
+                  <Td className="py-4">
                     {canEdit && user.id !== currentUserId && user.status === "active" ? (
-                      <select
+                      <Select
+                        size="sm"
                         value={user.roleId || ""}
                         onChange={(e) => void handleRoleChange(user, e.target.value)}
                         disabled={mutatingUserId === user.id}
-                        className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                       >
                         {roles.map(role => (
                           <option key={role.id} value={role.id}>{role.name}</option>
                         ))}
-                      </select>
+                      </Select>
                     ) : (
                       <span className="text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
                         {roles.find(r => r.id === user.roleId)?.name || ROLE_LABELS[user.role] || user.role}
                       </span>
                     )}
-                  </td>
-                  <td className="px-4 py-4">
+                  </Td>
+                  <Td className="py-4">
                     <span className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)]">
                       Password
                     </span>
-                  </td>
-                  <td className="px-4 py-4 text-center">
+                  </Td>
+                  <Td className="py-4 text-center">
                     <button
                       onClick={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
                       className="text-xs font-medium text-[var(--color-accent)] hover:underline"
                     >
                       {teams.filter(t => t.members.some(m => m.userId === user.id)).length} teams
                     </button>
-                  </td>
-                  <td className="px-4 py-4 text-center">
+                  </Td>
+                  <Td className="py-4 text-center">
                     <button
                       onClick={() => {
                         setExpandedDirectAccessUserId(expandedDirectAccessUserId === user.id ? null : user.id)
@@ -707,8 +706,8 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                     >
                       {user.manualDirectGrantCount + user.githubDirectGrantCount} resources
                     </button>
-                  </td>
-                  <td className="px-5 py-4 text-right">
+                  </Td>
+                  <Td className="px-5 py-4 text-right">
                     <div className="flex items-center justify-end space-x-3">
                       {canEdit && (
                         <>
@@ -747,11 +746,11 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                         </>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
                 {expandedUserId === user.id && (
-                  <tr className="bg-[var(--color-surface-raised)]/30">
-                    <td colSpan={6} className="px-6 py-4">
+                  <Tr className="bg-[var(--color-surface-raised)]/30">
+                    <Td colSpan={6} className="px-6 py-4">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <h4 className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Team memberships</h4>
@@ -787,12 +786,12 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                           })}
                         </div>
                       </div>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 )}
                 {expandedDirectAccessUserId === user.id && (
-                  <tr className="bg-[var(--color-surface-raised)]/30">
-                    <td colSpan={6} className="px-6 py-4">
+                  <Tr className="bg-[var(--color-surface-raised)]/30">
+                    <Td colSpan={6} className="px-6 py-4">
                       <div className="space-y-6">
                         <div className="space-y-4">
                           <h4 className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Direct Access</h4>
@@ -851,13 +850,13 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                           </div>
                         </div>
                       </div>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 )}
               </Fragment>
             ))}
-          </tbody>
-        </table>
+          </Tbody>
+        </Table>
       </div>
 
       <Dialog

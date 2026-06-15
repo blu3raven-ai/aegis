@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react"
 import { fetchSbomHistory, type SbomHistoryEntry } from "@/lib/client/sbom-api"
 import { relativeTime } from "@/lib/shared/relative-time"
+import { Button } from "@/components/ui/Button"
+import { Select } from "@/components/ui/Select"
 
 interface SbomScanSelectorProps {
   label: string
@@ -64,10 +66,9 @@ export function SbomScanSelector({
       {/* Repo selector */}
       <div className="flex flex-col gap-1.5">
         <label className="text-[11px] text-[var(--color-text-secondary)]">Repository</label>
-        <select
+        <Select
           value={selectedRepoId ?? ""}
           onChange={(e) => onRepoChange(e.target.value || null)}
-          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text-primary)] outline-none transition-colors focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]"
         >
           <option value="">Select a repository…</option>
           {repoIds.map((id) => (
@@ -75,7 +76,7 @@ export function SbomScanSelector({
               {id}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {/* Snapshot selector — shown only when a repo is selected */}
@@ -88,25 +89,26 @@ export function SbomScanSelector({
               Loading snapshots…
             </div>
           ) : historyState === "error" ? (
-            <p className="text-xs text-[var(--color-status-critical)]">
+            <p className="text-xs text-[var(--color-severity-critical)]">
               Failed to load snapshots.{" "}
-              <button
-                type="button"
+              <Button
+                variant="link"
+                size="xs"
                 onClick={() => selectedRepoId && void loadHistory(selectedRepoId)}
-                className="underline hover:no-underline"
+                className="underline hover:no-underline text-[var(--color-severity-critical)] hover:text-[var(--color-severity-critical)]"
               >
                 Retry
-              </button>
+              </Button>
             </p>
           ) : history.length === 0 ? (
             <p className="text-xs text-[var(--color-text-tertiary)]">
               No snapshots available for this repository.
             </p>
           ) : (
-            <select
+            <Select
               value={selectedHash ?? ""}
               onChange={(e) => onHashChange(e.target.value || null)}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-[13px] text-[var(--color-text-primary)] font-[family-name:var(--font-jetbrains-mono)] outline-none transition-colors focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]"
+              className="font-[family-name:var(--font-jetbrains-mono)]"
             >
               <option value="">Select a snapshot…</option>
               {history.map((entry, idx) => (
@@ -115,7 +117,7 @@ export function SbomScanSelector({
                   {idx === 0 ? " (latest)" : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </div>
       )}

@@ -2,6 +2,9 @@
 
 import { useState } from "react"
 import type { SlaPolicy, UpdateSlaPolicyPayload } from "@/lib/client/sla-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 const SEVERITY_ORDER: SlaPolicy["severity"][] = ["critical", "high", "medium", "low"]
 
@@ -62,38 +65,33 @@ export function PolicyEditor({ policies, onSave }: PolicyEditorProps) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-[var(--color-border)]">
-            <th className="py-2 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Severity
-            </th>
-            <th className="py-2 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Deadline (days)
-            </th>
-            <th className="py-2 pr-4 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Enabled
-            </th>
-            <th className="py-2 text-right text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]" />
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--color-border)]">
+      <Table>
+        <Thead className="bg-transparent">
+          <Tr>
+            <Th className="px-0 pr-4 pt-0 pb-2">Severity</Th>
+            <Th className="px-0 pr-4 pt-0 pb-2">Deadline (days)</Th>
+            <Th className="px-0 pr-4 pt-0 pb-2">Enabled</Th>
+            <Th className="px-0 pt-0 pb-2 text-right" />
+          </Tr>
+        </Thead>
+        <Tbody>
           {sorted.map(({ sev, row }) => (
-            <tr key={sev}>
-              <td className="py-3 pr-4">
+            <Tr key={sev}>
+              <Td className="px-0 py-3 pr-4">
                 <span className={`font-semibold capitalize ${SEV_COLORS[sev as SlaPolicy["severity"]]}`}>{sev}</span>
-              </td>
-              <td className="py-3 pr-4">
-                <input
+              </Td>
+              <Td className="px-0 py-3 pr-4">
+                <Input
+                  size="sm"
                   type="number"
                   min={1}
                   value={row.deadline_days}
                   onChange={(e) => setRow(sev, { deadline_days: Number(e.target.value), error: null, saved: false })}
-                  className="w-24 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+                  className="w-24"
                   aria-label={`${sev} deadline days`}
                 />
-              </td>
-              <td className="py-3 pr-4">
+              </Td>
+              <Td className="px-0 py-3 pr-4">
                 <button
                   type="button"
                   role="switch"
@@ -110,8 +108,8 @@ export function PolicyEditor({ policies, onSave }: PolicyEditorProps) {
                     }`}
                   />
                 </button>
-              </td>
-              <td className="py-3 text-right">
+              </Td>
+              <Td className="px-0 py-3 text-right">
                 <div className="flex items-center justify-end gap-2">
                   {row.error && (
                     <span className="text-xs text-[var(--color-severity-critical)]">{row.error}</span>
@@ -119,20 +117,21 @@ export function PolicyEditor({ policies, onSave }: PolicyEditorProps) {
                   {row.saved && (
                     <span className="text-xs text-[var(--color-status-ok)]">Saved</span>
                   )}
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => handleSave(sev)}
                     disabled={row.saving}
-                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:opacity-50"
+                    isLoading={row.saving}
                   >
                     {row.saving ? "Saving…" : "Save"}
-                  </button>
+                  </Button>
                 </div>
-              </td>
-            </tr>
+              </Td>
+            </Tr>
           ))}
-        </tbody>
-      </table>
+        </Tbody>
+      </Table>
     </div>
   )
 }

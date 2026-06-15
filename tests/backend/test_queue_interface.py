@@ -75,8 +75,8 @@ def test_factory_returns_file_backed_by_default(monkeypatch):
         assert isinstance(q, FileBackedQueue)
 
 
-def test_factory_rejects_redis_backend(monkeypatch):
-    monkeypatch.setenv("JOB_QUEUE_BACKEND", "redis")
+def test_factory_rejects_unknown_backend(monkeypatch):
+    monkeypatch.setenv("JOB_QUEUE_BACKEND", "nonexistent-backend")
     from src.runner.queue.factory import get_queue, reset_cache
     reset_cache()
     with pytest.raises(ValueError, match="Unknown"):

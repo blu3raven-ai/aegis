@@ -1,27 +1,39 @@
 "use client"
 
-import { Suspense, useEffect } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { FindingsBoardView } from "@/components/shared/findings/FindingsBoardView"
+import { FindingsIcon } from "@/lib/shared/ui/page-icons"
 
-function Redirect() {
+function SecretsDashboard() {
   const router = useRouter()
   const params = useSearchParams()
+  const [routed, setRouted] = useState(false)
 
   useEffect(() => {
     if (params.get("tab") === "settings") {
       router.replace("/settings/secrets")
     } else {
-      router.replace("/findings?scanner=secrets")
+      setRouted(true)
     }
   }, [params, router])
 
-  return null
+  if (!routed) return null
+
+  return (
+    <FindingsBoardView
+      pageTitle="Secret Scanning"
+      pageIcon={<FindingsIcon />}
+      pageDescription="Exposed secrets detected across your sources."
+      initialScannerFilter="secrets"
+    />
+  )
 }
 
-export default function SecretsDashboardRedirect() {
+export default function SecretsDashboardPage() {
   return (
     <Suspense fallback={null}>
-      <Redirect />
+      <SecretsDashboard />
     </Suspense>
   )
 }

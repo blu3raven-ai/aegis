@@ -16,7 +16,7 @@ from src.repos.service import RepoService, RepoSummary, RepoDetail
 from src.scans.models import ScanRequest, ScanSubmissionResponse
 from src.scans.service import submit_scan
 from src.settings.router import require_permission
-from src.shared.scope import get_user_asset_ids
+from src.shared.scope import get_user_asset_ids, resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/repos", tags=["repos"])
 
@@ -87,13 +87,14 @@ async def list_repos(
 
 
 @router.get("/{asset_id}")
-def get_repo(
+async def get_repo(
     request: Request,
     asset_id: str,
 ) -> JSONResponse:
     """Return detail for a single repo identified by its asset_id UUID."""
     require_permission(request, "view_findings")
-    detail = RepoService.get_repo(asset_id)
+    asset_ids = await resolve_asset_ids_from_request(request)
+    detail = RepoService.get_repo(asset_id, asset_ids)
     if detail is None:
         return JSONResponse({"error": "repo not found"}, status_code=404)
     return JSONResponse(_detail_to_dict(detail))
@@ -111,6 +112,10 @@ async def trigger_scan(
     request: Request,
 ) -> ScanSubmissionResponse:
     require_permission(request, "run_scans")
+    asset_ids = await resolve_asset_ids_from_request(request)
+    # 404 (not 403) when the caller can't see the asset — avoids leaking existence.
+    if asset_id not in asset_ids:
+        raise HTTPException(status_code=404, detail="Repo not found")
     user_id = request.state.user_sub
 
     submission = await submit_scan(

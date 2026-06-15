@@ -2,14 +2,15 @@ import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
+// Members / Roles / Teams were promoted out of /settings and live at
+// /members, /roles, /teams as top-level routes — see app/(app)/{members,
+// roles,teams}/page.tsx.
 const WRAPS: Array<[file: string, id: string, title: string]> = [
-  ["MembersSection.tsx", "members", "Members"],
-  ["RolesSection.tsx", "roles", "Roles"],
-  ["TeamsSection.tsx", "teams", "Teams"],
   ["SsoSection.tsx", "sso", "SSO / SAML"],
   ["AuditLogSection.tsx", "audit", "Audit Log"],
   ["ApiKeysSection.tsx", "api-keys", "API tokens"],
   ["RunnersSection.tsx", "runners", "Runners"],
+  ["LlmSection.tsx", "llm", "LLM verification"],
   ["LicenseSection.tsx", "license", "License"],
 ]
 

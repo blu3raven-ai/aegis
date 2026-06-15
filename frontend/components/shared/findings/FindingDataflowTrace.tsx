@@ -15,9 +15,8 @@ interface FindingDataflowTraceProps {
 }
 
 /**
- * Source-to-sink trace for taint findings (Joern). Renders nothing when
- * trace is absent — Opengrep findings have no dataflow, so the drawer
- * stays clean for them.
+ * Source-to-sink trace for taint findings. Renders nothing when the trace
+ * is absent.
  */
 export function FindingDataflowTrace({
   trace,

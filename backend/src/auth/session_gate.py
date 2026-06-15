@@ -34,28 +34,35 @@ from src.auth.cookies import SESSION_COOKIE_NAME
 PUBLIC_PATHS = frozenset({
     "/login", "/login/verify",
     "/auth/login", "/auth/login/verify", "/auth/logout",
+    "/auth/sso/saml/login", "/auth/sso/saml/acs", "/auth/sso/saml/metadata",
+    "/auth/sso/oidc/login", "/auth/sso/oidc/callback",
     "/health/live", "/health/ready",
     "/openapi.json", "/docs", "/redoc",
+    "/api/v1/branding",
+    "/api/v1/sso/sso-availability",
 })
 
 PUBLIC_PREFIXES = (
     "/_next/static/",
     "/assets/",
     "/favicon",
+    # Self-hosted Swagger UI assets backing /docs
+    "/swagger/",
     # Runner agent endpoints authenticate via runner Bearer tokens (not sessions)
-    "/runner/api/",
+    "/api/v1/runner/",
     # SCM webhook endpoints authenticate via HMAC signatures (not sessions)
     "/integrations/",
+    # SCIM endpoints authenticate via their own bearer-token dependency
+    "/scim/v2/",
 )
 
 # /graphql is a valid bare path; /graphql/anything is also API.
 # Use an exact-match set for bare paths and a prefix set for path trees so
 # that /graphqlinjector and similar typosquats don't accidentally match.
 API_PATHS = frozenset({"/graphql"})
-# Primary API path trees — anything under /api/ or /graphql/.
-# Also matches /*/api/ patterns (e.g. /dependencies/api/, /events/api/) so
-# all API route trees return 401 JSON rather than 302 redirect for
-# unauthenticated machine clients.
+# Primary API path trees — anything under /api/ or /graphql/. The substring
+# check below still matches legacy /*/api/* shapes if any reappear, so
+# machine clients always see 401 JSON rather than a 302 redirect.
 API_PREFIXES = ("/api/", "/graphql/")
 
 
@@ -70,8 +77,8 @@ def _is_api(path: str) -> bool:
         return True
     if any(path.startswith(p) for p in API_PREFIXES):
         return True
-    # Match /*/api/* patterns (e.g. /dependencies/api/, /events/api/) so
-    # all tool-namespaced API route trees return 401 JSON for unauthenticated
+    # Defensive fallback: any path containing "/api/" is treated as API so
+    # legacy or tool-namespaced shapes still return 401 JSON for unauthenticated
     # machine clients rather than a 302 page redirect.
     return "/api/" in path
 

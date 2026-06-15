@@ -12,7 +12,7 @@ export default function SbomPage() {
         title="SBOM Explorer"
         description="Search and query your software bill of materials"
       />
-      <main className="mx-auto max-w-7xl px-6 py-8">
+      <main className="px-6 py-8">
         <SbomExplorer />
       </main>
     </>

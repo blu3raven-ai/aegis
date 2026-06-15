@@ -7,6 +7,7 @@ import { fetchCurrentUser, type CurrentUser } from "@/lib/client/auth"
 import { can } from "@/lib/shared/auth/roles.ts"
 import { useSSE } from "@/components/providers/SSEProvider"
 import type { ScanCompletedEvent, ScanFailedEvent } from "@/lib/shared/sse-types"
+import { Button } from "@/components/ui/Button"
 
 const RUNNING_STATUSES = new Set(["queued", "running", "ingesting"])
 
@@ -160,35 +161,43 @@ export function ToolRefreshControls({
       </div>
 
       {isRunning && (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="md"
           onClick={() => void handleCancel()}
           disabled={isCancelling}
-          className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-sm font-medium text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] disabled:opacity-50 transition-colors"
+          className="border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
         >
           Cancel Scan
-        </button>
+        </Button>
       )}
 
       {canRun && !isRunning && (
         modeOptions && modeOptions.length > 0 ? (
+          // Split button: primary "Refresh" + caret that toggles the mode menu.
+          // Each half is a Button so chrome stays canonical, then we override
+          // the abutting radii so the two halves read as one segmented control.
           <div ref={modeMenuRef} className="relative inline-flex">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => void handleRefresh("full")}
               disabled={isRefreshing}
-              className="rounded-l-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              isLoading={isRefreshing}
+              className="rounded-r-none"
             >
               {isRefreshing ? "Starting..." : "Refresh"}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => setShowModeMenu(!showModeMenu)}
               disabled={isRefreshing}
-              className="rounded-r-lg border-l border-[var(--color-accent-hover)] bg-[var(--color-accent)] px-2 py-2 text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              aria-label="Choose refresh mode"
+              className="rounded-l-none border-l border-[var(--color-accent-hover)] px-2"
             >
               &#9662;
-            </button>
+            </Button>
             {showModeMenu && (
               <div className="absolute right-0 top-full z-10 mt-1 w-56 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
                 {modeOptions.map((mode, i) => (
@@ -212,14 +221,15 @@ export function ToolRefreshControls({
             )}
           </div>
         ) : (
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="md"
             onClick={() => void handleRefresh()}
             disabled={isRefreshing}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            isLoading={isRefreshing}
           >
             {isRefreshing ? "Starting..." : "Refresh"}
-          </button>
+          </Button>
         )
       )}
     </div>

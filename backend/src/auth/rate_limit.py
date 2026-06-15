@@ -1,7 +1,7 @@
 """Sliding-window rate limit backed by Postgres rate_limit_buckets.
 
 Atomic INSERT ... ON CONFLICT DO UPDATE keeps the increment and the
-window-reset race-free without external coordination (Redis, etc.).
+window-reset race-free without external coordination.
 A bucket whose window_start is older than `now - window_seconds` is reset
 to fresh; otherwise its counter is incremented in the same statement.
 

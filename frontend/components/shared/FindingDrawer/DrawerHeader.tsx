@@ -1,5 +1,7 @@
 // components/shared/FindingDrawer/DrawerHeader.tsx
 
+import { Button } from "@/components/ui/Button"
+
 export function DrawerHeader({
   eyebrow,
   eyebrowDotColor,
@@ -59,25 +61,25 @@ export function DrawerHeader({
             <span className="sr-only"> (opens in new tab)</span>
           </a>
         )}
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onClose}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+          leadingIcon={
+            <svg
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M1 1l10 10M11 1L1 11" />
+            </svg>
+          }
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <path d="M1 1l10 10M11 1L1 11" />
-          </svg>
-          <span>Close</span>
-        </button>
+          Close
+        </Button>
       </div>
     </div>
   )

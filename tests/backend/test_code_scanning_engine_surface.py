@@ -53,7 +53,7 @@ def test_storage_exposes_engine_column_and_dataflow_trace():
         {"file": "src/app.py", "line": 42, "snippet": "cursor.execute(q)", "role": "sink"},
     ]
     detail = {
-        "ruleId": "joern-sqli",
+        "ruleId": "semgrep-sqli",
         "ruleName": "SQL Injection",
         "filePath": "src/app.py",
         "startLine": 42,
@@ -64,13 +64,13 @@ def test_storage_exposes_engine_column_and_dataflow_trace():
         "cwe": ["CWE-89"],
         "confidence": "high",
         "dataflowTrace": dataflow,
-        "ruleIds": ["joern-sqli"],
+        "ruleIds": ["semgrep-sqli"],
     }
-    result = _finding_to_code_scanning_dict(_MockFinding(detail, engine="joern"), decision=None)
+    result = _finding_to_code_scanning_dict(_MockFinding(detail, engine="semgrep"), decision=None)
 
-    assert result["engine"] == "joern"
+    assert result["engine"] == "semgrep"
     assert result["dataflow_trace"] == dataflow
-    assert result["rule_ids"] == ["joern-sqli"]
+    assert result["rule_ids"] == ["semgrep-sqli"]
 
 
 def test_storage_engine_defaults_to_none_when_column_missing():
@@ -108,19 +108,20 @@ def test_make_dataflow_trace_defaults_role_to_intermediate():
 
 
 def test_graphql_finding_exposes_engine_and_dataflow_trace():
-    """End-to-end through the resolver: a merged finding (engine='both') with
-    a 2-step trace produces a CodeScanningFinding with both surfaces populated."""
+    """End-to-end through the resolver: a semgrep finding with engine attribution
+    and a 2-step dataflow trace produces a CodeScanningFinding with both
+    surfaces populated."""
     mock_findings = [
         {
             "state": "open",
             "severity": "high",
-            "rule_id": "opengrep-sqli",
+            "rule_id": "semgrep-sqli",
             "rule_name": "SQL Injection",
             "repo_full_name": "acme-org/api",
             "file_path": "src/app.py",
             "start_line": 42,
-            "engine": "both",
-            "rule_ids": ["opengrep-sqli", "joern-sqli"],
+            "engine": "semgrep",
+            "rule_ids": ["semgrep-sqli"],
             "dataflow_trace": [
                 {"file": "src/app.py", "line": 10, "snippet": "q = request.args['q']", "role": "source"},
                 {"file": "src/app.py", "line": 42, "snippet": "cursor.execute(q)", "role": "sink"},
@@ -133,12 +134,14 @@ def test_graphql_finding_exposes_engine_and_dataflow_trace():
         "src.graphql.code_scanning_resolvers.read_code_scanning_findings",
         return_value=mock_findings,
     ):
-        result = code_scanning_findings(org="acme-org", page=1, per_page=10, info_context=ctx)
+        result = code_scanning_findings(
+            org="acme-org", page=1, per_page=10, asset_ids=["asset-1"], info_context=ctx
+        )
 
     assert len(result.items) == 1
     item = result.items[0]
-    assert item.engine == "both"
-    assert item.rule_ids == ["opengrep-sqli", "joern-sqli"]
+    assert item.engine == "semgrep"
+    assert item.rule_ids == ["semgrep-sqli"]
     assert item.dataflow_trace is not None
     assert len(item.dataflow_trace) == 2
     assert item.dataflow_trace[0].role == "source"
@@ -148,13 +151,13 @@ def test_graphql_finding_exposes_engine_and_dataflow_trace():
 
 
 def test_graphql_finding_engine_fields_optional_when_missing():
-    """Single-engine opengrep findings without a dataflow trace must still
+    """Findings without engine attribution or a dataflow trace must still
     serialize cleanly with engine/trace as None."""
     mock_findings = [
         {
             "state": "open",
             "severity": "medium",
-            "rule_id": "opengrep-xss",
+            "rule_id": "semgrep-xss",
             "repo_full_name": "acme-org/api",
         }
     ]
@@ -164,7 +167,9 @@ def test_graphql_finding_engine_fields_optional_when_missing():
         "src.graphql.code_scanning_resolvers.read_code_scanning_findings",
         return_value=mock_findings,
     ):
-        result = code_scanning_findings(org="acme-org", page=1, per_page=10, info_context=ctx)
+        result = code_scanning_findings(
+            org="acme-org", page=1, per_page=10, asset_ids=["asset-1"], info_context=ctx
+        )
 
     assert len(result.items) == 1
     item = result.items[0]

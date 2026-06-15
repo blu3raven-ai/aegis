@@ -1,8 +1,8 @@
 """Tests for the /api/v1/notifications/* REST endpoints.
 
 Uses a minimal FastAPI app (no lifespan, no JWT) so tests run without a
-live Postgres or Redis setup — the real DB fixtures from conftest.py
-back the CRUD calls.
+live Postgres setup — the real DB fixtures from conftest.py back the CRUD
+calls.
 """
 from __future__ import annotations
 

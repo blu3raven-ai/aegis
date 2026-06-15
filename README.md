@@ -50,9 +50,9 @@ Whether you're a solo developer running your first security scan or an enterpris
 |---|---|---|
 | **Dependencies** | Syft + Grype | Generates Software Bill of Materials (SBOM) for every repository, matches against NVD and GHSA advisory databases, tracks open/fixed/dismissed findings across scans |
 | **Containers** | Syft + Grype | Scans container images from registries (GHCR, Docker Hub), detects known CVEs in OS packages and application dependencies, skips unchanged images via digest checking |
-| **Code Scanning** | Opengrep | Static analysis (SAST) with OWASP/CWE rulesets, optional AI-assisted triage to reduce false positives, call-graph reachability analysis to confirm exploitability |
-| **Secrets** | TruffleHog + BetterLeaks | Detects leaked credentials, API keys, and tokens in code history. ML-powered classifier (ONNX) reduces false positives. Contextual enrichment shows surrounding code |
-| **IaC Security** | — | *In development* — infrastructure-as-code misconfiguration scanning |
+| **Code Scanning** | Semgrep | Static analysis (SAST) with OWASP/CWE rulesets, LLM-based exploit-chain verification (hunter + skeptic) to reduce false positives, call-graph reachability analysis to confirm exploitability |
+| **Secrets** | TruffleHog | Detects leaked credentials, API keys, and tokens in code history. LLM verification gate (hunter + skeptic) drops test/fixture matches. Contextual enrichment shows surrounding code |
+| **IaC Security** | Checkov | Detects misconfigurations in Terraform, CloudFormation, Kubernetes manifests, and other IaC formats |
 
 ### Platform Capabilities
 
@@ -64,6 +64,7 @@ Whether you're a solo developer running your first security scan or an enterpris
 - **Source management** — connect Git repositories, container registries, and cloud infrastructure as scan targets
 - **Notification system** — real-time alerts for critical findings, scan completions, and runner status changes
 - **Dark and light themes** — full theme support designed for extended security triage sessions
+- **CI/CD integration** — trigger scans from GitHub Actions, GitLab CI, Bitbucket Pipelines, Azure DevOps, or Jenkins; sticky PR comments back to the merge request
 
 ### Tech Stack
 
@@ -73,8 +74,8 @@ Whether you're a solo developer running your first security scan or an enterpris
 | Backend | FastAPI (async Python), Strawberry GraphQL, SQLAlchemy |
 | Database | PostgreSQL 16 |
 | Object Storage | MinIO (S3-compatible) — SBOMs, scan artifacts |
-| Scanners | Embedded in runner image — Syft, Grype, cdxgen, Opengrep, TruffleHog, BetterLeaks |
-| ML | ONNX Runtime — secret classification model |
+| Scanners | Embedded in runner image — Syft, Grype, cdxgen, Semgrep, TruffleHog, Checkov |
+| AI | OpenAI-compatible LLM gateway (BYO key) — hunter/skeptic verification, mechanical citation critic |
 | Real-time | Server-Sent Events (SSE) with BroadcastChannel leader election |
 
 ### Editions
@@ -150,8 +151,9 @@ See [docs/architecture.md](docs/architecture.md) for a deep dive into the system
 ├── runner/           Scanner job runner with embedded scanner modules
 │   └── scanners/
 │       ├── dependencies/     Syft + Grype + cdxgen
-│       ├── code_scanning/    Opengrep + tree-sitter
-│       ├── secrets/          TruffleHog + BetterLeaks + ONNX
+│       ├── code_scanning/    Semgrep + tree-sitter (with LLM verification)
+│       ├── secrets/          TruffleHog (with LLM verification)
+│       ├── iac/              Checkov
 │       └── container/        Syft + Grype
 ├── components/       Shared React components
 ├── lib/              Shared TypeScript utilities
@@ -180,7 +182,7 @@ The first `docker compose up` builds the runner image, which bundles all scanner
 <details>
 <summary><strong>Can I run Aegis without Docker?</strong></summary>
 
-The frontend and backend can run natively (Node.js + Python). The runner can also run natively if all scanner CLIs (Syft, Grype, cdxgen, Opengrep, TruffleHog, BetterLeaks) and Python dependencies are installed locally — see [docs/development.md](docs/development.md).
+The frontend and backend can run natively (Node.js + Python). The runner can also run natively if all scanner CLIs (Syft, Grype, cdxgen, Semgrep, TruffleHog, Checkov) and Python dependencies are installed locally — see [docs/development.md](docs/development.md).
 </details>
 
 <details>
@@ -239,17 +241,12 @@ Community is the full product with no feature limits. Enterprise adds organizati
 | Variable | Default | Purpose |
 |---|---|---|
 | `AEGIS_CORRELATION_ENABLED` | `false` | Enable the correlation engine on app startup |
-| `JOB_QUEUE_BACKEND` | `file` | `file` / `postgres` / `redis` |
-| `RUNNER_DISPATCH_MODE` | `poll` | `poll` (5s loop) / `subscription` (Redis pub/sub) |
-| `RUNNER_EXEC_MODE` | `per_job` | `per_job` (existing) / `warm_pool` (long-running containers) |
+| `JOB_QUEUE_BACKEND` | `file` | `file` / `postgres` |
 | `MULTI_ORG_CONCURRENCY` | `8` | Max concurrent orgs in scan orchestration |
 | `AEGIS_CORRELATION_EPSS_THRESHOLD` | `0.7` | EPSS threshold for severity escalation rule |
 | `ARGUS_ENDPOINT` | (unset) | Argus connector endpoint URL |
 | `ARGUS_API_KEY` | (unset) | Argus API key |
 | `ARGUS_WEBHOOK_SECRET` | (unset) | HMAC secret for Argus → Aegis webhooks |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection (required for subscription/warm_pool/redis-queue modes) |
-| `EVENT_STREAM_PREFIX` | `aegis.events.` | Prefix for durable event bus streams |
-| `EVENT_STREAM_MAX_LEN` | `100000` | Approximate max stream length |
 
 ### Health endpoints
 
@@ -260,10 +257,9 @@ Community is the full product with no feature limits. Enterprise adds organizati
 ### Suggested rollout
 
 1. **Phase 0 (default):** Existing behavior, all features dormant. Validates deployment.
-2. **Phase 1:** Switch `JOB_QUEUE_BACKEND=postgres`, `RUNNER_DISPATCH_MODE=subscription`. Validates push dispatch.
+2. **Phase 1:** Switch `JOB_QUEUE_BACKEND=postgres`. Validates the Postgres queue backend.
 3. **Phase 2:** Existing scanner ingest with per-scanner baseline+delta engines (dormant until wired per scanner).
 4. **Phase 3–4:** `AEGIS_CORRELATION_ENABLED=true` + Argus config. Attack chains materialize; AI scoring enriches findings.
-5. **Phase 5 (warm pool):** `RUNNER_EXEC_MODE=warm_pool` after scanner Dockerfiles support daemon mode.
 
 ## Contributing
 

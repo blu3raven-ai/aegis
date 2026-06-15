@@ -11,13 +11,13 @@ from src.secrets.store import build_secret_identity
 
 
 def read_checkpoints(tool: str = "secrets") -> dict[str, dict[str, Any]]:
-    """Read all scan checkpoints for a tool from the DB."""
+    """Read all scan checkpoints for a tool from the DB, keyed by asset_id."""
     async def _query(session):
         result = await session.execute(
             select(ScanCheckpoint).where(ScanCheckpoint.tool == tool)
         )
         return {
-            cp.repo: {
+            cp.asset_id: {
                 "lastCommitSha": cp.last_commit_sha,
                 "lastScannedAt": cp.last_commit_date,
             }
@@ -27,31 +27,22 @@ def read_checkpoints(tool: str = "secrets") -> dict[str, dict[str, Any]]:
     return run_db(_query)
 
 
-def write_checkpoint_for_repo(
-    repo: str,
+def write_checkpoint_for_asset(
+    asset_id: str,
     last_commit_sha: str | None,
     last_scanned_at: str,
-    org: str = "",
     tool: str = "secrets",
 ) -> None:
-    """Write a checkpoint for a repo to the DB."""
+    """Write a checkpoint for an asset to the DB."""
     async def _query(session):
-        result = await session.execute(
-            select(ScanCheckpoint).where(
-                ScanCheckpoint.tool == tool,
-                ScanCheckpoint.org == org.lower(),
-                ScanCheckpoint.repo == repo,
-            )
-        )
-        existing = result.scalars().first()
+        existing = await session.get(ScanCheckpoint, (tool, asset_id))
         if existing:
             existing.last_commit_sha = last_commit_sha or ""
             existing.last_commit_date = last_scanned_at
         else:
             session.add(ScanCheckpoint(
                 tool=tool,
-                org=org.lower(),
-                repo=repo,
+                asset_id=asset_id,
                 last_commit_sha=last_commit_sha or "",
                 last_commit_date=last_scanned_at,
             ))
@@ -117,12 +108,22 @@ def _entries_to_append(
     return [e for e in new_entries if e.get("runId") not in existing_run_ids]
 
 
-def reset_checkpoints(org: str = "", tool: str = "secrets") -> None:
-    """Delete all checkpoints for a tool+org (or all for that tool if org is empty)."""
+def reset_checkpoints(asset_ids: list[str] | None = None, tool: str = "secrets") -> None:
+    """Delete checkpoints for a tool, optionally scoped to a set of assets.
+
+    With ``asset_ids=None`` (default), deletes every row (across all tools and
+    assets) — preserves the legacy "reset everything" behaviour of the old
+    org-less call.
+    """
     async def _query(session):
-        if org:
+        if asset_ids is not None:
+            if not asset_ids:
+                return
             result = await session.execute(
-                select(ScanCheckpoint).where(ScanCheckpoint.tool == tool, ScanCheckpoint.org == org.lower())
+                select(ScanCheckpoint).where(
+                    ScanCheckpoint.tool == tool,
+                    ScanCheckpoint.asset_id.in_(asset_ids),
+                )
             )
         else:
             result = await session.execute(select(ScanCheckpoint))

@@ -1,4 +1,4 @@
-"""Tests for POST /runner/api/jobs/{job_id}/uploads/presign."""
+"""Tests for POST /api/v1/runner/jobs/{job_id}/uploads/presign."""
 from __future__ import annotations
 
 import pytest
@@ -51,7 +51,7 @@ def test_upload_presign_happy_path(client, approved_runner, running_job):
     with patch("src.runner.router.generate_upload_url") as mock_mint:
         mock_mint.side_effect = lambda key, expires_in, external: f"https://minio.example/{key}?sig=xyz"
         resp = client.post(
-            f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+            f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
             headers=_auth(approved_runner["token"]),
             json={"files": ["findings.json", "sbom.cdx.json"]},
         )
@@ -68,7 +68,7 @@ def test_upload_presign_happy_path(client, approved_runner, running_job):
 
 def test_upload_presign_rejects_missing_auth(client, running_job):
     resp = client.post(
-        f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+        f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
         json={"files": ["findings.json"]},
     )
     assert resp.status_code == 401
@@ -85,7 +85,7 @@ def test_upload_presign_rejects_wrong_runner(client, approved_runner, running_jo
     assert err is None
     approve_runner(other["id"])
     resp = client.post(
-        f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+        f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
         headers=_auth(other_token),
         json={"files": ["findings.json"]},
     )
@@ -95,7 +95,7 @@ def test_upload_presign_rejects_wrong_runner(client, approved_runner, running_jo
 def test_upload_presign_rejects_non_running_job(client, approved_runner, running_job):
     update_job_status(running_job["id"], "queued")
     resp = client.post(
-        f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+        f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
         headers=_auth(approved_runner["token"]),
         json={"files": ["findings.json"]},
     )
@@ -105,7 +105,7 @@ def test_upload_presign_rejects_non_running_job(client, approved_runner, running
 @pytest.mark.parametrize("bad_name", ["../etc/passwd", "/absolute", "name with space", ""])
 def test_upload_presign_rejects_unsafe_filenames(client, approved_runner, running_job, bad_name):
     resp = client.post(
-        f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+        f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
         headers=_auth(approved_runner["token"]),
         json={"files": ["findings.json", bad_name]},
     )
@@ -121,7 +121,7 @@ def test_upload_presign_key_construction_uses_job_fields(client, approved_runner
 
     with patch("src.runner.router.generate_upload_url", side_effect=_capture):
         client.post(
-            f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+            f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
             headers=_auth(approved_runner["token"]),
             json={"files": ["findings.json"]},
         )
@@ -138,7 +138,7 @@ def test_sbom_list_happy_path(client, approved_runner, running_job):
         ]
         mock_mint.side_effect = lambda key, expires_in: f"https://minio.example/{key}?sig=xyz"
         resp = client.get(
-            f"/runner/api/jobs/{running_job['id']}/sboms",
+            f"/api/v1/runner/jobs/{running_job['id']}/sboms",
             headers=_auth(approved_runner["token"]),
         )
 
@@ -154,7 +154,7 @@ def test_sbom_list_happy_path(client, approved_runner, running_job):
 def test_sbom_list_empty_org(client, approved_runner, running_job):
     with patch("src.runner.router.list_objects", return_value=[]):
         resp = client.get(
-            f"/runner/api/jobs/{running_job['id']}/sboms",
+            f"/api/v1/runner/jobs/{running_job['id']}/sboms",
             headers=_auth(approved_runner["token"]),
         )
     assert resp.status_code == 200
@@ -173,7 +173,7 @@ def test_sbom_list_rejects_wrong_runner(client, approved_runner, running_job):
     assert err is None
     approve_runner(other["id"])
     resp = client.get(
-        f"/runner/api/jobs/{running_job['id']}/sboms",
+        f"/api/v1/runner/jobs/{running_job['id']}/sboms",
         headers=_auth(other_token),
     )
     assert resp.status_code == 404
@@ -204,7 +204,7 @@ def test_upload_presign_allows_up_to_limit(client, approved_runner, running_job,
     with patch("src.runner.router.generate_upload_url", side_effect=_mint_upload_url):
         for _ in range(200):
             resp = client.post(
-                f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+                f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
                 headers=_auth(approved_runner["token"]),
                 json={"files": ["findings.json"]},
             )
@@ -216,14 +216,14 @@ def test_upload_presign_rate_limits_above_threshold(client, approved_runner, run
     with patch("src.runner.router.generate_upload_url", side_effect=_mint_upload_url):
         for _ in range(200):
             resp = client.post(
-                f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+                f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
                 headers=_auth(approved_runner["token"]),
                 json={"files": ["findings.json"]},
             )
             assert resp.status_code == 200
 
         resp = client.post(
-            f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+            f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
             headers=_auth(approved_runner["token"]),
             json={"files": ["findings.json"]},
         )
@@ -242,7 +242,7 @@ def test_upload_presign_recovers_after_window_expires(client, approved_runner, r
     with patch("src.runner.router.generate_upload_url", side_effect=_mint_upload_url):
         for _ in range(200):
             resp = client.post(
-                f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+                f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
                 headers=_auth(approved_runner["token"]),
                 json={"files": ["findings.json"]},
             )
@@ -250,7 +250,7 @@ def test_upload_presign_recovers_after_window_expires(client, approved_runner, r
 
         # Still in the same window — 201st must 429.
         resp = client.post(
-            f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+            f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
             headers=_auth(approved_runner["token"]),
             json={"files": ["findings.json"]},
         )
@@ -259,7 +259,7 @@ def test_upload_presign_recovers_after_window_expires(client, approved_runner, r
         # Advance past the 60s window — old entries get pruned.
         fake_now["t"] += 61.0
         resp = client.post(
-            f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+            f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
             headers=_auth(approved_runner["token"]),
             json={"files": ["findings.json"]},
         )
@@ -289,7 +289,7 @@ def test_upload_presign_runners_have_independent_quotas(client, approved_runner,
     with patch("src.runner.router.generate_upload_url", side_effect=_mint_upload_url):
         for _ in range(200):
             resp = client.post(
-                f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+                f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
                 headers=_auth(approved_runner["token"]),
                 json={"files": ["findings.json"]},
             )
@@ -297,7 +297,7 @@ def test_upload_presign_runners_have_independent_quotas(client, approved_runner,
 
         # First runner is over quota.
         resp = client.post(
-            f"/runner/api/jobs/{running_job['id']}/uploads/presign",
+            f"/api/v1/runner/jobs/{running_job['id']}/uploads/presign",
             headers=_auth(approved_runner["token"]),
             json={"files": ["findings.json"]},
         )
@@ -305,7 +305,7 @@ def test_upload_presign_runners_have_independent_quotas(client, approved_runner,
 
         # Second runner still has its own untouched quota.
         resp = client.post(
-            f"/runner/api/jobs/{other_job['id']}/uploads/presign",
+            f"/api/v1/runner/jobs/{other_job['id']}/uploads/presign",
             headers=_auth(other_token),
             json={"files": ["findings.json"]},
         )
@@ -317,13 +317,13 @@ def test_sbom_list_rate_limits_per_runner(client, approved_runner, running_job, 
     with patch("src.runner.router.list_objects", return_value=[]):
         for _ in range(200):
             resp = client.get(
-                f"/runner/api/jobs/{running_job['id']}/sboms",
+                f"/api/v1/runner/jobs/{running_job['id']}/sboms",
                 headers=_auth(approved_runner["token"]),
             )
             assert resp.status_code == 200
 
         resp = client.get(
-            f"/runner/api/jobs/{running_job['id']}/sboms",
+            f"/api/v1/runner/jobs/{running_job['id']}/sboms",
             headers=_auth(approved_runner["token"]),
         )
     assert resp.status_code == 429

@@ -1,7 +1,7 @@
 """Job queue abstraction.
 
 Phase 0 wraps the existing file-based queue (jobs.py) behind this Protocol
-so Phase 1 can swap in a Redis-backed implementation without touching
+so future queue backends (e.g. SQS) can be added without touching
 call sites.
 """
 from __future__ import annotations

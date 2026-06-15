@@ -1,173 +1,27 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef, type ReactNode } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { ActivityFeed } from "@/components/shared/activity/ActivityFeed"
 import { ActivityFilterChip, eventTypeLabel } from "@/components/shared/activity/ActivityFilterChip"
+import { CatchUpBanner } from "@/components/shared/activity/CatchUpBanner"
+import { QuickFilterChips, FilterOverflow } from "@/components/shared/activity/QuickFilterChips"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ActivityIcon } from "@/lib/shared/ui/page-icons"
 import { KpiCard } from "@/components/shared/KpiCard"
+import { Button } from "@/components/ui/Button"
 import { listActivity } from "@/lib/client/activity-api"
 import type { ActivityEvent } from "@/lib/client/activity-api"
-import { CHIP_GROUPS } from "@/components/shared/activity/event-labels"
-import { relativeTime } from "@/lib/shared/relative-time"
+import { chipTypesFor } from "@/components/shared/activity/event-labels"
+import {
+  deriveCatchUp,
+  deriveDayStats,
+  type CatchUpData,
+  type DayStats,
+} from "@/lib/shared/activity-derivations"
 
 const NEUTRAL = "text-[var(--color-text-primary)]"
 const CRITICAL = "text-[var(--color-severity-critical)]"
 const OK = "text-[var(--color-state-fixed)]"
-
-function chipTypesFor(chipId: string | null): string[] {
-  if (!chipId) return []
-  const group = CHIP_GROUPS.find((c) => c.id === chipId)
-  return group ? [...group.types] : []
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface DayStats {
-  total: number
-  newFindings: number
-  criticalFindings: number
-  fixed: number
-  decisions: number
-  scans: number
-  byType: Record<string, number>
-}
-
-interface CatchUpData {
-  since: string
-  total: number
-  newFindings: number
-  criticalFindings: number
-  fixed: number
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function deriveDayStats(events: ActivityEvent[]): DayStats {
-  const byType: Record<string, number> = {}
-  for (const e of events) {
-    byType[e.type] = (byType[e.type] || 0) + 1
-  }
-  return {
-    total: events.length,
-    newFindings: events.filter((e) => e.type === "finding.created").length,
-    criticalFindings: events.filter(
-      (e) => e.type === "finding.created" && e.payload.severity === "critical"
-    ).length,
-    fixed: events.filter((e) => e.type === "finding.fixed").length,
-    decisions: events.filter((e) => e.type === "finding.dismissed").length,
-    scans: events.filter((e) => e.type === "scan.completed").length,
-    byType,
-  }
-}
-
-function deriveCatchUp(events: ActivityEvent[], since: string): CatchUpData {
-  return {
-    since,
-    total: events.length,
-    newFindings: events.filter((e) => e.type === "finding.created").length,
-    criticalFindings: events.filter(
-      (e) => e.type === "finding.created" && e.payload.severity === "critical"
-    ).length,
-    fixed: events.filter((e) => e.type === "finding.fixed").length,
-  }
-}
-
-// ── Filter overflow dropdown ──────────────────────────────────────────────────
-
-// Curated groups shown in the overflow dropdown (more granular than the chip row).
-const FILTER_GROUPS = [
-  {
-    label: "Findings",
-    types: ["finding.created", "finding.fixed", "finding.dismissed", "finding.reopened"],
-  },
-  {
-    label: "Scans",
-    types: ["scan.completed", "scan.failed"],
-  },
-  {
-    label: "Intel",
-    types: ["intel.cve.added", "kev.added", "sla.breached"],
-  },
-  {
-    label: "Integrations",
-    types: ["integration.connected", "integration.disconnected"],
-  },
-]
-
-interface FilterOverflowProps {
-  activeTypes: string[]
-  onToggle: (type: string) => void
-  onClear: () => void
-  open: boolean
-  onOpenChange: (v: boolean) => void
-}
-
-function FilterOverflow({ activeTypes, onToggle, onClear, open, onOpenChange }: FilterOverflowProps) {
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onOpenChange(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
-  }, [open, onOpenChange])
-
-  return (
-    <div className="relative shrink-0" ref={ref}>
-      <button
-        type="button"
-        onClick={() => onOpenChange(!open)}
-        aria-label="More filters"
-        aria-haspopup="true"
-        aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
-      >
-        <span aria-hidden="true">…</span>
-        {activeTypes.length > 0 && (
-          <span className="rounded-full bg-[var(--color-accent)] px-1.5 py-px text-2xs font-bold text-[var(--color-accent-on)]">
-            {activeTypes.length}
-          </span>
-        )}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-full z-10 mt-1 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-lg">
-          {activeTypes.length > 0 && (
-            <button
-              type="button"
-              onClick={onClear}
-              className="mb-2 w-full rounded-lg py-1 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-            >
-              Clear all filters
-            </button>
-          )}
-          {FILTER_GROUPS.map((group) => (
-            <div key={group.label} className="mb-3 last:mb-0">
-              <p className="mb-1.5 px-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
-                {group.label}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {group.types.map((type) => (
-                  <ActivityFilterChip
-                    key={type}
-                    label={eventTypeLabel(type)}
-                    active={activeTypes.includes(type)}
-                    onToggle={() => onToggle(type)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── StatStrip ─────────────────────────────────────────────────────────────────
 
@@ -228,130 +82,6 @@ function StatStrip({ stats, errored }: StatStripProps) {
   )
 }
 
-// ── CatchUpBanner ─────────────────────────────────────────────────────────────
-
-interface CatchUpBannerProps {
-  data: CatchUpData
-  onDismiss: () => void
-}
-
-function CatchUpBanner({ data, onDismiss }: CatchUpBannerProps) {
-  const eventLabel = `${data.total} event${data.total === 1 ? "" : "s"}`
-  return (
-    <div className="mb-4 flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--color-accent)_22%,transparent)] bg-gradient-to-br from-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] to-[color-mix(in_srgb,#a78bfa_5%,transparent)] px-4 py-3.5">
-      {/* Icon — mock catchup-icon (accent square with clock svg) */}
-      <span
-        aria-hidden="true"
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-on)]"
-      >
-        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 6v6l4 2" />
-        </svg>
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-          You&apos;ve been away since {relativeTime(data.since)}
-        </p>
-        <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-          <strong className="font-semibold text-[var(--color-text-primary)]">{eventLabel}</strong>
-          {data.newFindings > 0 && (
-            <>
-              {" · "}
-              <strong className="font-semibold text-[var(--color-text-primary)]">
-                {data.newFindings} new finding{data.newFindings === 1 ? "" : "s"}
-              </strong>
-              {data.criticalFindings > 0 && <> ({data.criticalFindings} critical)</>}
-            </>
-          )}
-          {data.fixed > 0 && (
-            <>
-              {" · "}
-              <strong className="font-semibold text-[var(--color-text-primary)]">
-                {data.fixed} fixed
-              </strong>
-            </>
-          )}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss catch-up banner"
-        className="shrink-0 rounded-md p-1 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text-primary)]"
-      >
-        <svg
-          className="h-4 w-4"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M18 6 6 18M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-  )
-}
-
-// ── QuickFilterChips ──────────────────────────────────────────────────────────
-
-interface QuickFilterChipsProps {
-  stats: DayStats | null
-  activeChip: string | null
-  onSelect: (chipId: string, types: string[]) => void
-  overflow: ReactNode
-}
-
-function QuickFilterChips({ stats, activeChip, onSelect, overflow }: QuickFilterChipsProps) {
-  return (
-    <div className="-mx-1 flex w-full items-center gap-2 overflow-x-auto px-1">
-      {CHIP_GROUPS.map((chip) => {
-        const isActive = activeChip === chip.id
-
-        // Compute count: for "all" show total, for others count matching types
-        let count: string | null
-        if (stats === null) {
-          count = null
-        } else if (chip.id === "all") {
-          count = String(stats.total)
-        } else {
-          const n = chip.types.reduce((acc, t) => acc + (stats.byType[t] || 0), 0)
-          count = String(n)
-        }
-
-        const baseClasses =
-          "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors"
-        const activeClasses =
-          "bg-[var(--color-accent)] text-[var(--color-accent-on)]"
-        const inactiveClasses =
-          "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-
-        const className = [
-          baseClasses,
-          isActive ? activeClasses : inactiveClasses,
-        ].join(" ")
-
-        return (
-          <button
-            key={chip.id}
-            type="button"
-            className={className}
-            onClick={() => onSelect(chip.id, [...chip.types])}
-          >
-            {chip.label}
-            {count !== null && <span className="opacity-70 tabular-nums">{count}</span>}
-          </button>
-        )
-      })}
-      {overflow}
-    </div>
-  )
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ActivityPage() {
@@ -400,25 +130,14 @@ export default function ActivityPage() {
     }
   }, [])
 
-  const fetchEvents = useCallback(async (types: string[], cursor?: string) => {
-    try {
-      const params = {
-        limit: 50,
-        ...(types.length > 0 ? { types } : {}),
-        ...(cursor ? { cursor } : {}),
-      }
-      const resp = await listActivity(params)
-      return resp
-    } catch (err) {
-      throw err
-    }
-  }, [])
-
   const load = useCallback(async (types: string[]) => {
     setLoading(true)
     setError(null)
     try {
-      const resp = await fetchEvents(types)
+      const resp = await listActivity({
+        limit: 50,
+        ...(types.length > 0 ? { types } : {}),
+      })
       setEvents(resp.events)
       setNextCursor(resp.next_cursor)
     } catch {
@@ -426,7 +145,7 @@ export default function ActivityPage() {
     } finally {
       setLoading(false)
     }
-  }, [fetchEvents])
+  }, [])
 
   useEffect(() => {
     load(activeTypes)
@@ -435,7 +154,10 @@ export default function ActivityPage() {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
     try {
-      const resp = await fetchEvents(activeTypes)
+      const resp = await listActivity({
+        limit: 50,
+        ...(activeTypes.length > 0 ? { types: activeTypes } : {}),
+      })
       setEvents(resp.events)
       setNextCursor(resp.next_cursor)
     } catch {
@@ -443,13 +165,17 @@ export default function ActivityPage() {
     } finally {
       setRefreshing(false)
     }
-  }, [fetchEvents, activeTypes])
+  }, [activeTypes])
 
   const handleLoadMore = useCallback(async () => {
     if (!nextCursor || loadingMore) return
     setLoadingMore(true)
     try {
-      const resp = await fetchEvents(activeTypes, nextCursor)
+      const resp = await listActivity({
+        limit: 50,
+        cursor: nextCursor,
+        ...(activeTypes.length > 0 ? { types: activeTypes } : {}),
+      })
       setEvents((prev) => [...prev, ...resp.events])
       setNextCursor(resp.next_cursor)
     } catch {
@@ -457,7 +183,7 @@ export default function ActivityPage() {
     } finally {
       setLoadingMore(false)
     }
-  }, [nextCursor, loadingMore, fetchEvents, activeTypes])
+  }, [nextCursor, loadingMore, activeTypes])
 
   const handleTypeToggle = useCallback((type: string) => {
     // When the user manually toggles types via dropdown, no chip is active
@@ -496,29 +222,21 @@ export default function ActivityPage() {
         title="Activity"
         description="What's happened across your org recently."
         controls={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={refreshing || loading}
-              title="Refresh"
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
-            >
-              <svg
-                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing || loading}
+            isLoading={refreshing}
+            title="Refresh"
+            leadingIcon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
               </svg>
-              Refresh
-            </button>
-          </div>
+            }
+          >
+            Refresh
+          </Button>
         }
       />
 
@@ -554,13 +272,9 @@ export default function ActivityPage() {
               onToggle={() => handleTypeToggle(type)}
             />
           ))}
-          <button
-            type="button"
-            onClick={handleClearFilters}
-            className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] underline"
-          >
+          <Button variant="ghost" size="xs" onClick={handleClearFilters}>
             Clear
-          </button>
+          </Button>
         </div>
       )}
 
@@ -572,7 +286,10 @@ export default function ActivityPage() {
 
         {/* Error state */}
         {error && (
-          <div className="mb-4 rounded-lg border border-[var(--color-severity-high)]/30 bg-[var(--color-severity-high)]/5 px-4 py-3 text-sm text-[var(--color-severity-high)]">
+          <div
+            role="alert"
+            className="mb-4 rounded-lg border border-[var(--color-severity-high-border)] bg-[var(--color-severity-high-subtle)] px-4 py-3 text-sm text-[var(--color-severity-high)]"
+          >
             {error}
           </div>
         )}

@@ -14,7 +14,7 @@ import pytest
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, _ROOT)
 
-from runner.structured_logging import (
+from runner.observability.logging import (
     JsonFormatter,
     configure_logging,
     install_json_logging,

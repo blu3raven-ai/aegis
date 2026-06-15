@@ -156,9 +156,7 @@ export interface SecretsScannerHitRate {
   runId: string | null
   organization: string | null
   createdAt: string | null
-  betterleaksCount: number
   trufflehogCount: number
-  betterleaksStatus: "green" | "amber" | "red"
   trufflehogStatus: "green" | "amber" | "red"
 }
 
@@ -175,7 +173,7 @@ export type SecretClassification = "confirmed" | "likely_real" | "uncertain" | "
 export interface ClassificationEntry {
   value: SecretClassification
   source: "scanner" | "ai"
-  scanDepth: "light" | "deep" | "ai_enhanced" | null
+  scanDepth: "light" | "deep" | null
   confidence: number
   runId: string
   scannedAt: string

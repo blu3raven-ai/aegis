@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { Input } from "@/components/ui/Input"
 import { saveToolSettings } from "@/lib/client/settings-api"
-import { SaveBar } from "./SaveBar"
+import { useSaveBarSection } from "./save-bar/SaveBarProvider"
 
 type ToolKey = "dependencies" | "containerScanning" | "codeScanning" | "secrets" | "iacSecurity"
 
@@ -89,6 +90,15 @@ export function ToolSettingsForm({
     setSaved(false)
   }
 
+  useSaveBarSection({
+    id: `tool-settings:${tool}`,
+    dirty: isDirty,
+    saving: isPending,
+    error,
+    onSave: handleSave,
+    onDiscard: handleDiscard,
+  })
+
   useEffect(() => {
     onDraftChange?.(draft)
   }, [isEnabled, values, onDraftChange])
@@ -159,13 +169,12 @@ export function ToolSettingsForm({
               ) : (
                 <>
                   <label className="mb-2 block text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">{field.label}</label>
-                  <input
+                  <Input
                     type={field.type}
                     min={field.type === "number" ? 1 : undefined}
                     value={values[field.key] ?? ""}
                     onChange={(e) => setFieldValue(field.key, e.target.value)}
                     required={field.required ?? true}
-                    className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
                   />
                   <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">{field.help}</p>
                 </>
@@ -180,14 +189,6 @@ export function ToolSettingsForm({
           {error}
         </div>
       )}
-
-      <SaveBar
-        saved={saved}
-        dirty={isDirty}
-        onSave={handleSave}
-        onDiscard={handleDiscard}
-        saving={isPending}
-      />
     </form>
   )
 }

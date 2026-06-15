@@ -3,7 +3,7 @@ import type { ClassificationEntry, SecretFinding, SecretReviewStatus, SecretScan
 // ---------------------------------------------------------------------------
 // Detector categorisation
 // ---------------------------------------------------------------------------
-// Built from the actual detector/rule-id namespaces of TruffleHog and BetterLeaks.
+// Built from the actual detector/rule-id namespaces of TruffleHog.
 // Strategy:
 //   1. Normalise the detector name to lowercase, strip separators → plain token list
 //   2. Match the first token (vendor prefix) against VENDOR_MAP
@@ -67,7 +67,7 @@ const VENDOR_MAP: Record<string, string> = {
   googlegemini:  "AI/ML",
   moonshot:      "AI/ML",
   openaiadmin:   "AI/ML",
-  azure_openai:  "AI/ML",  // betterleaks treats this separately
+  azure_openai:  "AI/ML",
   greptile:      "AI/ML",
   saladcloud:    "AI/ML",
   ngc:           "AI/ML",  // NVIDIA GPU Cloud

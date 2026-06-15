@@ -2,12 +2,24 @@
 from __future__ import annotations
 import logging
 from typing import Any
-from src.notifications.senders.base import BaseSender, SendResult
+
+from src.connectors.base import BaseSender, SendResult, TestResult
+from src.connectors.registry import register_connector
 
 logger = logging.getLogger(__name__)
 
 
+@register_connector
 class JiraSender(BaseSender):
+    id = "jira"
+    name = "Jira"
+    category = "notification"
+    description = "Open Jira tickets for new findings (stub)"
+    version = "v0.5"
+    status = "beta"
+    icon_slug = "jira"
+    href = "/notifications"
+
     destination_type = "jira"
 
     def send(self, payload: dict[str, Any], config: dict[str, Any]) -> SendResult:
@@ -17,3 +29,6 @@ class JiraSender(BaseSender):
             payload.get("finding_id", "?"),
         )
         return SendResult(success=True)
+
+    def test(self) -> TestResult:
+        return TestResult(ok=True)

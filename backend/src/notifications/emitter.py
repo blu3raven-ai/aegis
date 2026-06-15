@@ -61,7 +61,7 @@ def _get_admin_user_ids() -> list[str]:
         result = await session.execute(
             select(User.id).where(
                 User.status == "active",
-                User.role.in_(["owner", "admin"]),
+                User.role_id.in_(["role_owner", "role_admin"]),
             )
         )
         return [row[0] for row in result.all()]

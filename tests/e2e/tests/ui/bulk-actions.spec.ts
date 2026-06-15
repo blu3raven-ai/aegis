@@ -29,7 +29,7 @@ test.describe("Bulk actions", () => {
     if (await checkboxes.first().isVisible()) {
       await checkboxes.first().check()
 
-      await page.route("**/secrets/api/findings/review", (route) =>
+      await page.route("**/api/v1/secrets/findings/review", (route) =>
         route.fulfill({ json: { ok: true } })
       )
 

@@ -5,13 +5,15 @@ interface PageHeaderProps {
   description?: string
   /** Inline pill rendered next to the title — mirrors the mock's pageheader-count. */
   count?: number | null
+  /** Optional ReactNode rendered inline next to the title (e.g. a TypeChip). */
+  meta?: React.ReactNode
   controls?: React.ReactNode
 }
 
-export function PageHeader({ icon, title, description, count, controls }: PageHeaderProps) {
+export function PageHeader({ icon, title, description, count, meta, controls }: PageHeaderProps) {
   const showCount = typeof count === "number" && Number.isFinite(count)
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
+    <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
       <div className="flex w-full items-center gap-4">
         <div className="flex items-center gap-3 min-w-0">
           {icon}
@@ -23,6 +25,7 @@ export function PageHeader({ icon, title, description, count, controls }: PageHe
                   {count.toLocaleString()}
                 </span>
               )}
+              {meta && <span className="shrink-0">{meta}</span>}
             </h1>
             {description && <p className="text-xs text-[var(--color-text-secondary)] truncate">{description}</p>}
           </div>

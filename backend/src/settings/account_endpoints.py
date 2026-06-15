@@ -1,6 +1,6 @@
 """Per-user account self-service endpoints (email / avatar / TOTP).
 
-Mounted by `settings.router` so the routes appear under `/settings/api/account/*`.
+Mounted by `settings.router` so the routes appear under `/api/v1/settings/account/*`.
 SessionAuthMiddleware has already attached `request.state.user` (a `User`
 SQLAlchemy instance) for the calling user.
 """
@@ -27,7 +27,7 @@ from src.settings.schemas import (
 from src.shared.encryption import encrypt_string
 from src.shared.totp import verify_totp
 
-account_router = APIRouter(prefix="/settings/api/account", tags=["account"])
+account_router = APIRouter(prefix="/api/v1/settings/account", tags=["account"])
 
 
 # ── Limits ────────────────────────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 "use client"
 
+import { Button } from "@/components/ui/Button"
+
 export interface FindingsPaginationProps {
   page: number
   pageSize: number
@@ -27,33 +29,37 @@ export function FindingsPagination({ page, pageSize, total, onChange }: Findings
     <div className="flex items-center justify-between border-t border-[var(--color-border)] px-4 py-2.5 text-xs text-[var(--color-text-secondary)]">
       <span>Showing {startIdx}-{endIdx} of {total} findings</span>
       <nav className="flex items-center gap-1" aria-label="Pagination">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="xs"
+          iconOnly
           disabled={page <= 1}
           onClick={() => onChange(page - 1)}
           aria-label="Previous page"
-          className="rounded border border-[var(--color-border)] px-2 py-0.5 hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:opacity-50 disabled:cursor-not-allowed"
-        >◀</button>
+        >
+          ◀
+        </Button>
         {pages.map((p) => (
-          <button
+          <Button
             key={p}
-            type="button"
+            variant={p === page ? "primary" : "secondary"}
+            size="xs"
             onClick={() => onChange(p)}
             aria-current={p === page ? "page" : undefined}
-            className={`rounded px-2 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
-              p === page
-                ? "bg-[var(--color-accent)] text-[var(--color-accent-on)] font-semibold"
-                : "border border-[var(--color-border)] hover:text-[var(--color-text-primary)]"
-            }`}
-          >{p}</button>
+          >
+            {p}
+          </Button>
         ))}
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="xs"
+          iconOnly
           disabled={page >= totalPages}
           onClick={() => onChange(page + 1)}
           aria-label="Next page"
-          className="rounded border border-[var(--color-border)] px-2 py-0.5 hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:opacity-50 disabled:cursor-not-allowed"
-        >▶</button>
+        >
+          ▶
+        </Button>
       </nav>
     </div>
   )

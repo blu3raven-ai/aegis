@@ -57,11 +57,11 @@ export function BlockerDiffList({ blockers, emptyMessage, baselineRef }: Blocker
       </header>
 
       {total === 0 ? (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-text-secondary)]">
+        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-text-secondary)]">
           {emptyMessage}
         </div>
       ) : (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+        <div className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
           {visible.map((row) => {
             const sevKey = severityKey(row.severity)
             const sevLetter = SEVERITY_LETTER[sevKey] ?? "?"

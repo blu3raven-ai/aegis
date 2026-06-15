@@ -10,6 +10,8 @@ import {
   RoleRecord,
   RoleInput
 } from "@/lib/client/settings-api"
+import { Button } from "@/components/ui/Button"
+import { Sheet } from "@/components/ui/Sheet"
 import { RolesTable } from "./RolesTable"
 import { RoleEditor } from "./RoleEditor"
 import { Dialog } from "@/components/layout/Dialog"
@@ -167,16 +169,19 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
     <div className="space-y-6">
       {!selectedRole && !isCreating && !createTriggerRef && (
         <div className="flex items-start justify-end gap-4">
-          <button
+          <Button
+            variant="primary"
+            size="md"
             onClick={handleCreate}
-            className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
+            leadingIcon={
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+            }
           >
-            <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
             Create Role
-          </button>
+          </Button>
         </div>
       )}
 
@@ -186,23 +191,58 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
         </div>
       )}
 
-      {(selectedRole || isCreating) ? (
+      <RolesTable
+        roles={roles}
+        onSelectRole={handleSelect}
+        onDuplicateRole={handleDuplicate}
+        onDeleteRole={handleDeleteTrigger}
+      />
+
+      <Sheet
+        open={!!selectedRole || isCreating}
+        onClose={handleCancel}
+        title={isCreating ? "Create role" : `Edit role: ${selectedRole?.name ?? ""}`}
+        description={
+          isCreating
+            ? "Name the role and pick the permissions it grants."
+            : "Adjust the permissions this role grants."
+        }
+        size="xl"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            {selectedRole && !selectedRole.isLocked && selectedRole.id !== "role_owner" && !isCreating && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleDeleteTrigger(selectedRole.id)}
+                className="mr-auto border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+              >
+                Delete role
+              </Button>
+            )}
+            <Button variant="ghost" size="md" onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="role-editor-form"
+              variant="primary"
+              size="md"
+              disabled={isSaving || (!!selectedRole && (selectedRole.isLocked || selectedRole.id === "role_owner"))}
+              isLoading={isSaving}
+            >
+              {isSaving ? "Saving…" : isCreating ? "Create role" : "Save role"}
+            </Button>
+          </div>
+        }
+      >
         <RoleEditor
           role={selectedRole}
           isCreating={isCreating}
           onSave={handleSave}
-          onDelete={handleDeleteTrigger}
-          onCancel={handleCancel}
           isLoading={isSaving}
         />
-      ) : (
-        <RolesTable
-          roles={roles}
-          onSelectRole={handleSelect}
-          onDuplicateRole={handleDuplicate}
-          onDeleteRole={handleDeleteTrigger}
-        />
-      )}
+      </Sheet>
 
       {/* Popups */}
       <Dialog

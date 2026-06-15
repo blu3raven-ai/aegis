@@ -18,7 +18,6 @@ class AuditEventRecord(BaseModel):
     actor_username: str | None = None
     actor_email: str | None = None
     actor_role: str | None = None
-    org_id: str | None = None
     resource_type: str | None = None
     resource_id: str | None = None
     target: str | None = None

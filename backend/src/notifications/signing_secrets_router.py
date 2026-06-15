@@ -33,33 +33,10 @@ router = APIRouter(
 
 
 def _assert_webhook_dest(dest_id: int, request: Request) -> dict[str, Any]:
-    """Load the destination and verify it's a webhook type, or 404/403."""
-    org_id: str = getattr(request.state, "org_id", None) or ""
-    dest = get_destination(dest_id, org_id) if org_id else None
-
-    # Fall back to org-less lookup for backwards compat with test scaffolding
+    """Load the destination and verify it's a webhook type, or 404/422."""
+    dest = get_destination(dest_id)
     if dest is None:
-        from src.db.helpers import run_db
-        from src.db.models import NotificationDestination
-        from sqlalchemy import select
-
-        async def _q(session):
-            result = await session.execute(
-                select(NotificationDestination).where(
-                    NotificationDestination.id == dest_id,
-                )
-            )
-            return result.scalars().first()
-
-        row = run_db(_q)
-        if row is None:
-            raise HTTPException(status_code=404, detail="destination not found")
-        if row.destination_type != "webhook":
-            raise HTTPException(
-                status_code=422, detail="signing secrets are only supported for webhook destinations"
-            )
-        return {"id": row.id, "org_id": row.org_id, "destination_type": row.destination_type}
-
+        raise HTTPException(status_code=404, detail="destination not found")
     if dest["destination_type"] != "webhook":
         raise HTTPException(
             status_code=422, detail="signing secrets are only supported for webhook destinations"

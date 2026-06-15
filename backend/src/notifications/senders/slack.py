@@ -9,23 +9,32 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import httpx
-
-from src.notifications.senders.base import BaseSender, SendResult
+from src.connectors.base import BaseSender, SendResult, TestResult
+from src.connectors.http import default_client
+from src.connectors.registry import register_connector
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT_S = 10
 
-
+@register_connector
 class SlackSender(BaseSender):
+    id = "slack"
+    name = "Slack"
+    category = "notification"
+    description = "Post findings to a Slack channel via Incoming Webhooks"
+    version = "v1.0"
+    status = "stable"
+    icon_slug = "slack"
+    href = "/notifications"
+
     def send(self, payload: dict[str, Any], config: dict[str, Any]) -> SendResult:
         url = config.get("webhook_url", "")
         if not url:
             return SendResult(success=False, error="slack config missing webhook_url")
 
         try:
-            resp = httpx.post(url, json=payload, timeout=_TIMEOUT_S)
+            with default_client() as client:
+                resp = client.post(url, json=payload)
             if resp.status_code == 200:
                 return SendResult(success=True, response_code=resp.status_code)
             return SendResult(
@@ -36,3 +45,7 @@ class SlackSender(BaseSender):
         except Exception as exc:
             logger.warning("SlackSender.send error: %s", exc)
             return SendResult(success=False, error=str(exc)[:500])
+
+    def test(self) -> TestResult:
+        """No external probe — registration-time liveness check only."""
+        return TestResult(ok=True)

@@ -126,6 +126,12 @@ async def upsert_finding(
     # Extract typed-column values from full detail BEFORE split runs.
     queryable = extract_queryable_fields(detail)
 
+    # Promote verification fields from `detail` into typed columns.
+    v_verdict = detail.get("verdict")
+    v_evidence = detail.get("evidence_json")
+    v_chain = detail.get("exploit_chain")
+    v_meta = detail.get("verification_metadata")
+
     if existing:
         lean, fat = split_detail(tool, detail)
         existing.state = state
@@ -139,6 +145,24 @@ async def upsert_finding(
         existing.package_name = queryable["package_name"]
         if engine is not None:
             existing.engine = engine
+        old_verdict = existing.verdict
+        if v_verdict is not None:
+            existing.verdict = v_verdict
+        if v_evidence is not None:
+            existing.evidence_json = v_evidence
+        if v_chain is not None:
+            existing.exploit_chain = v_chain
+        if v_meta is not None:
+            existing.verification_metadata = v_meta
+        if v_verdict is not None and old_verdict != v_verdict:
+            from src.audit_log.recorder import ActorInfo, get_recorder
+            get_recorder().record(
+                action="finding.verdict_changed",
+                resource_type="finding",
+                resource_id=str(existing.id),
+                actor=ActorInfo(user_id="system:verification"),
+                changes={"verdict": {"from": old_verdict, "to": v_verdict}},
+            )
         existing.last_seen_at = now
         existing.updated_at = now
         if fixed_at is not None:
@@ -166,6 +190,10 @@ async def upsert_finding(
             rule_name=queryable["rule_name"],
             package_name=queryable["package_name"],
             engine=engine,
+            verdict=v_verdict,
+            evidence_json=v_evidence,
+            exploit_chain=v_chain,
+            verification_metadata=v_meta,
             first_seen_at=first_seen_at or now,
             last_seen_at=now,
             created_at=now,
@@ -334,9 +362,6 @@ async def insert_event(
     session: AsyncSession,
     *,
     finding_id: int,
-    tool: str,
-    org: str,
-    identity_key: str,
     from_state: str | None,
     to_state: str,
     triggered_by: str,
@@ -346,9 +371,6 @@ async def insert_event(
     """Append an audit event."""
     session.add(FindingEvent(
         finding_id=finding_id,
-        tool=tool,
-        org=org,
-        identity_key=identity_key,
         from_state=from_state,
         to_state=to_state,
         triggered_by=triggered_by,

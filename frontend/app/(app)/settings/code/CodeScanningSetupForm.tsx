@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { PrerequisitePanel } from "../PrerequisitePanel"
-import { SaveBar } from "../SaveBar"
+import { useSaveBarSection } from "../save-bar/SaveBarProvider"
 import type { PrerequisiteItem } from "@/lib/shared/prerequisite-utils"
 import { RulesetPicker } from "./RulesetPicker"
 import { parseRulesets, serialiseRulesets, AUTO_RULESETS } from "@/lib/shared/code-scanning-rulesets"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { Input } from "@/components/ui/Input"
 
 interface CodeScanningSetupFormProps {
   initialScanConcurrency: string
@@ -100,6 +101,14 @@ export function CodeScanningSetupForm({
     setSaved(false)
   }
 
+  useSaveBarSection({
+    id: "code-scanning-setup",
+    dirty: isDirty,
+    saving: isPending,
+    onSave: handleSave,
+    onDiscard: handleDiscard,
+  })
+
   let status: "Setup required" | "Verifying" | "Ready" = "Setup required"
   if (prereqRefreshing) {
     status = "Verifying"
@@ -140,12 +149,11 @@ export function CodeScanningSetupForm({
       <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">Scan concurrency</label>
-            <input
+            <Input
               type="number"
               min="1"
               value={values.scanConcurrency}
               onChange={(e) => setValues({ ...values, scanConcurrency: e.target.value })}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
             />
             <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">Maximum repositories scanned in parallel.</p>
           </div>
@@ -178,11 +186,11 @@ export function CodeScanningSetupForm({
                     <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                       Scan Time (Daily)
                     </label>
-                    <input
+                    <Input
                       type="time"
                       value={values.rerunScheduleValue}
                       onChange={(e) => setValues({ ...values, rerunScheduleValue: e.target.value })}
-                      className="w-full max-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                      className="max-w-[150px]"
                     />
                   </div>
                 ) : (
@@ -190,12 +198,12 @@ export function CodeScanningSetupForm({
                     <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
                       Cron Expression
                     </label>
-                    <input
+                    <Input
                       type="text"
                       value={values.rerunScheduleValue}
                       onChange={(e) => setValues({ ...values, rerunScheduleValue: e.target.value })}
                       placeholder="e.g. 0 2 * * *"
-                      className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm font-mono text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+                      className="font-mono"
                     />
                     <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
                       Standard cron format (min hour day month weekday).
@@ -232,13 +240,6 @@ export function CodeScanningSetupForm({
           {error}
         </div>
       )}
-      <SaveBar
-        saved={saved}
-        dirty={isDirty}
-        onSave={handleSave}
-        onDiscard={handleDiscard}
-        saving={isPending}
-      />
     </div>
   )
 }

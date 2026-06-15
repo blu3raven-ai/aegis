@@ -11,7 +11,6 @@ RuleCategory = Literal["sla", "scanner_coverage", "auto_dismiss", "data_retentio
 
 
 class RuleCreate(BaseModel):
-    org_id: str
     category: RuleCategory
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None

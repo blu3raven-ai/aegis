@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { addOrganisationRepository, removeOrganisationRepository, searchOrganisationRepositories } from "@/lib/client/settings-api"
+import { Button } from "@/components/ui/Button"
 import type { OrganisationTeam, ResourceSharingIndex } from "./team-types"
 import { ResourceAutocomplete } from "./ResourceAutocomplete"
 
@@ -78,15 +79,16 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
                   </span>
                 )}
               </div>
-              <button
+              <Button
                 disabled={!canEdit || isGitHubSourced}
-                type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => void removeRepository(repo.org, repo.repo)}
-                className="rounded-lg border border-[var(--color-severity-critical-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical-subtle)] disabled:opacity-40"
+                className="border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
                 title={isGitHubSourced ? "This repository is synced from a source connection and cannot be manually removed" : undefined}
               >
                 Remove
-              </button>
+              </Button>
             </div>
           )
         })}
@@ -106,14 +108,16 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
             onChange={(next) => void updateValue(next)}
             onPick={(next) => void addRepository(next)}
           />
-          <button
+          <Button
+            variant="primary"
+            size="md"
             disabled={!canEdit || !value.trim() || submitting}
-            type="button"
             onClick={() => void addRepository()}
-            className="w-full rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            isLoading={submitting}
+            className="w-full"
           >
             {submitting ? "Adding..." : "Add repository"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ from src.db.helpers import run_db
 from src.db.models import User
 from src.settings.router import require_permission, has_permission, resolve_role_permissions
 from src.settings.organisations_store import list_admin_team_ids
-from src.settings.roles_store import get_role, get_role_by_slug
+from src.settings.roles_store import get_role, get_role_by_slug, role_kind_from_id
 from src.settings.audit import record_event
 from src.shared.paths import now_iso as _now_iso
 
@@ -23,7 +23,7 @@ _ADMIN_ROLES = {"owner", "admin"}
 _VALID_ROLES = {"owner", "admin", "security", "viewer"}
 _VALID_STATUSES = {"active", "disabled", "pending"}
 
-users_router = APIRouter(prefix="/settings/api/users", tags=["users-admin"])
+users_router = APIRouter(prefix="/api/v1/settings/users", tags=["users-admin"])
 
 
 def _user_to_dict(user: User) -> dict[str, Any]:
@@ -40,7 +40,7 @@ def _user_to_dict(user: User) -> dict[str, Any]:
         "username": user.username,
         "email": user.email or "",
         "passwordHash": user.password_hash or "",
-        "role": user.role or "viewer",
+        "role": role_kind_from_id(user.role_id),
         "roleId": user.role_id,
         "status": user.status or "active",
         "createdAt": created_iso,
@@ -57,7 +57,7 @@ def _safe_user(user: dict[str, Any]) -> dict[str, Any]:
 
 async def _active_owner_count_async(session) -> int:
     result = await session.execute(
-        select(func.count()).select_from(User).where(User.role == "owner", User.status == "active")
+        select(func.count()).select_from(User).where(User.role_id == "role_owner", User.status == "active")
     )
     return result.scalar() or 0
 
@@ -165,7 +165,7 @@ def list_users_directory(request: Request) -> JSONResponse:
                 "id": u.id,
                 "username": u.username,
                 "email": u.email or "",
-                "role": u.role or "viewer",
+                "role": role_kind_from_id(u.role_id),
                 "status": u.status or "active",
             }
             for u in result.scalars().all()
@@ -187,16 +187,21 @@ def create_user(body: CreateUserRequest, request: Request) -> JSONResponse:
     email = body.email.strip().lower()
     password = body.password
 
-    # Resolve role from roleId if provided, fall back to legacy role field
-    resolved_role_id: str | None = None
+    # Resolve role_id from roleId if provided, fall back to legacy role slug.
     if body.roleId:
-        role_record = get_role(body.roleId)
-        if not role_record:
+        try:
+            role_record = get_role(body.roleId)
+        except ValueError:
             raise HTTPException(status_code=400, detail="Invalid role.")
-        role = role_record["name"].lower()
         resolved_role_id = role_record["id"]
     else:
-        role = _validate_role(body.role)
+        slug = _validate_role(body.role)
+        try:
+            role_record = get_role_by_slug(slug)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid role.")
+        resolved_role_id = role_record["id"]
+    role = role_kind_from_id(resolved_role_id)
 
     if not username:
         raise HTTPException(status_code=400, detail="Username is required.")
@@ -229,7 +234,6 @@ def create_user(body: CreateUserRequest, request: Request) -> JSONResponse:
             username=username,
             email=email,
             password_hash=password_hash,
-            role=role,
             role_id=resolved_role_id,
             status="active",
             created_at=now,
@@ -261,7 +265,7 @@ def disable_user(user_id: str, request: Request) -> JSONResponse:
         if user is None:
             raise HTTPException(status_code=404, detail="User not found.")
         owner_count = await _active_owner_count_async(session)
-        if user.role == "owner" and user.status == "active" and owner_count <= 1:
+        if user.role_id == "role_owner" and user.status == "active" and owner_count <= 1:
             raise HTTPException(status_code=400, detail="Cannot disable the last active owner.")
         user.status = "disabled"
         user.session_version = (user.session_version or 1) + 1
@@ -313,25 +317,28 @@ def update_user_role(user_id: str, body: UpdateRoleRequest, request: Request) ->
     actor_user_id = str(getattr(request.state, "user_sub", "") or "")
     actor_role = str(getattr(request.state, "user_role", "") or "")
 
-    new_role_name = None
-    new_role_id = None
-
+    # Resolve target role_id (truth) and derived kind from either roleId or slug.
     if body.roleId:
         try:
             role_record = get_role(body.roleId)
-            new_role_name = role_record["name"].lower() if role_record["id"].startswith("role_") and "-" not in role_record["id"] else "custom"
-            new_role_id = role_record["id"]
         except ValueError:
             raise HTTPException(status_code=404, detail="Role not found.")
     elif body.role:
-        new_role_name = _validate_role(body.role)
+        slug = _validate_role(body.role)
+        try:
+            role_record = get_role_by_slug(slug)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Role not found.")
     else:
         raise HTTPException(status_code=400, detail="Either role or roleId must be provided.")
+
+    new_role_id = role_record["id"]
+    new_role_kind = role_kind_from_id(new_role_id)
 
     if actor_user_id == user_id:
         raise HTTPException(status_code=400, detail="You cannot change your own role.")
 
-    # Non-owners cannot assign roles with permissions they don't hold themselves
+    # Non-owners cannot assign roles with permissions they don't hold themselves.
     if actor_role != "owner":
         try:
             actor_role_id = getattr(request.state, "user_role_id", None)
@@ -343,15 +350,7 @@ def update_user_role(user_id: str, body: UpdateRoleRequest, request: Request) ->
         except ValueError:
             actor_perms = set()
 
-        # Resolve target role permissions
-        if new_role_id:
-            target_perms = resolve_role_permissions(role_record)
-        else:
-            try:
-                target_record = get_role_by_slug(new_role_name or "")
-                target_perms = resolve_role_permissions(target_record)
-            except ValueError:
-                target_perms = set()
+        target_perms = resolve_role_permissions(role_record)
 
         escalated = target_perms - actor_perms
         if escalated:
@@ -365,26 +364,29 @@ def update_user_role(user_id: str, body: UpdateRoleRequest, request: Request) ->
         if user is None:
             raise HTTPException(status_code=404, detail="User not found.")
 
-        current_role = user.role or ""
         current_role_id = user.role_id
+        current_role_kind = role_kind_from_id(current_role_id)
 
-        if actor_role != "owner" and (current_role == "owner" or new_role_name == "owner"):
+        if actor_role != "owner" and (current_role_kind == "owner" or new_role_kind == "owner"):
             raise HTTPException(status_code=403, detail="Only owners can update owner users.")
 
         owner_count = await _active_owner_count_async(session)
-        if current_role == "owner" and new_role_name != "owner" and user.status == "active" and owner_count <= 1:
+        if (
+            current_role_id == "role_owner"
+            and new_role_id != "role_owner"
+            and user.status == "active"
+            and owner_count <= 1
+        ):
             raise HTTPException(status_code=400, detail="Cannot demote the last active owner.")
 
-        if current_role == new_role_name and current_role_id == new_role_id:
-            return _user_to_dict(user), current_role, False
+        if current_role_id == new_role_id:
+            return _user_to_dict(user), current_role_kind, False
 
-        user.role = new_role_name
-        if new_role_id:
-            user.role_id = new_role_id
+        user.role_id = new_role_id
         user.session_version = (user.session_version or 1) + 1
         user.updated_at = datetime.now(timezone.utc)
         await session.flush()
-        return _user_to_dict(user), current_role, True
+        return _user_to_dict(user), current_role_kind, True
 
     user_dict, old_role, changed = run_db(_query)
     if changed:
@@ -394,7 +396,7 @@ def update_user_role(user_id: str, body: UpdateRoleRequest, request: Request) ->
             actor_user_id=actor_user_id,
             actor_username=actor_username,
             target=user_id,
-            metadata={"old_role": old_role, "new_role": new_role_name, "roleId": new_role_id},
+            metadata={"old_role": old_role, "new_role": new_role_kind, "roleId": new_role_id},
         )
     return JSONResponse({"ok": True, "user": _safe_user(user_dict)})
 
@@ -450,11 +452,11 @@ def delete_user(user_id: str, request: Request) -> JSONResponse:
         user = await session.get(User, user_id)
         if user is None:
             raise HTTPException(status_code=404, detail="User not found.")
-        target_role = user.role or ""
-        if actor_role != "owner" and target_role == "owner":
+        target_is_owner = user.role_id == "role_owner"
+        if actor_role != "owner" and target_is_owner:
             raise HTTPException(status_code=403, detail="Only owners can delete owner users.")
         owner_count = await _active_owner_count_async(session)
-        if target_role == "owner" and user.status == "active" and owner_count <= 1:
+        if target_is_owner and user.status == "active" and owner_count <= 1:
             raise HTTPException(status_code=400, detail="Cannot delete the last active owner.")
         user_dict = _user_to_dict(user)
         await session.delete(user)

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { fetchCurrentUser, type CurrentUser } from "@/lib/client/auth"
 import { apiClient } from "@/lib/client/api-client.ts"
+import { Button } from "@/components/ui/Button"
 import { EmailModal } from "./EmailModal"
 import { PasswordModal } from "./PasswordModal"
 import { TotpSetupModal } from "./TotpSetupModal"
@@ -12,9 +13,6 @@ import { SettingsCard } from "@/components/settings/SettingsCard"
 import { SettingsRow } from "@/components/settings/SettingsRow"
 
 type OpenModal = "username" | "email" | "password" | "totp" | null
-
-const editBtnClass =
-  "rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-accent)]"
 
 /**
  * Identity + authentication editor. Rendered inside SecuritySessionsSection
@@ -62,7 +60,7 @@ export function AccountContent() {
         reader.readAsDataURL(file)
       })
       try {
-        await apiClient("/settings/api/account/avatar", {
+        await apiClient("/api/v1/settings/account/avatar", {
           method: "POST",
           body: { avatarUrl: dataUrl },
         })
@@ -82,7 +80,7 @@ export function AccountContent() {
   async function handleRemoveAvatar() {
     setAvatarUploading(true)
     try {
-      await apiClient("/settings/api/account/avatar", { method: "DELETE" })
+      await apiClient("/api/v1/settings/account/avatar", { method: "DELETE" })
       await loadUser()
     } catch {
       setShowErrorDialog("Failed to remove avatar.")
@@ -94,7 +92,7 @@ export function AccountContent() {
   async function handleDisableTotp() {
     setShowConfirmDisableTotp(false)
     try {
-      await apiClient("/settings/api/account/totp", { method: "DELETE" })
+      await apiClient("/api/v1/settings/account/totp", { method: "DELETE" })
       await loadUser()
     } catch {
       setShowErrorDialog("Failed to disable two-factor authentication.")
@@ -167,23 +165,24 @@ export function AccountContent() {
                 onChange={handleAvatarChange}
                 className="hidden"
               />
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="xs"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={avatarUploading}
-                className={editBtnClass}
               >
                 {user.avatarUrl ? "Change" : "Upload"}
-              </button>
+              </Button>
               {user.avatarUrl && (
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="xs"
                   onClick={handleRemoveAvatar}
                   disabled={avatarUploading}
-                  className="text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:opacity-80"
+                  className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
                 >
                   Remove
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -192,13 +191,9 @@ export function AccountContent() {
           <span className="text-sm text-[var(--color-text-secondary)]">
             {user.username}
           </span>
-          <button
-            type="button"
-            onClick={() => setOpenModal("username")}
-            className={editBtnClass}
-          >
+          <Button variant="secondary" size="xs" onClick={() => setOpenModal("username")}>
             Edit
-          </button>
+          </Button>
         </SettingsRow>
         <SettingsRow
           label="Email"
@@ -211,13 +206,9 @@ export function AccountContent() {
               </span>
             )}
           </span>
-          <button
-            type="button"
-            onClick={() => setOpenModal("email")}
-            className={editBtnClass}
-          >
+          <Button variant="secondary" size="xs" onClick={() => setOpenModal("email")}>
             {user.email ? "Edit" : "Add"}
-          </button>
+          </Button>
         </SettingsRow>
       </SettingsCard>
 
@@ -226,13 +217,9 @@ export function AccountContent() {
           <span className="text-sm text-[var(--color-text-secondary)]">
             ••••••••
           </span>
-          <button
-            type="button"
-            onClick={() => setOpenModal("password")}
-            className={editBtnClass}
-          >
+          <Button variant="secondary" size="xs" onClick={() => setOpenModal("password")}>
             Edit
-          </button>
+          </Button>
         </SettingsRow>
         <SettingsRow
           label="Two-factor authentication"
@@ -243,67 +230,60 @@ export function AccountContent() {
               <span className="rounded-full bg-[var(--color-success-bg)] px-2 py-0.5 text-xs font-medium text-[var(--color-success)]">
                 Enabled
               </span>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setShowConfirmDisableTotp(true)}
-                className="text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:opacity-80"
+                className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
               >
                 Remove
-              </button>
+              </Button>
             </>
           ) : (
             <>
-              <span className="rounded-full bg-[var(--color-surface-2)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-tertiary)]">
+              <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-tertiary)]">
                 Not set up
               </span>
-              <button
-                type="button"
-                onClick={() => setOpenModal("totp")}
-                className={editBtnClass}
-              >
+              <Button variant="secondary" size="xs" onClick={() => setOpenModal("totp")}>
                 Set up
-              </button>
+              </Button>
             </>
           )}
         </SettingsRow>
       </SettingsCard>
 
-      {openModal === "email" && (
-        <EmailModal
-          initialEmail={user.email ?? null}
-          onClose={() => setOpenModal(null)}
-          onSuccess={async () => {
-            setOpenModal(null)
-            await loadUser()
-          }}
-        />
-      )}
-      {openModal === "username" && (
-        <UsernameModal
-          initialUsername={user.username}
-          onClose={() => setOpenModal(null)}
-          onSuccess={async () => {
-            setOpenModal(null)
-            await loadUser()
-          }}
-        />
-      )}
-      {openModal === "password" && (
-        <PasswordModal
-          username={user.username}
-          onClose={() => setOpenModal(null)}
-          onSuccess={() => setOpenModal(null)}
-        />
-      )}
-      {openModal === "totp" && (
-        <TotpSetupModal
-          onClose={() => setOpenModal(null)}
-          onSuccess={async () => {
-            setOpenModal(null)
-            await loadUser()
-          }}
-        />
-      )}
+      <EmailModal
+        open={openModal === "email"}
+        initialEmail={user.email ?? null}
+        onClose={() => setOpenModal(null)}
+        onSuccess={async () => {
+          setOpenModal(null)
+          await loadUser()
+        }}
+      />
+      <UsernameModal
+        open={openModal === "username"}
+        initialUsername={user.username}
+        onClose={() => setOpenModal(null)}
+        onSuccess={async () => {
+          setOpenModal(null)
+          await loadUser()
+        }}
+      />
+      <PasswordModal
+        open={openModal === "password"}
+        username={user.username}
+        onClose={() => setOpenModal(null)}
+        onSuccess={() => setOpenModal(null)}
+      />
+      <TotpSetupModal
+        open={openModal === "totp"}
+        onClose={() => setOpenModal(null)}
+        onSuccess={async () => {
+          setOpenModal(null)
+          await loadUser()
+        }}
+      />
     </>
   )
 }

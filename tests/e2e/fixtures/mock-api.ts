@@ -111,21 +111,21 @@ export async function mockGraphQL(page: Page, overrides?: Record<string, unknown
  * Only intercepts data endpoints — never /auth/login or /auth/me.
  */
 export async function mockSecretsREST(page: Page) {
-  await page.route("**/secrets/api/runs?*", (route) =>
+  await page.route("**/api/v1/secrets/runs?*", (route) =>
     route.fulfill({
       json: { latest: null, runs: [], lastCompleted: null },
     })
   )
 
-  await page.route("**/secrets/api/review-queue?*", (route) =>
+  await page.route("**/api/v1/secrets/review-queue?*", (route) =>
     route.fulfill({ json: { empty: true, queue: [] } })
   )
 
-  await page.route("**/secrets/api/insights?*", (route) =>
+  await page.route("**/api/v1/secrets/insights?*", (route) =>
     route.fulfill({ json: { triagePriority: [], trend: [] } })
   )
 
-  await page.route("**/secrets/api/health?*", (route) =>
+  await page.route("**/api/v1/secrets/health?*", (route) =>
     route.fulfill({
       json: { empty: true, runHistory: [], coverageGaps: [], scannerHitRates: [] },
     })

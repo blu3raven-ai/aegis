@@ -7,42 +7,6 @@ function read(path: string): string {
 }
 
 describe("Sources settings pages", () => {
-  describe("code-repositories scope config page", () => {
-    const pageSrc = read("app/(app)/settings/sources/code-repositories/[id]/page.tsx")
-    const contentSrc = read("app/(app)/settings/sources/code-repositories/[id]/CodeRepositoryScopeConfigContent.tsx")
-
-    it("renders CodeRepositoryScopeConfigContent", () => {
-      assert.match(pageSrc, /CodeRepositoryScopeConfigContent/)
-    })
-
-    it("checks manage_settings for edit", () => {
-      assert.match(contentSrc, /can.*manage_settings/)
-    })
-
-    it("renders ScopeConfigContent with code-repositories category", () => {
-      assert.match(contentSrc, /<ScopeConfigContent/)
-      assert.match(contentSrc, /category="code-repositories"/)
-    })
-
-    it("passes connection id from params", () => {
-      assert.match(contentSrc, /connectionId=\{id\}/)
-    })
-  })
-
-  describe("container-images scope config page", () => {
-    const pageSrc = read("app/(app)/settings/sources/container-images/[id]/page.tsx")
-    const contentSrc = read("app/(app)/settings/sources/container-images/[id]/ContainerImageScopeConfigContent.tsx")
-
-    it("renders ContainerImageScopeConfigContent", () => {
-      assert.match(pageSrc, /ContainerImageScopeConfigContent/)
-    })
-
-    it("renders ScopeConfigContent with container-registry category", () => {
-      assert.match(contentSrc, /<ScopeConfigContent/)
-      assert.match(contentSrc, /category="container-registry"/)
-    })
-  })
-
   describe("sources API client", () => {
     const src = read("lib/client/sources-api.ts")
 
@@ -93,7 +57,7 @@ describe("Sources settings pages", () => {
   })
 
   describe("AddConnectionModal auto-sync behaviour", () => {
-    const src = read("app/(app)/settings/sources/_components/AddConnectionModal.tsx")
+    const src = read("components/sources/AddConnectionModal.tsx")
 
     it("imports syncSourceConnection", () => {
       assert.match(src, /syncSourceConnection/)
@@ -121,7 +85,7 @@ describe("Sources settings pages", () => {
     })
 
     it("AddConnectionModal exists", () => {
-      const src = read("app/(app)/settings/sources/_components/AddConnectionModal.tsx")
+      const src = read("components/sources/AddConnectionModal.tsx")
       assert.match(src, /export function AddConnectionModal/)
     })
 

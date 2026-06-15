@@ -56,6 +56,14 @@ export function SbomIcon() {
   )
 }
 
+export function SbomDiffIcon() {
+  return (
+    <IconChip>
+      <path d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+    </IconChip>
+  )
+}
+
 export function ComplianceIcon() {
   return (
     <IconChip>
@@ -65,9 +73,11 @@ export function ComplianceIcon() {
 }
 
 export function SourcesIcon() {
+  // Database cylinder — matches the sidebar nav icon (ICON_DATABASE) and the
+  // EmptySourcesState glyph so the same identity carries across surfaces.
   return (
     <IconChip>
-      <path d="M3.75 7.5a2.25 2.25 0 0 1 2.25-2.25h12A2.25 2.25 0 0 1 20.25 7.5v9A2.25 2.25 0 0 1 18 18.75H6a2.25 2.25 0 0 1-2.25-2.25v-9Zm4.5 3 2.25 2.25-2.25 2.25m4.5 0h3" />
+      <path d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4" />
     </IconChip>
   )
 }
@@ -148,6 +158,55 @@ export function CloudIcon() {
   return (
     <IconChip>
       <path d="M2.25 15a4.5 4.5 0 0 0 4.5 4.5H18a3.75 3.75 0 0 0 1.332-7.257 3 3 0 0 0-3.758-3.848 5.25 5.25 0 0 0-10.233 2.33A4.502 4.502 0 0 0 2.25 15Z" />
+    </IconChip>
+  )
+}
+
+export function MembersIcon() {
+  return (
+    <IconChip>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </IconChip>
+  )
+}
+
+export function RolesIcon() {
+  return (
+    <IconChip>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      <path d="m9 12 2 2 4-4" />
+    </IconChip>
+  )
+}
+
+export function IntegrationsIcon() {
+  return (
+    <IconChip>
+      <path d="M12 22v-5" />
+      <path d="M9 8V2" />
+      <path d="M15 8V2" />
+      <path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z" />
+    </IconChip>
+  )
+}
+
+export function TeamsIcon() {
+  return (
+    <IconChip>
+      <path d="M17 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M7 21v-2a4 4 0 0 1 3-3.87" />
+      <circle cx="12" cy="7" r="4" />
+      <path d="M5 11h.01M19 11h.01" />
+    </IconChip>
+  )
+}
+
+export function NotificationsIcon() {
+  return (
+    <IconChip>
+      <path d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
     </IconChip>
   )
 }

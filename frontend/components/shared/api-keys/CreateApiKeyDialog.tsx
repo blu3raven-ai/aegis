@@ -3,6 +3,9 @@
 import { useState } from "react"
 import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
 import { AVAILABLE_SCOPES } from "./ScopesBadgeList"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
 
 interface Props {
   open: boolean
@@ -53,13 +56,12 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
             <label className="block mb-1 text-xs font-medium text-[var(--color-text-secondary)]">
               Name
             </label>
-            <input
+            <Input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. ci-pipeline-key"
               required
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             />
           </div>
 
@@ -86,10 +88,9 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
             <label className="block mb-1 text-xs font-medium text-[var(--color-text-secondary)]">
               Expires in
             </label>
-            <select
+            <Select
               value={expiresDays}
               onChange={(e) => setExpiresDays(e.target.value)}
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             >
               <option value="30">30 days</option>
               <option value="60">60 days</option>
@@ -97,7 +98,7 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
               <option value="180">180 days</option>
               <option value="365">365 days</option>
               <option value="never">Never</option>
-            </select>
+            </Select>
           </div>
 
           {error && (
@@ -105,21 +106,23 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={onClose}
               disabled={submitting}
-              className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="primary"
+              size="sm"
               disabled={submitting || !name.trim()}
-              className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-accent-on)] hover:opacity-90 transition-opacity disabled:opacity-50"
+              isLoading={submitting}
             >
               {submitting ? "Creating…" : "Create key"}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

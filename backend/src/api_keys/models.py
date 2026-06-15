@@ -13,7 +13,6 @@ class ApiKeyRecord:
     def __init__(
         self,
         id: int,
-        org_id: str,
         name: str,
         prefix: str,
         last_four: str,
@@ -25,7 +24,6 @@ class ApiKeyRecord:
         revoked_at: datetime | None,
     ) -> None:
         self.id = id
-        self.org_id = org_id
         self.name = name
         self.prefix = prefix
         self.last_four = last_four
@@ -40,7 +38,6 @@ class ApiKeyRecord:
     def from_orm(cls, row: "ApiKey") -> "ApiKeyRecord":
         return cls(
             id=row.id,
-            org_id=row.org_id,
             name=row.name,
             prefix=row.prefix,
             last_four=row.last_four,
@@ -58,7 +55,6 @@ class ApiKeyRecord:
 
         return {
             "id": self.id,
-            "org_id": self.org_id,
             "name": self.name,
             "prefix": self.prefix,
             "last_four": self.last_four,

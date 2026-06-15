@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useState } from "react"
 import type { SigningSecretMeta, RotateSecretResponse } from "@/lib/client/webhook-signing-api"
 import { listSigningSecrets, rotateSigningSecret, revokeSigningSecret } from "@/lib/client/webhook-signing-api"
+import { Button } from "@/components/ui/Button"
+import { Sheet } from "@/components/ui/Sheet"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
 
 interface WebhookSigningPanelProps {
   destId: number
@@ -50,14 +53,14 @@ function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="secondary"
+      size="xs"
       onClick={handleCopy}
       aria-label="Copy to clipboard"
-      className="rounded-md border border-[var(--color-border)] px-2 py-1 text-2xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors"
     >
       {copied ? "Copied!" : "Copy"}
-    </button>
+    </Button>
   )
 }
 
@@ -75,12 +78,13 @@ function StatusBadge({ status }: { status: SigningSecretMeta["status"] }) {
 }
 
 interface RotateModalProps {
+  open: boolean
   destId: number
   onClose: () => void
   onRotated: (result: RotateSecretResponse) => void
 }
 
-function RotateModal({ destId, onClose, onRotated }: RotateModalProps) {
+function RotateModal({ open, destId, onClose, onRotated }: RotateModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<RotateSecretResponse | null>(null)
@@ -108,90 +112,78 @@ function RotateModal({ destId, onClose, onRotated }: RotateModalProps) {
     })
   }
 
+  // Once the new secret is shown, block dismissal until the user explicitly
+  // acknowledges they've copied it — same affordance as before, just routed
+  // through Sheet's dismissGuard for consistent Esc/backdrop behavior.
+  const handleClose = () => {
+    if (result || !loading) onClose()
+  }
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Rotate signing secret"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-    >
-      <div
-        className="absolute inset-0 bg-[var(--color-overlay)]"
-        onClick={result ? onClose : undefined}
-        aria-hidden="true"
-      />
-      <div className="relative z-10 w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
-        {!result ? (
-          <>
-            <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">
-              Rotate signing secret
-            </h2>
-            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-              A new secret will be generated. The current secret will remain valid during
-              the 5-minute rotation window so receivers can upgrade gracefully.
-            </p>
-            {error && (
-              <p className="mt-3 text-sm text-[var(--color-severity-critical)]">{error}</p>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={loading}
-                className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
-              >
+    <Sheet
+      open={open}
+      onClose={handleClose}
+      title={result ? "New signing secret — save it now" : "Rotate signing secret"}
+      description={
+        result
+          ? "This secret will not be shown again. Copy it before closing."
+          : "A new secret will be generated. The current secret will remain valid during the 5-minute rotation window so receivers can upgrade gracefully."
+      }
+      size="md"
+      footer={
+        <div className="flex justify-end gap-2">
+          {!result ? (
+            <>
+              <Button variant="secondary" size="sm" onClick={onClose} disabled={loading}>
                 Cancel
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => { void handleConfirm() }}
                 disabled={loading}
-                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+                isLoading={loading}
               >
                 {loading ? "Rotating…" : "Rotate"}
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">
-              New signing secret — save it now
-            </h2>
-            <p className="mt-2 text-[11px] text-[var(--color-state-pending)]">
-              This secret will not be shown again. Copy it before closing.
-            </p>
-            <div
-              data-testid="new-secret-value"
-              className="mt-3 flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2"
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" size="sm" onClick={onClose}>
+              Done
+            </Button>
+          )}
+        </div>
+      }
+    >
+      {!result ? (
+        error && (
+          <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+        )
+      ) : (
+        <>
+          <div
+            data-testid="new-secret-value"
+            className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2"
+          >
+            <code className="flex-1 break-all font-mono text-xs text-[var(--color-text-primary)]">
+              {result.secret.raw}
+            </code>
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={handleCopyRaw}
+              aria-label="Copy secret"
+              className="shrink-0"
             >
-              <code className="flex-1 break-all font-mono text-xs text-[var(--color-text-primary)]">
-                {result.secret.raw}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyRaw}
-                aria-label="Copy secret"
-                className="shrink-0 rounded-md border border-[var(--color-border)] px-2 py-1 text-2xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] transition-colors"
-              >
-                {rawCopied ? "Copied!" : "Copy"}
-              </button>
-            </div>
-            <p className="mt-2 text-[11px] text-[var(--color-text-tertiary)]">
-              Version {result.signing_secret_version} · {result.notice}
-            </p>
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]"
-              >
-                Done
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+              {rawCopied ? "Copied!" : "Copy"}
+            </Button>
+          </div>
+          <p className="mt-2 text-[11px] text-[var(--color-text-tertiary)]">
+            Version {result.signing_secret_version} · {result.notice}
+          </p>
+        </>
+      )}
+    </Sheet>
   )
 }
 
@@ -245,14 +237,14 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
       {/* Header row */}
       <div className="flex items-center justify-between">
         <p className={labelClass}>Signing secret</p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => setShowRotateModal(true)}
           data-testid="rotate-secret-button"
-          className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] transition-colors"
         >
           Rotate secret
-        </button>
+        </Button>
       </div>
 
       {loading && (
@@ -293,15 +285,16 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
                 )}
               </div>
               {s.status !== "revoked" && (
-                <button
-                  type="button"
+                <Button
+                  variant="link"
+                  size="xs"
                   onClick={() => { void handleRevoke(s.version) }}
                   disabled={revoking === s.version}
                   aria-label={`Revoke version ${s.version}`}
-                  className="text-[11px] font-medium text-[var(--color-severity-critical)] hover:underline disabled:opacity-50"
+                  className="text-[var(--color-severity-critical)] hover:underline hover:text-[var(--color-severity-critical)]"
                 >
                   {revoking === s.version ? "Revoking…" : "Revoke"}
-                </button>
+                </Button>
               )}
             </li>
           ))}
@@ -322,22 +315,15 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
         {snippetOpen && (
           <div className="border-t border-[var(--color-border)] px-3 pb-3 pt-2 space-y-3">
             {/* Language toggle */}
-            <div className="flex gap-1">
-              {(["python", "node"] as const).map((lang) => (
-                <button
-                  key={lang}
-                  type="button"
-                  onClick={() => setSnippetLang(lang)}
-                  className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                    snippetLang === lang
-                      ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
-                      : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                  }`}
-                >
-                  {lang === "python" ? "Python" : "Node.js"}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              ariaLabel="Snippet language"
+              value={snippetLang}
+              onChange={setSnippetLang}
+              options={[
+                { id: "python", label: "Python" },
+                { id: "node",   label: "Node.js" },
+              ]}
+            />
 
             <div className="relative">
               <pre className="overflow-x-auto rounded-lg bg-[var(--color-surface-raised)] p-3 text-[11px] font-mono text-[var(--color-text-primary)] whitespace-pre">
@@ -358,13 +344,12 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
       </div>
 
       {/* Rotate modal */}
-      {showRotateModal && (
-        <RotateModal
-          destId={destId}
-          onClose={() => { setShowRotateModal(false); handleRotated() }}
-          onRotated={handleRotated}
-        />
-      )}
+      <RotateModal
+        open={showRotateModal}
+        destId={destId}
+        onClose={() => { setShowRotateModal(false); handleRotated() }}
+        onRotated={handleRotated}
+      />
     </div>
   )
 }

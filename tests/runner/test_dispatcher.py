@@ -1,7 +1,7 @@
-"""Tests for runner.dispatcher — scanner type → scanner instance routing."""
+"""Tests for runner.core.dispatcher — scanner type → scanner instance routing."""
 import pytest
 
-from runner.dispatcher import get_scanner, supported_types
+from runner.core.dispatcher import get_scanner, supported_types
 from runner.scanners.dependencies.scanner import DependenciesScanner
 from runner.scanners.container.scanner import ContainerScanner
 from runner.scanners.secrets.scanner import SecretsScanner
@@ -31,6 +31,13 @@ def test_get_scanner_returns_same_instance():
     assert a is b
 
 
-def test_supported_types_lists_all_four_scanners():
+def test_supported_types_lists_all_scanners():
     types = supported_types()
-    assert set(types) == {"dependencies", "container", "secrets", "code-scanning"}
+    assert set(types) == {
+        "dependencies",
+        "container",
+        "secrets",
+        "code-scanning",
+        "iac",
+        "verification",
+    }

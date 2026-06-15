@@ -33,37 +33,13 @@ def test_trufflehog_verified_missing_produces_uncertain_entry():
     assert history[0]["value"] == "uncertain"
 
 
-def test_betterleaks_has_empty_classification_history():
-    raw = {"source": "betterleaks", "repository": "myorg/myrepo", "RuleID": "aws-key", "Secret": "abc123"}
-    result = normalize_finding("run1", "myorg", raw, "light")
-    assert result["classificationHistory"] == []
-
-
-def test_ai_enhanced_betterleaks_produces_ai_entry():
-    raw = {"source": "betterleaks", "repository": "myorg/myrepo", "RuleID": "aws-key", "Secret": "abc123", "ai_classification": "likely_real"}
-    result = normalize_finding("run1", "myorg", raw, "ai_enhanced")
-    history = result["classificationHistory"]
-    assert len(history) == 1
-    assert history[0]["source"] == "ai"
-    assert history[0]["value"] == "likely_secret"
-
-
-def test_ai_enhanced_trufflehog_produces_scanner_then_ai_entry():
-    raw = _base_trufflehog(Verified=True, ai_classification="likely_real")
-    result = normalize_finding("run1", "myorg", raw, "ai_enhanced")
-    history = result["classificationHistory"]
-    assert len(history) == 2
-    assert history[0]["source"] == "scanner"
-    assert history[1]["source"] == "ai"
-
-
 def test_no_verifiedStatus_field_on_finding():
     result = normalize_finding("run1", "myorg", _base_trufflehog(Verified=True), "light")
     assert "verifiedStatus" not in result
 
 
 def test_no_aiClassification_field_on_finding():
-    result = normalize_finding("run1", "myorg", _base_trufflehog(ai_classification="likely_real"), "ai_enhanced")
+    result = normalize_finding("run1", "myorg", _base_trufflehog(ai_classification="likely_real"), "deep")
     assert "aiClassification" not in result
 
 

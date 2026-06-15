@@ -8,6 +8,7 @@ import type {
   TeamPostureItem,
 } from "@/lib/client/posture-api"
 import type { ComplianceFramework, ControlSummaryItem } from "@/lib/client/compliance-api"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
 
 // ── Severity helpers ──────────────────────────────────────────────────────────
 
@@ -186,7 +187,7 @@ function RiskScoreHero({ snap, trend }: { snap: PostureSnapshotResponse; trend: 
     const diff = last.risk_score - baseline.risk_score
     if (diff === 0) {
       deltaNode = (
-        <span className="text-xs text-[var(--color-text-tertiary)]">— same vs last month</span>
+        <span className="text-xs text-[var(--color-text-tertiary)]">Same as last month</span>
       )
     } else {
       // Higher score = worse. Down arrow = improvement (good).
@@ -200,7 +201,7 @@ function RiskScoreHero({ snap, trend }: { snap: PostureSnapshotResponse; trend: 
         <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${tone}`}>
           <span aria-hidden="true">{arrow}</span>
           <span className="tabular-nums">{Math.abs(diff)} points</span>
-          <span className="text-[var(--color-text-secondary)]">vs last month — {label}</span>
+          <span className="text-[var(--color-text-secondary)]">vs last month, {label}</span>
         </span>
       )
     }
@@ -485,7 +486,7 @@ function AttentionPanel({
       rows.push({
         tone: "high",
         icon: "warning",
-        title: `${top.team_name} backlog growing — ${sum} open`,
+        title: `${top.team_name} backlog growing: ${sum} open`,
         sub: "Critical + high combined",
       })
     }
@@ -519,7 +520,7 @@ function AttentionPanel({
       </div>
       {rows.length === 0 ? (
         <p className="px-5 pb-5 text-sm text-[var(--color-text-secondary)]">
-          Nothing urgent — posture is healthy.
+          Nothing urgent. Posture is healthy.
         </p>
       ) : (
         <div>
@@ -592,10 +593,10 @@ function IntegrationActivityStrip({ snap }: { snap: PostureSnapshotResponse }) {
           Integration activity (this month)
         </p>
         <a
-          href="/integrations"
+          href="/notifications"
           className="text-xs text-[var(--color-accent)] hover:underline"
         >
-          Manage integrations →
+          Manage notifications →
         </a>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -863,38 +864,16 @@ function TeamRiskPanel({
         <p className="text-base font-semibold text-[var(--color-text-primary)]">
           Risk by team
         </p>
-        <div
-          role="tablist"
-          aria-label="Risk view"
-          className="inline-flex rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-0.5 text-2xs font-semibold"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={teamView === "teams"}
-            onClick={() => setTeamView("teams")}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              teamView === "teams"
-                ? "bg-[var(--color-accent)] text-[var(--color-accent-on)]"
-                : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-            }`}
-          >
-            Teams
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={teamView === "repos"}
-            onClick={() => setTeamView("repos")}
-            className={`px-2.5 py-1 rounded transition-colors ${
-              teamView === "repos"
-                ? "bg-[var(--color-accent)] text-[var(--color-accent-on)]"
-                : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-            }`}
-          >
-            Repos
-          </button>
-        </div>
+        <SegmentedControl
+          ariaLabel="Risk view"
+          size="xs"
+          value={teamView}
+          onChange={(id) => setTeamView(id)}
+          options={[
+            { id: "teams", label: "Teams" },
+            { id: "repos", label: "Repos" },
+          ]}
+        />
       </div>
 
       {rows === null ? (

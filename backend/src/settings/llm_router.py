@@ -1,0 +1,119 @@
+"""REST API for per-org LLM configuration."""
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field
+
+from src.audit_log.recorder import ActorInfo, get_recorder
+from src.settings.llm import (
+    LlmConfigUpsert,
+    delete_llm_config,
+    fetch_llm_config,
+    fetch_public_llm_config,
+    upsert_llm_config,
+)
+from src.settings.router import require_permission
+
+_DEFAULT_ORG_ID = "default"
+
+
+def _resolve_org_id() -> str:
+    return _DEFAULT_ORG_ID
+
+
+router = APIRouter(prefix="/api/v1/settings/llm", tags=["llm-settings"])
+
+
+class LlmConfigBody(BaseModel):
+    api_key: str = Field(..., min_length=1, max_length=512)
+    api_base_url: str = Field(..., min_length=4, max_length=512)
+    model: str = Field(..., min_length=1, max_length=128)
+    scan_token_budget: int = Field(100_000, ge=1_000, le=10_000_000)
+    daily_token_budget: int = Field(1_000_000, ge=10_000, le=100_000_000)
+    enabled: bool = False
+
+
+@router.get("")
+def get_llm_config(request: Request) -> dict:
+    require_permission(request, "manage_settings")
+    cfg = fetch_public_llm_config(_resolve_org_id())
+    if cfg is None:
+        raise HTTPException(status_code=404, detail="llm_config_not_set")
+    return cfg
+
+
+@router.put("")
+def put_llm_config(body: LlmConfigBody, request: Request) -> dict:
+    require_permission(request, "manage_settings")
+    org_id = _resolve_org_id()
+    upsert_llm_config(LlmConfigUpsert(
+        org_id=org_id,
+        api_key=body.api_key,
+        api_base_url=body.api_base_url,
+        model=body.model,
+        scan_token_budget=body.scan_token_budget,
+        daily_token_budget=body.daily_token_budget,
+        enabled=body.enabled,
+    ))
+    get_recorder().record(
+        action="llm_config.updated",
+        resource_type="llm_config",
+        resource_id=org_id,
+        actor=ActorInfo(user_id="system"),
+        metadata={"enabled": body.enabled, "model": body.model},
+    )
+    return fetch_public_llm_config(org_id) or {"configured": True}
+
+
+@router.post("/test")
+def test_llm_connection(request: Request) -> dict:
+    """Round-trip a 1-token chat completion to confirm the stored key works."""
+    require_permission(request, "manage_settings")
+    org_id = _resolve_org_id()
+    cfg = fetch_llm_config(org_id)
+    if cfg is None:
+        raise HTTPException(status_code=404, detail="llm_config_not_set")
+
+    import httpx
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.post(
+                f"{cfg.api_base_url.rstrip('/')}/chat/completions",
+                json={
+                    "model": cfg.model,
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "max_tokens": 1,
+                },
+                headers={
+                    "Authorization": f"Bearer {cfg.api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+    except httpx.RequestError as exc:
+        return {"ok": False, "error": "network", "detail": str(exc)[:200]}
+
+    if resp.status_code in (200, 201):
+        return {"ok": True}
+    if resp.status_code in (401, 403):
+        return {"ok": False, "error": "auth_failed", "status": resp.status_code}
+    return {
+        "ok": False,
+        "error": f"http_{resp.status_code}",
+        "detail": resp.text[:200],
+    }
+
+
+@router.delete("")
+def delete_llm_config_route(request: Request) -> dict:
+    require_permission(request, "manage_settings")
+    org_id = _resolve_org_id()
+    deleted = delete_llm_config(org_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="llm_config_not_set")
+    get_recorder().record(
+        action="llm_config.deleted",
+        resource_type="llm_config",
+        resource_id=org_id,
+        actor=ActorInfo(user_id="system"),
+    )
+    return {"deleted": True}

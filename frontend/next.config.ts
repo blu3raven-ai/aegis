@@ -10,14 +10,6 @@ const nextConfig: NextConfig = {
   ...(isDev && {
     async rewrites() {
       return [
-        { source: "/code-scanning/api/:path*", destination: `${backendUrl}/code-scanning/api/:path*` },
-        { source: "/dependencies/api/:path*", destination: `${backendUrl}/dependencies/api/:path*` },
-        { source: "/container-scanning/api/:path*", destination: `${backendUrl}/container-scanning/api/:path*` },
-        { source: "/secrets/api/:path*", destination: `${backendUrl}/secrets/api/:path*` },
-        { source: "/notifications/api/:path*", destination: `${backendUrl}/notifications/api/:path*` },
-        { source: "/settings/api/:path*", destination: `${backendUrl}/settings/api/:path*` },
-        { source: "/settings/runners/:path*", destination: `${backendUrl}/settings/runners/:path*` },
-        { source: "/license/api/:path*", destination: `${backendUrl}/license/api/:path*` },
         { source: "/api/:path*", destination: `${backendUrl}/api/:path*` },
         { source: "/auth/:path*", destination: `${backendUrl}/auth/:path*` },
       ]

@@ -1,5 +1,8 @@
 "use client"
 
+import { FilterChip } from "@/components/ui/FilterChip"
+import { Select } from "@/components/ui/Select"
+
 // Event filter builder — event type multi-select + min severity picker
 
 const KNOWN_EVENT_TYPES = [
@@ -62,34 +65,19 @@ export function EventFilterBuilder({ value, onChange }: EventFilterBuilderProps)
           Event types
         </label>
         <div className="flex flex-wrap gap-1.5">
-          <button
-            type="button"
+          <FilterChip
+            label="All events"
+            active={allSelected}
             onClick={() => onChange({ ...value, event_types: undefined })}
-            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-              allSelected
-                ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-text-primary)]"
-            }`}
-          >
-            All events
-          </button>
-          {KNOWN_EVENT_TYPES.map((et) => {
-            const active = selectedTypes.includes(et)
-            return (
-              <button
-                key={et}
-                type="button"
-                onClick={() => toggleType(et)}
-                className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                  active
-                    ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                    : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-text-primary)]"
-                }`}
-              >
-                {et}
-              </button>
-            )
-          })}
+          />
+          {KNOWN_EVENT_TYPES.map((et) => (
+            <FilterChip
+              key={et}
+              label={et}
+              active={selectedTypes.includes(et)}
+              onClick={() => toggleType(et)}
+            />
+          ))}
         </div>
       </div>
 
@@ -101,18 +89,18 @@ export function EventFilterBuilder({ value, onChange }: EventFilterBuilderProps)
         >
           Minimum severity
         </label>
-        <select
+        <Select
           id="event-filter-severity"
           value={value.min_severity ?? ""}
           onChange={(e) => setSeverity(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+          className="max-w-xs"
         >
           {SEVERITY_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}
-        </select>
+        </Select>
         {value.min_severity && (
           <p className={`mt-1 text-[11px] font-medium ${SEVERITY_COLORS[value.min_severity] ?? ""}`}>
             Filtering: {value.min_severity} and above

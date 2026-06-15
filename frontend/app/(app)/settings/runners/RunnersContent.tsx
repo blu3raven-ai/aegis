@@ -8,6 +8,7 @@ import { AddRunnerModal } from "./AddRunnerModal"
 import { RemoteRunnerList } from "./RemoteRunnerList"
 import type { Runner } from "./types"
 import { useSSE } from "@/components/providers/SSEProvider"
+import { Button } from "@/components/ui/Button"
 
 export function RunnersContent({ canEdit }: { canEdit: boolean }) {
   const router = useRouter()
@@ -99,36 +100,27 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {confirmModeSwitch && (
-        <div className="rounded-lg border border-[var(--color-state-pending)]/40 bg-[var(--color-state-pending)]/10 p-4">
+        <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] p-4">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">Switch to Local mode?</p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
             {runners.length} runner(s) are registered. Switching to Local mode means scans will run on this machine instead.
           </p>
           <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => void commitModeChange(confirmModeSwitch)}
-              className="rounded-md bg-[var(--color-state-pending)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] hover:brightness-110"
-            >
+            <Button variant="primary" size="sm" onClick={() => void commitModeChange(confirmModeSwitch)}>
               Switch to Local
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmModeSwitch(null)}
-              className="rounded-md border border-[var(--color-border-strong)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)]"
-            >
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmModeSwitch(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      {showAddModal && (
-        <AddRunnerModal
-          portalUrl={window.location.origin}
-          onClose={() => { setShowAddModal(false); void loadRunners() }}
-        />
-      )}
+      <AddRunnerModal
+        open={showAddModal}
+        portalUrl={typeof window === "undefined" ? "" : window.location.origin}
+        onClose={() => { setShowAddModal(false); void loadRunners() }}
+      />
     </>
   )
 }
@@ -272,13 +264,9 @@ function RemoteStatusBody({
           </p>
         </div>
         {canEdit && (
-          <button
-            type="button"
-            onClick={onAddClick}
-            className="shrink-0 rounded-md bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]"
-          >
+          <Button variant="primary" size="sm" onClick={onAddClick} className="shrink-0">
             Add Runner
-          </button>
+          </Button>
         )}
       </div>
 

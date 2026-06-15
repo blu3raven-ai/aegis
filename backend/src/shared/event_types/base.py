@@ -39,6 +39,8 @@ class Event(BaseModel):
     event_id: str = Field(default_factory=_ulid)
     event_type: str
     timestamp_utc: datetime.datetime = Field(default_factory=_utc_now)
-    org_id: str
     source_component: str = "unknown"
+    # Owning org tag — preserved through the EventBus so downstream listeners
+    # can scope their work without re-deriving it from the payload.
+    org_id: str = ""
     payload: dict[str, Any] = Field(default_factory=dict)

@@ -24,15 +24,33 @@ const manrope = Manrope({
   variable: "--font-manrope",
 })
 
-const DEFAULT_TITLE = "Blu3Raven | Aegis - Vulnerability Management Portal"
 const DEFAULT_ICON = "/logo-brand.png"
+const VENDOR_DEFAULT_TITLE = "Blu3Raven | Aegis - Vulnerability Management Portal"
 
-export const metadata: Metadata = {
-  title: DEFAULT_TITLE,
-  description: "Central portal for vulnerability management across your application security workflows.",
-  icons: {
-    icon: DEFAULT_ICON,
-  },
+async function getDefaultTitle(): Promise<string> {
+  try {
+    const res = await fetch(
+      `${process.env.INTERNAL_API_URL ?? "http://localhost:8000"}/api/v1/branding`,
+      { cache: "no-store" },
+    )
+    if (!res.ok) throw new Error("branding fetch failed")
+    const body = (await res.json()) as { name: string | null }
+    // NULL is the only vendor sentinel; any non-NULL name renders as-is.
+    return body.name ?? VENDOR_DEFAULT_TITLE
+  } catch {
+    return VENDOR_DEFAULT_TITLE
+  }
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const title = await getDefaultTitle()
+  return {
+    title,
+    description: "Central portal for vulnerability management across your application security workflows.",
+    icons: {
+      icon: DEFAULT_ICON,
+    },
+  }
 }
 
 const THEME_SCRIPT = `try{

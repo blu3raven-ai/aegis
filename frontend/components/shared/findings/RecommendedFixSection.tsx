@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { FindingRecommendedFix } from "@/lib/shared/findings/row-mapper"
+import { Button } from "@/components/ui/Button"
 
 interface RecommendedFixSectionProps {
   fix: FindingRecommendedFix | undefined
@@ -120,23 +121,23 @@ export function RecommendedFixSection({ fix, onViewDiff }: RecommendedFixSection
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={handleCopy}
           aria-label="Copy upgrade snippet to clipboard"
           aria-live="polite"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
         >
           {copied ? "Copied" : "Copy snippet"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={handleViewDiff}
           aria-label="View diff for the recommended fix"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
         >
           View diff
-        </button>
+        </Button>
       </div>
     </section>
   )

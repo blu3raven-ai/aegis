@@ -29,15 +29,3 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 def get_sync_url() -> str:
     """Return a synchronous DB URL for Alembic (replaces asyncpg with psycopg2)."""
     return DATABASE_URL.replace("+asyncpg", "")
-
-
-_sync_engine_instance = None
-
-
-def sync_engine():
-    """Return a module-level sync SQLAlchemy engine, creating it on first call."""
-    global _sync_engine_instance
-    if _sync_engine_instance is None:
-        from sqlalchemy import create_engine
-        _sync_engine_instance = create_engine(get_sync_url(), pool_pre_ping=True)
-    return _sync_engine_instance

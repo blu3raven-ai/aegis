@@ -33,7 +33,7 @@ export function RepoSummaryRow({ repo }: RepoSummaryRowProps) {
     <tr className="transition-colors hover:bg-[var(--color-surface-raised)]">
       <td className="px-5 py-4">
         <Link
-          href={`/repos/${encodedId}`}
+          href={`/sources/${encodedId}`}
           className="font-medium text-[var(--color-text-primary)] hover:text-[var(--color-accent)] transition-colors"
         >
           {repo.repo}

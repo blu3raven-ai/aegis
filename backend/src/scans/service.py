@@ -7,20 +7,22 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from src.db.engine import get_session
-from src.db.models import Repo, ScanRun
+from src.db.models import ScanRun
+from src.pr_feedback.git_pr_providers import resolve_pr_provider
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SCANNERS = ["dependencies", "code_scanning", "container_scanning", "secrets"]
+_DEFAULT_SCANNERS = ["dependencies", "code_scanning", "container_scanning", "secrets", "iac"]
 
 _SCANNER_JOB_TYPES: dict[str, str] = {
     "dependencies":       "dependencies",
     "code_scanning":      "code_scanning",
     "container_scanning": "container_scanning",
     "secrets":            "secrets",
+    "iac":                "iac",
 }
 
 
@@ -30,14 +32,41 @@ def _dispatch_scanner_jobs(
     commit_sha: str,
     scanners: list[str],
     org: str,
+    *,
+    base_sha: str | None = None,
+    scan_scope: str = "full_tree",
 ) -> None:
     """Create one runner job per scanner type after the ScanRun row is committed."""
+    from src.audit_log.recorder import ActorInfo, get_recorder
     from src.runner.jobs import create_job
+    from src.settings.llm import fetch_llm_config
+    from src.settings.llm_usage import daily_remaining
     from src.shared.config import get_token_for_org
 
     token = get_token_for_org(org) or ""
-    # V1: assumes GitHub. Extend when GitLab/Bitbucket source connections are supported.
     repo_url = f"https://github.com/{repo_id}"
+
+    _LLM_CONFIG_KEY = "default"
+    llm_cfg = fetch_llm_config(_LLM_CONFIG_KEY)
+    llm_env: dict[str, str] = {}
+    if llm_cfg and llm_cfg.enabled:
+        llm_env = {
+            "LLM_API_KEY":               llm_cfg.api_key,
+            "LLM_API_BASE_URL":          llm_cfg.api_base_url,
+            "LLM_API_MODEL":             llm_cfg.model,
+            "LLM_TOKEN_BUDGET_PER_SCAN": str(llm_cfg.scan_token_budget),
+            "LLM_DAILY_REMAINING":       str(daily_remaining(
+                org_id=_LLM_CONFIG_KEY,
+                daily_budget=llm_cfg.daily_token_budget,
+            )),
+        }
+        get_recorder().record(
+            action="scan.verification_started",
+            resource_type="scan_run",
+            resource_id=scan_id,
+            actor=ActorInfo(user_id="system:scan_dispatch"),
+            metadata={"model": llm_cfg.model, "scanners": scanners},
+        )
 
     for scanner in scanners:
         job_type = _SCANNER_JOB_TYPES.get(scanner)
@@ -54,12 +83,58 @@ def _dispatch_scanner_jobs(
             "COMMIT_SHA":  commit_sha,
             "REPO_ID":     repo_id,
             "CONCURRENCY": "4",
+            "SCAN_SCOPE":  scan_scope,
+            **llm_env,
         }
+        if base_sha:
+            env["BASE_SHA"] = base_sha
         if scanner == "secrets":
             env["SCAN_DEPTH"] = "deep"
 
         create_job(job_type=job_type, org=org, run_id=run_id, env_vars=env)
         logger.info("Dispatched %s runner job for scan %s (repo %s)", scanner, scan_id, repo_id)
+
+
+async def _load_source(source_id: str):
+    """Look up an Asset row by id and return a lightweight source-view object.
+
+    Returns None when no matching row exists.  The returned object exposes the
+    attributes that resolve_pr_provider and resolve_pr_base_sha expect:
+      .scm_type  — derived from the 'scheme' prefix of external_ref (e.g. "github")
+      .scm_base_url — None for SaaS providers; could be populated for self-hosted
+      .repo      — 'owner/name' path extracted from external_ref
+    """
+    from types import SimpleNamespace
+    from src.db.models import Asset
+    async with get_session() as session:
+        asset = await session.get(Asset, source_id)
+    if asset is None:
+        return None
+    ext_ref = asset.external_ref or ""
+    if ":" in ext_ref:
+        scm_type, repo = ext_ref.split(":", 1)
+    else:
+        scm_type, repo = "github", ext_ref
+    return SimpleNamespace(scm_type=scm_type, scm_base_url=None, repo=repo)
+
+
+async def _resolve_pr_base_sha(source_id: str, pr_number: int, token: str) -> str | None:
+    """Resolve the base-commit SHA for a PR via the appropriate SCM provider.
+
+    Returns None on any error so callers can fall back to a full-tree scan.
+    """
+    if not token:
+        return None
+    source = await _load_source(source_id)
+    if source is None:
+        logger.warning("source not found for base-sha resolution: %s", source_id)
+        return None
+    provider = resolve_pr_provider(source)
+    if provider is None:
+        logger.warning("no PR adapter for source: %s (scm_type=%s)", source_id, source.scm_type)
+        return None
+    repo = source.repo or source_id
+    return await provider.resolve_pr_base_sha(repo=repo, pr_number=pr_number, token=token)
 
 
 @dataclass
@@ -86,10 +161,10 @@ class ScanDetail:
     finished_at: datetime | None
     finding_counts: dict[str, int] | None
     error: str | None
-    # Surfaced so the UI can label archived rows when a deep-link lands on one.
-    # The detail endpoint intentionally still returns archived scans (so direct
-    # links survive), unlike list endpoints which hide them by default.
+    # The detail endpoint returns archived rows so deep-links survive.
     archived: bool = False
+    # None when no verification ran for this scan.
+    verification_summary: dict[str, Any] | None = None
 
 
 def _parse_submitted_at(meta: dict[str, Any]) -> datetime:
@@ -112,7 +187,7 @@ async def submit_scan(
 ) -> ScanSubmission | None:
     """Insert a queued scan_run for a user-triggered pre-release scan.
 
-    Returns None if no Repo row exists for the given asset_id.
+    Returns None if no Asset row exists for the given asset_id.
     """
     scanners = scanner_types or _DEFAULT_SCANNERS
     scan_id = f"scan-{uuid.uuid4()}"
@@ -120,12 +195,6 @@ async def submit_scan(
 
     async with get_session() as session:
         from src.db.models import Asset
-        repo = (await session.execute(
-            select(Repo).where(Repo.asset_id == asset_id)
-        )).scalar_one_or_none()
-        if repo is None:
-            return None
-
         # Derive runner dispatch params from the Asset.external_ref.
         # Format is "github:<owner>/<name>".
         asset_row = (await session.execute(
@@ -184,6 +253,152 @@ async def submit_scan(
         )
 
 
+async def find_inflight_scan(*, org: str, source_id: str, commit_sha: str) -> ScanRun | None:
+    """Return any in-flight (queued or running) scan for the given source+commit, else None.
+
+    Used for dedup at trigger time — any matching in-flight row satisfies the check,
+    so the result is intentionally unordered (ScanRun.id is a UUID and would not sort
+    monotonically anyway). The org argument is reserved for future cross-org safety;
+    current scoping is enforced upstream at the router layer via API-key org binding.
+    """
+    async with get_session() as session:
+        return (await session.execute(
+            select(ScanRun)
+            .where(ScanRun.asset_id == source_id)
+            .where(ScanRun.commit_sha == commit_sha)
+            .where(ScanRun.status.in_(("queued", "running")))
+            .limit(1)
+        )).scalar_one_or_none()
+
+
+async def cancel_older_queued_for_pr(
+    *,
+    org: str,
+    source_id: str,
+    pr_number: int,
+    keep_scan_id: str,
+) -> list[str]:
+    """Mark older queued scans on the same source+PR as cancelled. Return their IDs.
+
+    The SELECT-then-UPDATE is intentionally non-atomic; concurrent triggers may
+    each observe and cancel the same set, but writing 'cancelled' twice is
+    idempotent.
+    """
+    async with get_session() as session:
+        rows = (await session.execute(
+            select(ScanRun.id)
+            .where(ScanRun.asset_id == source_id)
+            .where(ScanRun.pr_number == pr_number)
+            .where(ScanRun.status == "queued")
+            .where(ScanRun.id != keep_scan_id)
+        )).scalars().all()
+
+        if not rows:
+            return []
+
+        await session.execute(
+            update(ScanRun)
+            .where(ScanRun.id.in_(rows))
+            .values(status="cancelled", cancelled_reason="superseded")
+        )
+        await session.commit()
+        return list(rows)
+
+
+async def submit_ci_scan(
+    *,
+    org: str,
+    source_id: str,
+    commit_sha: str,
+    branch: str | None,
+    pr_number: int | None,
+    api_key_id: int | None = None,
+    triggered_by: str = "ci",
+    trigger_metadata: dict | None = None,
+) -> ScanSubmission:
+    """Create a CI-triggered scan run, dispatch runner jobs, return submission record."""
+    from src.shared.config import get_token_for_org
+
+    scan_id = str(uuid.uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    feedback_status = "pending" if pr_number is not None else "not_applicable"
+
+    scan_scope = "diff_scoped" if pr_number is not None else "full_tree"
+    base_sha: str | None = None
+    if pr_number is not None:
+        token = get_token_for_org(org) or ""
+        base_sha = await _resolve_pr_base_sha(source_id, pr_number, token)
+        if base_sha is None:
+            # Missing token, API error, or PR not found — fall back silently.
+            scan_scope = "full_tree"
+
+    # Default trigger_metadata mirrors the audit context for the caller. The
+    # CI path always has an api_key_id; webhook callers pass their own dict.
+    if trigger_metadata is None:
+        trigger_metadata = {"api_key_id": api_key_id} if api_key_id is not None else {}
+
+    async with get_session() as session:
+        run = ScanRun(
+            id=scan_id,
+            tool="dependencies",  # umbrella row — per-scanner sub-runs created by dispatch
+            asset_id=source_id,
+            status="queued",
+            triggered_by=triggered_by,
+            commit_sha=commit_sha,
+            branch=branch,
+            pr_number=pr_number,
+            feedback_status=feedback_status,
+            trigger_metadata=trigger_metadata,
+        )
+        session.add(run)
+        await session.commit()
+
+    try:
+        _dispatch_scanner_jobs(
+            scan_id,
+            source_id,
+            commit_sha,
+            _DEFAULT_SCANNERS,
+            org,
+            base_sha=base_sha,
+            scan_scope=scan_scope,
+        )
+    except Exception:
+        # The ScanRun row is already committed in 'queued'. Surface the orphan
+        # in logs so it can be reaped or retried out-of-band.
+        logger.exception(
+            "ci.scan.dispatch_failed scan_id=%s source=%s commit=%s",
+            scan_id, source_id, commit_sha,
+        )
+        raise
+
+    logger.info(
+        "ci.scan.submitted scan_id=%s source=%s commit=%s pr=%s",
+        scan_id, source_id, commit_sha, pr_number,
+    )
+
+    # Downstream readers treat ``submitted_by`` as a principal identifier
+    # (e.g. ``api_key:7``, ``alice@example.com``). Shape the webhook path to
+    # carry the event_id from trigger_metadata so the value stays principal-like
+    # and stays distinguishable from CI/api-key triggers.
+    if api_key_id is not None:
+        submitted_by = f"api_key:{api_key_id}"
+    elif triggered_by == "webhook":
+        submitted_by = f"webhook:{trigger_metadata.get('event_id') or 'unknown'}"
+    else:
+        submitted_by = triggered_by
+
+    return ScanSubmission(
+        scan_id=scan_id,
+        repo_id=source_id,
+        commit_sha=commit_sha,
+        scanner_types=list(_DEFAULT_SCANNERS),
+        status="queued",
+        submitted_at=submitted_at,
+        submitted_by=submitted_by,
+    )
+
+
 async def get_scan(scan_id: str, asset_id: str) -> ScanDetail | None:
     """Read a scan_run, returning None if absent or not associated with the given asset.
 
@@ -202,6 +417,8 @@ async def get_scan(scan_id: str, asset_id: str) -> ScanDetail | None:
         meta: dict[str, Any] = row.metadata_json or {}
         progress: dict[str, Any] = row.progress or {}
 
+        verification_summary = await _verification_summary_for_scan(session, scan_id)
+
         return ScanDetail(
             scan_id=row.id,
             repo_id=meta.get("repo_id", ""),
@@ -215,4 +432,62 @@ async def get_scan(scan_id: str, asset_id: str) -> ScanDetail | None:
             finding_counts=progress.get("finding_counts"),
             error=row.error,
             archived=bool(row.archived),
+            verification_summary=verification_summary,
         )
+
+
+async def _verification_summary_for_scan(session, scan_id: str) -> dict[str, Any] | None:
+    """Aggregate verdict counts + token totals for findings touched by this scan.
+
+    Returns None when the scan touched no findings.
+    """
+    from sqlalchemy import distinct, func, select as sa_select
+    from src.db.models import Finding, FindingEvent
+
+    actor_prefix = f"{scan_id}:%"
+    finding_ids_subq = (
+        sa_select(distinct(FindingEvent.finding_id))
+        .where(FindingEvent.actor.like(actor_prefix))
+        .scalar_subquery()
+    )
+
+    rows = await session.execute(
+        sa_select(Finding.verdict, Finding.verification_metadata)
+        .where(Finding.id.in_(finding_ids_subq))
+    )
+
+    counts = {
+        "confirmed": 0,
+        "needs_verify": 0,
+        "possible": 0,
+        "ruled_out": 0,
+        "legacy": 0,
+    }
+    tokens_in = 0
+    tokens_out = 0
+    model: str | None = None
+    touched = 0
+
+    for verdict, meta_json in rows.all():
+        touched += 1
+        if verdict is None:
+            counts["legacy"] += 1
+        elif verdict in counts:
+            counts[verdict] += 1
+
+        meta_obj = meta_json or {}
+        if isinstance(meta_obj, dict):
+            tokens_in += int(meta_obj.get("tokens_in") or 0)
+            tokens_out += int(meta_obj.get("tokens_out") or 0)
+            if model is None and isinstance(meta_obj.get("model"), str):
+                model = meta_obj["model"]
+
+    if touched == 0:
+        return None
+
+    return {
+        **counts,
+        "tokens_in": tokens_in,
+        "tokens_out": tokens_out,
+        "model": model,
+    }

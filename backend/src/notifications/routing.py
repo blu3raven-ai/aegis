@@ -44,7 +44,6 @@ class Rule:
     priority: int
     channel_id: int
     conditions: dict[str, Any]
-    org_id: str
 
 
 # ── Predicate evaluation ──────────────────────────────────────────────────────

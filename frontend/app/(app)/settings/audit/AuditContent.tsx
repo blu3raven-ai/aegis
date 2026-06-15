@@ -6,6 +6,7 @@ import { AuditEventsTable } from "@/components/shared/audit/AuditEventsTable"
 import { AuditEventDrawer } from "@/components/shared/audit/AuditEventDrawer"
 import { AuditFilterBar, type AuditFilters, type DateWindow } from "@/components/shared/audit/AuditFilterBar"
 import { EmptyAuditState } from "@/components/shared/audit/EmptyAuditState"
+import { Button } from "@/components/ui/Button"
 
 const PER_PAGE = 25
 
@@ -100,7 +101,7 @@ export function AuditContent() {
 
         {/* Error state */}
         {loadState === "error" && (
-          <div className="rounded-2xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
+          <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
             <p className="text-sm font-semibold text-[var(--color-severity-critical)]">
               Couldn&apos;t load audit events
             </p>
@@ -109,19 +110,15 @@ export function AuditContent() {
                 ? "The audit log may be disabled. Set AEGIS_AUDIT_LOG_ENABLED=true to enable."
                 : (errorMessage ?? "An unknown error occurred.")}
             </p>
-            <button
-              type="button"
-              onClick={load}
-              className="mt-4 rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
-            >
+            <Button variant="secondary" size="md" onClick={load} className="mt-4">
               Retry
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Empty state */}
         {loadState === "ok" && events.length === 0 && (
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
             <EmptyAuditState filtered={isFiltered(filters)} />
           </div>
         )}

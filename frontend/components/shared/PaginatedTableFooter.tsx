@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/Button"
 
 export function PaginatedTableFooter({
   totalCount,
@@ -25,23 +26,27 @@ export function PaginatedTableFooter({
         {totalCount} {label}
       </span>
       <div className="flex items-center gap-1 text-xs text-[var(--color-text-secondary)]">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
+          iconOnly
           disabled={isFirst}
           onClick={() => onPageChange(page - 1)}
-          className="rounded px-2 py-1 disabled:opacity-30 hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] disabled:cursor-default disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          aria-label="Previous page"
         >
           ‹
-        </button>
+        </Button>
         <span className="tabular-nums px-1">{page} / {totalPages}</span>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
+          iconOnly
           disabled={isLast}
           onClick={() => onPageChange(page + 1)}
-          className="rounded px-2 py-1 disabled:opacity-30 hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] disabled:cursor-default disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          aria-label="Next page"
         >
           {isLast ? "—" : "›"}
-        </button>
+        </Button>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-"""Tests for runner.uploader — single-file PUT to a presigned URL."""
+"""Tests for runner.clients.uploader — single-file PUT to a presigned URL."""
 from __future__ import annotations
 
 import pytest
@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 
 import httpx
 
-from runner.uploader import put_to_url, URL_EXPIRED_MARKER
+from runner.clients.uploader import put_to_url, URL_EXPIRED_MARKER
 
 
 @pytest.fixture

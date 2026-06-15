@@ -58,7 +58,7 @@ def _window(lines: list[str], start_line: int) -> str:
 
 
 def extract_context(clone_dir: Path, repo_output_dir: Path) -> int:
-    """Read ``opengrep.json`` SARIF under ``repo_output_dir`` and emit
+    """Read ``semgrep.sarif`` under ``repo_output_dir`` and emit
     ``context.json`` with per-finding code window/imports/file_class.
 
     Returns the number of context entries written. ``context.json`` is
@@ -66,7 +66,7 @@ def extract_context(clone_dir: Path, repo_output_dir: Path) -> int:
     """
     clone_dir = Path(clone_dir)
     repo_output_dir = Path(repo_output_dir)
-    sarif_file = repo_output_dir / "opengrep.json"
+    sarif_file = repo_output_dir / "semgrep.sarif"
     context_file = repo_output_dir / "context.json"
 
     if not sarif_file.exists():

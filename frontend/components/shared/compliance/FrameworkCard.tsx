@@ -1,4 +1,5 @@
 import { type ControlSummaryItem, deriveControlStatus } from "@/lib/client/compliance-api"
+import { Button } from "@/components/ui/Button"
 
 interface FrameworkCardProps {
   framework: { id: string; label: string }
@@ -95,16 +96,17 @@ export function FrameworkCard({
           {onRetry ? (
             <>
               {" · "}
-              <button
-                type="button"
+              <Button
+                variant="link"
+                size="xs"
                 onClick={(e) => {
                   e.stopPropagation()
                   onRetry()
                 }}
-                className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+                className="text-[var(--color-accent)] underline-offset-2 hover:underline hover:text-[var(--color-accent)]"
               >
                 Retry
-              </button>
+              </Button>
             </>
           ) : null}
         </p>

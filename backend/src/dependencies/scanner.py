@@ -203,7 +203,7 @@ def _ingest_sboms_from_minio(org: str, run_id: str, prefix: str) -> None:
                 logger.warning("Failed to ingest SBOM for %s/%s", org, repo_name)
 
 
-def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
+def ingest_dependencies_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
     """Ingest dependency scan results from object store after runner completion."""
     from src.shared.object_store import find_findings_jsonl
     from src.shared.enrichment import map_finding_to_alert
@@ -238,6 +238,9 @@ def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
             update_dependencies_run(org, run_id, {"status": "failed", "finishedAt": now_iso(), "error": "No output files found"})
             return
 
+        from src.assets.service import resolve_repo_asset_ids
+        asset_id_by_repo = resolve_repo_asset_ids(list(repo_sboms.keys()))
+
         all_findings = []
         for repo_name, data in repo_sboms.items():
             sbom_json = data.get("sbom")
@@ -246,7 +249,9 @@ def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
             commit_sha = data.get("head_sha", "HEAD")
             manifests = data.get("manifests") or {}
             upsert_sbom(org=org, repo=repo_name, commit_sha=commit_sha, sbom=sbom_json, manifests=manifests, run_id=run_id)
-            write_checkpoint("dependencies", org, repo_name, commit_sha=commit_sha)
+            asset_id = asset_id_by_repo.get(repo_name)
+            if asset_id:
+                write_checkpoint("dependencies", asset_id, commit_sha=commit_sha)
             findings_key = data.get("findings_key") or f"dependencies/{org}/{run_id}/{repo_name}/findings.json"
             grype_output = download_json(findings_key)
             if grype_output:
@@ -282,7 +287,6 @@ def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
         from src.shared.event_emit_helpers import emit_finding_created
         for finding in new_findings:
             emit_finding_created(
-                org_id=org,
                 finding=finding,
                 scanner_type="dependencies",
                 source_component="dependencies.scanner",
@@ -401,7 +405,6 @@ def execute_dependencies_scan_once(
             repo_urls_str = ",".join(source.repo_urls)
 
             result = _execute_via_runner(
-                org=org,
                 run_id=run_id,
                 config=config,
                 repo_urls=repo_urls_str,

@@ -1,7 +1,7 @@
 """Tests for correlation engine startup / shutdown hooks in the lifespan.
 
 Isolates the startup logic without spinning up the full FastAPI app (which
-requires DB, MinIO, Redis). Instead we extract and test the same conditional
+requires DB and MinIO). Instead we extract and test the same conditional
 logic directly, using mocks for the engine and its dependencies.
 """
 from __future__ import annotations
@@ -43,13 +43,12 @@ class TestCorrelationStartupLogic:
     def test_engine_started_when_flag_true(self, monkeypatch):
         """AEGIS_CORRELATION_ENABLED=true must construct the engine and call start()."""
         monkeypatch.setenv("AEGIS_CORRELATION_ENABLED", "true")
-        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
 
         mock_engine = MagicMock()
         mock_engine_cls = MagicMock(return_value=mock_engine)
         mock_register = MagicMock()
         mock_argus = MagicMock()
-        mock_stream_cfg = {"url": "redis://localhost:6379/0", "stream_prefix": "aegis.events.", "max_len": 100000}
+        mock_stream_cfg = {"stream_prefix": "aegis.events.", "max_len": 100000}
 
         with patch("src.correlation.engine.CorrelationEngine", mock_engine_cls), \
              patch("src.correlation.rules.register_builtin_rules", mock_register), \
@@ -59,10 +58,8 @@ class TestCorrelationStartupLogic:
                 from src.correlation.engine import CorrelationEngine
                 from src.correlation.rules import register_builtin_rules
                 from src.argus.connector import get_argus_connector
-                redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
                 engine = mock_engine_cls(
                     stream_config=mock_stream_cfg,
-                    redis_config={"url": redis_url},
                     argus=mock_argus,
                 )
                 mock_register(engine)

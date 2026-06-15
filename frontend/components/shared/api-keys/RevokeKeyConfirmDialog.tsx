@@ -1,6 +1,7 @@
 "use client"
 
 import type { ApiKey } from "@/lib/client/api-keys-api"
+import { Button } from "@/components/ui/Button"
 
 interface Props {
   apiKey: ApiKey | null
@@ -30,18 +31,20 @@ export function RevokeKeyConfirmDialog({ apiKey, onConfirm, onCancel }: Props) {
           working immediately. This cannot be undone.
         </p>
         <div className="flex justify-end gap-2">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onCancel}
-            className="rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
             onClick={onConfirm}
-            className="rounded-lg bg-[var(--color-severity-critical)] px-3 py-1.5 text-xs font-medium text-[var(--color-on-danger)] hover:opacity-90 transition-opacity"
           >
             Revoke
-          </button>
+          </Button>
         </div>
       </div>
     </div>

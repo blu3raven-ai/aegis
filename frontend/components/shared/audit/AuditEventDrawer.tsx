@@ -9,6 +9,7 @@ import { ActionBadge } from "./ActionBadge"
 import { ActorBadge } from "./ActorBadge"
 import { ChangesDiffTable } from "./ChangesDiffTable"
 import type { AuditEvent } from "@/lib/client/audit-api"
+import { Button } from "@/components/ui/Button"
 
 function formatTimestamp(iso: string): string {
   try {
@@ -80,13 +81,14 @@ export function AuditEventDrawer({ event, open, onClose }: AuditEventDrawerProps
         <DrawerSection
           label="Raw payload"
           action={
-            <button
-              type="button"
+            <Button
+              variant="link"
+              size="xs"
               onClick={() => setRawExpanded((v) => !v)}
-              className="text-[11px] font-semibold text-[var(--color-accent)] hover:opacity-80"
+              className="text-[var(--color-accent)] font-semibold hover:opacity-80 hover:text-[var(--color-accent)]"
             >
               {rawExpanded ? "Collapse" : "Expand"}
-            </button>
+            </Button>
           }
         >
           {rawExpanded ? (

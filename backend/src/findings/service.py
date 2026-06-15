@@ -36,6 +36,13 @@ _PUBLIC_TO_TOOL = {v: k for k, v in _TOOL_TO_PUBLIC.items()}
 VALID_SCANNERS = frozenset(_PUBLIC_TO_TOOL.keys())
 VALID_SEVERITIES = frozenset({"critical", "high", "medium", "low"})
 VALID_STATES = frozenset({"open", "closed", "dismissed", "fixed"})
+
+# Concrete verdict values stored in Finding.verdict.
+VALID_VERDICTS = frozenset({"confirmed", "needs_verify", "possible", "ruled_out"})
+
+# Accepted ?verdict= filter values. "legacy" matches verdict IS NULL
+# (findings ingested before LLM verification ran); "all" disables the filter.
+_VALID_VERDICT_FILTERS = VALID_VERDICTS | frozenset({"legacy", "all"})
 VALID_SORTS = frozenset(
     {"severity", "severity_age", "epss", "risk_score", "newest", "oldest", "created_at", "updated_at"}
 )
@@ -74,13 +81,14 @@ class FindingsListFilters:
     # belong in the reports endpoint via include_archived=True.
     archived: bool | None = None
     first_seen_after: datetime | None = None
-    # PR 4 — More filters popover
     cwe: str | None = None
     kev: bool | None = None
     epss_min: float | None = None
     risk_score_min: int | None = None
     assignee_user_id: str | None = None
     page: int = 1
+    # None defaults to hiding ruled_out; "all" disables the filter entirely.
+    verdict: str | None = None
 
 
 def _normalize_filters(filters: FindingsListFilters) -> FindingsListFilters:
@@ -149,6 +157,13 @@ def _normalize_filters(filters: FindingsListFilters) -> FindingsListFilters:
 
     page = max(1, int(filters.page or 1))
 
+    verdict: str | None = None
+    if filters.verdict:
+        v = filters.verdict.strip().lower()
+        if v not in _VALID_VERDICT_FILTERS:
+            raise ValueError(f"invalid verdict: {filters.verdict!r}")
+        verdict = v
+
     return FindingsListFilters(
         org_id=filters.org_id,
         asset_ids=list(filters.asset_ids) if filters.asset_ids else [],
@@ -170,6 +185,7 @@ def _normalize_filters(filters: FindingsListFilters) -> FindingsListFilters:
         risk_score_min=risk_score_min,
         assignee_user_id=assignee_user_id,
         page=page,
+        verdict=verdict,
     )
 
 
@@ -312,10 +328,18 @@ def _build_where_clauses(filters: FindingsListFilters) -> list:
     if filters.asset_ids:
         clauses: list = [Finding.asset_id.in_(filters.asset_ids)]
     else:
-        # Org-only callers no longer have a scope after Plan D; fail closed.
+        # Fail closed when no asset scope is provided.
         clauses = [sa_false()]
     if filters.severity:
         clauses.append(func.lower(Finding.severity).in_(filters.severity))
+    if filters.verdict is None:
+        clauses.append(
+            or_(Finding.verdict.is_(None), Finding.verdict != "ruled_out")
+        )
+    elif filters.verdict == "legacy":
+        clauses.append(Finding.verdict.is_(None))
+    elif filters.verdict in VALID_VERDICTS:
+        clauses.append(Finding.verdict == filters.verdict)
     if filters.scanner:
         internal_tools = [_PUBLIC_TO_TOOL[s] for s in filters.scanner]
         clauses.append(Finding.tool.in_(internal_tools))
@@ -414,6 +438,7 @@ def _finding_to_dict(finding: Finding, kev_lookup: _KevLookup | None = None) -> 
         "cwe": lookup.first_cwe(finding.cve_id),
         "risk_score": finding.risk_score,
         "assignee_user_id": finding.assignee_user_id,
+        "verdict": finding.verdict,
     }
 
 
@@ -531,11 +556,53 @@ async def list_findings(
             return cwes[0] if cwes else None
 
     lookup = _RealKev()
+
+    verdict_counts = await _verdict_counts_for_filters(filters, session)
+
     return {
         "findings": [_finding_to_dict(f, kev_lookup=lookup) for f in page],
         "next_cursor": next_cursor,
         "total_count": total,
+        "verdict_counts": verdict_counts,
     }
+
+
+async def _verdict_counts_for_filters(
+    filters: FindingsListFilters,
+    session: AsyncSession,
+) -> dict[str, int]:
+    """Per-verdict counts for the filter set, with the verdict filter itself disabled.
+
+    Keeps chip counts stable as the user toggles between verdicts.
+    """
+    counts_filters = FindingsListFilters(**{**filters.__dict__, "verdict": "all"})
+    where = _build_where_clauses(counts_filters)
+    base_where = and_(*where)
+
+    stmt = (
+        select(Finding.verdict, func.count())
+        .where(base_where)
+        .group_by(Finding.verdict)
+    )
+    stmt = exclude_archived(stmt, Finding) if filters.archived is not True else only_archived(stmt, Finding)
+    rows = await session.execute(stmt)
+
+    out = {
+        "total": 0,
+        "confirmed": 0,
+        "needs_verify": 0,
+        "possible": 0,
+        "ruled_out": 0,
+        "legacy": 0,
+    }
+    for verdict, n in rows.all():
+        n_int = int(n or 0)
+        out["total"] += n_int
+        if verdict is None:
+            out["legacy"] += n_int
+        elif verdict in out:
+            out[verdict] += n_int
+    return out
 
 
 # Number of days the "fixed this week" bucket looks back. Matches the mock's
@@ -577,7 +644,7 @@ async def summarize_findings(
     if asset_ids:
         stmt = stmt.where(Finding.asset_id.in_(asset_ids))
     elif org_id:
-        # Org-only callers no longer have a scope after Plan D; fail closed.
+        # Fail closed when no asset scope is provided.
         stmt = stmt.where(sa_false())
     else:
         raise ValueError("summarize_findings requires asset_ids or org_id")
@@ -600,12 +667,14 @@ async def assign_finding(
     finding_id: int,
     assignee_user_id: str | None,
     session: AsyncSession,
+    asset_ids: list[str],
 ) -> tuple[Finding, str | None]:
     """Set or clear the assignee on a finding.
 
     Returns (finding, previous_assignee). Raises LookupError if the finding
-    does not exist; raises ValueError if assignee_user_id is non-empty but
-    references a user that does not exist.
+    does not exist or its asset is outside the caller's scope (404 path —
+    avoids leaking existence). Raises ValueError if assignee_user_id is
+    non-empty but references a user that does not exist.
     """
     if assignee_user_id is not None:
         normalized = assignee_user_id.strip()
@@ -616,7 +685,14 @@ async def assign_finding(
     finding = (
         await session.execute(select(Finding).where(Finding.id == finding_id))
     ).scalars().first()
-    if finding is None:
+    # Secrets findings (asset_id=NULL) have no per-source isolation and are
+    # not surfaced through the asset-scoped /findings list, so they are out
+    # of scope for assignment too.
+    if (
+        finding is None
+        or not finding.asset_id
+        or finding.asset_id not in asset_ids
+    ):
         raise LookupError(f"finding {finding_id} not found")
 
     if assignee_user_id is not None:

@@ -16,13 +16,13 @@ test("OrganisationsContent.tsx uses TeamList and TeamEditor", () => {
   assert.match(source, /md:min-h-\[calc\(100vh-12rem\)\]/)
 })
 
-test("TeamsSection.tsx carries the Teams title + subtitle copy", () => {
+test("TeamsPageContent carries the Teams title + description copy", () => {
   const source = readFileSync(
-    path.join(process.cwd(), "app/(app)/settings/sections/TeamsSection.tsx"),
+    path.join(process.cwd(), "app/(app)/teams/TeamsPageContent.tsx"),
     "utf8",
   )
   assert.match(source, /title="Teams"/)
-  assert.match(source, /subtitle="[^"]*[Tt]eam/)
+  assert.match(source, /description="[^"]*[Tt]eam/)
 })
 
 test("TeamList.tsx keeps the team rail independently scrollable on desktop", () => {

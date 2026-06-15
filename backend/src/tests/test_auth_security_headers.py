@@ -18,6 +18,14 @@ def _app(script_hashes: list[str] | None = None):
     def home():
         return {"ok": True}
 
+    @app.get("/docs")
+    def docs():
+        return {"ok": True}
+
+    @app.get("/docs/oauth2-redirect")
+    def docs_oauth():
+        return {"ok": True}
+
     return app
 
 
@@ -106,3 +114,47 @@ def test_csp_accepts_valid_base64_sha256_hash():
     # Should not raise
     client = TestClient(_app(script_hashes=[valid]))
     assert client.get("/").status_code == 200
+
+
+def test_docs_csp_allows_inline_for_swagger_ui():
+    """Swagger UI ships an inline init script — needs 'unsafe-inline' on script-src."""
+    client = TestClient(_app(script_hashes=[_HASH_A]))
+    csp = client.get("/docs").headers["Content-Security-Policy"]
+    script_src = next(p for p in csp.split(";") if "script-src" in p)
+    style_src = next(p for p in csp.split(";") if "style-src" in p)
+    assert "'unsafe-inline'" in script_src
+    assert "'unsafe-inline'" in style_src
+
+
+def test_docs_csp_has_no_external_host_allowlist():
+    """Assets are self-hosted at /swagger — no external origin should be trusted."""
+    client = TestClient(_app(script_hashes=[_HASH_A]))
+    csp = client.get("/docs").headers["Content-Security-Policy"]
+    assert "cdn.jsdelivr.net" not in csp
+
+
+def test_docs_csp_drops_trusted_types_and_strict_dynamic():
+    """Swagger UI uses innerHTML and inline init — Trusted Types + strict-dynamic block it."""
+    client = TestClient(_app(script_hashes=[_HASH_A]))
+    csp = client.get("/docs").headers["Content-Security-Policy"]
+    assert "require-trusted-types-for" not in csp
+    assert "'strict-dynamic'" not in csp
+
+
+def test_docs_subpath_gets_docs_csp():
+    """/docs/oauth2-redirect and similar sub-routes must also relax CSP."""
+    client = TestClient(_app(script_hashes=[_HASH_A]))
+    csp = client.get("/docs/oauth2-redirect").headers["Content-Security-Policy"]
+    script_src = next(p for p in csp.split(";") if "script-src" in p)
+    assert "'unsafe-inline'" in script_src
+
+
+def test_non_docs_path_keeps_strict_csp():
+    """Carve-out must not leak to other routes."""
+    client = TestClient(_app(script_hashes=[_HASH_A]))
+    csp = client.get("/").headers["Content-Security-Policy"]
+    assert "require-trusted-types-for" in csp
+    assert "'strict-dynamic'" in csp
+    # Strict script-src has only 'self' + strict-dynamic + hashes, no 'unsafe-inline'.
+    script_src = next(p for p in csp.split(";") if "script-src" in p)
+    assert "'unsafe-inline'" not in script_src

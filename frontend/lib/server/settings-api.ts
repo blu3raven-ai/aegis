@@ -16,7 +16,7 @@ export async function checkToolPrerequisites(
 ): Promise<{ ready: boolean }> {
   try {
     const data = await getJson<PrerequisitesResponse>(
-      `/settings/api/tools/${tool}/prerequisites`, user
+      `/api/v1/settings/tools/${tool}/prerequisites`, user
     )
     return { ready: data.runner_connected && data.scanner_status === "ready" }
   } catch {
@@ -44,7 +44,7 @@ function isNetworkFailure(error: unknown) {
 
 export async function getSettingsServer(user: { id: string; role: string; roleId?: string | null }): Promise<GetSettingsResult> {
   try {
-    const data = await getJson<AppConfig>("/settings/api", user)
+    const data = await getJson<AppConfig>("/api/v1/settings", user)
     return { ok: true, data }
   } catch (error) {
     return { ok: false, error: formatSettingsError(error) }
@@ -53,7 +53,7 @@ export async function getSettingsServer(user: { id: string; role: string; roleId
 
 export async function getUserCountServer(user: { id: string; role: string; roleId?: string | null }): Promise<number | undefined> {
   try {
-    const data = await getJson<{ users: any[] }>("/settings/api/users", user)
+    const data = await getJson<{ users: any[] }>("/api/v1/settings/users", user)
     return Array.isArray(data.users) ? data.users.length : undefined
   } catch {
     return undefined
@@ -62,7 +62,7 @@ export async function getUserCountServer(user: { id: string; role: string; roleI
 
 export async function getTeamCountServer(user: { id: string; role: string; roleId?: string | null }): Promise<number | undefined> {
   try {
-    const data = await getJson<{ teams?: unknown[] }>("/settings/api/organisations", user)
+    const data = await getJson<{ teams?: unknown[] }>("/api/v1/settings/organisations", user)
     return Array.isArray(data.teams) ? data.teams.length : undefined
   } catch {
     return undefined
@@ -71,7 +71,7 @@ export async function getTeamCountServer(user: { id: string; role: string; roleI
 
 export async function getRoleCountServer(user: { id: string; role: string; roleId?: string | null }): Promise<number | undefined> {
   try {
-    const data = await getJson<{ roles?: unknown[] }>("/settings/api/roles", user)
+    const data = await getJson<{ roles?: unknown[] }>("/api/v1/settings/roles", user)
     return Array.isArray(data.roles) ? data.roles.length : undefined
   } catch {
     return undefined

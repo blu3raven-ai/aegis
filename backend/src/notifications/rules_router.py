@@ -1,8 +1,4 @@
-"""REST endpoints for notification routing rules (Phase 42).
-
-All endpoints require manage_settings permission, mirroring the pattern
-used by admin_router.py for notification destinations.
-"""
+"""REST endpoints for notification routing rules."""
 from __future__ import annotations
 
 import logging
@@ -18,7 +14,7 @@ from src.notifications.rules_model import (
     list_rules,
     update_rule,
 )
-from src.notifications.routing import Finding, Rule, evaluate_condition, route_finding
+from src.notifications.routing import Finding, evaluate_condition, route_finding
 from src.settings.router import require_permission
 
 logger = logging.getLogger(__name__)
@@ -26,11 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/notification-rules", tags=["notification-rules"])
 
 
-# ── Request / response schemas ────────────────────────────────────────────────
-
-
 class CreateRuleRequest(BaseModel):
-    org_id: str
     name: str = Field(..., max_length=120)
     channel_id: int
     conditions: dict[str, Any] = Field(default_factory=dict)
@@ -56,19 +48,16 @@ class PreviewFinding(BaseModel):
 
 
 class PreviewRequest(BaseModel):
-    """Dry-run: evaluate a rule (or all org rules) against a sample finding."""
-    rule: CreateRuleRequest | None = None          # single rule to preview
-    org_id: str | None = None                      # if set, evaluate all active rules
+    """Dry-run: evaluate a rule (or all active rules) against a sample finding."""
+    rule: CreateRuleRequest | None = None              # single rule to preview
+    evaluate_all_active: bool = False                  # if true, evaluate all active rules
     finding: PreviewFinding
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
-
-
 @router.get("")
-def list_notification_rules(request: Request, org_id: str) -> dict:
+def list_notification_rules(request: Request) -> dict:
     require_permission(request, "manage_settings")
-    return {"rules": list_rules(org_id)}
+    return {"rules": list_rules()}
 
 
 @router.post("", status_code=201)
@@ -76,7 +65,6 @@ def create_notification_rule(request: Request, body: CreateRuleRequest) -> dict:
     require_permission(request, "manage_settings")
     try:
         rule = create_rule(
-            org_id=body.org_id,
             name=body.name,
             channel_id=body.channel_id,
             conditions=body.conditions,
@@ -90,9 +78,9 @@ def create_notification_rule(request: Request, body: CreateRuleRequest) -> dict:
 
 
 @router.get("/{rule_id}")
-def get_notification_rule(request: Request, rule_id: str, org_id: str) -> dict:
+def get_notification_rule(request: Request, rule_id: str) -> dict:
     require_permission(request, "manage_settings")
-    rule = get_rule(rule_id, org_id)
+    rule = get_rule(rule_id)
     if rule is None:
         raise HTTPException(status_code=404, detail="rule not found")
     return rule
@@ -100,12 +88,11 @@ def get_notification_rule(request: Request, rule_id: str, org_id: str) -> dict:
 
 @router.put("/{rule_id}")
 def update_notification_rule(
-    request: Request, rule_id: str, org_id: str, body: UpdateRuleRequest
+    request: Request, rule_id: str, body: UpdateRuleRequest
 ) -> dict:
     require_permission(request, "manage_settings")
     rule = update_rule(
         rule_id,
-        org_id,
         name=body.name,
         enabled=body.enabled,
         priority=body.priority,
@@ -118,21 +105,16 @@ def update_notification_rule(
 
 
 @router.delete("/{rule_id}", status_code=204)
-def delete_notification_rule(request: Request, rule_id: str, org_id: str) -> None:
+def delete_notification_rule(request: Request, rule_id: str) -> None:
     require_permission(request, "manage_settings")
-    deleted = delete_rule(rule_id, org_id)
+    deleted = delete_rule(rule_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="rule not found")
 
 
 @router.post("/preview")
 def preview_rule_match(request: Request, body: PreviewRequest) -> dict:
-    """Dry-run endpoint: evaluate a rule or full rule list against a sample finding.
-
-    If body.rule is set, evaluates only that rule's conditions.
-    If body.org_id is set, loads all active rules and returns which one matches.
-    Returns the matched channel_id(s) and per-rule match details.
-    """
+    """Dry-run endpoint: evaluate a rule or the full active rule list."""
     require_permission(request, "manage_settings")
 
     finding = Finding(
@@ -145,7 +127,6 @@ def preview_rule_match(request: Request, body: PreviewRequest) -> dict:
     )
 
     if body.rule is not None:
-        # Single-rule preview — don't touch the DB
         try:
             matched = evaluate_condition(body.rule.conditions, finding)
         except ValueError as exc:
@@ -156,12 +137,11 @@ def preview_rule_match(request: Request, body: PreviewRequest) -> dict:
             "rule_name": body.rule.name,
         }
 
-    if body.org_id is not None:
-        from src.notifications.rules_model import get_active_rules_for_org
+    if body.evaluate_all_active:
+        from src.notifications.rules_model import get_active_rules
 
-        rules = get_active_rules_for_org(body.org_id)
+        rules = get_active_rules()
         channel_ids = route_finding(finding, rules)
-        # Build per-rule breakdown for the UI
         breakdown = []
         for rule in rules:
             try:
@@ -182,5 +162,5 @@ def preview_rule_match(request: Request, body: PreviewRequest) -> dict:
 
     raise HTTPException(
         status_code=422,
-        detail="provide either 'rule' for single-rule preview or 'org_id' for full evaluation",
+        detail="provide either 'rule' for single-rule preview or set evaluate_all_active=true",
     )

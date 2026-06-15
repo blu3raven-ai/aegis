@@ -138,27 +138,128 @@ class AutoRerunScheduler:
 
         # Midnight UTC: write daily posture snapshots
         if now.hour == 0 and now.minute == 0:
-            self._take_posture_snapshots(all_orgs)
+            self._take_posture_snapshots()
 
-    def _take_posture_snapshots(self, all_orgs: list[str]) -> None:
+        # Scheduled reports: check every minute
+        self._tick_scheduled_reports(now)
+
+        # Daily CISA KEV catalog refresh (03:00)
+        if _matches_cron("0 3 * * *", now):
+            self._trigger_kev_refresh()
+
+        # Daily FIRST.org EPSS scores refresh (03:15, after KEV so CVE rows already exist)
+        if _matches_cron("15 3 * * *", now):
+            self._trigger_epss_refresh()
+
+        # Hourly SLA breach recompute + escalations
+        if _matches_cron("0 * * * *", now):
+            self._trigger_sla_recompute(all_orgs)
+
+        # Daily scanner-coverage recompute (04:00)
+        if _matches_cron("0 4 * * *", now):
+            self._trigger_scanner_coverage_recompute(all_orgs)
+
+        # Daily data-retention sweep (04:30 — offset from scanner-coverage so
+        # the two heavy nightly evaluators don't contend for DB at the same minute)
+        if _matches_cron("30 4 * * *", now):
+            self._trigger_data_retention_recompute(all_orgs)
+
+    def _tick_scheduled_reports(self, now: datetime) -> None:
+        try:
+            from src.reports.runner import run_due_schedules
+            count = run_due_schedules(now=now)
+            if count:
+                logger.info("Scheduled reports: ran %d schedule(s)", count)
+        except Exception:
+            logger.exception("Scheduled reports tick failed")
+
+    def _take_posture_snapshots(self) -> None:
+        """Run the asset-scoped daily snapshot job once."""
+        try:
+            from src.posture.service import compute_and_store_daily_snapshots
+            count = compute_and_store_daily_snapshots()
+            logger.info("Posture snapshots written for %d assets", count)
+        except Exception:
+            logger.exception("Failed to write posture snapshots")
+
+    def _trigger_kev_refresh(self) -> None:
         import threading
 
-        def _run_for_org(org: str) -> None:
+        def _run() -> None:
             try:
-                from src.posture.service import get_posture_snapshot, upsert_posture_snapshot
-                payload = get_posture_snapshot(org=org)
-                upsert_posture_snapshot(org=org, payload=payload)
-                logger.info("Posture snapshot written for org %s", org)
+                from src.jobs.kev_refresh import refresh_kev_catalog
+                result = refresh_kev_catalog()
+                logger.info("KEV refresh complete: %s", result)
             except Exception:
-                logger.exception("Failed to write posture snapshot for org %s", org)
+                logger.exception("KEV refresh failed")
 
-        for org in all_orgs:
-            threading.Thread(
-                target=_run_for_org,
-                args=(org,),
-                daemon=True,
-                name=f"posture-snapshot-{org}",
-            ).start()
+        threading.Thread(target=_run, daemon=True, name="kev-refresh").start()
+
+    def _trigger_epss_refresh(self) -> None:
+        import threading
+
+        def _run() -> None:
+            try:
+                from src.jobs.epss_refresh import refresh_epss_scores
+                result = refresh_epss_scores()
+                logger.info("EPSS refresh complete: %s", result)
+            except Exception:
+                logger.exception("EPSS refresh failed")
+
+        threading.Thread(target=_run, daemon=True, name="epss-refresh").start()
+
+    def _trigger_sla_recompute(self, all_orgs: list[str]) -> None:
+        import threading
+
+        if not all_orgs:
+            return
+
+        def _run() -> None:
+            try:
+                from src.jobs.sla_recompute import trigger_sla_recompute
+                trigger_sla_recompute(all_orgs)
+            except Exception:
+                logger.exception("SLA recompute failed")
+
+        threading.Thread(target=_run, daemon=True, name="sla-recompute").start()
+
+    def _trigger_scanner_coverage_recompute(self, all_orgs: list[str]) -> None:
+        import threading
+
+        if not all_orgs:
+            return
+
+        def _run() -> None:
+            try:
+                from src.jobs.scanner_coverage_recompute import (
+                    trigger_scanner_coverage_recompute,
+                )
+                trigger_scanner_coverage_recompute(all_orgs)
+            except Exception:
+                logger.exception("Scanner-coverage recompute failed")
+
+        threading.Thread(
+            target=_run, daemon=True, name="scanner-coverage-recompute"
+        ).start()
+
+    def _trigger_data_retention_recompute(self, all_orgs: list[str]) -> None:
+        import threading
+
+        if not all_orgs:
+            return
+
+        def _run() -> None:
+            try:
+                from src.jobs.data_retention_recompute import (
+                    trigger_data_retention_recompute,
+                )
+                trigger_data_retention_recompute(all_orgs)
+            except Exception:
+                logger.exception("Data-retention recompute failed")
+
+        threading.Thread(
+            target=_run, daemon=True, name="data-retention-recompute"
+        ).start()
 
     def _trigger_dependencies(self, dependencies_config: dict[str, Any], all_orgs: list[str]) -> None:
         import threading

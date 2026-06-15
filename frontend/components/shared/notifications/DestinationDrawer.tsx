@@ -14,6 +14,16 @@ import { DestinationForm } from "./DestinationForm"
 import { DeliveriesHistoryList } from "./DeliveriesHistoryList"
 import { DestinationTypeIcon } from "./DestinationTypeIcon"
 import { WebhookSigningPanel } from "./WebhookSigningPanel"
+import { Button } from "@/components/ui/Button"
+import { NavTabs, type NavTab } from "@/components/ui/NavTabs"
+
+type DestinationTab = "details" | "signing" | "history"
+
+const TAB_LABELS: Record<DestinationTab, string> = {
+  details: "Details",
+  signing: "Signing",
+  history: "Delivery history",
+}
 
 interface DestinationDrawerProps {
   destination: NotificationDestination | null
@@ -115,26 +125,18 @@ export function DestinationDrawer({
       />
 
       {/* Tab bar */}
-      <div className="flex border-b border-[var(--color-border)] px-5">
-        {([
-          "details",
-          ...(isWebhook ? (["signing"] as const) : []),
-          "history",
-        ] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t as typeof tab)}
-            className={`mr-4 py-3 text-xs font-semibold capitalize transition-colors focus-visible:outline-none ${
-              tab === t
-                ? "border-b-2 border-[var(--color-accent)] text-[var(--color-text-primary)]"
-                : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-            }`}
-          >
-            {t === "history" ? "Delivery history" : t === "signing" ? "Signing" : "Details"}
-          </button>
-        ))}
-      </div>
+      <NavTabs<DestinationTab>
+        tabs={(
+          [
+            "details",
+            ...(isWebhook ? (["signing"] as const) : []),
+            "history",
+          ] as const
+        ).map((t) => ({ id: t, label: TAB_LABELS[t] })) as NavTab<DestinationTab>[]}
+        activeTab={tab}
+        onChange={setTab}
+        containerClassName="px-5"
+      />
 
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
         {tab === "details" && (
@@ -158,13 +160,14 @@ export function DestinationDrawer({
                   label="Configuration"
                   action={
                     isEditable ? (
-                      <button
-                        type="button"
+                      <Button
+                        variant="link"
+                        size="xs"
                         onClick={() => setEditing(true)}
-                        className="text-xs font-semibold text-[var(--color-accent)] hover:underline focus-visible:outline-none"
+                        className="text-[var(--color-accent)] font-semibold hover:underline hover:text-[var(--color-accent)]"
                       >
                         Edit
-                      </button>
+                      </Button>
                     ) : undefined
                   }
                 >

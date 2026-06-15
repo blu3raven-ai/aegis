@@ -3,6 +3,9 @@
 import { useState } from "react"
 import type { NotificationDestination, CreateDestinationPayload, UpdateDestinationPayload } from "@/lib/client/destinations-api"
 import { EventFilterBuilder, type EventFilter } from "./EventFilterBuilder"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { Textarea } from "@/components/ui/Textarea"
 
 export type DestinationFormValues = {
   name: string
@@ -145,8 +148,6 @@ export function DestinationForm({
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
   const labelClass =
     "block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
   const errorClass = "mt-1 text-[11px] text-[var(--color-severity-critical)]"
@@ -158,13 +159,12 @@ export function DestinationForm({
         <label htmlFor="dest-name" className={labelClass}>
           Name
         </label>
-        <input
+        <Input
           id="dest-name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Security alerts"
-          className={inputClass}
           autoComplete="off"
         />
         {errors.name && <p className={errorClass}>{errors.name}</p>}
@@ -199,13 +199,12 @@ export function DestinationForm({
           <label htmlFor="dest-slack-url" className={labelClass}>
             Slack webhook URL
           </label>
-          <input
+          <Input
             id="dest-slack-url"
             type="url"
             value={slackUrl}
             onChange={(e) => setSlackUrl(e.target.value)}
             placeholder="https://hooks.slack.com/services/..."
-            className={inputClass}
           />
           {errors.webhookUrl && <p className={errorClass}>{errors.webhookUrl}</p>}
         </div>
@@ -217,13 +216,12 @@ export function DestinationForm({
             <label htmlFor="dest-webhook-url" className={labelClass}>
               Webhook URL
             </label>
-            <input
+            <Input
               id="dest-webhook-url"
               type="url"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
               placeholder="https://example.com/hooks/aegis"
-              className={inputClass}
             />
             {errors.url && <p className={errorClass}>{errors.url}</p>}
           </div>
@@ -234,13 +232,12 @@ export function DestinationForm({
                 (optional)
               </span>
             </label>
-            <input
+            <Input
               id="dest-webhook-secret"
               type="password"
               value={webhookSecret}
               onChange={(e) => setWebhookSecret(e.target.value)}
               placeholder="Optional HMAC-SHA256 secret"
-              className={inputClass}
               autoComplete="new-password"
             />
             <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
@@ -255,13 +252,13 @@ export function DestinationForm({
           <label htmlFor="dest-email-addrs" className={labelClass}>
             Recipients
           </label>
-          <textarea
+          <Textarea
             id="dest-email-addrs"
             value={toAddresses}
             onChange={(e) => setToAddresses(e.target.value)}
             placeholder={"security@example.com, oncall@example.com"}
             rows={3}
-            className={`${inputClass} resize-none`}
+            className="resize-none"
           />
           <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
             Comma- or newline-separated email addresses.
@@ -291,21 +288,23 @@ export function DestinationForm({
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] pt-4">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="md"
           onClick={onCancel}
           disabled={submitting}
-          className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
+          variant="primary"
+          size="md"
           disabled={submitting}
-          className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+          isLoading={submitting}
         >
           {submitting ? "Saving…" : isEditing ? "Save changes" : "Add destination"}
-        </button>
+        </Button>
       </div>
     </form>
   )

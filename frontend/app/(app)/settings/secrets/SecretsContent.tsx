@@ -7,6 +7,7 @@ import { listSourceConnections } from "@/lib/client/sources-api"
 import type { SourceConnection } from "@/lib/shared/sources-types"
 import { SecretsSetupForm } from "./SecretsSetupForm"
 import { NoSourcesBanner } from "@/components/shared/NoSourcesBanner"
+import { Button } from "@/components/ui/Button"
 import { useSecretsPrerequisites } from "../PrerequisitePanel"
 
 function getOrgsFromSources(connections: SourceConnection[]): string[] {
@@ -71,13 +72,14 @@ export function SecretsContent({ canEdit = true }: { canEdit?: boolean }) {
     return (
       <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-3 text-sm text-[var(--color-severity-critical)]">
         <p>{error ?? "Could not load settings."}</p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => void loadSettings()}
-          className="mt-3 rounded-lg border border-[var(--color-severity-critical-border)] px-3 py-2 text-sm font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical-subtle)]"
+          className="mt-3 border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
         >
           Retry
-        </button>
+        </Button>
       </div>
     )
   }
@@ -90,7 +92,7 @@ export function SecretsContent({ canEdit = true }: { canEdit?: boolean }) {
       {!hasManagedOrgs ? (
         <NoSourcesBanner
           sourceLabel="Git Repository"
-          sourceHref="/repos"
+          sourceHref="/sources"
           toolLabel="Secret scanning"
         />
       ) : (

@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.3 — 2026-06-15
+
+### Added — Push-driven scans and CI integration
+
+- **Runner long-poll job pickup** — 60s server-side wait replaces tight-polling (PR #517)
+- **Pooled HTTP client** in runner agent — keepalive reuses connections across job poll + upload (PR #515)
+- **Cached disk check + async workspace cleanup** in runner — concurrent cleanup off the scan hot path (PR #519)
+- **Git diff file resolver** for CI-triggered scans — single source of truth shared by all scanners (PR #520)
+- **Diff-scoped semgrep** for CI scans — only files in the PR diff get rule-scanned (PR #521)
+- **Diff-scoped trufflehog (git mode) and checkov** for CI scans (PR #522)
+- **Diff-scoped trufflehog filesystem mode** — post-filter against compute_diff_files since trufflehog filesystem doesn't accept --since-commit (PR #539)
+- **Multi-CI PR base SHA resolver** — GitLab, Bitbucket, Azure DevOps now resolve base SHA via their PR APIs instead of silently falling back to full-tree (PR #541)
+
+### Added — Verifier (agentic SAST/SCA/secrets)
+
+- **KEV/EPSS/SLA/coverage/retention scheduler jobs** wired into the verifier (PR #371)
+- **Reachability signal in hunter context** — tree-sitter call-graph verdict (reachable | unreachable | unknown) now feeds the SAST hunter prompt (PR #542)
+- **Pydantic validation across every LLM boundary** — SAST hunter + skeptic, SCA hunter + skeptic, secrets hunter + skeptic, and cross-scanner correlator now fail-open to `needs_verify` (or empty list) on schema drift, with WARN-level logging (PR #542, PR #544)
+
+### Changed
+
+- **Finding.engine constraint normalized** — pre-joern values ('joern', 'both') backfilled to NULL ahead of the `ck_findings_engine` CHECK so existing environments survive the migration (PR #532)
+- **Asyncio deprecations swept** — `get_event_loop().time()` replaced with `time.monotonic()` in runner router; deprecated APIs removed (PR #534)
+- **Dead helpers removed** — `db.engine.sync_engine` and `code_scanning.diff_detector.compute_file_diff` deleted (PR #534)
+
+### Fixed
+
+- **Legacy `dataflowTrace` JSONB key** stripped from existing findings rows — joern-era detail bloat retired (PR #537)
+
+### Verified
+
+- Benchmark harness shipped at `backend/tests/scripts/benchmark_ci_scan.py` and `run_v03_benchmarks.sh`. Exit-criterion run (~5-file diff < 30s end-to-end) pending — see `.claude/tmp/2026-06-15-v0.3-benchmark-report.md` for the report template once measured.
+
+## v0.2.5 — 2026-06-14
+
+### Added
+- GitLab CI Component, Bitbucket Pipe, Azure DevOps Task, Jenkins shared library — customer-installable artifacts under `integrations/`
+- PR feedback providers for GitLab, Bitbucket, Azure DevOps — sticky comments now post to all four major SCMs (previously GitHub only)
+- "Add to CI" snippet picker on the source detail page — shows the right CI snippet for the source's SCM, with copy-to-clipboard
+- Unified `/sources` page (replaces /repos + per-type pages) with inner tabs at /sources/[id]: Overview / Findings / Scans / CI integration / Settings
+- `/integrations` catalog page for CI/CD integrations; old `/integrations` route renamed to `/notifications`
+- 7 shared design-system UI primitives (SeverityPill, ScannerCoverage, StatusPill, TypeChip, TableSkeleton, EmptyState, KpiCard)
+
+### Fixed
+- GitLab component no longer fetches its trigger script from a raw GitLab URL at runtime; script is inlined in the component YAML
+
 ## [Unreleased]
 
 ### Added — Correlation, intel, and detection
@@ -36,7 +82,7 @@
 - **Phase 28:** global search across findings, chains, repos, CVEs (PR #57)
 - **Phase 33:** `/health/deep` endpoint with 7 concurrent subsystem probes (PR #64)
 - **Phase 37:** `aegis sbom diff` — added/removed/changed components between SBOM versions (PR #67)
-- **Phase 40:** runner fleet dashboard sourced from Redis heartbeat hash (PR #68)
+- **Phase 40:** runner fleet dashboard sourced from heartbeat data (PR #68)
 - **Phase 43 (UI):** SBOM diff page (PR #72)
 - **Phase 52:** activity feed — cursor-paginated event stream from durable storage (PR #80)
 - **Phase 55:** aggregated `GET /api/v1/findings` endpoint replacing per-scanner fan-out (PR #85)
@@ -69,7 +115,6 @@
 - **Phase 7 (steps 8–9):** scanner HTTP integration test workflow + docs (PR #101)
 - **Phase 7 refactor:** shared `scanners/shared/http_api_base.py` + `backend/src/shared/checkout_upload.py` consolidating 4-way duplication; -109 LOC net (PR #102)
 - **CI integration test resilience:** skip secrets scanner build (pending lighter image) + repair cdxgen binary copy in deps Dockerfile (PR #105)
-- **Phase 1b warm scanner pool wired:** `WarmPoolManager` started from `runner/agent.py` lifecycle gated by `AEGIS_WARM_POOL_ENABLED=true` (default off); backward-compatible with existing `RUNNER_EXEC_MODE=warm_pool` (PR #115)
 
 ### Changed
 
@@ -101,16 +146,13 @@
 
 ### Fixed
 
-- Redis service missing from `docker-compose.yml` — closes v1 deploy gap (PR #95)
 - Pre-existing backend test failures triaged; linearize Alembic heads (SLA / webhook / KEV) into a single chain (PR #84)
 - `prerequisite_utils` test failures (PR #37)
 
 ## [v1.1.0] - 2026-05-31
 
-### Added — Phase 9: warm pool full activation + real scanner adapters
+### Added — Phase 9: real scanner adapters
 
-- **Daemon-mode entrypoint for all 4 scanner images** (`scanners/{dependencies,container,code-scanning,secrets}/daemon_entry.py`): when `RUNNER_EXEC_MODE=daemon`, the container loops on its Redis input stream (XREADGROUP), invokes the existing `run.sh` per job, publishes a `WarmResultMessage` to the result stream, and XACKs. Per-job mode (default) execvs `run.sh` unchanged — no behaviour change for existing deployments.
-- **Result stream consumer in `runner/agent.py`**: when `RUNNER_EXEC_MODE=warm_pool`, `RunnerAgent.start()` spawns a background thread per scanner type that subscribes to `aegis.scanner.results.<type>`, calls `_report_completion` / `_report_failure` based on `WarmResultMessage.status`, and XACKs.
 - **Real subprocess adapters** replacing Phase 7 `NotImplementedError` stubs:
   - `backend/src/dependencies/syft_adapter.py` — `syft <path> -o cyclonedx-json`
   - `backend/src/dependencies/grype_adapter.py` — `grype sbom:<path> -o json`
@@ -120,16 +162,14 @@
   - `backend/src/secrets/trufflehog_adapter.py` — `trufflehog git file://... --since-commit --json`
 - **Shared subprocess helper** (`backend/src/shared/subprocess_runner.py`): `AdapterUnavailableError` (binary absent from PATH) and `AdapterFailedError` (non-zero exit) give operators actionable error messages. Incremental engine callers catch all exceptions and fall through to full-scan as before.
 - **Scanner binary installs in `backend/Dockerfile`**: Syft v1.24.0, Grype v0.92.0, TruffleHog v3.95.2, Opengrep v1.20.0 (all pinned; override via ARG in CI).
-- **`redis-py` install in all 4 scanner Dockerfiles** for daemon-mode stream IPC.
 - **125 new tests** (31 runner + 29 adapter + shared helper); all mocked — no real binaries required in CI.
 
 ## [v1.0.0] - 2026-05-31
 
 ### Added — Near-real-time scanner redesign
 
-- **Phase 0:** Durable Redis Streams event bus + event types + cache schema (Alembic migration `876f112b2034`)
-- **Phase 1a:** Push-dispatch job queue — PostgresBackedQueue + RedisBackedQueue + pub/sub notifications + runner subscription mode (env-gated)
-- **Phase 1b:** Warm scanner pool foundation (WarmPool + dispatcher; production rollout pending scanner Dockerfile daemon mode)
+- **Phase 0:** Durable event bus + event types + cache schema (Alembic migration `876f112b2034`)
+- **Phase 1a:** Push-dispatch job queue — PostgresBackedQueue + pub/sub notifications + runner subscription mode (env-gated)
 - **Phase 1c:** Streaming finding emit + parallel multi-org orchestration (default 8 concurrent orgs)
 - **Phase 2a-d:** Per-scanner baseline+delta incremental engines (dependencies / containers / SAST / secrets), opt-in via `AEGIS_USE_INCREMENTAL_*` env flags
 - **Phase 3a:** Correlation engine + chain graph store + 5 built-in rules (intel match, reachable CVE, secret-to-resource, lifecycle, EPSS escalation)

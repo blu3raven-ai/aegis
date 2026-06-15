@@ -26,7 +26,7 @@ _TEMP_PREFIX_RE = re.compile(r"^/tmp/tmp\.[^/]*/")
 
 
 def _strip_tmp_prefix(uri: str) -> str:
-    """Strip /tmp/tmp.XXXX/ prefix that Opengrep writes into SARIF URIs."""
+    """Strip /tmp/tmp.XXXX/ prefix that semgrep writes into SARIF URIs."""
     return _TEMP_PREFIX_RE.sub("", uri) or uri
 
 

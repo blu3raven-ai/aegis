@@ -8,6 +8,8 @@ import {
   updateSavedView,
   type SavedView,
 } from "@/lib/client/saved-views-api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 export interface ManageViewsPanelProps {
   open: boolean
@@ -106,11 +108,13 @@ export function ManageViewsPanel({ open, onClose, variant = "popover" }: ManageV
     >
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Saved views</h3>
-        <button
-          type="button"
+        <Button
+          variant="link"
+          size="xs"
           onClick={onClose}
-          className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-        >Close</button>
+        >
+          Close
+        </Button>
       </div>
 
       {error && <p className="mb-2 text-2xs text-[var(--color-severity-critical)]">{error}</p>}
@@ -127,24 +131,30 @@ export function ManageViewsPanel({ open, onClose, variant = "popover" }: ManageV
                 onSubmit={(e) => { e.preventDefault(); submitRename(v) }}
                 className="flex items-center gap-2"
               >
-                <input
+                <Input
+                  size="sm"
                   type="text"
                   autoFocus
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
                   maxLength={255}
-                  className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)]"
+                  className="flex-1"
                 />
-                <button
+                <Button
                   type="submit"
+                  variant="primary"
+                  size="xs"
                   disabled={!renameValue.trim()}
-                  className="rounded-md bg-[var(--color-accent)] px-2 py-1 text-2xs font-semibold text-[var(--color-accent-on)] disabled:opacity-50"
-                >Save</button>
-                <button
-                  type="button"
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="link"
+                  size="xs"
                   onClick={() => setRenamingId(null)}
-                  className="text-2xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                >Cancel</button>
+                >
+                  Cancel
+                </Button>
               </form>
             ) : (
               <>
@@ -152,22 +162,29 @@ export function ManageViewsPanel({ open, onClose, variant = "popover" }: ManageV
                   {v.is_default ? `★ ${v.name}` : v.name}
                 </div>
                 <div className="flex items-center gap-3 text-2xs">
-                  <button
-                    type="button"
+                  <Button
+                    variant="link"
+                    size="xs"
                     onClick={() => startRename(v)}
-                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                  >Rename</button>
-                  <button
-                    type="button"
+                  >
+                    Rename
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="xs"
                     onClick={() => handleDefault(v)}
                     disabled={v.is_default}
-                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
-                  >Set as default</button>
-                  <button
-                    type="button"
+                  >
+                    Set as default
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="xs"
                     onClick={() => handleDelete(v)}
-                    className="text-[var(--color-severity-critical)] hover:opacity-80"
-                  >Delete</button>
+                    className="text-[var(--color-severity-critical)] hover:opacity-80 hover:text-[var(--color-severity-critical)]"
+                  >
+                    Delete
+                  </Button>
                 </div>
               </>
             )}

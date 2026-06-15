@@ -4,6 +4,7 @@ import type { RuleSummary } from "@/lib/client/rules-api"
 import type { Condition, LeafCondition } from "@/lib/rules-engine/conditions"
 import { summarizeAction } from "@/lib/rules-engine/display"
 import { relativeTime } from "@/lib/shared/relative-time"
+import { Button } from "@/components/ui/Button"
 
 interface RuleRowProps {
   rule: RuleSummary
@@ -151,14 +152,15 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
           </span>
           {showViolationsLink && (
             // TODO: wire view-violations action in a later task
-            <button
-              type="button"
+            <Button
+              variant="link"
+              size="xs"
               disabled
               aria-disabled="true"
               className="cursor-not-allowed text-[var(--color-text-tertiary)] underline-offset-2 hover:underline disabled:opacity-60"
             >
               View violations →
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -183,21 +185,22 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
             />
           </button>
 
-          {/* Inline edit / delete */}
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => onEdit?.(rule)}
-            className="rounded px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
+            className="text-[var(--color-accent)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)]"
           >
             Edit
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={handleDeleteClick}
-            className="rounded px-2 py-1 text-xs font-medium text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical)]/10"
+            className="text-[var(--color-severity-critical)] hover:text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
           >
             Delete
-          </button>
+          </Button>
         </div>
       )}
     </div>

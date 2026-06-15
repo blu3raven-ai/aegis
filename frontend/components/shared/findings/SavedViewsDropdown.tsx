@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { listSavedViews, type SavedView } from "@/lib/client/saved-views-api"
+import { Select } from "@/components/ui/Select"
 
 export interface SavedViewsDropdownProps {
   onApply: (urlState: Record<string, string>) => void
@@ -25,7 +26,8 @@ export function SavedViewsDropdown({ onApply, refreshSignal }: SavedViewsDropdow
   }
 
   return (
-    <select
+    <Select
+      size="sm"
       aria-label="Saved views"
       onChange={(e) => {
         if (!e.target.value) return
@@ -33,12 +35,12 @@ export function SavedViewsDropdown({ onApply, refreshSignal }: SavedViewsDropdow
         if (v) onApply(v.url_state)
         e.target.value = ""
       }}
-      className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+      className="w-auto"
     >
       <option value="">Views ▾</option>
       {views.map((v) => (
         <option key={v.id} value={v.id}>{v.is_default ? `★ ${v.name}` : v.name}</option>
       ))}
-    </select>
+    </Select>
   )
 }

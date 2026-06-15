@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { Button } from "@/components/ui/Button"
 
 interface DialogProps {
   open: boolean
@@ -83,22 +84,18 @@ export function Dialog({
         {!children && (
           <div className="mt-6 flex justify-end gap-3">
             {onConfirm && (
-              <button
-                type="button"
-                className="rounded-lg px-4 py-2 text-sm font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors"
+              <Button
+                variant="ghost"
+                size="md"
                 onClick={onClose}
               >
                 {cancelLabel}
-              </button>
+              </Button>
             )}
-            <button
-              type="button"
+            <Button
+              variant={variant === "danger" ? "destructive" : "primary"}
+              size="md"
               autoFocus
-              className={`rounded-lg px-4 py-2 text-sm font-semibold text-[var(--color-on-danger)] transition-colors ${
-                variant === "danger"
-                  ? "bg-[var(--color-severity-critical)] hover:opacity-90"
-                  : "bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)]"
-              }`}
               onClick={() => {
                 if (onConfirm) {
                   onConfirm()
@@ -108,7 +105,7 @@ export function Dialog({
               }}
             >
               {confirmLabel}
-            </button>
+            </Button>
           </div>
         )}
       </div>

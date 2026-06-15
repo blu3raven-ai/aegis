@@ -99,18 +99,12 @@ async def should_rate_alarm_block(session: AsyncSession, rule: Rule) -> bool:
     return share_pct > pct
 
 
-def dispatch_rate_alarm(rule: Rule, *, org_id: str) -> None:
-    """Publish a ``rule.auto_dismiss.rate_alarm`` event for downstream routing.
-
-    Mirrors the dispatch pattern used by the SLA and scanner-coverage
-    evaluators: emit the event onto the shared bus and let existing
-    notification routing pick it up. Delivery (Slack / email / etc.) is
-    out of scope for the rules engine.
-    """
+def dispatch_rate_alarm(rule: Rule) -> None:
+    """Publish a ``rule.auto_dismiss.rate_alarm`` event for downstream routing."""
     action = rule.action or {}
     get_event_bus().publish_sync(Event(
         event_type="rule.auto_dismiss.rate_alarm",
-        org=org_id,
+        org="",
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,
@@ -119,26 +113,20 @@ def dispatch_rate_alarm(rule: Rule, *, org_id: str) -> None:
         },
     ))
     logger.warning(
-        "Auto-dismiss rate alarm tripped: rule=%s org=%s pct=%s window_minutes=%s",
-        rule.id, org_id, action.get("rate_alarm_pct"),
+        "Auto-dismiss rate alarm tripped: rule=%s pct=%s window_minutes=%s",
+        rule.id, action.get("rate_alarm_pct"),
         action.get("rate_alarm_window_minutes"),
     )
 
 
 def auto_disable_rule(session: AsyncSession, rule: Rule, *, reason: str) -> None:
-    """Flip ``rule.enabled`` to False so subsequent ingests skip the rule.
-
-    A structured warning carries the reason; we also publish a bus event so
-    operators can wire the disable into their on-call surface. We do not
-    invoke ``AuditRecorder.record`` from inside the caller's session — that
-    helper re-enters ``run_db`` and would deadlock the dedicated DB loop.
-    """
+    """Flip ``rule.enabled`` to False so subsequent ingests skip the rule."""
     rule.enabled = False
     rule.last_evaluated_at = _utcnow()
 
     get_event_bus().publish_sync(Event(
         event_type="rule.auto_dismiss.auto_disabled",
-        org=rule.org_id,
+        org="",
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,
@@ -146,8 +134,8 @@ def auto_disable_rule(session: AsyncSession, rule: Rule, *, reason: str) -> None
         },
     ))
     logger.warning(
-        "Auto-dismiss rule auto-disabled: rule=%s org=%s reason=%s",
-        rule.id, rule.org_id, reason,
+        "Auto-dismiss rule auto-disabled: rule=%s reason=%s",
+        rule.id, reason,
     )
 
 

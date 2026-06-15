@@ -1,16 +1,11 @@
-"""CRUD helpers for notification_destinations and notification_deliveries.
-
-All DB access is async via the shared session helper. Callers use the plain
-dict representation returned by _dest_to_dict so that this module has no
-coupling to the FastAPI layer.
-"""
+"""CRUD helpers for notification_destinations and notification_deliveries."""
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
 from src.db.helpers import run_db
 from src.db.models import NotificationDestination, NotificationDelivery
@@ -24,7 +19,6 @@ VALID_STATUSES = frozenset({"pending", "delivered", "failed", "retry"})
 def _dest_to_dict(dest: NotificationDestination) -> dict[str, Any]:
     return {
         "id": dest.id,
-        "org_id": dest.org_id,
         "destination_type": dest.destination_type,
         "name": dest.name,
         "config": dest.config,
@@ -52,25 +46,20 @@ def _delivery_to_dict(d: NotificationDelivery) -> dict[str, Any]:
 # ── Destination CRUD ──────────────────────────────────────────────────────────
 
 
-def list_destinations(org_id: str) -> list[dict[str, Any]]:
+def list_destinations() -> list[dict[str, Any]]:
     async def _q(session):
         result = await session.execute(
-            select(NotificationDestination)
-            .where(NotificationDestination.org_id == org_id)
-            .order_by(NotificationDestination.id)
+            select(NotificationDestination).order_by(NotificationDestination.id)
         )
         return [_dest_to_dict(d) for d in result.scalars().all()]
 
     return run_db(_q)
 
 
-def get_destination(dest_id: int, org_id: str) -> dict[str, Any] | None:
+def get_destination(dest_id: int) -> dict[str, Any] | None:
     async def _q(session):
         result = await session.execute(
-            select(NotificationDestination).where(
-                NotificationDestination.id == dest_id,
-                NotificationDestination.org_id == org_id,
-            )
+            select(NotificationDestination).where(NotificationDestination.id == dest_id)
         )
         dest = result.scalars().first()
         return _dest_to_dict(dest) if dest else None
@@ -79,7 +68,6 @@ def get_destination(dest_id: int, org_id: str) -> dict[str, Any] | None:
 
 
 def create_destination(
-    org_id: str,
     destination_type: str,
     name: str,
     config: dict[str, Any],
@@ -93,7 +81,6 @@ def create_destination(
 
     async def _q(session):
         dest = NotificationDestination(
-            org_id=org_id,
             destination_type=destination_type,
             name=name,
             config=config,
@@ -111,7 +98,6 @@ def create_destination(
 
 def update_destination(
     dest_id: int,
-    org_id: str,
     *,
     name: str | None = None,
     config: dict[str, Any] | None = None,
@@ -122,10 +108,7 @@ def update_destination(
 
     async def _q(session):
         result = await session.execute(
-            select(NotificationDestination).where(
-                NotificationDestination.id == dest_id,
-                NotificationDestination.org_id == org_id,
-            )
+            select(NotificationDestination).where(NotificationDestination.id == dest_id)
         )
         dest = result.scalars().first()
         if dest is None:
@@ -145,13 +128,10 @@ def update_destination(
     return run_db(_q)
 
 
-def delete_destination(dest_id: int, org_id: str) -> bool:
+def delete_destination(dest_id: int) -> bool:
     async def _q(session):
         result = await session.execute(
-            select(NotificationDestination).where(
-                NotificationDestination.id == dest_id,
-                NotificationDestination.org_id == org_id,
-            )
+            select(NotificationDestination).where(NotificationDestination.id == dest_id)
         )
         dest = result.scalars().first()
         if dest is None:
@@ -178,7 +158,6 @@ def record_delivery(
     now = datetime.now(timezone.utc)
 
     async def _q(session):
-        # Check for existing (idempotent upsert: update status if already present)
         result = await session.execute(
             select(NotificationDelivery).where(
                 NotificationDelivery.destination_id == destination_id,
@@ -241,11 +220,10 @@ def list_pending_retries(limit: int = 100) -> list[dict[str, Any]]:
     return run_db(_q)
 
 
-def get_enabled_destinations_for_org(org_id: str) -> list[dict[str, Any]]:
+def get_enabled_destinations() -> list[dict[str, Any]]:
     async def _q(session):
         result = await session.execute(
             select(NotificationDestination).where(
-                NotificationDestination.org_id == org_id,
                 NotificationDestination.enabled == True,  # noqa: E712
             )
         )

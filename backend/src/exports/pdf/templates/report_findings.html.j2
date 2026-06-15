@@ -1,0 +1,36 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<h1>{{ title }}</h1>
+<p class="meta">{{ findings|length }} findings · {{ scope_label }} · generated {{ generated_at }}</p>
+
+<h2>Severity breakdown</h2>
+<table>
+  <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
+  <tbody><tr>
+    <td class="sev-critical">{{ severity_counts.critical }}</td>
+    <td class="sev-high">{{ severity_counts.high }}</td>
+    <td class="sev-medium">{{ severity_counts.medium }}</td>
+    <td class="sev-low">{{ severity_counts.low }}</td>
+  </tr></tbody>
+</table>
+
+<h2>Findings</h2>
+{% if findings %}
+<table>
+  <thead><tr><th>Severity</th><th>Title</th><th>Source</th><th>State</th></tr></thead>
+  <tbody>
+  {% for f in findings %}
+    <tr>
+      <td class="sev-{{ (f.severity or 'info')|lower }}">{{ (f.severity or 'INFO')|upper }}</td>
+      <td>{{ f.title }}</td>
+      <td>{{ f.source_label or '—' }}</td>
+      <td>{{ f.state }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="meta">No findings match the supplied filters.</p>
+{% endif %}
+{% endblock %}

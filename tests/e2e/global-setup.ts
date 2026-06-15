@@ -67,7 +67,7 @@ async function seedTestData() {
   const cookies = adminState.cookies ?? []
   const cookieHeader = cookies.map((c: { name: string; value: string }) => `${c.name}=${c.value}`).join("; ")
 
-  const res = await fetch("http://localhost:8000/test/seed", {
+  const res = await fetch("http://localhost:8000/api/v1/test/seed", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -90,7 +90,7 @@ async function cleanupSeedData() {
   if (!manifest?.seeded) return
 
   try {
-    await fetch("http://localhost:8000/test/seed", {
+    await fetch("http://localhost:8000/api/v1/test/seed", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "teardown", manifest }),

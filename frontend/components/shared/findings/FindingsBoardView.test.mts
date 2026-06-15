@@ -25,8 +25,8 @@ describe("FindingsBoardView filter bar additions", () => {
     assert.match(src, /setTimeout\(\(\) => setSearchQuery\(/)
   })
 
-  it("re-runs load when severity, scanner, repo, state, sort, age, or debounced searchQuery changes", () => {
-    assert.match(src, /\[sevFilter,\s*scannerFilter,\s*searchQuery,\s*repoFilter,\s*stateFilter,\s*sortKey,\s*agePreset,\s*moreFilters,\s*page,\s*load\]/)
+  it("re-runs load when severity, scanner, repo, state, sort, age, verdict, or debounced searchQuery changes", () => {
+    assert.match(src, /\[sevFilter,\s*scannerFilter,\s*searchQuery,\s*repoFilter,\s*stateFilter,\s*sortKey,\s*agePreset,\s*moreFilters,\s*verdictFilter,\s*page,\s*load\]/)
   })
 
   it("delegates the non-compact filter bar to FindingsCommandBar", () => {

@@ -4,8 +4,6 @@ Per-repo flow (selected by ``SCAN_DEPTH``):
 
 * ``light``    - shallow clone -> ``trufflehog filesystem``
 * ``deep``     - full clone -> ``trufflehog git`` (optionally ``--since-commit``)
-* ``ai_enhanced`` - full clone -> ``betterleaks`` -> in-process context
-  enrichment; classification runs once across all repos after the pool drains.
 
 Per-repo work runs through a ThreadPoolExecutor; outputs are normalised into
 ``findings.jsonl`` and the ``_done`` manifest marker is written.
@@ -16,6 +14,7 @@ import concurrent.futures
 import dataclasses
 import json
 import logging
+import os
 import re
 import shutil
 import threading
@@ -33,8 +32,8 @@ from runner.scanners._shared import (
     TIMEOUT_CLONE,
     TIMEOUT_GIT_QUERY,
     TIMEOUT_TRUFFLEHOG,
-    TIMEOUT_BETTERLEAKS,
     clone_repo,
+    compute_diff_files,
     log_finished,
     log_scanning,
     parse_repos,
@@ -47,7 +46,9 @@ from runner.scanners._subprocess import (
     run_tool,
 )
 from runner.scanners.base import ExecutionResult
-from runner.scanners.secrets import classify, enrich_context, normalize
+from runner.scanners.secrets import normalize
+from runner.verification.budget import ScanBudget
+from runner.verification.pipeline import verify_secret_finding
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,7 @@ _SECRETS_TOOL_DROP_ENV = ("GIT_TOKEN",)
 
 SCAN_DEPTH_LIGHT = "light"
 SCAN_DEPTH_DEEP = "deep"
-SCAN_DEPTH_AI = "ai_enhanced"
-SUPPORTED_SCAN_DEPTHS = {SCAN_DEPTH_LIGHT, SCAN_DEPTH_DEEP, SCAN_DEPTH_AI}
+SUPPORTED_SCAN_DEPTHS = {SCAN_DEPTH_LIGHT, SCAN_DEPTH_DEEP}
 _UNSUPPORTED_DEPTH_EXIT_CODE = 2
 
 _START_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -70,6 +70,11 @@ class SecretsScanConfig(BaseScanConfig):
     git_token: str | None
     scan_depth: str
     start_date: str
+    # When SCAN_SCOPE="diff_scoped" AND BASE_SHA is set, deep-mode trufflehog
+    # runs only over commits since BASE_SHA via --since-commit. Filesystem
+    # (light) mode has no native diff flag and ignores these fields.
+    base_sha: str | None
+    scan_scope: str
 
     @classmethod
     def from_job(cls, job: dict[str, Any]) -> "SecretsScanConfig":
@@ -82,7 +87,7 @@ class SecretsScanConfig(BaseScanConfig):
             )
         start_date = env.get("SCAN_START_DATE", "")
         if (
-            scan_depth in (SCAN_DEPTH_DEEP, SCAN_DEPTH_AI)
+            scan_depth == SCAN_DEPTH_DEEP
             and start_date
             and not _START_DATE_RE.match(start_date)
         ):
@@ -97,6 +102,8 @@ class SecretsScanConfig(BaseScanConfig):
             git_token=env.get("GIT_TOKEN") or None,
             scan_depth=scan_depth,
             start_date=start_date,
+            base_sha=env.get("BASE_SHA") or None,
+            scan_scope=env.get("SCAN_SCOPE", "full_tree"),
         )
 
 
@@ -161,6 +168,8 @@ class SecretsScanner:
                     scan_depth=cfg.scan_depth,
                     start_date=cfg.start_date,
                     cancel_event=cancel_event,
+                    base_sha=cfg.base_sha,
+                    scan_scope=cfg.scan_scope,
                 )
             except InsecureURLError as e:
                 log_tail.append(f"[!] {e}")
@@ -185,16 +194,6 @@ class SecretsScanner:
 
         emitter.normalizing()
 
-        # AI classification runs once across every betterleaks_raw.json the
-        # ai_enhanced pass emitted - matches the bash batch pattern.
-        if cfg.scan_depth == SCAN_DEPTH_AI:
-            try:
-                count = classify.classify_batch(out_dir)
-                log_tail.append(f"[+] Classified {count} secrets findings")
-            except Exception as e:  # noqa: BLE001
-                log_tail.append(f"[!] AI classification failed: {e}")
-                logger.exception("[!] AI classification failed")
-
         try:
             total, errors = normalize.normalize_secrets_output(
                 cfg.org_label, out_dir, cfg.run_id
@@ -205,6 +204,13 @@ class SecretsScanner:
         except Exception as e:  # noqa: BLE001
             log_tail.append(f"[!] Normalization failed: {e}")
             logger.exception("[!] Normalization failed")
+
+        try:
+            findings_file = out_dir / "findings.jsonl"
+            self._verify_findings_file(findings_file, repo_root=str(out_dir))
+        except Exception:  # noqa: BLE001
+            logger.exception("[!] _verify_findings_file failed (continuing)")
+            log_tail.append("[!] secret verification failed; findings unverified")
 
         write_done_marker(out_dir)
         emitter.done()
@@ -220,6 +226,35 @@ class SecretsScanner:
     # internal helpers
     # ------------------------------------------------------------------
 
+    def _verify_findings_file(self, findings_file: Path, *, repo_root: str) -> None:
+        """Read findings.jsonl, run _maybe_verify_secrets, rewrite in place.
+
+        No-op when the file is missing. When the LLM client can't be built
+        (no BYO key configured), every finding is marked skipped=llm_disabled.
+        """
+        if not findings_file.exists():
+            return
+
+        raw_findings: list[dict] = []
+        for line in findings_file.read_text().splitlines():
+            if not line.strip():
+                continue
+            try:
+                raw_findings.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("[!] skip non-JSON line in %s", findings_file)
+
+        verified = _maybe_verify_secrets(
+            findings=raw_findings,
+            repo_root=repo_root,
+            llm=_build_llm_client(),
+            scan_budget=_build_scan_budget(),
+        )
+
+        with open(findings_file, "w") as f:
+            for finding in verified:
+                f.write(json.dumps(finding, separators=(",", ":")) + "\n")
+
     def _scan_repo(
         self,
         repo_url: str,
@@ -229,6 +264,8 @@ class SecretsScanner:
         scan_depth: str,
         start_date: str,
         cancel_event: threading.Event | None,
+        base_sha: str | None = None,
+        scan_scope: str = "full_tree",
     ) -> Path | None:
         repo_name = repo_name_from_url(repo_url)
         repo_out = out_dir / repo_name
@@ -236,8 +273,8 @@ class SecretsScanner:
         log_scanning(repo_name)
 
         clone_dir = repo_out / "_checkout"
-        # Light: shallow single-branch clone is sufficient for trufflehog
-        # filesystem mode. Deep/ai_enhanced need full history.
+        # Light: shallow clone for trufflehog filesystem mode.
+        # Deep: full history for trufflehog git.
         clone_depth: int | None = 1 if scan_depth == SCAN_DEPTH_LIGHT else None
         try:
             clone_repo(
@@ -258,22 +295,24 @@ class SecretsScanner:
             if scan_depth == SCAN_DEPTH_LIGHT:
                 produced.extend(
                     self._scan_trufflehog_filesystem(
-                        clone_dir, repo_out, cancel_event
+                        clone_dir,
+                        repo_out,
+                        cancel_event,
+                        base_sha=base_sha,
+                        scan_scope=scan_scope,
                     )
                 )
             elif scan_depth == SCAN_DEPTH_DEEP:
                 produced.extend(
                     self._scan_trufflehog_git(
-                        clone_dir, repo_out, start_date, cancel_event
+                        clone_dir,
+                        repo_out,
+                        start_date,
+                        cancel_event,
+                        base_sha=base_sha,
+                        scan_scope=scan_scope,
                     )
                 )
-            elif scan_depth == SCAN_DEPTH_AI:
-                produced.extend(
-                    self._scan_betterleaks(
-                        clone_dir, repo_out, start_date, cancel_event
-                    )
-                )
-
             self._cleanup_empty_results(repo_out)
 
             for f in sorted(repo_out.glob("*.json")):
@@ -291,6 +330,9 @@ class SecretsScanner:
         clone_dir: Path,
         repo_out: Path,
         cancel_event: threading.Event | None,
+        *,
+        base_sha: str | None = None,
+        scan_scope: str = "full_tree",
     ) -> list[Path]:
         if shutil.which("trufflehog") is None:
             logger.warning("[!] trufflehog not on PATH - skipping %s", repo_out.name)
@@ -318,6 +360,30 @@ class SecretsScanner:
             )
 
         head_sha = self._read_head_sha(clone_dir, cancel_event)
+
+        if stdout and scan_scope == "diff_scoped":
+            findings: list[dict] = []
+            for line in stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    findings.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+            try:
+                findings = _apply_diff_scope(
+                    findings=findings,
+                    clone_dir=str(clone_dir),
+                    base_sha=base_sha,
+                    head_sha=head_sha,
+                )
+            except ValueError as e:
+                logger.warning(
+                    "[!] trufflehog diff resolution failed (%s) - keeping full results", e
+                )
+            stdout = "\n".join(json.dumps(f, separators=(",", ":")) for f in findings)
+
         if stdout:
             output.write_text(self._inject_head_sha(stdout, head_sha))
         else:
@@ -330,14 +396,21 @@ class SecretsScanner:
         repo_out: Path,
         start_date: str,
         cancel_event: threading.Event | None,
+        *,
+        base_sha: str | None = None,
+        scan_scope: str = "full_tree",
     ) -> list[Path]:
         if shutil.which("trufflehog") is None:
             logger.warning("[!] trufflehog not on PATH - skipping %s", repo_out.name)
             return []
         output = repo_out / "trufflehog.json"
 
+        # diff-scoped PR runs anchor on the PR base; start-date anchoring is
+        # the older retention-window mode. PR base wins when both are set.
         anchor_commit = ""
-        if start_date:
+        if scan_scope == "diff_scoped" and base_sha:
+            anchor_commit = base_sha
+        elif start_date:
             if not self._has_commits_after(clone_dir, start_date, cancel_event):
                 output.write_text("[]")
                 return [output]
@@ -371,57 +444,6 @@ class SecretsScanner:
             )
         output.write_text(stdout or "")
         return [output]
-
-    # ---- betterleaks (ai_enhanced) -----------------------------------
-
-    def _scan_betterleaks(
-        self,
-        clone_dir: Path,
-        repo_out: Path,
-        start_date: str,
-        cancel_event: threading.Event | None,
-    ) -> list[Path]:
-        if shutil.which("betterleaks") is None:
-            logger.warning(
-                "[!] betterleaks not on PATH - skipping %s", repo_out.name
-            )
-            return []
-        raw = repo_out / "betterleaks_raw.json"
-        args = [
-            "betterleaks",
-            "git",
-            str(clone_dir),
-            "--report-format",
-            "json",
-            "--report-path",
-            str(raw),
-        ]
-        if start_date:
-            args.extend(["--log-opts", f"--after={start_date}"])
-
-        rc, _, stderr = run_tool(
-            args,
-            timeout=TIMEOUT_BETTERLEAKS,
-            drop_env=_SECRETS_TOOL_DROP_ENV,
-            cancel_event=cancel_event,
-        )
-        if rc != 0:
-            logger.info(
-                "[!] betterleaks exit=%d for %s: %s",
-                rc,
-                repo_out.name,
-                (stderr or "")[:200],
-            )
-
-        # Enrich now, while the clone is still on disk.
-        if raw.exists() and raw.stat().st_size > 0:
-            try:
-                enrich_context.enrich_file(raw, clone_dir)
-            except Exception as e:  # noqa: BLE001
-                logger.warning(
-                    "[!] enrich_context failed for %s: %s", repo_out.name, e
-                )
-        return [raw]
 
     # ---- shared helpers ----------------------------------------------
 
@@ -525,3 +547,97 @@ class SecretsScanner:
                     json_file.unlink()
             except OSError:
                 continue
+
+
+def _apply_diff_scope(
+    *,
+    findings: list[dict],
+    clone_dir: str,
+    base_sha: str | None,
+    head_sha: str | None,
+) -> list[dict]:
+    if not (base_sha and head_sha):
+        return findings
+    diff_files = set(compute_diff_files(clone_dir.rstrip("/"), base_sha, head_sha))
+    prefix = clone_dir.rstrip("/") + "/"
+    before = len(findings)
+    filtered = []
+    for f in findings:
+        abs_path = (
+            f.get("SourceMetadata", {})
+            .get("Data", {})
+            .get("Filesystem", {})
+            .get("file", "")
+        )
+        if not abs_path.startswith(prefix):
+            # Path outside the clone dir — can't determine scope, so keep it
+            # rather than silently dropping a real secret.
+            filtered.append(f)
+            continue
+        rel_path = abs_path[len(prefix):]
+        if rel_path in diff_files:
+            filtered.append(f)
+    logger.info(
+        "trufflehog filesystem diff-scope: %d -> %d findings across %d diff files",
+        before,
+        len(filtered),
+        len(diff_files),
+    )
+    return filtered
+
+
+def _build_llm_client():
+    """Construct an LLM client from env or return None if BYO key isn't configured."""
+    from runner.verification.llm_client import LlmClient
+
+    api_key = os.getenv("LLM_API_KEY")
+    if not api_key:
+        return None
+    return LlmClient(
+        api_key=api_key,
+        api_base_url=os.getenv("LLM_API_BASE_URL", "https://api.openai.com/v1"),
+        model=os.getenv("LLM_API_MODEL", "gpt-4o-mini"),
+    )
+
+
+def _build_scan_budget() -> ScanBudget:
+    return ScanBudget(
+        scan_budget=int(os.getenv("LLM_TOKEN_BUDGET_PER_SCAN", "200000")),
+        daily_remaining=int(os.getenv("LLM_DAILY_REMAINING", "1000000")),
+    )
+
+
+def _maybe_verify_secrets(
+    *, findings: list[dict], repo_root: str, llm, scan_budget: ScanBudget,
+) -> list[dict]:
+    out: list[dict] = []
+    for f in findings:
+        copy = dict(f)
+
+        if llm is None:
+            copy["verdict"] = None
+            copy.setdefault("verification_metadata", {})["skipped"] = "llm_disabled"
+            out.append(copy)
+            continue
+
+        # Provider-verified secrets bypass the budget — auto-confirmed
+        if not f.get("verified") and not scan_budget.allow():
+            copy["verdict"] = "possible"
+            copy.setdefault("verification_metadata", {})["skipped"] = scan_budget.skip_reason
+            out.append(copy)
+            continue
+
+        try:
+            result = verify_secret_finding(finding=f, repo_root=repo_root, llm=llm)
+            if not f.get("verified"):
+                scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
+            copy["verdict"] = result.verdict
+            copy["evidence_json"] = result.evidence
+            copy["exploit_chain"] = result.exploit_chain
+            copy["verification_metadata"] = result.verification_metadata
+        except Exception as e:  # noqa: BLE001
+            copy["verdict"] = None
+            copy.setdefault("verification_metadata", {})["skipped"] = f"llm_error:{type(e).__name__}"
+
+        out.append(copy)
+    return out

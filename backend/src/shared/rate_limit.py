@@ -8,15 +8,27 @@ from fastapi import Request, HTTPException
 _lock = threading.Lock()
 _buckets: dict[str, list[float]] = defaultdict(list)
 
+
+class RateLimitExceeded(HTTPException):
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(
+            status_code=429,
+            detail={"error": "rate_limited", "retry_after_seconds": retry_after_seconds},
+            headers={"Retry-After": str(retry_after_seconds)},
+        )
+
+
 def rate_limit(key: str, max_requests: int, window_seconds: int) -> None:
-    """Raise 429 if rate limit exceeded."""
+    """Raise RateLimitExceeded if rate limit exceeded. Includes Retry-After."""
     now = time.time()
     cutoff = now - window_seconds
     with _lock:
         bucket = _buckets[key]
         _buckets[key] = [t for t in bucket if t > cutoff]
         if len(_buckets[key]) >= max_requests:
-            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+            oldest = min(_buckets[key])
+            retry_after = max(1, int(oldest + window_seconds - now) + 1)
+            raise RateLimitExceeded(retry_after_seconds=retry_after)
         _buckets[key].append(now)
 
 def rate_limit_by_ip(request: Request, max_requests: int = 10, window_seconds: int = 60) -> None:

@@ -10,7 +10,7 @@ from src.license.store import read_license_key, remove_license_key, write_licens
 from src.license.types import TIER_LIMITS, Tier
 from src.settings.router import require_permission
 
-router = APIRouter(prefix="/license/api", tags=["license"])
+router = APIRouter(prefix="/api/v1/license", tags=["license"])
 
 
 class ActivateRequest(BaseModel):

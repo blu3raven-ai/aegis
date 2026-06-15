@@ -7,7 +7,7 @@ interface EmptyOverviewBannerProps {
   title?: string
   /** Subline explaining what the user will see once data flows in. */
   description?: string
-  /** Destination of the primary action. Defaults to /repos. */
+  /** Destination of the primary action. Defaults to /sources. */
   ctaHref?: string
   /** Primary action label. */
   ctaLabel?: string
@@ -23,7 +23,7 @@ interface EmptyOverviewBannerProps {
 export function EmptyOverviewBanner({
   title = "Connect a source to start seeing data",
   description = "The preview below shows what this page will look like once your first scan completes.",
-  ctaHref = "/repos",
+  ctaHref = "/sources",
   ctaLabel = "Add a source",
 }: EmptyOverviewBannerProps) {
   return (

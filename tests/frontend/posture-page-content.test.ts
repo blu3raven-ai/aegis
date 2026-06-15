@@ -14,11 +14,9 @@ describe("PosturePageContent shell", () => {
     assert.match(src, /const TABS = \["summary", "breakdown"\] as const/)
   })
 
-  it("uses the canonical underline tab style", () => {
-    assert.match(
-      src,
-      /-mb-px border-b-2 px-3 py-2\.5 text-sm transition-colors/,
-    )
+  it("uses the canonical NavTabs primitive (underline style)", () => {
+    assert.match(src, /from "@\/components\/ui\/NavTabs"/)
+    assert.match(src, /<NavTabs[\s\S]+ariaLabel="Posture views"/)
   })
 
   it("delegates to PostureSummaryTab when active", () => {

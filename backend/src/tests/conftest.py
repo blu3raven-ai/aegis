@@ -113,7 +113,6 @@ async def seed_user(db_session):
         username=f"testuser-{uuid4()}",
         email=f"test+{uuid4()}@example.com",
         password_hash="",
-        role="viewer",
         status="active",
     )
     db_session.add(user)

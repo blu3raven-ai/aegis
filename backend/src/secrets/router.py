@@ -24,7 +24,7 @@ from src.secrets.service_runs import get_runtime, list_runs_payload, latest_run_
 from src.shared.rate_limit import rate_limit_scan
 from src.shared.ttl_cache import TtlCache
 
-router = APIRouter(prefix="/secrets/api", tags=["secrets"])
+router = APIRouter(prefix="/api/v1/secrets", tags=["secrets"])
 
 _cache = TtlCache(ttl_seconds=300)
 
@@ -106,7 +106,7 @@ def get_runs(request: Request, orgs: list[str] = Depends(require_orgs)) -> Any:
 def start_runs(
     request: Request,
     orgs: list[str] = Depends(require_orgs),
-    scanDepth: Literal["light", "deep", "ai_enhanced"] | None = Query(default=None),
+    scanDepth: Literal["light", "deep"] | None = Query(default=None),
 ) -> Any:
     require_permission(request, "run_scans")
     rate_limit_scan(request, "secrets")
@@ -152,7 +152,6 @@ def start_runs(
         from src.shared.event_emit_helpers import emit_manual_rescan
         for org in orgs:
             emit_manual_rescan(
-                org_id=org,
                 repo_id=None,
                 scanner_type="secrets",
                 full=False,

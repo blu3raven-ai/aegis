@@ -2,6 +2,8 @@
 
 import Link from "next/link"
 import { useLicense } from "@/lib/client/license/client"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 export interface AdvisorySourceState {
   enabled: boolean
@@ -95,25 +97,23 @@ interface KeyInputProps {
 function KeyInput({ value, onChange, placeholder, show, onToggleShow, ariaLabel, errorState }: KeyInputProps) {
   return (
     <div className="relative">
-      <input
+      <Input
         type={show ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full rounded-lg border bg-[var(--color-surface)] px-3 py-2 pr-10 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:ring-2 ${
-          errorState
-            ? "border-[var(--color-state-pending)] focus:border-[var(--color-state-pending)] focus:ring-[var(--color-state-pending-subtle)]"
-            : "border-[var(--color-border)] focus:ring-[var(--color-accent)]/30"
-        }`}
+        invalid={errorState}
+        className="pr-10"
       />
-      <button
-        type="button"
+      <Button
+        variant="link"
+        size="xs"
         onClick={onToggleShow}
-        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-primary)]"
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
         aria-label={ariaLabel}
       >
         <EyeIcon open={show} />
-      </button>
+      </Button>
     </div>
   )
 }
@@ -127,20 +127,16 @@ interface MaskedKeyDisplayProps {
 function MaskedKeyDisplay({ maskedValue, canEdit, onChangeClick }: MaskedKeyDisplayProps) {
   return (
     <div className="flex items-center gap-2">
-      <input
+      <Input
         type="text"
         value={maskedValue}
         readOnly
-        className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 font-mono text-sm text-[var(--color-text-secondary)] outline-none"
+        className="min-w-0 flex-1 font-mono"
       />
       {canEdit && (
-        <button
-          type="button"
-          onClick={onChangeClick}
-          className="shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
-        >
+        <Button variant="secondary" size="sm" onClick={onChangeClick} className="shrink-0">
           Change
-        </button>
+        </Button>
       )}
     </div>
   )

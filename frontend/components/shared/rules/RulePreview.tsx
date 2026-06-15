@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { previewRule, type RulePreviewResponse } from "@/lib/client/rules-api"
+import { Button } from "@/components/ui/Button"
 
 interface RulePreviewProps {
   orgId: string
@@ -78,14 +79,15 @@ export function RulePreview({ orgId, ruleId, refreshKey = 0 }: RulePreviewProps)
     return (
       <div className="rounded-lg border border-[var(--color-severity-critical)]/30 bg-[var(--color-surface-raised)] px-5 py-5">
         <p className="text-sm text-[var(--color-severity-critical)]">{state.message}</p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           aria-label="Retry preview"
           onClick={() => setRetryCount((c) => c + 1)}
-          className="mt-3 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]"
+          className="mt-3"
         >
           Retry
-        </button>
+        </Button>
       </div>
     )
   }

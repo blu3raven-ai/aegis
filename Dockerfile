@@ -44,7 +44,7 @@ ENV PYTHONUTF8=1 \
     STATIC_ROOT=/app/static
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl libpq5 \
+      ca-certificates curl libpq5 libpango-1.0-0 libpangoft2-1.0-0 libcairo2 libgdk-pixbuf2.0-0 libffi8 fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root user with nologin shell — defense against post-exploit lateral movement

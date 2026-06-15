@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react"
 
 import { AGE_OPTIONS, type AgePresetKey } from "./FindingsAgeFilter"
 import { SORT_OPTIONS, type SortKey } from "./FindingsSortDropdown"
+import { Button } from "@/components/ui/Button"
+import { Select } from "@/components/ui/Select"
 
 export type GroupKey = "scanner" | "severity" | "repo" | "status"
 
@@ -52,19 +54,22 @@ export function FindingsDisplayOverflow({
 
   return (
     <div ref={rootRef} className="relative inline-block">
-      <button
-        type="button"
+      <Button
+        variant="secondary"
+        size="sm"
+        iconOnly
         onClick={() => setOpen((p) => !p)}
         aria-expanded={open}
         aria-label="Display options"
-        className="inline-grid h-8 w-8 place-items-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-      >
-        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
-          <circle cx="12" cy="5" r="1.4" />
-          <circle cx="12" cy="12" r="1.4" />
-          <circle cx="12" cy="19" r="1.4" />
-        </svg>
-      </button>
+        leadingIcon={
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+            <circle cx="12" cy="5" r="1.4" />
+            <circle cx="12" cy="12" r="1.4" />
+            <circle cx="12" cy="19" r="1.4" />
+          </svg>
+        }
+      />
+
       {open && (
         <div
           role="menu"
@@ -75,43 +80,43 @@ export function FindingsDisplayOverflow({
             Display
           </div>
           <DisplayRow label="Group by">
-            <select
+            <Select
+              size="sm"
               value={groupBy}
               onChange={(e) => onGroupByChange(e.target.value as GroupKey)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:outline-none focus-visible:border-[var(--color-accent)]"
             >
               {GROUP_BY_OPTIONS.map((opt) => (
                 <option key={opt.label} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </DisplayRow>
           <DisplayRow label="Sort">
-            <select
+            <Select
+              size="sm"
               value={sortKey}
               onChange={(e) => onSortKeyChange(e.target.value as SortKey)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:outline-none focus-visible:border-[var(--color-accent)]"
             >
               {SORT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </DisplayRow>
           <DisplayRow label="Age">
-            <select
+            <Select
+              size="sm"
               value={agePreset}
               onChange={(e) => onAgePresetChange(e.target.value as AgePresetKey)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:outline-none focus-visible:border-[var(--color-accent)]"
             >
               {AGE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </DisplayRow>
         </div>
       )}

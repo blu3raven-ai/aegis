@@ -102,7 +102,6 @@ class TestDeepHealthEndpoint:
                 data = c.get("/health/deep").json()
         returned_names = {p["name"] for p in data["probes"]}
         assert returned_names == set(PROBE_NAMES)
-        assert "redis" not in returned_names
 
     def test_each_probe_entry_has_required_fields(self):
         all_ok = [_make_probe(n, "ok") for n in PROBE_NAMES]

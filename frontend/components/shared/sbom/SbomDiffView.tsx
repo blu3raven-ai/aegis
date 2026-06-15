@@ -116,7 +116,7 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
           added
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">
-          <span className="font-semibold tabular-nums text-[var(--color-status-critical)]">
+          <span className="font-semibold tabular-nums text-[var(--color-severity-critical)]">
             -{diff.removed.length}
           </span>{" "}
           removed
@@ -171,7 +171,7 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
             <SectionHeader
               label="Removed"
               count={diff.removed.length}
-              color="bg-[var(--color-status-critical)]/10 text-[var(--color-status-critical)]"
+              color="bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
               expanded={removedOpen}
               onToggle={() => setRemovedOpen((v) => !v)}
             />

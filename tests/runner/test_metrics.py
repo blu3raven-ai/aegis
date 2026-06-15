@@ -1,6 +1,6 @@
 """Tests for runner Prometheus metrics: counters, histograms, and gauge wiring.
 
-All tests are unit-level and run without Docker, Redis, or a live backend.
+All tests are unit-level and run without Docker or a live backend.
 Prometheus metrics are module-level singletons, so each test uses a fresh
 CollectorRegistry to avoid cross-test pollution.
 """
@@ -147,7 +147,7 @@ class TestJobDurationHistogram:
 
 class TestMetricsModuleExports:
     def test_all_expected_metrics_exported(self) -> None:
-        import runner.metrics as m
+        import runner.observability.metrics as m
         assert hasattr(m, "jobs_processed_total")
         assert hasattr(m, "job_duration_seconds")
         assert hasattr(m, "job_pickup_latency_seconds")
@@ -156,17 +156,17 @@ class TestMetricsModuleExports:
 
     def test_start_metrics_server_noop_without_env(self) -> None:
         """start_metrics_server() must not bind a port when env var is absent."""
-        import runner.metrics as m
+        import runner.observability.metrics as m
         # Should complete without error and without calling start_http_server.
-        with patch("runner.metrics._PROMETHEUS_AVAILABLE", True):
+        with patch("runner.observability.metrics._PROMETHEUS_AVAILABLE", True):
             with patch("prometheus_client.start_http_server") as mock_start:
                 os.environ.pop("RUNNER_METRICS_PORT", None)
                 m.start_metrics_server()
                 mock_start.assert_not_called()
 
     def test_start_metrics_server_binds_when_port_set(self) -> None:
-        import runner.metrics as m
-        with patch("runner.metrics._PROMETHEUS_AVAILABLE", True):
+        import runner.observability.metrics as m
+        with patch("runner.observability.metrics._PROMETHEUS_AVAILABLE", True):
             with patch("prometheus_client.start_http_server") as mock_start:
                 os.environ["RUNNER_METRICS_PORT"] = "9090"
                 try:

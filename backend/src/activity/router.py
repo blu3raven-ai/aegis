@@ -11,6 +11,8 @@ from typing import Any
 from fastapi import APIRouter, Request
 
 from src.activity.service import ActivityService, SUPPORTED_TYPES
+from src.settings.router import require_permission
+from src.shared.scope import resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/activity", tags=["activity"])
 
@@ -24,7 +26,7 @@ def list_activity_types() -> dict[str, Any]:
 
 
 @router.get("")
-def list_activity(
+async def list_activity(
     request: Request,
     types: str | None = None,
     repo_id: str | None = None,
@@ -33,15 +35,13 @@ def list_activity(
     limit: int = 50,
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    """Return paginated activity events for the requesting user's org.
+    """Return paginated activity events scoped to the caller's accessible assets.
 
     types: comma-separated list of event type strings to include.
     cursor: opaque pagination token from the previous response's next_cursor.
     """
-    org_id: str | None = getattr(request.state, "user_org", None)
-    if not org_id:
-        # Fall back to query param for contexts where org_id is forwarded explicitly.
-        org_id = request.query_params.get("org_id") or "default"
+    require_permission(request, "view_findings")
+    asset_ids = await resolve_asset_ids_from_request(request)
 
     parsed_types: list[str] | None = None
     if types:
@@ -50,7 +50,7 @@ def list_activity(
             parsed_types = None
 
     events, next_cursor = _service.list_recent(
-        org_id,
+        asset_ids=asset_ids,
         types=parsed_types,
         repo_id=repo_id,
         since=since,

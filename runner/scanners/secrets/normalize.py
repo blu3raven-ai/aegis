@@ -1,11 +1,8 @@
-"""Normalize trufflehog / betterleaks output to a single findings JSONL.
+"""Normalize trufflehog output to a single findings JSONL.
 
-Mirrors the bash-era ``scripts/normalize-secrets.py``: walks ``target_dir``
-for per-repo ``trufflehog.json`` (JSONL) and ``betterleaks.json`` (JSON
-array) files, tags each finding with ``source`` + ``repository``, and emits
-one JSON object per line to ``findings.jsonl``. Repos that produced a
-``betterleaks_raw.json`` but no classified ``betterleaks.json`` (i.e. the AI
-step was skipped) fall back to the raw file.
+Walks ``target_dir`` for per-repo ``trufflehog.json`` (JSONL) files, tags each
+finding with ``source`` + ``repository``, and emits one JSON object per line to
+``findings.jsonl``.
 """
 from __future__ import annotations
 
@@ -35,17 +32,6 @@ def normalize_file(file_path: Path, source: str, repo_name: str) -> list[dict[st
                 findings.append(finding)
             except json.JSONDecodeError:
                 continue
-    elif source == "betterleaks":
-        # JSON array
-        try:
-            items = json.loads(text)
-            if isinstance(items, list):
-                for finding in items:
-                    finding["source"] = "betterleaks"
-                    finding["repository"] = repo_name
-                    findings.append(finding)
-        except json.JSONDecodeError:
-            pass
 
     return findings
 
@@ -69,51 +55,19 @@ def normalize_secrets_output(
     errors = 0
 
     trufflehog_files = list(target.rglob("trufflehog.json"))
-    betterleaks_files = list(target.rglob("betterleaks.json"))
-    betterleaks_raw_files = list(target.rglob("betterleaks_raw.json"))
-    logger.info(
-        "[+] target=%s trufflehog=%d betterleaks=%d betterleaks_raw=%d",
-        target,
-        len(trufflehog_files),
-        len(betterleaks_files),
-        len(betterleaks_raw_files),
-    )
+    logger.info("[+] target=%s trufflehog=%d", target, len(trufflehog_files))
 
     with open(findings_file, "w") as out:
-        for filename, source in (
-            ("trufflehog.json", "trufflehog"),
-            ("betterleaks.json", "betterleaks"),
-        ):
-            for raw_file in sorted(target.rglob(filename)):
-                repo_name = str(raw_file.parent.relative_to(target))
-                try:
-                    for f in normalize_file(raw_file, source, repo_name):
-                        out.write(json.dumps(f, separators=(",", ":")) + "\n")
-                        total += 1
-                except Exception as e:  # noqa: BLE001
-                    errors += 1
-                    logger.warning(
-                        "[!] Failed: %s/%s - %s", repo_name, filename, e
-                    )
-
-        # Fallback: repos with betterleaks_raw.json but no betterleaks.json
-        # (the AI classification step was skipped or unavailable).
-        classified_repos = {
-            str(f.parent.relative_to(target))
-            for f in target.rglob("betterleaks.json")
-        }
-        for raw_file in sorted(target.rglob("betterleaks_raw.json")):
+        for raw_file in sorted(target.rglob("trufflehog.json")):
             repo_name = str(raw_file.parent.relative_to(target))
-            if repo_name in classified_repos:
-                continue
             try:
-                for f in normalize_file(raw_file, "betterleaks", repo_name):
+                for f in normalize_file(raw_file, "trufflehog", repo_name):
                     out.write(json.dumps(f, separators=(",", ":")) + "\n")
                     total += 1
             except Exception as e:  # noqa: BLE001
                 errors += 1
                 logger.warning(
-                    "[!] Failed: %s/betterleaks_raw.json - %s", repo_name, e
+                    "[!] Failed: %s/trufflehog.json - %s", repo_name, e
                 )
 
     logger.info(

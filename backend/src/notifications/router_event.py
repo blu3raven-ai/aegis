@@ -101,16 +101,16 @@ class NotificationEventRouter:
         """Dispatch a single event to all matching destinations.
 
         Imports are deferred to avoid hard dependencies at module load time.
-        The dispatch logic mirrors the original Redis Streams implementation.
+        The dispatch logic dispatches to per-channel senders.
         """
         # Deferred imports — these modules are part of the notifications subsystem
         # and may not exist in all environments.
         from src.notifications.destination import (  # type: ignore[import]
-            get_enabled_destinations_for_org,
+            get_enabled_destinations,
             record_delivery,
         )
         from src.notifications.routing import Finding, route_finding  # type: ignore[import]
-        from src.notifications.rules_model import get_active_rules_for_org  # type: ignore[import]
+        from src.notifications.rules_model import get_active_rules  # type: ignore[import]
         from src.notifications.formatter import (  # type: ignore[import]
             format_for_email,
             format_for_slack,
@@ -139,23 +139,21 @@ class NotificationEventRouter:
         # Convert Event to the dict shape the helper functions expect
         raw: dict[str, Any] = {
             "event_type": event.event_type,
-            "org_id": event.org or "",
             "event_id": event.data.get("event_id", ""),
             "payload": event.data,
         }
 
-        org_id = raw["org_id"]
         event_id = raw["event_id"]
         event_type = raw["event_type"]
 
-        all_destinations = get_enabled_destinations_for_org(org_id)
+        all_destinations = get_enabled_destinations()
 
         # Apply routing rules to narrow destination list
         try:
-            rules = get_active_rules_for_org(org_id)
+            rules = get_active_rules()
         except Exception:
             logger.warning(
-                "could not load routing rules for org %s; falling back", org_id, exc_info=True
+                "could not load routing rules; falling back", exc_info=True
             )
             rules = []
 
@@ -240,13 +238,12 @@ class NotificationEventRouter:
                     exc_info=True,
                 )
 
-            # Emit outcome event
             try:
                 publisher = get_event_publisher()
                 cls = NotificationDispatchedEvent if result_ok else NotificationFailedEvent
                 publisher.publish(
                     cls(
-                        org_id=org_id,
+                        org_id="",
                         source_component="notification-router",
                         payload={
                             "source_event_id": event_id,

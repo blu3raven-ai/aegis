@@ -7,6 +7,7 @@
  */
 
 import type { ReleaseDetail } from "@/lib/client/releases-api"
+import { Button } from "@/components/ui/Button"
 import { relativeTime, shortenSha } from "./_helpers"
 
 interface ReleaseVerdictCardProps {
@@ -69,7 +70,7 @@ function verdictTitle(release: ReleaseDetail): string {
   }
 }
 
-const CARD_BASE = "rounded-2xl border p-5"
+const CARD_BASE = "rounded-lg border p-5"
 
 export function ReleaseVerdictCard({
   release,
@@ -152,31 +153,19 @@ export function ReleaseVerdictCard({
           {(showJira || showSlack || showShare) && (
             <div className="mt-4 flex flex-wrap gap-2">
               {showJira && (
-                <button
-                  type="button"
-                  onClick={onCreateJiraTicket}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)]"
-                >
+                <Button variant="secondary" size="xs" onClick={onCreateJiraTicket}>
                   Create Jira ticket
-                </button>
+                </Button>
               )}
               {showSlack && (
-                <button
-                  type="button"
-                  onClick={onNotifySlack}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)]"
-                >
+                <Button variant="secondary" size="xs" onClick={onNotifySlack}>
                   Notify Slack
-                </button>
+                </Button>
               )}
               {showShare && (
-                <button
-                  type="button"
-                  onClick={onShareLink}
-                  className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)]"
-                >
+                <Button variant="secondary" size="xs" onClick={onShareLink}>
                   Share scan link
-                </button>
+                </Button>
               )}
             </div>
           )}

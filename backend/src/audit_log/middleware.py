@@ -31,7 +31,7 @@ _AUDITABLE_PREFIXES = (
     "/api/v1/admin/",
     "/api/v1/integrations/",
     "/api/v1/audit/",
-    "/settings/api/",
+    "/api/v1/settings/",
 )
 
 # Derive a human-readable action from method + path:
@@ -73,8 +73,8 @@ def _infer_action(method: str, path: str) -> tuple[str, str]:
         "DELETE": "deleted",
     }.get(method, method.lower())
 
-    # Strip leading /api/v1/ or /settings/api/ and trailing numeric IDs
-    clean = re.sub(r"^(/api/v1|/settings/api)", "", path)
+    # Strip leading /api/v1 and trailing numeric IDs
+    clean = re.sub(r"^/api/v1", "", path)
     clean = re.sub(r"/\d+(/|$)", "/", clean).strip("/")
     segments = [s.replace("-", "_") for s in clean.split("/") if s and not s.isdigit()]
     resource_type = segments[-1] if segments else "unknown"

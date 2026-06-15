@@ -9,7 +9,7 @@ import { ApiClientError } from "./api-client.types.ts"
 
 // ─── Internal Helpers ─────────────────────────────────────────────────────────
 
-const SETTINGS_API_BASE = "/api/settings"
+const SETTINGS_API_BASE = "/api/v1/settings"
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -36,7 +36,11 @@ async function sourcesRequest<T>(
     return { ok: true, data }
   } catch (error) {
     if (error instanceof ApiClientError) {
-      return { ok: false, error: `Request failed (${error.status}).` }
+      // Surface the backend's own error message when available so users see
+      // "Organisation 'foo' not found" instead of a bare "Request failed (404)".
+      const body = error.body as { error?: string; message?: string; detail?: string } | null
+      const backendMsg = body?.error ?? body?.message ?? body?.detail
+      return { ok: false, error: backendMsg ?? `Request failed (${error.status}).` }
     }
     if (isNetworkFailure(error)) {
       return { ok: false, error: friendlySourcesUnavailableMessage() }

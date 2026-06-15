@@ -55,7 +55,6 @@ def test_create_destination_produces_audit_event():
          patch("src.notifications.admin_router.create_destination") as mock_create2:
         mock_create2.return_value = {"id": 1, "name": "test-slack", "destination_type": "slack"}
         resp = client.post("/api/v1/notifications/destinations", json={
-            "org_id": "acme-org",
             "destination_type": "slack",
             "name": "test-slack",
             "config": {"url": "https://hooks.slack.example.com/test"},
@@ -74,7 +73,7 @@ def test_delete_destination_produces_audit_event():
 
     with patch("src.settings.router._resolve_effective_permissions", return_value={"manage_settings"}), \
          patch("src.notifications.admin_router.delete_destination", return_value=True):
-        resp = client.delete("/api/v1/notifications/destinations/99", params={"org_id": "acme-org"})
+        resp = client.delete("/api/v1/notifications/destinations/99")
 
     assert len(events) >= 1
     actions = [e["action"] for e in events]
@@ -88,7 +87,7 @@ def test_non_admin_route_does_not_audit():
 
     with patch("src.settings.router._resolve_effective_permissions", return_value={"manage_settings"}), \
          patch("src.notifications.admin_router.list_destinations", return_value=[]):
-        client.get("/api/v1/notifications/destinations", params={"org_id": "acme-org"})
+        client.get("/api/v1/notifications/destinations")
 
     # GET requests are never auto-audited by the middleware
     middleware_events = [e for e in events if e.get("request") and getattr(e["request"], "method", None) == "GET"]

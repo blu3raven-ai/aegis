@@ -11,7 +11,7 @@ export interface FindingsReportFilters {
 
 export interface GenerateReportPayload {
   report_type: "findings" | "posture"
-  format: "json" | "csv"
+  format: "json" | "csv" | "pdf"
   title?: string
   filters?: FindingsReportFilters
 }

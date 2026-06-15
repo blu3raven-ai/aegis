@@ -62,10 +62,13 @@ def _ensure_aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
-def evaluate_data_retention_for_org(
-    org_id: str, *, now: datetime | None = None
+def evaluate_data_retention(
+    *, asset_ids: list[str], now: datetime | None = None
 ) -> DataRetentionEvalResult:
-    """Evaluate every enabled data_retention rule against the org's scan runs."""
+    """Evaluate every enabled data_retention rule against scan runs scoped to asset_ids."""
+    if not asset_ids:
+        return DataRetentionEvalResult(0, 0, 0, 0)
+
     current_time = _ensure_aware(now) if now is not None else _utcnow()
     prefilter_cutoff = current_time - timedelta(days=_MIN_ACTION_AGE_DAYS)
 
@@ -74,7 +77,6 @@ def evaluate_data_retention_for_org(
             select(Rule).where(
                 Rule.category == "data_retention",
                 Rule.enabled == True,  # noqa: E712
-                Rule.org_id == org_id,
             )
         )
         rules = list(rules_q.scalars().all())
@@ -83,7 +85,7 @@ def evaluate_data_retention_for_org(
 
         scans_stmt = exclude_archived(
             select(ScanRun).where(
-                ScanRun.metadata_json["org_label"].astext == org_id,
+                ScanRun.asset_id.in_(asset_ids),
                 ScanRun.status == "completed",
                 ScanRun.finished_at.is_not(None),
                 ScanRun.finished_at <= prefilter_cutoff,
@@ -166,7 +168,6 @@ def _archive_scan_run(session, run: ScanRun, rule_id: str, now: datetime) -> Non
     # rationale applies to the delete path below.
     session.add(AuditEvent(
         action="rule.data_retention.archived",
-        org_id=run.org,
         resource_type="scan_run",
         resource_id=str(run.id),
         actor_username=f"auto-rule:{rule_id}",
@@ -185,7 +186,6 @@ async def _delete_scan_run(session, run: ScanRun, rule_id: str, now: datetime) -
     """
     session.add(AuditEvent(
         action="rule.data_retention.deleted",
-        org_id=run.org,
         resource_type="scan_run",
         resource_id=str(run.id),
         actor_username=f"auto-rule:{rule_id}",
@@ -205,5 +205,5 @@ async def _delete_scan_run(session, run: ScanRun, rule_id: str, now: datetime) -
 
 __all__ = [
     "DataRetentionEvalResult",
-    "evaluate_data_retention_for_org",
+    "evaluate_data_retention",
 ]

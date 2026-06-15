@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Button } from "@/components/ui/Button"
 
 interface Props {
   token: string
@@ -39,21 +40,24 @@ export function CreatedKeyDialog({ token, onClose }: Props) {
           <code className="flex-1 break-all font-mono text-[11px] text-[var(--color-text-primary)]">
             {token}
           </code>
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={handleCopy}
-            className="shrink-0 rounded px-2 py-1 text-2xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-nav-active)] transition-colors"
+            className="shrink-0 text-[var(--color-accent)] hover:bg-[var(--color-nav-active)] hover:text-[var(--color-accent)]"
           >
             {copied ? "Copied!" : "Copy"}
-          </button>
+          </Button>
         </div>
 
         <div className="flex justify-end">
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={onClose}
-            className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-medium text-[var(--color-accent-on)] hover:opacity-90 transition-opacity"
           >
             Done
-          </button>
+          </Button>
         </div>
       </div>
     </div>

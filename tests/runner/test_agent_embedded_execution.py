@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from runner import dispatcher
+from runner.core import dispatcher
 
 
 def test_dispatcher_get_scanner_returns_callable_run_scan():

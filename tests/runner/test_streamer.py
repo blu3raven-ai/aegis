@@ -8,8 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from runner.streamer import ManifestStreamer
-from runner.uploader import URL_EXPIRED_MARKER
+from runner.clients.streamer import ManifestStreamer
+from runner.clients.uploader import URL_EXPIRED_MARKER
 
 
 def _sha(b: bytes) -> str:
@@ -110,7 +110,7 @@ def test_streamer_handles_partial_backend_response(job_dir):
 
 
 def test_streamer_continues_when_backend_unreachable(job_dir):
-    from runner.backend_client import BackendError
+    from runner.clients.backend import BackendError
     e1 = _write_file(job_dir, "a.json", b"a")
     _write_manifest(job_dir, [e1, {"file": "_done"}])
 

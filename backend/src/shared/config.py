@@ -582,7 +582,10 @@ def get_secret_scanner_config() -> dict[str, str]:
     secrets_tool = (config.get("tools") or {}).get("secrets") or {}
     concurrency = str(secrets_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("SECRET_SCANNER_CONCURRENCY") or get_app_config_env_value("SECRETS_SCAN_CONCURRENCY") or "4"
     scan_depth = str(secrets_tool.get("scanDepth") or "").strip().lower() or "light"
-    if scan_depth not in ("light", "deep", "ai_enhanced"):
+    # Migrate any retired legacy depth value to the closest current depth.
+    if scan_depth == "ai_enhanced":
+        scan_depth = "deep"
+    if scan_depth not in ("light", "deep"):
         scan_depth = "light"
     history_window = str(secrets_tool.get("scanHistoryWindow") or "all").strip()
     _window_days = {"30d": 30, "90d": 90, "180d": 180, "365d": 365}

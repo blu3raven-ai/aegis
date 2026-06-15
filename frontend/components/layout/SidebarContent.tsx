@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { Tooltip } from "@/components/layout/Tooltip"
 import { UserMenuButton } from "@/components/layout/UserMenuButton"
 import { BrandLogo } from "@/components/layout/BrandLogo"
+import { useBranding } from "@/lib/client/branding/client"
 import { useLicense } from "@/lib/client/license/client"
 import { TIER_LABELS } from "@/lib/shared/license/types"
 import type { Tier } from "@/lib/shared/license/types"
@@ -19,8 +20,7 @@ export interface SidebarContentProps {
   iacEnabled: boolean
   counts?: { dependencies?: number; containerScanning?: number; secrets?: number; codeScanning?: number }
   /** Aggregate navigation badge counts. Each is optional — undefined hides the badge for that item. */
-  navCounts?: { inbox?: number; findings?: number; repos?: number; images?: number }
-  orgName?: string
+  navCounts?: { inbox?: number; findings?: number }
   orgCount?: number
   collapsed: boolean
   /** Optional callback invoked when a navigation link is clicked (used by mobile drawer to close) */
@@ -32,14 +32,11 @@ export interface SidebarContentProps {
   onSearchOpen?: (open: boolean) => void
   /** Dynamic role-permission mapping from backend */
   policy?: any
-  onboardingComplete?: boolean
 }
 
 const ICON_HOME =
   "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
 
-const ICON_ONBOARDING =
-  "M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.745 3.745 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.745 3.745 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z"
 
 const ICON_FINDINGS =
   "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
@@ -53,7 +50,9 @@ const ICON_POSTURE =
   "M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941"
 const ICON_REPORTS =
   "M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0V12a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 12V5.25"
-const ICON_INTEGRATIONS =
+const ICON_INTEGRATIONS_PLUG =
+  "M21.75 6.75a4.5 4.5 0 0 1-4.884 4.484c-1.076-.091-2.264.071-2.95.904l-7.152 8.684a2.548 2.548 0 1 1-3.586-3.586l8.684-7.152c.833-.686.995-1.874.904-2.95a4.5 4.5 0 0 1 6.336-4.486l-3.276 3.276a3.004 3.004 0 0 0 2.25 2.25l3.276-3.276c.256.565.398 1.192.398 1.852Z M4.867 19.125h.008v.008h-.008v-.008Z"
+const ICON_NOTIFICATIONS =
   "M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
 const ICON_POLICIES =
   "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
@@ -61,11 +60,18 @@ const ICON_REPOS =
   "M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"
 const ICON_RELEASES =
   "M9 12.75 11.25 15 15 9.75M3.75 9.75h16.5M3.75 9.75A2.25 2.25 0 0 1 6 7.5h12a2.25 2.25 0 0 1 2.25 2.25v9A2.25 2.25 0 0 1 18 21H6a2.25 2.25 0 0 1-2.25-2.25v-9ZM7.5 7.5V5.25A2.25 2.25 0 0 1 9.75 3h4.5a2.25 2.25 0 0 1 2.25 2.25V7.5"
-const ICON_IMAGES =
-  "M3.75 6.75A2.25 2.25 0 0 1 6 4.5h12a2.25 2.25 0 0 1 2.25 2.25v10.5A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6.75ZM3.75 16.5l4.5-4.5 3 3 3-3 6 6m-6-9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"
+const ICON_DATABASE =
+  "M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4"
 
 const ICON_COMPLIANCE =
   "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
+
+const ICON_MEMBERS =
+  "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75 M9 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"
+const ICON_ROLES =
+  "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z m-3-10 2 2 4-4"
+const ICON_TEAMS =
+  "M17 21v-2a4 4 0 0 0-3-3.87 M7 21v-2a4 4 0 0 1 3-3.87 M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"
 
 function NavIcon({ d }: { d: string }) {
   return (
@@ -110,17 +116,16 @@ export function SidebarContent({
   iacEnabled: _iacEnabled,
   counts: _counts,
   navCounts,
-  orgName,
   orgCount,
   collapsed,
   onNavigate,
   scanningTools: _scanningTools,
   searchOpen,
   onSearchOpen,
-  onboardingComplete = true,
 }: SidebarContentProps) {
   const pathname = usePathname()
   const { tier } = useLicense()
+  const { name: brandName, isVendor } = useBranding()
 
   const tierCardStyles: Record<Tier, { border: string; icon: string; label: string }> = {
     community: {
@@ -153,31 +158,29 @@ export function SidebarContent({
 
   // Configuration: outbound routing rules and org-wide policies
   const configurationItems: NavItem[] = [
-    { href: "/integrations", label: "Integrations", icon: ICON_INTEGRATIONS },
-    { href: "/rules", label: "Rules", icon: ICON_POLICIES },
+    { href: "/policies", label: "Policies", icon: ICON_POLICIES },
+    { href: "/integrations", label: "Integrations", icon: ICON_INTEGRATIONS_PLUG },
+    { href: "/notifications", label: "Notifications", icon: ICON_NOTIFICATIONS },
   ];
 
   // Data: inventory of what Aegis is watching. /releases is intentionally
-  // absent — releases are reached from /repos/[repoId] → Pre-release scan.
+  // absent — releases are reached from /sources/[id] → Pre-release scan.
   const dataItems: NavItem[] = [
-    { href: "/repos", label: "Repositories", icon: ICON_REPOS, count: navCounts?.repos, countTone: "neutral" },
-    { href: "/images", label: "Images", icon: ICON_IMAGES, count: navCounts?.images, countTone: "neutral" },
+    { href: "/sources", label: "Sources", icon: ICON_DATABASE },
     { href: "/chains", label: "Chains", icon: ICON_CHAINS, badge: "Preview" },
+  ];
+
+  // Workspace: people and access. Promoted out of /settings so admins can
+  // reach Members / Roles / Teams in one click instead of three.
+  const workspaceItems: NavItem[] = [
+    { href: "/members", label: "Members", icon: ICON_MEMBERS },
+    { href: "/roles", label: "Roles", icon: ICON_ROLES },
+    { href: "/teams", label: "Teams", icon: ICON_TEAMS },
   ];
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/"
     if (href === "#") return false
-    // Keep Repositories active on /repos and its detail pages, and on the
-    // legacy /sources/{code-repositories,container-registry}/[id] connection
-    // detail routes that still exist for managing individual connections.
-    if (href === "/repos") {
-      return (
-        pathname === "/repos" ||
-        pathname.startsWith("/repos/") ||
-        pathname.startsWith("/sources/")
-      )
-    }
     return pathname.startsWith(href)
   }
 
@@ -202,21 +205,29 @@ export function SidebarContent({
 
   return (
     <>
-      {/* Branding */}
+      {/* Branding — vendor identity (3-line) when name is NULL; customer (2-line) otherwise */}
       <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-3 shrink-0 overflow-hidden">
         {!collapsed && (
           <div className="flex items-center gap-3 min-w-0">
             <BrandLogo className="h-11 w-11 shrink-0 object-contain" />
             <div className="flex min-w-0 flex-col">
-              <span className="font-[family-name:var(--font-space-grotesk)] text-[0.6rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
-                Raven Protocol
-              </span>
-              <span className="font-[family-name:var(--font-space-grotesk)] text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
-                Blu3Raven
-              </span>
-              <span className="mt-0.5 text-2xs leading-tight text-[var(--color-text-secondary)]">
-                Aegis — Vulnerability Management Portal
-              </span>
+              {isVendor ? (
+                <>
+                  <span className="font-[family-name:var(--font-space-grotesk)] text-[0.6rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
+                    Raven Protocol
+                  </span>
+                  <span className="font-[family-name:var(--font-space-grotesk)] text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
+                    Blu3Raven
+                  </span>
+                  <span className="mt-0.5 text-2xs leading-tight text-[var(--color-text-secondary)]">
+                    Aegis — Vulnerability Management Portal
+                  </span>
+                </>
+              ) : (
+                <span className="font-[family-name:var(--font-space-grotesk)] text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)] truncate">
+                  {brandName}
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -257,36 +268,7 @@ export function SidebarContent({
           )
         )}
 
-        {/* Onboarding — visible until wizard is dismissed */}
-        {!onboardingComplete && (() => {
-          const active = pathname === "/onboarding"
-          const link = (
-            <Link
-              href="/onboarding"
-              onClick={onNavigate}
-              className={navLinkClass(active)}
-            >
-              <span className="relative shrink-0">
-                <NavIcon d={ICON_ONBOARDING} />
-                <span
-                  className="absolute -right-0.5 -top-0.5 h-[7px] w-[7px] rounded-full bg-amber-500 ring-2 ring-[var(--color-surface)]"
-                  aria-hidden="true"
-                />
-              </span>
-              {!collapsed && (
-                <>
-                  <span className="truncate">Onboarding</span>
-                  <span className="ml-auto shrink-0 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-px text-2xs font-semibold text-amber-500">
-                    Incomplete
-                  </span>
-                </>
-              )}
-            </Link>
-          )
-          return collapsed ? <Tooltip content="Onboarding (incomplete)">{link}</Tooltip> : link
-        })()}
-
-        {/* Overview group — at-a-glance landing surfaces */}
+        {/* Overview — at-a-glance landing surfaces */}
         <GroupLabel label="Overview" />
         {overviewItems.map((item) => {
           const active = isActive(item.href)
@@ -313,55 +295,8 @@ export function SidebarContent({
           return collapsed ? <Tooltip key={item.href} content={item.label}>{link}</Tooltip> : link
         })}
 
-        {/* Reporting group — audit + exec deliverables */}
-        <GroupLabel label="Reporting" />
-        {reportingItems.map((item) => {
-          const active = isActive(item.href)
-          const link = (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? item.label : undefined}
-              aria-label={collapsed ? item.label : undefined}
-              onClick={onNavigate}
-              className={navLinkClass(active)}
-            >
-              <NavIcon d={item.icon} />
-              {!collapsed && (
-                <>
-                  <span className="truncate">{item.label}</span>
-                  {item.count != null && item.count > 0 && (
-                    <NavItemCount count={item.count} tone={item.countTone ?? "neutral"} />
-                  )}
-                </>
-              )}
-            </Link>
-          )
-          return collapsed ? <Tooltip key={item.href} content={item.label}>{link}</Tooltip> : link
-        })}
-
-        {/* Configuration group */}
-        <GroupLabel label="Configuration" />
-        {configurationItems.map((item) => {
-          const active = isActive(item.href)
-          const link = (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? item.label : undefined}
-              aria-label={collapsed ? item.label : undefined}
-              onClick={onNavigate}
-              className={navLinkClass(active)}
-            >
-              <NavIcon d={item.icon} />
-              {!collapsed && <span className="truncate">{item.label}</span>}
-            </Link>
-          )
-          return collapsed ? <Tooltip key={item.href} content={item.label}>{link}</Tooltip> : link
-        })}
-
-        {/* Data group */}
-        <GroupLabel label="Data" />
+        {/* Inventory — what Aegis is watching (ASPM-standard vocabulary) */}
+        <GroupLabel label="Inventory" />
         {dataItems.map((item) => {
           const active = isActive(item.href)
           const link = (
@@ -387,6 +322,73 @@ export function SidebarContent({
                   )}
                 </>
               )}
+            </Link>
+          )
+          return collapsed ? <Tooltip key={item.href} content={item.label}>{link}</Tooltip> : link
+        })}
+
+        {/* Workspace — people and access */}
+        <GroupLabel label="Workspace" />
+        {workspaceItems.map((item) => {
+          const active = isActive(item.href)
+          const link = (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={collapsed ? item.label : undefined}
+              aria-label={collapsed ? item.label : undefined}
+              onClick={onNavigate}
+              className={navLinkClass(active)}
+            >
+              <NavIcon d={item.icon} />
+              {!collapsed && <span className="truncate">{item.label}</span>}
+            </Link>
+          )
+          return collapsed ? <Tooltip key={item.href} content={item.label}>{link}</Tooltip> : link
+        })}
+
+        {/* Insights — audit + exec deliverables */}
+        <GroupLabel label="Insights" />
+        {reportingItems.map((item) => {
+          const active = isActive(item.href)
+          const link = (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={collapsed ? item.label : undefined}
+              aria-label={collapsed ? item.label : undefined}
+              onClick={onNavigate}
+              className={navLinkClass(active)}
+            >
+              <NavIcon d={item.icon} />
+              {!collapsed && (
+                <>
+                  <span className="truncate">{item.label}</span>
+                  {item.count != null && item.count > 0 && (
+                    <NavItemCount count={item.count} tone={item.countTone ?? "neutral"} />
+                  )}
+                </>
+              )}
+            </Link>
+          )
+          return collapsed ? <Tooltip key={item.href} content={item.label}>{link}</Tooltip> : link
+        })}
+
+        {/* Configure — routing + policies */}
+        <GroupLabel label="Configure" />
+        {configurationItems.map((item) => {
+          const active = isActive(item.href)
+          const link = (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={collapsed ? item.label : undefined}
+              aria-label={collapsed ? item.label : undefined}
+              onClick={onNavigate}
+              className={navLinkClass(active)}
+            >
+              <NavIcon d={item.icon} />
+              {!collapsed && <span className="truncate">{item.label}</span>}
             </Link>
           )
           return collapsed ? <Tooltip key={item.href} content={item.label}>{link}</Tooltip> : link

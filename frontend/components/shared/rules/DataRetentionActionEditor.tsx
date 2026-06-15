@@ -17,9 +17,7 @@ import type {
   DataRetentionAction,
   DeleteAction,
 } from "@/lib/client/rules-api"
-
-const inputClass =
-  "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] aria-[invalid=true]:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:border-[var(--color-severity-critical)] aria-[invalid=true]:focus:ring-[var(--color-severity-critical)]"
+import { Input } from "@/components/ui/Input"
 
 const ARCHIVE_MIN_DAYS = 30
 const DELETE_MIN_DAYS = 90
@@ -117,7 +115,7 @@ export function DataRetentionActionEditor({
           {value.type === "delete" ? "Delete after" : "Archive after"}
         </label>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             id="retention-after-days"
             type="number"
             min={value.type === "delete" ? DELETE_MIN_DAYS : ARCHIVE_MIN_DAYS}
@@ -131,7 +129,7 @@ export function DataRetentionActionEditor({
               })
             }
             aria-invalid={daysInvalid}
-            className={`${inputClass} w-28`}
+            className="w-28"
           />
           <span className="text-sm text-[var(--color-text-secondary)]">
             days after the scan finished

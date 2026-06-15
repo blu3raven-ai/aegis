@@ -1,6 +1,7 @@
 "use client"
 
 import type { ComplianceFramework } from "@/lib/client/compliance-api"
+import { Select } from "@/components/ui/Select"
 
 interface FrameworkSelectorProps {
   frameworks: ComplianceFramework[]
@@ -17,19 +18,20 @@ export function FrameworkSelector({ frameworks, selected, onChange }: FrameworkS
       >
         Framework
       </label>
-      <select
+      <Select
+        size="sm"
         id="framework-select"
         data-testid="framework-selector"
         value={selected}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] transition-colors"
+        className="w-auto"
       >
         {frameworks.map((fw) => (
           <option key={fw.id} value={fw.id}>
             {fw.label}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   )
 }

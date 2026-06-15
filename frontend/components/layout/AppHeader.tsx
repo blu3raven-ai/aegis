@@ -7,7 +7,9 @@ import { ThemeToggleButton } from "@/components/layout/ThemeToggleButton"
 import { SearchModal } from "@/components/layout/SearchModal"
 import { NotificationBell } from "@/components/layout/NotificationBell"
 import { HeaderCTAs } from "@/components/layout/HeaderCTAs"
+import { HelpButton } from "@/components/layout/HelpButton"
 import Link from "next/link"
+import { useConnectorCatalog, type Integration } from "@/lib/client/connectors-api"
 
 /** Map of URL path segments to their display labels. */
 const SEGMENT_LABELS: Record<string, string> = {
@@ -38,7 +40,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   images: "Images",
   inbox: "Inbox",
   notifications: "Notifications",
-  onboarding: "Onboarding",
   operations: "Operations",
   policies: "Policies",
   posture: "Posture",
@@ -51,32 +52,100 @@ const SEGMENT_LABELS: Record<string, string> = {
   audit: "Audit Log",
   "audit-log": "Audit Log",
   "sla-policies": "SLA Policies",
-  rules: "Rules",
+  rules: "Policies",
   integrations: "Integrations",
   "sla_policies": "SLA Policies",
+  llm: "LLM",
+  "ci-integration": "CI Integration",
 }
 
 /** Segments that should be hidden from breadcrumbs (intermediate route segments). */
 const HIDDEN_SEGMENTS = new Set([])
+
+/** Title-case a URL segment as a safety net when SEGMENT_LABELS doesn't cover it.
+ *  e.g. "my-route" -> "My Route", "snake_case" -> "Snake Case". */
+function titleCase(segment: string): string {
+  return segment
+    .split(/[-_\s]/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ")
+}
 
 /**
  * Build breadcrumb items from the current pathname.
  *
  * Examples:
  *   "/"                      → [{ label: "Home" }]
+ *   "/findings"              → [{ label: "Overview" }, { label: "Findings" }]
+ *   "/members"               → [{ label: "Workspace" }, { label: "Members" }]
+ *   "/sources"               → [{ label: "Inventory" }, { label: "Sources" }]
+ *   "/integrations"          → [{ label: "Configure" }, { label: "Integrations" }]
  *   "/settings/account"      → [{ label: "Settings" }, { label: "Account" }]
- *   "/settings/dependencies" → [{ label: "Settings" }, { label: "Dependencies" }]
+ *   "/settings/dependencies" → [{ label: "Settings" }, { label: "Tools" }, { label: "Dependencies" }]
  * */
-function buildBreadcrumbs(pathname: string): { label: string }[] {
+function buildBreadcrumbs(pathname: string, catalog: Integration[]): { label: string; href?: string }[] {
   if (pathname === "/") return [{ label: "Home" }]
 
   const segments = pathname.split("/").filter(Boolean)
-  const crumbs: { label: string }[] = []
+  const crumbs: { label: string; href?: string }[] = []
+  let prefix = ""
 
   for (let i = 0; i < segments.length; i++) {
     const segment = segments[i]
+    prefix += "/" + segment
 
-    // Settings sub-categories: Tools and System
+    // Top-level routes that live under a sidebar group: prefix with the
+    // group label so the breadcrumb mirrors the navigation hierarchy
+    // (e.g. /members → "Workspace > Members"). Group labels are synthetic — no href.
+    // Home ("/") stays bare (handled by the early return at the top of this fn).
+    if (i === 0) {
+      const OVERVIEW: Record<string, string> = {
+        inbox: "Inbox", findings: "Findings", posture: "Posture",
+      }
+      const WORKSPACE: Record<string, string> = {
+        members: "Members", roles: "Roles", teams: "Teams",
+      }
+      const INVENTORY: Record<string, string> = {
+        sources: "Sources", chains: "Chains",
+      }
+      const INSIGHTS: Record<string, string> = {
+        compliance: "Compliance", reports: "Reports",
+      }
+      const CONFIGURE: Record<string, string> = {
+        // /rules is the actual route — the sidebar surfaces it as "Policies"
+        // (Snyk / Apiiro / Endor vocabulary), so the breadcrumb matches.
+        policies: "Policies", rules: "Policies",
+        integrations: "Integrations", notifications: "Notifications",
+      }
+      if (OVERVIEW[segment]) {
+        crumbs.push({ label: "Overview" })
+        crumbs.push({ label: OVERVIEW[segment], href: prefix })
+        continue
+      }
+      if (WORKSPACE[segment]) {
+        crumbs.push({ label: "Workspace" })
+        crumbs.push({ label: WORKSPACE[segment], href: prefix })
+        continue
+      }
+      if (INVENTORY[segment]) {
+        crumbs.push({ label: "Inventory" })
+        crumbs.push({ label: INVENTORY[segment], href: prefix })
+        continue
+      }
+      if (INSIGHTS[segment]) {
+        crumbs.push({ label: "Insights" })
+        crumbs.push({ label: INSIGHTS[segment], href: prefix })
+        continue
+      }
+      if (CONFIGURE[segment]) {
+        crumbs.push({ label: "Configure" })
+        crumbs.push({ label: CONFIGURE[segment], href: prefix })
+        continue
+      }
+    }
+
+    // Settings sub-categories: Tools, System, Workspace are synthetic groupings (no href).
     if (i > 0 && segments[i - 1] === "settings") {
       const TOOLS: Record<string, string> = {
         dependencies: "Dependencies", containers: "Containers", code: "Code",
@@ -88,12 +157,12 @@ function buildBreadcrumbs(pathname: string): { label: string }[] {
 
       if (TOOLS[segment]) {
         crumbs.push({ label: "Tools" })
-        crumbs.push({ label: TOOLS[segment] })
+        crumbs.push({ label: TOOLS[segment], href: prefix })
         continue
       }
       if (SYSTEM[segment]) {
         crumbs.push({ label: "System" })
-        crumbs.push({ label: SYSTEM[segment] })
+        crumbs.push({ label: SYSTEM[segment], href: prefix })
         continue
       }
       const WORKSPACE: Record<string, string> = {
@@ -101,25 +170,45 @@ function buildBreadcrumbs(pathname: string): { label: string }[] {
       }
       if (WORKSPACE[segment]) {
         crumbs.push({ label: "Workspace" })
-        crumbs.push({ label: WORKSPACE[segment] })
+        crumbs.push({ label: WORKSPACE[segment], href: prefix })
         continue
       }
     }
 
-    const label = SEGMENT_LABELS[segment] ?? segment
-    crumbs.push({ label })
+    // Integration sub-routes: resolve slug → human name (e.g. github-action → GitHub Action)
+    if (i > 0 && segments[i - 1] === "integrations") {
+      const integration = catalog.find(x => x.slug === segment)
+      if (integration) {
+        crumbs.push({ label: integration.name, href: prefix })
+        continue
+      }
+    }
+
+    const label = SEGMENT_LABELS[segment] ?? titleCase(segment)
+    crumbs.push({ label, href: prefix })
   }
 
-  // Fallback: if all segments were hidden, show "Home"
+  // Current page is the last crumb — drop its href so it renders as plain text.
+  if (crumbs.length > 0 && crumbs[crumbs.length - 1].href !== undefined) {
+    crumbs[crumbs.length - 1] = { label: crumbs[crumbs.length - 1].label }
+  }
+
   if (crumbs.length === 0) return [{ label: "Home" }]
 
   return crumbs
 }
 
-export function AppHeader({ open, setSearchOpen }: { open: boolean; setSearchOpen: (value: boolean) => void }) {
+export function AppHeader({
+  open,
+  setSearchOpen,
+}: {
+  open: boolean
+  setSearchOpen: (value: boolean) => void
+}) {
   const pathname = usePathname()
   const { setOpen } = useMobileSidebar()
-  const crumbs = buildBreadcrumbs(pathname)
+  const { catalog } = useConnectorCatalog()
+  const crumbs = buildBreadcrumbs(pathname, catalog)
 
   // Global ⌘K listener to open/close search modal
   useEffect(() => {
@@ -134,7 +223,7 @@ export function AppHeader({ open, setSearchOpen }: { open: boolean; setSearchOpe
   }, [open, setSearchOpen])
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+    <header className="flex h-14 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4">
       {/* Left: hamburger (mobile) + breadcrumbs */}
       <div className="flex items-center gap-2 min-w-0">
         {/* Mobile hamburger */}
@@ -178,15 +267,21 @@ export function AppHeader({ open, setSearchOpen }: { open: boolean; setSearchOpe
                   <path d="M9 18l6-6-6-6" />
                 </svg>
               )}
-              <span
-                className={`truncate ${
-                  i === crumbs.length - 1
-                    ? "font-medium text-[var(--color-text-primary)]"
-                    : "text-[var(--color-text-secondary)]"
-                }`}
-              >
-                {crumb.label}
-              </span>
+              {crumb.href ? (
+                <Link
+                  href={crumb.href}
+                  className="truncate rounded-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]"
+                >
+                  {crumb.label}
+                </Link>
+              ) : (
+                <span
+                  aria-current={i === crumbs.length - 1 ? "page" : undefined}
+                  className="truncate font-medium text-[var(--color-text-primary)]"
+                >
+                  {crumb.label}
+                </span>
+              )}
             </span>
           ))}
         </nav>
@@ -196,6 +291,7 @@ export function AppHeader({ open, setSearchOpen }: { open: boolean; setSearchOpe
       <div className="flex items-center gap-2">
         <HeaderCTAs />
         <div className="mx-1 h-5 w-px bg-[var(--color-border)]" aria-hidden="true" />
+        <HelpButton />
         <NotificationBell />
         <Link
           href="/settings"

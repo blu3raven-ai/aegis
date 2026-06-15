@@ -144,7 +144,7 @@ def test_ingest_repo_html_url_absent_when_not_in_jsonl(tmp_path):
 
 
 def test_ingest_passes_through_engine_and_dataflow_trace(tmp_path):
-    """Joern-style finding: engine + dataflow_trace pass through ingestion."""
+    """Engine attribution + dataflow_trace pass through ingestion."""
     trace = [
         {"file": "src/app.py", "line": 5, "snippet": "x = req.args['id']", "role": "source"},
         {"file": "src/app.py", "line": 10, "snippet": "cursor.execute(x)", "role": "sink"},
@@ -154,15 +154,15 @@ def test_ingest_passes_through_engine_and_dataflow_trace(tmp_path):
         "file_path": "src/app.py",
         "start_line": 10,
         "end_line": 10,
-        "rule_id": "joern-sqli",
-        "rule_name": "Joern SQL Injection",
+        "rule_id": "semgrep-sqli",
+        "rule_name": "SQL Injection",
         "severity": "high",
         "confidence": "high",
         "category": "security",
         "cwe": ["CWE-89"],
         "message": "Tainted flow from request to SQL exec",
         "snippet": "cursor.execute(x)",
-        "engine": "joern",
+        "engine": "semgrep",
         "dataflow_trace": trace,
     }
     p = tmp_path / "findings.jsonl"
@@ -171,12 +171,12 @@ def test_ingest_passes_through_engine_and_dataflow_trace(tmp_path):
     findings = ingest_findings_jsonl(p)
     assert len(findings) == 1
     f = findings[0]
-    assert f["engine"] == "joern"
+    assert f["engine"] == "semgrep"
     assert f["dataflow_trace"] == trace
 
 
-def test_ingest_engine_defaults_to_opengrep_when_absent(tmp_path):
-    """Legacy findings (no `engine` field) default to opengrep."""
+def test_ingest_engine_defaults_to_semgrep_when_absent(tmp_path):
+    """Legacy findings (no `engine` field) default to semgrep."""
     finding = {
         "repo_full_name": "acme-org/example-repo",
         "file_path": "src/app.py",
@@ -196,5 +196,5 @@ def test_ingest_engine_defaults_to_opengrep_when_absent(tmp_path):
 
     findings = ingest_findings_jsonl(p)
     assert len(findings) == 1
-    assert findings[0]["engine"] == "opengrep"
+    assert findings[0]["engine"] == "semgrep"
     assert findings[0]["dataflow_trace"] is None

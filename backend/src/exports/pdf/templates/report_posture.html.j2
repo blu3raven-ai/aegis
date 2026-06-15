@@ -1,0 +1,36 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<h1>{{ title }}</h1>
+<p class="meta">Risk score {{ risk_score.score }} · {{ risk_score.rating }} · generated {{ generated_at }}</p>
+
+<h2>Open findings</h2>
+<table>
+  <tr><th>Total</th><td>{{ counts.total }}</td><th>Critical</th><td class="sev-critical">{{ counts.critical }}</td></tr>
+  <tr><th>High</th><td class="sev-high">{{ counts.high }}</td><th>Medium</th><td class="sev-medium">{{ counts.medium }}</td></tr>
+  <tr><th>Low</th><td class="sev-low">{{ counts.low }}</td><th>Fixed (30d)</th><td>{{ remediation.fixedLast30d }}</td></tr>
+</table>
+
+<h2>Coverage</h2>
+<table>
+  <tr><th>Repositories</th><td>{{ repository_coverage.total }}</td><th>Affected</th><td>{{ repository_coverage.affected }}</td></tr>
+  <tr><th>Unaffected</th><td>{{ repository_coverage.unaffected }}</td><th>Coverage %</th><td>{{ repository_coverage.percentage }}%</td></tr>
+</table>
+
+{% if top_repositories %}
+<h2>Top repositories by open findings</h2>
+<table>
+  <thead><tr><th>Repository</th><th>Open</th><th>Critical</th><th>High</th></tr></thead>
+  <tbody>
+  {% for r in top_repositories %}
+    <tr>
+      <td>{{ r.name }}</td>
+      <td>{{ r.open }}</td>
+      <td class="sev-critical">{{ r.critical }}</td>
+      <td class="sev-high">{{ r.high }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}
