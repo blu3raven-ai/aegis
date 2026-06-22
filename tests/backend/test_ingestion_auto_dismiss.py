@@ -368,7 +368,6 @@ def test_ingestion_no_checkout_path_does_not_crash():
     _seed_rule(rule_id="ingest-rule-noattr", conditions={"all": []})
 
     hooks = FakeIngestHooks()
-    # ScanContext without checkout_path — confirms _run_attribution returns early.
     ctx = ScanContext(tool=_TOOL, org=_ORG, run_id="run-noattr-1")
     assert ctx.extra.get("checkout_path") is None
 

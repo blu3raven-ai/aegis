@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react"
 
-import { getCatalog, type ConnectorType } from "@/lib/client/integrations-catalog-api"
 import {
   listDestinations,
   createDestination,
@@ -18,11 +17,7 @@ import { DestinationDrawer } from "@/components/shared/notifications/Destination
 
 import { ChannelsView } from "../ChannelsView"
 
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
-
 export default function ChannelsPage() {
-  const [catalog, setCatalog] = useState<ConnectorType[]>([])
-
   const [destinations, setDestinations] = useState<NotificationDestination[]>([])
   const [destsState, setDestsState] = useState<"loading" | "ok" | "error">("loading")
 
@@ -36,23 +31,16 @@ export default function ChannelsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [testStatuses, setTestStatuses] = useState<Record<number, TestStatus>>({})
 
-  const loadCatalog = useCallback(() => {
-    getCatalog()
-      .then((d) => setCatalog(d.connectors))
-      .catch(() => {})
-  }, [])
-
   const loadDestinations = useCallback(() => {
     setDestsState("loading")
-    listDestinations(ORG_ID)
+    listDestinations()
       .then((rows) => { setDestinations(rows); setDestsState("ok") })
       .catch(() => setDestsState("error"))
   }, [])
 
   useEffect(() => {
-    loadCatalog()
     loadDestinations()
-  }, [loadCatalog, loadDestinations])
+  }, [loadDestinations])
 
   const handleCreate = useCallback(
     async (payload: CreateDestinationPayload | (UpdateDestinationPayload & { id: number })) => {
@@ -74,7 +62,7 @@ export default function ChannelsPage() {
   const handleTest = useCallback(async (dest: NotificationDestination) => {
     setTestStatuses((prev) => ({ ...prev, [dest.id]: { kind: "sending" } }))
     try {
-      const result: TestSendResult = await testDestination(dest.id, ORG_ID)
+      const result: TestSendResult = await testDestination(dest.id)
       setTestStatuses((prev) => ({
         ...prev,
         [dest.id]:
@@ -137,7 +125,6 @@ export default function ChannelsPage() {
   return (
     <>
       <ChannelsView
-        orgId={ORG_ID}
         destinations={destinations}
         destsState={destsState}
         deletingId={deletingId}
@@ -165,7 +152,6 @@ export default function ChannelsPage() {
       )}
       <DestinationDrawer
         destination={selectedDest}
-        orgId={ORG_ID}
         open={drawerOpen}
         onClose={() => { setDrawerOpen(false); setSelectedDest(null) }}
         onUpdated={handleUpdated}

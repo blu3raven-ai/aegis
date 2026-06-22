@@ -27,7 +27,7 @@ describe("ScannerCoverageActionEditor type selector", () => {
 
 describe("ScannerCoverageActionEditor require_scanners fields", () => {
   it("offers all four scanner types as checkboxes", () => {
-    for (const tool of ["dependencies", "code_scanning", "container_scanning", "secrets"]) {
+    for (const tool of ["dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning"]) {
       assert.ok(src.includes(`"${tool}"`), `should include scanner option ${tool}`)
     }
   })

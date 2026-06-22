@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from "react"
 
-export function useActiveSection(ids: readonly string[], rootMargin = "-80px 0px -70% 0px"): string | null {
+export function useActiveSection(
+  ids: readonly string[],
+  rootMargin = "-80px 0px -70% 0px",
+  rootSelector?: string,
+): string | null {
   const [activeId, setActiveId] = useState<string | null>(ids[0] ?? null)
 
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined") return
+    const root = rootSelector ? (document.querySelector(rootSelector) ?? null) : null
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries
@@ -14,14 +19,14 @@ export function useActiveSection(ids: readonly string[], rootMargin = "-80px 0px
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
         if (visible) setActiveId(visible.target.id)
       },
-      { rootMargin, threshold: 0 },
+      { root, rootMargin, threshold: 0 },
     )
     for (const id of ids) {
       const el = document.getElementById(id)
       if (el) observer.observe(el)
     }
     return () => observer.disconnect()
-  }, [ids, rootMargin])
+  }, [ids, rootMargin, rootSelector])
 
   return activeId
 }

@@ -82,6 +82,31 @@ def test_finding_dict_without_lookup_returns_kev_false_and_cwe_none():
     out = _finding_to_dict(make_finding(cve_id="CVE-2021-44228"))
     assert out["kev"] is False
     assert out["cwe"] is None
+    assert out["epss_percentile"] is None
+
+
+def test_finding_dict_includes_epss_percentile_when_cve_in_lookup():
+    out = _finding_to_dict(
+        make_finding(cve_id="CVE-2021-44228"),
+        epss_lookup={"CVE-2021-44228": 0.97543},
+    )
+    assert out["epss_percentile"] == 0.97543
+
+
+def test_finding_dict_epss_percentile_none_when_cve_absent_from_lookup():
+    out = _finding_to_dict(
+        make_finding(cve_id="CVE-9999-9999"),
+        epss_lookup={"CVE-2021-44228": 0.5},
+    )
+    assert out["epss_percentile"] is None
+
+
+def test_finding_dict_epss_percentile_none_when_finding_has_no_cve():
+    out = _finding_to_dict(
+        make_finding(cve_id=None),
+        epss_lookup={"CVE-2021-44228": 0.5},
+    )
+    assert out["epss_percentile"] is None
 
 
 def test_valid_sorts_includes_new_options():
@@ -201,7 +226,6 @@ def test_normalize_filters_preserves_valid_page():
     assert f.page == 3
 
 
-# ─── assign_finding (DB-backed) ─────────────────────────────────────────────
 
 
 @pytest_asyncio.fixture
@@ -222,7 +246,7 @@ async def assign_finding_fixture(db_session):
     user_a = User(id=f"user-{uuid4()}", username=f"a-{uuid4()}", email="a@example.com")
     user_b = User(id=f"user-{uuid4()}", username=f"b-{uuid4()}", email="b@example.com")
     finding = Finding(
-        tool="dependencies",
+        tool="dependencies_scanning",
         identity_key=f"key-{uuid4()}",
         state="open",
         severity="critical",
@@ -293,7 +317,6 @@ async def test_assign_finding_404s_when_scope_is_empty(db_session, assign_findin
         await assign_finding(finding.id, user_a.id, db_session, [])
 
 
-# ─── list_assignable_users (DB-backed) ──────────────────────────────────────
 
 
 @pytest_asyncio.fixture
@@ -378,7 +401,7 @@ async def test_upsert_finding_writes_asset_id(db_session, _isolated_upsert_findi
         external_ref="github:acme/upsert-test", display_name="acme/upsert-test",
     )
     f = await upsert_finding(
-        db_session, tool="dependencies", asset_id=asset_id,
+        db_session, tool="dependencies_scanning", asset_id=asset_id,
         org="acme", repo="upsert-test",
         identity_key=f"ut-upsert-{uuid4()}", state="open", severity="high",
         detail={"title": "test"},
@@ -391,7 +414,7 @@ async def test_upsert_finding_accepts_null_asset_id_for_secrets(db_session, _iso
     from src.shared.finding_queries import upsert_finding
 
     f = await upsert_finding(
-        db_session, tool="secrets", asset_id=None,
+        db_session, tool="secret_scanning", asset_id=None,
         org="acme", repo=None,
         identity_key=f"ut-upsert-{uuid4()}", state="open", severity=None,
         detail={},
@@ -399,9 +422,7 @@ async def test_upsert_finding_accepts_null_asset_id_for_secrets(db_session, _iso
     assert f.asset_id is None
 
 
-# ---------------------------------------------------------------------------
 # Verdict filter normalization
-# ---------------------------------------------------------------------------
 
 def test_normalize_filters_accepts_known_verdict():
     f = _normalize_filters(FindingsListFilters(org_id="org-1", verdict="confirmed"))
@@ -426,3 +447,18 @@ def test_normalize_filters_rejects_unknown_verdict():
 def test_normalize_filters_defaults_verdict_to_none():
     f = _normalize_filters(FindingsListFilters(org_id="org-1"))
     assert f.verdict is None
+
+
+def test_normalize_filters_accepts_multi_repo_scope():
+    out = _normalize_filters(
+        FindingsListFilters(org_id="acme", repo=["github:acme/a", "github:acme/b"])
+    )
+    assert out.repo == ["github:acme/a", "github:acme/b"]
+
+
+def test_normalize_filters_drops_blank_repos_and_caps_count():
+    out = _normalize_filters(
+        FindingsListFilters(org_id="acme", repo=["  github:acme/a  ", "", "  "] + [f"r{i}" for i in range(600)])
+    )
+    assert out.repo[0] == "github:acme/a"   # trimmed, blanks removed
+    assert len(out.repo) == 500              # count capped

@@ -29,7 +29,6 @@ from src.shared.finding_queries import (
 )
 from src.assets.service import upsert_asset
 from src.shared.paths import normalize_org
-from src.shared.git_attribution import attribute_to_commit
 from src.shared.home_views_refresher import request_home_views_refresh
 
 from src.rules.auto_dismiss_matcher import check_auto_dismiss_rules
@@ -171,35 +170,6 @@ def _sanitize_for_pg(obj: Any) -> Any:
         return [_sanitize_for_pg(v) for v in obj]
     return obj
 
-def _run_attribution(
-    hooks: LifecycleHooks,
-    raw: dict,
-    checkout_path: Any,
-) -> "tuple[str | None, str | None, Any, str | None]":
-    """Attempt commit attribution for a new finding; return 4-tuple of attribution fields.
-
-    Never raises — any failure returns (None, None, None, None) so the
-    calling scan continues unimpeded.
-    """
-    if checkout_path is None:
-        return None, None, None, None
-    location = hooks.extract_file_location(raw)
-    if location is None:
-        return None, None, None, None
-    file_path, line = location
-    if not file_path or not line:
-        return None, None, None, None
-    try:
-        from pathlib import Path as _Path
-        attr = attribute_to_commit(_Path(checkout_path), file_path, line)
-        if attr is None:
-            return None, None, None, None
-        return attr.commit_sha, attr.author_email, attr.authored_at, attr.pr_url
-    except Exception:
-        logger.debug("commit attribution failed", exc_info=True)
-        return None, None, None, None
-
-
 def _build_subject_for_new_finding(
     *, tool: str, severity: str | None, repo: str | None, detail: Any
 ) -> RuleFindingSubject:
@@ -230,7 +200,6 @@ def apply_lifecycle(
 ) -> list[dict[str, Any]]:
     """Diff current scan against DB state and apply transitions. Returns new findings."""
     new_findings: list[dict[str, Any]] = []
-    checkout_path = ctx.extra.get("checkout_path")
 
     async def _run(session: AsyncSession) -> None:
         now = _utcnow()
@@ -418,18 +387,11 @@ def apply_lifecycle(
                         decision_map[key] = fresh
                     continue
 
-                sha, author, authored_at, pr_url = _run_attribution(
-                    hooks, raw, checkout_path
-                )
                 f = await upsert_finding(
                     session, tool=ctx.tool, asset_id=asset_id,
                     org=ctx.org, repo=repo,
                     identity_key=key, state=new_state, severity=severity,
                     detail=detail, first_seen_at=now, engine=engine,
-                    introduced_by_commit_sha=sha,
-                    introduced_by_author=author,
-                    introduced_at=authored_at,
-                    introduced_by_pr_url=pr_url,
                 )
                 await insert_event(
                     session, finding_id=f.id,
@@ -488,8 +450,6 @@ def dismiss_finding(
     if not asset_id and not org:
         raise ValueError("dismiss_finding requires asset_id or org")
 
-    norm_org = normalize_org(org) if org else None
-
     async def _run(session: AsyncSession) -> None:
         now = _utcnow()
 
@@ -540,8 +500,6 @@ def reopen_finding(
     if not asset_id and not org:
         raise ValueError("reopen_finding requires asset_id or org")
 
-    norm_org = normalize_org(org) if org else None
-
     async def _run(session: AsyncSession) -> None:
         now = _utcnow()
 
@@ -571,6 +529,70 @@ def reopen_finding(
     request_home_views_refresh()
 
 
+async def bulk_dismiss_in_session(
+    session: AsyncSession,
+    tool: str,
+    identity_keys: list[str],
+    reason: str,
+    user_id: str,
+    comment: str | None = None,
+    *,
+    asset_ids: list[str] | None = None,
+    org: str | None = None,
+    secrets: bool = False,
+) -> int:
+    """Atomic core of bulk_dismiss — operates inside the caller's session.
+
+    Lets a single endpoint call cover many (tool, asset_id) groups under one
+    transaction so a mid-loop failure rolls everything back together.
+
+    Callers must supply one of:
+    - asset_ids=[...] — asset-scoped path (preferred)
+    - secrets=True — secrets path (asset_id IS NULL)
+    - org=... — legacy org-scoped path (deprecated; falls through to secrets path)
+    """
+    if reason not in VALID_DISMISS_REASONS:
+        raise ValueError(f"Invalid dismiss reason {reason!r}")
+    if not asset_ids and not org and not secrets:
+        raise ValueError("bulk_dismiss requires asset_ids, org, or secrets=True")
+
+    now = _utcnow()
+    updated = 0
+
+    for key in identity_keys:
+        # For asset-scoped dismiss, write one decision per asset_id.
+        # For secrets (no asset_ids), write a single asset_id=NULL decision.
+        decision_asset_id = asset_ids[0] if asset_ids and len(asset_ids) == 1 else None
+        await upsert_decision(
+            session, tool=tool, asset_id=decision_asset_id, identity_key=key,
+            status="dismissed", reason=reason, comment=comment, decided_by=user_id,
+        )
+
+        stmt = select(Finding).where(
+            Finding.tool == tool,
+            Finding.identity_key == key,
+        )
+        if asset_ids:
+            stmt = stmt.where(Finding.asset_id.in_(asset_ids))
+        else:
+            stmt = stmt.where(Finding.asset_id.is_(None))
+
+        result = await session.execute(stmt)
+        finding = result.scalars().first()
+        if finding and finding.state != "dismissed":
+            old_state = finding.state
+            finding.state = "dismissed"
+            finding.updated_at = now
+            await insert_event(
+                session, finding_id=finding.id,
+                from_state=old_state, to_state="dismissed",
+                triggered_by="user", actor=user_id,
+                metadata={"reason": reason, "comment": comment},
+            )
+            updated += 1
+    return updated
+
+
 def bulk_dismiss(
     tool: str,
     identity_keys: list[str],
@@ -584,54 +606,23 @@ def bulk_dismiss(
 ) -> int:
     """Dismiss multiple findings in one transaction. Returns count updated.
 
+    Sync wrapper for callers outside the request loop. The async core lives in
+    `bulk_dismiss_in_session` so async callers can compose many groups under a
+    single transaction.
+
     Callers must supply one of:
     - asset_ids=[...] — asset-scoped path (preferred)
     - secrets=True — secrets path (asset_id IS NULL)
     - org=... — legacy org-scoped path (deprecated; falls through to secrets path)
     """
-    if reason not in VALID_DISMISS_REASONS:
-        raise ValueError(f"Invalid dismiss reason {reason!r}")
-    if not asset_ids and not org and not secrets:
-        raise ValueError("bulk_dismiss requires asset_ids, org, or secrets=True")
-
-    norm_org = normalize_org(org) if org else None
     updated = 0
 
     async def _run(session: AsyncSession) -> int:
         nonlocal updated
-        now = _utcnow()
-
-        for key in identity_keys:
-            # For asset-scoped dismiss, write one decision per asset_id.
-            # For secrets (no asset_ids), write a single asset_id=NULL decision.
-            decision_asset_id = asset_ids[0] if asset_ids and len(asset_ids) == 1 else None
-            await upsert_decision(
-                session, tool=tool, asset_id=decision_asset_id, identity_key=key,
-                status="dismissed", reason=reason, comment=comment, decided_by=user_id,
-            )
-
-            stmt = select(Finding).where(
-                Finding.tool == tool,
-                Finding.identity_key == key,
-            )
-            if asset_ids:
-                stmt = stmt.where(Finding.asset_id.in_(asset_ids))
-            else:
-                stmt = stmt.where(Finding.asset_id.is_(None))
-
-            result = await session.execute(stmt)
-            finding = result.scalars().first()
-            if finding and finding.state != "dismissed":
-                old_state = finding.state
-                finding.state = "dismissed"
-                finding.updated_at = now
-                await insert_event(
-                    session, finding_id=finding.id,
-                    from_state=old_state, to_state="dismissed",
-                    triggered_by="user", actor=user_id,
-                    metadata={"reason": reason, "comment": comment},
-                )
-                updated += 1
+        updated = await bulk_dismiss_in_session(
+            session, tool, identity_keys, reason, user_id, comment,
+            asset_ids=asset_ids, org=org, secrets=secrets,
+        )
         return updated
 
     run_db(_run)

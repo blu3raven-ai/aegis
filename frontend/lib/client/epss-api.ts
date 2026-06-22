@@ -1,23 +1,4 @@
-/**
- * TypeScript client for the EPSS scores REST API (Phase 50).
- *
- * Mirrors the pattern used in sla-api.ts and notification-rules-api.ts.
- * EPSS values are FIRST.org Exploit Prediction Scoring System probabilities
- * in [0.0, 1.0] — both `score` (probability) and `percentile` (ranking).
- */
-
-import { apiClient } from "./api-client.ts"
-import { ApiClientError } from "./api-client.types.ts"
-
-const BASE = "/api/v1"
-
-export interface EpssScore {
-  cve: string
-  score: number
-  percentile: number
-  scored_date: string | null
-  fetched_at: string | null
-}
+/** Display helpers for EPSS percentiles (formatting and severity bucketing). */
 
 export interface EpssTopFinding {
   finding_id: number
@@ -29,43 +10,6 @@ export interface EpssTopFinding {
   epss_score: number
   epss_percentile: number
   scored_date: string | null
-}
-
-export interface EpssTopResponse {
-  findings: EpssTopFinding[]
-  count: number
-}
-
-export interface EpssRefreshResult {
-  fetched: number
-  new: number
-}
-
-export class EpssApiError extends Error {
-  readonly status: number
-  constructor(message: string, status: number) {
-    super(message)
-    this.name = "EpssApiError"
-    this.status = status
-  }
-}
-
-export async function getEpssScore(cve: string): Promise<EpssScore | null> {
-  try {
-    return await apiClient<EpssScore>(`${BASE}/epss/scores/${encodeURIComponent(cve)}`)
-  } catch (err) {
-    if (err instanceof ApiClientError && err.status === 404) return null
-    throw err
-  }
-}
-
-export async function getEpssTop(orgId: string, limit = 5): Promise<EpssTopResponse> {
-  const qs = new URLSearchParams({ org_id: orgId, limit: String(limit) })
-  return apiClient<EpssTopResponse>(`${BASE}/epss/top?${qs}`)
-}
-
-export async function triggerEpssRefresh(): Promise<EpssRefreshResult> {
-  return apiClient<EpssRefreshResult>(`${BASE}/epss/refresh`, { method: "POST" })
 }
 
 /**

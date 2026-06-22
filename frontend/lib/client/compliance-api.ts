@@ -1,3 +1,5 @@
+/** Client for the compliance frameworks and controls surface. */
+
 import { apiClient } from "./api-client.ts"
 
 export interface ComplianceFramework {
@@ -15,25 +17,30 @@ export interface FrameworkControl {
 }
 
 export interface ControlSummaryItem {
+  framework: string
   control_id: string
   title: string
   category: string | null
   finding_count: number
-  chain_count: number
   highest_severity: string | null
 }
 
 export interface FrameworkSummary {
   framework: string
+  label: string
   controls: ControlSummaryItem[]
 }
 
 export interface ComplianceFindingBrief {
   id: number
-  title: string
-  severity: string
-  scanner_type: string | null
+  tool: string
+  org: string
+  repo: string | null
+  severity: string | null
   state: string
+  identity_key: string
+  confidence: number
+  rationale: string | null
 }
 
 export interface ControlFindingsResponse {
@@ -56,20 +63,24 @@ export interface FindingControlsResponse {
 }
 
 export async function listFrameworks(): Promise<ComplianceFramework[]> {
-  return apiClient<ComplianceFramework[]>("/api/v1/compliance/frameworks")
+  const data = await apiClient<{ frameworks: ComplianceFramework[] }>(
+    "/api/v1/compliance/frameworks",
+  )
+  return data.frameworks
 }
 
 export async function listFrameworkControls(framework: string): Promise<FrameworkControl[]> {
-  return apiClient<FrameworkControl[]>(
+  const data = await apiClient<{ controls: FrameworkControl[] }>(
     `/api/v1/compliance/frameworks/${encodeURIComponent(framework)}/controls`,
   )
+  return data.controls
 }
 
 export async function getFrameworkSummary(framework: string): Promise<ControlSummaryItem[]> {
-  const response = await apiClient<FrameworkSummary>(
+  const data = await apiClient<FrameworkSummary>(
     `/api/v1/compliance/frameworks/${encodeURIComponent(framework)}/summary`,
   )
-  return response.controls
+  return data.controls
 }
 
 export async function getControlFindings(
@@ -77,11 +88,13 @@ export async function getControlFindings(
   controlId: string,
 ): Promise<ControlFindingsResponse> {
   return apiClient<ControlFindingsResponse>(
-    `/api/v1/compliance/controls/${encodeURIComponent(framework)}/${encodeURIComponent(controlId)}/findings`,
+    `/api/v1/compliance/frameworks/${encodeURIComponent(framework)}/controls/${encodeURIComponent(controlId)}/findings`,
   )
 }
 
-export async function getFindingControls(findingId: number | string): Promise<FindingControlsResponse> {
+export async function getFindingControls(
+  findingId: number | string,
+): Promise<FindingControlsResponse> {
   return apiClient<FindingControlsResponse>(
     `/api/v1/compliance/findings/${encodeURIComponent(String(findingId))}/controls`,
   )
@@ -90,8 +103,7 @@ export async function getFindingControls(findingId: number | string): Promise<Fi
 export type ControlStatus = "met" | "partial" | "unmet" | "na"
 
 export function deriveControlStatus(c: ControlSummaryItem): ControlStatus {
-  if (c.finding_count === 0 && c.chain_count === 0) return "met"
-  if (c.chain_count > 0) return "unmet"
+  if (c.finding_count === 0) return "met"
   if (c.highest_severity === "critical" || c.highest_severity === "high") return "unmet"
   return "partial"
 }

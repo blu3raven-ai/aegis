@@ -33,11 +33,12 @@ import { ScimTokenModal } from "@/components/settings/ScimTokenModal"
 type EditableFields = Pick<
   SsoSettings,
   "enabled" | "protocol" | "defaultRoleId" | "samlMetadataUrl" | "samlMetadataXml"
+  | "samlValidateMetadataSignature"
   | "oidcDiscoveryUrl" | "oidcClientId" | "oidcScopes"
 > & { oidcClientSecret?: string }
 
 export function SsoContent() {
-  const { data, mutate } = useSsoSettings()
+  const { data, error: loadError, mutate } = useSsoSettings()
   const [draft, setDraft] = useState<EditableFields | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,6 +74,7 @@ export function SsoContent() {
         defaultRoleId: data.defaultRoleId,
         samlMetadataUrl: data.samlMetadataUrl,
         samlMetadataXml: data.samlMetadataXml,
+        samlValidateMetadataSignature: data.samlValidateMetadataSignature,
         oidcDiscoveryUrl: data.oidcDiscoveryUrl,
         oidcClientId: data.oidcClientId,
         oidcScopes: data.oidcScopes,
@@ -86,6 +88,7 @@ export function SsoContent() {
     draft.defaultRoleId !== data.defaultRoleId ||
     draft.samlMetadataUrl !== data.samlMetadataUrl ||
     draft.samlMetadataXml !== data.samlMetadataXml ||
+    draft.samlValidateMetadataSignature !== data.samlValidateMetadataSignature ||
     draft.oidcDiscoveryUrl !== data.oidcDiscoveryUrl ||
     draft.oidcClientId !== data.oidcClientId ||
     draft.oidcScopes !== data.oidcScopes ||
@@ -113,6 +116,7 @@ export function SsoContent() {
       defaultRoleId: data.defaultRoleId,
       samlMetadataUrl: data.samlMetadataUrl,
       samlMetadataXml: data.samlMetadataXml,
+      samlValidateMetadataSignature: data.samlValidateMetadataSignature,
       oidcDiscoveryUrl: data.oidcDiscoveryUrl,
       oidcClientId: data.oidcClientId,
       oidcScopes: data.oidcScopes,
@@ -210,6 +214,19 @@ export function SsoContent() {
     }
   }
 
+  if (loadError?.code === "PERMISSION_DENIED") {
+    return (
+      <div className="space-y-4">
+        <SettingsCard heading="Single Sign-On">
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            You don&apos;t have permission to view SSO settings. Contact an admin
+            to configure SAML or OIDC for your organisation.
+          </p>
+        </SettingsCard>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <SettingsCard heading="Identity provider">
@@ -290,6 +307,17 @@ export function SsoContent() {
               <Button variant="secondary" size="sm" onClick={handleGenerateKeypair} disabled={keypairBusy} isLoading={keypairBusy}>
                 {data?.samlSpPrivateKeySet ? "Regenerate keypair" : "Generate keypair"}
               </Button>
+            </SettingsRow>
+
+            <SettingsRow
+              label="Require signed IdP metadata"
+              description="Reject IdP metadata that is not signed. Protects against metadata MITM substitution."
+            >
+              <ToggleSwitch
+                label="Toggle signed IdP metadata enforcement"
+                checked={!!draft?.samlValidateMetadataSignature}
+                onChange={(v) => setDraft((d) => (d ? { ...d, samlValidateMetadataSignature: v } : d))}
+              />
             </SettingsRow>
           </>
         )}
@@ -385,7 +413,10 @@ export function SsoContent() {
       </SettingsCard>
 
       <SettingsCard heading="Audit log streaming">
-        <SettingsRow label="Enable streaming" description="Forward audit events to your SIEM in real time">
+        <SettingsRow
+          label="Enable streaming"
+          description="Forward audit events to your SIEM in real time. Delivery is at-least-once; each event carries a stable event_id field — dedup on it receiver-side."
+        >
           <ToggleSwitch
             label="Toggle audit streaming"
             checked={!!auditDraft?.enabled}

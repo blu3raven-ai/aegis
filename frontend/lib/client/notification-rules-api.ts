@@ -1,11 +1,42 @@
-/**
- * TypeScript client for the notification routing rules REST API (Phase 42).
- *
- * Mirrors the pattern used in destinations-api.ts.
- */
+/** Client for notification-routing rules (read via GraphQL, mutate via REST). */
 
 import { apiClient } from "./api-client.ts"
 import type { Condition } from "@/lib/rules-engine/conditions"
+
+const CSRF_COOKIE_NAME = "__Host-csrf"
+
+function readCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null
+  for (const pair of document.cookie.split(";").map((p) => p.trim())) {
+    const [k, ...rest] = pair.split("=")
+    if (k === CSRF_COOKIE_NAME) return rest.join("=")
+  }
+  return null
+}
+
+async function gqlFetch<T>(operationName: string, query: string, variables: Record<string, unknown>): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  }
+  const csrf = readCsrfCookie()
+  if (csrf !== null) headers["X-CSRF-Token"] = csrf
+
+  const res = await fetch("/api/v1/graphql", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ operationName, query, variables }),
+    credentials: "include",
+  })
+  const body = (await res.json()) as { data?: T; errors?: { message: string }[] }
+  if (body.errors && body.errors.length > 0) {
+    throw new Error(body.errors[0].message)
+  }
+  if (!body.data) {
+    throw new Error(`${operationName} returned no data`)
+  }
+  return body.data
+}
 
 export type { Condition, ConditionOp, LeafCondition, AllCondition, AnyCondition } from "@/lib/rules-engine/conditions"
 
@@ -29,13 +60,11 @@ export interface NotificationRule {
   priority: number
   channel_id: number
   conditions: Condition
-  org_id: string
   created_at: string
   updated_at: string
 }
 
 export type CreateRulePayload = {
-  org_id: string
   name: string
   channel_id: number
   conditions: Condition
@@ -66,7 +95,6 @@ export interface PreviewSingleRuleRequest {
 }
 
 export interface PreviewOrgRequest {
-  org_id: string
   finding: PreviewFinding
 }
 
@@ -89,12 +117,54 @@ export interface PreviewOrgResult {
   breakdown: PreviewBreakdownItem[]
 }
 
-const BASE = "/api/v1/notification-rules"
+const BASE = "/api/v1/notifications/rules"
 
-export async function listRules(orgId: string): Promise<NotificationRule[]> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  const data = await apiClient<{ rules: NotificationRule[] }>(`${BASE}?${qs}`)
-  return data.rules ?? []
+const NOTIFICATION_RULES_QUERY = `query NotificationRules {
+  notifications {
+    rules {
+      id
+      name
+      channelId
+      conditions
+      priority
+      enabled
+      createdAt
+      updatedAt
+    }
+  }
+}`
+
+interface GqlNotificationRule {
+  id: string
+  name: string
+  channelId: number
+  conditions: Condition
+  priority: number
+  enabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+interface GqlNotificationRulesResponse {
+  notifications: { rules: GqlNotificationRule[] }
+}
+
+export async function listRules(): Promise<NotificationRule[]> {
+  const data = await gqlFetch<GqlNotificationRulesResponse>(
+    "NotificationRules",
+    NOTIFICATION_RULES_QUERY,
+    {},
+  )
+  return (data.notifications?.rules ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    channel_id: r.channelId,
+    conditions: r.conditions ?? ({} as Condition),
+    priority: r.priority,
+    enabled: r.enabled,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+  }))
 }
 
 export async function createRule(payload: CreateRulePayload): Promise<NotificationRule> {
@@ -106,19 +176,16 @@ export async function createRule(payload: CreateRulePayload): Promise<Notificati
 
 export async function updateRule(
   id: string,
-  orgId: string,
   payload: UpdateRulePayload,
 ): Promise<NotificationRule> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  return apiClient<NotificationRule>(`${BASE}/${id}?${qs}`, {
+  return apiClient<NotificationRule>(`${BASE}/${id}`, {
     method: "PUT",
     body: payload,
   })
 }
 
-export async function deleteRule(id: string, orgId: string): Promise<void> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  await apiClient<void>(`${BASE}/${id}?${qs}`, { method: "DELETE" })
+export async function deleteRule(id: string): Promise<void> {
+  await apiClient<void>(`${BASE}/${id}`, { method: "DELETE" })
 }
 
 export async function previewRule(req: PreviewSingleRuleRequest): Promise<PreviewSingleResult> {
@@ -131,6 +198,6 @@ export async function previewRule(req: PreviewSingleRuleRequest): Promise<Previe
 export async function previewOrg(req: PreviewOrgRequest): Promise<PreviewOrgResult> {
   return apiClient<PreviewOrgResult>(`${BASE}/preview`, {
     method: "POST",
-    body: req,
+    body: { evaluate_all_active: true, finding: req.finding },
   })
 }

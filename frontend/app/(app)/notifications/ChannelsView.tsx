@@ -8,7 +8,9 @@ import { EmptyDestinationsState } from "@/components/shared/notifications/EmptyD
 import { DrawerSection } from "@/components/shared/FindingDrawer/DrawerSection"
 import { KpiCard } from "@/components/shared/KpiCard"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { Sheet } from "@/components/ui/Sheet"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import {
   type NotificationDestination,
@@ -17,7 +19,6 @@ import {
 } from "@/lib/client/destinations-api"
 
 interface ChannelsViewProps {
-  orgId: string
   destinations: NotificationDestination[]
   destsState: "loading" | "ok" | "error"
   deletingId: number | null
@@ -39,7 +40,7 @@ interface ChannelsViewProps {
 
 function DestinationsLoadingSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <Card padding="none" className="overflow-hidden rounded-2xl">
       <Table>
         <Thead>
           <Tr>
@@ -53,14 +54,14 @@ function DestinationsLoadingSkeleton() {
             <Tr key={i}>
               {[1, 2, 3, 4, 5, 6].map((j) => (
                 <Td key={j}>
-                  <div className="h-4 w-full animate-pulse rounded bg-[var(--color-surface-raised)]" />
+                  <Skeleton className="h-4 w-full" />
                 </Td>
               ))}
             </Tr>
           ))}
         </Tbody>
       </Table>
-    </div>
+    </Card>
   )
 }
 
@@ -98,7 +99,6 @@ function StatsStrip({ destinations }: { destinations: NotificationDestination[] 
 }
 
 export function ChannelsView({
-  orgId,
   destinations,
   destsState,
   deletingId,
@@ -172,7 +172,6 @@ export function ChannelsView({
           )}
           <DestinationForm
             initial={null}
-            orgId={orgId}
             onSubmit={onCreate}
             onCancel={onCancelCreate}
             submitting={createSubmitting}

@@ -18,7 +18,7 @@ export async function fetchProfile(): Promise<ProfileSettings> {
   const now = Date.now()
   if (cached && now - cacheTimestamp < CACHE_TTL_MS) return cached
   try {
-    const data = await apiClient<ProfileSettings>("/api/v1/settings/profile")
+    const data = await apiClient<ProfileSettings>("/api/v1/settings/account/profile")
     cached = data
     cacheTimestamp = Date.now()
     return data
@@ -28,9 +28,9 @@ export async function fetchProfile(): Promise<ProfileSettings> {
 }
 
 export async function saveProfile(patch: Partial<ProfileSettings>): Promise<ProfileSettings> {
-  const data = await apiClient<ProfileSettings>("/api/v1/settings/profile", {
+  const data = await apiClient<ProfileSettings>("/api/v1/settings/account/profile", {
     method: "PATCH",
-    body: patch,
+    body: { theme: patch.theme ?? null, timezone: patch.timezone ?? null },
   })
   cached = data
   cacheTimestamp = Date.now()

@@ -1,25 +1,42 @@
-"""Pydantic I/O models for /api/v1/repos/{repo_id}/scan and /api/v1/scans/{scan_id}."""
+"""Pydantic I/O models for the /api/v1/scans router family."""
 from __future__ import annotations
 
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-_VALID_SCANNERS = {"dependencies", "code_scanning", "container_scanning", "secrets", "iac"}
+_VALID_SCANNERS = {"dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"}
 _SHA_RE = re.compile(r"^[0-9a-f]{7,64}$")
 
 
-class ScanRequest(BaseModel):
-    commit_sha: str = Field(..., description="Git commit SHA to scan (7-64 hex chars)")
+class ManualScanRequest(BaseModel):
+    """Polymorphic manual scan trigger.
+
+    asset_id is the only universally required field. Asset.type determines which
+    extra fields apply: commit_sha for repos, image_digest for images, neither
+    for cloud. Per-type required-field validation happens server-side inside
+    submit_scan() after the Asset is loaded.
+    """
+    asset_id: str = Field(..., description="Asset UUID to scan (any type)")
+    commit_sha: str | None = Field(
+        None,
+        description="Git commit SHA (7-64 hex chars). Required when asset_id resolves to a repo.",
+    )
+    image_digest: str | None = Field(
+        None,
+        description="Container image digest (e.g. sha256:...). Optional override when asset_id resolves to an image.",
+    )
     scanner_types: list[str] | None = Field(
         None,
-        description="Optional list of scanner types to run. Defaults to a standard set.",
+        description="Optional list of scanner types. Defaults to the standard set for the asset's type.",
     )
 
     @field_validator("commit_sha")
     @classmethod
-    def _validate_sha(cls, v: str) -> str:
+    def _validate_sha(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         if not _SHA_RE.match(v):
             raise ValueError("commit_sha must be 7-64 lowercase hex characters")
         return v
@@ -33,6 +50,24 @@ class ScanRequest(BaseModel):
         if unknown:
             raise ValueError(f"Unknown scanner_types: {unknown}")
         return v
+
+
+class CIScanRequest(BaseModel):
+    # Either source_id (explicit) or repo + source_type (auto-resolved on
+    # ingestion) must be provided. Resolving by repo lets CI omit the source id.
+    source_id: str | None = Field(None, description="Source UUID the CI key is authorised to scan")
+    repo: str | None = Field(None, max_length=512, description="owner/name — resolved to a source on ingestion")
+    source_type: str | None = Field(None, max_length=32, description="github | gitlab | bitbucket | azure_devops")
+    commit_sha: str = Field(..., min_length=4, max_length=64, pattern=r"^[0-9a-fA-F]{4,64}$")
+    branch: str | None = Field(None, max_length=255)
+    pr_number: int | None = Field(None, ge=1)
+    trigger_metadata: dict | None = None
+
+    @model_validator(mode="after")
+    def _require_identity(self) -> "CIScanRequest":
+        if not self.source_id and not (self.repo and self.source_type):
+            raise ValueError("either source_id or (repo + source_type) is required")
+        return self
 
 
 class FindingCounts(BaseModel):

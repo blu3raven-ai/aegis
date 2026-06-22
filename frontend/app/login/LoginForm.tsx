@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { ApiClientError } from "@/lib/client/api-client.types.ts"
 import { ssoLoginUrl, useSsoAvailability } from "@/lib/client/sso-availability"
+import { FormField } from "@/components/ui/FormField"
+import { Input } from "@/components/ui/Input"
 
 export function LoginForm() {
   const router = useRouter()
@@ -26,7 +28,7 @@ export function LoginForm() {
           user?: { id: string; email: string; role: string; status: string }
           mfa_required?: boolean
           pending_token?: string
-        }>("/auth/login", {
+        }>("/api/v1/auth/login", {
           method: "POST",
           body: { identifier: email, password },
           suppressUnauthorizedRedirect: true,
@@ -70,11 +72,8 @@ export function LoginForm() {
           </div>
         </>
       )}
-      <div>
-        <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
-          Email or username
-        </label>
-        <input
+      <FormField label="Email or username" htmlFor="email">
+        <Input
           id="email"
           type="text"
           value={email}
@@ -83,16 +82,12 @@ export function LoginForm() {
           required
           autoComplete="username"
           autoFocus
-          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-3 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
         />
-      </div>
+      </FormField>
 
-      <div>
-        <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
-          Password
-        </label>
+      <FormField label="Password" htmlFor="password">
         <div className="relative">
-          <input
+          <Input
             id="password"
             type={showPassword ? "text" : "password"}
             value={password}
@@ -100,18 +95,18 @@ export function LoginForm() {
             placeholder="••••••••"
             required
             autoComplete="current-password"
-            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-3 pr-10 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+            className="pr-10"
           />
           <button
             type="button"
             onClick={() => setShowPassword((value) => !value)}
             aria-label={showPassword ? "Hide password" : "Show password"}
-            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-lg text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--color-accent)]/30"
+            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
           >
             {showPassword ? <EyeOffIcon /> : <EyeIcon />}
           </button>
         </div>
-      </div>
+      </FormField>
 
       {error && (
         <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">

@@ -3,14 +3,13 @@
 import { useState } from "react"
 import type { SourceCategory, SourceConnection, SourceType } from "@/lib/shared/sources-types"
 import { SOURCE_TYPE_LABELS, CATEGORY_ITEM_LABELS } from "@/lib/shared/sources-types"
-import { syncSourceConnection, deleteSourceConnection } from "@/lib/client/sources-api"
+import { syncSourceConnection, deleteSourceConnection } from "@/lib/client/source-connections-api"
 import { timeAgo } from "@/lib/shared/time-ago"
 import { Dialog } from "@/components/layout/Dialog"
 import { Button } from "@/components/ui/Button"
 
 const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { dot: string; label: string; text: string }> = {
   connected: { dot: "bg-[var(--color-status-ok)]", label: "Connected", text: "text-[var(--color-status-ok)]" },
@@ -30,7 +29,6 @@ function StatusBadge({ status }: { status: SourceConnection["status"] }) {
   )
 }
 
-// ─── Provider Logo ────────────────────────────────────────────────────────────
 
 function ProviderLogo({ sourceType }: { sourceType: SourceType }) {
   const logoClass = "h-8 w-8 shrink-0"
@@ -64,7 +62,6 @@ function ProviderLogo({ sourceType }: { sourceType: SourceType }) {
   }
 }
 
-// ─── Discovery Count Badge ────────────────────────────────────────────────────
 
 function DiscoveryBadge({ count, itemLabel, status }: { count: number; itemLabel: string; status: SourceConnection["status"] }) {
   if (status === "syncing" && count === 0) return null
@@ -83,7 +80,6 @@ function DiscoveryBadge({ count, itemLabel, status }: { count: number; itemLabel
   )
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface SourceConnectionCardProps {
   connection: SourceConnection
@@ -93,7 +89,6 @@ interface SourceConnectionCardProps {
   onDelete?: () => void
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SourceConnectionCard({
   connection,
@@ -139,7 +134,7 @@ export function SourceConnectionCard({
         onConfirm={handleDeleteConfirmed}
         title={`Delete ${displayName}?`}
         description={`This will remove the connection and stop syncing ${discoveredItemCount > 0 ? `${discoveredItemCount.toLocaleString()} discovered ${itemLabel}` : itemLabel}. Scan history and findings will remain.`}
-        confirmLabel={isDeleting ? "Deleting..." : "Delete Connection"}
+        confirmLabel={isDeleting ? "Deleting…" : "Delete Connection"}
         variant="danger"
       />
 

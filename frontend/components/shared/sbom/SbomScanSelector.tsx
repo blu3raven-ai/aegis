@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import { fetchSbomHistory, type SbomHistoryEntry } from "@/lib/client/sbom-api"
 import { relativeTime } from "@/lib/shared/relative-time"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { Select } from "@/components/ui/Select"
 
 interface SbomScanSelectorProps {
@@ -39,7 +40,7 @@ export function SbomScanSelector({
       setHistoryState("ok")
       // Auto-select the most recent snapshot
       if (entries.length > 0) {
-        onHashChange(entries[0].manifest_set_hash)
+        onHashChange(entries[0].run_id)
       }
     } catch {
       setHistoryState("error")
@@ -58,7 +59,7 @@ export function SbomScanSelector({
   }, [selectedRepoId])
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+    <Card padding="none" className="flex flex-col gap-3 rounded-xl p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         {label}
       </p>
@@ -112,8 +113,8 @@ export function SbomScanSelector({
             >
               <option value="">Select a snapshot…</option>
               {history.map((entry, idx) => (
-                <option key={entry.manifest_set_hash} value={entry.manifest_set_hash}>
-                  {entry.manifest_set_hash.slice(0, 16)}… — {relativeTime(entry.created_at)}
+                <option key={entry.run_id} value={entry.run_id}>
+                  {entry.run_id.slice(0, 16)}… — {relativeTime(entry.created_at)}
                   {idx === 0 ? " (latest)" : ""}
                 </option>
               ))}
@@ -121,6 +122,6 @@ export function SbomScanSelector({
           )}
         </div>
       )}
-    </div>
+    </Card>
   )
 }

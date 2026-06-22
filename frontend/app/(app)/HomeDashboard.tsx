@@ -5,6 +5,7 @@ import Link from "next/link"
 import { gqlQuery } from "@/lib/client/graphql-client"
 import { formatPercentile, type EpssTopFinding } from "@/lib/client/epss-api"
 import { listFindings, type Finding as ApiFinding } from "@/lib/client/findings-api"
+import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { HOME_DASHBOARD_QUERY } from "@/lib/shared/graphql/queries"
 import type {
   GqlPostureTrendPoint,
@@ -15,9 +16,10 @@ import { useSSE } from "@/components/providers/SSEProvider"
 import { SetupChecklistCard } from "@/components/shared/SetupChecklistCard"
 import { useCurrentUser } from "@/lib/client/auth"
 import type { SourceConnection } from "@/lib/shared/sources-types"
-import { EmptyOverviewBanner, GhostPreviewWrapper } from "@/components/shared/EmptyOverviewBanner"
 import { Button } from "@/components/ui/Button"
-import { HomeGhostPreview } from "./HomeGhostPreview"
+import { LinkButton } from "@/components/ui/LinkButton"
+import { Card } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
 
@@ -59,7 +61,6 @@ const SEV_CLASSES = {
 
 const LINK_FOCUS = "focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none focus-visible:rounded-lg"
 
-// ── Open in your repos · CVE cards ────────────────────────────────────────────
 
 interface OpenCveCard {
   cve: string
@@ -114,7 +115,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
     ? `also in ${card.otherRepos.slice(0, 2).join(", ")}${card.otherRepos.length > 2 ? ` +${card.otherRepos.length - 2}` : ""}`
     : null
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-xl">
       {/* Tag row — mock inherited-tag-row */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide ${sevClass}`}>
@@ -157,12 +158,9 @@ function CveCard({ card }: { card: OpenCveCard }) {
 
       {/* Open-fix-PR / Jira stay disabled until those integrations are wired through. */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Link
-          href={`/findings/${card.primaryFindingId}`}
-          className={`inline-flex h-8 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]`}
-        >
+        <LinkButton href={`/findings/${card.primaryFindingId}`} variant="primary" size="sm">
           Investigate →
-        </Link>
+        </LinkButton>
         <Button variant="secondary" size="sm" disabled title="Coming soon">
           Open fix PR
         </Button>
@@ -170,11 +168,10 @@ function CveCard({ card }: { card: OpenCveCard }) {
           Create Jira ticket
         </Button>
       </div>
-    </div>
+    </Card>
   )
 }
 
-// ── Just introduced · needs your attention ────────────────────────────────────
 
 function formatRelative(iso: string | null | undefined): string {
   if (!iso) return ""
@@ -333,7 +330,7 @@ function JustIntroducedSection({ findings }: { findings: ApiFinding[] | null }) 
           {findings.length > 1 && <CompactFindingRow finding={findings[1]} />}
         </div>
       ) : (
-        <div className="flex items-center gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <Card className="flex items-center gap-4 rounded-2xl">
           <span
             aria-hidden="true"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
@@ -351,7 +348,7 @@ function JustIntroducedSection({ findings }: { findings: ApiFinding[] | null }) 
               Newly introduced high-severity findings will surface here as scans complete.
             </p>
           </div>
-        </div>
+        </Card>
       )}
     </section>
   )
@@ -378,7 +375,6 @@ function OpenInYourReposSection({ cards }: { cards: OpenCveCard[] }) {
   )
 }
 
-// ── Your week · stats + 7-day chart ───────────────────────────────────────────
 
 interface WeekStats {
   introduced: number
@@ -533,7 +529,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
         </h2>
         <span className="text-xs text-[var(--color-text-tertiary)]">{rangeLabel}</span>
       </div>
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <Card className="rounded-2xl">
         <div className="grid grid-cols-3 gap-4">
           <div>
             <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
@@ -568,7 +564,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
         <div className="mt-5 border-t border-[var(--color-border)]/60 pt-2">
           <WeekChart days={stats.days} />
         </div>
-      </div>
+      </Card>
     </section>
   )
 }
@@ -589,7 +585,6 @@ function ErrorBanner({ onRetry, retrying }: { onRetry: () => void; retrying: boo
   )
 }
 
-// ── Your repos ────────────────────────────────────────────────────────────────
 
 function YourReposList({ repos }: { repos: GqlHomeAnalytics["topRepositories"] }) {
   if (repos.length === 0) return null
@@ -642,7 +637,6 @@ function YourReposList({ repos }: { repos: GqlHomeAnalytics["topRepositories"] }
   )
 }
 
-// ── Main Dashboard ────────────────────────────────────────────────────────────
 
 export function HomeDashboard() {
   const [deps, setDeps] = useState<ToolCounts>(EMPTY)
@@ -667,38 +661,32 @@ export function HomeDashboard() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await gqlQuery<GqlHomeDashboard>(HOME_DASHBOARD_QUERY, {
-        trendDays: 30,
-        epssLimit: 5,
-      })
+      const [data, sourcesResult] = await Promise.all([
+        gqlQuery<GqlHomeDashboard>(HOME_DASHBOARD_QUERY, {
+          trendDays: 30,
+          epssLimit: 5,
+        }),
+        listSourceConnections(),
+      ])
 
-      setDeps(data.dependenciesCounts);     setDepsState("ok")
-      setCode(data.codeScanningCounts);     setCodeState("ok")
-      setContainers(data.containerCounts);  setContainerState("ok")
-      setSecrets(data.secretCounts);        setSecretState("ok")
+      setDeps(data.scans.dependenciesScanning.counts);     setDepsState("ok")
+      setCode(data.scans.codeScanning.counts);             setCodeState("ok")
+      setContainers(data.scans.containerScanning.counts);  setContainerState("ok")
+      setSecrets(data.scans.secretScanning.counts);        setSecretState("ok")
 
-      // Map GraphQL connections to the SourceConnection shape expected by the UI.
-      // Fields not returned by this query (scanScope, excludedItems, etc.) are
-      // omitted here — the dashboard only reads status, name, auth, sourceType,
-      // id, category, and discoveredItemCount (undefined is safe for the last one).
-      setSources(
-        data.sourceConnections.connections.map(c => ({
-          id: c.id,
-          sourceType: c.sourceType as SourceConnection["sourceType"],
-          category: c.category as SourceConnection["category"],
-          name: c.name,
-          status: c.status as SourceConnection["status"],
-          lastSyncedAt: c.lastSyncedAt ?? undefined,
-          auth: { orgOrOwner: c.auth.orgOrOwner },
-        } as SourceConnection)),
-      )
-      setSourcesState("ok")
+      if (sourcesResult.ok) {
+        setSources(sourcesResult.data.connections)
+        setSourcesState("ok")
+      } else {
+        setSources([])
+        setSourcesState("error")
+      }
 
-      setTrend(data.postureTrend)
-      setAnalytics(data.homeAnalytics)
+      setTrend(data.posture.trend)
+      setAnalytics(data.posture.homeAnalytics)
 
       setEpssTop(
-        data.epssTop.findings.map(f => ({
+        data.sla.epssTop.findings.map(f => ({
           finding_id: f.findingId,
           tool: f.tool,
           repo: f.repo,
@@ -769,36 +757,36 @@ export function HomeDashboard() {
     // Mirror the post-load shape: greeting + 4 sections (Just introduced, Open in your repos,
     // Your week, Your repos). Each section is a small header rectangle + a content block sized
     // to the real component so the layout doesn't reflow when data arrives.
-    const sectionHeader = "h-3 w-28 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]"
-    const card = "motion-safe:animate-pulse rounded-2xl bg-[var(--color-surface-raised)]"
+    const sectionHeader = "h-3 w-28"
+    const card = "rounded-2xl"
     return (
       <div className="space-y-8" aria-busy="true" aria-live="polite">
         {/* Greeting */}
         <div className="space-y-2">
-          <div className="h-7 w-64 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]" />
-          <div className="h-4 w-80 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]" />
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-4 w-80" />
         </div>
         {/* Just introduced */}
         <div className="space-y-3">
-          <div className={sectionHeader} />
-          <div className={`${card} h-24`} />
+          <Skeleton className={sectionHeader} />
+          <Skeleton className={`${card} h-24`} />
         </div>
         {/* Open in your repos */}
         <div className="space-y-3">
-          <div className={sectionHeader} />
-          <div className={`${card} h-32`} />
-          <div className={`${card} h-32`} />
+          <Skeleton className={sectionHeader} />
+          <Skeleton className={`${card} h-32`} />
+          <Skeleton className={`${card} h-32`} />
         </div>
         {/* Your week */}
         <div className="space-y-3">
-          <div className={sectionHeader} />
-          <div className={`${card} h-44`} />
+          <Skeleton className={sectionHeader} />
+          <Skeleton className={`${card} h-44`} />
         </div>
         {/* Your repos */}
         <div className="space-y-3">
-          <div className={sectionHeader} />
-          <div className={`${card} h-14`} />
-          <div className={`${card} h-14`} />
+          <Skeleton className={sectionHeader} />
+          <Skeleton className={`${card} h-14`} />
+          <Skeleton className={`${card} h-14`} />
         </div>
       </div>
     )
@@ -817,14 +805,7 @@ export function HomeDashboard() {
     (analytics === null || analytics.topRepositories.length === 0)
 
   if (isEmpty) {
-    return (
-      <div className="space-y-6">
-        <EmptyOverviewBanner />
-        <GhostPreviewWrapper>
-          <HomeGhostPreview displayName={displayName} salutation={salutation} />
-        </GhostPreviewWrapper>
-      </div>
-    )
+    return <SetupChecklistCard />
   }
 
   return (

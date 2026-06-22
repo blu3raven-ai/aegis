@@ -24,3 +24,7 @@ class ScanCompletedEvent(Event):
 
 class ScanFailedEvent(Event):
     event_type: Literal["scan.failed"] = "scan.failed"
+
+
+class ScanCancelledEvent(Event):
+    event_type: Literal["scan.cancelled"] = "scan.cancelled"

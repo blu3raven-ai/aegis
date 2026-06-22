@@ -9,8 +9,9 @@ import type {
 } from "@/lib/client/posture-api"
 import type { ComplianceFramework, ControlSummaryItem } from "@/lib/client/compliance-api"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { Card } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
 
-// ── Severity helpers ──────────────────────────────────────────────────────────
 
 const SEV_VARS = {
   critical: "var(--color-severity-critical)",
@@ -26,7 +27,6 @@ const SEV_CLASSES = {
   low: "text-[var(--color-severity-low)]",
 }
 
-// ── Risk score rating tokens ──────────────────────────────────────────────────
 
 const RATING_TOKENS: Record<string, { color: string; border: string; bg: string }> = {
   Severe: {
@@ -55,7 +55,6 @@ function getRatingTokens(rating: string) {
   return RATING_TOKENS[rating] ?? DEFAULT_RATING
 }
 
-// ── Sparkline ─────────────────────────────────────────────────────────────────
 
 type SparkDirection = "up" | "down" | "flat"
 
@@ -117,7 +116,6 @@ function Sparkline({
   )
 }
 
-// ── DeltaBadge ────────────────────────────────────────────────────────────────
 
 function DeltaBadge({
   direction,
@@ -165,7 +163,6 @@ function deriveDelta(
   return { direction: "down", label: `${diff}`, upIsBad }
 }
 
-// ── RiskScoreHero ─────────────────────────────────────────────────────────────
 
 function RiskScoreHero({ snap, trend }: { snap: PostureSnapshotResponse; trend: PostureTrendResponse }) {
   const { riskScore } = snap
@@ -244,7 +241,6 @@ function RiskScoreHero({ snap, trend }: { snap: PostureSnapshotResponse; trend: 
   )
 }
 
-// ── KpiCard ───────────────────────────────────────────────────────────────────
 
 function KpiCard({
   label,
@@ -264,7 +260,7 @@ function KpiCard({
   delta: { direction: SparkDirection; label: string; upIsBad?: boolean } | null
 }) {
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3">
+    <Card padding="none" className="px-5 py-3">
       <div className="flex items-start justify-between gap-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           {label}
@@ -287,11 +283,10 @@ function KpiCard({
       <div className="mt-2">
         <Sparkline values={spark} stroke={sparkStroke} />
       </div>
-    </div>
+    </Card>
   )
 }
 
-// ── KpiGrid ───────────────────────────────────────────────────────────────────
 
 function KpiGrid({ snap, trend }: { snap: PostureSnapshotResponse; trend: PostureTrendResponse }) {
   const { counts, remediation: rem, repositoryCoverage: cov } = snap
@@ -366,7 +361,6 @@ function KpiGrid({ snap, trend }: { snap: PostureSnapshotResponse; trend: Postur
   )
 }
 
-// ── AttentionPanel ────────────────────────────────────────────────────────────
 
 type AttentionTone = "critical" | "high" | "medium"
 
@@ -446,7 +440,7 @@ function AttentionPanel({
 }) {
   if (teams === null) {
     return (
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <Card className="rounded-2xl">
         <p className="text-base font-semibold text-[var(--color-text-primary)] mb-4">
           Needs attention
         </p>
@@ -455,13 +449,13 @@ function AttentionPanel({
             <div key={i} className="flex items-start gap-3">
               <span className="h-7 w-7 shrink-0 rounded-lg motion-safe:animate-pulse bg-[var(--color-surface-raised)]" />
               <div className="flex-1">
-                <div className="h-4 w-3/4 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]" />
-                <div className="mt-1.5 h-3 w-1/2 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="mt-1.5 h-3 w-1/2" />
               </div>
             </div>
           ))}
         </div>
-      </div>
+      </Card>
     )
   }
 
@@ -514,7 +508,7 @@ function AttentionPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <Card padding="none" className="rounded-2xl">
       <div className="px-5 pt-5 pb-3">
         <p className="text-base font-semibold text-[var(--color-text-primary)]">Needs attention</p>
       </div>
@@ -554,11 +548,10 @@ function AttentionPanel({
           ))}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
-// ── IntegrationActivityStrip ──────────────────────────────────────────────────
 
 function IntegrationActivityStrip({ snap }: { snap: PostureSnapshotResponse }) {
   const { remediation } = snap
@@ -587,7 +580,7 @@ function IntegrationActivityStrip({ snap }: { snap: PostureSnapshotResponse }) {
   ]
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <div className="flex items-center justify-between gap-3 mb-4">
         <p className="text-base font-semibold text-[var(--color-text-primary)]">
           Integration activity (this month)
@@ -630,11 +623,10 @@ function IntegrationActivityStrip({ snap }: { snap: PostureSnapshotResponse }) {
       <p className="mt-3 text-xs italic text-[var(--color-text-tertiary)]">
         Delivery metrics for Slack, Webhook, Jira, and Fix PRs ship in a follow-up.
       </p>
-    </div>
+    </Card>
   )
 }
 
-// ── PostureTrendChart (stacked area) ──────────────────────────────────────────
 
 type StackLayer = "low" | "medium" | "high" | "critical"
 
@@ -654,18 +646,19 @@ function PostureTrendChart({
   snap: PostureSnapshotResponse
   trend: PostureTrendResponse
 }) {
+  const [hoverIdx, setHoverIdx] = React.useState<number | null>(null)
   // Use the last 30 points for the executive view; the full trend is in Breakdown.
   const points = trend.points.slice(-30)
   if (points.length < 2) {
     return (
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <Card className="rounded-2xl">
         <p className="text-base font-semibold text-[var(--color-text-primary)]">
           Open findings by severity — 30 days
         </p>
         <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
           Not enough data to plot a trend yet.
         </p>
-      </div>
+      </Card>
     )
   }
 
@@ -719,13 +712,37 @@ function PostureTrendChart({
   // Y-axis ticks (4 lines)
   const gridSteps = [0.25, 0.5, 0.75, 1.0]
 
+  // Map a pointer position over the plot to the nearest data-point index.
+  function idxFromPointer(e: React.PointerEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    if (rect.width === 0) return
+    const frac = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1)
+    setHoverIdx(Math.round(frac * (points.length - 1)))
+  }
+
+  const hovered = hoverIdx !== null ? points[hoverIdx] : null
+  // Crosshair / tooltip x as a percentage of the full SVG width so it lines up
+  // regardless of the (non-uniform) container scaling.
+  const hoverLeftPct =
+    hoverIdx !== null ? ((PLOT_X + hoverIdx * step) / VIEW_W) * 100 : 0
+  // Keep the tooltip card on-screen near the edges.
+  const tooltipAlign =
+    hoverIdx === null
+      ? "-translate-x-1/2"
+      : hoverIdx <= 2
+        ? "translate-x-0"
+        : hoverIdx >= points.length - 3
+          ? "-translate-x-full"
+          : "-translate-x-1/2"
+
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <div className="flex items-center justify-between gap-3 mb-3">
         <p className="text-base font-semibold text-[var(--color-text-primary)]">
           Open findings by severity — 30 days
         </p>
       </div>
+      <div className="relative">
       <svg
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
         className="w-full h-56"
@@ -768,6 +785,18 @@ function PostureTrendChart({
             strokeDasharray="2 3"
             opacity="0.6"
           />
+          {/* Hover crosshair */}
+          {hoverIdx !== null && (
+            <line
+              x1={hoverIdx * step}
+              y1="0"
+              x2={hoverIdx * step}
+              y2={PLOT_H}
+              stroke="var(--color-text-secondary)"
+              strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
         </g>
         {/* X-axis labels: first / mid / last + Today */}
         <g fontSize="10" fill="var(--color-text-tertiary)">
@@ -780,6 +809,51 @@ function PostureTrendChart({
           </text>
         </g>
       </svg>
+      {/* Pointer capture region over the plot (excludes the axis gutters). */}
+      <div
+        className="absolute inset-y-0 cursor-crosshair"
+        style={{
+          left: `${(PLOT_X / VIEW_W) * 100}%`,
+          width: `${(PLOT_W / VIEW_W) * 100}%`,
+        }}
+        onPointerMove={idxFromPointer}
+        onPointerLeave={() => setHoverIdx(null)}
+      />
+      {/* Hover tooltip */}
+      {hovered && (
+        <div
+          className={`pointer-events-none absolute top-1 z-10 ${tooltipAlign}`}
+          style={{ left: `${hoverLeftPct}%` }}
+        >
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 shadow-lg">
+            <p className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              {hovered.date}
+            </p>
+            <div className="space-y-1">
+              {(["critical", "high", "medium", "low"] as const).map((sev) => (
+                <div key={sev} className="flex items-center gap-2 text-xs whitespace-nowrap">
+                  <span
+                    className="h-2.5 w-2.5 rounded-sm shrink-0"
+                    style={{ background: SEV_VARS[sev] }}
+                    aria-hidden="true"
+                  />
+                  <span className="capitalize text-[var(--color-text-secondary)]">{sev}</span>
+                  <span className="ml-auto pl-3 font-semibold tabular-nums text-[var(--color-text-primary)]">
+                    {hovered[sev].toLocaleString()}
+                  </span>
+                </div>
+              ))}
+              <div className="mt-1 flex items-center gap-2 border-t border-[var(--color-border)] pt-1 text-xs">
+                <span className="text-[var(--color-text-secondary)]">Total</span>
+                <span className="ml-auto pl-3 font-semibold tabular-nums text-[var(--color-text-primary)]">
+                  {hovered.total.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
       {/* Legend with current totals (replaces SeverityDonut in summary) */}
       <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-[var(--color-text-secondary)]">
         {(["critical", "high", "medium", "low"] as const).map((sev) => (
@@ -796,11 +870,10 @@ function PostureTrendChart({
           </span>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
 
-// ── TeamRiskPanel (with Teams/Repos toggle) ───────────────────────────────────
 
 type TeamView = "teams" | "repos"
 
@@ -859,7 +932,7 @@ function TeamRiskPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <div className="flex items-center justify-between gap-3 mb-4">
         <p className="text-base font-semibold text-[var(--color-text-primary)]">
           Risk by team
@@ -880,9 +953,9 @@ function TeamRiskPanel({
         <div className="space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3">
-              <div className="h-3 w-24 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]" />
-              <div className="h-2 flex-1 motion-safe:animate-pulse rounded-full bg-[var(--color-surface-raised)]" />
-              <div className="h-3 w-6 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-2 flex-1 rounded-full" />
+              <Skeleton className="h-3 w-6" />
             </div>
           ))}
         </div>
@@ -901,6 +974,7 @@ function TeamRiskPanel({
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-raised)]">
                 <div
                   className="h-full rounded-full"
+                  title={`${row.label}: ${row.count.toLocaleString()} critical + high`}
                   style={{ width: `${row.bar * 100}%`, background: row.barColor }}
                 />
               </div>
@@ -911,11 +985,10 @@ function TeamRiskPanel({
           ))}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
-// ── ComplianceSnapshot ────────────────────────────────────────────────────────
 
 function ComplianceSnapshot({
   frameworks,
@@ -962,50 +1035,41 @@ function ComplianceSnapshot({
         {slots.map((fw, i) => {
           if (fw === undefined) {
             return (
-              <div
+              <Skeleton
                 key={i}
-                className="h-24 motion-safe:animate-pulse rounded-2xl bg-[var(--color-surface-raised)]"
+                className="h-24 rounded-2xl"
               />
             )
           }
           if (fw === null) {
             return (
-              <div
-                key={i}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4"
-              >
+              <Card key={i} padding="none" className="rounded-2xl px-5 py-4">
                 <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">
                   No framework
                 </p>
-              </div>
+              </Card>
             )
           }
           const controls = summaries[fw.id]
           if (!controls) {
             return (
-              <div
-                key={fw.id}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4"
-              >
+              <Card key={fw.id} padding="none" className="rounded-2xl px-5 py-4">
                 <p className="text-xs font-semibold text-[var(--color-text-primary)]">{fw.label}</p>
-                <div className="mt-3 h-4 w-16 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]" />
-                <div className="mt-2 h-3 w-24 motion-safe:animate-pulse rounded bg-[var(--color-surface-raised)]" />
-              </div>
+                <Skeleton className="mt-3 h-4 w-16" />
+                <Skeleton className="mt-2 h-3 w-24" />
+              </Card>
             )
           }
           const passing = controls.filter((c) => c.finding_count === 0).length
           const total = controls.length
           return (
-            <div
-              key={fw.id}
-              className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4"
-            >
+            <Card key={fw.id} padding="none" className="rounded-2xl px-5 py-4">
               <p className="text-xs font-semibold text-[var(--color-text-primary)]">{fw.label}</p>
               <div className="mt-2">{statusBadge(controls)}</div>
               <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
                 {passing} of {total} controls
               </p>
-            </div>
+            </Card>
           )
         })}
       </div>
@@ -1013,7 +1077,6 @@ function ComplianceSnapshot({
   )
 }
 
-// ── VerdictAssurance ──────────────────────────────────────────────────────────
 
 function VerdictAssurance({ snap }: { snap: PostureSnapshotResponse }) {
   const cov = snap.repositoryCoverage
@@ -1042,7 +1105,6 @@ function VerdictAssurance({ snap }: { snap: PostureSnapshotResponse }) {
   )
 }
 
-// ── PostureSummaryTab ─────────────────────────────────────────────────────────
 
 export interface PostureSummaryTabProps {
   snap: PostureSnapshotResponse

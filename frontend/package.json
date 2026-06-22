@@ -9,7 +9,6 @@
     "build": "next build",
     "start": "next start",
     "test:frontend": "node --test ../tests/frontend/*.test.ts 'components/**/*.test.mts' 'lib/**/*.test.mts' 'app/**/*.test.mts'",
-    "test:contracts": "node --test ../tests/contracts/*.test.mts",
     "test:e2e": "npx playwright test --config ../tests/e2e/playwright.config.ts",
     "test:e2e:mocked": "npx playwright test --config ../tests/e2e/playwright.config.ts --project=ui --project=settings",
     "test:e2e:critical": "npx playwright test --config ../tests/e2e/playwright.config.ts --project=critical",

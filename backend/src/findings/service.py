@@ -1,12 +1,4 @@
-"""Cross-scanner findings aggregation service — Phase 55.
-
-Single source of truth for the unified findings list endpoint. Reads from the
-`findings` table (which already stores rows from all four scanners with a
-discriminating `tool` column) so no SQL UNION or Python-side merge is required.
-
-The service is intentionally pure data access — no HTTP concerns. The router
-layer translates filter strings and shapes the response.
-"""
+"""Cross-scanner findings aggregation."""
 from __future__ import annotations
 
 import base64
@@ -26,14 +18,20 @@ from src.shared.archived_filter import exclude_archived, only_archived
 # Public shorthand matches the CLI/UI vocabulary; the DB uses the longer form
 # that the per-scanner ingest paths write.
 _TOOL_TO_PUBLIC = {
-    "dependencies": "deps",
+    "dependencies_scanning": "deps",
     "container_scanning": "container",
     "code_scanning": "sast",
-    "secrets": "secrets",
+    "secret_scanning": "secrets",
 }
 _PUBLIC_TO_TOOL = {v: k for k, v in _TOOL_TO_PUBLIC.items()}
 
-VALID_SCANNERS = frozenset(_PUBLIC_TO_TOOL.keys())
+# Accept either vocabulary on the scanner filter — the public shorthand
+# (deps/sast/...) or the internal tool name (dependencies_scanning/...) — and
+# resolve both to the internal tool for the query. The UI sends the long form,
+# so rejecting it returned an empty/errored findings list.
+_SCANNER_INPUT_TO_TOOL = {**_PUBLIC_TO_TOOL, **{t: t for t in _TOOL_TO_PUBLIC}}
+
+VALID_SCANNERS = frozenset(_SCANNER_INPUT_TO_TOOL.keys())
 VALID_SEVERITIES = frozenset({"critical", "high", "medium", "low"})
 VALID_STATES = frozenset({"open", "closed", "dismissed", "fixed"})
 
@@ -67,10 +65,10 @@ class FindingsListFilters:
     state: list[str] | None = None
     q: str | None = None
     cve: str | None = None
-    # Exact-match filter against Finding.repo. Single slug ("org/repo") — the
-    # findings page uses a dropdown rather than free-text, so we don't bother
-    # with a multi-value or LIKE form here.
-    repo: str | None = None
+    # Repo scope: each value an Asset.display_name (e.g. "github:acme/foo").
+    # The findings-page dropdown sends one; the per-source view sends the
+    # source's repositories. Matched with IN.
+    repo: list[str] | None = None
     sort: str = "severity"
     direction: str = "desc"
     limit: int = DEFAULT_LIMIT
@@ -136,11 +134,11 @@ def _normalize_filters(filters: FindingsListFilters) -> FindingsListFilters:
     if filters.cve:
         cve = filters.cve.strip()[:64] or None
 
-    # Same length cap as the legacy Finding.repo column so we never accept a
-    # value that couldn't have matched a real row anyway.
-    repo: str | None = None
+    # Cap each value (display_name length) and the count so the IN list stays
+    # bounded regardless of how many repos a source has.
+    repo: list[str] | None = None
     if filters.repo:
-        repo = filters.repo.strip()[:255] or None
+        repo = [r.strip()[:255] for r in filters.repo if r and r.strip()][:500] or None
 
     first_seen_after = filters.first_seen_after  # caller passes a real datetime or None
 
@@ -240,14 +238,6 @@ def _sort_columns(sort: str, direction: str):
     if sort == "severity":
         # Sort by severity rank — Postgres CASE expression so we can use the
         # ordinal rather than the lexicographic order of the severity string.
-        sev_rank = func.coalesce(
-            func.nullif(
-                func.lower(Finding.severity),
-                "",
-            ),
-            "low",
-        )
-        # Build a CASE that maps each severity to its rank.
         from sqlalchemy import case
         rank_expr = case(
             (func.lower(Finding.severity) == "critical", 4),
@@ -341,7 +331,7 @@ def _build_where_clauses(filters: FindingsListFilters) -> list:
     elif filters.verdict in VALID_VERDICTS:
         clauses.append(Finding.verdict == filters.verdict)
     if filters.scanner:
-        internal_tools = [_PUBLIC_TO_TOOL[s] for s in filters.scanner]
+        internal_tools = [_SCANNER_INPUT_TO_TOOL[s] for s in filters.scanner]
         clauses.append(Finding.tool.in_(internal_tools))
     if filters.state:
         clauses.append(Finding.state.in_(filters.state))
@@ -349,10 +339,11 @@ def _build_where_clauses(filters: FindingsListFilters) -> list:
         cve_upper = filters.cve.upper()
         clauses.append(Finding.cve_id == cve_upper)
     if filters.repo:
-        # filters.repo is the human-readable Asset.display_name (e.g. "acme/foo")
+        # Each value is an Asset.display_name (e.g. "github:acme/foo"): one from
+        # the findings dropdown, or many for the per-source scope.
         clauses.append(
             Finding.asset_id.in_(
-                select(Asset.id).where(Asset.display_name == filters.repo)
+                select(Asset.id).where(Asset.display_name.in_(filters.repo))
             )
         )
     if filters.first_seen_after:
@@ -401,7 +392,12 @@ class _NoKev:
         return None
 
 
-def _finding_to_dict(finding: Finding, kev_lookup: _KevLookup | None = None) -> dict[str, Any]:
+def _finding_to_dict(
+    finding: Finding,
+    kev_lookup: _KevLookup | None = None,
+    epss_lookup: dict[str, float] | None = None,
+    repo: str | None = None,
+) -> dict[str, Any]:
     """Serialise a Finding to the public response shape (now including kev + cwe)."""
     lookup = kev_lookup or _NoKev()
     detail: dict = finding.detail or {}
@@ -430,12 +426,15 @@ def _finding_to_dict(finding: Finding, kev_lookup: _KevLookup | None = None) -> 
         "package": package,
         "file_path": finding.file_path,
         "line": line,
-        "repo": finding.repo,
-        "org_id": finding.org,
+        # repo/org are no longer columns on Finding (Plan D); the repo is the
+        # finding's asset display_name ("owner/repo"), supplied by the caller.
+        "repo": repo,
+        "org_id": repo.split("/", 1)[0] if repo and "/" in repo else None,
         "created_at": finding.created_at.isoformat() if finding.created_at else None,
         "updated_at": finding.updated_at.isoformat() if finding.updated_at else None,
         "kev": lookup.is_kev(finding.cve_id),
         "cwe": lookup.first_cwe(finding.cve_id),
+        "epss_percentile": (epss_lookup or {}).get(finding.cve_id) if finding.cve_id else None,
         "risk_score": finding.risk_score,
         "assignee_user_id": finding.assignee_user_id,
         "verdict": finding.verdict,
@@ -537,6 +536,7 @@ async def list_findings(
     cve_ids = [f.cve_id for f in page if f.cve_id]
     kev_set: set[str] = set()
     kev_cwes: dict[str, list[str]] = {}
+    epss_percentiles: dict[str, float] = {}
     if cve_ids:
         kev_result = await session.execute(
             select(KevEntry.cve_id, KevEntry.cwes).where(KevEntry.cve_id.in_(cve_ids))
@@ -545,6 +545,13 @@ async def list_findings(
             kev_set.add(cve)
             if isinstance(cwes, list) and cwes:
                 kev_cwes[cve] = [str(c) for c in cwes]
+
+        from src.db.models import EpssScore
+        epss_result = await session.execute(
+            select(EpssScore.cve, EpssScore.percentile).where(EpssScore.cve.in_(cve_ids))
+        )
+        for cve, percentile in epss_result.all():
+            epss_percentiles[cve] = float(percentile)
 
     class _RealKev:
         def is_kev(self, cve):
@@ -559,8 +566,24 @@ async def list_findings(
 
     verdict_counts = await _verdict_counts_for_filters(filters, session)
 
+    # Resolve each finding's repo (Asset.display_name) in one query — repo is
+    # no longer a Finding column.
+    page_asset_ids = {f.asset_id for f in page if f.asset_id}
+    repo_by_asset: dict[str, str] = {}
+    if page_asset_ids:
+        repo_rows = await session.execute(
+            select(Asset.id, Asset.display_name).where(Asset.id.in_(page_asset_ids))
+        )
+        repo_by_asset = {str(aid): name for aid, name in repo_rows.all()}
+
     return {
-        "findings": [_finding_to_dict(f, kev_lookup=lookup) for f in page],
+        "findings": [
+            _finding_to_dict(
+                f, kev_lookup=lookup, epss_lookup=epss_percentiles,
+                repo=repo_by_asset.get(str(f.asset_id)) if f.asset_id else None,
+            )
+            for f in page
+        ],
         "next_cursor": next_cursor,
         "total_count": total,
         "verdict_counts": verdict_counts,

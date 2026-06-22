@@ -1,8 +1,6 @@
 import pytest
 
 from src.shared.providers.base import (
-    ImageRegistry,
-    RepoProvider,
     UnknownProvider,
     get_image_registry,
     get_repo_provider,

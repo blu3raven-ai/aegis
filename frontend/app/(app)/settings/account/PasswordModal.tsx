@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { saveAccountSettings } from "@/lib/client/settings-api"
 import { Modal } from "./Modal"
@@ -10,12 +11,14 @@ const EYE_OPEN = "M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 
 const EYE_CLOSED = "M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88"
 
 function PasswordField({
+  id,
   label,
   value,
   onChange,
   autoFocus,
   autoComplete,
 }: {
+  id: string
   label: string
   value: string
   onChange: (v: string) => void
@@ -24,12 +27,10 @@ function PasswordField({
 }) {
   const [show, setShow] = useState(false)
   return (
-    <div>
-      <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-        {label}
-      </label>
+    <FormField label={label} htmlFor={id}>
       <div className="relative">
         <Input
+          id={id}
           type={show ? "text" : "password"}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -51,7 +52,7 @@ function PasswordField({
           </svg>
         </Button>
       </div>
-    </div>
+    </FormField>
   )
 }
 
@@ -105,6 +106,7 @@ export function PasswordModal({
           Choose a new password for your portal account. You can keep using your current session after the change is saved.
         </p>
         <PasswordField
+          id="account-current-password"
           label="Current password"
           value={currentPassword}
           onChange={setCurrentPassword}
@@ -112,12 +114,14 @@ export function PasswordModal({
           autoComplete="current-password"
         />
         <PasswordField
+          id="account-new-password"
           label="New password"
           value={newPassword}
           onChange={setNewPassword}
           autoComplete="new-password"
         />
         <PasswordField
+          id="account-confirm-new-password"
           label="Confirm new password"
           value={confirmNewPassword}
           onChange={setConfirmNewPassword}

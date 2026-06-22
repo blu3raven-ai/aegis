@@ -128,6 +128,13 @@ def test_normalize_rejects_invalid_scanner():
         _normalize_filters(FindingsListFilters(org_id="acme", scanner=["iac"]))
 
 
+def test_normalize_accepts_internal_and_public_scanner_names():
+    # The UI sends the internal tool name; the public shorthand also works.
+    for value in ("secret_scanning", "secrets", "dependencies_scanning", "deps"):
+        out = _normalize_filters(FindingsListFilters(org_id="acme", scanner=[value]))
+        assert out.scanner == [value]
+
+
 def test_normalize_rejects_invalid_sort():
     with pytest.raises(ValueError, match="sort"):
         _normalize_filters(FindingsListFilters(org_id="acme", sort="bogus"))
@@ -211,7 +218,7 @@ def test_cursor_decode_rejects_malformed():
 def test_finding_to_dict_dependencies_shape():
     f = _make_finding(
         id=42,
-        tool="dependencies",
+        tool="dependencies_scanning",
         severity="CRITICAL",
         detail={
             "title": "log4j RCE",
@@ -246,7 +253,7 @@ def test_finding_to_dict_sast_shape():
 def test_finding_to_dict_secrets_shape():
     f = _make_finding(
         id=9,
-        tool="secrets",
+        tool="secret_scanning",
         severity="critical",
         detail={"title": "AWS key in config", "path": "config/prod.env", "line": 10},
     )
@@ -291,7 +298,7 @@ async def test_list_findings_empty_state():
 
 @pytest.mark.asyncio
 async def test_list_findings_single_scanner():
-    findings = [_make_finding(id=i, tool="dependencies") for i in range(3)]
+    findings = [_make_finding(id=i, tool="dependencies_scanning") for i in range(3)]
     session = _FakeSession(findings)
     out = await list_findings(FindingsListFilters(org_id="acme-org"), session)
     assert len(out["findings"]) == 3
@@ -303,10 +310,10 @@ async def test_list_findings_single_scanner():
 @pytest.mark.asyncio
 async def test_list_findings_multi_scanner_merge():
     findings = [
-        _make_finding(id=1, tool="dependencies"),
+        _make_finding(id=1, tool="dependencies_scanning"),
         _make_finding(id=2, tool="container_scanning"),
         _make_finding(id=3, tool="code_scanning"),
-        _make_finding(id=4, tool="secrets"),
+        _make_finding(id=4, tool="secret_scanning"),
     ]
     session = _FakeSession(findings)
     out = await list_findings(FindingsListFilters(org_id="acme-org"), session)

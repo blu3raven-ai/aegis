@@ -24,9 +24,16 @@ class BackendError(Exception):
 
 class BackendClient:
     def __init__(self, portal_url: str, auth_token: str, timeout: float = 15.0) -> None:
-        self._base = f"{portal_url.rstrip('/')}/api/v1/runner"
+        self._base = f"{portal_url.rstrip('/')}/api/v1/agent"
         self._headers = {"Authorization": f"Bearer {auth_token}"}
         self._timeout = timeout
+
+    def update_auth_token(self, new_token: str) -> None:
+        # The backend rotates the runner's auth token after every /complete and
+        # returns the new value in `newAuthToken`. The streamer + uploader both
+        # share this client, so updating in place here means they all pick up
+        # the new token on their next call without each holding their own copy.
+        self._headers = {"Authorization": f"Bearer {new_token}"}
 
     def presign_uploads(self, job_id: str, files: list[str]) -> dict[str, str]:
         body = self._request("POST", f"/jobs/{job_id}/uploads/presign", json={"files": files})

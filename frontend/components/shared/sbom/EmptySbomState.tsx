@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { LinkButton } from "@/components/ui/LinkButton"
 
 export function EmptySbomState({ repoName }: { repoName?: string }) {
   return (
@@ -27,12 +27,9 @@ export function EmptySbomState({ repoName }: { repoName?: string }) {
         </p>
       </div>
 
-      <Link
-        href="/findings"
-        className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-      >
+      <LinkButton href="/findings" variant="secondary" size="md">
         Go to Findings
-      </Link>
+      </LinkButton>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { cn } from "@/lib/shared/utils"
-import type { ScanVerificationSummary } from "@/lib/client/repos-api"
+import type { ScanVerificationSummary } from "@/lib/client/sources-api"
 
 // Approximate cost — exact provider rates aren't stored yet.
 const APPROX_COST_PER_1K_TOKENS = 0.01

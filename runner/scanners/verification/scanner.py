@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 from pathlib import Path
 from typing import Callable
@@ -68,7 +67,7 @@ class VerificationScanner:
 
         emitter.starting()
 
-        llm = _build_llm_client()
+        llm = _build_llm_client(env)
         if llm is None:
             log_tail.append(
                 "[*] LLM_API_KEY not set — running orchestrator + dedupe only "
@@ -141,15 +140,19 @@ def _build_repo_root_map(input_dir: Path, findings: list[dict]) -> dict[str, Pat
     return out
 
 
-def _build_llm_client():
-    """Return an LLM client or None when LLM_API_KEY is unset."""
+def _build_llm_client(env: JobEnv):
+    """Return an LLM client or None when LLM_API_KEY is unset.
+
+    Reads from job['envVars'] via JobEnv — the backend ships LLM config there,
+    not in the runner process environment.
+    """
     from runner.verification.llm_client import LlmClient
 
-    api_key = os.environ.get("LLM_API_KEY")
+    api_key = env.get("LLM_API_KEY")
     if not api_key:
         return None
     return LlmClient(
         api_key=api_key,
-        api_base_url=os.environ.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
-        model=os.environ.get("LLM_API_MODEL", "gpt-4o-mini"),
+        api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
+        model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
     )

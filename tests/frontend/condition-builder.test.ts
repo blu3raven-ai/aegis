@@ -70,7 +70,7 @@ function evaluate(cond: Cond, f: Finding): boolean {
 function finding(overrides: Partial<Finding> = {}): Finding {
   return {
     severity: "medium",
-    scanner: "dependencies",
+    scanner: "dependencies_scanning",
     repo_id: "r1",
     repo_labels: [],
     cve_id: null,
@@ -105,14 +105,14 @@ test("leaf eq: severity mismatch", () => {
 
 test("leaf in: scanner in list", () => {
   assert.equal(
-    evaluate({ field: "scanner", op: "in", value: ["secrets", "code_scanning"] }, finding({ scanner: "secrets" })),
+    evaluate({ field: "scanner", op: "in", value: ["secret_scanning", "code_scanning"] }, finding({ scanner: "secret_scanning" })),
     true,
   )
 })
 
 test("leaf nin: scanner not in list", () => {
   assert.equal(
-    evaluate({ field: "scanner", op: "nin", value: ["secrets"] }, finding({ scanner: "dependencies" })),
+    evaluate({ field: "scanner", op: "nin", value: ["secret_scanning"] }, finding({ scanner: "dependencies_scanning" })),
     true,
   )
 })
@@ -153,10 +153,10 @@ test("all group: both leaves true", () => {
       {
         all: [
           { field: "severity", op: "eq", value: "critical" },
-          { field: "scanner", op: "eq", value: "secrets" },
+          { field: "scanner", op: "eq", value: "secret_scanning" },
         ],
       },
-      finding({ severity: "critical", scanner: "secrets" }),
+      finding({ severity: "critical", scanner: "secret_scanning" }),
     ),
     true,
   )
@@ -168,10 +168,10 @@ test("all group: one leaf false makes whole group false", () => {
       {
         all: [
           { field: "severity", op: "eq", value: "critical" },
-          { field: "scanner", op: "eq", value: "secrets" },
+          { field: "scanner", op: "eq", value: "secret_scanning" },
         ],
       },
-      finding({ severity: "high", scanner: "secrets" }),
+      finding({ severity: "high", scanner: "secret_scanning" }),
     ),
     false,
   )
@@ -183,10 +183,10 @@ test("any group: one leaf true satisfies the group", () => {
       {
         any: [
           { field: "severity", op: "eq", value: "critical" },
-          { field: "scanner", op: "eq", value: "secrets" },
+          { field: "scanner", op: "eq", value: "secret_scanning" },
         ],
       },
-      finding({ severity: "medium", scanner: "secrets" }),
+      finding({ severity: "medium", scanner: "secret_scanning" }),
     ),
     true,
   )
@@ -201,7 +201,7 @@ test("nested all inside any: inner group matches", () => {
           { field: "repo_labels", op: "contains", value: "production" },
         ],
       },
-      { field: "scanner", op: "eq", value: "secrets" },
+      { field: "scanner", op: "eq", value: "secret_scanning" },
     ],
   }
   assert.equal(
@@ -216,7 +216,7 @@ test("nested any inside all: neither branch matches → false", () => {
       { field: "severity", op: "eq", value: "critical" },
       {
         any: [
-          { field: "scanner", op: "eq", value: "secrets" },
+          { field: "scanner", op: "eq", value: "secret_scanning" },
           { field: "scanner", op: "eq", value: "code_scanning" },
         ],
       },
@@ -224,7 +224,7 @@ test("nested any inside all: neither branch matches → false", () => {
   }
   // severity matches but scanner doesn't match any branch
   assert.equal(
-    evaluate(cond, finding({ severity: "critical", scanner: "dependencies" })),
+    evaluate(cond, finding({ severity: "critical", scanner: "dependencies_scanning" })),
     false,
   )
 })

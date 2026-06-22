@@ -73,14 +73,18 @@ def parse_policy(raw: dict[str, Any] | None) -> DecisionPolicy:
     return DecisionPolicy(block_on=tuple(block_on))
 
 
-def _finding_to_blocker(finding: Finding) -> dict[str, Any]:
-    """Public-shape blocker — same vocabulary as /api/v1/findings rows."""
+def _finding_to_blocker(finding: Finding, *, repo: str | None) -> dict[str, Any]:
+    """Public-shape blocker — same vocabulary as /api/v1/findings rows.
+
+    Finding has no `repo` column post asset-identity refactor; the caller
+    pulls Asset.display_name via JOIN and passes it through.
+    """
     return {
         "id": str(finding.id),
         "tool": finding.tool,
         "severity": (finding.severity or "").lower() or None,
         "state": finding.state,
-        "repo": finding.repo,
+        "repo": repo,
         "identity_key": finding.identity_key,
         "title": finding.title or finding.identity_key,
         "cve": finding.cve_id,
@@ -188,11 +192,14 @@ class DecisionService:
             clauses.append(Finding.asset_id.in_(asset_ids))
 
         stmt = (
-            select(Finding)
+            select(Finding, Asset.display_name)
+            .outerjoin(Asset, Asset.id == Finding.asset_id)
             .where(and_(*clauses))
             .order_by(Finding.id.asc())
             .limit(MAX_BLOCKERS_RETURNED)
         )
         result = await session.execute(stmt)
-        rows = list(result.scalars().all())
-        return [_finding_to_blocker(f) for f in rows]
+        return [
+            _finding_to_blocker(finding, repo=display_name)
+            for finding, display_name in result.all()
+        ]

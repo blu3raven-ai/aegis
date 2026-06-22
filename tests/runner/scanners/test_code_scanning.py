@@ -433,7 +433,7 @@ def test_normalize_code_scanning_output_writes_active_rules(tmp_path):
 def test_code_scanning_scanner_has_correct_type():
     from runner.scanners.code_scanning.scanner import CodeScanningScanner
 
-    assert CodeScanningScanner.SCANNER_TYPE == "code-scanning"
+    assert CodeScanningScanner.SCANNER_TYPE == "code_scanning"
 
 
 def test_code_scanning_scanner_implements_base_protocol():

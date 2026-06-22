@@ -33,7 +33,7 @@ export function SbomHeader({
             <span className="flex items-center gap-1">
               <span className="text-[var(--color-text-tertiary)]">Current hash</span>
               <code className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]">
-                {latestEntry.manifest_set_hash.slice(0, 12)}…
+                {latestEntry.run_id.slice(0, 12)}…
               </code>
             </span>
             <span className="text-[var(--color-text-tertiary)]">·</span>

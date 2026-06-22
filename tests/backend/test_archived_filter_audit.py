@@ -549,8 +549,8 @@ def test_graphql_posture_trend_excludes_archived_scan_runs():
 def test_dependencies_findings_excludes_archived_by_default():
     from src.storage import read_dependencies_findings
 
-    _seed_finding(tool="dependencies", identity_key="dep-active", archived=False)
-    _seed_finding(tool="dependencies", identity_key="dep-archived", archived=True)
+    _seed_finding(tool="dependencies_scanning", identity_key="dep-active", archived=False)
+    _seed_finding(tool="dependencies_scanning", identity_key="dep-archived", archived=True)
 
     rows = read_dependencies_findings(_ORG)
     repos = [r for r in rows]  # rows are alert dicts
@@ -562,8 +562,8 @@ def test_dependencies_findings_excludes_archived_by_default():
 def test_dependencies_findings_include_archived_returns_them():
     from src.storage import read_dependencies_findings
 
-    _seed_finding(tool="dependencies", identity_key="dep-active", archived=False)
-    _seed_finding(tool="dependencies", identity_key="dep-archived", archived=True)
+    _seed_finding(tool="dependencies_scanning", identity_key="dep-active", archived=False)
+    _seed_finding(tool="dependencies_scanning", identity_key="dep-archived", archived=True)
 
     rows = read_dependencies_findings(_ORG, include_archived_rows=True)
     assert len(rows) == 2
@@ -592,8 +592,8 @@ def test_container_scanning_findings_include_archived_returns_them():
 def test_secrets_findings_excludes_archived_by_default():
     from src.storage import read_latest_findings
 
-    _seed_finding(tool="secrets", identity_key="sec-active", archived=False)
-    _seed_finding(tool="secrets", identity_key="sec-archived", archived=True)
+    _seed_finding(tool="secret_scanning", identity_key="sec-active", archived=False)
+    _seed_finding(tool="secret_scanning", identity_key="sec-archived", archived=True)
 
     rows = read_latest_findings(_ORG)
     keys = {r.get("secretIdentity") for r in rows}
@@ -604,8 +604,8 @@ def test_secrets_findings_excludes_archived_by_default():
 def test_secrets_findings_include_archived_returns_them():
     from src.storage import read_latest_findings
 
-    _seed_finding(tool="secrets", identity_key="sec-active", archived=False)
-    _seed_finding(tool="secrets", identity_key="sec-archived", archived=True)
+    _seed_finding(tool="secret_scanning", identity_key="sec-active", archived=False)
+    _seed_finding(tool="secret_scanning", identity_key="sec-archived", archived=True)
 
     rows = read_latest_findings(_ORG, include_archived_rows=True)
     keys = {r.get("secretIdentity") for r in rows}

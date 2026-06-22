@@ -5,8 +5,10 @@ import type { ReportSummary } from "@/lib/client/reports-api"
 import { generateReport, listReports, deleteReport } from "@/lib/client/reports-api"
 import { ReportTemplateGrid, type ReportTemplateId } from "@/components/reports/ReportTemplateGrid"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { FilterChip } from "@/components/ui/FilterChip"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { ScheduledReportsPanel } from "./ScheduledReportsPanel"
 
@@ -120,8 +122,8 @@ export function ReportsPageContent() {
   if (listState === "loading") {
     return (
       <div className="px-6 py-5 space-y-5">
-        <div className="animate-pulse rounded-lg bg-[var(--color-surface-raised)] h-28" />
-        <div className="animate-pulse rounded-lg bg-[var(--color-surface-raised)] h-40" />
+        <Skeleton className="rounded-lg h-28" />
+        <Skeleton className="rounded-lg h-40" />
       </div>
     )
   }
@@ -129,7 +131,7 @@ export function ReportsPageContent() {
   if (listState === "error") {
     return (
       <div className="px-6 py-5">
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-12 text-center">
+        <Card padding="none" className="px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">Could not load reports</p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">The backend may be unavailable. Check that the server is running and try again.</p>
           <div className="mt-4 flex justify-center">
@@ -137,7 +139,7 @@ export function ReportsPageContent() {
               Retry
             </Button>
           </div>
-        </div>
+        </Card>
       </div>
     )
   }
@@ -241,7 +243,7 @@ export function ReportsPageContent() {
       {reports.length === 0 ? (
         <ReportsEmptyState />
       ) : (
-      <div className="overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <Card padding="none" className="overflow-auto">
         <Table className="min-w-full">
           <Thead>
             <Tr>
@@ -313,7 +315,7 @@ export function ReportsPageContent() {
             )}
           </Tbody>
         </Table>
-      </div>
+      </Card>
       )}
     </div>
   )

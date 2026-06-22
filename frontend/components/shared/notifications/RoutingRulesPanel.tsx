@@ -14,12 +14,10 @@ import { listDestinations } from "@/lib/client/destinations-api"
 import { RuleEditorModal } from "./RuleEditorModal"
 import { RulePreview } from "./RulePreview"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
-
-interface RoutingRulesPanelProps {
-  orgId: string
-}
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -37,14 +35,14 @@ function SkeletonRow() {
     <Tr>
       {[1, 2, 3, 4, 5].map((i) => (
         <Td key={i}>
-          <div className="h-4 w-full animate-pulse rounded bg-[var(--color-surface-raised)]" />
+          <Skeleton className="h-4 w-full" />
         </Td>
       ))}
     </Tr>
   )
 }
 
-export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
+export function RoutingRulesPanel() {
   const [rules, setRules] = useState<NotificationRule[]>([])
   const [destinations, setDestinations] = useState<NotificationDestination[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,14 +59,14 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
   const loadAll = useCallback(() => {
     setLoading(true)
     setLoadError(null)
-    Promise.all([listRules(orgId), listDestinations(orgId)])
+    Promise.all([listRules(), listDestinations()])
       .then(([r, d]) => {
         setRules(r)
         setDestinations(d)
       })
       .catch((err: Error) => setLoadError(err.message))
       .finally(() => setLoading(false))
-  }, [orgId])
+  }, [])
 
   useEffect(() => {
     loadAll()
@@ -91,7 +89,7 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
     setSaveError(null)
     try {
       if (editing) {
-        const updated = await updateRule(editing.id, orgId, payload)
+        const updated = await updateRule(editing.id, payload)
         setRules((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
       } else {
         const created = await createRule(payload)
@@ -107,7 +105,7 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
 
   async function handleToggle(rule: NotificationRule) {
     try {
-      const updated = await updateRule(rule.id, orgId, { enabled: !rule.enabled })
+      const updated = await updateRule(rule.id, { enabled: !rule.enabled })
       setRules((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
     } catch {
       // Silently ignore — the toggle reverts visually on next load
@@ -117,7 +115,7 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
   async function handleDelete(rule: NotificationRule) {
     if (!window.confirm(`Delete rule "${rule.name}"? This cannot be undone.`)) return
     try {
-      await deleteRule(rule.id, orgId)
+      await deleteRule(rule.id)
       setRules((prev) => prev.filter((r) => r.id !== rule.id))
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : "Delete failed")
@@ -178,7 +176,7 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
       {!loadError && activeTab === "rules" && (
         <>
           {!loading && rules.length === 0 ? (
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-10 text-center">
+            <Card padding="none" className="rounded-2xl p-10 text-center">
               <p className="text-sm font-semibold text-[var(--color-text-primary)]">No routing rules</p>
               <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                 All findings go to every enabled destination. Create a rule to route specific
@@ -189,9 +187,9 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
                   Create first rule
                 </Button>
               </div>
-            </div>
+            </Card>
           ) : (
-            <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+            <Card padding="none" className="overflow-hidden rounded-2xl">
               <Table>
                 <Thead>
                   <Tr>
@@ -278,7 +276,7 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
                   )}
                 </Tbody>
               </Table>
-            </div>
+            </Card>
           )}
 
           {!loading && !loadError && rules.length > 0 && (
@@ -292,9 +290,9 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
 
       {/* Preview tab */}
       {!loadError && activeTab === "preview" && (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <RulePreview orgId={orgId} />
-        </div>
+        <Card padding="lg" className="rounded-2xl">
+          <RulePreview />
+        </Card>
       )}
 
       {/* Editor modal */}
@@ -302,7 +300,6 @@ export function RoutingRulesPanel({ orgId }: RoutingRulesPanelProps) {
         open={modalOpen}
         rule={editing}
         destinations={destinations}
-        orgId={orgId}
         onClose={() => setModalOpen(false)}
         onSave={handleSave}
         saving={saving}

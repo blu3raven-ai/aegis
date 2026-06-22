@@ -3,7 +3,7 @@ import pytest
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 
-from src.auth.cookies import (
+from src.auth.authentication.cookies import (
     CSRF_COOKIE_NAME,
     SESSION_COOKIE_NAME,
     clear_auth_cookies,

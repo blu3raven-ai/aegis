@@ -38,7 +38,7 @@ test("listAuditEvents builds URL with no filters", async () => {
 
   assert.equal(calls.length, 1)
   const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.pathname, "/api/v1/audit/events")
+  assert.equal(url.pathname, "/api/v1/settings/audit/events")
   assert.equal(result.events.length, 0)
   assert.equal(result.total, 0)
   assert.equal(result.has_more, false)

@@ -56,7 +56,6 @@ def test_compute_risk_score_clamps_epss_out_of_range():
     assert compute_risk_score("low", epss_percentile=2.0) == 35
 
 
-# ─── recompute_finding_risk_scores (DB-backed) ──────────────────────────────
 
 
 @pytest_asyncio.fixture
@@ -68,15 +67,15 @@ async def rescore_fixture(db_session):
     kev = KevEntry(cve_id=cve_kev, date_added=date(2026, 1, 1))
     epss = EpssScore(cve=cve_epss, score=0.5, percentile=0.9, scored_date=date(2026, 1, 1))
     f_critical = Finding(
-        tool="dependencies", identity_key=f"k1-{uuid4()}",
+        tool="dependencies_scanning", identity_key=f"k1-{uuid4()}",
         state="open", severity="critical", cve_id=cve_kev, detail={},
     )
     f_low_epss = Finding(
-        tool="dependencies", identity_key=f"k2-{uuid4()}",
+        tool="dependencies_scanning", identity_key=f"k2-{uuid4()}",
         state="open", severity="low", cve_id=cve_epss, detail={},
     )
     f_unknown = Finding(
-        tool="dependencies", identity_key=f"k3-{uuid4()}",
+        tool="dependencies_scanning", identity_key=f"k3-{uuid4()}",
         state="open", severity=None, cve_id=None, detail={},
     )
     db_session.add_all([kev, epss, f_critical, f_low_epss, f_unknown])
@@ -130,7 +129,7 @@ async def test_recompute_scoped_by_asset_ids(db_session, rescore_fixture):
     """Empty asset_ids list means nothing is rescored (fail-closed scope)."""
     f_critical, _, _ = rescore_fixture
     foreign = Finding(
-        tool="dependencies", identity_key=f"k-{uuid4()}",
+        tool="dependencies_scanning", identity_key=f"k-{uuid4()}",
         state="open", severity="high", detail={},
     )
     db_session.add(foreign)

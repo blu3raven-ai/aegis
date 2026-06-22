@@ -2,12 +2,21 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 
 import pytest
 
+from runner.scanners._shared import JobEnv
 from runner.scanners.dependencies.scanner import DependenciesScanner
 from runner.verification.llm_client import LlmResponse
+
+
+def _env(api_key: str | None = None) -> JobEnv:
+    env_vars: dict[str, str] = {}
+    if api_key:
+        env_vars["LLM_API_KEY"] = api_key
+    return JobEnv({"envVars": env_vars})
 
 
 class _StubLlm:
@@ -74,7 +83,7 @@ def test_verify_marks_findings_llm_disabled_when_no_key(tmp_path, monkeypatch):
     _make_findings_jsonl(tmp_path, [_basic_finding()])
 
     scanner = DependenciesScanner()
-    scanner._verify_findings_file(tmp_path / "findings.jsonl", tmp_path)
+    scanner._verify_findings_file(tmp_path / "findings.jsonl", tmp_path, env=_env())
 
     line = (tmp_path / "findings.jsonl").read_text().strip()
     f = json.loads(line)
@@ -85,7 +94,7 @@ def test_verify_marks_findings_llm_disabled_when_no_key(tmp_path, monkeypatch):
 def test_verify_no_op_when_findings_file_missing(tmp_path):
     scanner = DependenciesScanner()
     # Should not raise
-    scanner._verify_findings_file(tmp_path / "missing.jsonl", tmp_path)
+    scanner._verify_findings_file(tmp_path / "missing.jsonl", tmp_path, env=_env())
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +254,132 @@ def test_llm_error_recorded_does_not_raise(tmp_path):
     )
     assert verified[0]["verdict"] is None
     assert "llm_error" in verified[0]["verification_metadata"]["skipped"]
+
+
+# ---------------------------------------------------------------------------
+# Cooperative cancellation
+# ---------------------------------------------------------------------------
+
+
+def test_cancel_event_set_before_loop_marks_all_findings_cancelled(tmp_path):
+    """When cancel is set up-front, every finding gets verdict=possible + cancelled."""
+    findings = [
+        _basic_finding(advisoryId=f"CVE-{i}", repository="acme__widget")
+        for i in range(3)
+    ]
+    repo_root = tmp_path / "acme__widget" / "_checkout"
+    repo_root.mkdir(parents=True)
+    (repo_root / "app.js").write_text("require('lodash');\n")
+
+    cancel = threading.Event()
+    cancel.set()
+
+    scanner = DependenciesScanner()
+    llm = _StubLlm([])
+
+    verified = scanner._maybe_verify_sca(
+        findings=findings,
+        out_dir=tmp_path,
+        llm=llm,
+        scan_budget=_unlimited_budget(),
+        cancel_event=cancel,
+    )
+
+    assert len(verified) == 3
+    for f in verified:
+        assert f["verdict"] == "possible"
+        assert f["verification_metadata"]["skipped"] == "cancelled"
+    # No LLM round-trips and no prefilter/import-site walking should have happened.
+    assert llm.calls == []
+
+
+def test_cancel_event_set_midway_short_circuits_remaining(tmp_path):
+    """A mid-loop cancel must mark the rest cancelled without further LLM calls."""
+
+    class _CancellingLlm:
+        _model = "stub"
+
+        def __init__(self, cancel):
+            self.calls = 0
+            self._cancel = cancel
+
+        def chat(self, *a, **kw):
+            self.calls += 1
+            # Trip cancel on the first hunter call so subsequent findings short-circuit.
+            self._cancel.set()
+            return LlmResponse(
+                content=json.dumps({"exploit_chain": "", "evidence": []}),
+                tokens_in=10,
+                tokens_out=5,
+                prompt_hash="h",
+            )
+
+    repo_root = tmp_path / "acme__widget" / "_checkout"
+    repo_root.mkdir(parents=True)
+    (repo_root / "app.js").write_text("require('lodash');\n")
+
+    cancel = threading.Event()
+    llm = _CancellingLlm(cancel)
+    findings = [
+        _basic_finding(advisoryId=f"CVE-{i}", repository="acme__widget")
+        for i in range(3)
+    ]
+
+    scanner = DependenciesScanner()
+    verified = scanner._maybe_verify_sca(
+        findings=findings,
+        out_dir=tmp_path,
+        llm=llm,
+        scan_budget=_unlimited_budget(),
+        cancel_event=cancel,
+    )
+
+    # First finding ran the hunter; remainder were short-circuited as cancelled.
+    assert verified[0]["verdict"] == "possible"
+    for f in verified[1:]:
+        assert f["verdict"] == "possible"
+        assert f["verification_metadata"]["skipped"] == "cancelled"
+    assert llm.calls == 1
+
+
+def test_cancel_event_none_runs_full_loop(tmp_path):
+    """cancel_event=None is the default and must not change behaviour."""
+    finding = _basic_finding(repository="acme__widget")
+    repo_root = tmp_path / "acme__widget" / "_checkout"
+    repo_root.mkdir(parents=True)
+    (repo_root / "src").mkdir()
+    (repo_root / "src" / "app.js").write_text("const _ = require('lodash');\n")
+
+    scanner = DependenciesScanner()
+    llm = _StubLlm([
+        json.dumps({
+            "exploit_chain": "lodash imported and prototype pollution surface reachable",
+            "evidence": [
+                {
+                    "kind": "advisory",
+                    "source": "CVE-2021-23337",
+                    "snippet": "prototype pollution",
+                },
+                {
+                    "kind": "import_site",
+                    "file": "src/app.js",
+                    "line": 1,
+                    "snippet": "const _ = require('lodash');",
+                },
+            ],
+        }),
+        json.dumps({"mitigation_found": False, "reasoning": ""}),
+    ])
+
+    verified = scanner._maybe_verify_sca(
+        findings=[finding],
+        out_dir=tmp_path,
+        llm=llm,
+        scan_budget=_unlimited_budget(),
+        cancel_event=None,
+    )
+    assert verified[0]["verdict"] == "confirmed"
+    assert len(llm.calls) == 2
 
 
 # ---------------------------------------------------------------------------

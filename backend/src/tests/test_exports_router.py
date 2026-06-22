@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
 os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
 from src.exports.router import router as exports_router  # noqa: E402
 
 _FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -21,7 +23,7 @@ _OTHER_ASSET_ID = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
 _VIEWER_PERMS = {"view_findings"}
 
 
-def _make_app() -> FastAPI:
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(exports_router)
 
@@ -32,6 +34,8 @@ def _make_app() -> FastAPI:
         request.state.user_role_id = None
         return await call_next(request)
 
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
     return app
 
 
@@ -64,13 +68,13 @@ def test_export_findings_threads_viewer_scope():
         async for chunk in _empty_stream():
             yield chunk
 
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
          patch("src.exports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.exports.router.get_session", return_value=_NullSession()), \
          patch("src.exports.router.count_findings", new=fake_count), \
          patch("src.exports.router.stream_findings_csv", new=fake_stream):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/exports/findings?format=csv")
+        resp = client.get("/api/v1/findings/export?format=csv")
 
     assert resp.status_code == 200
     assert captured["count_asset_ids"] == [_FAKE_ASSET_ID]
@@ -89,13 +93,13 @@ def test_export_findings_empty_scope_yields_zero_results():
         async for chunk in _empty_stream():
             yield chunk
 
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
          patch("src.exports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[])), \
          patch("src.exports.router.get_session", return_value=_NullSession()), \
          patch("src.exports.router.count_findings", new=fake_count), \
          patch("src.exports.router.stream_findings_csv", new=fake_stream):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/exports/findings?format=csv")
+        resp = client.get("/api/v1/findings/export?format=csv")
 
     assert resp.status_code == 200
     assert captured["asset_ids"] == []
@@ -110,12 +114,12 @@ def test_export_findings_missing_permission_is_403():
         called["count"] = True
         return 0
 
-    with patch("src.settings.router._resolve_effective_permissions", return_value=set()), \
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False), \
          patch("src.exports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.exports.router.get_session", return_value=_NullSession()), \
          patch("src.exports.router.count_findings", new=fake_count):
-        client = TestClient(_make_app())
-        resp = client.get("/api/v1/exports/findings?format=csv")
+        client = TestClient(_make_app(allow_view_findings=False))
+        resp = client.get("/api/v1/findings/export?format=csv")
 
     assert resp.status_code == 403
     assert called["count"] is False

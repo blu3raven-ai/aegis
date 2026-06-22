@@ -83,7 +83,7 @@ def deduplicate_findings(findings: Sequence[dict]) -> DedupResult:
 def compute_dedup_key(f: dict) -> DedupKey | None:
     scanner = (f.get("scanner") or f.get("tool") or "").lower()
 
-    if scanner in ("dependencies", "grype", "sca"):
+    if scanner in ("dependencies_scanning", "grype", "sca"):
         adv = f.get("advisoryId") or ""
         pkg = f.get("packageName") or ""
         ver = f.get("packageVersion") or ""
@@ -100,7 +100,7 @@ def compute_dedup_key(f: dict) -> DedupKey | None:
             return None
         return DedupKey(scanner_family="container", components=(adv, pkg, ver, digest))
 
-    if scanner in ("secrets", "trufflehog"):
+    if scanner in ("secret_scanning", "trufflehog"):
         digest = (
             f.get("matchHash")
             or f.get("redactedMatch")
@@ -119,7 +119,7 @@ def compute_dedup_key(f: dict) -> DedupKey | None:
             return None
         return DedupKey(scanner_family="sast", components=(rule, file, line))
 
-    if scanner in ("iac", "checkov"):
+    if scanner in ("iac_scanning", "checkov"):
         rule = f.get("rule") or ""
         file = f.get("file") or ""
         if not rule or not file:

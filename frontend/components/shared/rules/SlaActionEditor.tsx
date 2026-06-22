@@ -14,6 +14,7 @@ import Link from "next/link"
 import type { SlaAction, SlaEscalation } from "@/lib/client/rules-api"
 import type { NotificationDestination } from "@/lib/client/destinations-api"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 
@@ -58,13 +59,7 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
   return (
     <div className="space-y-5">
       {/* Deadline */}
-      <div>
-        <label
-          htmlFor="sla-deadline"
-          className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-        >
-          Deadline
-        </label>
+      <FormField label="Deadline" htmlFor="sla-deadline">
         <div className="flex items-center gap-2">
           <span className="text-sm text-[var(--color-text-secondary)]">Fix within</span>
           <Input
@@ -79,7 +74,7 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
           />
           <span className="text-sm text-[var(--color-text-secondary)]">days</span>
         </div>
-      </div>
+      </FormField>
 
       {/* Escalations */}
       <div>

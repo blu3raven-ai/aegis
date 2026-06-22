@@ -1,6 +1,6 @@
-import type { FindingRow } from "@/lib/client/repos-api"
+import type { FindingRow } from "@/lib/client/sources-api"
 
-type ScannerKey = "dependencies" | "code_scanning" | "container_scanning" | "secrets"
+type ScannerKey = "dependencies_scanning" | "code_scanning" | "container_scanning" | "secret_scanning"
 
 interface ScannerCoverageStripProps {
   covered: string[]
@@ -10,7 +10,6 @@ interface ScannerCoverageStripProps {
 interface ScannerSpec {
   key: ScannerKey
   label: string
-  matchTools: string[]
   icon: React.ReactNode
 }
 
@@ -49,21 +48,15 @@ function SecretsIcon() {
 }
 
 const SCANNERS: ScannerSpec[] = [
-  { key: "dependencies", label: "Dependencies", matchTools: ["grype", "syft", "trivy", "osv"], icon: <DependenciesIcon /> },
-  { key: "code_scanning", label: "Code scanning", matchTools: ["semgrep", "codeql", "bandit"], icon: <CodeIcon /> },
-  { key: "secrets", label: "Secrets", matchTools: ["gitleaks", "trufflehog"], icon: <SecretsIcon /> },
-  { key: "container_scanning", label: "Container", matchTools: ["trivy", "grype", "syft"], icon: <ContainerIcon /> },
+  { key: "dependencies_scanning", label: "Dependencies", icon: <DependenciesIcon /> },
+  { key: "code_scanning", label: "Code scanning", icon: <CodeIcon /> },
+  { key: "secret_scanning", label: "Secrets", icon: <SecretsIcon /> },
+  { key: "container_scanning", label: "Container", icon: <ContainerIcon /> },
 ]
 
 function findingCountFor(scanner: ScannerSpec, findings: FindingRow[]): number {
-  if (scanner.key === "container_scanning") {
-    return findings.filter((f) => f.tool.toLowerCase().includes("container")).length
-  }
-  const lowercased = scanner.matchTools
-  return findings.filter((f) => {
-    const tool = f.tool.toLowerCase()
-    return lowercased.some((t) => tool === t || tool.startsWith(`${t}-`) || tool.endsWith(`-${t}`))
-  }).length
+  // Finding.tool is the canonical scanner category — no tool-binary heuristics.
+  return findings.filter((f) => f.tool === scanner.key).length
 }
 
 export function ScannerCoverageStrip({ covered, activeFindings }: ScannerCoverageStripProps) {

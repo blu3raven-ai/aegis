@@ -4,7 +4,7 @@ import { mockCurrentUser } from "../../fixtures/mock-api"
 test.describe("Organization settings", () => {
   test.beforeEach(async ({ page }) => {
     await mockCurrentUser(page)
-    await page.route("**/api/v1/settings/organisations**", (route) =>
+    await page.route("**/api/v1/workspace/teams**", (route) =>
       route.fulfill({
         json: {
           organizations: [

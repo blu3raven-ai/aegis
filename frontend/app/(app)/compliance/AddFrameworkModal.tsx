@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Sheet } from "@/components/ui/Sheet"
 import { Textarea } from "@/components/ui/Textarea"
@@ -139,11 +140,9 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-sm">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <label className="block">
-              <span className="text-xs font-medium text-[var(--color-text-secondary)]">
-                Framework ID
-              </span>
+            <FormField label="Framework ID" htmlFor="framework-id" required>
               <Input
+                id="framework-id"
                 size="sm"
                 required
                 value={id}
@@ -151,33 +150,29 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
                 placeholder="acme-2026"
                 pattern="[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?"
                 title="lowercase letters, digits, hyphens; 1–64 chars"
-                className="mt-1 font-mono"
+                className="font-mono"
               />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-[var(--color-text-secondary)]">Label</span>
+            </FormField>
+            <FormField label="Label" htmlFor="framework-label" required>
               <Input
+                id="framework-label"
                 size="sm"
                 required
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="ACME 2026"
-                className="mt-1"
               />
-            </label>
+            </FormField>
           </div>
 
-          <label className="block">
-            <span className="text-xs font-medium text-[var(--color-text-secondary)]">
-              Description (optional)
-            </span>
+          <FormField label="Description (optional)" htmlFor="framework-description">
             <Textarea
+              id="framework-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="mt-1"
             />
-          </label>
+          </FormField>
 
           <div>
             <div className="mb-2 flex items-center justify-between">

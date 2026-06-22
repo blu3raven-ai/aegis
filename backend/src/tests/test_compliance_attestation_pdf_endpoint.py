@@ -9,8 +9,11 @@ os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
 from src.compliance.models import Framework  # noqa: E402
 from src.compliance.router import router as compliance_router  # noqa: E402
+from src.tests._pdf_skip import pdf_skip  # noqa: E402
 
 
 _VIEWER_PERMS = {"view_findings"}
@@ -24,7 +27,7 @@ async def _resolve_missing_framework(_session, _framework_id):
     return None
 
 
-def _make_app() -> FastAPI:
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(compliance_router)
 
@@ -34,6 +37,8 @@ def _make_app() -> FastAPI:
         request.state.user_org = "test-org"
         return await call_next(request)
 
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
     return app
 
 
@@ -66,6 +71,7 @@ def _stub_payload():
     }
 
 
+@pdf_skip
 def test_attestation_pdf_returns_pdf():
     app = _make_app()
 
@@ -74,7 +80,6 @@ def test_attestation_pdf_returns_pdf():
 
     recorder = MagicMock()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.compliance.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.compliance.router.get_framework", side_effect=_resolve_known_framework),
         patch("src.compliance.router.build_attestation_payload", side_effect=_fake_payload),
@@ -97,7 +102,6 @@ def test_attestation_pdf_returns_pdf():
 def test_attestation_pdf_unknown_framework_404():
     app = _make_app()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.compliance.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
         patch("src.compliance.router.get_framework", side_effect=_resolve_missing_framework),
     ):
@@ -106,7 +110,7 @@ def test_attestation_pdf_unknown_framework_404():
 
 
 def test_attestation_pdf_requires_permission():
-    app = _make_app()
-    with patch("src.settings.router._resolve_effective_permissions", return_value=set()):
+    app = _make_app(allow_view_findings=False)
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False):
         resp = TestClient(app).get("/api/v1/compliance/frameworks/soc2/attestation.pdf")
     assert resp.status_code == 403

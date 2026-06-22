@@ -9,8 +9,6 @@ from __future__ import annotations
 import asyncio
 import threading
 
-import pytest
-
 from src.shared.event_bus import Event as SseEvent, EventBus
 from src.shared.event_publisher import EventPublisher
 from src.shared.event_types.code import CodePushEvent

@@ -4,15 +4,16 @@ import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import type { SourceCategory, SourceConnection } from "@/lib/shared/sources-types"
 import { CATEGORY_LABELS, CATEGORY_ITEM_LABELS, CATEGORY_API_SLUGS } from "@/lib/shared/sources-types"
-import { listSourceConnections } from "@/lib/client/sources-api"
+import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { SourceKpiStrip } from "./SourceKpiStrip"
 import { SourceConnectionCard } from "./SourceConnectionCard"
 import { AddConnectionModal } from "@/components/sources/AddConnectionModal"
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { PoweredToolsSection } from "./PoweredToolsSection"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState({
   category,
@@ -28,7 +29,7 @@ function EmptyState({
   const itemLabel = CATEGORY_ITEM_LABELS[category]
   return (
     <div className="py-8">
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <Card padding="none" className="rounded-2xl p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
         <div className="mx-auto max-w-md text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)]/10">
             {icon}
@@ -55,27 +56,25 @@ function EmptyState({
             </div>
           )}
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
 
-// ─── Loading Skeleton ─────────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-28 motion-safe:animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
+          <Skeleton key={i} className="h-28 rounded-xl" />
         ))}
       </div>
-      <div className="h-20 motion-safe:animate-pulse rounded-2xl bg-[var(--color-surface-raised)]" />
+      <Skeleton className="h-20 rounded-2xl" />
     </div>
   )
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface SourcePageShellProps {
   category: SourceCategory
@@ -88,7 +87,6 @@ interface SourcePageShellProps {
   onControlledShowAddChange?: (open: boolean) => void
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SourcePageShell({
   category,
@@ -117,6 +115,7 @@ export function SourcePageShell({
     "code-repositories": "Connect code hosts to scan repositories for vulnerabilities, secrets, and code issues.",
     "container-registry": "Connect container registries to scan images for vulnerabilities.",
     "cloud-infrastructure": "Connect cloud accounts for infrastructure security scanning.",
+    "ci-systems": "Connect CI systems to trigger scans from your build pipelines.",
   }
   const description = CATEGORY_DESCRIPTIONS[category]
 

@@ -1,7 +1,11 @@
+import "server-only"
+
+import { getSessionCookieHeader } from "@/lib/server/session"
+
 const BACKEND_URL = process.env.FASTAPI_URL ?? "http://localhost:8000"
 
 interface SourceConnectionEntry {
-  auth?: { orgOrOwner?: string }
+  auth?: { orgOrOwner?: string | null }
   sourceType?: string
   category?: string
   status?: string
@@ -17,12 +21,31 @@ async function fetchSourceConnections(): Promise<SourceConnectionEntry[]> {
     return _cachedConnections
   }
   try {
-    const response = await fetch(`${BACKEND_URL}/api/v1/settings/sources/internal-orgs`, {
-      cache: "no-store",
-    })
+    const cookieHeader = await getSessionCookieHeader()
+    if (!cookieHeader) return _cachedConnections ?? []
+    const response = await fetch(
+      `${BACKEND_URL}/api/v1/sources/connections/internal-orgs`,
+      {
+        method: "GET",
+        headers: { Cookie: cookieHeader },
+        cache: "no-store",
+      },
+    )
     if (!response.ok) return _cachedConnections ?? []
     const data = await response.json()
-    const connections: SourceConnectionEntry[] = Array.isArray(data.connections) ? data.connections : []
+    const rows = data?.connections
+    if (!Array.isArray(rows)) return _cachedConnections ?? []
+    const connections: SourceConnectionEntry[] = rows.map((row: {
+      orgOrOwner?: string | null
+      sourceType?: string | null
+      category?: string | null
+      status?: string | null
+    }) => ({
+      auth: { orgOrOwner: row.orgOrOwner ?? "" },
+      sourceType: row.sourceType ?? "",
+      category: row.category ?? "",
+      status: row.status ?? "",
+    }))
     _cachedConnections = connections
     _cacheTime = now
     return connections
@@ -49,4 +72,3 @@ export async function getOrgsForCategories(categories: string[]): Promise<string
   }
   return Array.from(byKey.values())
 }
-

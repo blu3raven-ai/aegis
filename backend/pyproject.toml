@@ -29,6 +29,9 @@ dependencies = [
   # WeasyPrint 62 is incompatible with pydyf 0.11+ (upstream packaging bug)
   "pydyf>=0.10,<0.11",
   "jinja2>=3.1",
+  # Multi-ecosystem version comparison for backend OSV matching (semver, PEP440,
+  # Maven, Go, gem, NuGet, and distro dpkg/apk/rpm schemes).
+  "univers>=30.11.0",
 ]
 
 [project.optional-dependencies]

@@ -71,3 +71,20 @@ def test_list_sbom_downloads_empty(client):
         mock_ctor.return_value.__enter__.return_value.get.return_value = _mock_resp(200, body)
         result = client.list_sbom_downloads("job-1")
     assert result == []
+
+
+def test_update_auth_token_swaps_bearer_header_on_next_request(client):
+    """After /complete auto-rotates the token, subsequent presign calls must
+    use the NEW token. Prevents 401-on-next-job regressions."""
+    client.update_auth_token("new-tok")
+
+    body = {"urls": [{"file": "a.json", "url": "u"}], "expiresIn": 300}
+    captured: dict = {}
+    with patch("httpx.Client") as mock_ctor:
+        def capture_post(url, headers=None, json=None):
+            captured["headers"] = headers
+            return _mock_resp(200, body)
+        mock_ctor.return_value.__enter__.return_value.post.side_effect = capture_post
+        client.presign_uploads("job-1", ["a.json"])
+
+    assert captured["headers"] == {"Authorization": "Bearer new-tok"}

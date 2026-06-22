@@ -11,7 +11,7 @@ from runner.core import dispatcher
 
 def test_dispatcher_get_scanner_returns_callable_run_scan():
     """Smoke test: the dispatcher returns instances whose run_scan is callable."""
-    for scanner_type in ("dependencies", "container", "secrets", "code-scanning"):
+    for scanner_type in ("dependencies_scanning", "container_scanning", "secret_scanning", "code_scanning"):
         scanner = dispatcher.get_scanner(scanner_type)
         assert callable(scanner.run_scan)
 

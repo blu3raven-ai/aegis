@@ -36,7 +36,7 @@ def _seed_control(framework: str, control_id: str, title: str) -> None:
     run_db(_run)
 
 
-def _seed_finding(tool="secrets", org="example-org", severity="critical", state="open", suffix="") -> int:
+def _seed_finding(tool="secret_scanning", org="example-org", severity="critical", state="open", suffix="") -> int:
     now = _now()
     async def _run(session):
         f = Finding(
@@ -98,7 +98,7 @@ def test_list_controls_wrong_framework_returns_empty():
 
 def test_get_controls_for_finding_returns_mappings():
     _seed_control("soc2", "CC6_SVC_A", "Access SVC")
-    fid = _seed_finding(tool="secrets", org="svc-access-org", suffix="acc")
+    fid = _seed_finding(tool="secret_scanning", org="svc-access-org", suffix="acc")
     _seed_mapping(fid, "soc2", "CC6_SVC_A", confidence=0.95)
     async def _run(session):
         return await get_controls_for_finding(session, fid)
@@ -120,8 +120,8 @@ def test_get_controls_for_finding_unknown_id_returns_empty():
 
 def test_get_findings_for_control_returns_correct_org():
     _seed_control("iso27001", "A8_SVC_FW", "A8 SVC")
-    fid_in = _seed_finding(tool="dependencies", org="svc-org-in", severity="high", suffix="in")
-    fid_out = _seed_finding(tool="dependencies", org="svc-org-out", severity="high", suffix="out")
+    fid_in = _seed_finding(tool="dependencies_scanning", org="svc-org-in", severity="high", suffix="in")
+    fid_out = _seed_finding(tool="dependencies_scanning", org="svc-org-out", severity="high", suffix="out")
     _seed_mapping(fid_in, "iso27001", "A8_SVC_FW")
     _seed_mapping(fid_out, "iso27001", "A8_SVC_FW")
     async def _run(session):
@@ -148,7 +148,7 @@ def test_get_findings_for_control_excludes_fixed():
 
 def test_get_framework_summary_counts():
     _seed_control("pci-dss", "6_3_SVC_SUM", "PCI SVC Sum")
-    fid1 = _seed_finding(tool="dependencies", org="svc-sum-org", severity="critical", suffix="s1")
+    fid1 = _seed_finding(tool="dependencies_scanning", org="svc-sum-org", severity="critical", suffix="s1")
     fid2 = _seed_finding(tool="containers", org="svc-sum-org", severity="high", suffix="s2")
     _seed_mapping(fid1, "pci-dss", "6_3_SVC_SUM")
     _seed_mapping(fid2, "pci-dss", "6_3_SVC_SUM")

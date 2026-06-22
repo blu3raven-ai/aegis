@@ -1,7 +1,7 @@
-import { IMPLIED_PERMISSIONS } from "@/lib/shared/auth/permissions"
-import type { Permission } from "@/lib/shared/auth/permissions"
-export type { Permission } from "@/lib/shared/auth/permissions"
-export { PERMISSION_GROUPS, IMPLIED_PERMISSIONS } from "@/lib/shared/auth/permissions"
+import { IMPLIED_PERMISSIONS } from "./permissions.ts"
+import type { Permission } from "./permissions.ts"
+export type { Permission } from "./permissions.ts"
+export { PERMISSION_GROUPS, IMPLIED_PERMISSIONS } from "./permissions.ts"
 
 export type UserRole = "owner" | "admin" | "security" | "viewer"
 

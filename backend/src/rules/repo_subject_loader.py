@@ -10,10 +10,10 @@ from src.db.models import Asset, ScanRun
 from src.rules_engine.subjects import RuleRepoSubject
 
 
-# Mirrored from src.repos.service to avoid importing the async-heavy repos
+# Mirrored from src.sources.service to avoid importing the async-heavy sources
 # service module here; if this list drifts, scanner coverage will silently
-# diverge from the repos page.
-_SCANNER_TYPES = ("dependencies", "code_scanning", "container_scanning", "secrets")
+# diverge from the sources page.
+_SCANNER_TYPES = ("dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning")
 
 
 def _ensure_aware(dt: datetime) -> datetime:

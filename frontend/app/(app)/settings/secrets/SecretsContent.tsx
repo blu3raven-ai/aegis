@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import type { AppConfig } from "@/lib/server/app-config"
 import { formatSettingsError, getSettings } from "@/lib/client/settings-api"
-import { listSourceConnections } from "@/lib/client/sources-api"
+import { listSourceConnections } from "@/lib/client/source-connections-api"
 import type { SourceConnection } from "@/lib/shared/sources-types"
 import { SecretsSetupForm } from "./SecretsSetupForm"
 import { NoSourcesBanner } from "@/components/shared/NoSourcesBanner"
@@ -98,12 +98,12 @@ export function SecretsContent({ canEdit = true }: { canEdit?: boolean }) {
       ) : (
       <SecretsSetupForm
         initialValues={{
-          scanConcurrency: settings.tools.secrets.scanConcurrency,
-          scanDepth: settings.tools.secrets.scanDepth,
-          scanHistoryWindow: settings.tools.secrets.scanHistoryWindow,
-          autoRerunEnabled: settings.tools.secrets.autoRerunEnabled,
-          rerunScheduleType: settings.tools.secrets.rerunScheduleType,
-          rerunScheduleValue: settings.tools.secrets.rerunScheduleValue,
+          scanConcurrency: settings.tools.secret_scanning.scanConcurrency,
+          scanDepth: settings.tools.secret_scanning.scanDepth,
+          scanHistoryWindow: settings.tools.secret_scanning.scanHistoryWindow,
+          autoRerunEnabled: settings.tools.secret_scanning.autoRerunEnabled,
+          rerunScheduleType: settings.tools.secret_scanning.rerunScheduleType,
+          rerunScheduleValue: settings.tools.secret_scanning.rerunScheduleValue,
         }}
         prereqItems={prereqItems}
         prereqRefreshing={prereqRefreshing}

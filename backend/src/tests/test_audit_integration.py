@@ -6,18 +6,16 @@ verify the full request-to-audit-record flow without needing a real Postgres.
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 from src.audit_log.middleware import AuditMiddleware
 from src.audit_log.recorder import AuditRecorder
-from src.notifications.admin_router import router as notifications_admin_router
+from src.settings.notifications.router import config_router as notifications_config_router
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
 
 
 def _make_integration_app(captured_events: list) -> tuple[FastAPI, TestClient]:
@@ -28,7 +26,7 @@ def _make_integration_app(captured_events: list) -> tuple[FastAPI, TestClient]:
 
     app = FastAPI()
     app.add_middleware(AuditMiddleware, recorder=CapturingRecorder())
-    app.include_router(notifications_admin_router)
+    app.include_router(notifications_config_router)
 
     @app.middleware("http")
     async def inject_user(request: Request, call_next):
@@ -42,7 +40,6 @@ def _make_integration_app(captured_events: list) -> tuple[FastAPI, TestClient]:
     return app, TestClient(app, raise_server_exceptions=False)
 
 
-# ── tests ─────────────────────────────────────────────────────────────────────
 
 
 def test_create_destination_produces_audit_event():
@@ -50,11 +47,11 @@ def test_create_destination_produces_audit_event():
     events: list = []
     app, client = _make_integration_app(events)
 
-    with patch("src.settings.router._resolve_effective_permissions", return_value={"manage_settings"}), \
-         patch("src.notifications.destination.create_destination") as mock_create, \
-         patch("src.notifications.admin_router.create_destination") as mock_create2:
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value={"manage_settings"}), \
+         patch("src.notifications.destination.create_destination"), \
+         patch("src.settings.notifications.router.create_destination") as mock_create2:
         mock_create2.return_value = {"id": 1, "name": "test-slack", "destination_type": "slack"}
-        resp = client.post("/api/v1/notifications/destinations", json={
+        client.post("/api/v1/notifications/destinations", json={
             "destination_type": "slack",
             "name": "test-slack",
             "config": {"url": "https://hooks.slack.example.com/test"},
@@ -71,9 +68,9 @@ def test_delete_destination_produces_audit_event():
     events: list = []
     app, client = _make_integration_app(events)
 
-    with patch("src.settings.router._resolve_effective_permissions", return_value={"manage_settings"}), \
-         patch("src.notifications.admin_router.delete_destination", return_value=True):
-        resp = client.delete("/api/v1/notifications/destinations/99")
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value={"manage_settings"}), \
+         patch("src.settings.notifications.router.delete_destination", return_value=True):
+        client.delete("/api/v1/notifications/destinations/99")
 
     assert len(events) >= 1
     actions = [e["action"] for e in events]
@@ -85,9 +82,9 @@ def test_non_admin_route_does_not_audit():
     events: list = []
     app, client = _make_integration_app(events)
 
-    with patch("src.settings.router._resolve_effective_permissions", return_value={"manage_settings"}), \
-         patch("src.notifications.admin_router.list_destinations", return_value=[]):
-        client.get("/api/v1/notifications/destinations")
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value={"manage_settings"}), \
+         patch("src.settings.notifications.router.get_destination", return_value={"id": 1, "destination_type": "slack", "name": "ops", "config": {}, "enabled": True, "event_filter": None, "created_at": None, "updated_at": None}):
+        client.get("/api/v1/notifications/destinations/1")
 
     # GET requests are never auto-audited by the middleware
     middleware_events = [e for e in events if e.get("request") and getattr(e["request"], "method", None) == "GET"]

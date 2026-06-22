@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { RoleRecord, RoleInput } from "@/lib/client/settings-api"
 import { PERMISSION_GROUPS } from "@/lib/shared/auth/permissions"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 import { PermissionGroup } from "./PermissionGroup"
@@ -71,8 +72,7 @@ export function RoleEditor({
 
       <form id={formId} onSubmit={handleSubmit} className="space-y-8">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="space-y-1.5">
-            <label htmlFor="role-name" className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Role name</label>
+          <FormField label="Role name" htmlFor="role-name" required>
             <Input
               id="role-name"
               type="text"
@@ -82,9 +82,8 @@ export function RoleEditor({
               required
               placeholder="e.g. Security Auditor"
             />
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="role-id" className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Role ID</label>
+          </FormField>
+          <FormField label="Role ID" htmlFor="role-id">
             <Input
               id="role-id"
               type="text"
@@ -93,11 +92,10 @@ export function RoleEditor({
               className="cursor-default font-mono"
               title="Role ID is automatically generated and cannot be changed"
             />
-          </div>
+          </FormField>
         </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="role-desc" className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Description</label>
+        <FormField label="Description" htmlFor="role-desc">
           <Textarea
             id="role-desc"
             value={description}
@@ -107,7 +105,7 @@ export function RoleEditor({
             placeholder="Describe the purpose and access level of this role."
             className="resize-none"
           />
-        </div>
+        </FormField>
 
         <div className="space-y-6 border-t border-[var(--color-border)] pt-6">
           <div className="space-y-1">

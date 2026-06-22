@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { ApiClientError } from "@/lib/client/api-client.types.ts"
+import { FormField } from "@/components/ui/FormField"
+import { Input } from "@/components/ui/Input"
 
 export function VerifyForm() {
   const router = useRouter()
@@ -21,7 +23,7 @@ export function VerifyForm() {
     startTransition(async () => {
       const pending_token = sessionStorage.getItem("mfa_pending_token") ?? ""
       try {
-        await apiClient("/auth/login/verify", {
+        await apiClient("/api/v1/auth/login/verify", {
           method: "POST",
           body: { pending_token, code },
           suppressUnauthorizedRedirect: true,
@@ -49,11 +51,8 @@ export function VerifyForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <div>
-        <label htmlFor="code" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
-          Verification code
-        </label>
-        <input
+      <FormField label="Verification code" htmlFor="code">
+        <Input
           id="code"
           type="text"
           inputMode="numeric"
@@ -65,9 +64,9 @@ export function VerifyForm() {
           required
           autoComplete="one-time-code"
           autoFocus
-          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-3 text-center font-mono text-sm tracking-widest text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+          className="text-center font-mono tracking-widest"
         />
-      </div>
+      </FormField>
 
       {error && (
         <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">

@@ -4,6 +4,7 @@ import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
 import { relativeTime } from "@/lib/shared/relative-time"
 import type { SbomHistoryEntry } from "@/lib/client/sbom-api"
 import { Button } from "@/components/ui/Button"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 export function SbomHistoryDrawer({
   open,
@@ -46,8 +47,8 @@ export function SbomHistoryDrawer({
           <div className="flex flex-col gap-2 p-5">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex flex-col gap-1.5 rounded-xl border border-[var(--color-border)] p-4">
-                <div className="h-3.5 w-40 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
-                <div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+                <Skeleton className="h-3.5 w-40" />
+                <Skeleton className="h-3 w-24" />
               </div>
             ))}
           </div>
@@ -61,12 +62,12 @@ export function SbomHistoryDrawer({
         ) : (
           <div className="flex flex-col gap-2 p-5">
             {history.map((entry, idx) => {
-              const isSelected = selectedHash === entry.manifest_set_hash
+              const isSelected = selectedHash === entry.run_id
               const isLatest = idx === 0
 
               return (
                 <button
-                  key={entry.manifest_set_hash}
+                  key={entry.run_id}
                   type="button"
                   onClick={() => onSelectVersion(entry)}
                   className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
@@ -87,7 +88,7 @@ export function SbomHistoryDrawer({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <code className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]">
-                        {entry.manifest_set_hash.slice(0, 16)}…
+                        {entry.run_id.slice(0, 16)}…
                       </code>
                       {isLatest && (
                         <span className="rounded-full bg-[var(--color-status-ok)]/10 px-2 py-px text-2xs font-semibold text-[var(--color-status-ok)]">

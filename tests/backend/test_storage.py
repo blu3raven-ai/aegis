@@ -223,24 +223,6 @@ def test_ingest_normalized_jsonl_writes_findings_to_db(tmp_path, monkeypatch):
     assert snapshot["stats"]["total"] >= 1
 
 
-def test_ingest_raw_scanner_output_reads_trufflehog_shape(tmp_path, monkeypatch):
-    from src.secrets.scanner import ingest_raw_scanner_output
-
-
-    repo_dir = tmp_path / "raw" / "example-org" / "repo-a"
-    repo_dir.mkdir(parents=True)
-    (repo_dir / "trufflehog.json").write_text(
-        '{"DetectorName":"gcp-api-key","Raw":"secret-b","SourceMetadata":{"Data":{"Git":{"file":"b.py","commit":"bbb","line":2}}}}\n',
-        encoding="utf-8",
-    )
-
-    # ingest_raw_scanner_output now returns (None, repo_to_sha)
-    result, repo_to_sha = ingest_raw_scanner_output("example-org", "run-raw", tmp_path / "raw" / "example-org")
-
-    assert result is None
-    assert repo_to_sha["repo-a"] == "bbb"
-
-
 def test_in_memory_scan_runtime_tracks_probe_and_cancel_metadata():
     from src.secrets.scanner import InMemoryScanRuntime
 

@@ -53,3 +53,69 @@ class DryRunConfirmation(BaseModel):
     match_count: int
     sample_matches: list[DryRunSampleMatch]
     valid_until: datetime
+
+
+# Read envelopes for the GET endpoints. Snake_case fields on the wire — the
+# TS client already destructures snake_case so no adapter layer is needed.
+
+
+class RuleRead(BaseModel):
+    id: str
+    category: str
+    name: str
+    description: str | None = None
+    enabled: bool
+    priority: int
+    conditions: dict[str, Any] = Field(default_factory=dict)
+    action: dict[str, Any] = Field(default_factory=dict)
+    created_by: str
+    created_at: str
+    updated_at: str | None = None
+    last_evaluated_at: str | None = None
+    violation_count_open: int = 0
+    violation_count_resolved_30d: int = 0
+
+
+class RuleList(BaseModel):
+    rules: list[RuleRead]
+
+
+class RuleReadResponse(BaseModel):
+    rule: RuleRead
+
+
+class RuleSummaryResponse(BaseModel):
+    active_rules: int
+    violations_open: int
+    coverage_gaps: int
+    sla_compliance_pct: float
+
+
+class RuleViolationRead(BaseModel):
+    id: int
+    rule_id: str
+    subject_type: str
+    subject_id: str
+    status: str
+    opened_at: str
+    resolved_at: str | None = None
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class RuleViolationPageResponse(BaseModel):
+    violations: list[RuleViolationRead]
+    total: int
+    limit: int
+    offset: int
+
+
+class KillSwitchRead(BaseModel):
+    id: int
+    category: str
+    killed_at: str
+    killed_by: str
+    reason: str | None = None
+
+
+class KillSwitchList(BaseModel):
+    kill_switches: list[KillSwitchRead]

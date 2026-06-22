@@ -13,7 +13,6 @@ from src.db.models import Asset, ScanRun
 from src.pr_feedback.git_pr_providers.base import AuthError
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _make_session_patch(db_session):
     """Return a patched get_session that yields the test db_session."""
@@ -43,7 +42,6 @@ class _FakeSource:
         return self._base
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest_asyncio.fixture
 async def seeded_pending_pr_scan(db_session):
@@ -60,7 +58,7 @@ async def seeded_pending_pr_scan(db_session):
 
     scan = ScanRun(
         id="scan-pending-1",
-        tool="dependencies",
+        tool="dependencies_scanning",
         asset_id=asset_id,
         status="completed",
         triggered_by="ci",
@@ -76,7 +74,6 @@ async def seeded_pending_pr_scan(db_session):
     await db_session.commit()
 
 
-# ── Tests ─────────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_processes_pending_pr_scan_and_marks_posted(db_session, seeded_pending_pr_scan):

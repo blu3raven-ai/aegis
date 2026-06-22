@@ -64,7 +64,7 @@ class TestPullAndDispatchDuringDrain:
 
         fake_job = {
             "jobId": "job-abc",
-            "type": "dependencies",
+            "type": "dependencies_scanning",
             "org": "example-org",
             "runId": "run-1",
         }
@@ -81,7 +81,7 @@ class TestPullAndDispatchDuringDrain:
         mock_pool = MagicMock()
         agent._pool = mock_pool
 
-        fake_job = {"jobId": "job-xyz", "type": "secrets", "org": "example-org", "runId": "run-2"}
+        fake_job = {"jobId": "job-xyz", "type": "secret_scanning", "org": "example-org", "runId": "run-2"}
 
         with patch.object(agent, "_poll_job", return_value=fake_job):
             # Before drain: dispatch works

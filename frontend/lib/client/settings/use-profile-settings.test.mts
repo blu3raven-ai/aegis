@@ -4,13 +4,14 @@ import assert from "node:assert/strict"
 
 const SRC = readFileSync(new URL("./use-profile-settings.ts", import.meta.url), "utf8")
 
-test("useProfileSettings fetches /api/v1/settings/profile", () => {
-  assert.match(SRC, /apiClient<.*>\("\/api\/v1\/settings\/profile"/)
+test("useProfileSettings fetches /api/v1/settings/account/profile via REST", () => {
+  assert.match(SRC, /apiClient/)
+  assert.match(SRC, /\/api\/v1\/settings\/account\/profile/)
 })
 
-test("useProfileSettings exposes saveProfile via PATCH", () => {
-  assert.match(SRC, /method: "PATCH"/)
+test("useProfileSettings exposes saveProfile via PATCH /api/v1/settings/account/profile", () => {
   assert.match(SRC, /export async function saveProfile/)
+  assert.match(SRC, /method:\s*"PATCH"/)
 })
 
 test("useProfileSettings exposes mutate to refresh after save", () => {

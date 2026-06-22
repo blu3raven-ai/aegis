@@ -6,7 +6,7 @@ import json
 import httpx
 import pytest
 
-from src.pr_feedback.git_pr_providers.base import AuthError, RateLimitedError
+from src.pr_feedback.git_pr_providers.base import AuthError
 from src.pr_feedback.git_pr_providers.azure_devops import AzureDevOpsPrProvider
 from src.pr_feedback.render import MARKER_PREFIX
 

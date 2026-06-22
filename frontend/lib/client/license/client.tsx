@@ -31,7 +31,6 @@ const DEFAULT_STATUS: LicenseStatus = {
   license: null,
 }
 
-// ── Module-level cache (shared across all hook instances) ───────────────────
 
 let cachedStatus: LicenseStatus = DEFAULT_STATUS
 let cacheTimestamp = 0
@@ -57,8 +56,6 @@ export function invalidateLicenseCache() {
   cacheTimestamp = 0
 }
 
-// ── Context provider (optional — wrap layout for zero-fetch child hooks) ────
-
 const LicenseContext = createContext<(LicenseStatus & { isLoading: boolean }) | null>(null)
 
 export function LicenseProvider({ children }: { children: ReactNode }) {
@@ -78,8 +75,6 @@ export function LicenseProvider({ children }: { children: ReactNode }) {
     </LicenseContext.Provider>
   )
 }
-
-// ── Hook ────────────────────────────────────────────────────────────────────
 
 export function useLicense() {
   const ctx = useContext(LicenseContext)

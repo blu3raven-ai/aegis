@@ -2,7 +2,6 @@ from __future__ import annotations
 
 
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import case, select
@@ -12,18 +11,11 @@ from src.db.models import Asset, ScanRun, Finding, Decision
 from src.shared.archived_filter import exclude_archived, include_archived
 from src.shared.paths import (
     dt_to_iso as _dt_to_iso,
-    normalize_org,
     now_iso,
 )
 from src.secrets.store import (
-    SECRET_VALUE_KEYS,
     VALID_REVIEW_STATUSES,
-    build_secret_identity,
     ensure_secret_identity,
-    normalize_decision_value,
-    secret_decision_key,
-    secret_identity_value,
-    secret_key_decision_key,
     default_secret_run_progress,
     build_secrets_snapshot as _build_secrets_snapshot,
     combine_secrets_snapshots as _combine_secrets_snapshots,
@@ -79,12 +71,9 @@ def _run_to_dict(run: ScanRun) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Dependencies Run CRUD — stored in scan_runs table (tool='dependencies')
-# ---------------------------------------------------------------------------
+# Dependencies Run CRUD — stored in scan_runs table (tool='dependencies_scanning')
 
 def create_dependencies_run(org_key: str, run_id: str) -> dict[str, Any]:
-    now = _now_dt()
     run_dict: dict[str, Any] = {
         "id": run_id,
         "org": org_key,
@@ -110,7 +99,7 @@ def create_dependencies_run(org_key: str, run_id: str) -> dict[str, Any]:
     async def _query(session):
         session.add(ScanRun(
             id=run_id,
-            tool="dependencies",
+            tool="dependencies_scanning",
             status="queued",
             started_at=None,
             progress=run_dict["progress"],
@@ -172,7 +161,7 @@ def list_dependencies_runs(org_key: str) -> list[dict[str, Any]]:
         result = await session.execute(
             select(ScanRun)
             .where(
-                ScanRun.tool == "dependencies",
+                ScanRun.tool == "dependencies_scanning",
                 ScanRun.metadata_json["org_label"].astext == org_key,
             )
             .order_by(ScanRun.started_at.desc().nullslast())
@@ -182,9 +171,7 @@ def list_dependencies_runs(org_key: str) -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # Dependencies Findings — read from unified Finding table
-# ---------------------------------------------------------------------------
 
 def read_dependencies_findings(*, asset_ids: list[str], include_archived_rows: bool = False) -> list[dict[str, Any]]:
     if not asset_ids:
@@ -199,7 +186,7 @@ def read_dependencies_findings(*, asset_ids: list[str], include_archived_rows: b
                 & (Decision.identity_key == Finding.identity_key),
             )
             .join(Asset, Asset.id == Finding.asset_id)
-            .where(Finding.tool == "dependencies", Finding.asset_id.in_(asset_ids))
+            .where(Finding.tool == "dependencies_scanning", Finding.asset_id.in_(asset_ids))
         )
         if include_archived_rows:
             stmt = include_archived(stmt)
@@ -283,12 +270,9 @@ def empty_dependencies_snapshot(org: str) -> dict[str, Any]:
         },
     }
 
-# ---------------------------------------------------------------------------
 # ContainerScanning Run CRUD — stored in scan_runs table (tool='container_scanning')
-# ---------------------------------------------------------------------------
 
 def create_container_scanning_run(org_key: str, run_id: str) -> dict[str, Any]:
-    now = _now_dt()
     run_dict: dict[str, Any] = {
         "id": run_id,
         "org": org_key,
@@ -386,9 +370,7 @@ def list_container_scanning_runs(org_key: str) -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # ContainerScanning Findings — read from unified Finding table
-# ---------------------------------------------------------------------------
 
 def read_container_scanning_findings(*, asset_ids: list[str], include_archived_rows: bool = False) -> list[dict[str, Any]]:
     if not asset_ids:
@@ -434,9 +416,7 @@ def empty_container_scanning_snapshot(org: str) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Secret runs — stored in scan_runs table (tool='secrets')
-# ---------------------------------------------------------------------------
+# Secret runs — stored in scan_runs table (tool='secret_scanning')
 
 def _secret_run_to_dict(run: ScanRun) -> dict[str, Any]:
     meta = run.metadata_json or {}
@@ -465,7 +445,6 @@ def _secret_run_to_dict(run: ScanRun) -> dict[str, Any]:
 
 
 def create_secret_run(org: str, run_id: str) -> dict[str, Any]:
-    now = _now_dt()
     run_dict: dict[str, Any] = {
         "id": run_id,
         "organization": org.lower(),
@@ -487,7 +466,7 @@ def create_secret_run(org: str, run_id: str) -> dict[str, Any]:
     async def _query(session):
         session.add(ScanRun(
             id=run_id,
-            tool="secrets",
+            tool="secret_scanning",
             status="queued",
             progress=run_dict["progress"],
             metadata_json={
@@ -517,7 +496,7 @@ def update_secret_run(org: str, run_id: str, patch: dict[str, Any]) -> dict[str,
         run = await session.get(ScanRun, run_id)
         if not run:
             # Create it
-            run = ScanRun(id=run_id, tool="secrets", status="queued",
+            run = ScanRun(id=run_id, tool="secret_scanning", status="queued",
                           metadata_json={"org_label": org.lower()})
             session.add(run)
 
@@ -562,7 +541,7 @@ def list_secret_runs(org: str) -> list[dict[str, Any]]:
         result = await session.execute(
             select(ScanRun)
             .where(
-                ScanRun.tool == "secrets",
+                ScanRun.tool == "secret_scanning",
                 ScanRun.metadata_json["org_label"].astext == org.lower(),
             )
             .order_by(
@@ -578,9 +557,7 @@ def list_secret_runs(org: str) -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
-# Secret findings — read from unified Finding table (tool='secrets')
-# ---------------------------------------------------------------------------
+# Secret findings — read from unified Finding table (tool='secret_scanning')
 
 def _finding_to_secret_dict(f: Finding, decision: Decision | None = None) -> dict[str, Any]:
     from src.shared.finding_detail_blob import hydrate_detail
@@ -617,7 +594,7 @@ def read_latest_findings(org: str | None = None, *, asset_ids: list[str] | None 
                 & (Decision.asset_id == Finding.asset_id)
                 & (Decision.identity_key == Finding.identity_key),
             )
-            .where(Finding.tool == "secrets")
+            .where(Finding.tool == "secret_scanning")
         )
         if asset_ids is not None:
             stmt = stmt.where(Finding.asset_id.in_(asset_ids))
@@ -647,7 +624,7 @@ def read_secrets_snapshot(org: str) -> dict[str, Any] | None:
         result = await session.execute(
             select(ScanRun)
             .where(
-                ScanRun.tool == "secrets",
+                ScanRun.tool == "secret_scanning",
                 ScanRun.metadata_json["org_label"].astext == org.lower(),
             )
             .order_by(ScanRun.started_at.desc().nullslast())
@@ -664,12 +641,9 @@ def combine_secrets_snapshots(orgs: list[str], snapshots: list[dict[str, Any] | 
     return _combine_secrets_snapshots(orgs, snapshots, ensure_secret_identity)
 
 
-# ---------------------------------------------------------------------------
 # Code Scanning Run CRUD — stored in scan_runs table (tool='code_scanning')
-# ---------------------------------------------------------------------------
 
 def create_code_scanning_run(org_key: str, run_id: str) -> dict[str, Any]:
-    now = _now_dt()
     run_dict: dict[str, Any] = {
         "id": run_id,
         "org": org_key,
@@ -763,9 +737,7 @@ def list_code_scanning_runs(org_key: str) -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # Code Scanning Findings — read from unified Finding table
-# ---------------------------------------------------------------------------
 
 def read_code_scanning_findings(*, asset_ids: list[str], include_archived_rows: bool = False) -> list[dict[str, Any]]:
     if not asset_ids:
@@ -827,6 +799,11 @@ def _finding_to_code_scanning_dict(
         # Engine attribution (column is SOT) + merged rule ids
         "engine": getattr(f, "engine", None),
         "rule_ids": detail.get("ruleIds"),
+        # Verifier outputs (columns are SOT)
+        "verdict": getattr(f, "verdict", None),
+        "evidence": getattr(f, "evidence", None),
+        "exploit_chain": getattr(f, "exploit_chain", None),
+        "verification_metadata": getattr(f, "verification_metadata", None),
     }
     # Optional large fields
     for key in ("code_flows", "code_window", "imports", "reachability"):

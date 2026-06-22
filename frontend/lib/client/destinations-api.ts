@@ -1,14 +1,44 @@
-/**
- * TypeScript client for the notification destinations REST API (Phase 13).
- *
- * All endpoints are proxied through /api/v1/notifications/destinations.
- */
+/** Client for notification destinations and their delivery history. */
 
 import { apiClient } from "./api-client.ts"
 
+const CSRF_COOKIE_NAME = "__Host-csrf"
+
+function readCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null
+  for (const pair of document.cookie.split(";").map((p) => p.trim())) {
+    const [k, ...rest] = pair.split("=")
+    if (k === CSRF_COOKIE_NAME) return rest.join("=")
+  }
+  return null
+}
+
+async function gqlFetch<T>(operationName: string, query: string, variables: Record<string, unknown>): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  }
+  const csrf = readCsrfCookie()
+  if (csrf !== null) headers["X-CSRF-Token"] = csrf
+
+  const res = await fetch("/api/v1/graphql", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ operationName, query, variables }),
+    credentials: "include",
+  })
+  const body = (await res.json()) as { data?: T; errors?: { message: string }[] }
+  if (body.errors && body.errors.length > 0) {
+    throw new Error(body.errors[0].message)
+  }
+  if (!body.data) {
+    throw new Error(`${operationName} returned no data`)
+  }
+  return body.data
+}
+
 export interface NotificationDestination {
   id: number
-  org_id: string
   destination_type: string
   name: string
   config: Record<string, unknown>
@@ -41,7 +71,6 @@ export interface TestSendResult {
 }
 
 export type CreateDestinationPayload = {
-  org_id: string
   destination_type: string
   name: string
   config: Record<string, unknown>
@@ -58,12 +87,56 @@ export type UpdateDestinationPayload = {
 
 const BASE = "/api/v1/notifications/destinations"
 
-export async function listDestinations(orgId: string): Promise<NotificationDestination[]> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  const data = await apiClient<{ destinations: NotificationDestination[] }>(
-    `${BASE}?${qs.toString()}`,
+const NOTIFICATION_DESTINATIONS_QUERY = `query NotificationDestinations {
+  notifications {
+    destinations {
+      id
+      destinationType
+      name
+      config
+      enabled
+      eventFilter
+      createdAt
+      updatedAt
+    }
+  }
+}`
+
+interface GqlNotificationDestination {
+  id: number
+  destinationType: string
+  name: string
+  config: Record<string, unknown>
+  enabled: boolean
+  eventFilter: NotificationDestination["event_filter"]
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+interface GqlNotificationDestinationsResponse {
+  notifications: { destinations: GqlNotificationDestination[] }
+}
+
+function fromGqlDestination(d: GqlNotificationDestination): NotificationDestination {
+  return {
+    id: d.id,
+    destination_type: d.destinationType,
+    name: d.name,
+    config: d.config ?? {},
+    enabled: d.enabled,
+    event_filter: d.eventFilter ?? {},
+    created_at: d.createdAt ?? "",
+    updated_at: d.updatedAt ?? "",
+  }
+}
+
+export async function listDestinations(): Promise<NotificationDestination[]> {
+  const data = await gqlFetch<GqlNotificationDestinationsResponse>(
+    "NotificationDestinations",
+    NOTIFICATION_DESTINATIONS_QUERY,
+    {},
   )
-  return data.destinations ?? []
+  return data.notifications.destinations.map(fromGqlDestination)
 }
 
 export async function createDestination(
@@ -89,23 +162,68 @@ export async function deleteDestination(id: number): Promise<void> {
   await apiClient<void>(`${BASE}/${id}`, { method: "DELETE" })
 }
 
+const NOTIFICATION_DELIVERIES_QUERY = `query NotificationDeliveries($destinationId: Int!, $limit: Int) {
+  notifications {
+    deliveries(destinationId: $destinationId, limit: $limit) {
+      id
+      destinationId
+      eventId
+      eventType
+      status
+      payloadSummary
+      responseCode
+      error
+      attemptedAt
+    }
+  }
+}`
+
+interface GqlNotificationDelivery {
+  id: string
+  destinationId: number
+  eventId: string
+  eventType: string
+  status: string
+  payloadSummary?: string | null
+  responseCode?: number | null
+  error?: string | null
+  attemptedAt?: string | null
+}
+
+interface GqlNotificationDeliveriesResponse {
+  notifications: { deliveries: GqlNotificationDelivery[] }
+}
+
+function fromGqlDelivery(d: GqlNotificationDelivery): NotificationDelivery {
+  return {
+    id: Number(d.id),
+    destination_id: d.destinationId,
+    event_id: d.eventId,
+    event_type: d.eventType,
+    status: d.status as NotificationDelivery["status"],
+    payload_summary: d.payloadSummary ?? undefined,
+    response_code: d.responseCode ?? undefined,
+    error: d.error ?? undefined,
+    attempted_at: d.attemptedAt ?? "",
+  }
+}
+
 export async function listDeliveries(
   destinationId: number,
   limit = 50,
 ): Promise<NotificationDelivery[]> {
-  const qs = new URLSearchParams({ limit: String(limit) })
-  const data = await apiClient<{ deliveries: NotificationDelivery[] }>(
-    `${BASE}/${destinationId}/deliveries?${qs.toString()}`,
+  const data = await gqlFetch<GqlNotificationDeliveriesResponse>(
+    "NotificationDeliveries",
+    NOTIFICATION_DELIVERIES_QUERY,
+    { destinationId, limit },
   )
-  return data.deliveries ?? []
+  return data.notifications.deliveries.map(fromGqlDelivery)
 }
 
 export async function testDestination(
   destinationId: number,
-  orgId: string,
 ): Promise<TestSendResult> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  return apiClient<TestSendResult>(`${BASE}/${destinationId}/test?${qs.toString()}`, {
+  return apiClient<TestSendResult>(`${BASE}/${destinationId}/test`, {
     method: "POST",
   })
 }

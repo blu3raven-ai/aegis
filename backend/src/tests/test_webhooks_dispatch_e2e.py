@@ -16,12 +16,11 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.webhooks import event_listener as listener_mod
-from src.webhooks.event_listener import WebhookScanDispatcher
+from src.connectors.webhooks import event_listener as listener_mod
+from src.connectors.webhooks.event_listener import WebhookScanDispatcher
 
 
 _SECRET = "test-webhook-secret"
@@ -68,7 +67,7 @@ def _fake_session(asset: _FakeAsset):
 
 
 def _build_app() -> FastAPI:
-    from src.integrations.github_webhook import router as github_router
+    from src.connectors.webhooks.providers.github import router as github_router
 
     app = FastAPI()
     app.include_router(github_router)

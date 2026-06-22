@@ -15,7 +15,7 @@ export interface ConditionFieldSchema {
 
 export const NOTIFICATION_ROUTING_FIELDS: ConditionFieldSchema[] = [
   { value: "severity", label: "Severity", inputType: "select", valueSuggestions: ["critical", "high", "medium", "low", "info"] },
-  { value: "scanner", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies", "code_scanning", "secrets", "container_scanning"] },
+  { value: "scanner", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning"] },
   { value: "repo_id", label: "Repository ID", inputType: "text" },
   { value: "repo_labels", label: "Repo labels", inputType: "text" },
   { value: "cve_id", label: "CVE ID", inputType: "text" },
@@ -24,7 +24,7 @@ export const NOTIFICATION_ROUTING_FIELDS: ConditionFieldSchema[] = [
 
 export const SLA_RULE_FIELDS: ConditionFieldSchema[] = [
   { value: "severity", label: "Severity", inputType: "select", valueSuggestions: ["critical", "high", "medium", "low", "info"] },
-  { value: "scanner", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies", "code_scanning", "container_scanning", "secrets"] },
+  { value: "scanner", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"] },
   { value: "kev_matched", label: "KEV-matched", inputType: "boolean" },
   { value: "cve_id", label: "CVE ID", inputType: "text" },
   { value: "cwe_id", label: "CWE ID", inputType: "text" },
@@ -44,7 +44,7 @@ export const SCANNER_COVERAGE_RULE_FIELDS: ConditionFieldSchema[] = [
 
 export const AUTO_DISMISS_RULE_FIELDS: ConditionFieldSchema[] = [
   { value: "severity", label: "Severity", inputType: "select", valueSuggestions: ["critical", "high", "medium", "low", "info"] },
-  { value: "scanner", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies", "code_scanning", "container_scanning", "secrets"] },
+  { value: "scanner", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"] },
   { value: "file_path", label: "File path", inputType: "text" },
   { value: "cwe_id", label: "CWE ID", inputType: "text" },
   { value: "cve_id", label: "CVE ID", inputType: "text" },
@@ -54,7 +54,7 @@ export const AUTO_DISMISS_RULE_FIELDS: ConditionFieldSchema[] = [
 ]
 
 export const DATA_RETENTION_RULE_FIELDS: ConditionFieldSchema[] = [
-  { value: "tool", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies", "code_scanning", "container_scanning", "secrets"] },
+  { value: "tool", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"] },
   { value: "repo_id", label: "Repository ID", inputType: "text" },
   { value: "age_days", label: "Scan age (days)", inputType: "number" },
 ]

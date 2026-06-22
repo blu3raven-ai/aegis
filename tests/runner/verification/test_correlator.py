@@ -61,7 +61,7 @@ def _findings_two_scanners(repo: str = "acme__widget") -> list[dict]:
         {
             "id": "f1",
             "repository": repo,
-            "scanner": "secrets",
+            "scanner": "secret_scanning",
             "severity": "high",
             "rule": "aws-secret-key",
             "file": "cfg.env",
@@ -102,7 +102,7 @@ def test_skips_single_scanner_groups(tmp_path):
 
 def test_skips_too_small_groups(tmp_path):
     findings = [
-        {"id": "a", "repository": "x", "scanner": "secrets", "severity": "high",
+        {"id": "a", "repository": "x", "scanner": "secret_scanning", "severity": "high",
          "rule": "r1", "file": "a.py", "line": 1, "summary": ""},
     ]
     llm = _StubLlm([_final(_chain_json())])
@@ -113,7 +113,7 @@ def test_skips_too_small_groups(tmp_path):
 
 def test_skips_findings_without_repository(tmp_path):
     findings = [
-        {"id": "a", "scanner": "secrets", "severity": "high"},
+        {"id": "a", "scanner": "secret_scanning", "severity": "high"},
         {"id": "b", "scanner": "code-scanning", "severity": "high"},
     ]
     llm = _StubLlm([_final(_chain_json())])

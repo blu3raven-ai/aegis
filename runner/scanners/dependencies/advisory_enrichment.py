@@ -363,3 +363,56 @@ class _AdvisoryCache:
             p.write_text(json.dumps(detail.to_dict(), separators=(",", ":")))
         except OSError as exc:
             logger.debug("Cache write failed for %s: %s", advisory_id, exc)
+
+
+def enrich_advisories_enabled() -> bool:
+    """Whether normalizers should fetch NVD/OSV advisory text inline.
+
+    Both the SCA and container normalizers consult the same env flag so an
+    operator can disable enrichment for the whole runner in one place."""
+    return os.environ.get("AEGIS_DISABLE_EAGER_ENRICHMENT", "").lower() not in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def attach_advisory_details(
+    findings: list[dict],
+    *,
+    cache_dir: Path | None = None,
+    nvd_api_key: str | None = None,
+) -> None:
+    """Fetch advisory text from NVD/OSV and attach as ``advisoryDetail``. Mutates in place.
+
+    Shared between SCA and container normalizers — both produce findings with
+    ``advisoryId`` and ``advisoryAliases``, both feed the same verifier prompt
+    surface."""
+    advisory_ids: list[str] = []
+    for f in findings:
+        if f.get("advisoryId"):
+            advisory_ids.append(f["advisoryId"])
+        for alias in f.get("advisoryAliases") or []:
+            if isinstance(alias, str):
+                advisory_ids.append(alias)
+
+    if not advisory_ids:
+        return
+
+    api_key = nvd_api_key if nvd_api_key is not None else os.environ.get("NVD_API_KEY")
+    details = fetch_advisory_details(
+        advisory_ids,
+        cache_dir=cache_dir,
+        nvd_api_key=api_key,
+    )
+    if not details:
+        return
+
+    for f in findings:
+        detail = details.get(f.get("advisoryId", ""))
+        if detail is None:
+            for alias in f.get("advisoryAliases") or []:
+                detail = details.get(alias) if isinstance(alias, str) else None
+                if detail is not None:
+                    break
+        f["advisoryDetail"] = detail.to_dict() if detail else None

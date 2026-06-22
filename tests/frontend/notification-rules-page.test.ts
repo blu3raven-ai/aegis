@@ -44,38 +44,45 @@ async function loadModule() {
 // ── Page load ────────────────────────────────────────────────────────────────
 
 test("page load: listRules fetches rules for the org", async () => {
-  const rules = [
-    {
-      id: "nr_abc123",
-      org_id: "example-org",
-      name: "Crits to sec-channel",
-      enabled: true,
-      priority: 10,
-      channel_id: 1,
-      conditions: { field: "severity", op: "eq", value: "critical" },
-      created_at: "2026-05-01T00:00:00Z",
-      updated_at: "2026-05-01T00:00:00Z",
+  // listRules speaks GraphQL — wrap in {data: {notifications: {rules: [...]}}}
+  // with the camelCase resolver shape (conditionsJson string).
+  const payload = {
+    data: {
+      notifications: {
+        rules: [
+          {
+            id: "nr_abc123",
+            name: "Crits to sec-channel",
+            enabled: true,
+            priority: 10,
+            channelId: 1,
+            conditionsJson: JSON.stringify({ field: "severity", op: "eq", value: "critical" }),
+            createdAt: "2026-05-01T00:00:00Z",
+            updatedAt: "2026-05-01T00:00:00Z",
+          },
+        ],
+      },
     },
-  ]
-  const { mock, calls } = makeFetchMock({ rules })
+  }
+  const { mock, calls } = makeFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listRules } = await loadModule()
-  const result = await listRules("example-org")
+  const result = await listRules()
 
   assert.equal(calls.length, 1)
-  assert.ok(calls[0].url.includes("/api/v1/notification-rules"))
-  assert.ok(calls[0].url.includes("org_id=example-org"))
+  assert.equal(calls[0].url, "/api/v1/graphql")
   assert.equal(result.length, 1)
   assert.equal(result[0].name, "Crits to sec-channel")
+  assert.equal(result[0].channel_id, 1)
 })
 
 test("page load: listRules returns empty array for org with no rules", async () => {
-  const { mock, calls } = makeFetchMock({ rules: [] })
+  const { mock, calls } = makeFetchMock({ data: { notifications: { rules: [] } } })
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listRules } = await loadModule()
-  const result = await listRules("example-org")
+  const result = await listRules()
 
   assert.equal(calls.length, 1)
   assert.deepEqual(result, [])
@@ -86,12 +93,11 @@ test("page load: listRules returns empty array for org with no rules", async () 
 test("create flow: POST builds correct request body", async () => {
   const created = {
     id: "nr_new001",
-    org_id: "example-org",
     name: "Secrets rule",
     enabled: true,
     priority: 20,
     channel_id: 5,
-    conditions: { field: "scanner", op: "eq", value: "secrets" },
+    conditions: { field: "scanner", op: "eq", value: "secret_scanning" },
     created_at: "2026-05-20T00:00:00Z",
     updated_at: "2026-05-20T00:00:00Z",
   }
@@ -100,15 +106,14 @@ test("create flow: POST builds correct request body", async () => {
 
   const { createRule } = await loadModule()
   const result = await createRule({
-    org_id: "example-org",
     name: "Secrets rule",
     channel_id: 5,
-    conditions: { field: "scanner", op: "eq", value: "secrets" },
+    conditions: { field: "scanner", op: "eq", value: "secret_scanning" },
     priority: 20,
   })
 
   assert.equal(calls.length, 1)
-  assert.equal(calls[0].url, "/api/v1/notification-rules")
+  assert.equal(calls[0].url, "/api/v1/notifications/rules")
   const body = JSON.parse(calls[0].init!.body as string)
   assert.equal(body.name, "Secrets rule")
   assert.equal(body.channel_id, 5)
@@ -118,10 +123,9 @@ test("create flow: POST builds correct request body", async () => {
 
 // ── Update flow ───────────────────────────────────────────────────────────────
 
-test("update flow: PUT sends to correct URL with org_id query param", async () => {
+test("update flow: PUT sends to correct URL", async () => {
   const updated = {
     id: "nr_abc123",
-    org_id: "example-org",
     name: "Updated name",
     enabled: false,
     priority: 15,
@@ -134,11 +138,10 @@ test("update flow: PUT sends to correct URL with org_id query param", async () =
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { updateRule } = await loadModule()
-  const result = await updateRule("nr_abc123", "example-org", { name: "Updated name", enabled: false })
+  const result = await updateRule("nr_abc123", { name: "Updated name", enabled: false })
 
   assert.equal(calls.length, 1)
-  assert.ok(calls[0].url.includes("/api/v1/notification-rules/nr_abc123"))
-  assert.ok(calls[0].url.includes("org_id=example-org"))
+  assert.equal(calls[0].url, "/api/v1/notifications/rules/nr_abc123")
   assert.equal(calls[0].init!.method, "PUT")
   assert.equal(result.name, "Updated name")
   assert.equal(result.enabled, false)
@@ -151,11 +154,10 @@ test("delete flow: DELETE sends 204 to correct URL", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { deleteRule } = await loadModule()
-  await deleteRule("nr_abc123", "example-org")
+  await deleteRule("nr_abc123")
 
   assert.equal(calls.length, 1)
-  assert.ok(calls[0].url.includes("/api/v1/notification-rules/nr_abc123"))
-  assert.ok(calls[0].url.includes("org_id=example-org"))
+  assert.equal(calls[0].url, "/api/v1/notifications/rules/nr_abc123")
   assert.equal(calls[0].init!.method, "DELETE")
 })
 
@@ -169,16 +171,15 @@ test("preview single rule: POST to /preview with rule payload", async () => {
   const { previewRule } = await loadModule()
   const result = await previewRule({
     rule: {
-      org_id: "example-org",
       name: "crits rule",
       channel_id: 2,
       conditions: { field: "severity", op: "eq", value: "critical" },
     },
-    finding: { severity: "critical", scanner: "secrets", repo_id: "repo-1" },
+    finding: { severity: "critical", scanner: "secret_scanning", repo_id: "repo-1" },
   })
 
   assert.equal(calls.length, 1)
-  assert.ok(calls[0].url.includes("/api/v1/notification-rules/preview"))
+  assert.ok(calls[0].url.includes("/api/v1/notifications/rules/preview"))
   assert.equal(calls[0].init!.method, "POST")
   assert.equal(result.matched, true)
   assert.equal(result.channel_id, 2)
@@ -192,12 +193,11 @@ test("preview single rule: no match returns matched=false", async () => {
   const { previewRule } = await loadModule()
   const result = await previewRule({
     rule: {
-      org_id: "example-org",
       name: "crits rule",
       channel_id: 2,
       conditions: { field: "severity", op: "eq", value: "critical" },
     },
-    finding: { severity: "low", scanner: "dependencies", repo_id: "repo-1" },
+    finding: { severity: "low", scanner: "dependencies_scanning", repo_id: "repo-1" },
   })
 
   assert.equal(result.matched, false)
@@ -206,7 +206,7 @@ test("preview single rule: no match returns matched=false", async () => {
 
 // ── Preview: org evaluation ───────────────────────────────────────────────────
 
-test("preview org: POST with org_id returns breakdown", async () => {
+test("preview org: POST with evaluate_all_active returns breakdown", async () => {
   const orgResult = {
     matched_channel_ids: [3],
     breakdown: [
@@ -219,11 +219,13 @@ test("preview org: POST with org_id returns breakdown", async () => {
 
   const { previewOrg } = await loadModule()
   const result = await previewOrg({
-    org_id: "example-org",
     finding: { severity: "high", scanner: "code_scanning", repo_id: "repo-xyz" },
   })
 
   assert.equal(calls.length, 1)
+  const body = JSON.parse(calls[0].init!.body as string)
+  assert.equal(body.evaluate_all_active, true)
+  assert.equal(body.finding.severity, "high")
   assert.equal(result.matched_channel_ids.length, 1)
   assert.equal(result.matched_channel_ids[0], 3)
   assert.equal(result.breakdown.length, 2)
@@ -233,16 +235,13 @@ test("preview org: POST with org_id returns breakdown", async () => {
 
 // ── Error handling ────────────────────────────────────────────────────────────
 
-test("api error: non-ok response throws RulesApiError", async () => {
-  const { mock } = makeFetchMock({ detail: "rule not found" }, 404)
+test("api error: GraphQL response with errors propagates first message", async () => {
+  const { mock } = makeFetchMock({ errors: [{ message: "rule not found" }] })
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listRules } = await loadModule()
   await assert.rejects(
-    () => listRules("example-org"),
-    (err: Error) => {
-      assert.ok(err.message.includes("404"))
-      return true
-    }
+    () => listRules(),
+    /rule not found/,
   )
 })

@@ -24,10 +24,12 @@ export async function fetchOrgSettings(): Promise<OrgSettings> {
   const now = Date.now()
   if (cached && now - cacheTimestamp < CACHE_TTL_MS) return cached
   try {
-    const data = await apiClient<OrgSettings>("/api/v1/settings/org")
-    cached = data
+    const res = await fetch("/api/v1/settings/organisations/branding")
+    if (!res.ok) return DEFAULTS
+    const body = (await res.json()) as { name: string | null; logoDataUrl: string | null; updatedAt: string | null }
+    cached = { name: body.name, logoDataUrl: body.logoDataUrl, updatedAt: body.updatedAt ?? null }
     cacheTimestamp = Date.now()
-    return data
+    return cached
   } catch {
     return DEFAULTS
   }
@@ -36,35 +38,35 @@ export async function fetchOrgSettings(): Promise<OrgSettings> {
 export async function saveOrgSettings(
   patch: Partial<Omit<OrgSettings, "updatedAt" | "logoDataUrl">>,
 ): Promise<OrgSettings> {
-  const data = await apiClient<OrgSettings>("/api/v1/settings/org", {
+  const result = await apiClient<OrgSettings>("/api/v1/settings/organisations", {
     method: "PATCH",
-    body: patch,
+    body: { name: patch.name ?? null },
   })
-  cached = data
+  cached = result
   cacheTimestamp = Date.now()
   invalidateBrandingCache()
-  return data
+  return result
 }
 
 export async function setOrgLogo(dataUrl: string): Promise<OrgSettings> {
-  const data = await apiClient<OrgSettings>("/api/v1/settings/org/logo", {
-    method: "POST",
+  const result = await apiClient<OrgSettings>("/api/v1/settings/organisations/logo", {
+    method: "PUT",
     body: { dataUrl },
   })
-  cached = data
+  cached = result
   cacheTimestamp = Date.now()
   invalidateBrandingCache()
-  return data
+  return result
 }
 
 export async function clearOrgLogo(): Promise<OrgSettings> {
-  const data = await apiClient<OrgSettings>("/api/v1/settings/org/logo", {
+  const result = await apiClient<OrgSettings>("/api/v1/settings/organisations/logo", {
     method: "DELETE",
   })
-  cached = data
+  cached = result
   cacheTimestamp = Date.now()
   invalidateBrandingCache()
-  return data
+  return result
 }
 
 export function useOrgSettings(): {

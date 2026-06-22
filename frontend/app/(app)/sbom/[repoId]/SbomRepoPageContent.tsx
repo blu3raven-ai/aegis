@@ -109,7 +109,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
       setHistory(entries)
       setHistoryState("ok")
       if (entries.length > 0 && !selectedHash) {
-        setSelectedHash(entries[0].manifest_set_hash)
+        setSelectedHash(entries[0].run_id)
       }
     } catch {
       setHistoryState("error")
@@ -143,7 +143,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
 
   function handleSelectVersion(entry: SbomHistoryEntry) {
     setHistoryDrawerOpen(false)
-    void loadSbom(entry.manifest_set_hash)
+    void loadSbom(entry.run_id)
   }
 
   const latestEntry = history[0]

@@ -15,10 +15,10 @@
 import type { Condition, ConditionOp, LeafCondition } from "@/lib/rules-engine/conditions"
 import type { ConditionFieldSchema } from "@/lib/rules-engine/field-schemas"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 
-// ── Static option lists ───────────────────────────────────────────────────────
 
 const OP_OPTIONS: { value: ConditionOp; label: string }[] = [
   { value: "eq", label: "equals" },
@@ -51,7 +51,6 @@ function valueToInput(val: string | string[] | number | boolean): string {
   return String(val)
 }
 
-// ── Leaf node ─────────────────────────────────────────────────────────────────
 
 interface LeafNodeProps {
   cond: LeafCondition
@@ -180,7 +179,7 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+    <Card padding="none" className="flex flex-wrap items-center gap-2 px-3 py-2">
       {/* Field */}
       <Select
         size="sm"
@@ -221,11 +220,10 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
       >
         ×
       </Button>
-    </div>
+    </Card>
   )
 }
 
-// ── Group node (all/any) ──────────────────────────────────────────────────────
 
 interface GroupNodeProps {
   cond: { all?: Condition[]; any?: Condition[] }
@@ -371,7 +369,6 @@ function GroupNode({ cond, onChange, onRemove, depth = 0, fields, operatorsForFi
   )
 }
 
-// ── Public component ──────────────────────────────────────────────────────────
 
 export interface ConditionBuilderProps {
   value: Condition

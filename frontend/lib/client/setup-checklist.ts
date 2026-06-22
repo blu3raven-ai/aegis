@@ -1,18 +1,9 @@
-/**
- * Setup-checklist task status — derives task completion from real data so
- * the user never has to manually tick anything off. Stripe / Linear pattern.
- *
- * Each task fires a small read against the matching endpoint in parallel.
- * Failures are treated as `done: false` so a dead backend doesn't mark
- * setup falsely complete.
- */
+/** Derives onboarding-checklist task status from real reads against the relevant endpoints. */
 
-import { listSourceConnections } from "./sources-api"
+import { listSourceConnections } from "./source-connections-api"
 import { listDestinations } from "./destinations-api"
 import { listFindingsSummary } from "./findings-api"
 import { listRules } from "./rules-api"
-
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
 
 export interface SetupTask {
   /** Stable id used as the localStorage key and for analytics. */
@@ -30,9 +21,9 @@ export interface SetupTask {
 export async function getSetupChecklist(): Promise<SetupTask[]> {
   const [sources, summary, rules, destinations] = await Promise.allSettled([
     listSourceConnections(),
-    listFindingsSummary(ORG_ID),
-    listRules(ORG_ID),
-    listDestinations(ORG_ID),
+    listFindingsSummary(),
+    listRules(),
+    listDestinations(),
   ])
 
   const sourcesOk = sources.status === "fulfilled" && sources.value.ok

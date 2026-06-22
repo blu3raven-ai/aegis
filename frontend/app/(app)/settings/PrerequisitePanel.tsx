@@ -169,7 +169,6 @@ export function PrerequisitePanel({
   )
 }
 
-// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function CheckIcon() {
   return (
@@ -216,13 +215,12 @@ function SpinnerIcon() {
   )
 }
 
-// ─── Hooks ────────────────────────────────────────────────────────────────────
 
 const POLL_INTERVAL_FAST_MS = 10_000  // poll every 10s while waiting for prerequisites
 const POLL_INTERVAL_SLOW_MS = 30_000  // poll every 30s after prerequisites pass (detect deletions)
 
 function useScannerPrerequisites(
-  tool: "dependencies" | "codeScanning" | "container-scanning" | "secrets",
+  tool: "dependencies_scanning" | "code_scanning" | "container_scanning" | "secret_scanning",
   label: string,
 ) {
   const loadingState: ScannerPrerequisiteState = {
@@ -271,19 +269,19 @@ function useScannerPrerequisites(
   return { ...state, isRefreshing, refresh: check, passingCount, totalCount }
 }
 
-// Named exports for each scanner — backward compatible
+// Named exports for each scanner — slugs match the backend _VALID_TOOLS set.
 export function useDependenciesPrerequisites() {
-  return useScannerPrerequisites("dependencies", "Dependencies Scanner")
+  return useScannerPrerequisites("dependencies_scanning", "Dependencies Scanner")
 }
 
 export function useCodeScanningPrerequisites() {
-  return useScannerPrerequisites("codeScanning", "Code Scanning Scanner")
+  return useScannerPrerequisites("code_scanning", "Code Scanning Scanner")
 }
 
 export function useContainerScanningPrerequisites() {
-  return useScannerPrerequisites("container-scanning", "Container Scanner")
+  return useScannerPrerequisites("container_scanning", "Container Scanner")
 }
 
 export function useSecretsPrerequisites() {
-  return useScannerPrerequisites("secrets", "Secret Scanner")
+  return useScannerPrerequisites("secret_scanning", "Secret Scanner")
 }

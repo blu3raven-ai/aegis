@@ -1,6 +1,6 @@
 "use client";
 import { Sheet } from "@/components/ui/Sheet";
-import type { Integration } from "@/lib/client/connectors-api";
+import type { Integration } from "@/lib/client/integrations-catalog-api";
 import { IntegrationSetup } from "./IntegrationSetup";
 
 interface IntegrationDrawerProps {

@@ -25,7 +25,7 @@ def _sca(
 ) -> dict:
     return {
         "id": id,
-        "scanner": "dependencies",
+        "scanner": "dependencies_scanning",
         "advisoryId": advisory,
         "packageName": pkg,
         "packageVersion": version,
@@ -45,7 +45,7 @@ def _secret(
 ) -> dict:
     return {
         "id": id,
-        "scanner": "secrets",
+        "scanner": "secret_scanning",
         "detectorName": detector,
         "redactedMatch": redacted,
         "file": file,

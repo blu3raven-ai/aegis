@@ -271,7 +271,7 @@ def test_build_custom_advisory_db_returns_path_on_success(tmp_path, monkeypatch)
 def test_dependencies_scanner_has_correct_type():
     from runner.scanners.dependencies.scanner import DependenciesScanner
 
-    assert DependenciesScanner.SCANNER_TYPE == "dependencies"
+    assert DependenciesScanner.SCANNER_TYPE == "dependencies_scanning"
 
 
 def test_dependencies_scanner_implements_base_protocol():

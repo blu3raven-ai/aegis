@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import type { CycloneDxComponent } from "@/lib/client/sbom-api"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 interface TreeNode {
   ref: string
@@ -144,9 +145,9 @@ export function SbomDependencyTree({
     return (
       <div className="flex flex-col gap-2 p-4">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div
+          <Skeleton
             key={i}
-            className="h-6 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse"
+            className="h-6"
             style={{ width: `${60 + (i * 7) % 30}%`, marginLeft: `${(i % 3) * 16}px` }}
           />
         ))}

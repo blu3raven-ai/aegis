@@ -9,12 +9,7 @@ export interface ApiClientOptions extends Omit<RequestInit, "body"> {
   method?: string
   body?: unknown
   headers?: Record<string, string>
-  // Set true for auth endpoints (login, login/verify) that expect 401 to
-  // mean "show the error" rather than "redirect to /login".
   suppressUnauthorizedRedirect?: boolean
-  // Set true for pre-session POSTs (login, login/verify) — the backend
-  // CSRF middleware bypasses requests without a session cookie, so the
-  // client must skip its double-submit check too.
   skipCsrf?: boolean
 }
 

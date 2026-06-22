@@ -6,7 +6,7 @@ from src.shared.checkpoints import compute_coverage_gaps
 def test_compute_coverage_gaps_missing_checkpoint():
     """Repos with no checkpoint show as missing."""
     gaps = compute_coverage_gaps(
-        tool="dependencies",
+        tool="dependencies_scanning",
         org="testorg",
         expected_repos=["org/repo-a", "org/repo-b"],
     )
@@ -18,7 +18,7 @@ def test_compute_coverage_gaps_missing_checkpoint():
 def test_compute_coverage_gaps_empty_expected():
     """No expected repos = no gaps."""
     gaps = compute_coverage_gaps(
-        tool="dependencies",
+        tool="dependencies_scanning",
         org="testorg",
         expected_repos=[],
     )

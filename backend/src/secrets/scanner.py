@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
-import threading
 import time
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -13,22 +11,12 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Literal
 
-import os
-
-import src.storage as storage
 from src.secrets.lifecycle import secrets_hooks
 from src.secrets.pool import (
-    get_scan_start_date,
     merge_pool,
 )
 from src.shared.config import get_scan_sources_for_org, get_secret_scanner_config
-from src.shared.object_store import (
-    download_bytes,
-    list_objects,
-    tag_object,
-)
 from src.shared.lifecycle import ScanContext, apply_lifecycle as _apply_lifecycle
-from src.shared.paths import normalize_org
 from src.secrets.store import ensure_secret_identity
 from src.storage import (
     create_secret_run,
@@ -39,7 +27,6 @@ from src.storage import (
 )
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
-_TEMP_PREFIX_RE = re.compile(r"^/tmp/tmp\.[^/]+/")
 SCANNING_RE = re.compile(r"\[\+\]\s+Scanning (?:repo|image):\s+(\S+?)(?:\s+\(.*\))?$")
 FINISHED_RE = re.compile(r"\[✓\]\s+Finished(?:\s+scanning)?\s+(\S+?)(?:\s+—.*)?$")
 CLASSIFY_RE = re.compile(r"\[classify\]\s+(\d+/\d+)")
@@ -58,13 +45,6 @@ class ScanProgressState:
 
 def strip_ansi(line: str) -> str:
     return ANSI_RE.sub("", line)
-
-
-def strip_temp_prefix(path: str | None) -> str | None:
-    """Strip /tmp/tmp.*/ prefix so stored paths are repo-relative."""
-    if not path:
-        return path
-    return _TEMP_PREFIX_RE.sub("", path) or path
 
 
 def extract_repo_progress(line: str) -> dict[str, str | None] | None:
@@ -259,65 +239,8 @@ def as_record(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def pick_string(record: dict[str, Any], keys: list[str]) -> str | None:
-    for key in keys:
-        value = record.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def nested(record: dict[str, Any], path: list[str]) -> Any:
-    current: Any = record
-    for segment in path:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(segment)
-    return current
-
-
-def safe_iso(value: str | None) -> str | None:
-    if not value:
-        return None
-    try:
-        normalized = value.replace("Z", "+00:00")
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError:
-        return None
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
-def build_fingerprint(parts: list[str | None]) -> str:
-    normalized = "::".join(part or "" for part in parts)
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
-
-
-def _line_value(raw: dict[str, Any]) -> int | None:
-    value = nested(raw, ["SourceMetadata", "Data", "Git", "line"])
-    if isinstance(value, bool):
-        pass
-    elif isinstance(value, (int, float)):
-        return int(value)
-
-    fs_value = nested(raw, ["SourceMetadata", "Data", "Filesystem", "line"])
-    if isinstance(fs_value, bool):
-        pass
-    elif isinstance(fs_value, (int, float)):
-        return int(fs_value)
-
-    for key in ["line", "StartLine"]:
-        candidate = raw.get(key)
-        if isinstance(candidate, bool):
-            continue
-        if isinstance(candidate, (int, float)):
-            return int(candidate)
-    return None
 
 
 _VALID_AI_CLASSIFICATIONS = {"likely_real", "false_positive", "uncertain", "likely_false_positive"}
@@ -378,61 +301,6 @@ def build_classification_entries(
     return entries
 
 
-def normalize_finding(run_id: str, org: str, raw: dict[str, Any], scan_depth: str | None = "light") -> dict[str, Any]:
-    source = pick_string(raw, ["source"]) or "unknown"
-    repository = pick_string(raw, ["repository", "Repo", "repo"]) or "unknown"
-    detector = pick_string(raw, ["DetectorName", "DetectorType", "RuleID", "rule", "name", "Title"]) or "unknown"
-    snippet = pick_string(raw, ["Raw", "Match", "match", "secret", "Secret", "Redacted"]) or "[redacted]"
-    git = as_record(nested(raw, ["SourceMetadata", "Data", "Git"]))
-    filesystem = as_record(nested(raw, ["SourceMetadata", "Data", "Filesystem"]))
-    file_path = strip_temp_prefix(
-        pick_string(raw, ["File", "path", "Path", "file"])
-        or pick_string(git, ["file"])
-        or pick_string(filesystem, ["file"])
-    )
-    commit = pick_string(raw, ["Commit", "commit", "commitHash"]) or pick_string(git, ["commit"])
-    line_value = _line_value(raw)
-    detected_at = (
-        safe_iso(pick_string(raw, ["Date", "detectedAt", "timestamp", "date", "CreatedAt"]))
-        or safe_iso(pick_string(git, ["timestamp"]))
-        or now_iso()
-    )
-    fingerprint = build_fingerprint(
-        [
-            org.lower(),
-            repository.lower(),
-            source.lower(),
-            detector.lower(),
-            file_path.lower() if file_path else None,
-            str(line_value or ""),
-            commit.lower() if commit else None,
-            snippet,
-        ]
-    )
-    finding = {
-        "id": f"{run_id}:{fingerprint}",
-        "runId": run_id,
-        "organization": org.lower(),
-        "repository": repository,
-        "source": source,
-        "detector": detector,
-        "secretSnippet": snippet,
-        "filePath": file_path,
-        "line": line_value,
-        "commit": commit,
-        "detectedAt": detected_at,
-        "fingerprint": fingerprint,
-        "secretIdentity": None,
-        "reviewStatus": "new",
-        "classificationHistory": build_classification_entries(raw, run_id, scan_depth, now_iso()),
-        "aiReasoning": raw.get("ai_reasoning") or None,
-        "raw": raw,
-    }
-    result = ensure_secret_identity(finding)
-    result.setdefault("reviewStatus", "new")
-    return result
-
-
 def _repo_to_latest_sha_from_list(findings: list[dict[str, Any]]) -> dict[str, str | None]:
     """Extract repo->latest commit SHA from a list of findings."""
     latest_by_repo: dict[str, tuple[str, str | None]] = {}
@@ -449,6 +317,49 @@ def _repo_to_latest_sha_from_list(findings: list[dict[str, Any]]) -> dict[str, s
     return {repo: sha for repo, (_, sha) in latest_by_repo.items()}
 
 
+def _adapt_trufflehog_to_canonical(record: dict[str, Any], org: str) -> dict[str, Any]:
+    """Bridge a runner-emitted TruffleHog record into the shape downstream code expects.
+
+    The runner currently emits raw TruffleHog records (top-level ``Raw`` /
+    ``RawV2`` / ``Redacted`` / ``DetectorName`` / ``SourceMetadata`` etc.) with
+    only ``source`` and ``repository`` tags added. ``ensure_secret_identity``,
+    ``merge_pool``, and ``secrets_hooks.extract_detail`` all read canonical
+    keys (``organization``, ``raw.{Secret,Match,Redacted}``, ``detector``,
+    ``filePath``, ``line``, ``commit``, ``detectedAt``, ``secretSnippet``).
+
+    This shim wraps the TruffleHog top-level fields into that canonical shape.
+    Drop it once the runner emits canonical secrets directly.
+    """
+    if record.get("organization") and isinstance(record.get("raw"), dict):
+        return record
+
+    git = (record.get("SourceMetadata") or {}).get("Data", {}).get("Git") or {}
+    filesystem = (record.get("SourceMetadata") or {}).get("Data", {}).get("Filesystem") or {}
+
+    snippet = (
+        record.get("Raw")
+        or record.get("RawV2")
+        or record.get("Redacted")
+        or ""
+    )
+
+    return {
+        **record,
+        "organization": org,
+        "raw": {
+            "Secret": record.get("Raw") or record.get("RawV2") or "",
+            "Match": record.get("Redacted") or "",
+            "Redacted": record.get("Redacted") or "",
+        },
+        "detector": record.get("DetectorName") or record.get("DetectorType") or "",
+        "filePath": git.get("file") or filesystem.get("file") or "",
+        "line": git.get("line") or filesystem.get("line"),
+        "commit": git.get("commit") or "",
+        "detectedAt": git.get("timestamp") or "",
+        "secretSnippet": snippet,
+    }
+
+
 def ingest_findings(
     org: str,
     run_id: str,
@@ -456,19 +367,29 @@ def ingest_findings(
     scan_depth: str | None = "light",
     source_type: str | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, str | None] | None]:
-    """Normalize, deduplicate, and apply lifecycle. Returns (None, repo_to_sha)."""
-    findings = [normalize_finding(run_id, org, finding, scan_depth) for finding in raw_findings]
+    """Deduplicate and apply lifecycle on findings emitted by the runner. Returns (None, repo_to_sha)."""
+    findings: list[dict[str, Any]] = []
+    classified_at = now_iso()
+    for finding in raw_findings:
+        finding = _adapt_trufflehog_to_canonical(finding, org)
+        finding = ensure_secret_identity(finding)
+        finding.setdefault("reviewStatus", "new")
+        if "classificationHistory" not in finding:
+            finding["classificationHistory"] = build_classification_entries(
+                finding, run_id, scan_depth, classified_at,
+            )
+        findings.append(finding)
 
     # Default-exclude archived rows: archived findings are retired from the
     # active pool, so a re-detected match should be treated as a fresh finding
     # rather than resurrecting the archived row.
     previous = read_latest_findings(org)
     merged = merge_pool(findings, previous)
-    ctx = ScanContext(tool="secrets", org=org, run_id=run_id, source_type=source_type)
+    ctx = ScanContext(tool="secret_scanning", org=org, run_id=run_id, source_type=source_type)
     new_findings = _apply_lifecycle(secrets_hooks, ctx, merged)
 
     try:
-        from src.settings.llm_usage import record_usage_from_findings
+        from src.settings.llm.usage import record_usage_from_findings
         record_usage_from_findings(merged)
     except Exception:
         logger.warning("Failed to record LLM usage from secrets ingest", exc_info=True)
@@ -476,7 +397,7 @@ def ingest_findings(
     if new_findings:
         try:
             from src.notifications.emitter import notify_new_critical_findings
-            notify_new_critical_findings("secrets", org, new_findings)
+            notify_new_critical_findings("secret_scanning", org, new_findings)
         except Exception:
             import logging
             logging.getLogger(__name__).warning("Failed to emit new finding notifications", exc_info=True)
@@ -485,7 +406,7 @@ def ingest_findings(
         for finding in new_findings:
             emit_finding_created(
                 finding=finding,
-                scanner_type="secrets",
+                scanner_type="secret_scanning",
                 source_component="secrets.scanner",
             )
 
@@ -510,57 +431,6 @@ def ingest_normalized_jsonl(
 
     raw_findings = [as_record(json.loads(line.strip())) for line in lines if line.strip()]
     return ingest_findings(org, run_id, raw_findings[:MAX_JSONL_LINES])
-
-
-def scanner_finding_source(file_name: str) -> str | None:
-    if file_name == "trufflehog.json":
-        return "trufflehog"
-    return None
-
-
-def parse_scanner_finding_payload(raw: str) -> list[dict[str, Any]]:
-    trimmed = raw.strip()
-    if not trimmed:
-        return []
-    try:
-        parsed = json.loads(trimmed)
-        if isinstance(parsed, list):
-            return [as_record(item) for item in parsed]
-        return [as_record(parsed)]
-    except json.JSONDecodeError:
-        pass
-
-    return [as_record(json.loads(line.strip())) for line in trimmed.splitlines() if line.strip()]
-
-
-def read_raw_scanner_findings(org: str, raw_org_output_dir: Path | str) -> list[dict[str, Any]]:
-    base = Path(raw_org_output_dir)
-    findings: list[dict[str, Any]] = []
-    if not base.exists():
-        return findings
-
-    for repo_dir in base.iterdir():
-        if not repo_dir.is_dir():
-            continue
-        for file_path in repo_dir.iterdir():
-            if not file_path.is_file():
-                continue
-            source = scanner_finding_source(file_path.name)
-            if not source:
-                continue
-            records = parse_scanner_finding_payload(file_path.read_text(encoding="utf-8"))
-            for record in records:
-                findings.append({**record, "organization": org, "repository": repo_dir.name, "source": source})
-    return findings
-
-
-def ingest_raw_scanner_output(
-    org: str,
-    run_id: str,
-    raw_org_output_dir: Path | str,
-    scan_depth: str | None = "light",
-) -> tuple[dict[str, Any] | None, dict[str, str | None] | None]:
-    return ingest_findings(org, run_id, read_raw_scanner_findings(org, raw_org_output_dir), scan_depth)
 
 
 SecretRunStatus = Literal[
@@ -632,7 +502,7 @@ def _execute_via_runner(
         env_vars["SCAN_START_DATE"] = scan_start_date
 
     job = create_job(
-        job_type="secrets",
+        job_type="secret_scanning",
         org=org,
         run_id=run_id,
         env_vars=env_vars,
@@ -696,7 +566,7 @@ def ingest_secrets_from_minio(org: str, run_id: str, source_type: str | None = N
     """Ingest secret scan results from object store after runner completion."""
     from src.shared.object_store import find_findings_jsonl
 
-    data = find_findings_jsonl(f"secrets/{org}/{run_id}/")
+    data = find_findings_jsonl(f"secret_scanning/{org}/{run_id}/")
     if data is None:
         logger.warning("No secrets output for %s/%s", org, run_id)
         update_secret_run(org, run_id, {

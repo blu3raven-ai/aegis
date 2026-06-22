@@ -1,23 +1,58 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { ApiClientError } from "../../frontend/lib/client/api-client.types.ts"
 
 // ---------------------------------------------------------------------------
-// Minimal fetch mock
+// sbom-diff-api uses GraphQL (Query.sbom.diff) with a SbomDiffResult |
+// SbomDiffError union. Tests assert the GraphQL request shape and the
+// union-aware response handling.
 // ---------------------------------------------------------------------------
 
-interface FetchCall { url: string; method?: string }
+interface FetchCall { url: string; body: { operationName: string; variables: Record<string, unknown> } }
 
-function makeFetchMock(body: unknown, status = 200) {
+function makeFetchMock(payload: unknown, status = 200) {
   const calls: FetchCall[] = []
   const mock = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    calls.push({ url: input.toString(), method: init?.method ?? "GET" })
-    return new Response(JSON.stringify(body), {
+    calls.push({
+      url: input.toString(),
+      body: JSON.parse(init?.body as string) as FetchCall["body"],
+    })
+    return new Response(JSON.stringify(payload), {
       status,
       headers: { "Content-Type": "application/json" },
     })
   }
   return { mock, calls }
+}
+
+function gqlDiffResult(overrides: Partial<{
+  added: Array<{ name: string; version: string; purl: string; type: string }>
+  removed: Array<{ name: string; version: string; purl: string; type: string }>
+  versionChanged: Array<{ name: string; purl: string; fromVersion: string | null; toVersion: string | null }>
+  unchangedCount: number
+}> = {}) {
+  return {
+    data: {
+      sbom: {
+        diff: {
+          __typename: "SbomDiffResult",
+          added: overrides.added ?? [],
+          removed: overrides.removed ?? [],
+          versionChanged: overrides.versionChanged ?? [],
+          unchangedCount: overrides.unchangedCount ?? 0,
+        },
+      },
+    },
+  }
+}
+
+function gqlDiffError(message: string, code = "NOT_FOUND") {
+  return {
+    data: {
+      sbom: {
+        diff: { __typename: "SbomDiffError", message, code },
+      },
+    },
+  }
 }
 
 async function loadModule() {
@@ -28,91 +63,89 @@ async function loadModule() {
 // diffSbomsByRepo
 // ---------------------------------------------------------------------------
 
-const SAMPLE_DIFF = {
-  added: [{ name: "lodash", version: "4.17.21", purl: "pkg:npm/lodash@4.17.21", type: "library" }],
-  removed: [{ name: "underscore", version: "1.13.6", purl: "pkg:npm/underscore@1.13.6", type: "library" }],
-  version_changed: [
-    { name: "react", purl: "pkg:npm/react@18.2.0", from_version: "18.2.0", to_version: "18.3.1" },
-  ],
-  unchanged_count: 42,
-}
-
-test("diffSbomsByRepo builds correct GET URL with query params", async () => {
-  const { mock, calls } = makeFetchMock(SAMPLE_DIFF)
+test("diffSbomsByRepo POSTs to /api/v1/graphql with operationName SbomDiff", async () => {
+  const { mock, calls } = makeFetchMock(gqlDiffResult())
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { diffSbomsByRepo } = await loadModule()
-  await diffSbomsByRepo({ repo_id: "payments-api", from_hash: "abc123", to_hash: "def456" })
+  await diffSbomsByRepo({ repo_id: "payments-api", from_run_id: "run-a", to_run_id: "run-b" })
 
   assert.equal(calls.length, 1)
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.pathname, "/api/v1/sboms/diff")
-  assert.equal(url.searchParams.get("repo_id"), "payments-api")
-  assert.equal(url.searchParams.get("from_hash"), "abc123")
-  assert.equal(url.searchParams.get("to_hash"), "def456")
+  assert.equal(calls[0].url, "/api/v1/graphql")
+  assert.equal(calls[0].body.operationName, "SbomDiff")
 })
 
-test("diffSbomsByRepo returns parsed diff response", async () => {
-  const { mock } = makeFetchMock(SAMPLE_DIFF)
+test("diffSbomsByRepo maps inputs to repoId/fromRunId/toRunId variables", async () => {
+  const { mock, calls } = makeFetchMock(gqlDiffResult())
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { diffSbomsByRepo } = await loadModule()
-  const result = await diffSbomsByRepo({ repo_id: "payments-api", from_hash: "abc", to_hash: "def" })
+  await diffSbomsByRepo({ repo_id: "payments-api", from_run_id: "run-a", to_run_id: "run-b" })
+
+  assert.equal(calls[0].body.variables.repoId, "payments-api")
+  assert.equal(calls[0].body.variables.fromRunId, "run-a")
+  assert.equal(calls[0].body.variables.toRunId, "run-b")
+  assert.equal(calls[0].body.variables.imageDigestFrom, null)
+  assert.equal(calls[0].body.variables.imageDigestTo, null)
+})
+
+test("diffSbomsByRepo unwraps SbomDiffResult and converts camelCase fields", async () => {
+  const payload = gqlDiffResult({
+    added: [{ name: "lodash", version: "4.17.21", purl: "pkg:npm/lodash@4.17.21", type: "library" }],
+    removed: [{ name: "underscore", version: "1.13.6", purl: "pkg:npm/underscore@1.13.6", type: "library" }],
+    versionChanged: [
+      { name: "react", purl: "pkg:npm/react@18.2.0", fromVersion: "18.2.0", toVersion: "18.3.1" },
+    ],
+    unchangedCount: 42,
+  })
+  const { mock } = makeFetchMock(payload)
+  globalThis.fetch = mock as unknown as typeof fetch
+
+  const { diffSbomsByRepo } = await loadModule()
+  const result = await diffSbomsByRepo({ repo_id: "payments-api", from_run_id: "a", to_run_id: "b" })
 
   assert.equal(result.added.length, 1)
   assert.equal(result.added[0].name, "lodash")
   assert.equal(result.removed.length, 1)
-  assert.equal(result.removed[0].name, "underscore")
   assert.equal(result.version_changed.length, 1)
-  assert.equal(result.version_changed[0].name, "react")
   assert.equal(result.version_changed[0].from_version, "18.2.0")
   assert.equal(result.version_changed[0].to_version, "18.3.1")
   assert.equal(result.unchanged_count, 42)
 })
 
-test("diffSbomsByRepo handles empty diff gracefully", async () => {
-  const emptyDiff = { added: [], removed: [], version_changed: [], unchanged_count: 100 }
-  const { mock } = makeFetchMock(emptyDiff)
+test("diffSbomsByRepo strips empty-string optional fields to undefined", async () => {
+  const payload = gqlDiffResult({
+    added: [{ name: "minimal", version: "", purl: "", type: "" }],
+  })
+  const { mock } = makeFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { diffSbomsByRepo } = await loadModule()
-  const result = await diffSbomsByRepo({ repo_id: "auth-service", from_hash: "a", to_hash: "b" })
+  const result = await diffSbomsByRepo({ repo_id: "a", from_run_id: "b", to_run_id: "c" })
 
-  assert.equal(result.added.length, 0)
-  assert.equal(result.removed.length, 0)
-  assert.equal(result.version_changed.length, 0)
-  assert.equal(result.unchanged_count, 100)
+  assert.equal(result.added[0].version, undefined)
+  assert.equal(result.added[0].purl, undefined)
+  assert.equal(result.added[0].type, undefined)
 })
 
-test("diffSbomsByRepo throws on non-OK response", async () => {
-  const { mock } = makeFetchMock({ detail: "SBOM not found" }, 404)
+test("diffSbomsByRepo throws when SbomDiffError union branch is returned", async () => {
+  const { mock } = makeFetchMock(gqlDiffError("from snapshot missing"))
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { diffSbomsByRepo } = await loadModule()
   await assert.rejects(
-    () => diffSbomsByRepo({ repo_id: "missing", from_hash: "a", to_hash: "b" }),
-    (e: unknown) => e instanceof ApiClientError && e.status === 404,
+    () => diffSbomsByRepo({ repo_id: "payments-api", from_run_id: "a", to_run_id: "b" }),
+    /from snapshot missing/,
   )
 })
 
-test("diffSbomsByRepo throws on 500 server error", async () => {
-  const { mock } = makeFetchMock({ detail: "Internal Server Error" }, 500)
+test("diffSbomsByRepo throws when GraphQL response has errors", async () => {
+  const { mock } = makeFetchMock({ errors: [{ message: "denied" }] })
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { diffSbomsByRepo } = await loadModule()
   await assert.rejects(
-    () => diffSbomsByRepo({ repo_id: "payments-api", from_hash: "a", to_hash: "b" }),
-    (e: unknown) => e instanceof ApiClientError && e.status === 500,
+    () => diffSbomsByRepo({ repo_id: "payments-api", from_run_id: "a", to_run_id: "b" }),
+    /denied/,
   )
-})
-
-test("diffSbomsByRepo encodes special chars in repo_id", async () => {
-  const { mock, calls } = makeFetchMock(SAMPLE_DIFF)
-  globalThis.fetch = mock as unknown as typeof fetch
-
-  const { diffSbomsByRepo } = await loadModule()
-  await diffSbomsByRepo({ repo_id: "org/repo name", from_hash: "a", to_hash: "b" })
-
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.searchParams.get("repo_id"), "org/repo name")
 })

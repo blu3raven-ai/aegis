@@ -3,6 +3,8 @@
 import type { RuleCategory, RuleSummary } from "@/lib/client/rules-api"
 import { RuleRow } from "./RuleRow"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 interface RuleCategorySectionProps {
   category: RuleCategory
@@ -50,14 +52,14 @@ const DEFAULT_ICON_THEME = {
 
 function SkeletonRow() {
   return (
-    <div className="flex items-start gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+    <Card padding="none" className="flex items-start gap-4 px-4 py-3">
       <div className="flex-1 space-y-2">
-        <div className="h-3.5 w-1/3 animate-pulse rounded bg-[var(--color-surface-raised)]" />
-        <div className="h-3 w-1/2 animate-pulse rounded bg-[var(--color-surface-raised)]" />
-        <div className="h-2.5 w-1/4 animate-pulse rounded bg-[var(--color-surface-raised)]" />
+        <Skeleton className="h-3.5 w-1/3" />
+        <Skeleton className="h-3 w-1/2" />
+        <Skeleton className="h-2.5 w-1/4" />
       </div>
-      <div className="h-5 w-9 animate-pulse rounded-full bg-[var(--color-surface-raised)]" />
-    </div>
+      <Skeleton className="h-5 w-9 rounded-full" />
+    </Card>
   )
 }
 
@@ -106,9 +108,9 @@ export function RuleCategorySection({
       </div>
 
       {disabled ? (
-        <div className="rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-6 text-center text-xs text-[var(--color-text-tertiary)]">
+        <Card padding="none" className="border-dashed px-4 py-6 text-center text-xs text-[var(--color-text-tertiary)]">
           {placeholderText ?? "Coming soon."}
-        </div>
+        </Card>
       ) : loading ? (
         <div className="space-y-2">
           <SkeletonRow />
@@ -116,7 +118,7 @@ export function RuleCategorySection({
           <SkeletonRow />
         </div>
       ) : rules.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] py-10 text-center">
+        <Card padding="none" className="flex flex-col items-center justify-center gap-4 border-dashed py-10 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]">
             <svg
               className="h-6 w-6"
@@ -149,7 +151,7 @@ export function RuleCategorySection({
               Create rule
             </Button>
           )}
-        </div>
+        </Card>
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (

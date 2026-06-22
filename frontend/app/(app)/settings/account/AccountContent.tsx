@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { fetchCurrentUser, type CurrentUser } from "@/lib/client/auth"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { Button } from "@/components/ui/Button"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { EmailModal } from "./EmailModal"
 import { PasswordModal } from "./PasswordModal"
 import { TotpSetupModal } from "./TotpSetupModal"
@@ -61,7 +62,7 @@ export function AccountContent() {
       })
       try {
         await apiClient("/api/v1/settings/account/avatar", {
-          method: "POST",
+          method: "PUT",
           body: { avatarUrl: dataUrl },
         })
         await loadUser()
@@ -92,7 +93,7 @@ export function AccountContent() {
   async function handleDisableTotp() {
     setShowConfirmDisableTotp(false)
     try {
-      await apiClient("/api/v1/settings/account/totp", { method: "DELETE" })
+      await apiClient("/api/v1/auth/totp/disable", { method: "POST" })
       await loadUser()
     } catch {
       setShowErrorDialog("Failed to disable two-factor authentication.")
@@ -102,8 +103,8 @@ export function AccountContent() {
   if (loading) {
     return (
       <div className="space-y-3">
-        <div className="h-20 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
-        <div className="h-24 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
+        <Skeleton className="h-20 rounded-lg" />
+        <Skeleton className="h-24 rounded-lg" />
       </div>
     )
   }

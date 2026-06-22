@@ -33,27 +33,36 @@ const SETTINGS_ICON = (
 
 export default function SettingsPage() {
   return (
-    <>
+    // flex-1 min-h-0: fills the flex column that SettingsMainSetup creates on
+    // <main>, letting PageHeader pin at top and only the content column scroll.
+    <div className="flex min-h-0 flex-1 flex-col">
       <PageHeader
         icon={SETTINGS_ICON}
         title="Settings"
         description="Personal preferences, org admin, billing, security"
       />
-      <div className="flex w-full flex-col gap-8 px-6 pt-6 pb-12 md:flex-row md:items-start">
+      <div className="flex min-h-0 flex-1">
         <SettingsInPageNav />
-        <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <ProfileSection />
-          <NotificationsPreferencesSection />
-          <SecuritySessionsSection />
-          <OrgGeneralSection />
-          <SsoSection />
-          <AuditLogSection />
-          <ApiKeysSection />
-          <RunnersSection />
-          <LlmSection />
-          <LicenseSection />
+        <div
+          data-settings-content
+          className="flex-1 overflow-y-auto px-6 py-6 pb-12"
+        >
+          <div className="flex flex-col gap-6">
+            {/* Personal — scoped to the signed-in user */}
+            <ProfileSection />
+            <NotificationsPreferencesSection />
+            <SecuritySessionsSection />
+            <ApiKeysSection />
+            {/* Organization — org-admin scope */}
+            <OrgGeneralSection />
+            <SsoSection />
+            <AuditLogSection />
+            <RunnersSection />
+            <LlmSection />
+            <LicenseSection />
+          </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }

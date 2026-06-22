@@ -1,8 +1,7 @@
 "use client"
 
 import { use } from "react"
-import { useSession } from "@/lib/client/use-session"
-import { can } from "@/lib/shared/auth/roles"
+import { useHasPermission } from "@/lib/client/use-permission"
 import { RunnerDetailContent } from "./RunnerDetailContent"
 
 export function RunnerDetailPageContent({
@@ -10,8 +9,7 @@ export function RunnerDetailPageContent({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const { user } = useSession()
-  const canEdit = user ? can(user.role as any, "manage_settings") : false
+  const { allowed: canEdit } = useHasPermission("manage_runners")
   const { id } = use(params)
 
   return (

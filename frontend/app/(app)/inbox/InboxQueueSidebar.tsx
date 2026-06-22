@@ -6,8 +6,6 @@ import { listSavedViews, type SavedView } from "@/lib/client/saved-views-api"
 import { SaveViewModal } from "@/components/shared/findings/SaveViewModal"
 import { ManageViewsPanel } from "@/components/shared/findings/ManageViewsPanel"
 
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
-
 interface QueueItem {
   id: string
   label: string
@@ -332,7 +330,7 @@ export function InboxQueueSidebar({
 
   useEffect(() => {
     let cancelled = false
-    listFindingsSummary(ORG_ID)
+    listFindingsSummary()
       .then((data) => { if (!cancelled) setSummary(data) })
       .catch(() => { /* keep previous summary */ })
     return () => { cancelled = true }
@@ -341,7 +339,7 @@ export function InboxQueueSidebar({
   return (
     <aside
       aria-label="Inbox queues"
-      className="hidden md:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] overflow-y-auto"
+      className="hidden md:flex w-[220px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] overflow-y-auto pt-3"
     >
       <QueueSection
         label="My work"

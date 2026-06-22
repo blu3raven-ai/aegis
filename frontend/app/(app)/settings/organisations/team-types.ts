@@ -9,14 +9,12 @@ export interface TeamMember {
   source?: "manual" | "github"
 }
 
-export interface TeamRepository {
-  org: string
-  repo: string
-  source?: MembershipSource
-}
-
-export interface TeamContainerImage {
-  image: string
+export interface TeamAsset {
+  assetId: string
+  type: "repo" | "image"
+  displayName: string
+  externalRef: string
+  source: MembershipSource
 }
 
 export interface OrganisationTeam {
@@ -25,17 +23,14 @@ export interface OrganisationTeam {
   description: string
   source?: TeamSource
   members: TeamMember[]
-  repositories: TeamRepository[]
-  containerImages: TeamContainerImage[]
+  assets: TeamAsset[]
   createdAt: string
   updatedAt: string
   lastSyncedAt?: string
 }
 
-export interface ResourceSharingIndex {
-  repositories: Record<string, string[]>
-  containerImages: Record<string, string[]>
-}
+/** assetId → list of teamIds that own it. Computed client-side from the teams list. */
+export type ResourceSharingIndex = Record<string, string[]>
 
 export interface UserDirectoryEntry {
   id: string

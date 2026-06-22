@@ -4,10 +4,10 @@
  */
 
 const SCANNERS = [
-  { key: "dependencies",      label: "D",   title: "Dependencies (SCA)" },
-  { key: "code_scanning",     label: "S",   title: "SAST (Code Scanning)" },
-  { key: "container_scanning",label: "C",   title: "Containers" },
-  { key: "secrets",           label: "Sec", title: "Secrets" },
+  { key: "dependencies_scanning", label: "D",   title: "Dependencies (SCA)" },
+  { key: "code_scanning",         label: "S",   title: "SAST (Code Scanning)" },
+  { key: "container_scanning",    label: "C",   title: "Containers" },
+  { key: "secret_scanning",       label: "Sec", title: "Secrets" },
 ] as const
 
 interface ScannerCoverageIconsProps {

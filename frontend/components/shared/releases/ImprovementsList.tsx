@@ -6,6 +6,7 @@
 
 import Link from "next/link"
 import type { BlockerDiffRow } from "@/lib/client/releases-api"
+import { Card } from "@/components/ui/Card"
 import {
   DIFF_PILL_BASE,
   DIFF_PILL_VARIANT,
@@ -38,7 +39,7 @@ export function ImprovementsList({ improvements }: ImprovementsListProps) {
         </p>
       </header>
 
-      <div className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <Card padding="none" className="divide-y divide-[var(--color-border)]">
         {improvements.map((row) => {
           const sevKey = severityKey(row.severity)
           const sevLetter = SEVERITY_LETTER[sevKey] ?? "?"
@@ -83,7 +84,7 @@ export function ImprovementsList({ improvements }: ImprovementsListProps) {
             </div>
           )
         })}
-      </div>
+      </Card>
     </section>
   )
 }

@@ -38,10 +38,11 @@ describe("activity-derivations", () => {
     assert.match(src, /export\s+function\s+deriveCatchUp\s*\(events:\s*ActivityEvent\[\],\s*since:\s*string\)/)
   })
 
-  it("counts finding.created / finding.fixed / finding.dismissed / scan.completed", () => {
-    for (const type of ["finding.created", "finding.fixed", "finding.dismissed", "scan.completed"]) {
+  it("counts finding.created / finding.fixed / finding.dismissed and all scan.* events", () => {
+    for (const type of ["finding.created", "finding.fixed", "finding.dismissed"]) {
       assert.ok(src.includes(`"${type}"`), `expected count by type "${type}"`)
     }
+    assert.ok(src.includes('startsWith("scan.")'), "expected scans counted via scan.* prefix")
   })
 
   it("imports ActivityEvent from the activity API client", () => {

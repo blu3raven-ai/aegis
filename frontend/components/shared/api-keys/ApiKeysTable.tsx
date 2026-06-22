@@ -3,6 +3,7 @@
 import type { ApiKey } from "@/lib/client/api-keys-api"
 import { ScopesBadgeList } from "./ScopesBadgeList"
 import { Button } from "@/components/ui/Button"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 function relativeTime(iso: string | null): string {
@@ -52,7 +53,7 @@ function SkeletonRow() {
     <Tr className="border-b border-[var(--color-border)]">
       {[1, 2, 3, 4, 5].map((i) => (
         <Td key={i}>
-          <div className="h-3 rounded bg-[var(--color-surface-raised)] animate-pulse" />
+          <Skeleton className="h-3" />
         </Td>
       ))}
     </Tr>

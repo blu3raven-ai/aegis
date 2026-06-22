@@ -11,6 +11,7 @@ export interface SsoSettings {
   samlMetadataXml: string | null
   samlSpCertificate: string | null
   samlSpPrivateKeySet: boolean
+  samlValidateMetadataSignature: boolean
   samlAcsUrl: string
   samlSpEntityId: string
   samlSpMetadataUrl: string
@@ -22,21 +23,96 @@ export interface SsoSettings {
   updatedAt: string | null
 }
 
+const CSRF_COOKIE_NAME = "__Host-csrf"
+
+function readCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null
+  for (const pair of document.cookie.split(";").map((p) => p.trim())) {
+    const [k, ...rest] = pair.split("=")
+    if (k === CSRF_COOKIE_NAME) return rest.join("=")
+  }
+  return null
+}
+
+export class GqlError extends Error {
+  code: string | null
+  constructor(message: string, code: string | null) {
+    super(message)
+    this.code = code
+  }
+}
+
+async function gqlFetch<T>(
+  operationName: string,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  }
+  const csrf = readCsrfCookie()
+  if (csrf !== null) headers["X-CSRF-Token"] = csrf
+
+  const res = await fetch("/api/v1/graphql", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ operationName, query, variables }),
+    credentials: "include",
+  })
+  const body = (await res.json()) as {
+    data?: T
+    errors?: { message: string; extensions?: { code?: string } }[]
+  }
+  if (body.errors && body.errors.length > 0) {
+    const first = body.errors[0]
+    throw new GqlError(first.message, first.extensions?.code ?? null)
+  }
+  if (!body.data) {
+    throw new GqlError(`${operationName} returned no data`, null)
+  }
+  return body.data
+}
+
+const SSO_SETTINGS_QUERY = `query SsoSettings {
+  settings {
+    sso {
+      enabled
+      protocol
+      defaultRoleId
+      samlMetadataUrl
+      samlMetadataXml
+      samlSpCertificate
+      samlSpPrivateKeySet
+      samlValidateMetadataSignature
+      samlAcsUrl
+      samlSpEntityId
+      samlSpMetadataUrl
+      oidcDiscoveryUrl
+      oidcClientId
+      oidcClientSecretSet
+      oidcScopes
+      oidcRedirectUri
+      updatedAt
+    }
+  }
+}`
+
 let cached: SsoSettings | null = null
 let cacheTimestamp = 0
 const CACHE_TTL_MS = 60_000
 
-export async function fetchSsoSettings(): Promise<SsoSettings | null> {
+export async function fetchSsoSettings(): Promise<SsoSettings> {
   const now = Date.now()
   if (cached && now - cacheTimestamp < CACHE_TTL_MS) return cached
-  try {
-    const data = await apiClient<SsoSettings>("/api/v1/settings/sso")
-    cached = data
-    cacheTimestamp = Date.now()
-    return data
-  } catch {
-    return null
-  }
+  const data = await gqlFetch<{ settings: { sso: SsoSettings } }>(
+    "SsoSettings",
+    SSO_SETTINGS_QUERY,
+    {},
+  )
+  cached = data.settings.sso
+  cacheTimestamp = Date.now()
+  return cached
 }
 
 export async function saveSsoSettings(patch: Partial<{
@@ -45,6 +121,7 @@ export async function saveSsoSettings(patch: Partial<{
   defaultRoleId: string | null
   samlMetadataUrl: string | null
   samlMetadataXml: string | null
+  samlValidateMetadataSignature: boolean
   oidcDiscoveryUrl: string | null
   oidcClientId: string | null
   oidcClientSecret: string
@@ -80,18 +157,27 @@ export async function refreshSamlMetadata(): Promise<{ ok: boolean; error?: stri
 export function useSsoSettings(): {
   data: SsoSettings | null
   isLoading: boolean
+  error: GqlError | null
   mutate: (next?: SsoSettings) => void
 } {
   const [data, setData] = useState<SsoSettings | null>(cached)
   const [isLoading, setIsLoading] = useState(cached == null)
+  const [error, setError] = useState<GqlError | null>(null)
 
   useEffect(() => {
     let alive = true
-    fetchSsoSettings().then((d) => {
-      if (!alive) return
-      setData(d)
-      setIsLoading(false)
-    })
+    fetchSsoSettings()
+      .then((d) => {
+        if (!alive) return
+        setData(d)
+        setError(null)
+        setIsLoading(false)
+      })
+      .catch((e: unknown) => {
+        if (!alive) return
+        setError(e instanceof GqlError ? e : new GqlError(String(e), null))
+        setIsLoading(false)
+      })
     return () => {
       alive = false
     }
@@ -102,12 +188,20 @@ export function useSsoSettings(): {
       cached = next
       cacheTimestamp = Date.now()
       setData(next)
+      setError(null)
     } else {
       cached = null
       cacheTimestamp = 0
-      fetchSsoSettings().then(setData)
+      fetchSsoSettings()
+        .then((d) => {
+          setData(d)
+          setError(null)
+        })
+        .catch((e: unknown) => {
+          setError(e instanceof GqlError ? e : new GqlError(String(e), null))
+        })
     }
   }
 
-  return { data, isLoading, mutate }
+  return { data, isLoading, error, mutate }
 }

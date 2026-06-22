@@ -12,6 +12,7 @@ import {
 } from "@/lib/client/settings-api"
 import { Button } from "@/components/ui/Button"
 import { Sheet } from "@/components/ui/Sheet"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { RolesTable } from "./RolesTable"
 import { RoleEditor } from "./RoleEditor"
 import { Dialog } from "@/components/layout/Dialog"
@@ -87,7 +88,7 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
 
   const handleDuplicate = async (role: RoleRecord) => {
     setIsSaving(true)
-    const result = await duplicateRole(role.id)
+    const result = await duplicateRole(role)
     if (result.ok) {
       await refreshRoles()
       setSelectedRoleId(result.role.id)
@@ -157,10 +158,10 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
 
   if (isLoading && roles.length === 0) {
     return (
-      <div className="animate-pulse space-y-4">
-        <div className="h-8 w-48 bg-[var(--color-surface-raised)] rounded" />
-        <div className="h-4 w-96 bg-[var(--color-surface-raised)] rounded" />
-        <div className="h-64 bg-[var(--color-surface-raised)] rounded-lg" />
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-96" />
+        <Skeleton className="h-64 rounded-lg" />
       </div>
     )
   }

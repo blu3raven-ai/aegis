@@ -3,19 +3,37 @@ import { useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SourcesIcon } from "@/lib/shared/ui/page-icons";
-import { listSourceConnections } from "@/lib/client/sources-api";
-import type { SourceCategory, ConnectionStatus } from "@/lib/shared/sources-types";
+import { listSourceConnections } from "@/lib/client/source-connections-api";
+import { CATEGORY_SCANNERS, sourceDisplayName } from "@/lib/shared/sources-types";
+import type { SourceCategory, ConnectionStatus, ScannerType } from "@/lib/shared/sources-types";
 import { AddConnectionModal } from "@/components/sources/AddConnectionModal";
 import { SourcesList, type Source } from "./_components/SourcesList";
 import { Button } from "@/components/ui/Button";
+import type { ScannerType as CoverageScanner } from "@/components/ui/ScannerCoverage";
 
-// ─── Adapter maps ──────────────────────────────────────────────────────────────
 
-const CATEGORY_TO_UI: Record<SourceCategory, "code" | "containers" | "cloud"> = {
+const CATEGORY_TO_UI: Record<SourceCategory, "code" | "containers" | "cloud" | "ci"> = {
   "code-repositories": "code",
   "container-registry": "containers",
   "cloud-infrastructure": "cloud",
+  "ci-systems": "ci",
 };
+
+// Map a source scan job-type to the generic coverage chip shown in the list.
+// Container image scanning is a form of composition analysis, so it maps to SCA.
+const SCANNER_TO_COVERAGE: Record<ScannerType, CoverageScanner> = {
+  dependencies_scanning: "sca",
+  code_scanning: "sast",
+  secret_scanning: "secrets",
+  container_scanning: "sca",
+};
+
+// An empty `scanners` array means "all applicable to the category", so expand
+// it before mapping to the coverage chips.
+function coverageFor(category: SourceCategory, scanners: ScannerType[]): CoverageScanner[] {
+  const effective = scanners.length ? scanners : CATEGORY_SCANNERS[category];
+  return Array.from(new Set(effective.map((s) => SCANNER_TO_COVERAGE[s])));
+}
 
 const STATUS_MAP: Record<ConnectionStatus, "healthy" | "warning" | "failing" | "stale"> = {
   "connected": "healthy",
@@ -36,11 +54,12 @@ export default function SourcesPage() {
         setSources(
           result.data.connections.map(conn => ({
             id: conn.id,
-            name: conn.name,
+            name: sourceDisplayName(conn),
             type: CATEGORY_TO_UI[conn.category],
-            scanners: [],                              // populated by SCM plan companion
+            scanners: coverageFor(conn.category, conn.scanners ?? []),
             findings: { high: 0, medium: 0, low: 0 }, // populated by SCM plan companion
-            last_scan_at: conn.lastSyncedAt ?? null,
+            last_synced_at: conn.lastSyncedAt ?? null,
+            last_scan_at: conn.lastScanAt ?? null,
             status: STATUS_MAP[conn.status],
           })),
         );
@@ -68,7 +87,7 @@ export default function SourcesPage() {
               </svg>
             }
           >
-            Add source
+            Add Source
           </Button>
         }
       />

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import type { SourceCategory, SourceType, SourceConnectionAuth } from "@/lib/shared/sources-types"
 import {
   SOURCE_TYPE_FIELDS,
@@ -14,11 +15,24 @@ import {
   createSourceConnection,
   testNewSourceConnection,
   syncSourceConnection,
-} from "@/lib/client/sources-api"
+} from "@/lib/client/source-connections-api"
+import {
+  createWebhookEndpoint,
+  rotateWebhookEndpoint,
+  listWebhookEndpoints,
+  type WebhookProvider,
+} from "@/lib/client/webhook-endpoints-api"
+import { createApiKey } from "@/lib/client/api-keys-api"
+import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
+import { KeyRound, Webhook, Workflow, Check, Copy } from "lucide-react"
+import { GitHubActionSteps } from "@/app/(app)/integrations/[slug]/_steps/GitHubActionSteps"
+import { GitLabComponentSteps } from "@/app/(app)/integrations/[slug]/_steps/GitLabComponentSteps"
+import { BitbucketPipeSteps } from "@/app/(app)/integrations/[slug]/_steps/BitbucketPipeSteps"
+import { AzureDevOpsTaskSteps } from "@/app/(app)/integrations/[slug]/_steps/AzureDevOpsTaskSteps"
 
-// ─── Provider Logo (small, for type selection) ────────────────────────────────
 
 function ProviderIcon({ type }: { type: SourceType }) {
   const cls = "h-6 w-6 shrink-0"
@@ -88,7 +102,72 @@ function ProviderIcon({ type }: { type: SourceType }) {
   }
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
+
+// ─── Connection methods ─────────────────────────────────────────────────────
+
+type ConnectMethod = "pat" | "webhook" | "cicd"
+
+// Source types that have a webhook receiver + CI/CD integration. Other git
+// hosts (e.g. Gitea) are token-only, so they skip the method step entirely.
+const MULTI_METHOD_TYPES: Partial<Record<SourceType, WebhookProvider>> = {
+  github: "github",
+  gitlab: "gitlab",
+  bitbucket: "bitbucket",
+  azure_devops: "azure_devops",
+}
+
+const WEBHOOK_PATHS: Partial<Record<SourceType, string>> = {
+  github: "/integrations/github/webhook",
+  gitlab: "/integrations/gitlab/webhook",
+  bitbucket: "/integrations/bitbucket/webhook",
+  azure_devops: "/integrations/azure-devops/webhook",
+}
+
+// Inline CI/CD pipeline snippet per provider (reused from the integrations setup).
+const CICD_STEPS: Partial<Record<SourceType, React.ComponentType<{ aegisUrl: string }>>> = {
+  github: GitHubActionSteps,
+  gitlab: GitLabComponentSteps,
+  bitbucket: BitbucketPipeSteps,
+  azure_devops: AzureDevOpsTaskSteps,
+}
+
+// Where the webhook is configured, per provider — keeps the steps accurate.
+const WEBHOOK_SETTINGS_PATH: Partial<Record<SourceType, string>> = {
+  github: "Settings → Webhooks → Add webhook",
+  gitlab: "Settings → Webhooks",
+  bitbucket: "Repository settings → Webhooks → Add webhook",
+  azure_devops: "Project settings → Service hooks → Create subscription",
+}
+
+function methodsFor(type: SourceType): ConnectMethod[] {
+  return type in MULTI_METHOD_TYPES ? ["pat", "webhook", "cicd"] : ["pat"]
+}
+
+const METHOD_META: Record<
+  ConnectMethod,
+  { label: string; icon: typeof KeyRound; recommended?: boolean; describe: (p: string) => string; outcome: string }
+> = {
+  pat: {
+    label: "Personal Access Token",
+    icon: KeyRound,
+    recommended: true,
+    describe: () => "Aegis pulls your repositories directly using a token. Best for a full inventory and scheduled scans.",
+    outcome: "You'll need a token with read access.",
+  },
+  webhook: {
+    label: "Webhook",
+    icon: Webhook,
+    describe: (p) => `${p} notifies Aegis on push and pull-request events so it can rescan in near real time.`,
+    outcome: "You'll get a webhook URL and signing secret to add in your provider.",
+  },
+  cicd: {
+    label: "CI/CD pipeline",
+    icon: Workflow,
+    describe: () => "Run the scanner inside your existing pipeline and report results back to Aegis.",
+    outcome: "You'll get a config snippet to drop into your pipeline.",
+  },
+}
+
 
 interface AddConnectionModalProps {
   lockedCategory?: SourceCategory
@@ -96,7 +175,6 @@ interface AddConnectionModalProps {
   onCreated: () => void
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function AddConnectionModal({
   lockedCategory,
@@ -107,26 +185,42 @@ export function AddConnectionModal({
     ? [lockedCategory]
     : (Object.keys(CATEGORY_LABELS) as SourceCategory[])
 
-  const [step, setStep] = useState<1 | 2>(1)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, onClose)
+
+  const [screen, setScreen] = useState<"provider" | "method" | "settings">("provider")
   const [selectedType, setSelectedType] = useState<SourceType | null>(null)
+  const [method, setMethod] = useState<ConnectMethod>("pat")
   const [auth, setAuth] = useState<SourceConnectionAuth>({})
   const [name, setName] = useState("")
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({})
 
+  // Webhook-method state
+  const [webhookSecret, setWebhookSecret] = useState<string | null>(null)
+  const [webhookBusy, setWebhookBusy] = useState(false)
+  const [existingWebhookId, setExistingWebhookId] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  // CI/CD-method state
+  const [apiKeyToken, setApiKeyToken] = useState<string | null>(null)
+  const [apiKeyBusy, setApiKeyBusy] = useState(false)
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null)
+
   const category: SourceCategory | null = selectedType
     ? SOURCE_TYPE_TO_CATEGORY[selectedType]
     : null
+
+  const hasMethodStep =
+    category === "code-repositories" && selectedType !== null && methodsFor(selectedType).length > 1
 
   function handleTypeSelect(type: SourceType) {
     setSelectedType(type)
     const fields = SOURCE_TYPE_FIELDS[type]
     const defaults: SourceConnectionAuth = {}
     for (const f of fields) {
-      if (f.defaultValue) {
-        defaults[f.key] = f.defaultValue
-      }
+      if (f.defaultValue) defaults[f.key] = f.defaultValue
     }
     setAuth(defaults)
     setName("")
@@ -135,13 +229,92 @@ export function AddConnectionModal({
 
   function handleNext() {
     if (!selectedType) return
-    setStep(2)
     setError(null)
+    if (category === "code-repositories" && methodsFor(selectedType).length > 1) {
+      setScreen("method")
+    } else {
+      setMethod("pat")
+      setScreen("settings")
+    }
+  }
+
+  function pickMethod(m: ConnectMethod) {
+    setMethod(m)
+    setWebhookSecret(null)
+    setExistingWebhookId(null)
+    setApiKeyToken(null)
+    setApiKeyError(null)
+    setError(null)
+    setScreen("settings")
   }
 
   function handleBack() {
-    setStep(1)
     setError(null)
+    if (screen === "settings" && hasMethodStep) setScreen("method")
+    else setScreen("provider")
+  }
+
+  async function copy(text: string, key: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(key)
+      window.setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+
+  // When the webhook panel opens, detect whether a secret already exists for
+  // this provider so we offer "Rotate" instead of a dead-end "already exists".
+  useEffect(() => {
+    if (screen !== "settings" || method !== "webhook" || !selectedType) return
+    const provider = MULTI_METHOD_TYPES[selectedType]
+    if (!provider) return
+    let cancelled = false
+    listWebhookEndpoints()
+      .then((res) => {
+        if (cancelled) return
+        const ep = res.endpoints.find((e) => e.provider === provider)
+        setExistingWebhookId(ep ? ep.id : null)
+      })
+      .catch(() => { /* listing optional — fall back to create */ })
+    return () => { cancelled = true }
+  }, [screen, method, selectedType])
+
+  async function handleWebhookSecret() {
+    if (!selectedType) return
+    const provider = MULTI_METHOD_TYPES[selectedType]
+    if (!provider) return
+    setWebhookBusy(true)
+    setError(null)
+    try {
+      const ep = existingWebhookId
+        ? await rotateWebhookEndpoint(existingWebhookId)
+        : await createWebhookEndpoint(provider)
+      setWebhookSecret(ep.secret)
+      setExistingWebhookId(ep.id)
+    } catch {
+      setError("Could not generate the webhook secret. Please try again.")
+    } finally {
+      setWebhookBusy(false)
+    }
+  }
+
+  async function handleCreateApiKey() {
+    if (!selectedType) return
+    setApiKeyBusy(true)
+    setApiKeyError(null)
+    try {
+      const key = await createApiKey({
+        name: `CI/CD — ${SOURCE_TYPE_LABELS[selectedType]}`,
+        scopes: ["trigger:scans"],
+      })
+      setApiKeyToken(key.token)
+    } catch {
+      setApiKeyError("Could not create the API key. Please try again.")
+    } finally {
+      setApiKeyBusy(false)
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -166,7 +339,8 @@ export function AddConnectionModal({
       auth,
       scanScope: "all" as const,
       excludedItems: [],
-      syncSchedule: "6h" as const,
+      connectionMethods: [method],
+      syncSchedule: "1h" as const,
       status: "not-synced" as const,
     }
 
@@ -194,30 +368,44 @@ export function AddConnectionModal({
     onClose()
   }
 
+  const providerLabel = selectedType ? SOURCE_TYPE_LABELS[selectedType] : ""
+  const totalSteps = hasMethodStep ? 3 : 2
+  const stepNumber = screen === "provider" ? 1 : screen === "method" ? 2 : totalSteps
+
+  const title =
+    screen === "provider"
+      ? "Add a Source"
+      : screen === "method"
+        ? `Connect ${providerLabel}`
+        : method === "webhook"
+          ? `${providerLabel} Webhook`
+          : method === "cicd"
+            ? `${providerLabel} CI/CD`
+            : `Connect to ${providerLabel}`
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       onClick={onClose}
     >
-      {/* Scrim */}
       <div className="fixed inset-0 bg-[var(--color-overlay-strong)] transition-opacity" aria-hidden="true" />
 
-      {/* Modal */}
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)]"
+        ref={dialogRef}
+        tabIndex={-1}
+        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)] focus:outline-none"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-labelledby="add-source-title"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-              Step {step} of 2
+              Step {stepNumber} of {totalSteps}
             </p>
-            <h2 className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">
-              {step === 1 ? "Add Source Connection" : `Connect to ${selectedType ? SOURCE_TYPE_LABELS[selectedType] : ""}`}
-            </h2>
+            <h2 id="add-source-title" className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">{title}</h2>
           </div>
           <button
             type="button"
@@ -233,9 +421,9 @@ export function AddConnectionModal({
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5">
-          {/* Step 1: Source type selection */}
-          {step === 1 && (
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {/* Screen 1: provider selection */}
+          {screen === "provider" && (
             <div>
               <p className="mb-5 text-sm text-[var(--color-text-secondary)]">
                 Select the provider you want to connect.
@@ -243,10 +431,9 @@ export function AddConnectionModal({
               <div className="space-y-6">
                 {visibleCategories.map((cat) => {
                   const types = CATEGORY_SOURCE_TYPES[cat]
-                  const showHeader = !lockedCategory
                   return (
                     <div key={cat}>
-                      {showHeader && (
+                      {!lockedCategory && (
                         <p className="mb-3 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                           {CATEGORY_LABELS[cat]}
                         </p>
@@ -262,9 +449,7 @@ export function AddConnectionModal({
                               <path d="M12 7v5l3 2" />
                             </svg>
                           </span>
-                          <span className="text-sm font-medium text-[var(--color-text-secondary)]">
-                            Coming soon
-                          </span>
+                          <span className="text-sm font-medium text-[var(--color-text-secondary)]">Coming soon</span>
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 gap-3">
@@ -275,18 +460,23 @@ export function AddConnectionModal({
                                 key={type}
                                 type="button"
                                 onClick={() => handleTypeSelect(type)}
-                                className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors ${
+                                aria-pressed={isSelected}
+                                className={`group flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-colors ${
                                   isSelected
                                     ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                                     : "border-[var(--color-border)] hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
                                 }`}
                               >
-                                <span className={isSelected ? "text-[var(--color-accent)]" : "text-[var(--color-text-secondary)]"}>
+                                <span
+                                  className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border transition-colors ${
+                                    isSelected
+                                      ? "border-[var(--color-accent)]/40 bg-[var(--color-surface)] text-[var(--color-accent)]"
+                                      : "border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)]"
+                                  }`}
+                                >
                                   <ProviderIcon type={type} />
                                 </span>
-                                <span className={`text-sm font-semibold ${
-                                  isSelected ? "text-[var(--color-accent)]" : "text-[var(--color-text-primary)]"
-                                }`}>
+                                <span className={`text-sm font-semibold leading-tight ${isSelected ? "text-[var(--color-accent)]" : "text-[var(--color-text-primary)]"}`}>
                                   {SOURCE_TYPE_LABELS[type]}
                                 </span>
                               </button>
@@ -301,10 +491,53 @@ export function AddConnectionModal({
             </div>
           )}
 
-          {/* Step 2: Credentials form */}
-          {step === 2 && selectedType && (
+          {/* Screen 2: connection method */}
+          {screen === "method" && selectedType && (
+            <div>
+              <p className="mb-5 text-sm text-[var(--color-text-secondary)]">
+                Choose how Aegis should connect to {providerLabel}.
+              </p>
+              <div className="space-y-3">
+                {methodsFor(selectedType).map((m) => {
+                  const meta = METHOD_META[m]
+                  const Icon = meta.icon
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => pickMethod(m)}
+                      className="group flex w-full items-start gap-3.5 rounded-2xl border border-[var(--color-border)] p-4 text-left transition-colors hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
+                    >
+                      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-[var(--color-text-primary)]">{meta.label}</span>
+                          {meta.recommended && (
+                            <span className="rounded-full bg-[var(--color-accent-subtle)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
+                              Recommended
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-1 block text-xs leading-relaxed text-[var(--color-text-secondary)]">
+                          {meta.describe(providerLabel)}
+                        </span>
+                        <span className="mt-1.5 block text-xs text-[var(--color-text-tertiary)]">{meta.outcome}</span>
+                      </span>
+                      <svg className="mt-1 h-4 w-4 shrink-0 text-[var(--color-text-tertiary)] transition-colors group-hover:text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Screen 3a: PAT settings */}
+          {screen === "settings" && selectedType && method === "pat" && (
             <form onSubmit={handleSubmit} id="add-connection-form">
-              {/* Setup guide */}
               {(() => {
                 const guide = SOURCE_TYPE_SETUP_GUIDES[selectedType]
                 return (
@@ -326,10 +559,7 @@ export function AddConnectionModal({
                         </ol>
                         <div className="mt-2.5 flex flex-wrap gap-1.5">
                           {guide.requiredScopes.map((scope) => (
-                            <span
-                              key={scope}
-                              className="inline-block rounded bg-[var(--color-accent-subtle)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--color-accent)]"
-                            >
+                            <span key={scope} className="inline-block rounded bg-[var(--color-accent-subtle)] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[var(--color-accent)]">
                               {scope}
                             </span>
                           ))}
@@ -340,56 +570,46 @@ export function AddConnectionModal({
                 )
               })()}
 
-              {/* Display name */}
-              <div className="mb-4">
-                <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
-                  Display Name{" "}
-                  <span className="text-xs font-normal text-[var(--color-text-tertiary)]">
-                    (optional)
-                  </span>
-                </label>
+              <FormField
+                label={<>Display name <span className="font-normal text-[var(--color-text-tertiary)]">(optional)</span></>}
+                htmlFor="connection-display-name"
+                className="mb-4"
+              >
                 <Input
+                  id="connection-display-name"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={SOURCE_TYPE_LABELS[selectedType]}
                 />
-              </div>
+              </FormField>
 
-              {/* Dynamic fields */}
               {SOURCE_TYPE_FIELDS[selectedType].map((field) => {
                 const isPassword = field.type === "password"
                 const isVisible = showPassword[field.key]
+                const fieldId = `connection-${field.key}`
                 return (
-                  <div key={field.key} className="mb-4">
-                    <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
-                      {field.label}
-                      {field.required && (
-                        <span className="ml-0.5 text-[var(--color-severity-critical)]">*</span>
-                      )}
-                    </label>
+                  <FormField
+                    key={field.key}
+                    label={field.label}
+                    htmlFor={fieldId}
+                    required={field.required}
+                    hint={field.helperText}
+                    className="mb-4"
+                  >
                     <div className="relative">
                       <Input
+                        id={fieldId}
                         type={isPassword && !isVisible ? "password" : "text"}
                         value={auth[field.key] ?? ""}
                         placeholder={field.placeholder}
-                        onChange={(e) =>
-                          setAuth((prev) => ({
-                            ...prev,
-                            [field.key]: e.target.value,
-                          }))
-                        }
+                        onChange={(e) => setAuth((prev) => ({ ...prev, [field.key]: e.target.value }))}
                         className={isPassword ? "pr-14" : ""}
                       />
                       {isPassword && (
                         <button
                           type="button"
-                          onClick={() =>
-                            setShowPassword((prev) => ({
-                              ...prev,
-                              [field.key]: !prev[field.key],
-                            }))
-                          }
+                          onClick={() => setShowPassword((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
                           className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded px-1.5 py-0.5 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
                           tabIndex={-1}
                         >
@@ -397,16 +617,10 @@ export function AddConnectionModal({
                         </button>
                       )}
                     </div>
-                    {field.helperText && (
-                      <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                        {field.helperText}
-                      </p>
-                    )}
-                  </div>
+                  </FormField>
                 )
               })}
 
-              {/* Error */}
               {error && (
                 <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
                   <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -420,37 +634,196 @@ export function AddConnectionModal({
               )}
             </form>
           )}
+
+          {/* Screen 3b: Webhook setup */}
+          {screen === "settings" && selectedType && method === "webhook" && (
+            <div className="space-y-4">
+              <p className="text-sm text-[var(--color-text-secondary)]">
+                Send {providerLabel} push and pull-request events to Aegis so it rescans automatically. Add the
+                webhook below in your {providerLabel} repository (or organisation) settings.
+              </p>
+
+              <ol className="space-y-4">
+                <Step n={1}>
+                  In {providerLabel}, open{" "}
+                  <span className="font-medium text-[var(--color-text-primary)]">
+                    {WEBHOOK_SETTINGS_PATH[selectedType] ?? "your webhook settings"}
+                  </span>.
+                </Step>
+                <Step n={2}>
+                  Set the <span className="font-medium text-[var(--color-text-primary)]">Payload URL</span> to:
+                  <CopyRow
+                    value={(typeof window !== "undefined" ? window.location.origin : "") + (WEBHOOK_PATHS[selectedType] ?? "")}
+                    copied={copied === "url"}
+                    onCopy={(v) => copy(v, "url")}
+                  />
+                </Step>
+                <Step n={3}>
+                  Set <span className="font-medium text-[var(--color-text-primary)]">Content type</span> to{" "}
+                  <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">application/json</code>.
+                </Step>
+                <Step n={4}>
+                  Generate a signing secret and paste it into the webhook&apos;s{" "}
+                  <span className="font-medium text-[var(--color-text-primary)]">Secret</span> field:
+                  {webhookSecret ? (
+                    <>
+                      <CopyRow value={webhookSecret} mono copied={copied === "secret"} onCopy={(v) => copy(v, "secret")} />
+                      <p className="text-[var(--color-text-tertiary)]">
+                        Copy it now — it won&apos;t be shown again. You can rotate it later from Webhook Endpoints.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <span className="block">
+                        <Button variant="secondary" size="sm" onClick={handleWebhookSecret} disabled={webhookBusy} isLoading={webhookBusy}>
+                          {webhookBusy
+                            ? (existingWebhookId ? "Rotating…" : "Generating…")
+                            : (existingWebhookId ? "Rotate signing secret" : "Generate signing secret")}
+                        </Button>
+                      </span>
+                      {existingWebhookId && (
+                        <p className="text-[var(--color-text-tertiary)]">
+                          A secret already exists for {providerLabel}. Rotating generates a new one and invalidates the old.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </Step>
+                <Step n={5}>
+                  Under events, select{" "}
+                  <span className="font-medium text-[var(--color-text-primary)]">Pushes</span> and{" "}
+                  <span className="font-medium text-[var(--color-text-primary)]">Pull requests</span>, then save.
+                </Step>
+              </ol>
+
+              {error && <p className="text-xs text-[var(--color-severity-critical)]">{error}</p>}
+            </div>
+          )}
+
+          {/* Screen 3c: CI/CD setup */}
+          {screen === "settings" && selectedType && method === "cicd" && (() => {
+            const StepsComponent = CICD_STEPS[selectedType]
+            const aegisUrl = typeof window !== "undefined" ? window.location.origin : ""
+            return (
+              <div className="space-y-4">
+                <p className="text-sm text-[var(--color-text-secondary)]">
+                  Run the Aegis scanner inside your {providerLabel} pipeline. It scans each build and reports findings
+                  back to Aegis — no webhook required.
+                </p>
+
+                <ol className="space-y-4">
+                  <Step n={1}>
+                    Create an API key with{" "}
+                    <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">trigger:scans</code>{" "}
+                    scope and add it to your CI as a secret named{" "}
+                    <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">AEGIS_API_KEY</code>.
+                    {apiKeyToken ? (
+                      <>
+                        <CopyRow value={apiKeyToken} mono copied={copied === "apikey"} onCopy={(v) => copy(v, "apikey")} />
+                        <p className="text-[var(--color-text-tertiary)]">
+                          Copy it now — it won&apos;t be shown again. It&apos;s saved under{" "}
+                          <Link href="/settings/api-keys" className="text-[var(--color-accent)] underline" onClick={onClose}>
+                            Settings → API keys
+                          </Link>.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <span className="block">
+                          <Button variant="secondary" size="sm" onClick={handleCreateApiKey} disabled={apiKeyBusy} isLoading={apiKeyBusy}>
+                            {apiKeyBusy ? "Creating…" : "Create API key"}
+                          </Button>
+                        </span>
+                        {apiKeyError && <p className="text-[var(--color-severity-critical)]">{apiKeyError}</p>}
+                      </>
+                    )}
+                  </Step>
+                  <Step n={2}>
+                    Add this to your {providerLabel} pipeline config, then commit and run a build:
+                    {StepsComponent && (
+                      <div className="mt-1">
+                        <StepsComponent aegisUrl={aegisUrl} />
+                      </div>
+                    )}
+                  </Step>
+                  <Step n={3}>
+                    That&apos;s it — Aegis links each scan to the right source from the repository
+                    automatically, so there&apos;s no source id to manage.
+                  </Step>
+                </ol>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
-          {step === 1 ? (
+        <div className="flex shrink-0 items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
+          {screen === "provider" ? (
             <>
-              <Button variant="ghost" size="md" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button variant="primary" size="md" disabled={!selectedType} onClick={handleNext}>
-                Next
+              <Button variant="ghost" size="md" onClick={onClose}>Cancel</Button>
+              <Button variant="primary" size="md" disabled={!selectedType} onClick={handleNext}>Next</Button>
+            </>
+          ) : screen === "method" ? (
+            <Button variant="ghost" size="md" onClick={handleBack}>Back</Button>
+          ) : method === "pat" ? (
+            <>
+              <Button variant="ghost" size="md" onClick={handleBack}>Back</Button>
+              <Button type="submit" form="add-connection-form" variant="primary" size="md" disabled={testing} isLoading={testing}>
+                {testing ? "Testing…" : "Test & Connect"}
               </Button>
             </>
           ) : (
             <>
-              <Button variant="ghost" size="md" onClick={handleBack}>
-                Back
-              </Button>
-              <Button
-                type="submit"
-                form="add-connection-form"
-                variant="primary"
-                size="md"
-                disabled={testing}
-                isLoading={testing}
-              >
-                {testing ? "Testing\u2026" : "Test & Connect"}
-              </Button>
+              <Button variant="ghost" size="md" onClick={handleBack}>Back</Button>
+              <Button variant="primary" size="md" onClick={onClose}>Done</Button>
             </>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+
+// A numbered step in the webhook / CI-CD setup instructions.
+function Step({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-3">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-subtle)] text-[11px] font-semibold text-[var(--color-accent)]">
+        {n}
+      </span>
+      <div className="min-w-0 flex-1 space-y-2 text-xs leading-relaxed text-[var(--color-text-secondary)]">
+        {children}
+      </div>
+    </li>
+  )
+}
+
+
+function CopyRow({
+  label, value, mono, copied, onCopy,
+}: {
+  label?: string
+  value: string
+  mono?: boolean
+  copied: boolean
+  onCopy: (value: string) => void
+}) {
+  return (
+    <div>
+      {label && <p className="mb-1.5 text-xs font-medium text-[var(--color-text-secondary)]">{label}</p>}
+      <div className="flex items-center gap-2">
+        <code className={`min-w-0 flex-1 truncate rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-xs text-[var(--color-text-primary)] ${mono ? "font-mono" : ""}`}>
+          {value}
+        </code>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => onCopy(value)}
+          leadingIcon={copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        >
+          {copied ? "Copied" : "Copy"}
+        </Button>
       </div>
     </div>
   )

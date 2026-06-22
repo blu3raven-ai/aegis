@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import type { SourceCategory, SourceConnection } from "@/lib/shared/sources-types"
 import { CATEGORY_LABELS, CATEGORY_ITEM_LABELS } from "@/lib/shared/sources-types"
-import { listSourceConnections } from "@/lib/client/sources-api"
+import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { ConnectionCard } from "./ConnectionCard"
 import { AddConnectionModal } from "@/components/sources/AddConnectionModal"
 import { useLicense } from "@/lib/client/license/client"
@@ -11,38 +11,39 @@ import { TIER_LABELS } from "@/lib/shared/license/types"
 import type { Tier } from "@/lib/shared/license/types"
 import { useSSE } from "@/components/providers/SSEProvider"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
 import type { SourceSyncedEvent } from "@/lib/shared/sse-types"
 
-// ─── Category descriptions ────────────────────────────────────────────────────
 
 const CATEGORY_DESCRIPTIONS: Record<SourceCategory, string> = {
   "code-repositories": "Manage your code host connections and control which repositories are scanned.",
   "container-registry": "Manage your container registry connections and control which images are scanned.",
   "cloud-infrastructure": "Manage your cloud infrastructure connections and monitor your cloud resources.",
+  "ci-systems": "Manage your CI system connections to trigger scans from your pipelines.",
 }
 
 const CATEGORY_EMPTY_HINTS: Record<SourceCategory, string> = {
   "code-repositories": "Add a code host connection to start discovering and scanning your repositories.",
   "container-registry": "Add a container registry connection to start discovering and scanning your images.",
   "cloud-infrastructure": "Add a cloud infrastructure connection to start monitoring your cloud resources.",
+  "ci-systems": "Add a CI system connection to trigger scans from your build pipelines.",
 }
 
-// ─── Skeleton ──────────────────────────────────────────────────────────────────
 
 function SkeletonRow() {
   return (
     <div className="flex items-center gap-4 px-5 py-4">
-      <div className="h-8 w-8 shrink-0 animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
+      <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
       <div className="flex flex-1 flex-col gap-1.5">
-        <div className="h-3.5 w-36 animate-pulse rounded bg-[var(--color-surface-raised)]" />
-        <div className="h-3 w-24 animate-pulse rounded bg-[var(--color-surface-raised)]" />
+        <Skeleton className="h-3.5 w-36" />
+        <Skeleton className="h-3 w-24" />
       </div>
-      <div className="h-5 w-20 animate-pulse rounded-full bg-[var(--color-surface-raised)]" />
+      <Skeleton className="h-5 w-20 rounded-full" />
     </div>
   )
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface ConnectionListProps {
   category: SourceCategory
@@ -50,7 +51,6 @@ interface ConnectionListProps {
   initialTotalConnections?: number
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function ConnectionList({ category, canEdit, initialTotalConnections }: ConnectionListProps) {
   const [connections, setConnections] = useState<SourceConnection[]>([])
@@ -144,10 +144,10 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
           <p className="mb-4 text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Connections
           </p>
-          <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <Card padding="none" className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl">
             <SkeletonRow />
             <SkeletonRow />
-          </div>
+          </Card>
         </div>
       ) : connections.length === 0 ? (
         /* Empty state — matches Teams empty style */
@@ -172,7 +172,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
           {canEdit && (
             <div className="mt-5 inline-flex">
               <Button variant="primary" size="md" onClick={() => setShowAddModal(true)}>
-                Add your first connection
+                Add Your First Connection
               </Button>
             </div>
           )}
@@ -183,7 +183,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
           <p className="mb-4 text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Connections
           </p>
-          <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <Card padding="none" className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl">
             {connections.map((conn) => (
               <ConnectionCard
                 key={conn.id}
@@ -193,7 +193,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
                 onRefresh={load}
               />
             ))}
-          </div>
+          </Card>
         </div>
       )}
 

@@ -9,6 +9,7 @@ os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 import pytest  # noqa: E402
 
 from src.reports.service import generate_report  # noqa: E402
+from src.tests._pdf_skip import pdf_skip  # noqa: E402
 
 
 def _fake_report(report_id: int = 1) -> MagicMock:
@@ -154,6 +155,7 @@ def test_report_visible_via_asset_intersection():
     )
 
 
+@pdf_skip
 def test_generate_findings_pdf_returns_pdf_bytes(monkeypatch):
     """generate_report(format='pdf') uploads PDF bytes with the right content type."""
     from src.reports import service
@@ -190,7 +192,7 @@ def test_generate_findings_pdf_returns_pdf_bytes(monkeypatch):
     monkeypatch.setattr(service, "run_db", fake_run_db)
     monkeypatch.setattr(service, "upload_bytes", fake_upload)
 
-    report = service.generate_report(
+    service.generate_report(
         report_type="findings",
         fmt="pdf",
         title="Q3 findings",
@@ -207,6 +209,7 @@ def test_generate_findings_pdf_returns_pdf_bytes(monkeypatch):
     assert captured["upload"]["size"] > 1000
 
 
+@pdf_skip
 def test_generate_posture_pdf_uses_get_posture_snapshot(monkeypatch):
     from src.reports import service
     from src.shared.analytics import (

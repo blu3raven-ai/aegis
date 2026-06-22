@@ -50,9 +50,7 @@ def _job_to_dict(job: RunnerJob) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # Runner records
-# ---------------------------------------------------------------------------
 
 def read_runner(runner_id: str) -> dict[str, Any] | None:
     async def _query(session):
@@ -111,9 +109,7 @@ def list_runners() -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # Job records
-# ---------------------------------------------------------------------------
 
 def read_job(job_id: str) -> dict[str, Any] | None:
     async def _query(session):
@@ -165,9 +161,7 @@ def list_jobs(status: str | None = None) -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # Registration tokens
-# ---------------------------------------------------------------------------
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
@@ -229,9 +223,7 @@ def generate_auth_token() -> tuple[str, str]:
     return raw, hash_token(raw)
 
 
-# ---------------------------------------------------------------------------
 # Heartbeat history
-# ---------------------------------------------------------------------------
 
 def record_heartbeat(runner_id: str, cpu: float | None, memory: float | None) -> None:
     """Record a heartbeat entry for history."""
@@ -302,9 +294,7 @@ def prune_old_heartbeats(keep_minutes: int = 120) -> int:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # Runner metrics & settings
-# ---------------------------------------------------------------------------
 
 def update_runner_metrics(runner_id: str, metrics: dict[str, Any]) -> None:
     """Update runner's live metric columns."""

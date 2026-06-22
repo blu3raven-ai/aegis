@@ -78,10 +78,10 @@ describe("rules-api scanner coverage action types", () => {
   })
 
   for (const scanner of [
-    '"dependencies"',
+    '"dependencies_scanning"',
     '"code_scanning"',
     '"container_scanning"',
-    '"secrets"',
+    '"secret_scanning"',
   ]) {
     it(`ScannerType includes ${scanner}`, () => {
       assert.ok(

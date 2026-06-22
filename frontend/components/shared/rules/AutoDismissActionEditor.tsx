@@ -12,6 +12,7 @@
  */
 
 import type { AutoDismissAction } from "@/lib/client/rules-api"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 
@@ -45,13 +46,13 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
 
   return (
     <div className="space-y-5">
-      <div>
-        <label
-          htmlFor="auto-dismiss-reason"
-          className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-        >
-          User-facing dismiss reason
-        </label>
+      <FormField
+        label="User-facing dismiss reason"
+        htmlFor="auto-dismiss-reason"
+        labelSuffix={`${reasonLen} / 200`}
+        hint={reasonInvalid ? undefined : "Shown to anyone reviewing the auto-dismissed finding."}
+        error={reasonInvalid ? "Reason must be between 3 and 200 characters." : undefined}
+      >
         <Textarea
           id="auto-dismiss-reason"
           value={value.reason}
@@ -61,29 +62,15 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
           maxLength={200}
           className="min-h-[72px]"
         />
-        <div className="mt-1 flex items-center justify-between">
-          <p
-            className={`text-xs ${
-              reasonInvalid
-                ? "text-[var(--color-severity-critical)]"
-                : "text-[var(--color-text-tertiary)]"
-            }`}
-          >
-            {reasonInvalid
-              ? "Reason must be between 3 and 200 characters."
-              : "Shown to anyone reviewing the auto-dismissed finding."}
-          </p>
-          <span className="text-2xs text-[var(--color-text-tertiary)]">{reasonLen} / 200</span>
-        </div>
-      </div>
+      </FormField>
 
-      <div>
-        <label
-          htmlFor="auto-dismiss-audit-note"
-          className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-        >
-          Audit note <span className="font-normal normal-case tracking-normal text-[var(--color-text-tertiary)]">(internal, optional)</span>
-        </label>
+      <FormField
+        label={<>Audit note <span className="font-normal text-[var(--color-text-tertiary)]">(internal, optional)</span></>}
+        htmlFor="auto-dismiss-audit-note"
+        labelSuffix={`${auditNoteLen} / 500`}
+        hint={auditNoteInvalid ? undefined : "Visible only to admins reviewing rule history."}
+        error={auditNoteInvalid ? "Audit note must be 500 characters or fewer." : undefined}
+      >
         <Textarea
           id="auto-dismiss-audit-note"
           value={value.audit_note ?? ""}
@@ -93,21 +80,7 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
           maxLength={500}
           className="min-h-[72px]"
         />
-        <div className="mt-1 flex items-center justify-between">
-          <p
-            className={`text-xs ${
-              auditNoteInvalid
-                ? "text-[var(--color-severity-critical)]"
-                : "text-[var(--color-text-tertiary)]"
-            }`}
-          >
-            {auditNoteInvalid
-              ? "Audit note must be 500 characters or fewer."
-              : "Visible only to admins reviewing rule history."}
-          </p>
-          <span className="text-2xs text-[var(--color-text-tertiary)]">{auditNoteLen} / 500</span>
-        </div>
-      </div>
+      </FormField>
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
         <div className="mb-3">

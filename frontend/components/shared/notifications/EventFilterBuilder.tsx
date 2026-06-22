@@ -1,6 +1,7 @@
 "use client"
 
 import { FilterChip } from "@/components/ui/FilterChip"
+import { FormField } from "@/components/ui/FormField"
 import { Select } from "@/components/ui/Select"
 
 // Event filter builder — event type multi-select + min severity picker
@@ -82,13 +83,7 @@ export function EventFilterBuilder({ value, onChange }: EventFilterBuilderProps)
       </div>
 
       {/* Min severity */}
-      <div>
-        <label
-          htmlFor="event-filter-severity"
-          className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
-        >
-          Minimum severity
-        </label>
+      <FormField label="Minimum severity" htmlFor="event-filter-severity">
         <Select
           id="event-filter-severity"
           value={value.min_severity ?? ""}
@@ -106,7 +101,7 @@ export function EventFilterBuilder({ value, onChange }: EventFilterBuilderProps)
             Filtering: {value.min_severity} and above
           </p>
         )}
-      </div>
+      </FormField>
     </div>
   )
 }

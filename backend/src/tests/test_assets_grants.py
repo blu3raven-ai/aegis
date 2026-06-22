@@ -1,17 +1,16 @@
 import pytest
 import pytest_asyncio
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from src.assets.grants import auto_grant_to_uploader, primary_team_id_for_user
-from src.db.models import Team, TeamAsset, TeamMember, Asset
+from src.db.models import Asset, Grant, Team, TeamMember
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def _clean_grants(db_session):
     yield
-    from src.db.models import Asset, Team, TeamAsset, TeamMember
-    await db_session.execute(delete(TeamAsset))
+    await db_session.execute(delete(Grant))
     await db_session.execute(delete(TeamMember))
     await db_session.execute(delete(Team))
     await db_session.execute(delete(Asset))
@@ -51,10 +50,10 @@ async def test_auto_grant_attaches_asset_to_primary_team(db_session, seed_user):
     await auto_grant_to_uploader(db_session, asset_id=asset.id, user_id=seed_user.id)
 
     grant = (await db_session.execute(
-        TeamAsset.__table__.select().where(TeamAsset.asset_id == asset.id)
-    )).first()
+        select(Grant).where(Grant.asset_id == str(asset.id), Grant.subject_type == "team")
+    )).scalar_one()
     assert grant is not None
-    assert grant.team_id == "t-1"
+    assert grant.subject_id == "t-1"
 
 
 @pytest.mark.asyncio

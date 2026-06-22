@@ -6,7 +6,7 @@ import json
 import httpx
 import pytest
 
-from src.pr_feedback.git_pr_providers.base import AuthError, NotFoundError, RateLimitedError
+from src.pr_feedback.git_pr_providers.base import AuthError
 from src.pr_feedback.git_pr_providers.bitbucket import BitbucketPrProvider
 from src.pr_feedback.render import MARKER_PREFIX
 

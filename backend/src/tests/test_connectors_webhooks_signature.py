@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 
 from src.connectors.webhooks.signature import (
+    verify_basic_auth,
+    verify_bearer_token,
     verify_hmac_sha256,
     verify_token_eq,
 )
@@ -65,3 +68,64 @@ def test_token_eq_rejects_empty_secret():
 
 def test_token_eq_rejects_empty_header():
     assert verify_token_eq("secret", "") is False
+
+
+def _basic(secret: str) -> str:
+    return "Basic " + base64.b64encode(secret.encode()).decode()
+
+
+def test_basic_auth_accepts_valid():
+    assert verify_basic_auth("user:pw", _basic("user:pw")) is True
+
+
+def test_basic_auth_rejects_wrong_secret():
+    assert verify_basic_auth("user:pw", _basic("user:other")) is False
+
+
+def test_basic_auth_rejects_missing_prefix():
+    raw = base64.b64encode(b"user:pw").decode()
+    assert verify_basic_auth("user:pw", raw) is False
+
+
+def test_basic_auth_rejects_empty_header():
+    assert verify_basic_auth("user:pw", "") is False
+
+
+def test_basic_auth_rejects_empty_secret():
+    assert verify_basic_auth("", _basic("anything:x")) is False
+
+
+def test_basic_auth_rejects_malformed_base64():
+    assert verify_basic_auth("user:pw", "Basic !!!not-base64!!!") is False
+
+
+def test_basic_auth_rejects_blank_payload():
+    assert verify_basic_auth("user:pw", "Basic ") is False
+
+
+def test_bearer_token_accepts_valid():
+    assert verify_bearer_token("token-abc", "Bearer token-abc") is True
+
+
+def test_bearer_token_rejects_wrong_secret():
+    assert verify_bearer_token("token-abc", "Bearer token-xyz") is False
+
+
+def test_bearer_token_rejects_missing_prefix():
+    assert verify_bearer_token("token-abc", "token-abc") is False
+
+
+def test_bearer_token_rejects_lowercase_prefix():
+    assert verify_bearer_token("token-abc", "bearer token-abc") is False
+
+
+def test_bearer_token_rejects_empty_header():
+    assert verify_bearer_token("token-abc", "") is False
+
+
+def test_bearer_token_rejects_empty_secret():
+    assert verify_bearer_token("", "Bearer anything") is False
+
+
+def test_bearer_token_rejects_blank_payload():
+    assert verify_bearer_token("token-abc", "Bearer ") is False

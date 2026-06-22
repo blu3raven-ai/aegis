@@ -19,6 +19,8 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const repoAssets = team.assets.filter((a) => a.type === "repo")
+
   async function updateValue(next: string) {
     setValue(next)
     try {
@@ -47,8 +49,8 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
     setSubmitting(false)
   }
 
-  async function removeRepository(org: string, repo: string) {
-    const result = await removeOrganisationRepository(team.id, org, repo)
+  async function removeRepository(assetId: string) {
+    const result = await removeOrganisationRepository(team.id, assetId)
     if (result.ok) {
       await onChanged()
     } else {
@@ -59,15 +61,14 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        {team.repositories.map((repo) => {
-          const key = `${repo.org}/${repo.repo}`
-          const sharedTeamCount = sharing.repositories[key]?.length ?? 0
-          const isGitHubSourced = repo.source === "github"
+        {repoAssets.map((asset) => {
+          const sharedTeamCount = sharing[asset.assetId]?.length ?? 0
+          const isGitHubSourced = asset.source === "github"
 
           return (
-            <div key={key} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
+            <div key={asset.assetId} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
               <div className="flex flex-1 items-center gap-2 min-w-0">
-                <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{key}</span>
+                <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{asset.displayName}</span>
                 {sharedTeamCount > 1 && (
                   <span className="rounded bg-[var(--color-state-pending-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-state-pending)] whitespace-nowrap">
                     shared with {sharedTeamCount} teams
@@ -83,7 +84,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
                 disabled={!canEdit || isGitHubSourced}
                 variant="secondary"
                 size="sm"
-                onClick={() => void removeRepository(repo.org, repo.repo)}
+                onClick={() => void removeRepository(asset.assetId)}
                 className="border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
                 title={isGitHubSourced ? "This repository is synced from a source connection and cannot be manually removed" : undefined}
               >
@@ -92,7 +93,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
             </div>
           )
         })}
-        {team.repositories.length === 0 && (
+        {repoAssets.length === 0 && (
           <p className="py-4 text-center text-xs text-[var(--color-text-secondary)] italic">No repositories assigned to this team.</p>
         )}
       </div>

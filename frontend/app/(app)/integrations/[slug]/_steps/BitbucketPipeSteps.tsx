@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
 
-export function BitbucketPipeSteps({ sourceId, aegisUrl }: { sourceId: string; aegisUrl: string }) {
+export function BitbucketPipeSteps({ aegisUrl }: { aegisUrl: string }) {
   const [copied, setCopied] = useState(false);
 
   const snippet = `pipelines:
@@ -15,7 +15,6 @@ export function BitbucketPipeSteps({ sourceId, aegisUrl }: { sourceId: string; a
               variables:
                 AEGIS_URL: ${aegisUrl}
                 AEGIS_API_KEY: $AEGIS_API_KEY
-                SOURCE_ID: ${sourceId || "<your-source-id>"}
 `;
 
   async function copy() {

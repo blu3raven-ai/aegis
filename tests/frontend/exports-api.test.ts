@@ -13,7 +13,7 @@ test("builds URL with format=csv by default path structure", async () => {
   const { buildFindingsExportUrl } = await loadModule()
   const url = buildFindingsExportUrl({}, "csv")
   const parsed = new URL(url, "http://localhost")
-  assert.equal(parsed.pathname, "/api/v1/exports/findings")
+  assert.equal(parsed.pathname, "/api/v1/findings/export")
   assert.equal(parsed.searchParams.get("format"), "csv")
 })
 
@@ -33,9 +33,9 @@ test("includes severity filter", async () => {
 
 test("includes scanner filter", async () => {
   const { buildFindingsExportUrl } = await loadModule()
-  const url = buildFindingsExportUrl({ scanner: "dependencies" }, "csv")
+  const url = buildFindingsExportUrl({ scanner: "dependencies_scanning" }, "csv")
   const parsed = new URL(url, "http://localhost")
-  assert.equal(parsed.searchParams.get("scanner"), "dependencies")
+  assert.equal(parsed.searchParams.get("scanner"), "dependencies_scanning")
 })
 
 test("includes status filter", async () => {
@@ -75,12 +75,27 @@ test("omits undefined filters from query string", async () => {
   assert.equal(parsed.searchParams.has("repo_id"), false)
 })
 
+test("includes include_archived flag when true", async () => {
+  const { buildFindingsExportUrl } = await loadModule()
+  const url = buildFindingsExportUrl({ include_archived: true }, "csv")
+  const parsed = new URL(url, "http://localhost")
+  assert.equal(parsed.searchParams.get("include_archived"), "true")
+})
+
+test("omits include_archived when false or absent", async () => {
+  const { buildFindingsExportUrl } = await loadModule()
+  const omitted = buildFindingsExportUrl({}, "csv")
+  assert.equal(new URL(omitted, "http://localhost").searchParams.has("include_archived"), false)
+  const explicitFalse = buildFindingsExportUrl({ include_archived: false }, "csv")
+  assert.equal(new URL(explicitFalse, "http://localhost").searchParams.has("include_archived"), false)
+})
+
 test("includes all filters when all are provided", async () => {
   const { buildFindingsExportUrl } = await loadModule()
   const url = buildFindingsExportUrl(
     {
       severity: "critical",
-      scanner: "secrets",
+      scanner: "secret_scanning",
       status: "open",
       repo_id: "example-org/api",
       since: "2026-01-01T00:00:00Z",
@@ -91,7 +106,7 @@ test("includes all filters when all are provided", async () => {
   const parsed = new URL(url, "http://localhost")
   assert.equal(parsed.searchParams.get("format"), "json")
   assert.equal(parsed.searchParams.get("severity"), "critical")
-  assert.equal(parsed.searchParams.get("scanner"), "secrets")
+  assert.equal(parsed.searchParams.get("scanner"), "secret_scanning")
   assert.equal(parsed.searchParams.get("status"), "open")
   assert.equal(parsed.searchParams.get("repo_id"), "example-org/api")
   assert.equal(parsed.searchParams.get("since"), "2026-01-01T00:00:00Z")

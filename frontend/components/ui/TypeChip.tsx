@@ -1,14 +1,15 @@
 // Pattern: Snyk projects list — project type label with icon.
 // Reference: Snyk projects table → "Project Type" column.
-import { Boxes, Cloud, Code2 } from "lucide-react";
+import { Boxes, Cloud, Code2, Workflow } from "lucide-react";
 import { cn } from "@/lib/shared/utils";
 
-export type SourceType = "code" | "containers" | "cloud";
+export type SourceType = "code" | "containers" | "cloud" | "ci";
 
 const STYLES: Record<SourceType, { label: string; Icon: typeof Code2 }> = {
   code:       { label: "Code",       Icon: Code2 },
   containers: { label: "Container",  Icon: Boxes },
   cloud:      { label: "Cloud",      Icon: Cloud },
+  ci:         { label: "CI",         Icon: Workflow },
 };
 
 export function TypeChip({ type }: { type: SourceType }) {

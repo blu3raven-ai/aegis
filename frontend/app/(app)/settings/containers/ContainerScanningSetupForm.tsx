@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react"
 import { AdvisorySourcesCopyBar } from "@/components/settings/AdvisorySourcesCopyBar"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { useRouter } from "next/navigation"
 import { PrerequisitePanel } from "../PrerequisitePanel"
@@ -115,13 +116,13 @@ export function ContainerScanningSetupForm({
     startTransition(async () => {
       const { saveToolSettings } = await import("@/lib/client/settings-api")
       const result = await saveToolSettings({
-        tool: "containerScanning",
+        tool: "container_scanning",
         enabled: true,
         settings: {
           autoRerunEnabled: autoRerunEnabled ? "true" : "false",
           rerunScheduleType,
           rerunScheduleValue,
-          concurrency: scanConcurrency,
+          scanConcurrency,
           nvdEnabled: nvdEnabled ? "true" : "false",
           nvdApiKey: editingNvdKey ? nvdApiKey : initialNvdApiKey,
           ghsaEnabled: ghsaEnabled ? "true" : "false",
@@ -234,20 +235,19 @@ export function ContainerScanningSetupForm({
 
       <SettingsCard eyebrow="Scanner Config" title="Scanner Settings">
       <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-              Scan concurrency
-            </label>
+          <FormField
+            label="Scan concurrency"
+            htmlFor="containers-scan-concurrency"
+            hint="Maximum container images scanned in parallel."
+          >
             <Input
+              id="containers-scan-concurrency"
               type="number"
               min="1"
               value={scanConcurrency}
               onChange={(e) => setScanConcurrency(e.target.value)}
             />
-            <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
-              Maximum container images scanned in parallel.
-            </p>
-          </div>
+          </FormField>
 
       </fieldset>
       </SettingsCard>
@@ -274,33 +274,35 @@ export function ContainerScanningSetupForm({
               <div className="space-y-4 rounded-lg border border-[var(--color-border)] p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   {rerunScheduleType === "simple" ? (
-                    <div className="flex-1">
-                      <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-                        Scan Time (Daily)
-                      </label>
+                    <FormField
+                      label="Scan Time (Daily)"
+                      htmlFor="containers-scan-time"
+                      className="flex-1"
+                    >
                       <Input
+                        id="containers-scan-time"
                         type="time"
                         value={rerunScheduleValue}
                         onChange={(e) => setRerunScheduleValue(e.target.value)}
                         className="max-w-[150px]"
                       />
-                    </div>
+                    </FormField>
                   ) : (
-                    <div className="flex-1">
-                      <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-                        Cron Expression
-                      </label>
+                    <FormField
+                      label="Cron Expression"
+                      htmlFor="containers-cron"
+                      hint="Standard cron format (min hour day month weekday)."
+                      className="flex-1"
+                    >
                       <Input
+                        id="containers-cron"
                         type="text"
                         value={rerunScheduleValue}
                         onChange={(e) => setRerunScheduleValue(e.target.value)}
                         placeholder="e.g. 0 2 * * *"
                         className="font-mono"
                       />
-                      <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
-                        Standard cron format (min hour day month weekday).
-                      </p>
-                    </div>
+                    </FormField>
                   )}
                 </div>
 

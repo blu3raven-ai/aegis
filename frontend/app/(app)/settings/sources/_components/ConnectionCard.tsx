@@ -8,21 +8,19 @@ import {
   syncSourceConnection,
   testSourceConnection,
   deleteSourceConnection,
-} from "@/lib/client/sources-api"
+} from "@/lib/client/source-connections-api"
 import { ConnectionStatusBadge } from "./ConnectionStatusBadge"
 import { SourceTypeLogo } from "./SourceTypeLogo"
 import { Dialog } from "@/components/layout/Dialog"
 import { Button } from "@/components/ui/Button"
 import { timeAgo } from "@/lib/shared/time-ago"
 
-// ─── Time helpers ─────────────────────────────────────────────────────────────
 
 function isSyncOverdue(nextSyncAt: string | undefined): boolean {
   if (!nextSyncAt) return false
   return new Date(nextSyncAt).getTime() < Date.now()
 }
 
-// ─── Metadata pill ────────────────────────────────────────────────────────────
 
 function MetaPill({
   children,
@@ -44,7 +42,6 @@ function MetaPill({
   )
 }
 
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface ConnectionCardProps {
   connection: SourceConnection
@@ -53,7 +50,6 @@ interface ConnectionCardProps {
   onRefresh: () => void
 }
 
-// ─── Component (row inside grouped card) ──────────────────────────────────────
 
 export function ConnectionCard({
   connection,

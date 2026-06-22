@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { useMountedPathname } from "@/lib/client/use-mounted-pathname"
 import { Tooltip } from "@/components/layout/Tooltip"
 import { UserMenuButton } from "@/components/layout/UserMenuButton"
 import { BrandLogo } from "@/components/layout/BrandLogo"
@@ -14,11 +14,10 @@ const ICON_SEARCH = "M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0
 
 export interface SidebarContentProps {
   dependenciesEnabled: boolean
-  containerScanningEnabled: boolean
+  container_scanningEnabled: boolean
   secretsEnabled: boolean
-  codeScanningEnabled: boolean
+  code_scanningEnabled: boolean
   iacEnabled: boolean
-  counts?: { dependencies?: number; containerScanning?: number; secrets?: number; codeScanning?: number }
   /** Aggregate navigation badge counts. Each is optional — undefined hides the badge for that item. */
   navCounts?: { inbox?: number; findings?: number }
   orgCount?: number
@@ -110,11 +109,10 @@ function NavItemCount({ count, tone }: { count: number; tone: CountTone }) {
 
 export function SidebarContent({
   dependenciesEnabled: _dependenciesEnabled,
-  containerScanningEnabled: _containerScanningEnabled,
+  container_scanningEnabled: _container_scanningEnabled,
   secretsEnabled: _secretsEnabled,
-  codeScanningEnabled: _codeScanningEnabled,
+  code_scanningEnabled: _code_scanningEnabled,
   iacEnabled: _iacEnabled,
-  counts: _counts,
   navCounts,
   orgCount,
   collapsed,
@@ -123,7 +121,7 @@ export function SidebarContent({
   searchOpen,
   onSearchOpen,
 }: SidebarContentProps) {
-  const pathname = usePathname()
+  const pathname = useMountedPathname()
   const { tier } = useLicense()
   const { name: brandName, isVendor } = useBranding()
 
@@ -179,6 +177,7 @@ export function SidebarContent({
   ];
 
   const isActive = (href: string) => {
+    if (!pathname) return false
     if (href === "/") return pathname === "/"
     if (href === "#") return false
     return pathname.startsWith(href)

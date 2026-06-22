@@ -1,4 +1,4 @@
-"""Tests for /api/v1/reports/scheduled CRUD endpoints."""
+"""Tests for /api/v1/findings/reports/scheduled CRUD endpoints."""
 from __future__ import annotations
 
 import os
@@ -10,13 +10,15 @@ os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
 from src.reports.router import router as reports_router  # noqa: E402
 
 
 _VIEWER_PERMS = {"view_findings"}
 
 
-def _make_app() -> FastAPI:
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(reports_router)
 
@@ -26,6 +28,8 @@ def _make_app() -> FastAPI:
         request.state.user_email = "test@example.com"
         return await call_next(request)
 
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
     return app
 
 
@@ -41,12 +45,11 @@ def test_create_scheduled_report():
     }
     recorder = MagicMock()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=["a-1"])),
         patch("src.reports.router.create_schedule", return_value=fake_result),
         patch("src.reports.router.get_recorder", return_value=recorder),
     ):
-        r = TestClient(app).post("/api/v1/reports/scheduled", json={
+        r = TestClient(app).post("/api/v1/findings/reports/scheduled", json={
             "name": "Weekly findings",
             "report_type": "findings",
             "format": "pdf",
@@ -66,11 +69,10 @@ def test_create_scheduled_report():
 def test_create_scheduled_report_validation_error():
     app = _make_app()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=["a-1"])),
         patch("src.reports.router.create_schedule", side_effect=ValueError("posture reports do not support csv format")),
     ):
-        r = TestClient(app).post("/api/v1/reports/scheduled", json={
+        r = TestClient(app).post("/api/v1/findings/reports/scheduled", json={
             "name": "Bad",
             "report_type": "posture",
             "format": "csv",
@@ -93,10 +95,9 @@ def test_list_scheduled_reports():
         },
     ]
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.list_schedules", return_value=fake_items),
     ):
-        r = TestClient(app).get("/api/v1/reports/scheduled")
+        r = TestClient(app).get("/api/v1/findings/reports/scheduled")
     assert r.status_code == 200
     assert len(r.json()["items"]) == 1
 
@@ -106,17 +107,16 @@ def test_update_scheduled_report_404():
 
     app = _make_app()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.update_schedule", side_effect=ScheduledReportNotFound("999")),
     ):
-        r = TestClient(app).patch("/api/v1/reports/scheduled/999", json={"enabled": False})
+        r = TestClient(app).patch("/api/v1/findings/reports/scheduled/999", json={"enabled": False})
     assert r.status_code == 404
 
 
 def test_update_scheduled_report_empty_body():
     app = _make_app()
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS):
-        r = TestClient(app).patch("/api/v1/reports/scheduled/1", json={})
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS):
+        r = TestClient(app).patch("/api/v1/findings/reports/scheduled/1", json={})
     assert r.status_code == 422
 
 
@@ -124,11 +124,10 @@ def test_delete_scheduled_report():
     app = _make_app()
     recorder = MagicMock()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.delete_schedule", return_value=True),
         patch("src.reports.router.get_recorder", return_value=recorder),
     ):
-        r = TestClient(app).delete("/api/v1/reports/scheduled/1")
+        r = TestClient(app).delete("/api/v1/findings/reports/scheduled/1")
     assert r.status_code == 204
     recorder.record.assert_called_once()
 
@@ -136,17 +135,16 @@ def test_delete_scheduled_report():
 def test_delete_scheduled_report_404():
     app = _make_app()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.delete_schedule", return_value=False),
     ):
-        r = TestClient(app).delete("/api/v1/reports/scheduled/999")
+        r = TestClient(app).delete("/api/v1/findings/reports/scheduled/999")
     assert r.status_code == 404
 
 
 def test_create_requires_permission():
-    app = _make_app()
-    with patch("src.settings.router._resolve_effective_permissions", return_value=set()):
-        r = TestClient(app).post("/api/v1/reports/scheduled", json={
+    app = _make_app(allow_view_findings=False)
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False):
+        r = TestClient(app).post("/api/v1/findings/reports/scheduled", json={
             "name": "x", "report_type": "findings", "format": "pdf",
             "schedule_type": "simple", "schedule_value": "09:00",
         })

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useParams } from "next/navigation"
 
 import Link from "next/link"
+import { Card } from "@/components/ui/Card"
 import { ControlDetailHero } from "@/components/shared/compliance/ControlDetailHero"
 import { MappingsList } from "@/components/shared/compliance/MappingsList"
 import {
@@ -73,7 +74,7 @@ export function ControlDetailPageContent() {
       )}
 
       {loadState === "error" && (
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-8 text-center">
+        <Card padding="none" className="rounded-xl px-6 py-8 text-center">
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">
             Couldn&apos;t load control data
           </p>
@@ -87,7 +88,7 @@ export function ControlDetailPageContent() {
           >
             Retry
           </button>
-        </div>
+        </Card>
       )}
 
       {loadState === "ok" && (
@@ -99,12 +100,11 @@ export function ControlDetailPageContent() {
             description={control?.description}
             category={control?.category}
             findingCount={openFindings.length}
-            chainCount={0}
             highestSeverity={highestSeverity}
           />
 
           {/* Findings section */}
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+          <Card padding="none" elevation="sm" className="rounded-xl">
             <div className="border-b border-[var(--color-border)] px-5 py-3">
               <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
                 Mapped Findings
@@ -118,7 +118,7 @@ export function ControlDetailPageContent() {
             <div className="px-5 py-4">
               <MappingsList findings={openFindings} />
             </div>
-          </div>
+          </Card>
         </>
       )}
     </div>

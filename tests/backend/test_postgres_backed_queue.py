@@ -23,7 +23,7 @@ def test_postgres_backed_queue_satisfies_protocol(queue):
     _drain_queued(queue)
     q: JobQueue = queue
     jid = q.create(
-        job_type="dependencies", org="acme-org", run_id="run-1",
+        job_type="dependencies_scanning", org="acme-org", run_id="run-1",
         env_vars={"FOO": "bar"},
     )
     record = q.get(jid)

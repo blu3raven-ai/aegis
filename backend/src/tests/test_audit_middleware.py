@@ -8,10 +8,8 @@ These tests use a lightweight ASGI test client built on httpx to verify:
 """
 from __future__ import annotations
 
-from typing import Callable
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
@@ -40,7 +38,7 @@ def _make_app(recorder: MagicMock | None = None) -> tuple[FastAPI, MagicMock]:
     def health():
         return JSONResponse({"ok": True})
 
-    @app.post("/api/v1/runner/jobs")
+    @app.post("/api/v1/agent/jobs")
     def runner_job():
         return JSONResponse({"ok": True})
 
@@ -85,7 +83,7 @@ def test_health_path_not_audited():
 def test_runner_path_not_audited():
     app, mock_rec = _make_app()
     client = TestClient(app)
-    client.post("/api/v1/runner/jobs", json={})
+    client.post("/api/v1/agent/jobs", json={})
     mock_rec.record.assert_not_called()
 
 

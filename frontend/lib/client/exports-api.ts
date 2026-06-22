@@ -14,6 +14,7 @@ export interface FindingExportFilters {
   repo_id?: string         // single repository slug "owner/name"
   since?: string           // ISO-8601 datetime or duration like "30d"
   until?: string           // ISO-8601 datetime
+  include_archived?: boolean  // compliance opt-in: include archived findings
 }
 
 /**
@@ -33,5 +34,6 @@ export function buildFindingsExportUrl(
   if (filters.repo_id) qs.set("repo_id", filters.repo_id)
   if (filters.since) qs.set("since", filters.since)
   if (filters.until) qs.set("until", filters.until)
-  return `/api/v1/exports/findings?${qs.toString()}`
+  if (filters.include_archived) qs.set("include_archived", "true")
+  return `/api/v1/findings/export?${qs.toString()}`
 }

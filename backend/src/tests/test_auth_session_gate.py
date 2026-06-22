@@ -6,8 +6,8 @@ pure logic; the DB-bound SessionService is exercised in test_auth_session.py.
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.auth.cookies import SESSION_COOKIE_NAME
-from src.auth.session_gate import SessionAuthMiddleware
+from src.auth.authentication.cookies import SESSION_COOKIE_NAME
+from src.auth.authentication.session_gate import SessionAuthMiddleware
 
 
 class _FakeUser:
@@ -147,7 +147,6 @@ def test_pending_user_can_access_pending():
     assert client.get("/pending").status_code == 200
 
 
-# ── New regression / coverage tests ──────────────────────────────────────────
 
 
 def test_graphqlinjector_path_does_not_match_api():
@@ -175,17 +174,12 @@ def test_health_paths_are_public():
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_service_factory=lambda: _FakeService())
 
-    @app.get("/health/live")
-    def live():
-        return {"ok": True}
-
-    @app.get("/health/ready")
-    def ready():
+    @app.get("/health")
+    def health():
         return {"ok": True}
 
     client = TestClient(app)
-    assert client.get("/health/live").status_code == 200
-    assert client.get("/health/ready").status_code == 200
+    assert client.get("/health").status_code == 200
 
 
 def test_openapi_and_docs_are_public():
@@ -223,7 +217,6 @@ def test_pending_user_on_api_returns_401():
     assert r.json()["detail"] == "pending"
 
 
-# ── Connection lifecycle ─────────────────────────────────────────────────────
 
 
 class _TrackedDb:

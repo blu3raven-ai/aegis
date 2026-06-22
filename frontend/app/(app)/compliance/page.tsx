@@ -9,6 +9,7 @@ import { KpiCard } from "@/components/shared/KpiCard"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ComplianceIcon } from "@/lib/shared/ui/page-icons"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { FilterChip } from "@/components/ui/FilterChip"
 import {
   listFrameworks,
@@ -21,7 +22,6 @@ import { AddFrameworkModal } from "./AddFrameworkModal"
 
 type StatusFilter = "all" | "unmet" | "partial" | "met"
 
-// ─── Stats helpers ────────────────────────────────────────────────────────────
 
 function frameworksCaption(frameworks: ComplianceFramework[]): string {
   const labels = frameworks.map((f) => f.label)
@@ -74,7 +74,6 @@ function aggregateStats(
   return { totalControls, metControls, unmetControls, partialControls, criticalGaps, highGaps }
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 const NEUTRAL = "text-[var(--color-text-primary)]"
 const CRITICAL = "text-[var(--color-severity-critical)]"
@@ -139,7 +138,6 @@ function StatsStrip({
   )
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CompliancePage() {
   const [frameworks, setFrameworks] = useState<ComplianceFramework[]>([])
@@ -261,26 +259,26 @@ export default function CompliancePage() {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div
+                <Card
                   key={i}
-                  className="animate-pulse rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+                  className="animate-pulse rounded-xl"
                 >
                   <div className="mb-3 h-4 w-1/2 rounded bg-[var(--color-border)]" />
                   <div className="mb-3 h-1.5 w-full rounded-full bg-[var(--color-border)]" />
                   <div className="h-3 w-2/3 rounded bg-[var(--color-border)]" />
-                </div>
+                </Card>
               ))}
             </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
+            <Card elevation="sm" className="rounded-xl">
               <div className="flex items-center justify-center py-12 text-sm text-[var(--color-text-secondary)]">
                 Loading frameworks…
               </div>
-            </div>
+            </Card>
           </>
         )}
 
         {loadState === "error" && (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-8 py-16 text-center">
+          <Card padding="none" className="flex flex-col items-center justify-center gap-3 rounded-xl px-8 py-16 text-center">
             <p className="text-base font-semibold text-[var(--color-text-primary)]">
               Couldn&apos;t load compliance frameworks
             </p>
@@ -292,11 +290,11 @@ export default function CompliancePage() {
                 Retry
               </Button>
             </div>
-          </div>
+          </Card>
         )}
 
         {loadState === "ok" && frameworks.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-20 text-center">
+          <Card padding="none" className="flex flex-col items-center justify-center gap-4 rounded-xl py-20 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]">
               <svg
                 className="h-8 w-8"
@@ -322,7 +320,7 @@ export default function CompliancePage() {
             <Button variant="secondary" size="md" onClick={() => setAddModalOpen(true)}>
               Add framework
             </Button>
-          </div>
+          </Card>
         )}
 
         {loadState === "ok" && frameworks.length > 0 && (
@@ -342,7 +340,7 @@ export default function CompliancePage() {
             </div>
 
             {selected !== null && (
-              <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[var(--shadow-card)]">
+              <Card elevation="sm" className="rounded-xl">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
                     Controls · {selectedFw?.label ?? selected}
@@ -390,7 +388,7 @@ export default function CompliancePage() {
                     )}
                   </>
                 )}
-              </div>
+              </Card>
             )}
           </>
         )}

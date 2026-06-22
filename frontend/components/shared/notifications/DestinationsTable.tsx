@@ -3,6 +3,8 @@
 import type { NotificationDestination, TestSendResult } from "@/lib/client/destinations-api"
 import { DestinationTypeIcon } from "./DestinationTypeIcon"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 function relativeTime(iso: string): string {
@@ -34,7 +36,7 @@ function SkeletonRow() {
     <Tr>
       {[1, 2, 3, 4, 5, 6].map((i) => (
         <Td key={i}>
-          <div className="h-4 w-full animate-pulse rounded bg-[var(--color-surface-raised)]" />
+          <Skeleton className="h-4 w-full" />
         </Td>
       ))}
     </Tr>
@@ -108,7 +110,7 @@ export function DestinationsTable({
   deletingId,
 }: DestinationsTableProps) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <Card padding="none" className="overflow-hidden rounded-2xl">
       <Table>
         <Thead>
           <Tr>
@@ -212,6 +214,6 @@ export function DestinationsTable({
           )}
         </Tbody>
       </Table>
-    </div>
+    </Card>
   )
 }

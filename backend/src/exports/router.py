@@ -1,6 +1,6 @@
 """REST endpoints for bulk findings export — Phase 49.
 
-GET /api/v1/exports/findings
+GET /api/v1/findings/export
     Stream findings as CSV or JSONL with optional filters.
 
 The response is a streaming download — rows are emitted in batches to keep
@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 
 from src.db.engine import get_session
@@ -22,10 +22,11 @@ from src.exports.findings_export import (
     stream_findings_csv,
     stream_findings_json,
 )
-from src.settings.router import require_permission
-from src.shared.scope import resolve_asset_ids_from_request
+from src.authz.enforcement.dependencies import Permission
+from src.authz.enforcement.scope import resolve_asset_ids_from_request
+from src.authz.permissions.catalog import VIEW_FINDINGS
 
-router = APIRouter(prefix="/api/v1/exports", tags=["exports"])
+router = APIRouter(prefix="/api/v1/findings", tags=["findings"])
 
 
 def _parse_csv_list(value: str | None) -> list[str] | None:
@@ -40,7 +41,7 @@ def _filename(fmt: str, ts: datetime) -> str:
     return f"aegis-findings-{stamp}.{fmt if fmt == 'csv' else 'jsonl'}"
 
 
-@router.get("/findings")
+@router.get("/export")
 async def export_findings(
     request: Request,
     format: Literal["csv", "json"] = Query(default="csv", description="Output format: csv or json (JSONL)"),
@@ -51,6 +52,7 @@ async def export_findings(
     since: datetime | None = Query(default=None, description="Only findings first seen on or after this ISO-8601 timestamp"),
     until: datetime | None = Query(default=None, description="Only findings first seen on or before this ISO-8601 timestamp"),
     include_archived: bool = Query(default=False, description="Include archived findings (compliance opt-in). Defaults to excluding archived rows."),
+    _: None = Depends(Permission(VIEW_FINDINGS)),
 ) -> StreamingResponse:
     """Stream findings as a downloadable CSV or JSONL file.
 
@@ -58,7 +60,6 @@ async def export_findings(
     into memory.  The X-Total-Count response header contains the matching row
     count, useful for progress indicators in CLI clients.
     """
-    require_permission(request, "view_findings")
     asset_ids = await resolve_asset_ids_from_request(request)
 
     filters = FindingFilters(

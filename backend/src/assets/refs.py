@@ -7,12 +7,20 @@ in the `assets.external_ref` unique constraint.
 """
 from __future__ import annotations
 
-_REPO_SOURCE_TYPES = frozenset({"github", "gitlab", "bitbucket"})
-_IMAGE_REGISTRIES = frozenset({"ghcr", "dockerhub", "ecr", "gcr", "acr"})
+_REPO_SOURCE_TYPES = frozenset({"github", "gitlab", "bitbucket", "gitea", "azure_devops", "jenkins"})
+_IMAGE_REGISTRIES = frozenset({"ghcr", "dockerhub", "ecr", "gcr", "acr", "gitlab-registry"})
+# Source-connection registry tokens that normalise onto a canonical registry.
+_IMAGE_REGISTRY_ALIASES = {"docker-hub": "dockerhub"}
 
 
 def repo_ref(source_type: str, owner: str, name: str) -> str:
-    """Canonical key for a code repository."""
+    """Canonical key for a code repository.
+
+    Jenkins is not an SCM, but the webhook pipeline needs a canonical
+    identity for a Jenkins-backed asset so it can be looked up by
+    ``external_ref``. The accepted shape is
+    ``jenkins:<controller_host>/<job_name>`` — ``owner`` is the controller
+    host and ``name`` is the (possibly folder-pathed) job name."""
     st = source_type.strip().lower()
     if st not in _REPO_SOURCE_TYPES:
         raise ValueError(f"unknown source_type: {source_type!r}")
@@ -26,8 +34,14 @@ def repo_ref(source_type: str, owner: str, name: str) -> str:
 
 
 def image_ref(registry: str, image: str, tag: str) -> str:
-    """Canonical key for a container image (tag defaults to 'latest')."""
+    """Canonical key for a container image (tag defaults to 'latest').
+
+    Accepts source-connection registry tokens (e.g. ``docker-hub``) and
+    normalises them to the canonical registry so the same registry always
+    yields the same external_ref.
+    """
     r = registry.strip().lower()
+    r = _IMAGE_REGISTRY_ALIASES.get(r, r)
     if r not in _IMAGE_REGISTRIES:
         raise ValueError(f"unknown registry: {registry!r}")
     i = image.strip()

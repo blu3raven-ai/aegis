@@ -70,7 +70,6 @@ def _summary_line(event: dict[str, Any]) -> str:
     return f"[{org}] {_event_title(et)}"
 
 
-# ── Slack Block Kit ───────────────────────────────────────────────────────────
 
 
 def format_for_slack(event: dict[str, Any]) -> dict[str, Any]:
@@ -144,7 +143,6 @@ def _payload_fields(event_type: str, payload: dict[str, Any]) -> dict[str, str]:
     return out
 
 
-# ── Generic webhook JSON envelope ─────────────────────────────────────────────
 
 
 def format_for_webhook(event: dict[str, Any]) -> dict[str, Any]:
@@ -159,7 +157,6 @@ def format_for_webhook(event: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-# ── Email text ────────────────────────────────────────────────────────────────
 
 
 def format_for_email(event: dict[str, Any]) -> dict[str, Any]:

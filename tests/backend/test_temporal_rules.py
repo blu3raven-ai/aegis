@@ -107,7 +107,7 @@ class TestAttributionRollupRule:
         for _ in range(5):
             rule.evaluate(
                 _event("finding.created",
-                       scanner_type="secrets",
+                       scanner_type="secret_scanning",
                        severity="critical",
                        introduced_by_author="eng@example.org"),
                 _ctx(),
@@ -168,7 +168,7 @@ class TestMttrTrackingRule:
         rule.evaluate(
             _event("finding.closed",
                    finding_id=999,
-                   scanner_type="secrets",
+                   scanner_type="secret_scanning",
                    severity="critical",
                    first_seen_at_utc=first_seen),
             _ctx(),
@@ -274,7 +274,7 @@ class TestAnomalyDetectionRule:
         ) as mock_emit:
             # One finding in this hour — well below the 3× threshold (1 vs 10/hr avg)
             rule.evaluate(
-                _event("finding.created", scanner_type="secrets", severity="high"),
+                _event("finding.created", scanner_type="secret_scanning", severity="high"),
                 _ctx(),
             )
             mock_emit.assert_not_called()

@@ -64,3 +64,16 @@ def test_image_ref_rejects_empty_image():
 def test_image_ref_rejects_unknown_registry():
     with pytest.raises(ValueError, match="registry"):
         image_ref("unknown", "acme/img", "v1")
+
+
+def test_image_ref_normalizes_docker_hub_alias():
+    # source connections use "docker-hub"; image_ref canonicalises to "dockerhub"
+    assert image_ref("docker-hub", "library/nginx", "1.27") == "dockerhub:library/nginx:1.27"
+
+
+def test_image_ref_accepts_gitlab_registry():
+    assert image_ref("gitlab-registry", "acme/img", "v1") == "gitlab-registry:acme/img:v1"
+
+
+def test_repo_ref_accepts_gitea():
+    assert repo_ref("gitea", "acme", "foo") == "gitea:acme/foo"

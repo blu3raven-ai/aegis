@@ -1,6 +1,7 @@
 "use client"
 
 import type { NotificationDelivery } from "@/lib/client/destinations-api"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 const STATUS_STYLES: Record<string, { dot: string; label: string }> = {
   delivered: { dot: "bg-[var(--color-status-ok)]", label: "text-[var(--color-status-ok)]" },
@@ -31,9 +32,9 @@ export function DeliveriesHistoryList({ deliveries, loading, error }: Deliveries
     return (
       <div className="space-y-2">
         {[0, 1, 2].map((i) => (
-          <div
+          <Skeleton
             key={i}
-            className="h-10 animate-pulse rounded-lg bg-[var(--color-surface-raised)]"
+            className="h-10 rounded-lg"
           />
         ))}
       </div>

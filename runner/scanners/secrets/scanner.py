@@ -14,7 +14,6 @@ import concurrent.futures
 import dataclasses
 import json
 import logging
-import os
 import re
 import shutil
 import threading
@@ -108,7 +107,7 @@ class SecretsScanConfig(BaseScanConfig):
 
 
 class SecretsScanner:
-    SCANNER_TYPE = "secrets"
+    SCANNER_TYPE = "secret_scanning"
 
     def run_scan(
         self,
@@ -207,7 +206,7 @@ class SecretsScanner:
 
         try:
             findings_file = out_dir / "findings.jsonl"
-            self._verify_findings_file(findings_file, repo_root=str(out_dir))
+            self._verify_findings_file(findings_file, repo_root=str(out_dir), env=JobEnv(job))
         except Exception:  # noqa: BLE001
             logger.exception("[!] _verify_findings_file failed (continuing)")
             log_tail.append("[!] secret verification failed; findings unverified")
@@ -226,7 +225,7 @@ class SecretsScanner:
     # internal helpers
     # ------------------------------------------------------------------
 
-    def _verify_findings_file(self, findings_file: Path, *, repo_root: str) -> None:
+    def _verify_findings_file(self, findings_file: Path, *, repo_root: str, env: JobEnv) -> None:
         """Read findings.jsonl, run _maybe_verify_secrets, rewrite in place.
 
         No-op when the file is missing. When the LLM client can't be built
@@ -247,8 +246,8 @@ class SecretsScanner:
         verified = _maybe_verify_secrets(
             findings=raw_findings,
             repo_root=repo_root,
-            llm=_build_llm_client(),
-            scan_budget=_build_scan_budget(),
+            llm=_build_llm_client(env),
+            scan_budget=_build_scan_budget(env),
         )
 
         with open(findings_file, "w") as f:
@@ -586,24 +585,28 @@ def _apply_diff_scope(
     return filtered
 
 
-def _build_llm_client():
-    """Construct an LLM client from env or return None if BYO key isn't configured."""
+def _build_llm_client(env: JobEnv):
+    """Construct an LLM client from job env or return None if BYO key isn't configured.
+
+    The backend ships LLM_API_KEY (and friends) inside job['envVars'], not the
+    runner process environment, so JobEnv.get is the only correct read path.
+    """
     from runner.verification.llm_client import LlmClient
 
-    api_key = os.getenv("LLM_API_KEY")
+    api_key = env.get("LLM_API_KEY")
     if not api_key:
         return None
     return LlmClient(
         api_key=api_key,
-        api_base_url=os.getenv("LLM_API_BASE_URL", "https://api.openai.com/v1"),
-        model=os.getenv("LLM_API_MODEL", "gpt-4o-mini"),
+        api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
+        model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
     )
 
 
-def _build_scan_budget() -> ScanBudget:
+def _build_scan_budget(env: JobEnv) -> ScanBudget:
     return ScanBudget(
-        scan_budget=int(os.getenv("LLM_TOKEN_BUDGET_PER_SCAN", "200000")),
-        daily_remaining=int(os.getenv("LLM_DAILY_REMAINING", "1000000")),
+        scan_budget=env.get_int("LLM_TOKEN_BUDGET_PER_SCAN", 200000),
+        daily_remaining=env.get_int("LLM_DAILY_REMAINING", 1000000),
     )
 
 
@@ -632,7 +635,7 @@ def _maybe_verify_secrets(
             if not f.get("verified"):
                 scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
             copy["verdict"] = result.verdict
-            copy["evidence_json"] = result.evidence
+            copy["evidence"] = result.evidence
             copy["exploit_chain"] = result.exploit_chain
             copy["verification_metadata"] = result.verification_metadata
         except Exception as e:  # noqa: BLE001

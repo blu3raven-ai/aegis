@@ -1,4 +1,4 @@
-"""SAST finding ingestion — parse SARIF/JSONL output from semgrep scanner."""
+"""SAST finding ingestion — read canonical findings.jsonl emitted by the runner."""
 from __future__ import annotations
 
 import json
@@ -49,33 +49,6 @@ def _derive_language(file_path: str) -> str:
     ext = Path(file_path).suffix.lower()
     return _FILE_EXTENSION_TO_LANGUAGE.get(ext, "unknown")
 
-# ---------------------------------------------------------------------------
-# Severity mapping: SARIF level → Portal
-# ---------------------------------------------------------------------------
-
-def map_severity(sarif_severity: str, confidence: str) -> str:
-    """Map SARIF severity level + rule confidence to portal severity.
-
-    | SARIF   | Confidence   | Portal   |
-    |---------|--------------|----------|
-    | ERROR   | high         | critical |
-    | ERROR   | medium/low   | high     |
-    | WARNING | any          | medium   |
-    | INFO    | any          | low      |
-    """
-    sev = sarif_severity.upper()
-    conf = confidence.lower() if confidence else "medium"
-
-    if sev == "ERROR":
-        return "critical" if conf == "high" else "high"
-    if sev == "WARNING":
-        return "medium"
-    return "low"
-
-
-# ---------------------------------------------------------------------------
-# Identity key
-# ---------------------------------------------------------------------------
 
 def finding_identity_key(repo: str, file_path: str, rule_id: str, start_line: int) -> str:
     """Build a stable identity key: {repo}:{file_path}:{rule_id}:{start_line}"""
@@ -89,94 +62,6 @@ def identity_key_from_finding(finding: dict[str, Any]) -> str:
         finding.get("rule_id", ""),
         finding.get("start_line", 0),
     )
-
-
-# ---------------------------------------------------------------------------
-# SARIF/JSONL parsing
-# ---------------------------------------------------------------------------
-
-def _parse_sarif_finding(result: dict[str, Any], rule_map: dict[str, dict], repo: str) -> dict[str, Any] | None:
-    """Parse a single SARIF result into our finding format."""
-    rule_id = result.get("ruleId", "")
-    rule_info = rule_map.get(rule_id, {})
-
-    locations = result.get("locations", [])
-    if not locations:
-        return None
-    loc = locations[0]
-    phys = loc.get("physicalLocation", {})
-    artifact = phys.get("artifactLocation", {})
-    region = phys.get("region", {})
-
-    file_path = _strip_temp_prefix(artifact.get("uri", ""))
-    start_line = region.get("startLine", 0)
-    end_line = region.get("endLine", start_line)
-
-    # Extract severity and confidence from rule metadata
-    level = result.get("level", "warning")
-    properties = rule_info.get("properties", {})
-    confidence = properties.get("confidence", "medium")
-
-    # Map SARIF level to canonical severity token
-    sarif_to_severity = {"error": "ERROR", "warning": "WARNING", "note": "INFO", "none": "INFO"}
-    sarif_severity = sarif_to_severity.get(level.lower(), "WARNING")
-    severity = map_severity(sarif_severity, confidence)
-
-    # Extract CWE from rule tags
-    tags = properties.get("tags") or []
-    if not isinstance(tags, list):
-        tags = []
-    cwe_list = [t for t in tags if isinstance(t, str) and t.startswith("CWE-")]
-
-    # Extract category
-    category = properties.get("category", "security")
-
-    # Message
-    message = result.get("message", {}).get("text", "")
-    rule_name = rule_info.get("shortDescription", {}).get("text", "") or rule_info.get("name", rule_id)
-
-    # Fix suggestion (from SARIF fixes)
-    fixes = result.get("fixes", [])
-    fix_suggestion = None
-    if fixes and isinstance(fixes[0], dict):
-        fix_suggestion = fixes[0].get("description", {}).get("text", "") or None
-
-    # Snippet
-    snippet = region.get("snippet", {}).get("text", "")
-
-    return {
-        "repo_full_name": repo,
-        "file_path": file_path,
-        "start_line": start_line,
-        "end_line": end_line,
-        "rule_id": rule_id,
-        "rule_name": rule_name,
-        "severity": severity,
-        "confidence": confidence,
-        "category": category,
-        "cwe": cwe_list,
-        "message": message,
-        "snippet": snippet,
-        "fix_suggestion": fix_suggestion,
-        "state": "open",
-        "finding_data": result,
-    }
-
-
-def parse_sarif(sarif_data: dict[str, Any], repo: str) -> list[dict[str, Any]]:
-    """Parse a full SARIF document into findings."""
-    findings: list[dict[str, Any]] = []
-    runs = sarif_data.get("runs", [])
-    for run in runs:
-        # Build rule lookup
-        tool_rules = run.get("tool", {}).get("driver", {}).get("rules", [])
-        rule_map = {r.get("id", ""): r for r in tool_rules}
-
-        for result in run.get("results", []):
-            finding = _parse_sarif_finding(result, rule_map, repo)
-            if finding:
-                findings.append(finding)
-    return findings
 
 
 def load_active_rule_ids(findings_path: Path) -> set[str]:
@@ -202,8 +87,9 @@ def load_active_rule_ids(findings_path: Path) -> set[str]:
 def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
     """Read findings.jsonl and return parsed findings.
 
-    Each line is a JSON object with the finding already in our format
-    (the scanner image handles SARIF-to-JSONL conversion).
+    Each line is a JSON object emitted by the runner — either already in
+    canonical snake_case form, or in SARIF-style camelCase which this
+    function remaps inline below.
     """
     if not findings_path.exists():
         logger.warning("No findings.jsonl found at %s", findings_path)

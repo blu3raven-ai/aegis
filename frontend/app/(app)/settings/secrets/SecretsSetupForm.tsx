@@ -7,6 +7,7 @@ import { useSaveBarSection } from "../save-bar/SaveBarProvider"
 import { PrerequisitePanel } from "../PrerequisitePanel"
 import type { PrerequisiteItem } from "@/lib/shared/prerequisite-utils"
 import { SettingsCard } from "@/components/shared/SettingsCard"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 
 interface SecretsSetupFormProps {
@@ -50,6 +51,7 @@ export function SecretsSetupForm({
   const isDirty =
     values.scanConcurrency !== normalizedInitialValues.scanConcurrency ||
     values.scanDepth !== normalizedInitialValues.scanDepth ||
+    values.scanHistoryWindow !== normalizedInitialValues.scanHistoryWindow ||
     values.autoRerunEnabled !== normalizedInitialValues.autoRerunEnabled ||
     values.rerunScheduleType !== normalizedInitialValues.rerunScheduleType ||
     values.rerunScheduleValue !== normalizedInitialValues.rerunScheduleValue
@@ -67,7 +69,7 @@ export function SecretsSetupForm({
 
     startTransition(async () => {
       const result = await saveToolSettings({
-        tool: "secrets",
+        tool: "secret_scanning",
         enabled: true,
         settings: {
           scanConcurrency: values.scanConcurrency,
@@ -204,20 +206,19 @@ export function SecretsSetupForm({
 
       <SettingsCard eyebrow="Scanner Config" title="Scanner Settings">
       <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-                Scan concurrency
-              </label>
+            <FormField
+              label="Scan concurrency"
+              htmlFor="secrets-scan-concurrency"
+              hint="Maximum repositories scanned in parallel."
+            >
               <Input
+                id="secrets-scan-concurrency"
                 type="number"
                 min="1"
                 value={values.scanConcurrency}
                 onChange={(e) => setValues({ ...values, scanConcurrency: e.target.value })}
               />
-              <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
-                Maximum repositories scanned in parallel.
-              </p>
-            </div>
+            </FormField>
 
       </fieldset>
       </SettingsCard>
@@ -244,33 +245,35 @@ export function SecretsSetupForm({
               <div className="space-y-4 rounded-lg border border-[var(--color-border)] p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   {values.rerunScheduleType === "simple" ? (
-                    <div className="flex-1">
-                      <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-                        Scan Time (Daily)
-                      </label>
+                    <FormField
+                      label="Scan Time (Daily)"
+                      htmlFor="secrets-scan-time"
+                      className="flex-1"
+                    >
                       <Input
+                        id="secrets-scan-time"
                         type="time"
                         value={values.rerunScheduleValue}
                         onChange={(e) => setValues({ ...values, rerunScheduleValue: e.target.value })}
                         className="max-w-[150px]"
                       />
-                    </div>
+                    </FormField>
                   ) : (
-                    <div className="flex-1">
-                      <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-                        Cron Expression
-                      </label>
+                    <FormField
+                      label="Cron Expression"
+                      htmlFor="secrets-cron"
+                      hint="Standard cron format (min hour day month weekday)."
+                      className="flex-1"
+                    >
                       <Input
+                        id="secrets-cron"
                         type="text"
                         value={values.rerunScheduleValue}
                         onChange={(e) => setValues({ ...values, rerunScheduleValue: e.target.value })}
                         placeholder="e.g. 0 2 * * *"
                         className="font-mono"
                       />
-                      <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
-                        Standard cron format (min hour day month weekday).
-                      </p>
-                    </div>
+                    </FormField>
                   )}
                 </div>
 

@@ -34,8 +34,8 @@ describe("SourcesList — empty-state skeleton", () => {
     assert.match(listSrc, /if\s*\(\s*sources\s*===\s*null\s*\)\s+return\s+<TableSkeleton/)
   })
 
-  it("renders the unfiltered EmptySourcesState inside a colSpan=6 row", () => {
-    assert.match(listSrc, /colSpan=\{6\}/)
+  it("renders the unfiltered EmptySourcesState inside a colSpan=7 row", () => {
+    assert.match(listSrc, /colSpan=\{7\}/)
     assert.match(listSrc, /<EmptySourcesState\s+filtered=\{false\}\s*\/>/)
   })
 

@@ -1,9 +1,7 @@
 import { apiClient } from "./api-client.ts"
-import { ApiClientError } from "./api-client.types.ts"
 
 export interface ApiKey {
   id: number
-  org_id: string
   name: string
   prefix: string
   last_four: string
@@ -19,34 +17,26 @@ export interface CreatedApiKey extends ApiKey {
   token: string
 }
 
-export class ApiKeysApiError extends Error {
-  constructor(message: string, public status: number) {
-    super(message)
-    this.name = "ApiKeysApiError"
-  }
-}
+const BASE = "/api/v1/auth/api-keys"
 
-const BASE = "/api/v1/api-keys"
-
-export async function listApiKeys(orgId: string): Promise<ApiKey[]> {
-  const data = await apiClient<{ keys: ApiKey[] }>(`${BASE}?org_id=${encodeURIComponent(orgId)}`, {
+export async function listApiKeys(): Promise<ApiKey[]> {
+  const data = await apiClient<{ keys: ApiKey[] }>(BASE, {
     cache: "no-store",
   })
   return data.keys
 }
 
 export async function createApiKey(
-  orgId: string,
   payload: { name: string; scopes: string[]; expires_in_days?: number | null },
 ): Promise<CreatedApiKey> {
   return apiClient<CreatedApiKey>(BASE, {
     method: "POST",
-    body: { ...payload, org_id: orgId },
+    body: payload,
   })
 }
 
-export async function revokeApiKey(id: number, orgId: string): Promise<ApiKey> {
-  return apiClient<ApiKey>(`${BASE}/${id}?org_id=${encodeURIComponent(orgId)}`, {
+export async function revokeApiKey(id: number): Promise<ApiKey> {
+  return apiClient<ApiKey>(`${BASE}/${id}`, {
     method: "DELETE",
   })
 }

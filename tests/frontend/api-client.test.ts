@@ -136,7 +136,7 @@ describe("apiClient", () => {
     withFetchMock(async () => new Response('{"detail":"invalid credentials"}', { status: 401 }))
 
     await assert.rejects(
-      apiClient("/auth/login", { method: "POST", body: {}, suppressUnauthorizedRedirect: true }),
+      apiClient("/api/v1/auth/login", { method: "POST", body: {}, suppressUnauthorizedRedirect: true }),
       (e: ApiClientError) => e.status === 401,
     )
     assert.equal(redirected, "")
@@ -153,7 +153,7 @@ describe("apiClient", () => {
     })
 
     const opts: ApiClientOptions = { method: "POST", body: { identifier: "u", password: "p" }, skipCsrf: true }
-    await apiClient("/auth/login", opts)
+    await apiClient("/api/v1/auth/login", opts)
 
     assert.equal(receivedHeaders["X-CSRF-Token"], undefined)
     assert.equal(receivedInit?.credentials, "include")
@@ -167,7 +167,7 @@ describe("apiClient", () => {
       return new Response('{"ok":true}', { status: 200 })
     })
 
-    await apiClient("/auth/login", { method: "POST", body: {}, skipCsrf: true })
+    await apiClient("/api/v1/auth/login", { method: "POST", body: {}, skipCsrf: true })
 
     assert.equal(receivedHeaders["X-CSRF-Token"], undefined)
   })

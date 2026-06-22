@@ -17,7 +17,7 @@ export function PostureTrendKpiCard({ days = 30 }: Props) {
 
   useEffect(() => {
     let cancelled = false
-    getPostureTrend(undefined, days)
+    getPostureTrend(days)
       .then((r) => { if (!cancelled) setPoints(r.points) })
       .catch(() => { if (!cancelled) setErrored(true) })
     return () => { cancelled = true }

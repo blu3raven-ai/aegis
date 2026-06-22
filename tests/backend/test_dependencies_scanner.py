@@ -5,70 +5,22 @@ import json
 import textwrap
 from pathlib import Path
 
-from src.shared.enrichment import ingest_findings_jsonl, map_finding_to_alert
-
-
-def test_map_finding_to_alert_basic():
-    finding = {
-        "organization": "my-org",
-        "repository": "my-repo",
-        "commitSha": "abc123",
-        "packageName": "lodash",
-        "ecosystem": "npm",
-        "advisoryId": "CVE-2021-23337",
-        "advisoryAliases": ["GHSA-abcd-1234-efgh"],
-        "severity": "high",
-        "summary": "Prototype pollution in lodash",
-        "description": "Detailed description here",
-        "references": [{"url": "https://nvd.nist.gov/vuln/detail/CVE-2021-23337"}],
-        "scanner": "grype",
-        "stateCandidate": "open",
-    }
-    alert = map_finding_to_alert(finding)
-
-    assert alert["state"] == "open"
-    assert alert["commit_sha"] == "abc123"
-    assert alert["dependency"]["package"]["name"] == "lodash"
-    assert alert["dependency"]["package"]["ecosystem"] == "npm"
-    assert alert["security_advisory"]["ghsa_id"] == "CVE-2021-23337"
-    assert alert["security_advisory"]["cve_id"] == "CVE-2021-23337"
-    assert alert["security_advisory"]["severity"] == "high"
-    assert alert["security_advisory"]["summary"] == "Prototype pollution in lodash"
-    assert alert["repository"]["full_name"] == "my-org/my-repo"
-    assert alert["scanner"] == "grype"
-    identifiers = alert["security_advisory"]["identifiers"]
-    assert {"type": "CVE", "value": "CVE-2021-23337"} in identifiers
-    assert {"type": "GHSA", "value": "GHSA-abcd-1234-efgh"} in identifiers
-
-
-def test_map_finding_to_alert_minimal():
-    alert = map_finding_to_alert({})
-    assert alert["state"] == "open"
-    assert alert["repository"]["full_name"] == "/"
-    assert alert["security_advisory"]["severity"] == "unknown"
+from src.shared.enrichment import ingest_findings_jsonl
 
 
 def test_ingest_findings_jsonl(tmp_path: Path):
     findings = [
         {
-            "organization": "org1",
-            "repository": "repo1",
-            "packageName": "express",
-            "ecosystem": "npm",
-            "advisoryId": "CVE-2024-1234",
-            "severity": "critical",
-            "summary": "RCE in express",
-            "stateCandidate": "open",
+            "repository": {"name": "repo1", "full_name": "org1/repo1"},
+            "dependency": {"package": {"name": "express", "ecosystem": "npm"}},
+            "security_advisory": {"ghsa_id": "CVE-2024-1234", "severity": "critical"},
+            "state": "open",
         },
         {
-            "organization": "org1",
-            "repository": "repo2",
-            "packageName": "flask",
-            "ecosystem": "pip",
-            "advisoryId": "CVE-2024-5678",
-            "severity": "medium",
-            "summary": "XSS in flask",
-            "stateCandidate": "open",
+            "repository": {"name": "repo2", "full_name": "org1/repo2"},
+            "dependency": {"package": {"name": "flask", "ecosystem": "pip"}},
+            "security_advisory": {"ghsa_id": "CVE-2024-5678", "severity": "medium"},
+            "state": "open",
         },
     ]
     jsonl_path = tmp_path / "findings.jsonl"
@@ -95,9 +47,9 @@ def test_ingest_findings_jsonl_empty_file(tmp_path: Path):
 
 def test_ingest_findings_jsonl_skips_malformed_lines(tmp_path: Path):
     content = textwrap.dedent("""\
-        {"organization":"org","repository":"repo","packageName":"a","severity":"low","stateCandidate":"open"}
+        {"repository":{"name":"repo"},"dependency":{"package":{"name":"a"}},"security_advisory":{"severity":"low"},"state":"open"}
         not valid json
-        {"organization":"org","repository":"repo","packageName":"b","severity":"high","stateCandidate":"open"}
+        {"repository":{"name":"repo"},"dependency":{"package":{"name":"b"}},"security_advisory":{"severity":"high"},"state":"open"}
     """)
     jsonl_path = tmp_path / "findings.jsonl"
     jsonl_path.write_text(content, encoding="utf-8")
@@ -190,53 +142,6 @@ def test_get_scan_sources_for_org_repo_urls(monkeypatch):
     assert any("old-repo" in u for u in all_urls) is False
     assert "https://gitlab.example.com/test-org/infra.git" in all_urls
     assert len(all_urls) == 3
-
-
-def test_map_finding_to_alert_image_source():
-    finding = {
-        "organization": "test-org",
-        "repository": "ghcr.io_test-org_app_latest",
-        "source": "image",
-        "commitSha": None,
-        "packageName": "openssl",
-        "ecosystem": "deb",
-        "advisoryId": "CVE-2024-1234",
-        "severity": "high",
-        "summary": "Buffer overflow in openssl",
-        "scanner": "trivy",
-        "stateCandidate": "open",
-    }
-    alert = map_finding_to_alert(finding)
-
-    assert alert["source"] == "image"
-    assert alert["commit_sha"] is None
-    assert alert["dependency"]["package"]["name"] == "openssl"
-    assert alert["scanner"] == "trivy"
-
-
-def test_map_finding_to_alert_git_source():
-    finding = {
-        "organization": "test-org",
-        "repository": "my-repo",
-        "source": "git",
-        "commitSha": "abc123",
-        "packageName": "lodash",
-        "ecosystem": "npm",
-        "advisoryId": "CVE-2021-23337",
-        "severity": "high",
-        "scanner": "grype",
-        "stateCandidate": "open",
-    }
-    alert = map_finding_to_alert(finding)
-
-    assert alert["source"] == "git"
-    assert alert["commit_sha"] == "abc123"
-
-
-def test_map_finding_to_alert_defaults_source_to_git():
-    """Backward compat: findings without source field default to git."""
-    alert = map_finding_to_alert({"stateCandidate": "open"})
-    assert alert["source"] == "git"
 
 
 def test_get_scan_sources_skips_non_connected_status(monkeypatch):

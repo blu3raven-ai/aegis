@@ -104,7 +104,6 @@ async def _load_violation_counts(session, rule_ids: list[str]) -> dict[str, tupl
     return counts
 
 
-# ── CRUD ──────────────────────────────────────────────────────────────────────
 
 
 def list_rules(
@@ -350,7 +349,6 @@ def list_violations_for_rule(
     return run_db(_query)
 
 
-# ── Kill switch ───────────────────────────────────────────────────────────────
 
 
 def engage_kill_switch(
@@ -410,7 +408,6 @@ def list_kill_switches() -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ── Dry-run preview ──────────────────────────────────────────────────────────
 
 
 def get_dry_run_state(*, rule_id: str) -> dict[str, Any] | None:

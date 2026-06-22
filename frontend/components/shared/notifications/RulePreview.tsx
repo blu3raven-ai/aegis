@@ -14,18 +14,16 @@ import type {
 } from "@/lib/client/notification-rules-api"
 import { previewOrg } from "@/lib/client/notification-rules-api"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 const SEVERITY_OPTIONS = ["critical", "high", "medium", "low", "info"]
-const SCANNER_OPTIONS = ["dependencies", "code_scanning", "secrets", "container_scanning"]
+const SCANNER_OPTIONS = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning"]
 
-interface RulePreviewProps {
-  orgId: string
-}
-
-export function RulePreview({ orgId }: RulePreviewProps) {
+export function RulePreview() {
   const [finding, setFinding] = useState<PreviewFinding>({
     severity: "high",
     scanner: "dependencies",
@@ -51,7 +49,6 @@ export function RulePreview({ orgId }: RulePreviewProps) {
 
     try {
       const result = await previewOrg({
-        org_id: orgId,
         finding: { ...finding, repo_labels: labels },
       })
       setBreakdown(result.breakdown)
@@ -71,14 +68,7 @@ export function RulePreview({ orgId }: RulePreviewProps) {
 
       {/* Sample finding form */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {/* Severity */}
-        <div>
-          <label
-            htmlFor="preview-severity"
-            className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-          >
-            Severity
-          </label>
+        <FormField label="Severity" htmlFor="preview-severity">
           <Select
             id="preview-severity"
             value={finding.severity ?? "high"}
@@ -88,16 +78,9 @@ export function RulePreview({ orgId }: RulePreviewProps) {
               <option key={s} value={s}>{s}</option>
             ))}
           </Select>
-        </div>
+        </FormField>
 
-        {/* Scanner */}
-        <div>
-          <label
-            htmlFor="preview-scanner"
-            className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-          >
-            Scanner
-          </label>
+        <FormField label="Scanner" htmlFor="preview-scanner">
           <Select
             id="preview-scanner"
             value={finding.scanner ?? ""}
@@ -108,16 +91,9 @@ export function RulePreview({ orgId }: RulePreviewProps) {
               <option key={s} value={s}>{s}</option>
             ))}
           </Select>
-        </div>
+        </FormField>
 
-        {/* Repo ID */}
-        <div>
-          <label
-            htmlFor="preview-repo-id"
-            className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-          >
-            Repository ID
-          </label>
+        <FormField label="Repository ID" htmlFor="preview-repo-id">
           <Input
             id="preview-repo-id"
             type="text"
@@ -125,16 +101,9 @@ export function RulePreview({ orgId }: RulePreviewProps) {
             onChange={(e) => setFinding((f) => ({ ...f, repo_id: e.target.value }))}
             placeholder="e.g. repo-abc123"
           />
-        </div>
+        </FormField>
 
-        {/* Repo labels */}
-        <div>
-          <label
-            htmlFor="preview-repo-labels"
-            className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-          >
-            Repo labels
-          </label>
+        <FormField label="Repo labels" htmlFor="preview-repo-labels">
           <Input
             id="preview-repo-labels"
             type="text"
@@ -142,7 +111,7 @@ export function RulePreview({ orgId }: RulePreviewProps) {
             onChange={(e) => setLabelsInput(e.target.value)}
             placeholder="production, backend, …"
           />
-        </div>
+        </FormField>
       </div>
 
       {/* Run button */}
@@ -163,7 +132,7 @@ export function RulePreview({ orgId }: RulePreviewProps) {
 
       {/* Results */}
       {breakdown !== null && (
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <Card padding="none" className="rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-[var(--color-border)]">
             <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">
               Results
@@ -216,7 +185,7 @@ export function RulePreview({ orgId }: RulePreviewProps) {
               </Tbody>
             </Table>
           )}
-        </div>
+        </Card>
       )}
     </div>
   )

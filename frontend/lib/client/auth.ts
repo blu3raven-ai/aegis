@@ -14,7 +14,7 @@ export interface CurrentUser {
 
 export async function fetchCurrentUser(): Promise<CurrentUser | null> {
   try {
-    const payload = await apiClient<{ user?: CurrentUser | null }>("/auth/me")
+    const payload = await apiClient<{ user?: CurrentUser | null }>("/api/v1/auth/me")
     return payload.user ?? null
   } catch {
     return null

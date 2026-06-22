@@ -23,7 +23,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
 
   async function handleSignOut() {
     setOpen(false)
-    await apiClient("/auth/logout", { method: "POST" }).catch(() => {})
+    await apiClient("/api/v1/auth/logout", { method: "POST" }).catch(() => {})
     window.location.href = "/login"
   }
 
@@ -31,9 +31,6 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
     void fetchCurrentUser().then(setUser)
   }, [])
 
-  // Click-outside handling differs by variant:
-  // - header: fixed overlay (already in JSX)
-  // - footer: mousedown listener
   useEffect(() => {
     if (variant !== "footer" || !open) return
     function handleClick(e: MouseEvent) {

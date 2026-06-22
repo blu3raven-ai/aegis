@@ -38,8 +38,8 @@ POLL_INTERVAL = 1  # seconds
 
 DEFAULT_MAX_CONCURRENT = 2
 
-# Module-level agent instance — set by run_poll_loop()
-# so that _pull_assignment() can operate on it without threading gymnastics.
+# Module-level agent instance — set by run_poll_loop() so the SIGTERM handler
+# can reach the running agent without threading gymnastics.
 _agent: RunnerAgent | None = None
 
 
@@ -55,17 +55,6 @@ def _setup_sigterm_handler() -> None:
         pass
 
 
-def _should_stop() -> bool:
-    return _agent is not None and _agent._stop.is_set()
-
-
-def _pull_assignment() -> None:
-    """Pull the next available job from the backend and submit it to the executor."""
-    if _agent is None:
-        return
-    _agent._pull_and_dispatch()
-
-
 def load_config() -> dict[str, Any]:
     """Load runner config from env vars or ~/.vuln-runner/config.json."""
     backend_url = os.environ.get("BACKEND_URL")
@@ -78,7 +67,7 @@ def load_config() -> dict[str, Any]:
         try:
             with httpx.Client(timeout=15.0) as client:
                 resp = client.post(
-                    f"{backend_url}/api/v1/runner/register",
+                    f"{backend_url}/api/v1/agent/register",
                     json={
                         "token": registration_token,
                         "name": name,
@@ -87,7 +76,12 @@ def load_config() -> dict[str, Any]:
                     },
                 )
             if resp.status_code != 200:
-                error = resp.json().get("error", resp.text)
+                # The error body may not be JSON (e.g. a middleware rejection
+                # returns plain text), so fall back to the raw text/status.
+                try:
+                    error = resp.json().get("error", resp.text)
+                except ValueError:
+                    error = resp.text or f"HTTP {resp.status_code}"
                 raise RuntimeError(f"Registration failed: {error}")
 
             data = resp.json()
@@ -149,7 +143,7 @@ class RunnerAgent:
         return {"Authorization": f"Bearer {self.auth_token}"}
 
     def _api(self, path: str) -> str:
-        return f"{self.portal_url}/api/v1/runner{path}"
+        return f"{self.portal_url}/api/v1/agent{path}"
 
     def heartbeat_loop(self) -> None:
         """Send heartbeat with system metrics every HEARTBEAT_INTERVAL seconds."""
@@ -309,7 +303,7 @@ class RunnerAgent:
     def _execute_job(self, job: dict[str, Any]) -> None:
         job_id = job["jobId"]
         org = job.get("org", "unknown")
-        job_type = job.get("type", "dependencies")
+        job_type = job.get("type", "dependencies_scanning")
         run_id = job.get("runId", "unknown")
 
         self._drain.track_job_start()
@@ -426,6 +420,10 @@ class RunnerAgent:
                     new_token = data.get("newAuthToken")
                     if new_token:
                         self.auth_token = new_token
+                        # BackendClient snapshots the token in its headers dict;
+                        # presign + sbom-download calls on subsequent jobs would
+                        # otherwise use the stale token and 401.
+                        self._backend.update_auth_token(new_token)
                         if CONFIG_PATH.exists():
                             try:
                                 cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -491,11 +489,8 @@ class RunnerAgent:
                 shutil.rmtree(job_dir, ignore_errors=True)
 
     def start(self) -> None:
-        """Start the agent: configure logging, install drain handler, cleanup,
-        heartbeat thread, then main loop.
-
-        The main loop is selected by RUNNER_DISPATCH_MODE (default: poll).
-        """
+        """Start the agent: configure logging, install drain handler, cleanup
+        leftover job dirs, then run heartbeat thread + poll loop until stopped."""
         configure_logging()
         self._drain.install_handler()
 
@@ -525,11 +520,11 @@ class RunnerAgent:
 
 
 # ---------------------------------------------------------------------------
-# Module-level API consumed by tests and the mode dispatcher
+# Module-level entry consumed by tests
 # ---------------------------------------------------------------------------
 
 def run_poll_loop() -> None:
-    """Start the agent in poll mode (original behaviour, default)."""
+    """Start the agent (configure, register if needed, run heartbeat + poll loop)."""
     global _agent
     _setup_sigterm_handler()
     config = load_config()
@@ -574,7 +569,7 @@ def configure(url: str, token: str, name: str, insecure: bool) -> None:
         # shared pool so --insecure can't relax verify for runtime backend calls.
         with httpx.Client(timeout=15.0, verify=not insecure) as client:
             resp = client.post(
-                f"{url}/api/v1/runner/register",
+                f"{url}/api/v1/agent/register",
                 json={
                     "token": token,
                     "name": runner_name,

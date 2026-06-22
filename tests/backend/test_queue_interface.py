@@ -26,7 +26,7 @@ def test_file_backed_queue_satisfies_protocol():
     with tempfile.TemporaryDirectory() as tmp:
         q: JobQueue = FileBackedQueue(storage_dir=Path(tmp))
         jid = q.create(
-            job_type="dependencies",
+            job_type="dependencies_scanning",
             org="acme-org",
             run_id="run-1",
             env_vars={"FOO": "bar"},

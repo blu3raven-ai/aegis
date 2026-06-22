@@ -4,7 +4,6 @@ import Link from "next/link"
 import type { ActivityEvent } from "@/lib/client/activity-api"
 import { relativeTime } from "@/lib/shared/relative-time"
 
-// ── Event type metadata ───────────────────────────────────────────────────────
 
 interface EventMeta {
   icon: string
@@ -61,38 +60,12 @@ const EVENT_META: Record<string, EventMeta> = {
       return repo ? `/repos` : null
     },
   },
-  "integration.connected": {
-    icon: "M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z",
-    color: "var(--color-accent)",
-    href: () => "/notifications/channels",
-  },
-  "integration.disconnected": {
-    icon: "M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0",
+  "scan.cancelled": {
+    icon: "M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636",
     color: "var(--color-text-secondary)",
-    href: () => "/notifications/channels",
-  },
-  "intel.cve.added": {
-    icon: "M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z",
-    color: "var(--color-severity-high)",
     href: (e) => {
-      const cve = e.payload?.cve_id as string | undefined
-      return cve ? `/findings?cve=${encodeURIComponent(cve)}` : "/findings"
-    },
-  },
-  "sla.breached": {
-    icon: "M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
-    color: "var(--color-severity-critical)",
-    href: (e) => {
-      const id = e.payload?.finding_id
-      return id != null ? `/findings/${id}` : "/findings"
-    },
-  },
-  "kev.added": {
-    icon: "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z",
-    color: "var(--color-severity-critical)",
-    href: (e) => {
-      const cve = e.payload?.cve_id as string | undefined
-      return cve ? `/findings?cve=${encodeURIComponent(cve)}` : "/findings"
+      const repo = e.repo_id
+      return repo ? `/repos` : null
     },
   },
 }
@@ -103,7 +76,6 @@ const DEFAULT_META: EventMeta = {
   href: () => null,
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatTime(isoString: string): string {
   try {
@@ -134,7 +106,6 @@ const TONE_CLASSES: Record<SeverityTone, string> = {
 
 const NEUTRAL_TONE = "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] border-[var(--color-border)]"
 
-// ── PayloadChip ───────────────────────────────────────────────────────────────
 
 interface PayloadChipProps {
   label: string
@@ -154,7 +125,6 @@ function PayloadChip({ label, tone, mono }: PayloadChipProps) {
   )
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 
 interface ActivityItemProps {
   event: ActivityEvent

@@ -4,22 +4,35 @@ export type SourceCategory =
   | "code-repositories"
   | "container-registry"
   | "cloud-infrastructure"
+  | "ci-systems"
 
 export type SourceType =
   | "github"
   | "gitlab"
   | "bitbucket"
   | "gitea"
+  | "azure_devops"
   | "docker-hub"
   | "ghcr"
   | "ecr"
   | "acr"
   | "gcr"
   | "gitlab-registry"
+  | "jenkins"
 
 export type ScanScope = "all" | "all-except-excluded"
 
+export type ScannerType =
+  | "dependencies_scanning"
+  | "secret_scanning"
+  | "code_scanning"
+  | "container_scanning"
+
+export type ConnectionMethod = "pat" | "webhook" | "cicd"
+
 export type SyncSchedule = "1h" | "3h" | "6h" | "12h" | "24h"
+
+export type ScheduleMode = "preset" | "cron"
 
 export type ConnectionStatus = "connected" | "syncing" | "error" | "disconnected" | "not-synced"
 
@@ -41,10 +54,22 @@ export interface SourceConnection {
   auth: SourceConnectionAuth
   scanScope: ScanScope
   excludedItems: string[]
+  /** Scanners to run on Scan Now. Empty = all applicable to the category. */
+  scanners: ScannerType[]
+  /** How the source was connected — PAT, webhook, CI/CD, or a combination. */
+  connectionMethods: ConnectionMethod[]
   syncSchedule: SyncSchedule
+  syncScheduleMode: ScheduleMode
+  syncScheduleCron?: string
+  scanAutoEnabled: boolean
+  scanScheduleMode: ScheduleMode
+  scanSchedulePreset: SyncSchedule
+  scanScheduleCron?: string
   status: ConnectionStatus
   statusMessage?: string
   lastSyncedAt?: string
+  /** Most recent scan for this source's org (from the latest scan_run). */
+  lastScanAt?: string
   nextSyncAt?: string
   discoveredItemCount?: number
   discoveredItems?: string[]
@@ -62,6 +87,7 @@ export interface CategoryCounts {
   "code-repositories": number
   "container-registry": number
   "cloud-infrastructure": number
+  "ci-systems": number
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -70,18 +96,50 @@ export const CATEGORY_LABELS: Record<SourceCategory, string> = {
   "code-repositories": "Git Repository",
   "container-registry": "Container Registry",
   "cloud-infrastructure": "Cloud Infrastructure",
+  "ci-systems": "CI Systems",
 }
 
 export const CATEGORY_ITEM_LABELS: Record<SourceCategory, string> = {
   "code-repositories": "repositories",
   "container-registry": "images",
   "cloud-infrastructure": "accounts",
+  "ci-systems": "pipelines",
 }
 
 export const CATEGORY_SOURCE_TYPES: Record<SourceCategory, SourceType[]> = {
-  "code-repositories": ["github", "gitlab", "bitbucket", "gitea"],
+  "code-repositories": ["github", "gitlab", "bitbucket", "gitea", "azure_devops"],
   "container-registry": ["docker-hub", "ghcr", "ecr", "acr", "gcr", "gitlab-registry"],
   "cloud-infrastructure": [],
+  "ci-systems": ["jenkins"],
+}
+
+// Scanner job types that run for each source category. Mirrors the backend's
+// SCANNERS_BY_CATEGORY — keep the two in sync.
+export const CATEGORY_SCANNERS: Record<SourceCategory, ScannerType[]> = {
+  "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning"],
+  "container-registry": ["container_scanning"],
+  "cloud-infrastructure": [],
+  "ci-systems": [],
+}
+
+export const SCANNER_LABELS: Record<ScannerType, string> = {
+  dependencies_scanning: "Dependency Scanning",
+  secret_scanning: "Secret Scanning",
+  code_scanning: "Code Scanning",
+  container_scanning: "Container Scanning",
+}
+
+export const SCANNER_DESCRIPTIONS: Record<ScannerType, string> = {
+  dependencies_scanning: "Checks the open-source libraries your project relies on for known security problems.",
+  secret_scanning: "Looks for passwords, API keys, and other secrets accidentally left in your code.",
+  code_scanning: "Reviews your own code for security weaknesses and risky mistakes.",
+  container_scanning: "Inspects your container images for known vulnerabilities in their software.",
+}
+
+export const CONNECTION_METHOD_LABELS: Record<ConnectionMethod, string> = {
+  pat: "PAT",
+  webhook: "Webhook",
+  cicd: "CI/CD",
 }
 
 export const SOURCE_TYPE_TO_CATEGORY: Record<SourceType, SourceCategory> = {
@@ -89,18 +147,21 @@ export const SOURCE_TYPE_TO_CATEGORY: Record<SourceType, SourceCategory> = {
   gitlab: "code-repositories",
   bitbucket: "code-repositories",
   gitea: "code-repositories",
+  azure_devops: "code-repositories",
   "docker-hub": "container-registry",
   ghcr: "container-registry",
   ecr: "container-registry",
   acr: "container-registry",
   gcr: "container-registry",
   "gitlab-registry": "container-registry",
+  jenkins: "ci-systems",
 }
 
 export const CATEGORY_API_SLUGS: Record<SourceCategory, string> = {
   "code-repositories": "code-repositories",
   "container-registry": "container-images",
   "cloud-infrastructure": "cloud-infrastructure",
+  "ci-systems": "ci-systems",
 }
 
 export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
@@ -108,12 +169,30 @@ export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
   gitlab: "GitLab",
   bitbucket: "Bitbucket",
   gitea: "Gitea",
+  azure_devops: "Azure DevOps",
   "docker-hub": "Docker Hub",
   ghcr: "GitHub Container Registry",
   ecr: "AWS ECR",
   acr: "Azure ACR",
   gcr: "Google GCR",
   "gitlab-registry": "GitLab Registry",
+  jenkins: "Jenkins",
+}
+
+/**
+ * Display label for a source: the user's custom name when set, otherwise the
+ * org/owner that identifies it (e.g. "frogasia"). Sources created without a
+ * name default to the provider label (e.g. "GitHub"), which is ambiguous when
+ * several sources share a provider — so fall back to the org instead.
+ */
+export function sourceDisplayName(
+  connection: Pick<SourceConnection, "name" | "sourceType" | "auth">,
+): string {
+  const name = connection.name?.trim() ?? ""
+  const isProviderDefault = name === SOURCE_TYPE_LABELS[connection.sourceType]
+  if (name && !isProviderDefault) return name
+  const { orgOrOwner, groupOrProject, username } = connection.auth
+  return orgOrOwner || groupOrProject || username || name || SOURCE_TYPE_LABELS[connection.sourceType]
 }
 
 export const SYNC_SCHEDULE_LABELS: Record<SyncSchedule, string> = {
@@ -359,6 +438,57 @@ export const SOURCE_TYPE_FIELDS: Record<SourceType, SourceTypeFieldConfig[]> = {
       required: true,
     },
   ],
+  azure_devops: [
+    {
+      key: "instanceUrl",
+      label: "Organization URL",
+      type: "text",
+      placeholder: "https://dev.azure.com/my-org",
+      helperText: "Your Azure DevOps organization URL.",
+      required: true,
+    },
+    {
+      key: "groupOrProject",
+      label: "Project",
+      type: "text",
+      placeholder: "my-project",
+      helperText: "Repos under this project will be discovered.",
+    },
+    {
+      key: "token",
+      label: "Personal Access Token",
+      type: "password",
+      placeholder: "••••••••••••",
+      helperText: "Use a PAT with Code (read) scope.",
+      required: true,
+    },
+  ],
+  jenkins: [
+    {
+      key: "instanceUrl",
+      label: "Jenkins URL",
+      type: "text",
+      placeholder: "https://jenkins.example.com",
+      helperText: "Your Jenkins controller URL.",
+      required: true,
+    },
+    {
+      key: "username",
+      label: "Username",
+      type: "text",
+      placeholder: "my-username",
+      helperText: "Jenkins user the API token belongs to.",
+      required: true,
+    },
+    {
+      key: "token",
+      label: "API Token",
+      type: "password",
+      placeholder: "••••••••••••",
+      helperText: "Generate from User → Configure → API Token.",
+      required: true,
+    },
+  ],
 }
 
 // ─── Setup Guides ────────────────────────────────────────────────────────────
@@ -459,5 +589,23 @@ export const SOURCE_TYPE_SETUP_GUIDES: Record<SourceType, SourceTypeSetupGuide> 
       "Set an expiration and select the scopes below",
     ],
     requiredScopes: ["read_api"],
+  },
+  azure_devops: {
+    tokenLabel: "Personal Access Token",
+    steps: [
+      "Go to Azure DevOps → User Settings → Personal access tokens",
+      "Click \"New Token\"",
+      "Set an expiration and select the scopes below",
+    ],
+    requiredScopes: ["Code (read)"],
+  },
+  jenkins: {
+    tokenLabel: "API Token",
+    steps: [
+      "Go to Jenkins → User → Configure",
+      "Under \"API Token\", click \"Add new Token\"",
+      "Copy the generated token",
+    ],
+    requiredScopes: ["Overall: Read", "Job: Read"],
   },
 }

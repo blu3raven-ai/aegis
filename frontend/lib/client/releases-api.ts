@@ -1,14 +1,7 @@
-/**
- * TypeScript client for the releases REST API.
- *
- * All endpoints proxy through Next.js to the FastAPI backend at
- * /api/v1/releases. Mirrors the pattern used in repos-api.ts.
- */
+/** Client for the releases surface (list and per-scan detail). */
 
-import { apiClient } from "./api-client.ts"
-import { ApiClientError } from "./api-client.types.ts"
-
-const BASE = "/api/v1/releases"
+import { apiClient } from "./api-client"
+import { ApiClientError } from "./api-client.types"
 
 export interface ReleaseTriggeredBy {
   actor_type: "user" | "ci"
@@ -62,29 +55,36 @@ export interface ReleasesListResponse {
   next_cursor: string | null
 }
 
+export interface ListReleasesFilters {
+  repo_id?: string
+  status?: string
+  verdict?: string
+  limit?: number
+  cursor?: string
+}
+
+function buildQuery(filters: ListReleasesFilters): string {
+  const qs = new URLSearchParams()
+  if (filters.repo_id) qs.set("repo_id", filters.repo_id)
+  if (filters.status) qs.set("status", filters.status)
+  if (filters.verdict) qs.set("verdict", filters.verdict)
+  if (typeof filters.limit === "number") qs.set("limit", String(filters.limit))
+  if (filters.cursor) qs.set("cursor", filters.cursor)
+  return qs.toString()
+}
+
 export async function listReleases(
-  filters: {
-    repo_id?: string
-    status?: string
-    verdict?: string
-    limit?: number
-    cursor?: string
-  } = {},
+  filters: ListReleasesFilters = {},
 ): Promise<ReleasesListResponse> {
-  const params = new URLSearchParams()
-  if (filters.repo_id) params.set("repo_id", filters.repo_id)
-  if (filters.status) params.set("status", filters.status)
-  if (filters.verdict) params.set("verdict", filters.verdict)
-  if (filters.limit != null) params.set("limit", String(filters.limit))
-  if (filters.cursor) params.set("cursor", filters.cursor)
-  const qs = params.toString()
-  return apiClient<ReleasesListResponse>(`${BASE}${qs ? `?${qs}` : ""}`)
+  const qs = buildQuery(filters)
+  const path = qs ? `/api/v1/history/releases?${qs}` : "/api/v1/history/releases"
+  return apiClient<ReleasesListResponse>(path)
 }
 
 export async function getRelease(scanId: string): Promise<ReleaseDetail | null> {
   try {
-    return await apiClient<ReleaseDetail>(`${BASE}/${encodeURIComponent(scanId)}`)
-  } catch (err: unknown) {
+    return await apiClient<ReleaseDetail>(`/api/v1/history/releases/${encodeURIComponent(scanId)}`)
+  } catch (err) {
     if (err instanceof ApiClientError && err.status === 404) return null
     throw err
   }

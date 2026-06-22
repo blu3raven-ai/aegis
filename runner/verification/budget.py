@@ -1,12 +1,19 @@
-"""Per-scanner token budget pools."""
+"""Per-scanner token budget pools.
+
+The backend ships LLM_* limits inside job['envVars'] (see backend
+src/scans/service.py). Read them through JobEnv — the runner process env
+does NOT see those values because the runner agent does not propagate
+envVars to os.environ (and shouldn't: jobs run concurrently in threads,
+so a shared os.environ would be a cross-job leak).
+"""
 from __future__ import annotations
 
-import os
+from runner.scanners._shared import JobEnv
 
 
 DEFAULT_SAST_BUDGET = 200_000
-DEFAULT_SCA_BUDGET = 100_000
 DEFAULT_SECRETS_BUDGET = 150_000
+DEFAULT_IAC_BUDGET = 100_000
 DEFAULT_DAILY_REMAINING = 1_000_000
 
 
@@ -33,32 +40,22 @@ class ScanBudget:
         self.total_tokens_out += tokens_out
 
 
-def _env_int(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None or raw == "":
-        return default
-    try:
-        return int(raw)
-    except ValueError:
-        return default
-
-
-def make_sast_budget() -> ScanBudget:
+def make_sast_budget(env: JobEnv) -> ScanBudget:
     return ScanBudget(
-        scan_budget=_env_int("LLM_TOKEN_BUDGET_PER_SCAN", DEFAULT_SAST_BUDGET),
-        daily_remaining=_env_int("LLM_DAILY_REMAINING", DEFAULT_DAILY_REMAINING),
+        scan_budget=env.get_int("LLM_TOKEN_BUDGET_PER_SCAN", DEFAULT_SAST_BUDGET),
+        daily_remaining=env.get_int("LLM_DAILY_REMAINING", DEFAULT_DAILY_REMAINING),
     )
 
 
-def make_sca_budget() -> ScanBudget:
+def make_secrets_budget(env: JobEnv) -> ScanBudget:
     return ScanBudget(
-        scan_budget=_env_int("LLM_TOKEN_BUDGET_PER_SCAN_SCA", DEFAULT_SCA_BUDGET),
-        daily_remaining=_env_int("LLM_DAILY_REMAINING", DEFAULT_DAILY_REMAINING),
+        scan_budget=env.get_int("LLM_TOKEN_BUDGET_PER_SCAN_SECRETS", DEFAULT_SECRETS_BUDGET),
+        daily_remaining=env.get_int("LLM_DAILY_REMAINING", DEFAULT_DAILY_REMAINING),
     )
 
 
-def make_secrets_budget() -> ScanBudget:
+def make_iac_budget(env: JobEnv) -> ScanBudget:
     return ScanBudget(
-        scan_budget=_env_int("LLM_TOKEN_BUDGET_PER_SCAN_SECRETS", DEFAULT_SECRETS_BUDGET),
-        daily_remaining=_env_int("LLM_DAILY_REMAINING", DEFAULT_DAILY_REMAINING),
+        scan_budget=env.get_int("LLM_TOKEN_BUDGET_PER_SCAN_IAC", DEFAULT_IAC_BUDGET),
+        daily_remaining=env.get_int("LLM_DAILY_REMAINING", DEFAULT_DAILY_REMAINING),
     )

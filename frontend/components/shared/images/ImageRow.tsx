@@ -1,4 +1,4 @@
-import type { ImageRow as ImageRowData } from "@/lib/client/images-api"
+import type { ImageRow as ImageRowData } from "@/lib/client/sources-api"
 import { BaseOsChip } from "./BaseOsChip"
 import { SeverityCounts } from "@/components/shared/SeverityCounts"
 import {

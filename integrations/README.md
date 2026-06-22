@@ -1,3 +1,5 @@
+> This directory contains **customer-installable CI integrations** (GitHub Actions, GitLab Components, etc.). The internal connector kernel lives at `backend/src/connectors/`.
+
 # Aegis customer-installable integrations
 
 These are CI/CD artifacts customers add to their pipelines to trigger Aegis

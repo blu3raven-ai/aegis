@@ -1,5 +1,7 @@
 // components/shared/FindingDrawer/DrawerSection.tsx
 
+import { Card } from "@/components/ui/Card"
+
 export function DrawerSection({
   label,
   action,
@@ -10,7 +12,7 @@ export function DrawerSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <Card as="section" padding="none" className="rounded-xl">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           {label}
@@ -18,6 +20,6 @@ export function DrawerSection({
         {action}
       </div>
       <div className="space-y-4 px-4 pb-4">{children}</div>
-    </section>
+    </Card>
   )
 }

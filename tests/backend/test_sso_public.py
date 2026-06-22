@@ -3,7 +3,7 @@ def test_sso_availability_returns_disabled_by_default(monkeypatch):
     from fastapi.testclient import TestClient
     from src.main import app
     client = TestClient(app)
-    resp = client.get("/api/v1/sso/sso-availability")
+    resp = client.get("/api/v1/auth/sso/availability")
     assert resp.status_code == 200
     body = resp.json()
     assert body == {"enabled": False, "protocol": None}
@@ -27,5 +27,5 @@ def test_sso_availability_reports_enabled_after_admin_toggles(monkeypatch):
     from fastapi.testclient import TestClient
     from src.main import app
     client = TestClient(app)
-    body = client.get("/api/v1/sso/sso-availability").json()
+    body = client.get("/api/v1/auth/sso/availability").json()
     assert body == {"enabled": True, "protocol": "saml"}

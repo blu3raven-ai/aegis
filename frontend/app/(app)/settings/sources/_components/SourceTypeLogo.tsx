@@ -77,17 +77,27 @@ function GoogleCloudLogo({ size }: { size: number }) {
   )
 }
 
+function JenkinsLogo({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-1.6 5.2c1.3-1 3.2-.7 4.1.6.8 1.2.6 2.7-.4 3.6-.4.3-.8.5-1.3.6l.7 1.2 1 .4c1.2.5 1.9 1.8 1.6 3.1-.4 1.5-1.9 2.3-3.3 1.9-.8-.2-1.5-.7-1.9-1.4l-1.9-3.3c-.6-1-.5-2.2.2-3 .4-.5 1-.8 1.6-.9z" />
+    </svg>
+  )
+}
+
 const LOGO_COMPONENTS: Record<SourceType, React.FC<{ size: number }>> = {
   github: GitHubLogo,
   gitlab: GitLabLogo,
   bitbucket: BitbucketLogo,
   gitea: GiteaLogo,
+  azure_devops: AzureLogo,
   "docker-hub": DockerLogo,
   ghcr: GitHubLogo,
   ecr: AwsLogo,
   acr: AzureLogo,
   gcr: GoogleCloudLogo,
   "gitlab-registry": GitLabLogo,
+  jenkins: JenkinsLogo,
 }
 
 const LOGO_COLORS: Record<SourceType, string> = {
@@ -95,12 +105,14 @@ const LOGO_COLORS: Record<SourceType, string> = {
   gitlab: "",
   bitbucket: "",
   gitea: "",
+  azure_devops: "",
   "docker-hub": "",
   ghcr: "",
   ecr: "",
   acr: "",
   gcr: "",
   "gitlab-registry": "",
+  jenkins: "",
 }
 
 export function SourceTypeLogo({ type, size = 24, className = "" }: SourceTypeLogoProps) {

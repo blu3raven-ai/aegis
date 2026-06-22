@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { Button } from "@/components/ui/Button"
 import { SbomDiffIcon } from "@/lib/shared/ui/page-icons"
 import { diffSbomsByRepo, type SbomDiffResponse } from "@/lib/client/sbom-diff-api"
-import { listRepos } from "@/lib/client/repos-api"
+import { listRepos } from "@/lib/client/sources-api"
 
 type DiffState = "idle" | "loading" | "ok" | "error"
 
@@ -57,8 +57,8 @@ export default function SbomDiffPage() {
     try {
       const result = await diffSbomsByRepo({
         repo_id: sideARepo,
-        from_hash: sideAHash,
-        to_hash: sideBHash,
+        from_run_id: sideAHash,
+        to_run_id: sideBHash,
       })
       setDiffResult(result)
       setDiffState("ok")

@@ -1,8 +1,12 @@
-"""Permission and org-scoping smoke tests for /api/v1/epss."""
+"""Permission and asset-scope tests for /api/v1/sla/epss.
+
+The /top endpoint scopes by the caller's accessible asset_ids; the legacy
+``?org_id=`` query-param fallback was a BOLA vector and has been removed.
+"""
 from __future__ import annotations
 
 import os
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
@@ -10,14 +14,14 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
 os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
 from src.epss.router import router as epss_router  # noqa: E402
 
-_VIEWER_PERMS = {"view_findings"}
-_ADMIN_PERMS = {"view_findings", "manage_settings"}
-_NO_PERMS: set[str] = set()
+_FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 
-def _make_app(org: str | None = "test-org") -> FastAPI:
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(epss_router)
 
@@ -26,71 +30,77 @@ def _make_app(org: str | None = "test-org") -> FastAPI:
         request.state.user_sub = "user-1"
         request.state.user_role = "viewer"
         request.state.user_role_id = None
-        if org is not None:
-            request.state.user_org = org
         return await call_next(request)
 
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
     return app
 
 
 def test_top_requires_view_findings():
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_NO_PERMS):
-        client = TestClient(_make_app())
-        resp = client.get("/api/v1/epss/top")
+    """Caller without view_findings gets 403 before any scope lookup runs."""
+    called = {"scope": False}
+
+    async def fake_scope(*args, **kwargs):
+        called["scope"] = True
+        return [_FAKE_ASSET_ID]
+
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False), \
+         patch("src.epss.router.resolve_asset_ids_from_request", side_effect=fake_scope):
+        client = TestClient(_make_app(allow_view_findings=False))
+        resp = client.get("/api/v1/sla/epss/top")
         assert resp.status_code == 403
+        assert called["scope"] is False
 
 
-def test_top_resolves_org_from_session():
+def test_top_uses_caller_scoped_asset_ids():
+    """The service is invoked with the caller's resolved asset_ids — not any
+    client-supplied org_id (the query-param fallback has been removed)."""
     captured: dict = {}
 
-    def _fake_top(org_id, limit):
-        captured["org_id"] = org_id
+    def _fake_top(asset_ids, limit):
+        captured["asset_ids"] = asset_ids
         captured["limit"] = limit
         return []
 
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+    with patch("src.epss.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.epss.router._service.top_findings_by_epss", side_effect=_fake_top):
-        client = TestClient(_make_app(org="session-org"))
-        # Even though the query string asks for "evil-org", the session org wins.
-        resp = client.get("/api/v1/epss/top?org_id=evil-org")
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/sla/epss/top")
         assert resp.status_code == 200
-        assert captured["org_id"] == "session-org"
+        assert captured["asset_ids"] == [_FAKE_ASSET_ID]
+        assert captured["limit"] == 20
 
 
-def test_top_falls_back_to_query_when_no_session_org():
+def test_top_ignores_legacy_org_id_query_param():
+    """The legacy ?org_id= query string used to widen scope; today it is
+    silently ignored and the response is scoped to the caller's grants."""
     captured: dict = {}
 
-    def _fake_top(org_id, limit):
-        captured["org_id"] = org_id
+    def _fake_top(asset_ids, limit):
+        captured["asset_ids"] = asset_ids
         return []
 
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+    with patch("src.epss.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.epss.router._service.top_findings_by_epss", side_effect=_fake_top):
-        client = TestClient(_make_app(org=None))
-        resp = client.get("/api/v1/epss/top?org_id=fallback-org")
-        assert resp.status_code == 200
-        assert captured["org_id"] == "fallback-org"
-
-
-def test_top_400_without_any_org():
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS):
-        client = TestClient(_make_app(org=None))
-        resp = client.get("/api/v1/epss/top")
-        assert resp.status_code == 400
-
-
-def test_refresh_requires_manage_settings():
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS):
         client = TestClient(_make_app())
-        resp = client.post("/api/v1/epss/refresh")
-        assert resp.status_code == 403
-
-
-def test_refresh_allowed_for_admin():
-    fake_result = {"inserted": 1, "updated": 0}
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_ADMIN_PERMS), \
-         patch("src.jobs.epss_refresh.refresh_epss_scores", return_value=fake_result):
-        client = TestClient(_make_app())
-        resp = client.post("/api/v1/epss/refresh")
+        resp = client.get("/api/v1/sla/epss/top?org_id=evil-org")
         assert resp.status_code == 200
-        assert resp.json() == fake_result
+        assert captured["asset_ids"] == [_FAKE_ASSET_ID]
+
+
+def test_top_empty_scope_returns_empty_list():
+    """Caller with no asset access gets a clean empty response — the service
+    isn't even invoked (avoids running the SQL query for a known-empty
+    result)."""
+    with patch("src.epss.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[])), \
+         patch("src.epss.router._service.top_findings_by_epss") as mock_top:
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/sla/epss/top")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"findings": [], "count": 0}
+        mock_top.assert_not_called()

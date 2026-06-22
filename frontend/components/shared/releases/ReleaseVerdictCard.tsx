@@ -8,6 +8,7 @@
 
 import type { ReleaseDetail } from "@/lib/client/releases-api"
 import { Button } from "@/components/ui/Button"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { relativeTime, shortenSha } from "./_helpers"
 
 interface ReleaseVerdictCardProps {
@@ -83,11 +84,11 @@ export function ReleaseVerdictCard({
     return (
       <div className={`${CARD_BASE} border-[var(--color-border)] bg-[var(--color-surface)]`}>
         <div className="flex items-start gap-4">
-          <div className="h-12 w-12 rounded-full bg-[var(--color-surface-raised)] animate-pulse" />
+          <Skeleton className="h-12 w-12 rounded-full" />
           <div className="flex-1 space-y-2">
-            <div className="h-3 w-32 rounded bg-[var(--color-surface-raised)] animate-pulse" />
-            <div className="h-5 w-72 rounded bg-[var(--color-surface-raised)] animate-pulse" />
-            <div className="h-3 w-56 rounded bg-[var(--color-surface-raised)] animate-pulse" />
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-5 w-72" />
+            <Skeleton className="h-3 w-56" />
           </div>
         </div>
       </div>

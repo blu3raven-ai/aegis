@@ -47,7 +47,7 @@ def start_multi_org_scan(
         on_org_complete: Called after each org completes (e.g., cache invalidation).
         tool_label: Human-readable label for error messages ("dependency", "container", "SAST").
         update_run_fn: Updates a run record — needed for marking cancelled runs. Called as update_run_fn(org, run_id, patch).
-        skip_connection_check: Skip source connection validation (e.g., SCA advisories_only mode).
+        skip_connection_check: Skip source connection validation.
 
     Returns:
         Tuple of (response_dict, http_status_code).

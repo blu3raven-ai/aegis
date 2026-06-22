@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import type { SbomDiffResponse, SbomComponent, SbomVersionChange } from "@/lib/client/sbom-diff-api"
+import { Card } from "@/components/ui/Card"
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
@@ -100,7 +101,7 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
     diff.added.length + diff.removed.length + diff.version_changed.length
 
   return (
-    <div className="flex flex-col gap-0 divide-y divide-[var(--color-border)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+    <Card padding="none" className="flex flex-col gap-0 divide-y divide-[var(--color-border)] rounded-xl overflow-hidden">
       {/* Summary bar */}
       <div className="flex flex-wrap gap-4 px-4 py-3">
         <span className="text-xs text-[var(--color-text-secondary)]">
@@ -209,6 +210,6 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }

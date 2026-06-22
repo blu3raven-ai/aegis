@@ -2,18 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { RUNNERS_API } from "@/lib/shared/api-paths"
-import { apiClient } from "@/lib/client/api-client.ts"
+import { fetchRunnerDetail, fetchRunnerHeartbeats, saveRunnerSettings } from "@/lib/client/settings/use-runners"
 import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
+import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import type { Runner, RunnerDetail, RunnerJob, HeartbeatEntry } from "../types"
 import { ResourceGauge } from "../ResourceGauge"
 import { HeartbeatGrid } from "../HeartbeatGrid"
+import { RunnerLifecycleActions } from "./RunnerLifecycleActions"
 import { formatDate } from "@/lib/shared/utils"
 import { sectionHeadingClass } from "@/lib/shared/settings-styles"
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDuration(start: string | null, end: string | null): string {
   if (!start) return "—"
@@ -24,10 +25,8 @@ function formatDuration(start: string | null, end: string | null): string {
   return `${min}m ${sec % 60}s`
 }
 
-// ─── Design tokens (matches ScopeConfigContent) ─────────────────────────────
 
-const cardClass =
-  "overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
+const cardClassExtras = "overflow-hidden rounded-xl"
 
 function SettingsRow({
   label,
@@ -49,7 +48,6 @@ function SettingsRow({
   )
 }
 
-// ─── Status badge ───────────────────────────────────────────────────────────
 
 const STATUS_DOT: Record<string, string> = {
   online: "bg-[var(--color-status-ok)]",
@@ -76,7 +74,6 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-// ─── Job status colors ──────────────────────────────────────────────────────
 
 const JOB_STATUS_CLASS: Record<string, string> = {
   completed: "text-[var(--color-status-ok)]",
@@ -87,14 +84,12 @@ const JOB_STATUS_CLASS: Record<string, string> = {
   cancelled: "text-[var(--color-state-pending)]",
 }
 
-// ─── Props ──────────────────────────────────────────────────────────────────
 
 interface Props {
   runnerId: string
   canEdit: boolean
 }
 
-// ─── Component ──────────────────────────────────────────────────────────────
 
 export function RunnerDetailContent({ runnerId, canEdit }: Props) {
   const [loading, setLoading] = useState(true)
@@ -111,8 +106,8 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
   const load = useCallback(async () => {
     try {
       const [detailData, hbData] = await Promise.allSettled([
-        apiClient<{ runner: RunnerDetail; recentJobs?: RunnerJob[] }>(RUNNERS_API.detail(runnerId)),
-        apiClient<{ heartbeats: HeartbeatEntry[] }>(RUNNERS_API.heartbeats(runnerId)),
+        fetchRunnerDetail(runnerId),
+        fetchRunnerHeartbeats(runnerId),
       ])
       if (detailData.status === "fulfilled") {
         const data = detailData.value
@@ -124,7 +119,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
         }
       }
       if (hbData.status === "fulfilled") {
-        setHeartbeats(hbData.value.heartbeats || [])
+        setHeartbeats(hbData.value || [])
       }
     } catch { /* ignore */ }
     setLoading(false)
@@ -139,10 +134,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
   async function handleSave() {
     setSaving(true)
     try {
-      await apiClient(RUNNERS_API.settings(runnerId), {
-        method: "PATCH",
-        body: { maxConcurrent, name: runnerName },
-      })
+      await saveRunnerSettings(runnerId, { maxConcurrent, name: runnerName })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch { /* ignore */ }
@@ -170,12 +162,12 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="h-4 w-40 animate-pulse rounded bg-[var(--color-surface-raised)]" />
+        <Skeleton className="h-4 w-40" />
         <div className="space-y-2">
-          <div className="h-7 w-64 animate-pulse rounded bg-[var(--color-surface-raised)]" />
-          <div className="h-4 w-48 animate-pulse rounded bg-[var(--color-surface-raised)]" />
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-4 w-48" />
         </div>
-        <div className="h-48 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
+        <Skeleton className="h-48 rounded-xl" />
       </div>
     )
   }
@@ -230,7 +222,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
       {/* ── Connection ─────────────────────────────────────────────────────── */}
       <div>
         <p className={sectionHeadingClass}>Connection</p>
-        <div className={cardClass}>
+        <Card padding="none" className={cardClassExtras}>
           <SettingsRow label="Status" hint="Current connection state">
             <div className="flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full ${lastPing != null && lastPing < 60 ? "bg-[var(--color-status-ok)]" : "bg-[var(--color-text-tertiary)]"}`} />
@@ -243,13 +235,13 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
           <SettingsRow label="Registered" hint="When the runner was first seen">
             <span className="text-sm text-[var(--color-text-primary)]">{formatDate(runner.registeredAt)}</span>
           </SettingsRow>
-        </div>
+        </Card>
       </div>
 
       {/* ── System Resources ───────────────────────────────────────────────── */}
       <div>
         <p className={sectionHeadingClass}>System Resources</p>
-        <div className={`${cardClass} p-5`}>
+        <Card padding="none" className={`${cardClassExtras} p-5`}>
           <div className="space-y-3">
             <ResourceGauge label="CPU" percent={runner.cpuPercent} />
             <ResourceGauge
@@ -263,22 +255,22 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
               detail={runner.diskTotalGb ? `${Math.round(runner.diskUsedGb!)} / ${Math.round(runner.diskTotalGb)} GB` : undefined}
             />
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* ── Heartbeat History ──────────────────────────────────────────────── */}
       <div>
         <p className={sectionHeadingClass}>Heartbeat History (last 1h)</p>
-        <div className={`${cardClass} p-5`}>
+        <Card padding="none" className={`${cardClassExtras} p-5`}>
           <HeartbeatGrid heartbeats={heartbeats} />
-        </div>
+        </Card>
       </div>
 
       {/* ── Recent Jobs ────────────────────────────────────────────────────── */}
       {recentJobs.length > 0 && (
         <div>
           <p className={sectionHeadingClass}>Recent Jobs</p>
-          <div className={`${cardClass} overflow-x-auto`}>
+          <Card padding="none" className={`${cardClassExtras} overflow-x-auto`}>
             <Table className="text-xs">
               <Thead>
                 <Tr>
@@ -303,7 +295,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
                 ))}
               </Tbody>
             </Table>
-          </div>
+          </Card>
         </div>
       )}
 
@@ -311,7 +303,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
       {canEdit && (
         <div>
           <p className={sectionHeadingClass}>Settings</p>
-          <div className={cardClass}>
+          <Card padding="none" className={cardClassExtras}>
             <SettingsRow label="Concurrent scan limit" hint="Maximum scanner containers that can run simultaneously on this runner.">
               <div className="space-y-3">
                 <div className="flex gap-2">
@@ -340,7 +332,26 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
                 className="max-w-xs"
               />
             </SettingsRow>
-          </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Manage ─────────────────────────────────────────────────────────── */}
+      {canEdit && (
+        <div>
+          <p className={sectionHeadingClass}>Manage</p>
+          <Card padding="none" className={cardClassExtras}>
+            <SettingsRow
+              label="Lifecycle"
+              hint="Approve a pending runner to let it pick up jobs. Rotate the token to invalidate the current one. Revoke or delete to take the runner out of service."
+            >
+              <RunnerLifecycleActions
+                runnerId={runnerId}
+                status={runner.status}
+                onChange={() => void load()}
+              />
+            </SettingsRow>
+          </Card>
         </div>
       )}
 

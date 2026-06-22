@@ -49,6 +49,7 @@ import { ScannerCoverageActionEditor, REQUIRE_DEFAULT } from "./ScannerCoverageA
 import { AutoDismissActionEditor, AUTO_DISMISS_DEFAULT } from "./AutoDismissActionEditor"
 import { DryRunConfirmDialog } from "./DryRunConfirmDialog"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 import { DataRetentionActionEditor, ARCHIVE_DEFAULT } from "./DataRetentionActionEditor"
@@ -60,7 +61,6 @@ interface RuleEditorModalProps {
   category: EditableRuleCategory
   initialRule?: RuleSummary | null
   destinations: NotificationDestination[]
-  orgId: string
   onClose: () => void
   onSave: (payload: { create?: CreateRulePayload; update?: UpdateRulePayload }) => Promise<void>
   saving?: boolean
@@ -121,7 +121,6 @@ export function RuleEditorModal({
   category,
   initialRule,
   destinations,
-  orgId,
   onClose,
   onSave,
   saving,
@@ -385,7 +384,6 @@ export function RuleEditorModal({
       const effectiveEnabled = category === "auto_dismiss" ? false : enabled
       await onSave({
         create: {
-          org_id: orgId,
           category,
           name: trimmedName,
           description: trimmedDesc.length > 0 ? trimmedDesc : null,
@@ -439,7 +437,7 @@ export function RuleEditorModal({
     setDryRunResult(null)
     setDryRunError(null)
     try {
-      const res = await dryRunAndConfirm(orgId, initialRule.id)
+      const res = await dryRunAndConfirm(initialRule.id)
       setDryRunResult(res)
     } catch (err) {
       setDryRunError(err instanceof Error ? err.message : "Failed to run dry-run")
@@ -582,13 +580,7 @@ export function RuleEditorModal({
             className="flex-1 space-y-5 overflow-y-auto px-6 py-5"
           >
             {/* Name */}
-            <div>
-              <label
-                htmlFor="sla-rule-name"
-                className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-              >
-                Name
-              </label>
+            <FormField label="Name" htmlFor="sla-rule-name" required error={errors.name}>
               <Input
                 id="sla-rule-name"
                 type="text"
@@ -599,19 +591,10 @@ export function RuleEditorModal({
                 placeholder={namePlaceholder}
                 invalid={!!errors.name}
               />
-              {errors.name && (
-                <p className="mt-1 text-xs text-[var(--color-severity-critical)]">{errors.name}</p>
-              )}
-            </div>
+            </FormField>
 
             {/* Description */}
-            <div>
-              <label
-                htmlFor="sla-rule-description"
-                className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-              >
-                Description
-              </label>
+            <FormField label="Description" htmlFor="sla-rule-description" error={errors.description}>
               <Textarea
                 id="sla-rule-description"
                 rows={2}
@@ -622,10 +605,7 @@ export function RuleEditorModal({
                 invalid={!!errors.description}
                 className="resize-none"
               />
-              {errors.description && (
-                <p className="mt-1 text-xs text-[var(--color-severity-critical)]">{errors.description}</p>
-              )}
-            </div>
+            </FormField>
 
             {/* Conditions */}
             <div>
@@ -742,13 +722,13 @@ export function RuleEditorModal({
 
             {/* Priority + Enabled */}
             <div className="flex items-end gap-4">
-              <div className="flex-1">
-                <label
-                  htmlFor="sla-rule-priority"
-                  className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-                >
-                  Priority
-                </label>
+              <FormField
+                label="Priority"
+                htmlFor="sla-rule-priority"
+                hint={errors.priority ? undefined : "Lower = higher priority. First match wins."}
+                error={errors.priority}
+                className="flex-1"
+              >
                 <Input
                   id="sla-rule-priority"
                   type="number"
@@ -757,13 +737,7 @@ export function RuleEditorModal({
                   onChange={(e) => setPriority(Math.max(0, Number(e.target.value)))}
                   invalid={!!errors.priority}
                 />
-                <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
-                  Lower = higher priority. First match wins.
-                </p>
-                {errors.priority && (
-                  <p className="mt-1 text-xs text-[var(--color-severity-critical)]">{errors.priority}</p>
-                )}
-              </div>
+              </FormField>
 
               <div className="pb-5">
                 <label
@@ -802,7 +776,6 @@ export function RuleEditorModal({
             className="flex-1 overflow-y-auto px-6 py-5"
           >
             <RulePreview
-              orgId={orgId}
               ruleId={initialRule?.id ?? null}
               refreshKey={previewRefreshKey}
             />

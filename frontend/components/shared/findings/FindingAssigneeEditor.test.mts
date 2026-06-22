@@ -14,32 +14,30 @@ describe("FindingAssigneeEditor", () => {
     assert.match(src, /onUpdate:\s*\(next:\s*string \| null\)\s*=>\s*void/)
   })
 
-  it("calls updateFindingAssignee with null to clear assignment", () => {
+  it("delegates the picker UI to FindingAssigneePicker", () => {
+    assert.match(src, /import \{ FindingAssigneePicker \}/)
+    assert.match(src, /<FindingAssigneePicker/)
+  })
+
+  it("calls updateFindingAssignee with the picker's next value", () => {
     assert.match(src, /updateFindingAssignee\(numericId,\s*next\)/)
-    assert.match(src, /onClick=\{\(\)\s*=>\s*commit\(null\)\}/)
+    assert.match(src, /onChange=\{\(next\)\s*=>\s*void commit\(next\)\}/)
   })
 
-  it("trims whitespace and converts empty input to null", () => {
-    assert.match(src, /input\.trim\(\)\s*\|\|\s*null/)
+  it("shows the Unassigned label when no assignee is set", () => {
+    assert.match(src, /emptyLabel="Unassigned"/)
   })
 
-  it("shows Unassigned label when currentAssignee is null", () => {
-    assert.match(src, /currentAssignee\s*\?\?\s*"Unassigned"/)
-  })
-
-  it("renders a Clear button only when an assignee is set", () => {
-    assert.match(src, /\{currentAssignee\s*&&\s*\(/)
-    assert.match(src, />\s*Clear\s*</)
-  })
-
-  it("closes on outside click and Escape", () => {
-    assert.match(src, /addEventListener\("mousedown"/)
-    assert.match(src, /e\.key === "Escape"/)
-  })
-
-  it("disables Save while saving and shows Saving… label", () => {
+  it("disables the picker while a save is in flight", () => {
     assert.match(src, /disabled=\{saving\}/)
-    assert.match(src, /Saving…/)
+  })
+
+  it("skips the save when next equals currentAssignee", () => {
+    assert.match(src, /\(currentAssignee\s*\?\?\s*null\)\s*===\s*next/)
+  })
+
+  it("surfaces error text via role=alert", () => {
+    assert.match(src, /role="alert"/)
   })
 
   it("does not import @radix-ui (no new dependency)", () => {

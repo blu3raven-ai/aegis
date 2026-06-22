@@ -8,7 +8,7 @@ import pytest_asyncio
 from sqlalchemy import delete
 
 from src.db.models import SavedView
-from src.saved_views.service import (
+from src.settings.saved_views.service import (
     KNOWN_SURFACES,
     MAX_URL_STATE_BYTES,
     SavedViewIn,

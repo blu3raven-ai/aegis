@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { Card } from "@/components/ui/Card"
 
 const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
 
@@ -9,7 +10,7 @@ interface EnterpriseGateProps {
 
 export function EnterpriseGate({ feature, description }: EnterpriseGateProps) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
+    <Card padding="none" className="rounded-2xl p-8">
       <div className="max-w-lg">
         <span className="rounded-full bg-[var(--color-argus-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-argus)]">
           Enterprise
@@ -27,6 +28,6 @@ export function EnterpriseGate({ feature, description }: EnterpriseGateProps) {
           Upgrade
         </Link>
       </div>
-    </div>
+    </Card>
   )
 }

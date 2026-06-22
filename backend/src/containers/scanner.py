@@ -1,20 +1,18 @@
 """Container Scanner — Syft + Grype orchestration via runner service."""
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Lock
-from typing import Any, Literal
+from typing import Any
 
-from src.containers.image_metadata import extract_image_metadata
 from src.containers.lifecycle import container_scanning_hooks
 from src.containers.sbom_store import upsert_sbom, list_stored_sboms
 from src.shared.config import get_container_scanner_config, get_scan_sources_for_org
-from src.shared.enrichment import ingest_findings_jsonl, enrich_findings_with_advisory_data
+from src.shared.enrichment import enrich_findings_with_advisory_data
 from src.shared.lifecycle import ScanContext, apply_lifecycle as _apply_lifecycle
 from src.shared.paths import DATA_DIR
 from src.storage import (
@@ -143,12 +141,11 @@ def _execute_via_runner(
 
 
 def _download_scan_output_from_minio(
-    org: str, run_id: str
+    org: str, run_id: str, prefix: str
 ) -> dict[str, dict[str, Any]]:
-    """Download SBOMs from object store. Returns {image_name: {sbom, syft_json, digest}}."""
+    """Download SBOMs from object store. Returns {image_name: {sbom, digest}}."""
     from src.shared.object_store import list_objects, download_json, download_bytes
 
-    prefix = f"container_scanning/{org}/{run_id}/"
     keys = list_objects(prefix)
     image_sboms: dict[str, dict[str, Any]] = {}
 
@@ -166,7 +163,7 @@ def _download_scan_output_from_minio(
         filename = parts[1]
 
         if image_safe_name not in image_sboms:
-            image_sboms[image_safe_name] = {"sbom": None, "syft_json": None, "digest": None}
+            image_sboms[image_safe_name] = {"sbom": None, "digest": None}
 
         if filename == "sbom.cdx.json":
             sbom = download_json(key)
@@ -174,11 +171,6 @@ def _download_scan_output_from_minio(
                 image_sboms[image_safe_name]["sbom"] = sbom
             else:
                 logger.warning("Failed to read SBOM from %s", key)
-
-        elif filename == "sbom.syft.json":
-            syft_json = download_json(key)
-            if syft_json:
-                image_sboms[image_safe_name]["syft_json"] = syft_json
 
         elif filename == "digest.txt":
             blob = download_bytes(key)
@@ -188,149 +180,93 @@ def _download_scan_output_from_minio(
     return image_sboms
 
 
-def _fallback_ingest_per_image(org: str, run_id: str, prefix: str) -> list[dict[str, Any]]:
-    """Fallback: normalize per-image findings.json when findings.jsonl is missing."""
-    from src.shared.object_store import list_objects, download_bytes, download_json
+def _image_external_ref(source_type: str, full_ref: str) -> str:
+    """Canonical image external_ref from a full image ref ('ghcr.io/acme/app:1.2.3').
 
-    keys = list_objects(prefix)
-    findings: list[dict[str, Any]] = []
-
-    image_dirs: dict[str, dict[str, str]] = {}
-    for key in keys:
-        rel = key[len(prefix):]
-        parts = rel.split("/")
-        if len(parts) < 2:
-            continue
-        image_dir = parts[0]
-        filename = parts[1]
-        image_dirs.setdefault(image_dir, {})[filename] = key
-
-    for image_dir, files in image_dirs.items():
-        if "findings.json" not in files or "sbom.cdx.json" not in files:
-            continue
-        grype_data = download_json(files["findings.json"])
-        if not grype_data:
-            continue
-        sbom_data = download_json(files["sbom.cdx.json"])
-        image_ref = (sbom_data or {}).get("metadata", {}).get("component", {}).get("name", image_dir.replace("_", "/"))
-        digest_blob = download_bytes(files["digest.txt"]) if "digest.txt" in files else None
-        image_digest = digest_blob.decode().strip() if digest_blob else ""
-
-        if ":" in image_ref and not image_ref.startswith("sha256:"):
-            image_name, image_tag = image_ref.rsplit(":", 1)
-        else:
-            image_name, image_tag = image_ref, "latest"
-
-        for match in grype_data.get("matches", []):
-            vuln = match.get("vulnerability", {})
-            artifact = match.get("artifact", {})
-            fix = vuln.get("fix", {})
-            vid = vuln.get("id", "")
-            ghsa_id = vid if vid.startswith("GHSA-") else next((r["id"] for r in match.get("relatedVulnerabilities", []) if r.get("id", "").startswith("GHSA-")), None)
-            cve_id = vid if vid.startswith("CVE-") else next((r["id"] for r in match.get("relatedVulnerabilities", []) if r.get("id", "").startswith("CVE-")), None)
-            fix_versions = fix.get("versions", [])
-            locations = artifact.get("locations", [])
-
-            findings.append({
-                "organization": org,
-                "repository": image_name,
-                "source": "container",
-                "commitSha": image_digest,
-                "packageName": artifact.get("name", ""),
-                "packageVersion": artifact.get("version", ""),
-                "manifestPath": locations[0].get("path", "") if locations else "",
-                "ecosystem": artifact.get("type", ""),
-                "advisoryId": ghsa_id or cve_id or vid,
-                "ghsaId": ghsa_id,
-                "cveId": cve_id,
-                "severity": (vuln.get("severity") or "unknown").lower(),
-                "fixedVersion": fix_versions[0] if fix_versions else None,
-                "fixState": fix.get("state", "unknown"),
-                "summary": (vuln.get("description") or "")[:200],
-                "description": vuln.get("description", ""),
-                "scanner": "grype",
-                "stateCandidate": "open",
-                "imageName": image_name,
-                "imageTag": image_tag,
-                "imageDigest": image_digest,
-            })
-
-    if findings:
-        logger.info("Fallback: normalized %d findings from %d per-image files", len(findings), len(image_dirs))
-    return findings
-
-
-def _apply_image_enrichment(
-    findings: list[dict[str, Any]],
-    image_sboms: dict[str, dict[str, Any]],
-) -> None:
-    """Mutate findings in-place to carry layerCount / sizeBytes / baseOs.
-
-    Looks up by image digest; findings whose digest has no matching scan output
-    are left untouched (the API serializer treats absent keys as null).
+    Strips the registry hostname (the registry short name is carried in
+    source_type) and any digest, then builds image_ref(source_type, image, tag).
     """
-    by_digest: dict[str, dict[str, Any]] = {}
-    for data in image_sboms.values():
-        digest = data.get("digest")
-        if not digest:
-            continue
-        enrichment = extract_image_metadata(
-            data.get("syft_json"),
-            data.get("sbom"),
-        )
-        if any(v is not None for v in enrichment.values()):
-            by_digest[digest] = enrichment
-
-    if not by_digest:
-        return
-
-    for finding in findings:
-        digest = finding.get("imageDigest") or finding.get("commit_sha")
-        if not digest:
-            continue
-        enrichment = by_digest.get(digest)
-        if not enrichment:
-            continue
-        for key, value in enrichment.items():
-            if value is not None:
-                finding[key] = value
+    from src.assets.refs import image_ref
+    ref = full_ref.split("@", 1)[0]  # drop any digest
+    parts = ref.split("/")
+    if len(parts) > 1 and ("." in parts[0] or ":" in parts[0] or parts[0] == "localhost"):
+        ref = "/".join(parts[1:])
+    last = ref.rsplit("/", 1)[-1]
+    if ":" in last:
+        image, tag = ref.rsplit(":", 1)
+    else:
+        image, tag = ref, "latest"
+    return image_ref(source_type, image, tag)
 
 
-def ingest_container_from_minio(org: str, run_id: str, source_type: str | None = None) -> int:
-    """Ingest scan results from object store after runner completion. Returns finding count."""
-    from src.shared.object_store import find_findings_jsonl
+def _index_container_sboms(org: str, run_id: str, source_type: str, prefix: str) -> dict[str, str]:
+    """Index each image SBOM under its resolved image asset.
 
-    config = get_container_scanner_config()
-    prefix = f"container_scanning/{org}/{run_id}/"
+    Returns {asset_id: external_ref} for the images indexed this run so the
+    caller can match their components against the OSV mirror.
+    """
+    from src.assets.service import upsert_asset
+    from src.db.helpers import run_db
 
-    findings = []
-    blob = find_findings_jsonl(prefix)
-    if blob:
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".jsonl", delete=False) as f:
-            f.write(blob)
-            tmp_path = f.name
-        from pathlib import Path
-        findings = ingest_findings_jsonl(org, run_id, Path(tmp_path))
-        os.unlink(tmp_path)
-    elif blob is None:
-        findings = _fallback_ingest_per_image(org, run_id, prefix)
-        if not findings:
-            logger.warning("No findings.jsonl found under %s", prefix)
-
-    image_sboms = _download_scan_output_from_minio(org, run_id)
+    assets: dict[str, str] = {}
+    image_sboms = _download_scan_output_from_minio(org, run_id, prefix)
     for image_safe_name, data in image_sboms.items():
         sbom = data.get("sbom")
         if not sbom:
             continue
-        metadata = sbom.get("metadata", {})
-        component = metadata.get("component", {})
-        image_ref = component.get("name", image_safe_name.replace("_", "/"))
+        component = (sbom.get("metadata") or {}).get("component") or {}
+        full_ref = component.get("name") or image_safe_name.replace("_", "/")
         digest = data.get("digest")
-        upsert_sbom(org, image_ref, digest, sbom, run_id)
+        try:
+            external_ref = _image_external_ref(source_type, full_ref)
+        except ValueError:
+            logger.warning("Skipping image with unresolvable ref %s", full_ref)
+            continue
+        asset_id = run_db(lambda s, e=external_ref, d=full_ref: upsert_asset(
+            s, type="image", source="source_connection", external_ref=e, display_name=d,
+        ))
+        try:
+            upsert_sbom(org, full_ref, digest, sbom, run_id, asset_id=asset_id)
+            assets[asset_id] = external_ref
+        except Exception:
+            logger.warning("Failed to ingest SBOM for image %s", full_ref)
+    return assets
 
-    _apply_image_enrichment(findings, image_sboms)
 
+def ingest_container_from_minio(org: str, run_id: str, source_type: str | None = None) -> int:
+    """Ingest a container scan: index image SBOMs and match their components
+    against the OSV mirror to produce findings.
+
+    The runner uploads only SBOMs; vulnerability matching happens here. Returns
+    the finding count.
+    """
+    from src.db.helpers import run_db
+    from src.osv.sca_findings import build_backend_match_findings
+
+    if not source_type:
+        logger.error(
+            "container ingest for %s/%s has no source_type; cannot resolve assets", org, run_id
+        )
+        update_container_scanning_run(org, run_id, {
+            "status": "failed", "finishedAt": now_iso(),
+            "error": "missing source_type for OSV matching",
+        })
+        return 0
+
+    prefix = f"container_scanning/{org}/{run_id}/"
+    assets = _index_container_sboms(org, run_id, source_type, prefix)
+
+    async def _match(session) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for asset_id, external_ref in assets.items():
+            out.extend(await build_backend_match_findings(
+                session, asset_id=asset_id, external_ref=external_ref, kind="container",
+            ))
+        return out
+
+    findings: list[dict[str, Any]] = run_db(_match) if assets else []
+
+    config = get_container_scanner_config()
     nvd_enabled = config.get("nvdEnabled") in (True, "true")
     nvd_api_key = config.get("nvdApiKey", "")
     ghsa_enabled = config.get("ghsaEnabled") in (True, "true")
@@ -348,6 +284,7 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
     if findings:
         ctx = ScanContext(
             tool="container_scanning",
+            org=org,
             run_id=run_id,
             source_type=source_type,
         )
@@ -415,10 +352,7 @@ def execute_container_scan_once(
     })
 
     try:
-        if scan_mode == "advisories_only":
-            _run_advisories_only(org, run_id, config)
-        else:
-            _run_full_or_sbom(org, run_id, config, scan_mode, runtime)
+        _run_full_or_sbom(org, run_id, config, scan_mode, runtime)
 
         if runtime and runtime.is_cancelled(run_id):
             return
@@ -475,7 +409,6 @@ def _run_full_or_sbom(
 
     docker_images = ",".join(all_images)
 
-    import json as _json
     prev_digests = _get_previous_digests(org)
     update_container_scanning_run(org, run_id, {
         "progress": {
@@ -487,29 +420,6 @@ def _run_full_or_sbom(
     })
 
     result = _execute_via_runner(org, run_id, config, docker_images, scan_mode, registry_auths=registry_auths, prev_digests=prev_digests)
-    if not result or result.get("status") in ("failed", "cancelled"):
-        if result and result.get("status") == "cancelled":
-            return  # Cancelled — don't raise, let is_cancelled() handle it
-        raise RuntimeError(
-            f"Runner job failed: {result.get('error', 'unknown') if result else 'no result'}"
-        )
-
-
-def _run_advisories_only(
-    org: str,
-    run_id: str,
-    config: dict[str, Any],
-) -> None:
-    """Re-match stored SBOMs against updated advisory databases."""
-    stored = list_stored_sboms(org)
-
-    if not stored:
-        raise ValueError(f"No stored SBOMs found for org {org}")
-
-    image_refs = [s["repo"] for s in stored]
-    docker_images = ",".join(image_refs)
-
-    result = _execute_via_runner(org, run_id, config, docker_images, "advisories_only")
     if not result or result.get("status") in ("failed", "cancelled"):
         if result and result.get("status") == "cancelled":
             return  # Cancelled — don't raise, let is_cancelled() handle it
@@ -586,3 +496,6 @@ class InMemoryScanRuntime:
             if not job:
                 return {"active": False, "runId": None}
             return {"active": True, "runId": job.run_id}
+
+
+_container_scanning_runtime = InMemoryScanRuntime()

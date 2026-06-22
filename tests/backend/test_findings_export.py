@@ -201,7 +201,7 @@ async def test_csv_row_count_matches_fixtures():
 async def test_csv_row_values_correct():
     f = _make_finding(
         id=1,
-        tool="secrets",
+        tool="secret_scanning",
         severity="critical",
         detail={"title": "Hardcoded key", "cve_id": "", "file_path": "config.py", "start_line": 5},
     )

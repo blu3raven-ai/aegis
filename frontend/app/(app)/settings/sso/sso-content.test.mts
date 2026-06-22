@@ -35,6 +35,11 @@ test("SsoContent calls generateSamlKeypair on demand", () => {
   assert.match(SRC, /generateSamlKeypair\(/)
 })
 
+test("SsoContent exposes the signed IdP metadata toggle", () => {
+  assert.match(SRC, /Require signed IdP metadata/)
+  assert.match(SRC, /samlValidateMetadataSignature/)
+})
+
 test("SsoContent renders OIDC option in the protocol select", () => {
   assert.match(SRC, /value="oidc"/)
 })

@@ -4,24 +4,21 @@ import Link from "next/link"
 import { useEffect, type ReactNode, type MouseEvent } from "react"
 import { useActiveSection } from "./useActiveSection"
 
-/**
- * Scrolls the AppShell's `<main>` so a target settings section lands below
- * the sticky AppHeader + PageHeader. We can't rely on default browser anchor
- * behaviour because html/body have overflow:hidden — only `<main>` scrolls.
- */
+// Scrolls the settings content column (not main) to bring a target section
+// into view. The content column is the only scrolling element on the settings
+// page — main itself is overflow-hidden so the PageHeader and nav stay pinned.
 function scrollMainTo(id: string, behavior: ScrollBehavior = "smooth") {
   if (typeof window === "undefined") return
-  const main = document.querySelector(
-    "main[data-app-scroll]",
-  ) as HTMLElement | null
+  const container = document.querySelector("[data-settings-content]") as HTMLElement | null
   const target = document.getElementById(id)
-  if (!main || !target) return
-  const mainTop = main.getBoundingClientRect().top
-  const targetTopInMain =
-    target.getBoundingClientRect().top - mainTop + main.scrollTop
-  const margin =
-    parseInt(getComputedStyle(target).scrollMarginTop || "80", 10) || 80
-  main.scrollTo({ top: Math.max(0, targetTopInMain - margin), behavior })
+  if (!container || !target) return
+  const containerTop = container.getBoundingClientRect().top
+  const targetTop = target.getBoundingClientRect().top
+  const margin = parseInt(getComputedStyle(target).scrollMarginTop || "16", 10) || 16
+  container.scrollTo({
+    top: Math.max(0, container.scrollTop + (targetTop - containerTop) - margin),
+    behavior,
+  })
 }
 
 interface NavItem {
@@ -234,38 +231,25 @@ interface NavGroupSpec {
   items: NavItem[]
 }
 
-// Two top-level buckets ("Personal" and "Organization") with thematic
-// sub-groups inside each so the nav reads as four short clusters instead of
-// one wall of links.
-const PERSONAL_GROUPS: NavGroupSpec[] = [
+// Two top-level buckets: everything scoped to the signed-in user under
+// "Personal", everything that is org-admin under "Organization". API tokens are
+// personal access tokens, so they live in Personal — not the org cluster.
+const NAV_GROUPS: NavGroupSpec[] = [
   {
     label: "Personal",
     items: [
       { id: "profile", href: "#profile", label: "Profile", icon: ICONS.user },
       { id: "notifications", href: "#notifications", label: "Notifications", icon: ICONS.bell },
       { id: "security", href: "#security", label: "Security & Sessions", icon: ICONS.shield },
-    ],
-  },
-]
-
-const ORGANIZATION_GROUPS: NavGroupSpec[] = [
-  {
-    label: "Identity & Access",
-    items: [
-      { id: "general", href: "#general", label: "General", icon: ICONS.building },
-    ],
-  },
-  {
-    label: "Security & Audit",
-    items: [
-      { id: "sso", href: "#sso", label: "SSO / SAML", icon: ICONS.lock },
-      { id: "audit", href: "#audit", label: "Audit Log", icon: ICONS.scroll },
       { id: "api-keys", href: "#api-keys", label: "API Tokens", icon: ICONS.key },
     ],
   },
   {
-    label: "Operations",
+    label: "Organization",
     items: [
+      { id: "general", href: "#general", label: "General", icon: ICONS.building },
+      { id: "sso", href: "#sso", label: "SSO / SAML", icon: ICONS.lock },
+      { id: "audit", href: "#audit", label: "Audit Log", icon: ICONS.scroll },
       { id: "runners", href: "#runners", label: "Runners", icon: ICONS.runner },
       { id: "llm", href: "#llm", label: "LLM Verification", icon: ICONS.sparkles },
       { id: "license", href: "#license", label: "License", icon: ICONS.badge },
@@ -273,11 +257,10 @@ const ORGANIZATION_GROUPS: NavGroupSpec[] = [
   },
 ]
 
-const ALL_GROUPS = [...PERSONAL_GROUPS, ...ORGANIZATION_GROUPS]
-const ALL_IDS = ALL_GROUPS.flatMap((g) => g.items.map((i) => i.id)) as readonly string[]
+const ALL_IDS = NAV_GROUPS.flatMap((g) => g.items.map((i) => i.id)) as readonly string[]
 
 export function SettingsInPageNav() {
-  const activeId = useActiveSection(ALL_IDS)
+  const activeId = useActiveSection(ALL_IDS, "-16px 0px -65% 0px", "[data-settings-content]")
 
   // Honour the URL hash on initial mount + when the user navigates back/forward
   // — main needs to be scrolled manually because the document is overflow-locked.
@@ -298,21 +281,29 @@ export function SettingsInPageNav() {
   return (
     <nav
       aria-label="Settings sections"
-      className="sticky top-20 hidden self-start md:flex md:w-[220px] md:flex-col"
+      className="hidden w-[220px] shrink-0 overflow-y-auto border-r border-[var(--color-border)] pl-6 pr-2 py-6 md:flex md:flex-col"
     >
-      {PERSONAL_GROUPS.map((group) => (
-        <NavGroup key={group.label} {...group} activeId={activeId} />
-      ))}
-      {ORGANIZATION_GROUPS.map((group) => (
-        <NavGroup key={group.label} {...group} activeId={activeId} />
+      {NAV_GROUPS.map((group, index) => (
+        <NavGroup key={group.label} {...group} activeId={activeId} withDivider={index > 0} />
       ))}
     </nav>
   )
 }
 
-function NavGroup({ label, items, activeId }: NavGroupSpec & { activeId: string | null }) {
+function NavGroup({
+  label,
+  items,
+  activeId,
+  withDivider,
+}: NavGroupSpec & { activeId: string | null; withDivider?: boolean }) {
   return (
-    <div className="mb-4 last:mb-0">
+    <div
+      className={
+        withDivider
+          ? "mt-5 border-t border-[var(--color-border)] pt-5"
+          : "mb-1"
+      }
+    >
       <div className="px-3 pb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         {label}
       </div>

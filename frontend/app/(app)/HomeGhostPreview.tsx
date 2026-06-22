@@ -5,13 +5,15 @@
  * disabled and the entire tree is aria-hidden by the wrapping component.
  */
 
+import { Card } from "@/components/ui/Card"
+
 const SEV_BADGE_CRIT = "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical)]"
 const SEV_BADGE_HIGH = "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high)]"
 const SEV_BADGE_MED = "bg-[var(--color-severity-medium)]/10 text-[var(--color-severity-medium)]"
 
 function FeaturedCard() {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <div className="flex items-start gap-3">
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${SEV_BADGE_CRIT}`}>
           <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
@@ -30,13 +32,13 @@ function FeaturedCard() {
         <span aria-hidden="true" className="text-[var(--color-text-tertiary)]">·</span>
         <span className="text-[var(--color-text-tertiary)]">Dependencies</span>
       </div>
-    </div>
+    </Card>
   )
 }
 
 function CompactRow() {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+    <Card padding="none" className="flex items-center gap-3 rounded-xl px-4 py-3">
       <span className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${SEV_BADGE_HIGH}`}>
         <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
         high
@@ -50,14 +52,14 @@ function CompactRow() {
           <span>Containers</span>
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
 function CveCard({ severity }: { severity: "critical" | "high" }) {
   const sevClass = severity === "critical" ? SEV_BADGE_CRIT : SEV_BADGE_HIGH
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-xl">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide ${sevClass}`}>
           {severity}
@@ -81,7 +83,7 @@ function CveCard({ severity }: { severity: "critical" | "high" }) {
           Open fix PR
         </span>
       </div>
-    </div>
+    </Card>
   )
 }
 
@@ -133,13 +135,13 @@ function RepoRow({ name, detail, blocked }: { name: string; detail: string; bloc
     ? "text-[var(--color-severity-critical)]"
     : "text-[var(--color-status-ok)]"
   return (
-    <div className={`flex items-center gap-3 rounded-lg border border-[var(--color-border)] border-l-4 ${borderClass} bg-[var(--color-surface)] px-4 py-3`}>
+    <Card padding="none" className={`flex items-center gap-3 border-l-4 ${borderClass} px-4 py-3`}>
       <span className="flex-1 truncate text-sm font-medium text-[var(--color-text-primary)]">{name}</span>
       <span className={`shrink-0 text-xs tabular-nums ${detailClass}`}>{detail}</span>
       <svg className="h-4 w-4 shrink-0 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M9 18l6-6-6-6" />
       </svg>
-    </div>
+    </Card>
   )
 }
 
@@ -192,7 +194,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
         </div>
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <Card className="rounded-2xl">
           <div className="grid grid-cols-3 gap-4">
             <div>
               <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Introduced</p>
@@ -213,7 +215,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
           <div className="mt-5 border-t border-[var(--color-border)]/60 pt-2">
             <WeekChart />
           </div>
-        </div>
+        </Card>
       </section>
 
       {/* Your repos */}

@@ -19,6 +19,10 @@ export interface FindingAssigneePickerProps {
   label?: string
   /** Aria id used to associate the trigger with an external label. */
   triggerAriaLabel?: string
+  /** Trigger label when `value` is null. Defaults to "Any assignee" (filter context). */
+  emptyLabel?: string
+  /** Disable the trigger and prevent opening — used while a save is in flight. */
+  disabled?: boolean
 }
 
 const SEARCH_DEBOUNCE_MS = 200
@@ -29,6 +33,8 @@ export function FindingAssigneePicker({
   onChange,
   label,
   triggerAriaLabel,
+  emptyLabel = "Any assignee",
+  disabled = false,
 }: FindingAssigneePickerProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -82,7 +88,7 @@ export function FindingAssigneePicker({
     }
   }, [open])
 
-  const triggerLabel = value ? valueLabel || value : "Any assignee"
+  const triggerLabel = value ? valueLabel || value : emptyLabel
 
   return (
     <div ref={rootRef} className="relative inline-block">
@@ -95,6 +101,7 @@ export function FindingAssigneePicker({
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-label={triggerAriaLabel || (value ? `Change assignee (${triggerLabel})` : "Select assignee")}
+        disabled={disabled}
         className="w-full justify-between"
         trailingIcon={
           <svg

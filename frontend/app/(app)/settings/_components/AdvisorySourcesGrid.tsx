@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useLicense } from "@/lib/client/license/client"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 
 export interface AdvisorySourceState {
@@ -85,6 +86,7 @@ function StatusDot() {
 }
 
 interface KeyInputProps {
+  id?: string
   value: string
   onChange: (value: string) => void
   placeholder: string
@@ -94,10 +96,11 @@ interface KeyInputProps {
   errorState?: boolean
 }
 
-function KeyInput({ value, onChange, placeholder, show, onToggleShow, ariaLabel, errorState }: KeyInputProps) {
+function KeyInput({ id, value, onChange, placeholder, show, onToggleShow, ariaLabel, errorState }: KeyInputProps) {
   return (
     <div className="relative">
       <Input
+        id={id}
         type={show ? "text" : "password"}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -119,15 +122,17 @@ function KeyInput({ value, onChange, placeholder, show, onToggleShow, ariaLabel,
 }
 
 interface MaskedKeyDisplayProps {
+  id?: string
   maskedValue: string
   canEdit: boolean
   onChangeClick: () => void
 }
 
-function MaskedKeyDisplay({ maskedValue, canEdit, onChangeClick }: MaskedKeyDisplayProps) {
+function MaskedKeyDisplay({ id, maskedValue, canEdit, onChangeClick }: MaskedKeyDisplayProps) {
   return (
     <div className="flex items-center gap-2">
       <Input
+        id={id}
         type="text"
         value={maskedValue}
         readOnly
@@ -172,18 +177,20 @@ function NvdCard({ state, handlers, canEdit }: { state: AdvisorySourceState; han
         )}
       </div>
       <div className={`space-y-3 transition-opacity ${enabled ? "" : "opacity-40 pointer-events-none"}`}>
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-            API Key <span className="font-normal text-[var(--color-text-tertiary)]">(optional)</span>
-          </label>
+        <FormField
+          label={<>API Key <span className="font-normal text-[var(--color-text-tertiary)]">(optional)</span></>}
+          htmlFor="advisory-nvd-key"
+        >
           {!editingKey ? (
             <MaskedKeyDisplay
+              id="advisory-nvd-key"
               maskedValue={maskKey(initialApiKey, initialApiKeyHint)}
               canEdit={canEdit}
               onChangeClick={() => { handlers.setEditingKey(true); handlers.setApiKey(""); handlers.setShowKey(false) }}
             />
           ) : (
             <KeyInput
+              id="advisory-nvd-key"
               value={apiKey}
               onChange={handlers.setApiKey}
               placeholder="Enter NVD API key"
@@ -192,7 +199,7 @@ function NvdCard({ state, handlers, canEdit }: { state: AdvisorySourceState; han
               ariaLabel={showKey ? "Hide key" : "Show key"}
             />
           )}
-        </div>
+        </FormField>
 
         <div className="flex items-start gap-2 rounded-md border border-[var(--color-border)]/60 bg-[var(--color-bg-section)] px-3 py-2.5">
           <InfoIcon />
@@ -258,12 +265,13 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
         )}
       </div>
       <div className={`space-y-3 transition-opacity ${enabled ? "" : "opacity-40 pointer-events-none"}`}>
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-            GitHub PAT <span className="font-normal text-[var(--color-state-pending)]">(required)</span>
-          </label>
+        <FormField
+          label={<>GitHub PAT <span className="font-normal text-[var(--color-state-pending)]">(required)</span></>}
+          htmlFor="advisory-ghsa-key"
+        >
           {!editingKey ? (
             <MaskedKeyDisplay
+              id="advisory-ghsa-key"
               maskedValue={maskKey(initialApiKey, initialApiKeyHint)}
               canEdit={canEdit}
               onChangeClick={() => { handlers.setEditingKey(true); handlers.setApiKey(""); handlers.setShowKey(false) }}
@@ -271,6 +279,7 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
           ) : (
             <>
               <KeyInput
+                id="advisory-ghsa-key"
                 value={apiKey}
                 onChange={handlers.setApiKey}
                 placeholder="ghp_..."
@@ -287,7 +296,7 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
               )}
             </>
           )}
-        </div>
+        </FormField>
 
         <div className="flex items-start gap-2 rounded-md border border-[var(--color-border)]/60 bg-[var(--color-bg-section)] px-3 py-2.5">
           <InfoIcon />
@@ -370,12 +379,13 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
         )}
       </div>
       <div className={`space-y-3 transition-opacity ${enabled ? "" : "opacity-40 pointer-events-none"}`}>
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-            API Key <span className="font-normal text-[var(--color-state-pending)]">(required)</span>
-          </label>
+        <FormField
+          label={<>API Key <span className="font-normal text-[var(--color-state-pending)]">(required)</span></>}
+          htmlFor="advisory-argus-key"
+        >
           {!editingKey ? (
             <MaskedKeyDisplay
+              id="advisory-argus-key"
               maskedValue={maskKey(initialApiKey, initialApiKeyHint)}
               canEdit={canEdit}
               onChangeClick={() => { handlers.setEditingKey(true); handlers.setApiKey(""); handlers.setShowKey(false) }}
@@ -383,6 +393,7 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
           ) : (
             <>
               <KeyInput
+                id="advisory-argus-key"
                 value={apiKey}
                 onChange={handlers.setApiKey}
                 placeholder="argus_..."
@@ -399,7 +410,7 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
               )}
             </>
           )}
-        </div>
+        </FormField>
 
         <div className="flex items-start gap-2 rounded-md border border-[var(--color-border)]/60 bg-[var(--color-bg-section)] px-3 py-2.5">
           <InfoIcon />

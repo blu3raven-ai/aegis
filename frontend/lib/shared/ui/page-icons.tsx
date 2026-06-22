@@ -4,9 +4,22 @@ interface IconChipProps {
   children: ReactNode
 }
 
+/**
+ * The accent-tinted rounded frame behind every PageHeader icon. Wrap any icon
+ * element (the built-in SVG paths below, or a lucide component) so non-catalog
+ * icons get the same chrome. Size the inner icon to `h-5 w-5 text-[var(--color-accent)]`.
+ */
+export function IconChipFrame({ children }: IconChipProps) {
+  return (
+    <div className="inline-flex items-center justify-center p-1.5 bg-[var(--color-accent-subtle)] rounded-lg">
+      {children}
+    </div>
+  )
+}
+
 function IconChip({ children }: IconChipProps) {
   return (
-    <div className="p-1.5 bg-[var(--color-accent-subtle)] rounded-lg">
+    <IconChipFrame>
       <svg
         xmlns="http://www.w3.org/2000/svg"
         className="w-5 h-5 text-[var(--color-accent)]"
@@ -20,7 +33,7 @@ function IconChip({ children }: IconChipProps) {
       >
         {children}
       </svg>
-    </div>
+    </IconChipFrame>
   )
 }
 

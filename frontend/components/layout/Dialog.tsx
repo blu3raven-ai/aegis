@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useRef } from "react"
 import { Button } from "@/components/ui/Button"
+import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
 
 interface DialogProps {
   open: boolean
@@ -27,17 +28,7 @@ export function Dialog({
   variant = "info",
 }: DialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose()
-    }
-
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [open, onClose])
+  useDialogA11y(dialogRef, onClose, open)
 
   if (!open) return null
 
@@ -51,9 +42,10 @@ export function Dialog({
       />
 
       {/* Dialog */}
-      <div 
+      <div
         ref={dialogRef}
-        className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-[var(--color-surface)] p-6 text-left align-middle shadow-xl transition-all border border-[var(--color-border)]"
+        tabIndex={-1}
+        className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-[var(--color-surface)] p-6 text-left align-middle shadow-xl transition-all border border-[var(--color-border)] focus:outline-none"
         role="dialog"
         aria-modal="true"
         aria-labelledby="dialog-title"

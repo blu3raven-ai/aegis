@@ -13,14 +13,13 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from uuid import UUID
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Asset, Finding
 from src.shared.archived_filter import exclude_archived, include_archived
-from src.shared.scope import apply_scope
+from src.authz.enforcement.scope import apply_scope
 
 # Columns emitted in every export — ordered for human readability.
 EXPORT_COLUMNS = [

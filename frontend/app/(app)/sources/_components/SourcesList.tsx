@@ -1,7 +1,9 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
+import { Card } from "@/components/ui/Card";
 import { SeverityPill } from "@/components/ui/SeverityPill";
 import { ScannerCoverage, type ScannerType } from "@/components/ui/ScannerCoverage";
 import { StatusPill } from "@/components/ui/StatusPill";
@@ -17,6 +19,7 @@ export type Source = {
   type: SourceCategoryUiType;
   scanners: ScannerType[];
   findings: { high: number; medium: number; low: number };
+  last_synced_at: string | null;
   last_scan_at: string | null;
   status: "healthy" | "warning" | "failing" | "stale";
 };
@@ -26,6 +29,7 @@ type Props = {
 };
 
 export function SourcesList({ sources }: Props) {
+  const router = useRouter();
   const [typeFilter, setTypeFilter] = useState<SourceCategoryUiType | "all">("all");
   const [search, setSearch] = useState("");
 
@@ -39,7 +43,7 @@ export function SourcesList({ sources }: Props) {
     });
   }, [list, typeFilter, search]);
 
-  if (sources === null) return <TableSkeleton rows={6} columns={6} />;
+  if (sources === null) return <TableSkeleton rows={6} columns={7} />;
 
   const isEmpty = list.length === 0;
   const isFilteredEmpty = !isEmpty && filtered.length === 0;
@@ -55,7 +59,7 @@ export function SourcesList({ sources }: Props) {
         />
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <Card padding="none" className="overflow-hidden">
         <Table>
           <Thead>
             <Tr>
@@ -63,6 +67,7 @@ export function SourcesList({ sources }: Props) {
               <Th className="py-2">Type</Th>
               <Th className="py-2">Scanners</Th>
               <Th className="py-2">Findings</Th>
+              <Th className="py-2">Last sync</Th>
               <Th className="py-2">Last scan</Th>
               <Th className="py-2">Status</Th>
             </Tr>
@@ -70,21 +75,31 @@ export function SourcesList({ sources }: Props) {
           <Tbody divided={false}>
             {isEmpty ? (
               <Tr>
-                <Td colSpan={6} className="p-0">
+                <Td colSpan={7} className="p-0">
                   <EmptySourcesState filtered={false} />
                 </Td>
               </Tr>
             ) : isFilteredEmpty ? (
               <Tr>
-                <Td colSpan={6} className="p-0">
+                <Td colSpan={7} className="p-0">
                   <EmptySourcesState filtered={true} />
                 </Td>
               </Tr>
             ) : (
               filtered.map(s => (
-                <Tr key={s.id} interactive className="border-t border-[var(--color-border)]">
+                <Tr
+                  key={s.id}
+                  interactive
+                  className="cursor-pointer border-t border-[var(--color-border)]"
+                  onClick={() => router.push(`/sources/${s.id}`)}
+                >
                   <Td>
-                    <Link href={`/sources/${s.id}`} className="font-medium hover:underline">
+                    {/* Keep <Link> so right-click / cmd+click / keyboard still works */}
+                    <Link
+                      href={`/sources/${s.id}`}
+                      className="font-medium hover:underline"
+                      onClick={e => e.stopPropagation()}
+                    >
                       {s.name}
                     </Link>
                   </Td>
@@ -101,6 +116,9 @@ export function SourcesList({ sources }: Props) {
                     </div>
                   </Td>
                   <Td className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+                    {s.last_synced_at ? new Date(s.last_synced_at).toLocaleString() : "—"}
+                  </Td>
+                  <Td className="text-xs text-[var(--color-text-secondary)] tabular-nums">
                     {s.last_scan_at ? new Date(s.last_scan_at).toLocaleString() : "—"}
                   </Td>
                   <Td><StatusPill status={s.status} /></Td>
@@ -109,7 +127,7 @@ export function SourcesList({ sources }: Props) {
             )}
           </Tbody>
         </Table>
-      </div>
+      </Card>
     </>
   );
 }

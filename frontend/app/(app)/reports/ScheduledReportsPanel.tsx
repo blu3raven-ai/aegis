@@ -2,15 +2,15 @@
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { FilterChip } from "@/components/ui/FilterChip"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Sheet } from "@/components/ui/Sheet"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { apiClient } from "@/lib/client/api-client"
 import { listDestinations, type NotificationDestination } from "@/lib/client/destinations-api"
-
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
 
 interface ScheduledReport {
   id: number
@@ -35,12 +35,12 @@ interface ListResponse {
 }
 
 async function listSchedules(): Promise<ScheduledReport[]> {
-  const data = await apiClient<ListResponse>("/api/v1/reports/scheduled")
+  const data = await apiClient<ListResponse>("/api/v1/findings/reports/scheduled")
   return data.items
 }
 
 async function deleteSchedule(id: number): Promise<void> {
-  await apiClient<void>(`/api/v1/reports/scheduled/${id}`, { method: "DELETE" })
+  await apiClient<void>(`/api/v1/findings/reports/scheduled/${id}`, { method: "DELETE" })
 }
 
 interface CreatePayload {
@@ -55,7 +55,7 @@ interface CreatePayload {
 }
 
 async function createSchedule(payload: CreatePayload): Promise<ScheduledReport> {
-  return apiClient<ScheduledReport>("/api/v1/reports/scheduled", {
+  return apiClient<ScheduledReport>("/api/v1/findings/reports/scheduled", {
     method: "POST",
     body: payload,
   })
@@ -79,7 +79,7 @@ export function ScheduledReportsPanel() {
 
   useEffect(() => {
     void refresh()
-    void listDestinations(ORG_ID)
+    void listDestinations()
       .then(setDestinations)
       .catch(() => setDestinations([]))
   }, [])
@@ -95,7 +95,7 @@ export function ScheduledReportsPanel() {
   }
 
   return (
-    <section className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card as="section">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Scheduled reports</h2>
@@ -176,7 +176,7 @@ export function ScheduledReportsPanel() {
           void refresh()
         }}
       />
-    </section>
+    </Card>
   )
 }
 
@@ -253,72 +253,70 @@ function CreateScheduleModal({
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-3 text-sm">
-          <label className="block">
-            <span className="text-xs font-medium text-[var(--color-text-secondary)]">Name</span>
+          <FormField label="Name" htmlFor="report-name" required>
             <Input
+              id="report-name"
               size="sm"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Weekly findings"
-              className="mt-1"
             />
-          </label>
+          </FormField>
 
           <div className="flex gap-3">
-            <label className="block flex-1">
-              <span className="text-xs font-medium text-[var(--color-text-secondary)]">Type</span>
+            <FormField label="Type" htmlFor="report-type" className="flex-1">
               <Select
+                id="report-type"
                 size="sm"
                 value={reportType}
                 onChange={(e) => setReportType(e.target.value as "findings" | "posture")}
-                className="mt-1"
               >
                 <option value="findings">findings</option>
                 <option value="posture">posture</option>
               </Select>
-            </label>
-            <label className="block flex-1">
-              <span className="text-xs font-medium text-[var(--color-text-secondary)]">Format</span>
+            </FormField>
+            <FormField label="Format" htmlFor="report-format" className="flex-1">
               <Select
+                id="report-format"
                 size="sm"
                 value={format}
                 onChange={(e) => setFormat(e.target.value as "json" | "csv" | "pdf")}
-                className="mt-1"
               >
                 <option value="pdf">pdf</option>
                 <option value="json">json</option>
                 {reportType === "findings" && <option value="csv">csv</option>}
               </Select>
-            </label>
+            </FormField>
           </div>
 
           <div className="flex gap-3">
-            <label className="block flex-1">
-              <span className="text-xs font-medium text-[var(--color-text-secondary)]">Schedule type</span>
+            <FormField label="Schedule type" htmlFor="report-schedule-type" className="flex-1">
               <Select
+                id="report-schedule-type"
                 size="sm"
                 value={scheduleType}
                 onChange={(e) => setScheduleType(e.target.value as "simple" | "cron")}
-                className="mt-1"
               >
                 <option value="simple">daily (HH:MM)</option>
                 <option value="cron">cron</option>
               </Select>
-            </label>
-            <label className="block flex-1">
-              <span className="text-xs font-medium text-[var(--color-text-secondary)]">
-                {scheduleType === "simple" ? "Time (UTC)" : "Cron expression"}
-              </span>
+            </FormField>
+            <FormField
+              label={scheduleType === "simple" ? "Time (UTC)" : "Cron expression"}
+              htmlFor="report-schedule-value"
+              className="flex-1"
+              required
+            >
               <Input
+                id="report-schedule-value"
                 size="sm"
                 required
                 value={scheduleValue}
                 onChange={(e) => setScheduleValue(e.target.value)}
                 placeholder={scheduleType === "simple" ? "09:00" : "0 9 * * 1"}
-                className="mt-1"
               />
-            </label>
+            </FormField>
           </div>
 
           {destinations.length > 0 && (

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import TeamAsset, TeamMember
+from src.db.models import Grant, TeamMember
 
 
 async def primary_team_id_for_user(db: AsyncSession, user_id: str) -> str | None:
@@ -34,7 +34,11 @@ async def auto_grant_to_uploader(
     team_id = await primary_team_id_for_user(db, user_id)
     if team_id is None:
         raise ValueError("user has no team membership; cannot auto-grant")
-    stmt = insert(TeamAsset).values(team_id=team_id, asset_id=asset_id, source="upload")
-    stmt = stmt.on_conflict_do_nothing(index_elements=["team_id", "asset_id"])
+    stmt = insert(Grant).values(
+        subject_type="team", subject_id=team_id, asset_id=asset_id, source="upload",
+    )
+    stmt = stmt.on_conflict_do_nothing(
+        index_elements=["subject_type", "subject_id", "asset_id"]
+    )
     await db.execute(stmt)
     await db.commit()

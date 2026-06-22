@@ -21,7 +21,7 @@ export function useSsoAvailability(): SsoAvailability | null {
   useEffect(() => {
     if (cached) return
     let alive = true
-    fetch("/api/v1/sso/sso-availability", { credentials: "omit" })
+    fetch("/api/v1/auth/sso/availability", { credentials: "omit" })
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
       .then((d: SsoAvailability) => { cached = d; if (alive) setData(d) })
       .catch(() => { if (alive) setData({ enabled: false, protocol: null }) })

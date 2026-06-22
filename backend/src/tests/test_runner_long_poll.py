@@ -34,7 +34,7 @@ def test_returns_job_immediately_when_one_is_queued():
         patch("src.runner.router._transition_run_to_running"),
     ):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/runner/jobs/next?wait=10")
+        resp = client.get("/api/v1/agent/jobs/next?wait=10")
     assert resp.status_code == 200
     body = resp.json()
     assert body["jobId"] == "j-1"
@@ -47,7 +47,7 @@ def test_returns_204_when_no_job_and_wait_is_zero():
         patch("src.runner.router.assign_next_job", return_value=None),
     ):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/runner/jobs/next?wait=0")
+        resp = client.get("/api/v1/agent/jobs/next?wait=0")
     assert resp.status_code == 204
 
 
@@ -69,7 +69,7 @@ def test_returns_204_after_short_wait_when_no_job_queued(monkeypatch):
         patch("src.runner.router.asyncio.sleep", new=fast_sleep),
     ):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/runner/jobs/next?wait=1")
+        resp = client.get("/api/v1/agent/jobs/next?wait=1")
     assert resp.status_code == 204
     assert poll_calls["n"] >= 2
 
@@ -97,7 +97,7 @@ def test_picks_up_job_mid_wait(monkeypatch):
         patch("src.runner.router.asyncio.sleep", new=fast_sleep),
     ):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/runner/jobs/next?wait=10")
+        resp = client.get("/api/v1/agent/jobs/next?wait=10")
     assert resp.status_code == 200
     assert resp.json()["jobId"] == "j-2"
     assert state["calls"] >= 3
@@ -128,7 +128,7 @@ def test_wait_param_is_clamped_to_60():
         patch("src.runner.router.time.monotonic", new=fake_monotonic),
     ):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/runner/jobs/next?wait=99999")
+        resp = client.get("/api/v1/agent/jobs/next?wait=99999")
     assert resp.status_code == 204
     # With wait clamped to 60 and 0.25s poll interval, max ~241 iterations (60/0.25 + 1).
     assert poll_calls["n"] < 500
@@ -142,7 +142,7 @@ def test_returns_403_when_runner_not_approved():
         return_value=({"id": "r-2", "status": "pending"}, None),
     ):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/runner/jobs/next?wait=0")
+        resp = client.get("/api/v1/agent/jobs/next?wait=0")
     assert resp.status_code == 403
 
 
@@ -151,5 +151,5 @@ def test_returns_auth_error_when_require_runner_fails():
     fake_err = _Resp(status_code=401, content=b'{"error":"no"}')
     with patch("src.runner.router._require_runner", return_value=(None, fake_err)):
         client = TestClient(_make_app())
-        resp = client.get("/api/v1/runner/jobs/next?wait=0")
+        resp = client.get("/api/v1/agent/jobs/next?wait=0")
     assert resp.status_code == 401

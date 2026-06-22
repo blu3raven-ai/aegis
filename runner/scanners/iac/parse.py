@@ -40,7 +40,7 @@ def parse_checkov_results(raw: dict, *, repo_root: str) -> list[dict]:
         line = int(line_range[0]) if line_range else 1
         out.append(
             {
-                "tool": "iac",
+                "tool": "iac_scanning",
                 "check_id": chk.get("check_id", ""),
                 "title": chk.get("check_name", ""),
                 "severity": sev,

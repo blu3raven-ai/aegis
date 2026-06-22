@@ -2,7 +2,12 @@ import type { Finding as ApiFinding } from "../../client/findings-api.ts"
 import { timeAgo } from "../time-ago.ts"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low"
-export type FindingScanner = "deps" | "sast" | "containers" | "secrets" | "iac"
+export type FindingScanner =
+  | "dependencies_scanning"
+  | "code_scanning"
+  | "container_scanning"
+  | "secret_scanning"
+  | "iac_scanning"
 
 export interface FindingRecommendedFix {
   /** Optional one-line title, e.g. "Upgrade log4j-core". */
@@ -50,20 +55,19 @@ export interface FindingRow {
   assigneeUserId?: string
 }
 
-// The aggregated endpoint emits the short scanner form `container`; the UI
-// uses `containers` (plural) for the cell label/colour lookup. Unknown
-// scanners fall back to the `deps` styling rather than crashing the row.
+// Canonical scanner names use the `<thing>_scanning` suffix. Unknown
+// values fall back to dependencies-scanning styling rather than crashing
+// the row.
 const SCANNER_MAP: Record<string, FindingScanner> = {
-  deps: "deps",
-  container: "containers",
-  containers: "containers",
-  sast: "sast",
-  secrets: "secrets",
-  iac: "iac",
+  dependencies_scanning: "dependencies_scanning",
+  code_scanning: "code_scanning",
+  container_scanning: "container_scanning",
+  secret_scanning: "secret_scanning",
+  iac_scanning: "iac_scanning",
 }
 
 export function normaliseScanner(raw: string): FindingScanner {
-  return SCANNER_MAP[raw] ?? "deps"
+  return SCANNER_MAP[raw] ?? "dependencies_scanning"
 }
 
 export function normaliseSeverity(raw: string | null): FindingSeverity {
@@ -79,9 +83,44 @@ function buildRepoLabel(api: ApiFinding): string {
   return api.org_id
 }
 
+/**
+ * Strip the runner's ephemeral clone prefix (".../workspace/job-<hash>/") and
+ * any leading slashes so a path reads repo-relative instead of leaking the
+ * scanner's working directory.
+ */
+function cleanWorkspacePath(path: string): string {
+  return path.replace(/^.*?\/workspace\/job-[0-9a-f]+\//i, "").replace(/^\/+/, "")
+}
+
 function buildFilePath(api: ApiFinding): string | undefined {
   if (!api.file_path) return undefined
-  return api.line != null ? `${api.file_path}:${api.line}` : api.file_path
+  const path = cleanWorkspacePath(api.file_path)
+  return api.line != null ? `${path}:${api.line}` : path
+}
+
+/** Readable "basename:line" label from the structured file fields. */
+function fileLabel(api: ApiFinding): string | undefined {
+  if (!api.file_path) return undefined
+  const file = cleanWorkspacePath(api.file_path).split("/").pop() || api.file_path
+  return api.line != null ? `${file}:${api.line}` : file
+}
+
+/**
+ * Some scanners use an opaque identity as the title: code-scanning leaks the
+ * clone path + full rule id ("repo:/workspace/job-…/server.py:rule.path:93"),
+ * and secret-scanning uses a hash of the secret value. Neither is readable, so
+ * fall back to a file-location label from the structured fields.
+ */
+function buildTitle(api: ApiFinding): string {
+  const raw = api.title ?? api.cve ?? ""
+  const loc = fileLabel(api)
+  if (loc && raw.includes("/workspace/job-")) {
+    return loc
+  }
+  if (loc && normaliseScanner(api.scanner) === "secret_scanning" && /^[0-9a-f]{16,}$/i.test(raw)) {
+    return `Secret in ${loc}`
+  }
+  return raw || "Untitled finding"
 }
 
 function buildAge(api: ApiFinding): string {
@@ -93,7 +132,7 @@ function buildAge(api: ApiFinding): string {
 export function mapApiFinding(api: ApiFinding): FindingRow {
   return {
     id: api.id,
-    title: api.title ?? api.cve ?? "Untitled finding",
+    title: buildTitle(api),
     cve: api.cve ?? undefined,
     severity: normaliseSeverity(api.severity),
     scanner: normaliseScanner(api.scanner),

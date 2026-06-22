@@ -17,7 +17,6 @@ class Base(DeclarativeBase):
     pass
 
 
-# ── Settings & Config ────────────────────────────────────────────────────────
 
 
 class User(Base):
@@ -44,6 +43,7 @@ class User(Base):
     session_version: Mapped[int] = mapped_column(Integer, default=1)
     sso_subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
     sso_protocol: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    scim_managed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa.false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -84,6 +84,9 @@ class SsoConfig(Base):
     saml_metadata_xml: Mapped[str | None] = mapped_column(Text, nullable=True)
     saml_sp_private_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     saml_sp_certificate: Mapped[str | None] = mapped_column(Text, nullable=True)
+    saml_validate_metadata_signature: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.text("false"),
+    )
     oidc_discovery_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     oidc_client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     oidc_client_secret_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -139,7 +142,6 @@ class Team(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     members: Mapped[list[TeamMember]] = relationship(back_populates="team", cascade="all, delete-orphan")
-    assets: Mapped[list[TeamAsset]] = relationship(back_populates="team", cascade="all, delete-orphan")
 
 
 class TeamMember(Base):
@@ -158,18 +160,25 @@ class TeamMember(Base):
     )
 
 
-class DirectGrant(Base):
-    __tablename__ = "direct_grants"
+class Grant(Base):
+    """Unified access grant: either a user or a team may access an asset."""
+    __tablename__ = "grants"
 
-    id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    subject_type: Mapped[str] = mapped_column(String(10), primary_key=True)
+    subject_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     asset_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
-        ForeignKey("assets.id", ondelete="RESTRICT"),
-        nullable=False, index=True,
+        ForeignKey("assets.id", ondelete="CASCADE"),
+        primary_key=True,
     )
-    source: Mapped[str] = mapped_column(String(50), default="manual-direct")
-    granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="manual")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        sa.Index("ix_grants_asset_id", "asset_id"),
+        sa.Index("ix_grants_subject", "subject_type", "subject_id"),
+        sa.CheckConstraint("subject_type IN ('user', 'team')", name="ck_grants_subject_type"),
+    )
 
 
 class SourceConnection(Base):
@@ -182,7 +191,23 @@ class SourceConnection(Base):
     auth: Mapped[dict] = mapped_column(JSONB, default=dict)
     scan_scope: Mapped[str] = mapped_column(String(50), default="all")
     excluded_items: Mapped[list] = mapped_column(JSONB, default=list)
+    # Which scanner job types to run for this source. Empty = all scanners
+    # applicable to the category (see SCANNERS_BY_CATEGORY).
+    scanners: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    # How the source was connected: any of "pat", "webhook", "cicd". Recorded
+    # from the Add Source flow; a source may combine more than one.
+    connection_methods: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=lambda: ["pat"], server_default='["pat"]'
+    )
     sync_schedule: Mapped[str] = mapped_column(String(50), default="6h")
+    # Sync schedule editing mode: "preset" uses sync_schedule, "cron" uses sync_schedule_cron.
+    sync_schedule_mode: Mapped[str] = mapped_column(String(10), nullable=False, default="preset", server_default="preset")
+    sync_schedule_cron: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Auto-rerun of scans on a schedule (independent of sync re-discovery).
+    scan_auto_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa.false())
+    scan_schedule_mode: Mapped[str] = mapped_column(String(10), nullable=False, default="preset", server_default="preset")
+    scan_schedule_preset: Mapped[str] = mapped_column(String(50), nullable=False, default="24h", server_default="24h")
+    scan_schedule_cron: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="not-synced")
     status_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     discovered_items: Mapped[list | None] = mapped_column(JSONB, nullable=True)
@@ -205,7 +230,46 @@ class SourceConnection(Base):
             "sync_schedule IN ('1h', '3h', '6h', '12h', '24h')",
             name="ck_source_connections_sync_schedule",
         ),
+        sa.CheckConstraint(
+            "scan_schedule_preset IN ('1h', '3h', '6h', '12h', '24h')",
+            name="ck_source_connections_scan_schedule_preset",
+        ),
+        sa.CheckConstraint(
+            "sync_schedule_mode IN ('preset', 'cron')",
+            name="ck_source_connections_sync_schedule_mode",
+        ),
+        sa.CheckConstraint(
+            "scan_schedule_mode IN ('preset', 'cron')",
+            name="ck_source_connections_scan_schedule_mode",
+        ),
     )
+
+
+class WebhookEndpoint(Base):
+    """Per-org webhook receiver secret for a single provider.
+
+    Bootstrap remains via env-var (GITHUB_WEBHOOK_SECRET / etc.). A DB row
+    overrides the env-var on a per-provider basis so customers can rotate
+    without redeploying.
+    """
+    __tablename__ = "webhook_endpoints"
+    __table_args__ = (
+        sa.UniqueConstraint("org_id", "provider", name="uq_webhook_endpoints_org_provider"),
+        sa.CheckConstraint(
+            "provider IN ('github','gitlab','bitbucket','azure_devops','jenkins')",
+            name="ck_webhook_endpoints_provider",
+        ),
+        sa.Index("ix_webhook_endpoints_provider", "provider"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    org_id: Mapped[str] = mapped_column(String(255), nullable=False, default="default")
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    secret_enc: Mapped[str] = mapped_column(Text, nullable=False)
+    last4: Mapped[str] = mapped_column(String(4), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AppConfig(Base):
@@ -364,7 +428,6 @@ class AuditEvent(Base):
     )
 
 
-# ── Scan Data ─────────────────────────────────────────────────────────────────
 
 
 class ScanRun(Base):
@@ -483,7 +546,7 @@ class Finding(Base):
         nullable=True,
     )
     verdict: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    evidence_json: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    evidence: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     exploit_chain: Mapped[str | None] = mapped_column(Text, nullable=True)
     verification_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
@@ -606,7 +669,6 @@ class FindingEvent(Base):
     )
 
 
-# ── External notification routing ────────────────────────────────────────────
 
 
 class NotificationDestination(Base):
@@ -634,6 +696,10 @@ class NotificationDestination(Base):
 
     __table_args__ = (
         sa.UniqueConstraint('name', name='uq_notif_dest_name'),
+        sa.CheckConstraint(
+            "destination_type IN ('slack', 'webhook', 'email')",
+            name='ck_notification_destinations_destination_type',
+        ),
     )
 
 
@@ -669,7 +735,6 @@ class NotificationDelivery(Base):
     )
 
 
-# ── Notification routing rules ───────────────────────────────────────────────
 
 
 class NotificationRule(Base):
@@ -702,10 +767,8 @@ class NotificationRule(Base):
     )
 
 
-# ── Repos asset management ───────────────────────────────────────────────────
 
 
-# ── API Keys ─────────────────────────────────────────────────────────────────
 
 class ApiKey(Base):
     """Revocable API token — token stored only as SHA-256 hash."""
@@ -733,7 +796,6 @@ class ApiKey(Base):
     )
 
 
-# ── Webhook signing secrets ──────────────────────────────────────────────────
 
 class WebhookSigningSecret(Base):
     """Per-channel HMAC signing secret with rotation history.
@@ -768,7 +830,6 @@ class WebhookSigningSecret(Base):
     )
 
 
-# ── SLA ──────────────────────────────────────────────────────────────────────
 
 
 class SlaPolicy(Base):
@@ -802,7 +863,6 @@ class FindingSlaStatus(Base):
     )
 
 
-# ── Rules Engine ─────────────────────────────────────────────────────────────
 
 
 class Rule(Base):
@@ -885,7 +945,6 @@ class RuleKillSwitch(Base):
     )
 
 
-# ── CISA KEV Catalog ──────────────────────────────────────────────────────────
 
 
 class KevEntry(Base):
@@ -911,7 +970,6 @@ class KevEntry(Base):
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-# ── EPSS Scores ──────────────────────────────────────────────────────────────
 
 
 class EpssScore(Base):
@@ -933,7 +991,6 @@ class EpssScore(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-# ── Session auth (unified frontend/backend) ──────────────────────────────────
 
 
 class UserSession(Base):
@@ -988,7 +1045,7 @@ class RateLimitBucket(Base):
     """Sliding-window rate-limit counter, keyed by endpoint+actor.
 
     Key format: "<endpoint>:<actor_kind>:<actor_id>"
-      e.g. "/auth/login:ip:198.51.100.42" or "/auth/login:user:<user-uuid>"
+      e.g. "/api/v1/auth/login:ip:198.51.100.42" or "/api/v1/auth/login:user:<user-uuid>"
 
     Server-side state so rate limits survive process restarts and span workers.
     """
@@ -1083,7 +1140,6 @@ class ScheduledReport(Base):
     )
 
 
-# ── Saved views (per-user filter/sort/group state) ──────────────────────────
 
 
 class SavedView(Base):
@@ -1149,26 +1205,6 @@ class Asset(Base):
     )
 
 
-class TeamAsset(Base):
-    """RBAC grant: a team can read findings on this asset."""
-    __tablename__ = "team_assets"
-
-    team_id: Mapped[str] = mapped_column(
-        String(255), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True,
-    )
-    asset_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("assets.id", ondelete="CASCADE"), primary_key=True,
-    )
-    source: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
-    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
-
-    team: Mapped[Team] = relationship(back_populates="assets")
-    asset: Mapped[Asset] = relationship()
-
-    __table_args__ = (
-        sa.Index("ix_team_assets_asset_id", "asset_id"),
-    )
-
 
 class PostureSnapshot(Base):
     """Daily severity snapshot per asset.
@@ -1221,3 +1257,67 @@ class LlmUsageDaily(Base):
     tokens_in: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     tokens_out: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     scans: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class OsvAdvisory(Base):
+    """Mirror of an OSV vulnerability advisory header.
+
+    Body fields (description, references, full affected ranges with events)
+    live in MinIO at the `blob_key` path — fetched lazily on the detail view.
+    """
+
+    __tablename__ = "osv_advisories"
+
+    advisory_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ecosystem: Mapped[str] = mapped_column(String(32), nullable=False)
+    summary: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    severity: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    blob_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+    modified_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    refreshed_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        sa.Index("ix_osv_advisories_modified_at", "modified_at"),
+        sa.Index("ix_osv_advisories_ecosystem", "ecosystem"),
+    )
+
+
+class OsvVulnerableRange(Base):
+    """A single (package, version-range) row for an OSV advisory.
+
+    One advisory can have N affected packages × N version ranges.
+    Joined to `assets`/sbom contents at dispatch time to find affected orgs.
+    """
+
+    __tablename__ = "osv_vulnerable_ranges"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    advisory_id: Mapped[str] = mapped_column(
+        String(64),
+        sa.ForeignKey("osv_advisories.advisory_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    package_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    ecosystem: Mapped[str] = mapped_column(String(32), nullable=False)
+    range_introduced: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    range_fixed: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    range_last_affected: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    __table_args__ = (
+        sa.Index("ix_osv_ranges_pkg_eco", "ecosystem", "package_name"),
+    )
+
+
+class OsvRefreshRun(Base):
+    """Audit log row for each OSV refresh + dispatch pass."""
+
+    __tablename__ = "osv_refresh_runs"
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    started_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+    advisories_added: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text("0"))
+    advisories_changed: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text("0"))
+    jobs_enqueued: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text("0"))
+    error: Mapped[str | None] = mapped_column(sa.Text, nullable=True)

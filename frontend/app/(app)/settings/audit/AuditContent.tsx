@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { listAuditEvents, type AuditEvent, type AuditQueryFilters } from "@/lib/client/audit-api"
+import { ApiClientError } from "@/lib/client/api-client.types"
 import { AuditEventsTable } from "@/components/shared/audit/AuditEventsTable"
 import { AuditEventDrawer } from "@/components/shared/audit/AuditEventDrawer"
 import { AuditFilterBar, type AuditFilters, type DateWindow } from "@/components/shared/audit/AuditFilterBar"
 import { EmptyAuditState } from "@/components/shared/audit/EmptyAuditState"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 
 const PER_PAGE = 25
 
@@ -37,6 +39,7 @@ export function AuditContent() {
   const [total, setTotal] = useState(0)
   const [loadState, setLoadState] = useState<LoadState>("loading")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [errorStatus, setErrorStatus] = useState<number | null>(null)
 
   const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -50,11 +53,12 @@ export function AuditContent() {
         .map((e) => [e.actor_id!, { id: e.actor_id!, email: e.actor_email }]),
     ).values(),
   ]
-  const knownResourceTypes = [...new Set(events.map((e) => e.resource_type))].sort()
+  const knownResourceTypes = [...new Set(events.map((e) => e.resource_type).filter((v): v is string => !!v))].sort()
 
   const load = useCallback(async () => {
     setLoadState("loading")
     setErrorMessage(null)
+    setErrorStatus(null)
     const query: AuditQueryFilters = {
       limit: PER_PAGE,
       offset: (page - 1) * PER_PAGE,
@@ -66,10 +70,16 @@ export function AuditContent() {
     try {
       const res = await listAuditEvents(query)
       setEvents(res.events)
-      setTotal(res.total)
+      setTotal(res.total_count)
       setLoadState("ok")
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : "Failed to load audit events")
+      if (err instanceof ApiClientError) {
+        setErrorStatus(err.status)
+        const detail = (err.body as { detail?: string } | null)?.detail
+        setErrorMessage(detail ?? err.message)
+      } else {
+        setErrorMessage(err instanceof Error ? err.message : "Failed to load audit events")
+      }
       setLoadState("error")
     }
   }, [filters, page])
@@ -106,9 +116,11 @@ export function AuditContent() {
               Couldn&apos;t load audit events
             </p>
             <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-              {errorMessage?.includes("403") || errorMessage?.includes("audit")
-                ? "The audit log may be disabled. Set AEGIS_AUDIT_LOG_ENABLED=true to enable."
-                : (errorMessage ?? "An unknown error occurred.")}
+              {errorStatus === 409
+                ? "The audit log is disabled. Set AEGIS_AUDIT_LOG_ENABLED=true to enable."
+                : errorStatus === 403
+                  ? "You don't have permission to view the audit log."
+                  : (errorMessage ?? "An unknown error occurred.")}
             </p>
             <Button variant="secondary" size="md" onClick={load} className="mt-4">
               Retry
@@ -118,9 +130,9 @@ export function AuditContent() {
 
         {/* Empty state */}
         {loadState === "ok" && events.length === 0 && (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <Card padding="none">
             <EmptyAuditState filtered={isFiltered(filters)} />
-          </div>
+          </Card>
         )}
 
         {/* Events table */}

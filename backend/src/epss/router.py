@@ -1,9 +1,10 @@
 """EPSS scores API router.
 
 Endpoints:
-  GET  /api/v1/epss/scores/{cve}   — single EPSS score lookup
-  GET  /api/v1/epss/top            — open findings ranked by EPSS for the caller's org
-  POST /api/v1/epss/refresh        — trigger fetch + upsert (admin)
+  GET  /api/v1/sla/epss/scores/{cve}   — single EPSS score lookup
+  GET  /api/v1/sla/epss/top            — open findings ranked by EPSS for the caller's scope
+
+Refresh lives on the enrichment surface — see backend/src/enrichment/router.py.
 
 Route handlers are synchronous (FastAPI runs them in a thread pool) because
 EpssService uses run_db() internally — consistent with kev/router.
@@ -12,24 +13,19 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
+from src.authz.enforcement.dependencies import Permission
+from src.authz.enforcement.scope import resolve_asset_ids_from_request
+from src.authz.permissions.catalog import VIEW_FINDINGS
 from src.epss.service import EpssService
-from src.settings.router import require_permission
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/epss", tags=["epss"])
+router = APIRouter(prefix="/api/v1/sla/epss", tags=["sla"])
 
 _service = EpssService()
-
-
-def _resolve_org(request: Request) -> str:
-    org = getattr(request.state, "user_org", None) or request.query_params.get("org_id")
-    if not org:
-        raise HTTPException(status_code=400, detail="org_id is required")
-    return org
 
 
 def _score_dict(s) -> dict:
@@ -52,30 +48,21 @@ def get_score(cve: str) -> JSONResponse:
 
 
 @router.get("/top")
-def top_findings(
+async def top_findings(
     request: Request,
     limit: int = Query(default=20, ge=1, le=200),
+    _: None = Depends(Permission(VIEW_FINDINGS)),
 ) -> JSONResponse:
-    """List open findings ranked by EPSS score, descending, for the caller's org."""
-    require_permission(request, "view_findings")
-    org_id = _resolve_org(request)
-    findings = _service.top_findings_by_epss(org_id, limit=limit)
-    return JSONResponse({"findings": findings, "count": len(findings)})
+    """List open findings ranked by EPSS score, descending, scoped to the caller.
 
-
-@router.post("/refresh")
-def trigger_refresh(request: Request) -> JSONResponse:
-    """Trigger an immediate EPSS feed fetch + upsert. Admin-only.
-
-    Fetch failures bubble up as 502 so the caller can decide to retry.
+    Authorization: VIEW_FINDINGS plus the caller's asset-scope set (team
+    grants + direct grants). Empty scope returns an empty list rather than
+    leaking that the endpoint exists or accepting a client-supplied org_id
+    as scope override — the previous ``?org_id=`` query-param fallback was
+    a BOLA vector.
     """
-    require_permission(request, "manage_settings")
-    from src.jobs.epss_refresh import refresh_epss_scores
-
-    try:
-        result = refresh_epss_scores()
-    except Exception as exc:
-        logger.exception("epss refresh failed")
-        raise HTTPException(status_code=502, detail=f"EPSS refresh failed: {exc}") from exc
-
-    return JSONResponse(result)
+    asset_ids = await resolve_asset_ids_from_request(request)
+    if not asset_ids:
+        return JSONResponse({"findings": [], "count": 0})
+    findings = _service.top_findings_by_epss(asset_ids=asset_ids, limit=limit)
+    return JSONResponse({"findings": findings, "count": len(findings)})

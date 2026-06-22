@@ -1,6 +1,7 @@
 "use client"
 
 import { RoleRecord } from "@/lib/client/settings-api"
+import { Card } from "@/components/ui/Card"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { format } from "date-fns"
 
@@ -29,7 +30,7 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
   }
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+    <Card padding="none" className="overflow-hidden">
       <div className="overflow-x-auto">
         <Table>
           <Thead>
@@ -113,6 +114,6 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
           </Tbody>
         </Table>
       </div>
-    </div>
+    </Card>
   )
 }

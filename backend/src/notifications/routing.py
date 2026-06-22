@@ -46,7 +46,6 @@ class Rule:
     conditions: dict[str, Any]
 
 
-# ── Predicate evaluation ──────────────────────────────────────────────────────
 
 _FINDING_FIELDS: frozenset[str] = frozenset(
     {"severity", "scanner", "repo_id", "repo_labels", "cve_id", "chain_role"}
@@ -70,7 +69,6 @@ def evaluate_condition(condition: dict[str, Any], finding: Finding) -> bool:
     return _evaluate_condition(condition, finding, _get_field)
 
 
-# ── Routing ───────────────────────────────────────────────────────────────────
 
 
 def route_finding(finding: Finding, rules: list[Rule]) -> list[int]:

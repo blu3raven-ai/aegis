@@ -1,7 +1,7 @@
 """GraphQL query depth and complexity limits."""
 from __future__ import annotations
 
-MAX_QUERY_DEPTH = 5
+MAX_QUERY_DEPTH = 7
 
 
 def check_query_depth(query: str, max_depth: int = MAX_QUERY_DEPTH) -> None:

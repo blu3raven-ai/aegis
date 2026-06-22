@@ -8,7 +8,7 @@ function read(path: string): string {
 
 describe("Sources settings pages", () => {
   describe("sources API client", () => {
-    const src = read("lib/client/sources-api.ts")
+    const src = read("lib/client/source-connections-api.ts")
 
     it("exports listSourceConnections", () => {
       assert.match(src, /export async function listSourceConnections/)

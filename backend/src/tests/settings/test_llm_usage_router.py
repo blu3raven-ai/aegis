@@ -14,16 +14,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import MANAGE_SETTINGS  # noqa: E402
 from src.db.helpers import run_db  # noqa: E402
 from src.db.models import LlmConfig, LlmUsageDaily  # noqa: E402
-from src.settings.llm import LlmConfigUpsert, upsert_llm_config  # noqa: E402
-from src.settings.llm_usage import record_usage  # noqa: E402
-from src.settings.llm_usage_router import router as llm_usage_router  # noqa: E402
+from src.settings.llm.service import LlmConfigUpsert, upsert_llm_config  # noqa: E402
+from src.settings.llm.usage import record_usage  # noqa: E402
+from src.settings.llm.usage_router import router as llm_usage_router  # noqa: E402
 
 _ADMIN_PERMS = {"manage_settings"}
 
 
-def _make_app() -> FastAPI:
+def _make_app(*, allow_manage_settings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(llm_usage_router)
 
@@ -34,6 +36,8 @@ def _make_app() -> FastAPI:
         request.state.user_role_id = "admin"
         return await call_next(request)
 
+    if allow_manage_settings:
+        app.dependency_overrides[Permission(MANAGE_SETTINGS)] = lambda: None
     return app
 
 
@@ -50,7 +54,7 @@ def _cleanup():
 
 def test_usage_with_no_history_returns_zeroed_series():
     with patch(
-        "src.settings.router._resolve_effective_permissions", return_value=_ADMIN_PERMS
+        "src.authz.enforcement._resolve_effective_permissions", return_value=_ADMIN_PERMS
     ):
         client = TestClient(_make_app())
         resp = client.get("/api/v1/settings/llm/usage?days=7")
@@ -76,7 +80,7 @@ def test_usage_returns_recorded_history():
     record_usage(org_id="default", tokens_in=400, tokens_out=100, scans=1)
 
     with patch(
-        "src.settings.router._resolve_effective_permissions", return_value=_ADMIN_PERMS
+        "src.authz.enforcement._resolve_effective_permissions", return_value=_ADMIN_PERMS
     ):
         client = TestClient(_make_app())
         resp = client.get("/api/v1/settings/llm/usage?days=7")
@@ -93,7 +97,7 @@ def test_usage_returns_recorded_history():
 
 def test_usage_rejects_out_of_range_days():
     with patch(
-        "src.settings.router._resolve_effective_permissions", return_value=_ADMIN_PERMS
+        "src.authz.enforcement._resolve_effective_permissions", return_value=_ADMIN_PERMS
     ):
         client = TestClient(_make_app())
         resp = client.get("/api/v1/settings/llm/usage?days=400")

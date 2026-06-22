@@ -38,6 +38,13 @@
   --color-status-ok-subtle: rgb(16 185 129 / 0.1);
   --color-status-ok-border: rgb(16 185 129 / 0.3);
 
+  /* Generic semantic aliases — components reference these names; they follow
+     the theme automatically because var() resolves against the active scope. */
+  --color-success: var(--color-status-ok);
+  --color-danger:  var(--color-severity-critical);
+  --color-warning: var(--color-state-pending);
+  --color-muted:   var(--color-text-tertiary);
+
   --color-severity-critical:        #ef4444;
   --color-severity-critical-subtle: rgb(239 68 68 / 0.1);
   --color-severity-critical-border: rgb(239 68 68 / 0.3);
@@ -310,11 +317,22 @@ body {
   --type-lg:   1rem;
   --type-xl:   1.125rem;
   --type-2xl:  1.25rem;
+
+  /* Sticky offset for sub-navigation that sits directly under the sticky
+     PageHeader. Single source of truth so all sticky sub-bars stay aligned
+     if the PageHeader height ever changes. */
+  --page-header-offset: 77px;
 }
 
 @keyframes scan-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
+}
+
+/* Indeterminate progress: a segment that sweeps across the track. */
+@keyframes scan-indeterminate {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(410%); }
 }
 
 @keyframes chain-shimmer {
@@ -325,4 +343,18 @@ body {
 @keyframes row-flash {
   0%   { background: rgba(192,132,252,0.10); }
   100% { background: transparent; }
+}
+
+/* Respect the OS-level "reduce motion" preference: collapse animations and
+   transitions to near-instant rather than removing them outright, so state
+   changes still register without motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

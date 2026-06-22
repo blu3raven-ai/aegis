@@ -6,8 +6,9 @@ import { KpiCard } from "@/components/shared/KpiCard"
 import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
 import { RepoSummaryRow } from "@/components/shared/repos/RepoSummaryRow"
 import { EmptyReposState } from "@/components/shared/repos/EmptyReposState"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
-import { listRepos, type RepoSummary } from "@/lib/client/repos-api"
+import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
 
 import { ReposDisplayOverflow, type ReposSortMode } from "./ReposDisplayOverflow"
 
@@ -209,17 +210,19 @@ export function RepositoriesPanel({ onCountChange }: RepositoriesPanelProps = {}
               <Th className="px-5">Coverage</Th>
               <Th className="px-5">Scanners</Th>
               <Th className="px-5">Last scan</Th>
+              <Th className="px-5 text-right">Actions</Th>
             </Tr>
           </Thead>
           <Tbody>
             {loading && repos.length === 0 ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <Tr key={i} aria-hidden="true">
-                  <Td className="px-5 py-4"><div className="h-3 w-40 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
-                  <Td className="px-5 py-4"><div className="h-3 w-28 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
-                  <Td className="px-5 py-4"><div className="h-3 w-16 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
-                  <Td className="px-5 py-4"><div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
-                  <Td className="px-5 py-4"><div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" /></Td>
+                  <Td className="px-5 py-4"><Skeleton className="h-3 w-40" /></Td>
+                  <Td className="px-5 py-4"><Skeleton className="h-3 w-28" /></Td>
+                  <Td className="px-5 py-4"><Skeleton className="h-3 w-16" /></Td>
+                  <Td className="px-5 py-4"><Skeleton className="h-3 w-24" /></Td>
+                  <Td className="px-5 py-4"><Skeleton className="h-3 w-24" /></Td>
+                  <Td className="px-5 py-4 text-right"><Skeleton className="ml-auto h-6 w-16" /></Td>
                 </Tr>
               ))
             ) : paged.length > 0 ? (
@@ -228,7 +231,7 @@ export function RepositoriesPanel({ onCountChange }: RepositoriesPanelProps = {}
               ))
             ) : (
               <Tr>
-                <Td colSpan={5} className="py-0">
+                <Td colSpan={6} className="py-0">
                   <EmptyReposState filtered={isFiltered} />
                 </Td>
               </Tr>

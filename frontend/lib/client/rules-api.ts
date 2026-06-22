@@ -1,9 +1,9 @@
 /**
- * TypeScript client for the rules REST API.
+ * TypeScript client for the unified Rules REST surface at /api/v1/rules.
  */
 
-import { ApiClientError } from "./api-client.types.ts"
 import { apiClient } from "./api-client.ts"
+import { ApiClientError } from "./api-client.types.ts"
 import type { Condition } from "@/lib/rules-engine/conditions"
 
 export type RuleCategory = "sla" | "scanner_coverage" | "auto_dismiss" | "data_retention"
@@ -24,7 +24,7 @@ export interface SlaAction {
   escalations: SlaEscalation[]
 }
 
-export type ScannerType = "dependencies" | "code_scanning" | "container_scanning" | "secrets"
+export type ScannerType = "dependencies_scanning" | "code_scanning" | "container_scanning" | "secret_scanning"
 
 export interface RequireScannersAction {
   type: "require_scanners"
@@ -133,7 +133,6 @@ export function isDataRetentionAction(action: RuleAction): action is DataRetenti
 
 export interface RuleSummary {
   id: string
-  org_id: string
   category: RuleCategory
   name: string
   description: string | null
@@ -150,7 +149,7 @@ export interface RuleSummary {
 }
 
 export interface RuleViolation {
-  id: string
+  id: number
   rule_id: string
   subject_type: string
   subject_id: string
@@ -181,7 +180,6 @@ export interface RulePreviewResponse {
 }
 
 export interface CreateRulePayload {
-  org_id: string
   category: RuleCategory
   name: string
   description?: string | null
@@ -223,27 +221,40 @@ export interface ListRulesFilters {
   q?: string
 }
 
+export interface KillSwitch {
+  id: number
+  category: RuleCategory
+  killed_at: string
+  killed_by: string
+  reason: string | null
+}
+
 const BASE = "/api/v1/rules"
 
-export async function listRules(orgId: string, filters?: ListRulesFilters): Promise<RuleSummary[]> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  if (filters?.category !== undefined) qs.set("category", filters.category)
+// ── Reads ─────────────────────────────────────────────────────────────────
+
+export async function listRules(filters?: ListRulesFilters): Promise<RuleSummary[]> {
+  const qs = new URLSearchParams()
+  if (filters?.category) qs.set("category", filters.category)
   if (filters?.enabled !== undefined) qs.set("enabled", String(filters.enabled))
-  if (filters?.q !== undefined) qs.set("q", filters.q)
-  const data = await apiClient<{ rules: RuleSummary[] }>(`${BASE}?${qs}`)
-  return data.rules ?? []
+  if (filters?.q) qs.set("q", filters.q)
+  const suffix = qs.toString() ? `?${qs}` : ""
+  const data = await apiClient<{ rules: RuleSummary[] }>(`${BASE}${suffix}`)
+  return data.rules
 }
 
-export async function getRulesSummary(orgId: string): Promise<RuleSummaryStats> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  const data = await apiClient<{ summary: RuleSummaryStats }>(`${BASE}/summary?${qs}`)
-  return data.summary
+export async function getRulesSummary(): Promise<RuleSummaryStats> {
+  return apiClient<RuleSummaryStats>(`${BASE}/summary`)
 }
 
-export async function getRule(orgId: string, ruleId: string): Promise<RuleSummary | null> {
-  const qs = new URLSearchParams({ org_id: orgId })
+export async function listKillSwitches(): Promise<KillSwitch[]> {
+  const data = await apiClient<{ kill_switches: KillSwitch[] }>(`${BASE}/kill-switches`)
+  return data.kill_switches
+}
+
+export async function getRule(ruleId: string): Promise<RuleSummary | null> {
   try {
-    const data = await apiClient<{ rule: RuleSummary }>(`${BASE}/${ruleId}?${qs}`)
+    const data = await apiClient<{ rule: RuleSummary }>(`${BASE}/${ruleId}`)
     return data.rule
   } catch (err) {
     if (err instanceof ApiClientError && err.status === 404) return null
@@ -252,15 +263,17 @@ export async function getRule(orgId: string, ruleId: string): Promise<RuleSummar
 }
 
 export async function listRuleViolations(
-  orgId: string,
   ruleId: string,
   opts?: { limit?: number; offset?: number },
 ): Promise<RuleViolationPage> {
-  const qs = new URLSearchParams({ org_id: orgId })
+  const qs = new URLSearchParams()
   if (opts?.limit !== undefined) qs.set("limit", String(opts.limit))
   if (opts?.offset !== undefined) qs.set("offset", String(opts.offset))
-  return apiClient<RuleViolationPage>(`${BASE}/${ruleId}/violations?${qs}`)
+  const suffix = qs.toString() ? `?${qs}` : ""
+  return apiClient<RuleViolationPage>(`${BASE}/${ruleId}/violations${suffix}`)
 }
+
+// ── Mutations ─────────────────────────────────────────────────────────────
 
 export async function createRule(payload: CreateRulePayload): Promise<RuleSummary> {
   const data = await apiClient<{ rule: RuleSummary }>(BASE, {
@@ -271,89 +284,56 @@ export async function createRule(payload: CreateRulePayload): Promise<RuleSummar
 }
 
 export async function updateRule(
-  orgId: string,
   ruleId: string,
   payload: UpdateRulePayload,
 ): Promise<RuleSummary> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  const data = await apiClient<{ rule: RuleSummary }>(`${BASE}/${ruleId}?${qs}`, {
+  const data = await apiClient<{ rule: RuleSummary }>(`${BASE}/${ruleId}`, {
     method: "PUT",
     body: payload,
   })
   return data.rule
 }
 
-export async function deleteRule(orgId: string, ruleId: string): Promise<void> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  await apiClient<void>(`${BASE}/${ruleId}?${qs}`, { method: "DELETE" })
+export async function deleteRule(ruleId: string): Promise<void> {
+  await apiClient<void>(`${BASE}/${ruleId}`, { method: "DELETE" })
 }
 
-export async function toggleRule(orgId: string, ruleId: string): Promise<RuleSummary> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  const data = await apiClient<{ rule: RuleSummary }>(`${BASE}/${ruleId}/toggle?${qs}`, {
+export async function toggleRule(ruleId: string): Promise<RuleSummary> {
+  const data = await apiClient<{ rule: RuleSummary }>(`${BASE}/${ruleId}/toggle`, {
     method: "POST",
   })
   return data.rule
 }
 
 export async function previewRule(
-  orgId: string,
   ruleId: string,
   body?: { sample_subject?: Record<string, unknown> },
 ): Promise<RulePreviewResponse> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  return apiClient<RulePreviewResponse>(`${BASE}/${ruleId}/preview?${qs}`, {
+  return apiClient<RulePreviewResponse>(`${BASE}/${ruleId}/preview`, {
     method: "POST",
     body: body ?? {},
   })
 }
 
-export async function dryRunAndConfirm(
-  orgId: string,
-  ruleId: string,
-): Promise<DryRunConfirmation> {
-  const qs = new URLSearchParams({ org_id: orgId })
+export async function dryRunAndConfirm(ruleId: string): Promise<DryRunConfirmation> {
   return apiClient<DryRunConfirmation>(
-    `${BASE}/${ruleId}/dry-run-and-confirm?${qs}`,
+    `${BASE}/${ruleId}/dry-run-and-confirm`,
     { method: "POST", body: {} },
   )
 }
 
-export interface KillSwitch {
-  id: number
-  org_id: string
-  category: RuleCategory
-  killed_at: string
-  killed_by: string
-  reason: string | null
-}
-
-export async function listKillSwitches(orgId: string): Promise<KillSwitch[]> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  const data = await apiClient<{ kill_switches: KillSwitch[] }>(
-    `${BASE}/kill-switch?${qs}`,
-  )
-  return data.kill_switches ?? []
-}
-
 export async function engageKillSwitch(
-  orgId: string,
   category: RuleCategory,
   reason?: string,
 ): Promise<KillSwitch> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  return apiClient<KillSwitch>(`${BASE}/kill-switch/${category}?${qs}`, {
+  return apiClient<KillSwitch>(`${BASE}/kill-switch/${category}`, {
     method: "POST",
     body: { reason: reason ?? null },
   })
 }
 
-export async function disengageKillSwitch(
-  orgId: string,
-  category: RuleCategory,
-): Promise<void> {
-  const qs = new URLSearchParams({ org_id: orgId })
-  await apiClient<void>(`${BASE}/kill-switch/${category}?${qs}`, {
+export async function disengageKillSwitch(category: RuleCategory): Promise<void> {
+  await apiClient<void>(`${BASE}/kill-switch/${category}`, {
     method: "DELETE",
   })
 }

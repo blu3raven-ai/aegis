@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Sbom
 from src.db.helpers import run_db
-from src.shared.sbom_storage import (
+from src.sbom.storage import (
     safe_s3_segment,
     upload_to_minio,
     download_from_minio,

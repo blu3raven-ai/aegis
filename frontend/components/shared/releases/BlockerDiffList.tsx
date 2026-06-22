@@ -8,6 +8,7 @@
 
 import Link from "next/link"
 import type { BlockerDiffRow } from "@/lib/client/releases-api"
+import { Card } from "@/components/ui/Card"
 import {
   DIFF_PILL_BASE,
   DIFF_PILL_VARIANT,
@@ -57,11 +58,11 @@ export function BlockerDiffList({ blockers, emptyMessage, baselineRef }: Blocker
       </header>
 
       {total === 0 ? (
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-center text-sm text-[var(--color-text-secondary)]">
+        <Card padding="lg" className="text-center text-sm text-[var(--color-text-secondary)]">
           {emptyMessage}
-        </div>
+        </Card>
       ) : (
-        <div className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
+        <Card padding="none" className="divide-y divide-[var(--color-border)]">
           {visible.map((row) => {
             const sevKey = severityKey(row.severity)
             const sevLetter = SEVERITY_LETTER[sevKey] ?? "?"
@@ -117,7 +118,7 @@ export function BlockerDiffList({ blockers, emptyMessage, baselineRef }: Blocker
               </div>
             )
           })}
-        </div>
+        </Card>
       )}
     </section>
   )

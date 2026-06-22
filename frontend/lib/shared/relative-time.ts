@@ -1,8 +1,13 @@
 /**
  * Converts an ISO 8601 timestamp to a human-readable relative string,
  * e.g. "3 days ago". Used in attribution rows throughout the UI.
+ *
+ * Accepts null/undefined and returns "—" so call sites with nullable
+ * timestamps (GraphQL Optional fields, REST payloads with missing dates)
+ * don't have to guard at every usage.
  */
-export function relativeTime(isoString: string): string {
+export function relativeTime(isoString: string | null | undefined): string {
+  if (!isoString) return "—"
   const then = new Date(isoString).getTime()
   if (Number.isNaN(then)) return isoString
 

@@ -8,7 +8,7 @@ import logging
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import false as sa_false, func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.helpers import run_db
@@ -317,7 +317,7 @@ def list_reports(
 ) -> tuple[list[Report], int]:
     """List reports visible to the viewer.
 
-    The TeamAsset-intersection check runs in Python after fetching a window
+    The grant-intersection check runs in Python after fetching a window
     of candidate rows. Overshoot the limit to absorb post-filter exclusions —
     a 50-row response page reads up to a few hundred rows worst case, still
     cheap for the report volumes we expect.

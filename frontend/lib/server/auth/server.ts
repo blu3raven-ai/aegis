@@ -5,7 +5,7 @@ import { getSession, type SessionPayload } from "@/lib/server/session"
 import type { UserRole } from "@/lib/shared/auth/roles.ts"
 
 // Minimal user shape consumed by server pages.
-// Fields align with what /auth/me returns via getSession().
+// Fields align with what /api/v1/auth/me returns via getSession().
 export interface SessionUser {
   id: string
   username: string | null

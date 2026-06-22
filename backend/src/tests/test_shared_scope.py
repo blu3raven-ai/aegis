@@ -2,14 +2,14 @@ import pytest
 import pytest_asyncio
 from sqlalchemy import delete, select
 
-from src.db.models import Asset, Finding, Team, TeamAsset, TeamMember
-from src.shared.scope import apply_scope, get_user_asset_ids
+from src.db.models import Asset, Finding, Grant, Team, TeamMember
+from src.authz.enforcement.scope import apply_scope, get_user_asset_ids
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def _clean_scope(db_session):
     yield
-    await db_session.execute(delete(TeamAsset))
+    await db_session.execute(delete(Grant))
     await db_session.execute(delete(TeamMember))
     await db_session.execute(delete(Team))
     await db_session.execute(delete(Asset))
@@ -44,7 +44,7 @@ async def test_get_user_asset_ids_returns_team_granted_only(db_session, seed_use
     await db_session.flush()
     db_session.add_all([
         TeamMember(team_id=team.id, user_id=seed_user.id),
-        TeamAsset(team_id=team.id, asset_id=granted.id),
+        Grant(subject_type="team", subject_id=team.id, asset_id=granted.id),
     ])
     await db_session.commit()
 

@@ -27,6 +27,26 @@ def get_session_secret() -> str:
         )
     return secret
 
+
+def get_allowed_hosts() -> list[str]:
+    """Hosts the app is willing to serve. Configure via ALLOWED_HOSTS env var.
+
+    Required in every environment. Set to a comma-separated list of hostnames
+    (e.g. ``aegis.example.com,api.aegis.example.com``). For local dev/tests,
+    set ``ALLOWED_HOSTS=localhost,127.0.0.1,testserver``.
+    """
+    raw = os.getenv("ALLOWED_HOSTS")
+    if not raw:
+        raise RuntimeError(
+            "ALLOWED_HOSTS environment variable is required. "
+            "Comma-separated list of permitted host headers. "
+            "Local dev/tests: ALLOWED_HOSTS=localhost,127.0.0.1,testserver"
+        )
+    hosts = [h.strip() for h in raw.split(",") if h.strip()]
+    if not hosts:
+        raise RuntimeError("ALLOWED_HOSTS must contain at least one non-empty host entry.")
+    return hosts
+
 ENV_PATH = repo_root() / ".env.local"
 
 # Keys that must be redacted when logging or displaying config
@@ -104,7 +124,7 @@ def app_config_from_env_map(env: dict[str, str]) -> dict[str, Any]:
             "recoveryCodePolicy": env.get("AUTH_SECURITY_RECOVERY_CODE_POLICY") or "mandatory",
         },
         "tools": {
-            "dependencies": {
+            "dependencies_scanning": {
                 "enabled": _to_bool(env.get("SCA_ENABLED"), False),
                 "autoRerunEnabled": _to_bool(env.get("SCA_AUTO_RERUN_ENABLED"), False),
                 "rerunScheduleType": env.get("SCA_RERUN_SCHEDULE_TYPE") or "simple",
@@ -115,7 +135,7 @@ def app_config_from_env_map(env: dict[str, str]) -> dict[str, Any]:
                 "ghsaEnabled": env.get("SCA_GHSA_ENABLED", "").lower() == "true",
                 "ghsaApiKey": env.get("SCA_GHSA_API_KEY") or "",
             },
-            "containerScanning": {
+            "container_scanning": {
                 "enabled": _to_bool(env.get("CONTAINER_SCANNING_ENABLED"), False),
                 "autoRerunEnabled": _to_bool(env.get("CONTAINER_SCANNING_AUTO_RERUN_ENABLED"), False),
                 "rerunScheduleType": env.get("CONTAINER_SCANNING_RERUN_SCHEDULE_TYPE") or "simple",
@@ -128,7 +148,7 @@ def app_config_from_env_map(env: dict[str, str]) -> dict[str, Any]:
                 "argusEnabled": env.get("CONTAINER_SCANNING_ARGUS_ENABLED", "false").lower() == "true",
                 "argusApiKey": env.get("CONTAINER_SCANNING_ARGUS_API_KEY") or "",
             },
-            "codeScanning": {
+            "code_scanning": {
                 "enabled": _to_bool(env.get("SAST_ENABLED"), False),
                 "scanConcurrency": env.get("SAST_SCAN_CONCURRENCY") or "4",
                 "rulesets": (env.get("SAST_RULESETS") or "p/owasp-top-ten,p/cwe-top-25").split(","),
@@ -136,7 +156,7 @@ def app_config_from_env_map(env: dict[str, str]) -> dict[str, Any]:
                 "rerunScheduleType": env.get("SAST_RERUN_SCHEDULE_TYPE") or "simple",
                 "rerunScheduleValue": env.get("SAST_RERUN_SCHEDULE_VALUE") or "02:00",
             },
-            "secrets": {
+            "secret_scanning": {
                 "enabled": _to_bool(env.get("SECRETS_ENABLED"), False),
                 "scanConcurrency": env.get("SECRET_SCANNER_CONCURRENCY") or env.get("SECRETS_SCAN_CONCURRENCY") or "4",
                 "scanDepth": env.get("SECRETS_SCAN_DEPTH") or "light",
@@ -147,7 +167,7 @@ def app_config_from_env_map(env: dict[str, str]) -> dict[str, Any]:
                 "rerunScheduleType": env.get("SECRETS_RERUN_SCHEDULE_TYPE") or "simple",
                 "rerunScheduleValue": env.get("SECRETS_RERUN_SCHEDULE_VALUE") or "02:00",
             },
-            "iacSecurity": {
+            "iac_scanning": {
                 "enabled": _to_bool(env.get("IAC_SECURITY_ENABLED"), False),
             },
         },
@@ -160,11 +180,11 @@ def _normalize_config(value: dict[str, Any] | None, fallback: dict[str, Any]) ->
     dashboard = value.get("dashboard") if isinstance(value.get("dashboard"), dict) else {}
     auth_security = value.get("authSecurity") if isinstance(value.get("authSecurity"), dict) else {}
     tools = value.get("tools") if isinstance(value.get("tools"), dict) else {}
-    dependencies = tools.get("dependencies") if isinstance(tools.get("dependencies"), dict) else {}
-    container_scanning_cfg = tools.get("containerScanning") if isinstance(tools.get("containerScanning"), dict) else {}
-    code_scanning = tools.get("codeScanning") if isinstance(tools.get("codeScanning"), dict) else {}
-    secrets = tools.get("secrets") if isinstance(tools.get("secrets"), dict) else {}
-    iac_security = tools.get("iacSecurity") if isinstance(tools.get("iacSecurity"), dict) else {}
+    dependencies = tools.get("dependencies_scanning") if isinstance(tools.get("dependencies_scanning"), dict) else {}
+    container_scanning_cfg = tools.get("container_scanning") if isinstance(tools.get("container_scanning"), dict) else {}
+    code_scanning = tools.get("code_scanning") if isinstance(tools.get("code_scanning"), dict) else {}
+    secrets = tools.get("secret_scanning") if isinstance(tools.get("secret_scanning"), dict) else {}
+    iac_security = tools.get("iac_scanning") if isinstance(tools.get("iac_scanning"), dict) else {}
 
     return {
         "dashboard": {
@@ -188,59 +208,59 @@ def _normalize_config(value: dict[str, Any] | None, fallback: dict[str, Any]) ->
             ),
         },
         "tools": {
-            "dependencies": {
-                "enabled": dependencies.get("enabled", fallback["tools"]["dependencies"]["enabled"]),
-                "autoRerunEnabled": dependencies.get("autoRerunEnabled", fallback["tools"]["dependencies"]["autoRerunEnabled"]),
-                "rerunScheduleType": dependencies.get("rerunScheduleType", fallback["tools"]["dependencies"]["rerunScheduleType"]),
-                "rerunScheduleValue": dependencies.get("rerunScheduleValue", fallback["tools"]["dependencies"]["rerunScheduleValue"]),
-                "scanConcurrency": dependencies.get("scanConcurrency", fallback["tools"]["dependencies"]["scanConcurrency"]),
-                "nvdEnabled": dependencies.get("nvdEnabled", fallback["tools"]["dependencies"]["nvdEnabled"]),
-                "nvdApiKey": dependencies.get("nvdApiKey", fallback["tools"]["dependencies"]["nvdApiKey"]),
-                "ghsaEnabled": dependencies.get("ghsaEnabled", fallback["tools"]["dependencies"]["ghsaEnabled"]),
-                "ghsaApiKey": dependencies.get("ghsaApiKey", fallback["tools"]["dependencies"]["ghsaApiKey"]),
+            "dependencies_scanning": {
+                "enabled": dependencies.get("enabled", fallback["tools"]["dependencies_scanning"]["enabled"]),
+                "autoRerunEnabled": dependencies.get("autoRerunEnabled", fallback["tools"]["dependencies_scanning"]["autoRerunEnabled"]),
+                "rerunScheduleType": dependencies.get("rerunScheduleType", fallback["tools"]["dependencies_scanning"]["rerunScheduleType"]),
+                "rerunScheduleValue": dependencies.get("rerunScheduleValue", fallback["tools"]["dependencies_scanning"]["rerunScheduleValue"]),
+                "scanConcurrency": dependencies.get("scanConcurrency", fallback["tools"]["dependencies_scanning"]["scanConcurrency"]),
+                "nvdEnabled": dependencies.get("nvdEnabled", fallback["tools"]["dependencies_scanning"]["nvdEnabled"]),
+                "nvdApiKey": dependencies.get("nvdApiKey", fallback["tools"]["dependencies_scanning"]["nvdApiKey"]),
+                "ghsaEnabled": dependencies.get("ghsaEnabled", fallback["tools"]["dependencies_scanning"]["ghsaEnabled"]),
+                "ghsaApiKey": dependencies.get("ghsaApiKey", fallback["tools"]["dependencies_scanning"]["ghsaApiKey"]),
             },
-            "containerScanning": {
-                "enabled": container_scanning_cfg.get("enabled", fallback["tools"]["containerScanning"]["enabled"]),
-                "autoRerunEnabled": container_scanning_cfg.get("autoRerunEnabled", fallback["tools"]["containerScanning"]["autoRerunEnabled"]),
-                "rerunScheduleType": container_scanning_cfg.get("rerunScheduleType", fallback["tools"]["containerScanning"]["rerunScheduleType"]),
-                "rerunScheduleValue": container_scanning_cfg.get("rerunScheduleValue", fallback["tools"]["containerScanning"]["rerunScheduleValue"]),
-                "scanConcurrency": container_scanning_cfg.get("scanConcurrency", fallback["tools"]["containerScanning"]["scanConcurrency"]),
-                "nvdEnabled": container_scanning_cfg.get("nvdEnabled", fallback["tools"]["containerScanning"]["nvdEnabled"]),
-                "nvdApiKey": container_scanning_cfg.get("nvdApiKey", fallback["tools"]["containerScanning"]["nvdApiKey"]),
-                "ghsaEnabled": container_scanning_cfg.get("ghsaEnabled", fallback["tools"]["containerScanning"]["ghsaEnabled"]),
-                "ghsaApiKey": container_scanning_cfg.get("ghsaApiKey", fallback["tools"]["containerScanning"]["ghsaApiKey"]),
-                "argusEnabled": container_scanning_cfg.get("argusEnabled", fallback["tools"]["containerScanning"]["argusEnabled"]),
-                "argusApiKey": container_scanning_cfg.get("argusApiKey", fallback["tools"]["containerScanning"]["argusApiKey"]),
+            "container_scanning": {
+                "enabled": container_scanning_cfg.get("enabled", fallback["tools"]["container_scanning"]["enabled"]),
+                "autoRerunEnabled": container_scanning_cfg.get("autoRerunEnabled", fallback["tools"]["container_scanning"]["autoRerunEnabled"]),
+                "rerunScheduleType": container_scanning_cfg.get("rerunScheduleType", fallback["tools"]["container_scanning"]["rerunScheduleType"]),
+                "rerunScheduleValue": container_scanning_cfg.get("rerunScheduleValue", fallback["tools"]["container_scanning"]["rerunScheduleValue"]),
+                "scanConcurrency": container_scanning_cfg.get("scanConcurrency", fallback["tools"]["container_scanning"]["scanConcurrency"]),
+                "nvdEnabled": container_scanning_cfg.get("nvdEnabled", fallback["tools"]["container_scanning"]["nvdEnabled"]),
+                "nvdApiKey": container_scanning_cfg.get("nvdApiKey", fallback["tools"]["container_scanning"]["nvdApiKey"]),
+                "ghsaEnabled": container_scanning_cfg.get("ghsaEnabled", fallback["tools"]["container_scanning"]["ghsaEnabled"]),
+                "ghsaApiKey": container_scanning_cfg.get("ghsaApiKey", fallback["tools"]["container_scanning"]["ghsaApiKey"]),
+                "argusEnabled": container_scanning_cfg.get("argusEnabled", fallback["tools"]["container_scanning"]["argusEnabled"]),
+                "argusApiKey": container_scanning_cfg.get("argusApiKey", fallback["tools"]["container_scanning"]["argusApiKey"]),
             },
-            "codeScanning": {
-                "enabled": code_scanning.get("enabled", fallback["tools"]["codeScanning"]["enabled"]),
-                "scanConcurrency": code_scanning.get("scanConcurrency", fallback["tools"]["codeScanning"]["scanConcurrency"]),
-                "rulesets": code_scanning.get("rulesets", fallback["tools"]["codeScanning"]["rulesets"]),
-                "autoRerunEnabled": code_scanning.get("autoRerunEnabled", fallback["tools"]["codeScanning"]["autoRerunEnabled"]),
-                "rerunScheduleType": code_scanning.get("rerunScheduleType", fallback["tools"]["codeScanning"]["rerunScheduleType"]),
-                "rerunScheduleValue": code_scanning.get("rerunScheduleValue", fallback["tools"]["codeScanning"]["rerunScheduleValue"]),
+            "code_scanning": {
+                "enabled": code_scanning.get("enabled", fallback["tools"]["code_scanning"]["enabled"]),
+                "scanConcurrency": code_scanning.get("scanConcurrency", fallback["tools"]["code_scanning"]["scanConcurrency"]),
+                "rulesets": code_scanning.get("rulesets", fallback["tools"]["code_scanning"]["rulesets"]),
+                "autoRerunEnabled": code_scanning.get("autoRerunEnabled", fallback["tools"]["code_scanning"]["autoRerunEnabled"]),
+                "rerunScheduleType": code_scanning.get("rerunScheduleType", fallback["tools"]["code_scanning"]["rerunScheduleType"]),
+                "rerunScheduleValue": code_scanning.get("rerunScheduleValue", fallback["tools"]["code_scanning"]["rerunScheduleValue"]),
             },
-            "secrets": {
-                "enabled": secrets.get("enabled", fallback["tools"]["secrets"]["enabled"]),
+            "secret_scanning": {
+                "enabled": secrets.get("enabled", fallback["tools"]["secret_scanning"]["enabled"]),
                 "scanConcurrency": secrets.get(
-                    "scanConcurrency", fallback["tools"]["secrets"]["scanConcurrency"]
+                    "scanConcurrency", fallback["tools"]["secret_scanning"]["scanConcurrency"]
                 ),
-                "scanDepth": secrets.get("scanDepth", fallback["tools"]["secrets"]["scanDepth"]),
-                "scanHistoryWindow": secrets.get("scanHistoryWindow", fallback["tools"]["secrets"]["scanHistoryWindow"]),
-                "aiReviewEnabled": secrets.get("aiReviewEnabled", fallback["tools"]["secrets"]["aiReviewEnabled"]),
-                "aiApiKey": secrets.get("aiApiKey", fallback["tools"]["secrets"]["aiApiKey"]),
+                "scanDepth": secrets.get("scanDepth", fallback["tools"]["secret_scanning"]["scanDepth"]),
+                "scanHistoryWindow": secrets.get("scanHistoryWindow", fallback["tools"]["secret_scanning"]["scanHistoryWindow"]),
+                "aiReviewEnabled": secrets.get("aiReviewEnabled", fallback["tools"]["secret_scanning"]["aiReviewEnabled"]),
+                "aiApiKey": secrets.get("aiApiKey", fallback["tools"]["secret_scanning"]["aiApiKey"]),
                 "autoRerunEnabled": secrets.get(
-                    "autoRerunEnabled", fallback["tools"]["secrets"]["autoRerunEnabled"]
+                    "autoRerunEnabled", fallback["tools"]["secret_scanning"]["autoRerunEnabled"]
                 ),
                 "rerunScheduleType": secrets.get(
-                    "rerunScheduleType", fallback["tools"]["secrets"]["rerunScheduleType"]
+                    "rerunScheduleType", fallback["tools"]["secret_scanning"]["rerunScheduleType"]
                 ),
                 "rerunScheduleValue": secrets.get(
-                    "rerunScheduleValue", fallback["tools"]["secrets"]["rerunScheduleValue"]
+                    "rerunScheduleValue", fallback["tools"]["secret_scanning"]["rerunScheduleValue"]
                 ),
             },
-            "iacSecurity": {
-                "enabled": iac_security.get("enabled", fallback["tools"]["iacSecurity"]["enabled"]),
+            "iac_scanning": {
+                "enabled": iac_security.get("enabled", fallback["tools"]["iac_scanning"]["enabled"]),
             },
         },
         # Runner config
@@ -282,21 +302,21 @@ def app_config_to_env(config: dict[str, Any]) -> dict[str, str]:
 
     tools = config.get("tools") if isinstance(config.get("tools"), dict) else {}
 
-    dependencies = tools.get("dependencies") if isinstance(tools.get("dependencies"), dict) else {}
+    dependencies = tools.get("dependencies_scanning") if isinstance(tools.get("dependencies_scanning"), dict) else {}
     env["SCA_ENABLED"] = "true" if dependencies.get("enabled", False) else "false"
     env["SCA_AUTO_RERUN_ENABLED"] = "true" if dependencies.get("autoRerunEnabled", False) else "false"
     env["SCA_RERUN_SCHEDULE_TYPE"] = str(dependencies.get("rerunScheduleType") or "simple")
     env["SCA_RERUN_SCHEDULE_VALUE"] = str(dependencies.get("rerunScheduleValue") or "02:00")
     env["SCA_SCAN_CONCURRENCY"] = str(dependencies.get("scanConcurrency") or "4")
 
-    container_scanning_cfg = tools.get("containerScanning") if isinstance(tools.get("containerScanning"), dict) else {}
+    container_scanning_cfg = tools.get("container_scanning") if isinstance(tools.get("container_scanning"), dict) else {}
     env["CONTAINER_SCANNING_ENABLED"] = "true" if container_scanning_cfg.get("enabled", False) else "false"
     env["CONTAINER_SCANNING_AUTO_RERUN_ENABLED"] = "true" if container_scanning_cfg.get("autoRerunEnabled", False) else "false"
     env["CONTAINER_SCANNING_RERUN_SCHEDULE_TYPE"] = str(container_scanning_cfg.get("rerunScheduleType") or "simple")
     env["CONTAINER_SCANNING_RERUN_SCHEDULE_VALUE"] = str(container_scanning_cfg.get("rerunScheduleValue") or "02:00")
     env["CONTAINER_SCAN_CONCURRENCY"] = str(container_scanning_cfg.get("scanConcurrency") or "4")
 
-    code_scanning = tools.get("codeScanning") if isinstance(tools.get("codeScanning"), dict) else {}
+    code_scanning = tools.get("code_scanning") if isinstance(tools.get("code_scanning"), dict) else {}
     env["SAST_ENABLED"] = "true" if code_scanning.get("enabled", False) else "false"
     env["SAST_SCAN_CONCURRENCY"] = str(code_scanning.get("scanConcurrency") or "4")
     rulesets = code_scanning.get("rulesets") or ["p/owasp-top-ten", "p/cwe-top-25"]
@@ -305,7 +325,7 @@ def app_config_to_env(config: dict[str, Any]) -> dict[str, str]:
     env["SAST_RERUN_SCHEDULE_TYPE"] = str(code_scanning.get("rerunScheduleType") or "simple")
     env["SAST_RERUN_SCHEDULE_VALUE"] = str(code_scanning.get("rerunScheduleValue") or "02:00")
 
-    secrets = tools.get("secrets") if isinstance(tools.get("secrets"), dict) else {}
+    secrets = tools.get("secret_scanning") if isinstance(tools.get("secret_scanning"), dict) else {}
     env["SECRETS_ENABLED"] = "true" if secrets.get("enabled", True) else "false"
     scan_concurrency = str(secrets.get("scanConcurrency") or "4")
     env["SECRET_SCANNER_CONCURRENCY"] = scan_concurrency
@@ -317,7 +337,7 @@ def app_config_to_env(config: dict[str, Any]) -> dict[str, str]:
     env["SECRETS_RERUN_SCHEDULE_TYPE"] = str(secrets.get("rerunScheduleType") or "simple")
     env["SECRETS_RERUN_SCHEDULE_VALUE"] = str(secrets.get("rerunScheduleValue") or "02:00")
 
-    iac_security = tools.get("iacSecurity") if isinstance(tools.get("iacSecurity"), dict) else {}
+    iac_security = tools.get("iac_scanning") if isinstance(tools.get("iac_scanning"), dict) else {}
     env["IAC_SECURITY_ENABLED"] = "true" if iac_security.get("enabled", False) else "false"
 
     return env
@@ -342,7 +362,7 @@ def _redact_config(config: dict[str, Any]) -> dict[str, Any]:
     if isinstance(tools, dict):
         tools_copy = {**tools}
 
-        for tool_name in ("codeScanning", "dependencies", "containerScanning", "secrets"):
+        for tool_name in ("code_scanning", "dependencies_scanning", "container_scanning", "secret_scanning"):
             tool_cfg = tools_copy.get(tool_name)
             if not isinstance(tool_cfg, dict):
                 continue
@@ -370,7 +390,7 @@ def write_app_config(config: dict[str, Any], event_type: str = "settings.updated
     run_db(_query)
 
     # Log config change to audit trail
-    from src.settings.audit import record_event
+    from src.settings.audit_stream.service import record_event
     record_event(
         action=event_type,
         metadata=_redact_config(config),
@@ -395,7 +415,7 @@ def get_app_config_env_value(key: str) -> str:
 
 
 def _read_source_connections() -> list[dict[str, Any]]:
-    from src.settings.sources_store import list_connections_with_secrets
+    from src.sources.store import list_connections_with_secrets
     try:
         return list_connections_with_secrets()
     except Exception:
@@ -579,15 +599,15 @@ def org_has_source_connections(org: str, categories: list[str] | None = None) ->
 
 def get_secret_scanner_config() -> dict[str, str]:
     config = read_app_config()
-    secrets_tool = (config.get("tools") or {}).get("secrets") or {}
-    concurrency = str(secrets_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("SECRET_SCANNER_CONCURRENCY") or get_app_config_env_value("SECRETS_SCAN_CONCURRENCY") or "4"
-    scan_depth = str(secrets_tool.get("scanDepth") or "").strip().lower() or "light"
+    secret_scanning_tool = (config.get("tools") or {}).get("secret_scanning") or {}
+    concurrency = str(secret_scanning_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("SECRET_SCANNER_CONCURRENCY") or get_app_config_env_value("SECRETS_SCAN_CONCURRENCY") or "4"
+    scan_depth = str(secret_scanning_tool.get("scanDepth") or "").strip().lower() or "light"
     # Migrate any retired legacy depth value to the closest current depth.
     if scan_depth == "ai_enhanced":
         scan_depth = "deep"
     if scan_depth not in ("light", "deep"):
         scan_depth = "light"
-    history_window = str(secrets_tool.get("scanHistoryWindow") or "all").strip()
+    history_window = str(secret_scanning_tool.get("scanHistoryWindow") or "all").strip()
     _window_days = {"30d": 30, "90d": 90, "180d": 180, "365d": 365}
     scan_start_date = ""
     if history_window in _window_days:
@@ -601,14 +621,14 @@ def get_secret_scanner_config() -> dict[str, str]:
 
 def get_dependencies_scanner_config() -> dict[str, str]:
     config = read_app_config()
-    deps_tool = (config.get("tools") or {}).get("dependencies") or {}
+    deps_tool = (config.get("tools") or {}).get("dependencies_scanning") or {}
     concurrency = str(deps_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("SCA_SCAN_CONCURRENCY") or "4"
     return {"concurrency": concurrency}
 
 
 def get_container_scanner_config() -> dict[str, str]:
     config = read_app_config()
-    ct_tool = (config.get("tools") or {}).get("containerScanning") or {}
+    ct_tool = (config.get("tools") or {}).get("container_scanning") or {}
     concurrency = str(ct_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("CONTAINER_SCAN_CONCURRENCY") or "4"
     return {
         "concurrency": concurrency,
@@ -623,7 +643,7 @@ def get_container_scanner_config() -> dict[str, str]:
 
 def get_code_scanning_scanner_config() -> dict[str, str]:
     config = read_app_config()
-    cs_tool = (config.get("tools") or {}).get("codeScanning") or {}
+    cs_tool = (config.get("tools") or {}).get("code_scanning") or {}
     concurrency = str(cs_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("SAST_SCAN_CONCURRENCY") or "4"
     rulesets_val = cs_tool.get("rulesets")
     if isinstance(rulesets_val, list):

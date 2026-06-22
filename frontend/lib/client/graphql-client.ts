@@ -4,8 +4,8 @@ import { GraphQLClient, ClientError } from "graphql-request"
 // absolute URL.  Resolve against window.location.origin in the browser.
 const GQL_ENDPOINT =
   typeof window !== "undefined"
-    ? `${window.location.origin}/api/graphql`
-    : "/api/graphql"
+    ? `${window.location.origin}/api/v1/graphql`
+    : "/api/v1/graphql"
 
 const CSRF_COOKIE_NAME = "__Host-csrf"
 

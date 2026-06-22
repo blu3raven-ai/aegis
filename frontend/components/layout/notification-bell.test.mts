@@ -7,7 +7,6 @@ const ROOT = join(import.meta.dirname, "../..")
 const src = readFileSync(join(ROOT, "components/layout/NotificationBell.tsx"), "utf8")
 const drawer = readFileSync(join(ROOT, "components/layout/NotificationDrawer.tsx"), "utf8")
 const notifBody = readFileSync(join(ROOT, "components/layout/NotificationsTabBody.tsx"), "utf8")
-const activityBody = readFileSync(join(ROOT, "components/shared/activity/ActivityTabBody.tsx"), "utf8")
 
 describe("NotificationBell", () => {
   it("opens a drawer rather than navigating to /notifications", () => {
@@ -30,9 +29,14 @@ describe("NotificationBell", () => {
 })
 
 describe("NotificationDrawer", () => {
-  it("renders both tab bodies as the drawer's content", () => {
-    assert.ok(drawer.includes("NotificationsTabBody"), "renders NotificationsTabBody for Notifications tab")
-    assert.ok(drawer.includes("ActivityTabBody"), "renders ActivityTabBody for Activity tab")
+  it("is a single Notifications panel — no Activity tab", () => {
+    assert.ok(drawer.includes("NotificationsTabBody"), "renders NotificationsTabBody")
+    assert.ok(!drawer.includes("ActivityTabBody"), "no Activity tab in the drawer")
+    assert.ok(!drawer.includes('role="tablist"'), "no tab bar")
+  })
+  it("provides a 'View all' link to the Inbox history route", () => {
+    assert.ok(drawer.includes('href="/inbox/history"'), "footer links to /inbox/history")
+    assert.ok(drawer.includes("View all"), "footer label present")
   })
   it("does not link to /notifications (the drawer is the only notifications surface)", () => {
     assert.ok(!drawer.includes('href="/notifications"'), "should not link to the deleted /notifications page")
@@ -41,20 +45,9 @@ describe("NotificationDrawer", () => {
     assert.ok(drawer.includes("Escape"), "should dismiss on Escape")
     assert.ok(drawer.includes("mousedown"), "should dismiss on outside click")
   })
-  it("delegates fetching to the tab bodies — no inline fetchNotifications or listActivity in drawer", () => {
+  it("delegates fetching to the notifications body — no inline fetchNotifications or listActivity in drawer", () => {
     assert.ok(!drawer.includes("fetchNotifications"), "drawer should not call fetchNotifications directly")
     assert.ok(!drawer.includes("listActivity"), "drawer should not call listActivity directly")
-  })
-})
-
-describe("Drawer Activity tab body — peek surface for the /activity page", () => {
-  it("composes the shared catch-up, chips, and feed", () => {
-    assert.ok(activityBody.includes("CatchUpBanner"), "renders CatchUpBanner")
-    assert.ok(activityBody.includes("QuickFilterChips"), "renders QuickFilterChips")
-    assert.ok(activityBody.includes("ActivityFeed"), "renders ActivityFeed")
-  })
-  it("retains the deep-link to /activity for the full-page audit view", () => {
-    assert.ok(activityBody.includes('href="/activity"'), "should provide deep-link to /activity")
   })
 })
 

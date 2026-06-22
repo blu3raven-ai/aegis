@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { saveAccountSettings } from "@/lib/client/settings-api"
 import { Modal } from "./Modal"
@@ -37,19 +38,17 @@ export function UsernameModal({
   return (
     <Modal open={open} title="Change username" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-            Username
-          </label>
+        <FormField label="Username" htmlFor="account-username" error={error ?? undefined}>
           <Input
+            id="account-username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
             autoFocus
+            invalid={!!error}
           />
-        </div>
-        {error && <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>}
+        </FormField>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" size="md" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" size="md" isLoading={isPending} disabled={isPending || !username.trim()}>

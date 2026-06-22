@@ -31,6 +31,27 @@ export function GlobalSaveBar() {
     }
   }, [])
 
+  // Center the bar over the main content area, not the full viewport — the
+  // sidebar offsets content to the right, and it can collapse, so track the
+  // live <main> bounds rather than assuming a fixed width.
+  const [bounds, setBounds] = useState<{ left: number; width: number } | null>(null)
+  useEffect(() => {
+    const main = document.querySelector("main[data-app-scroll]") as HTMLElement | null
+    if (!main) return
+    const update = () => {
+      const r = main.getBoundingClientRect()
+      setBounds({ left: r.left, width: r.width })
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(main)
+    window.addEventListener("resize", update)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener("resize", update)
+    }
+  }, [])
+
   const visible = anyDirty || showSaved || !!error
   if (!visible) return null
 
@@ -41,7 +62,10 @@ export function GlobalSaveBar() {
       : "Unsaved changes"
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4">
+    <div
+      className="pointer-events-none fixed bottom-4 z-40 flex justify-center px-4"
+      style={bounds ? { left: bounds.left, width: bounds.width } : { left: 0, right: 0 }}
+    >
       <div
         role="region"
         aria-label="Unsaved changes"

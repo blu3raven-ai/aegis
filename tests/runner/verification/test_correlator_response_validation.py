@@ -34,7 +34,7 @@ def _findings_two_scanners(repo: str = "acme__widget") -> list[dict]:
         {
             "id": "f1",
             "repository": repo,
-            "scanner": "secrets",
+            "scanner": "secret_scanning",
             "severity": "high",
             "rule": "aws-secret-key",
             "file": "cfg.env",

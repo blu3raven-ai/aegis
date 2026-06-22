@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
 
-export function JenkinsLibrarySteps({ sourceId, aegisUrl }: { sourceId: string; aegisUrl: string }) {
+export function JenkinsLibrarySteps({ aegisUrl }: { aegisUrl: string }) {
   const [copied, setCopied] = useState(false);
 
   const snippet = `@Library('aegis@v0.2.5') _
@@ -14,7 +14,6 @@ pipeline {
         aegisScan(
           aegisUrl: '${aegisUrl}',
           apiKey: env.AEGIS_API_KEY,
-          sourceId: '${sourceId || "<your-source-id>"}'
         )
       }
     }

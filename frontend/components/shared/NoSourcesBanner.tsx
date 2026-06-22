@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { Card } from "@/components/ui/Card"
 
 interface NoSourcesBannerProps {
   sourceLabel: string
@@ -14,7 +15,7 @@ interface NoSourcesBannerProps {
  */
 export function NoSourcesBanner({ sourceLabel, sourceHref, toolLabel }: NoSourcesBannerProps) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+    <Card padding="none" className="rounded-2xl p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
       <div className="mx-auto max-w-md text-center">
         {/* Icon */}
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)]/10">
@@ -57,6 +58,6 @@ export function NoSourcesBanner({ sourceLabel, sourceHref, toolLabel }: NoSource
           Add {sourceLabel} Connection
         </Link>
       </div>
-    </div>
+    </Card>
   )
 }

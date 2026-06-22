@@ -180,7 +180,7 @@ def test_get_severity_counts_filters_by_tool():
     assert cs["high"] == 0
     assert cs["total"] == 1
 
-    dep = get_severity_counts([org], tool="dependencies")
+    dep = get_severity_counts([org], tool="dependencies_scanning")
     assert dep["high"] == 1
     assert dep["critical"] == 0
     assert dep["total"] == 1

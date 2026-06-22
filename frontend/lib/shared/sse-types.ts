@@ -1,5 +1,5 @@
 export interface ScanProgressEvent {
-  tool: "dependencies" | "code_scanning" | "secrets" | "container_scanning"
+  tool: "dependencies_scanning" | "code_scanning" | "secret_scanning" | "container_scanning" | "iac_scanning"
   org: string
   runId: string
   progress: {
@@ -26,6 +26,13 @@ export interface ScanFailedEvent {
   org: string
   runId: string
   error: string
+}
+
+export interface ScanCancelledEvent {
+  scanId: string
+  scannerTypes: string[]
+  org: string
+  repoId: string
 }
 
 export interface SourceSyncedEvent {
@@ -59,6 +66,7 @@ export type SSEEventMap = {
   "scan.progress": ScanProgressEvent
   "scan.completed": ScanCompletedEvent
   "scan.failed": ScanFailedEvent
+  "scan.cancelled": ScanCancelledEvent
   "source.synced": SourceSyncedEvent
   "runner.status": RunnerStatusEvent
   "notification.new": NotificationNewEvent

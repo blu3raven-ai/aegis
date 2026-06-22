@@ -90,7 +90,7 @@ def _scanner_coverage_rule_dict(**overrides) -> dict:
         "conditions": {},
         "action": {
             "type": "require_scanners",
-            "required_scanners": ["dependencies", "code_scanning", "secrets"],
+            "required_scanners": ["dependencies_scanning", "code_scanning", "secret_scanning"],
         },
         "created_by": "test-user",
         "created_at": None,
@@ -134,7 +134,7 @@ def test_create_scanner_coverage_rule_with_require_scanners_action():
         "name": "Production needs all scanners",
         "action": {
             "type": "require_scanners",
-            "required_scanners": ["dependencies", "code_scanning", "secrets"],
+            "required_scanners": ["dependencies_scanning", "code_scanning", "secret_scanning"],
         },
     }
     with _with_permission(True), patch("src.rules.router.store") as mock_store:
@@ -179,7 +179,7 @@ def test_create_scanner_coverage_rule_rejects_invalid_action_with_422():
         "org_id": _ORG,
         "category": "scanner_coverage",
         "name": "Bogus",
-        "action": {"required_scanners": ["dependencies"]},  # missing `type`
+        "action": {"required_scanners": ["dependencies_scanning"]},  # missing `type`
     }
     with _with_permission(True), patch("src.rules.router.store") as mock_store:
         resp = client.post("/api/v1/rules", json=body)
@@ -194,7 +194,7 @@ def test_create_scanner_coverage_rule_requires_manage_permission():
         "org_id": _ORG,
         "category": "scanner_coverage",
         "name": "x",
-        "action": {"type": "require_scanners", "required_scanners": ["dependencies"]},
+        "action": {"type": "require_scanners", "required_scanners": ["dependencies_scanning"]},
     }
     with _with_permission(False):
         resp = client.post("/api/v1/rules", json=body)
@@ -592,13 +592,13 @@ def test_summary_counts_open_scanner_coverage_violations_as_coverage_gaps():
         session.add(Rule(
             id="cov-rule-1", org_id=org, category="scanner_coverage",
             name="cov-1", description=None, enabled=True, priority=100,
-            conditions={}, action={"type": "require_scanners", "required_scanners": ["dependencies"]},
+            conditions={}, action={"type": "require_scanners", "required_scanners": ["dependencies_scanning"]},
             created_by="test-user", created_at=now, updated_at=now,
         ))
         session.add(Rule(
             id="cov-rule-2", org_id=org, category="scanner_coverage",
             name="cov-2", description=None, enabled=True, priority=100,
-            conditions={}, action={"type": "require_scanners", "required_scanners": ["secrets"]},
+            conditions={}, action={"type": "require_scanners", "required_scanners": ["secret_scanning"]},
             created_by="test-user", created_at=now, updated_at=now,
         ))
         session.add(Rule(

@@ -53,7 +53,7 @@ def _repo(**overrides) -> RuleRepoSubject:
         repo_labels=["production"],
         tier="production",
         archived=False,
-        scanners_with_coverage=["dependencies"],
+        scanners_with_coverage=["dependencies_scanning"],
         image_registry=None,
         last_scanned_at=None,
     )
@@ -65,7 +65,7 @@ def _scan_result(**overrides) -> RuleScanResultSubject:
     defaults: dict = dict(
         scan_id="scan-1",
         repo_id="repo-1",
-        tool="dependencies",
+        tool="dependencies_scanning",
         finished_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
         age_days=10,
     )
@@ -189,7 +189,7 @@ def test_evaluate_condition_scan_result_age_gte():
 
 
 def test_evaluate_condition_scan_result_tool_eq():
-    s = _scan_result(tool="secrets")
+    s = _scan_result(tool="secret_scanning")
     cond = {"field": "tool", "op": "eq", "value": "secrets"}
     assert evaluate_condition(cond, s, get_scan_result_field) is True
 
