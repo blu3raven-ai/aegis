@@ -3,6 +3,7 @@
 import Link from "next/link"
 import type { EpssTopFinding } from "@/lib/client/epss-api"
 import { formatPercentile, epssBucket } from "@/lib/client/epss-api"
+import { Card } from "@/components/ui/Card"
 
 interface EpssExposureWidgetProps {
   findings: EpssTopFinding[]
@@ -25,7 +26,7 @@ export function EpssExposureWidget({ findings }: EpssExposureWidgetProps) {
   const hasData = findings.length > 0
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <div className="flex items-start justify-between gap-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           EPSS Exposure
@@ -71,6 +72,6 @@ export function EpssExposureWidget({ findings }: EpssExposureWidgetProps) {
           or wait for the daily job.
         </p>
       )}
-    </div>
+    </Card>
   )
 }

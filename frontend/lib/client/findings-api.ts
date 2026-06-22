@@ -1,17 +1,27 @@
-/**
- * TypeScript client for the aggregated findings REST API (Phase 55).
- *
- * Mirrors the fetch pattern used by other clients in lib/client/. Server
- * fields stay snake_case in the wire format; we expose a camelCase
- * `epssPercentile` mirror on each row so the EPSS column rendered by
- * EpssScoreCell (Phase 54) keeps working unchanged when the backend
- * starts populating it.
- */
+/** Client for the findings surface (list, summary, mutations, assignees). */
 
 import { apiClient } from "./api-client.ts"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low"
-export type FindingScanner = "deps" | "container" | "sast" | "secrets" | "iac"
+export type FindingScanner =
+  | "dependencies_scanning"
+  | "code_scanning"
+  | "container_scanning"
+  | "secret_scanning"
+  | "iac_scanning"
+
+// The findings API returns the public shorthand (deps/sast/secrets/container);
+// the rest of the UI keys off the internal scanner names, so normalise on read.
+const SCANNER_SHORTHAND_TO_NAME: Record<string, FindingScanner> = {
+  deps: "dependencies_scanning",
+  sast: "code_scanning",
+  secrets: "secret_scanning",
+  container: "container_scanning",
+}
+
+function normalizeScanner(scanner: string): string {
+  return SCANNER_SHORTHAND_TO_NAME[scanner] ?? scanner
+}
 export type FindingState = "open" | "closed" | "dismissed" | "fixed"
 export type FindingVerdict = "confirmed" | "needs_verify" | "possible" | "ruled_out"
 export type FindingVerdictFilter = FindingVerdict | "legacy" | "all"
@@ -40,17 +50,14 @@ export interface Finding {
   org_id: string
   created_at: string | null
   updated_at: string | null
-  /** EPSS percentile in [0.0, 1.0]. Mirrors `epss_percentile` from the server. */
+  /** EPSS percentile in [0.0, 1.0]. */
   epssPercentile?: number | null
   /** True when this finding's CVE is in CISA KEV. */
   kev?: boolean | null
   /** First CWE id (e.g. "CWE-502") from KEV metadata. */
   cwe?: string | null
-  /** Server-supplied risk score 0-100. Null when no scoring path has populated it. */
   risk_score?: number | null
-  /** Assigned reviewer's user id, or null when unassigned. */
   assignee_user_id?: string | null
-  /** LLM verification verdict, or null for pre-verification ("legacy") findings. */
   verdict?: FindingVerdict | null
 }
 
@@ -66,7 +73,6 @@ export interface ListFindingsParams {
   direction?: FindingSortDirection
   limit?: number
   page?: number
-  /** ISO8601 timestamp — only findings first seen at or after this point. */
   first_seen_after?: string
   cwe?: string
   kev?: boolean
@@ -92,22 +98,109 @@ export interface FindingsListResponse {
   verdict_counts?: VerdictCounts
 }
 
-interface RawFinding extends Omit<Finding, "epssPercentile"> {
-  epss_percentile?: number | null
+interface GqlFindingRow {
+  id: string
+  scanner: string
+  severity: string | null
+  state: string | null
+  title: string | null
+  cve: string | null
+  package: string | null
+  filePath: string | null
+  line: number | null
+  repo: string | null
+  orgId: string
+  createdAt: string | null
+  updatedAt: string | null
+  epssPercentile: number | null
+  kev: boolean | null
+  cwe: string | null
+  riskScore: number | null
+  assigneeUserId: string | null
+  verdict: FindingVerdict | null
 }
 
-interface RawFindingsListResponse {
-  findings: RawFinding[]
-  next_cursor: string | null
-  total_count: number
-  verdict_counts?: VerdictCounts
+interface GqlVerdictCounts {
+  total: number
+  confirmed: number
+  needsVerify: number
+  possible: number
+  ruledOut: number
+  legacy: number
 }
 
-function normalizeFinding(raw: RawFinding): Finding {
-  const { epss_percentile, ...rest } = raw
+interface GqlFindingsSearchResponse {
+  findings: {
+    search: {
+      findings: GqlFindingRow[]
+      nextCursor: string | null
+      totalCount: number
+      verdictCounts: GqlVerdictCounts | null
+    }
+  }
+}
+
+const CSRF_COOKIE_NAME = "__Host-csrf"
+
+function readCsrfCookie(): string | null {
+  if (typeof document === "undefined") return null
+  for (const pair of document.cookie.split(";").map((p) => p.trim())) {
+    const [k, ...rest] = pair.split("=")
+    if (k === CSRF_COOKIE_NAME) return rest.join("=")
+  }
+  return null
+}
+
+async function postGql<T>(
+  operationName: string,
+  query: string,
+  variables?: Record<string, unknown>,
+): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  }
+  const csrf = readCsrfCookie()
+  if (csrf !== null) headers["X-CSRF-Token"] = csrf
+
+  const res = await fetch("/api/v1/graphql", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ operationName, query, variables }),
+    credentials: "include",
+  })
+  if (!res.ok) throw new Error(`${operationName} failed: ${res.status}`)
+  const body = (await res.json()) as { data?: T; errors?: { message: string }[] }
+  if (body.errors && body.errors.length > 0) {
+    throw new Error(body.errors[0].message)
+  }
+  if (!body.data) {
+    throw new Error(`${operationName} returned no data`)
+  }
+  return body.data
+}
+
+function fromGqlRow(row: GqlFindingRow): Finding {
   return {
-    ...rest,
-    epssPercentile: epss_percentile ?? null,
+    id: row.id,
+    scanner: normalizeScanner(row.scanner),
+    severity: row.severity,
+    state: row.state,
+    title: row.title,
+    cve: row.cve,
+    package: row.package,
+    file_path: row.filePath,
+    line: row.line,
+    repo: row.repo,
+    org_id: row.orgId,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
+    epssPercentile: row.epssPercentile,
+    kev: row.kev,
+    cwe: row.cwe,
+    risk_score: row.riskScore,
+    assignee_user_id: row.assigneeUserId,
+    verdict: row.verdict,
   }
 }
 
@@ -122,14 +215,9 @@ export interface FindingsSummary {
   fixed_window_days: number
 }
 
-export async function listFindingsSummary(orgId: string): Promise<FindingsSummary> {
-  if (!orgId) {
-    throw new Error("findings-api: orgId is required")
-  }
-  const qs = new URLSearchParams({ org_id: orgId })
-  return apiClient<FindingsSummary>(`/api/v1/findings/summary?${qs.toString()}`, {
-    cache: "no-store",
-  })
+/** Cross-scanner KPI counts for the findings page. */
+export async function listFindingsSummary(): Promise<FindingsSummary> {
+  return apiClient<FindingsSummary>("/api/v1/findings/summary")
 }
 
 /** Reasons accepted by the backend. Keep in sync with backend/src/shared/lifecycle.VALID_DISMISS_REASONS. */
@@ -142,18 +230,20 @@ export const DISMISS_REASONS = [
 
 export type DismissReason = (typeof DISMISS_REASONS)[number]
 
+/** Dismiss a single finding with a reason and optional comment. */
 export async function dismissFinding(
   findingId: number,
   reason: DismissReason,
   comment?: string,
 ): Promise<{ ok: true }> {
-  return apiClient<{ ok: true }>(`/api/v1/findings/${findingId}/dismiss`, {
-    method: "POST",
-    body: JSON.stringify({ reason, comment }),
+  return apiClient<{ ok: true }>(`/api/v1/findings/${findingId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ state: "dismissed", dismiss_reason: reason, comment }),
     headers: { "Content-Type": "application/json" },
   })
 }
 
+/** Dismiss many findings at once. Throws if `ids` is empty; the backend caps the batch. */
 export async function bulkDismissFindings(
   ids: number[],
   reason: DismissReason,
@@ -162,9 +252,9 @@ export async function bulkDismissFindings(
   if (ids.length === 0) {
     throw new Error("findings-api: bulkDismissFindings requires at least one id")
   }
-  return apiClient<{ ok: true; updated: number }>(`/api/v1/findings/bulk_dismiss`, {
-    method: "POST",
-    body: JSON.stringify({ ids, reason, comment }),
+  return apiClient<{ ok: true; updated: number }>(`/api/v1/findings`, {
+    method: "PATCH",
+    body: JSON.stringify({ ids, state: "dismissed", dismiss_reason: reason, comment }),
     headers: { "Content-Type": "application/json" },
   })
 }
@@ -174,15 +264,18 @@ export async function updateFindingAssignee(
   findingId: number,
   assigneeUserId: string | null,
 ): Promise<{ ok: true; finding: Finding }> {
-  const raw = await apiClient<{ ok: true; finding: RawFinding }>(
-    `/api/v1/findings/${findingId}/assignee`,
+  const raw = await apiClient<{ ok: true; finding: Finding | null }>(
+    `/api/v1/findings/${findingId}`,
     {
       method: "PATCH",
       body: JSON.stringify({ assignee_user_id: assigneeUserId }),
       headers: { "Content-Type": "application/json" },
     },
   )
-  return { ok: raw.ok, finding: normalizeFinding(raw.finding) }
+  if (!raw.finding) {
+    throw new Error("findings-api: server returned no finding payload")
+  }
+  return { ok: raw.ok, finding: raw.finding }
 }
 
 export interface AssignableUser {
@@ -191,19 +284,50 @@ export interface AssignableUser {
   email: string
 }
 
+/** Search active users for the finding-assignee picker. Empty/null query returns the first `limit`. */
 export async function listAssignableUsers(
   q: string | null = null,
   limit = 20,
 ): Promise<AssignableUser[]> {
-  const qs = new URLSearchParams()
-  if (q) qs.set("q", q)
-  qs.set("limit", String(limit))
+  const qs = new URLSearchParams({ limit: String(limit) })
+  const trimmed = q?.trim()
+  if (trimmed) qs.set("q", trimmed)
   const data = await apiClient<{ users: AssignableUser[] }>(
     `/api/v1/findings/assignable-users?${qs.toString()}`,
-    { cache: "no-store" },
   )
   return data.users
 }
+
+const FINDINGS_SEARCH_QUERY = `query FindingsSearch(
+  $org: String, $severity: String, $scanner: String, $state: String,
+  $q: String, $cve: String, $repo: String,
+  $sort: String!, $direction: String!,
+  $limit: Int!, $cursor: String, $page: Int!,
+  $firstSeenAfter: String, $cwe: String, $kev: Boolean,
+  $epssMin: Float, $riskScoreMin: Int,
+  $assignee: String, $verdict: String
+) {
+  findings {
+    search(
+      org: $org, severity: $severity, scanner: $scanner, state: $state,
+      q: $q, cve: $cve, repo: $repo,
+      sort: $sort, direction: $direction,
+      limit: $limit, cursor: $cursor, page: $page,
+      firstSeenAfter: $firstSeenAfter, cwe: $cwe, kev: $kev,
+      epssMin: $epssMin, riskScoreMin: $riskScoreMin,
+      assignee: $assignee, verdict: $verdict
+    ) {
+      findings {
+        id scanner severity state title cve package filePath line
+        repo orgId createdAt updatedAt epssPercentile kev cwe
+        riskScore assigneeUserId verdict
+      }
+      nextCursor
+      totalCount
+      verdictCounts { total confirmed needsVerify possible ruledOut legacy }
+    }
+  }
+}`
 
 export async function listFindings(
   params: ListFindingsParams,
@@ -212,39 +336,49 @@ export async function listFindings(
     throw new Error("findings-api: orgId is required")
   }
 
-  const qs = new URLSearchParams()
-  qs.set("org_id", params.orgId)
-  if (params.severity && params.severity.length > 0) {
-    qs.set("severity", params.severity.join(","))
+  const variables = {
+    org: params.orgId,
+    severity: params.severity?.length ? params.severity.join(",") : null,
+    scanner: params.scanner?.length ? params.scanner.join(",") : null,
+    state: params.state?.length ? params.state.join(",") : null,
+    q: params.q ?? null,
+    cve: params.cve ?? null,
+    repo: params.repo ?? null,
+    sort: params.sort ?? "severity",
+    direction: params.direction ?? "desc",
+    limit: params.limit ?? 50,
+    cursor: null,
+    page: params.page ?? 1,
+    firstSeenAfter: params.first_seen_after ?? null,
+    cwe: params.cwe ?? null,
+    kev: params.kev ?? null,
+    epssMin: params.epss_min ?? null,
+    riskScoreMin: params.risk_score_min ?? null,
+    assignee: params.assignee ?? null,
+    verdict: params.verdict ?? null,
   }
-  if (params.scanner && params.scanner.length > 0) {
-    qs.set("scanner", params.scanner.join(","))
-  }
-  if (params.state && params.state.length > 0) {
-    qs.set("state", params.state.join(","))
-  }
-  if (params.q) qs.set("q", params.q)
-  if (params.cve) qs.set("cve", params.cve)
-  if (params.repo) qs.set("repo", params.repo)
-  if (params.sort) qs.set("sort", params.sort)
-  if (params.direction) qs.set("direction", params.direction)
-  if (params.first_seen_after) qs.set("first_seen_after", params.first_seen_after)
-  if (params.cwe) qs.set("cwe", params.cwe)
-  if (params.kev) qs.set("kev", "true")
-  if (params.epss_min != null) qs.set("epss_min", String(params.epss_min))
-  if (params.risk_score_min != null) qs.set("risk_score_min", String(params.risk_score_min))
-  if (params.assignee) qs.set("assignee", params.assignee)
-  if (params.verdict) qs.set("verdict", params.verdict)
-  if (params.limit != null) qs.set("limit", String(params.limit))
-  if (params.page != null) qs.set("page", String(params.page))
 
-  const url = `/api/v1/findings?${qs.toString()}`
-
-  const raw = await apiClient<RawFindingsListResponse>(url, { cache: "no-store" })
+  const data = await postGql<GqlFindingsSearchResponse>(
+    "FindingsSearch",
+    FINDINGS_SEARCH_QUERY,
+    variables,
+  )
+  const r = data.findings.search
+  const vc = r.verdictCounts
+  const verdict_counts: VerdictCounts | undefined = vc
+    ? {
+        total: vc.total,
+        confirmed: vc.confirmed,
+        needs_verify: vc.needsVerify,
+        possible: vc.possible,
+        ruled_out: vc.ruledOut,
+        legacy: vc.legacy,
+      }
+    : undefined
   return {
-    findings: raw.findings.map(normalizeFinding),
-    next_cursor: raw.next_cursor,
-    total_count: raw.total_count,
-    verdict_counts: raw.verdict_counts,
+    findings: r.findings.map(fromGqlRow),
+    next_cursor: r.nextCursor,
+    total_count: r.totalCount,
+    verdict_counts,
   }
 }

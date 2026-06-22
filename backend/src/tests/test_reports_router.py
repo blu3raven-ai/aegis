@@ -10,13 +10,15 @@ os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
 from src.reports.router import router as reports_router  # noqa: E402
 
 
 _VIEWER_PERMS = {"view_findings"}
 
 
-def _make_app(*, with_user: bool = True) -> FastAPI:
+def _make_app(*, with_user: bool = True, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(reports_router)
 
@@ -27,6 +29,8 @@ def _make_app(*, with_user: bool = True) -> FastAPI:
             request.state.user_org = "test-org"
             return await call_next(request)
 
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
     return app
 
 
@@ -59,12 +63,11 @@ def test_create_findings_report_json():
         return ["asset-1"]
 
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
         patch("src.reports.router.generate_report", return_value=fake),
         patch("src.reports.router.get_download_url", return_value="https://minio.example/reports/42.json?sig=abc"),
     ):
-        resp = TestClient(app).post("/api/v1/reports", json={
+        resp = TestClient(app).post("/api/v1/findings/reports", json={
             "report_type": "findings",
             "format": "json",
         })
@@ -78,9 +81,9 @@ def test_create_findings_report_json():
 
 
 def test_create_report_no_permission():
-    app = _make_app()
-    with patch("src.settings.router._resolve_effective_permissions", return_value=set()):
-        resp = TestClient(app).post("/api/v1/reports", json={
+    app = _make_app(allow_view_findings=False)
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False):
+        resp = TestClient(app).post("/api/v1/findings/reports", json={
             "report_type": "findings",
             "format": "json",
         })
@@ -94,11 +97,10 @@ async def _fake_resolve(request):
 def test_list_reports_empty():
     app = _make_app()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
         patch("src.reports.router.list_reports", return_value=([], 0)),
     ):
-        resp = TestClient(app).get("/api/v1/reports")
+        resp = TestClient(app).get("/api/v1/findings/reports")
     assert resp.status_code == 200
     body = resp.json()
     assert body["reports"] == []
@@ -108,31 +110,28 @@ def test_list_reports_empty():
 def test_get_report_not_found():
     app = _make_app()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
         patch("src.reports.router.get_report", return_value=None),
     ):
-        resp = TestClient(app).get("/api/v1/reports/999")
+        resp = TestClient(app).get("/api/v1/findings/reports/999")
     assert resp.status_code == 404
 
 
 def test_delete_report():
     app = _make_app()
     with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
         patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
         patch("src.reports.router.delete_report", return_value=True),
     ):
-        resp = TestClient(app).delete("/api/v1/reports/5")
+        resp = TestClient(app).delete("/api/v1/findings/reports/5")
     assert resp.status_code == 204
 
 
 def test_create_posture_report_csv_rejected():
     app = _make_app()
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS):
-        resp = TestClient(app).post("/api/v1/reports", json={
-            "report_type": "posture",
-            "format": "csv",
-        })
+    resp = TestClient(app).post("/api/v1/findings/reports", json={
+        "report_type": "posture",
+        "format": "csv",
+    })
     assert resp.status_code == 422
     assert "CSV" in resp.json()["detail"]

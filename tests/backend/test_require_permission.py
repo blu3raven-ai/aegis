@@ -93,3 +93,64 @@ def test_has_role_permission_without_request():
         assert has_role_permission("viewer", None, "manage_sources") is False
 
     assert has_role_permission(None, None, "manage_sources") is False
+
+
+def _make_caller_request(**state_fields):
+    import types
+
+    return types.SimpleNamespace(state=types.SimpleNamespace(**state_fields))
+
+
+def test_caller_context_returns_expected_shape():
+    from src.authz.enforcement.dependencies import caller_context
+
+    request = _make_caller_request(
+        user_sub="usr_42",
+        user_role="admin",
+        user_role_id="role_admin",
+        tier="pro",
+    )
+
+    ctx = caller_context(request)
+
+    assert ctx == {
+        "user_id": "usr_42",
+        "role": "admin",
+        "role_id": "role_admin",
+        "tier": "pro",
+        "request": request,
+    }
+
+
+def test_caller_context_defaults_for_missing_state():
+    from src.authz.enforcement.dependencies import caller_context
+
+    request = _make_caller_request()
+
+    ctx = caller_context(request)
+
+    assert ctx["user_id"] is None
+    assert ctx["role"] == "viewer"
+    assert ctx["role_id"] is None
+    assert ctx["tier"] == "community"
+    assert ctx["request"] is request
+
+
+def test_caller_context_does_not_require_interactive_session():
+    """Unlike require_caller_identity, caller_context is callable for API-key
+    identities (no request.state.session). This is the discriminator that lets
+    it compose with Permission(...) on admin endpoints reachable by machine
+    callers."""
+    from src.authz.enforcement.dependencies import caller_context
+
+    request = _make_caller_request(
+        user_sub="api_key:42",
+        user_role="admin",
+        user_role_id="role_admin",
+    )
+    assert getattr(request.state, "session", None) is None
+
+    ctx = caller_context(request)
+
+    assert ctx["user_id"] == "api_key:42"
+    assert ctx["role"] == "admin"

@@ -18,7 +18,7 @@ def test_scan_started_emit_helper_publishes(mock_get_pub):
         org_id="acme-org",
         scan_id="scan-abc",
         repo_id="repo-1",
-        scanner_type="dependencies",
+        scanner_type="dependencies_scanning",
         trigger_event_id="01HXYZ",
     )
 
@@ -41,7 +41,7 @@ def test_emit_helper_swallows_publish_failure(mock_get_pub, caplog):
         org_id="acme-org",
         scan_id="scan-abc",
         repo_id="repo-1",
-        scanner_type="dependencies",
+        scanner_type="dependencies_scanning",
         trigger_event_id="01HXYZ",
     )
 
@@ -92,7 +92,7 @@ def test_manual_rescan_emit_helper_publishes(mock_get_pub):
     emit_manual_rescan(
         org_id="acme-org",
         repo_id="repo-1",
-        scanner_type="dependencies",
+        scanner_type="dependencies_scanning",
         full=False,
         source_component="dependencies.router",
     )
@@ -113,7 +113,7 @@ def test_manual_rescan_emit_helper_swallows_failure(mock_get_pub):
     from src.shared.event_emit_helpers import emit_manual_rescan
     # Must not raise
     emit_manual_rescan(
-        org_id="acme-org", repo_id="repo-1", scanner_type="dependencies",
+        org_id="acme-org", repo_id="repo-1", scanner_type="dependencies_scanning",
         source_component="dependencies.router",
     )
 
@@ -127,7 +127,7 @@ def test_finding_created_emit_helper_publishes(mock_get_pub):
     emit_finding_created(
         org_id="acme-org",
         finding={"id": "F-1", "severity": "critical", "scanner_type": "deps"},
-        scanner_type="dependencies",
+        scanner_type="dependencies_scanning",
         source_component="dependencies.scanner",
     )
 
@@ -149,7 +149,7 @@ def test_finding_created_emit_helper_swallows_failure(mock_get_pub):
     emit_finding_created(
         org_id="acme-org",
         finding={"id": "F-2", "severity": "high"},
-        scanner_type="dependencies",
+        scanner_type="dependencies_scanning",
         source_component="dependencies.scanner",
     )
 
@@ -185,18 +185,18 @@ def test_full_dual_write_sequence_does_not_raise(mock_get_pub):
     # Simulate user-triggered manual rescan
     emit_manual_rescan(
         org_id="acme-org", repo_id="repo-1",
-        scanner_type="dependencies", source_component="dependencies.router",
+        scanner_type="dependencies_scanning", source_component="dependencies.router",
     )
     # Simulate orchestrator starting the scan
     emit_scan_started(
         org_id="acme-org", scan_id="scan-1", repo_id="repo-1",
-        scanner_type="dependencies", trigger_event_id="01HX",
+        scanner_type="dependencies_scanning", trigger_event_id="01HX",
     )
     # Simulate per-finding emit
     emit_finding_created(
         org_id="acme-org",
         finding={"id": "F-1", "severity": "critical"},
-        scanner_type="dependencies",
+        scanner_type="dependencies_scanning",
         source_component="dependencies.scanner",
     )
     # Simulate scan completion
@@ -228,16 +228,16 @@ def test_full_dual_write_sequence_emits_correct_event_types(mock_get_pub):
 
     emit_manual_rescan(
         org_id="acme-org", repo_id="repo-1",
-        scanner_type="dependencies", source_component="dependencies.router",
+        scanner_type="dependencies_scanning", source_component="dependencies.router",
     )
     emit_scan_started(
         org_id="acme-org", scan_id="scan-1", repo_id="repo-1",
-        scanner_type="dependencies", trigger_event_id="01HX",
+        scanner_type="dependencies_scanning", trigger_event_id="01HX",
     )
     emit_finding_created(
         org_id="acme-org",
         finding={"id": "F-1", "severity": "critical"},
-        scanner_type="dependencies",
+        scanner_type="dependencies_scanning",
         source_component="dependencies.scanner",
     )
     emit_scan_completed(

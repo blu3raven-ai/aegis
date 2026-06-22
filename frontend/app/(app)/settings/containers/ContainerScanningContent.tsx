@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import type { AppConfig } from "@/lib/server/app-config"
 import { useContainerScanningPrerequisites } from "../PrerequisitePanel"
 import { formatSettingsError, getSettings } from "@/lib/client/settings-api"
-import { listSourceConnections } from "@/lib/client/sources-api"
+import { listSourceConnections } from "@/lib/client/source-connections-api"
 import type { SourceConnection } from "@/lib/shared/sources-types"
 import { ContainerScanningSetupForm } from "./ContainerScanningSetupForm"
 import { NoSourcesBanner } from "@/components/shared/NoSourcesBanner"
@@ -101,10 +101,10 @@ export function ContainerScanningContent({ canEdit = true }: { canEdit?: boolean
         />
       ) : (
       <ContainerScanningSetupForm
-        initialAutoRerunEnabled={settings.tools.containerScanning.autoRerunEnabled}
-        initialRerunScheduleType={settings.tools.containerScanning.rerunScheduleType}
-        initialRerunScheduleValue={settings.tools.containerScanning.rerunScheduleValue}
-        initialScanConcurrency={settings.tools.containerScanning.scanConcurrency}
+        initialAutoRerunEnabled={settings.tools.container_scanning.autoRerunEnabled}
+        initialRerunScheduleType={settings.tools.container_scanning.rerunScheduleType}
+        initialRerunScheduleValue={settings.tools.container_scanning.rerunScheduleValue}
+        initialScanConcurrency={settings.tools.container_scanning.scanConcurrency}
         prereqItems={prereqItems}
         prereqRefreshing={prereqRefreshing}
         refreshPrereqs={refreshPrereqs}
@@ -112,33 +112,33 @@ export function ContainerScanningContent({ canEdit = true }: { canEdit?: boolean
         passingCount={passingCount}
         totalCount={totalCount}
         canEdit={canEdit}
-        initialNvdEnabled={settings.tools.containerScanning.nvdEnabled ?? true}
-        initialNvdApiKey={settings.tools.containerScanning.nvdApiKey ?? ""}
-        initialNvdApiKeyHint={settings.tools.containerScanning.nvdApiKeyHint ?? ""}
-        initialGhsaEnabled={settings.tools.containerScanning.ghsaEnabled ?? false}
-        initialGhsaApiKey={settings.tools.containerScanning.ghsaApiKey ?? ""}
-        initialGhsaApiKeyHint={settings.tools.containerScanning.ghsaApiKeyHint ?? ""}
+        initialNvdEnabled={settings.tools.container_scanning.nvdEnabled ?? true}
+        initialNvdApiKey={settings.tools.container_scanning.nvdApiKey ?? ""}
+        initialNvdApiKeyHint={settings.tools.container_scanning.nvdApiKeyHint ?? ""}
+        initialGhsaEnabled={settings.tools.container_scanning.ghsaEnabled ?? false}
+        initialGhsaApiKey={settings.tools.container_scanning.ghsaApiKey ?? ""}
+        initialGhsaApiKeyHint={settings.tools.container_scanning.ghsaApiKeyHint ?? ""}
         initialArgusEnabled={false}
         initialArgusApiKey=""
         initialArgusApiKeyHint=""
         scaAdvisoryConfig={{
-          nvdEnabled: settings.tools.dependencies.nvdEnabled ?? false,
-          ghsaEnabled: settings.tools.dependencies.ghsaEnabled ?? false,
+          nvdEnabled: settings.tools.dependencies_scanning.nvdEnabled ?? false,
+          ghsaEnabled: settings.tools.dependencies_scanning.ghsaEnabled ?? false,
         }}
         scaHasAdvisory={
-          ((settings.tools.dependencies.nvdEnabled ?? false) && !!(settings.tools.dependencies.nvdApiKeyHint || settings.tools.dependencies.nvdApiKey || "")) ||
-          ((settings.tools.dependencies.ghsaEnabled ?? false) && !!(settings.tools.dependencies.ghsaApiKeyHint || settings.tools.dependencies.ghsaApiKey || ""))
+          ((settings.tools.dependencies_scanning.nvdEnabled ?? false) && !!(settings.tools.dependencies_scanning.nvdApiKeyHint || settings.tools.dependencies_scanning.nvdApiKey || "")) ||
+          ((settings.tools.dependencies_scanning.ghsaEnabled ?? false) && !!(settings.tools.dependencies_scanning.ghsaApiKeyHint || settings.tools.dependencies_scanning.ghsaApiKey || ""))
         }
         onCopyAdvisory={async () => {
           try {
-            await apiClient("/api/v1/settings/copy-advisory-sources", {
+            await apiClient("/api/v1/enrichment/advisory-sources/copy", {
               method: "POST",
-              body: { source: "dependencies", target: "containerScanning" },
+              body: { source: "dependencies_scanning", target: "container_scanning" },
             })
           } catch (err) {
             if (err instanceof ApiClientError) {
-              const body = err.body as { error?: string } | null
-              throw new Error(body?.error || "Copy failed")
+              const body = err.body as { detail?: string; error?: string } | null
+              throw new Error(body?.detail || body?.error || "Copy failed")
             }
             throw err
           }

@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.shared.event_bus import Event as SseEvent, EventBus
-from src.webhooks import event_listener as listener_mod
-from src.webhooks.event_listener import WebhookScanDispatcher
+from src.connectors.webhooks import event_listener as listener_mod
+from src.connectors.webhooks.event_listener import WebhookScanDispatcher
 
 
 _FLAG = "AEGIS_WEBHOOK_DISPATCH_ENABLED"
@@ -88,7 +88,6 @@ def _pr_opened_event(repo_id: str = "acme-org/repo") -> SseEvent:
     )
 
 
-# ── start()/stop() & feature flag ─────────────────────────────────────────────
 
 def test_start_is_noop_when_flag_unset(monkeypatch):
     monkeypatch.delenv(_FLAG, raising=False)
@@ -122,7 +121,7 @@ def test_start_refuses_when_bus_has_no_loop(monkeypatch, caplog):
     monkeypatch.setenv(_FLAG, "true")
     bus = EventBus()  # no set_loop()
     d = WebhookScanDispatcher(event_bus=bus)
-    with caplog.at_level("ERROR", logger="src.webhooks.event_listener"):
+    with caplog.at_level("ERROR", logger="src.connectors.webhooks.event_listener"):
         d.start()
     assert d._listener_token is None  # noqa: SLF001
     assert len(bus._listeners) == 0  # noqa: SLF001
@@ -167,14 +166,13 @@ def test_on_event_drops_when_loop_not_set(caplog):
     d = WebhookScanDispatcher(event_bus=bus)
     # Intentionally bypass start(): no loop captured.
     assert d._loop is None  # noqa: SLF001
-    with caplog.at_level("ERROR", logger="src.webhooks.event_listener"), \
+    with caplog.at_level("ERROR", logger="src.connectors.webhooks.event_listener"), \
          patch.object(listener_mod, "submit_ci_scan", new=AsyncMock()) as mock_submit:
         d._on_event(_push_event())  # noqa: SLF001
     mock_submit.assert_not_called()
     assert any("no loop captured" in r.message for r in caplog.records)
 
 
-# ── dispatch happy paths ──────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_dispatch_push_submits_scan_with_branch():
@@ -263,6 +261,82 @@ async def test_dispatch_resolves_gitlab_nested_group():
 
 
 @pytest.mark.asyncio
+async def test_dispatch_resolves_azure_devops_two_segment():
+    """Lock the partition split for Azure DevOps. The normalizer emits a
+    2-segment ``project/repo`` repo_id (the org/account segment is not
+    reliably present in service-hook payloads), so ADO takes the same
+    ``partition`` path as GitHub/Bitbucket. The test fails if someone
+    later moves ``azure_devops`` to the GitLab/rpartition branch by
+    mistake — partition and rpartition produce the SAME tuple here but
+    the wrong branch would diverge as soon as a 3-segment shape arrived."""
+    asset = _FakeAsset(id="asset-ado-split", external_ref="azure_devops:platform/payments-api")
+    bus = EventBus()
+    d = WebhookScanDispatcher(event_bus=bus)
+
+    event = _push_event(repo_id="platform/payments-api", source_component="integrations.azure_devops")
+
+    repo_ref_calls: list[tuple[str, str, str]] = []
+
+    def _capturing_repo_ref(source_type: str, owner: str, name: str) -> str:
+        repo_ref_calls.append((source_type, owner, name))
+        return f"{source_type}:{owner}/{name}"
+
+    with (
+        patch.object(listener_mod, "get_session", _fake_session_yielding(asset)),
+        patch.object(listener_mod, "repo_ref", side_effect=_capturing_repo_ref),
+        patch.object(listener_mod, "find_inflight_scan", new=AsyncMock(return_value=None)),
+        patch.object(listener_mod, "submit_ci_scan", new=AsyncMock()) as mock_submit,
+    ):
+        await d._dispatch(event)  # noqa: SLF001
+
+    mock_submit.assert_awaited_once()
+    assert mock_submit.call_args.kwargs["source_id"] == "asset-ado-split"
+    # The partition branch must produce owner=platform, name=payments-api.
+    assert repo_ref_calls == [("azure_devops", "platform", "payments-api")]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_resolves_jenkins_nested_folder_path():
+    """Lock the rpartition split for Jenkins. The normalizer emits
+    ``<controller_host>/<job_name>`` and ``job_name`` itself may carry a
+    folder path (``folder/sub/my-pipeline``), so the listener must take
+    the rpartition branch to keep the trailing segment as the job-name.
+    The test fails if someone regresses Jenkins to ``partition``."""
+    asset = _FakeAsset(
+        id="asset-jen-split",
+        external_ref="jenkins:jenkins.example.com/folder/sub/my-pipeline",
+    )
+    bus = EventBus()
+    d = WebhookScanDispatcher(event_bus=bus)
+
+    event = _push_event(
+        repo_id="jenkins.example.com/folder/sub/my-pipeline",
+        source_component="integrations.jenkins",
+    )
+
+    repo_ref_calls: list[tuple[str, str, str]] = []
+
+    def _capturing_repo_ref(source_type: str, owner: str, name: str) -> str:
+        repo_ref_calls.append((source_type, owner, name))
+        return f"{source_type}:{owner}/{name}"
+
+    with (
+        patch.object(listener_mod, "get_session", _fake_session_yielding(asset)),
+        patch.object(listener_mod, "repo_ref", side_effect=_capturing_repo_ref),
+        patch.object(listener_mod, "find_inflight_scan", new=AsyncMock(return_value=None)),
+        patch.object(listener_mod, "submit_ci_scan", new=AsyncMock()) as mock_submit,
+    ):
+        await d._dispatch(event)  # noqa: SLF001
+
+    mock_submit.assert_awaited_once()
+    assert mock_submit.call_args.kwargs["source_id"] == "asset-jen-split"
+    # rpartition must produce owner=jenkins.example.com/folder/sub, name=my-pipeline.
+    assert repo_ref_calls == [
+        ("jenkins", "jenkins.example.com/folder/sub", "my-pipeline"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dispatch_calls_find_inflight_with_empty_org():
     """The dispatcher passes org="" to find_inflight_scan to mirror the CI
     router. The find_inflight_scan helper currently ignores the arg; keeping
@@ -346,7 +420,7 @@ async def test_dispatch_swallows_audit_recorder_failure(caplog):
         patch.object(listener_mod, "find_inflight_scan", new=AsyncMock(return_value=None)),
         patch.object(listener_mod, "submit_ci_scan", new=AsyncMock(return_value=fake_submission)) as mock_submit,
         patch.object(listener_mod, "get_recorder", return_value=_FailingRecorder()),
-        caplog.at_level("ERROR", logger="src.webhooks.event_listener"),
+        caplog.at_level("ERROR", logger="src.connectors.webhooks.event_listener"),
     ):
         await d._dispatch(_push_event())  # noqa: SLF001
 
@@ -354,13 +428,12 @@ async def test_dispatch_swallows_audit_recorder_failure(caplog):
     assert any("audit_log" in r.message for r in caplog.records)
 
 
-# ── PR scan-queue cleanup parity ─────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_dispatch_pr_opened_cancels_older_queued():
-    """Mirror trigger_router.py:98 — a PR-triggered webhook scan must cancel
-    older queued scans for the same (asset, pr_number) so push spam on a PR
-    branch doesn't pile up behind the in-flight scan."""
+    """Mirror the CI router — a PR-triggered webhook scan must cancel older
+    queued scans for the same (asset, pr_number) so push spam on a PR branch
+    doesn't pile up behind the in-flight scan."""
     asset = _FakeAsset(id="asset-pr-cancel", external_ref="github:acme-org/repo")
     bus = EventBus()
     d = WebhookScanDispatcher(event_bus=bus)
@@ -431,7 +504,7 @@ async def test_dispatch_swallows_cancel_older_failure(caplog):
         patch.object(listener_mod, "submit_ci_scan", new=AsyncMock(return_value=fake_submission)),
         patch.object(listener_mod, "cancel_older_queued_for_pr", new=failing_cancel),
         patch.object(listener_mod, "get_recorder", return_value=_CapturingRecorder()),
-        caplog.at_level("ERROR", logger="src.webhooks.event_listener"),
+        caplog.at_level("ERROR", logger="src.connectors.webhooks.event_listener"),
     ):
         await d._dispatch(_pr_opened_event())  # noqa: SLF001
 
@@ -443,7 +516,6 @@ async def test_dispatch_swallows_cancel_older_failure(caplog):
     assert isinstance(recorded["actor"], ActorInfo)
 
 
-# ── skip paths ────────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_dispatch_skips_when_asset_missing(caplog):
@@ -454,7 +526,7 @@ async def test_dispatch_skips_when_asset_missing(caplog):
         patch.object(listener_mod, "get_session", _fake_session_yielding(None)),
         patch.object(listener_mod, "find_inflight_scan", new=AsyncMock(return_value=None)),
         patch.object(listener_mod, "submit_ci_scan", new=AsyncMock()) as mock_submit,
-        caplog.at_level("INFO", logger="src.webhooks.event_listener"),
+        caplog.at_level("INFO", logger="src.connectors.webhooks.event_listener"),
     ):
         await d._dispatch(_push_event())  # noqa: SLF001
 
@@ -473,7 +545,7 @@ async def test_dispatch_skips_when_inflight_scan_exists(caplog):
         patch.object(listener_mod, "get_session", _fake_session_yielding(asset)),
         patch.object(listener_mod, "find_inflight_scan", new=AsyncMock(return_value=existing)),
         patch.object(listener_mod, "submit_ci_scan", new=AsyncMock()) as mock_submit,
-        caplog.at_level("INFO", logger="src.webhooks.event_listener"),
+        caplog.at_level("INFO", logger="src.connectors.webhooks.event_listener"),
     ):
         await d._dispatch(_push_event())  # noqa: SLF001
 
@@ -492,7 +564,7 @@ async def test_dispatch_skips_when_asset_archived(caplog):
         patch.object(listener_mod, "get_session", _fake_session_yielding(asset)),
         patch.object(listener_mod, "find_inflight_scan", new=AsyncMock(return_value=None)),
         patch.object(listener_mod, "submit_ci_scan", new=AsyncMock()) as mock_submit,
-        caplog.at_level("INFO", logger="src.webhooks.event_listener"),
+        caplog.at_level("INFO", logger="src.connectors.webhooks.event_listener"),
     ):
         await d._dispatch(_push_event())  # noqa: SLF001
 
@@ -519,14 +591,13 @@ async def test_dispatch_skips_push_with_no_after_sha(caplog):
         patch.object(listener_mod, "get_session", _fake_session_yielding(asset)),
         patch.object(listener_mod, "find_inflight_scan", new=AsyncMock(return_value=None)),
         patch.object(listener_mod, "submit_ci_scan", new=AsyncMock()) as mock_submit,
-        caplog.at_level("INFO", logger="src.webhooks.event_listener"),
+        caplog.at_level("INFO", logger="src.connectors.webhooks.event_listener"),
     ):
         await d._dispatch(event)  # noqa: SLF001
 
     mock_submit.assert_not_awaited()
 
 
-# ── irrelevant event types ────────────────────────────────────────────────────
 
 def test_on_event_ignores_irrelevant_types(monkeypatch):
     monkeypatch.setenv(_FLAG, "true")
@@ -540,7 +611,6 @@ def test_on_event_ignores_irrelevant_types(monkeypatch):
     mock_submit.assert_not_called()
 
 
-# ── exception isolation ──────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_dispatch_swallows_submit_ci_scan_exception(caplog):
@@ -554,7 +624,7 @@ async def test_dispatch_swallows_submit_ci_scan_exception(caplog):
         patch.object(listener_mod, "get_session", _fake_session_yielding(asset)),
         patch.object(listener_mod, "find_inflight_scan", new=AsyncMock(return_value=None)),
         patch.object(listener_mod, "submit_ci_scan", new=failing_submit),
-        caplog.at_level("ERROR", logger="src.webhooks.event_listener"),
+        caplog.at_level("ERROR", logger="src.connectors.webhooks.event_listener"),
     ):
         # _dispatch wraps _dispatch_unchecked in try/except; no exception should escape.
         await d._dispatch(_push_event())  # noqa: SLF001
@@ -563,7 +633,6 @@ async def test_dispatch_swallows_submit_ci_scan_exception(caplog):
     assert any("dispatch failed" in r.message for r in caplog.records)
 
 
-# ── async bridging via a real loop ───────────────────────────────────────────
 
 def test_async_bridge_runs_dispatch_on_loop(monkeypatch):
     """When start() runs in an async context the dispatcher captures the loop

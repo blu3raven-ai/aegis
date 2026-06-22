@@ -2,14 +2,13 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
 
-export function GitLabComponentSteps({ sourceId, aegisUrl }: { sourceId: string; aegisUrl: string }) {
+export function GitLabComponentSteps({ aegisUrl }: { aegisUrl: string }) {
   const [copied, setCopied] = useState(false);
 
   const snippet = `include:
   - component: gitlab.com/blu3raven-ai/aegis@v0.2.5
     inputs:
       aegis_url: ${aegisUrl}
-      source_id: ${sourceId || "<your-source-id>"}
 `;
 
   async function copy() {

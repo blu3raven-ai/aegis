@@ -213,9 +213,6 @@ class ProgressEmitter:
 
 TIMEOUT_CLONE: float = 300.0
 TIMEOUT_GIT_QUERY: float = 30.0
-TIMEOUT_GRYPE_DB_CHECK: float = 60.0
-TIMEOUT_GRYPE_DB_UPDATE: float = 600.0
-TIMEOUT_GRYPE_MATCH: float = 300.0
 TIMEOUT_SYFT_REPO: float = 600.0    # syft on git repo checkouts
 TIMEOUT_SYFT_IMAGE: float = 900.0   # syft on container images (larger)
 TIMEOUT_CDXGEN: float = 600.0

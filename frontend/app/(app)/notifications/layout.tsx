@@ -1,13 +1,12 @@
 "use client"
 
-import { usePathname, useRouter } from "next/navigation"
-import { useState } from "react"
+import { useRouter } from "next/navigation"
 
+import { useMountedPathname } from "@/lib/client/use-mounted-pathname"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Button } from "@/components/ui/Button"
 import { NavTabs } from "@/components/ui/NavTabs"
 import { NotificationsIcon } from "@/lib/shared/ui/page-icons"
-import { AddChannelModal } from "./AddChannelModal"
 
 const TABS = [
   { id: "channels", label: "Channels" },
@@ -24,12 +23,10 @@ const PLUS_ICON = (
 )
 
 export default function NotificationsLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
+  const pathname = useMountedPathname()
   const router = useRouter()
-  const [showAdd, setShowAdd] = useState(false)
 
-  // Derive active slug from the URL segment after /notifications/
-  const segments = pathname.split("/")
+  const segments = (pathname ?? "").split("/")
   const activeTab = (segments[2] as TabId) || "channels"
 
   return (
@@ -42,7 +39,7 @@ export default function NotificationsLayout({ children }: { children: React.Reac
           <Button
             variant="primary"
             size="sm"
-            onClick={() => setShowAdd(true)}
+            onClick={() => router.push("/integrations?category=notifications")}
             leadingIcon={PLUS_ICON}
           >
             Add channel
@@ -55,11 +52,10 @@ export default function NotificationsLayout({ children }: { children: React.Reac
         activeTab={activeTab}
         onChange={(next) => router.push(`/notifications/${next}`)}
         ariaLabel="Notifications sub-navigation"
+        containerClassName="sticky top-[var(--page-header-offset)] z-10"
       />
 
       {children}
-
-      <AddChannelModal open={showAdd} onClose={() => setShowAdd(false)} />
     </>
   )
 }

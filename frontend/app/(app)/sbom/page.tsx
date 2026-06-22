@@ -4,8 +4,10 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { LinkButton } from "@/components/ui/LinkButton"
 import { SbomIcon } from "@/lib/shared/ui/page-icons"
-import { listRepos, type RepoSummary } from "@/lib/client/repos-api"
+import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
 import { relativeTime } from "@/lib/shared/relative-time"
 import { EmptySbomState } from "@/components/shared/sbom/EmptySbomState"
 
@@ -98,13 +100,9 @@ export default function SbomIndexPage() {
         title="SBOM Explorer"
         description="Browse and export Software Bills of Materials for your repositories."
         controls={
-          <Link
-            href="/sbom/diff"
-            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm font-semibold text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
-          >
-            <span className="h-3.5 w-3.5 shrink-0">{DIFF_ICON}</span>
+          <LinkButton href="/sbom/diff" variant="secondary" size="md" leadingIcon={DIFF_ICON}>
             Compare manifests
-          </Link>
+          </LinkButton>
         }
       />
 
@@ -129,9 +127,10 @@ export default function SbomIndexPage() {
         {loading && repos.length === 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div
+              <Card
                 key={i}
-                className="h-[88px] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] motion-safe:animate-pulse"
+                padding="none"
+                className="h-[88px] rounded-xl motion-safe:animate-pulse"
               />
             ))}
           </div>

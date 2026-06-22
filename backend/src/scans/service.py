@@ -15,14 +15,14 @@ from src.pr_feedback.git_pr_providers import resolve_pr_provider
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SCANNERS = ["dependencies", "code_scanning", "container_scanning", "secrets", "iac"]
+_DEFAULT_SCANNERS = ["dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"]
 
 _SCANNER_JOB_TYPES: dict[str, str] = {
-    "dependencies":       "dependencies",
-    "code_scanning":      "code_scanning",
-    "container_scanning": "container_scanning",
-    "secrets":            "secrets",
-    "iac":                "iac",
+    "dependencies_scanning": "dependencies_scanning",
+    "code_scanning":         "code_scanning",
+    "container_scanning":    "container_scanning",
+    "secret_scanning":       "secret_scanning",
+    "iac_scanning":          "iac_scanning",
 }
 
 
@@ -39,8 +39,8 @@ def _dispatch_scanner_jobs(
     """Create one runner job per scanner type after the ScanRun row is committed."""
     from src.audit_log.recorder import ActorInfo, get_recorder
     from src.runner.jobs import create_job
-    from src.settings.llm import fetch_llm_config
-    from src.settings.llm_usage import daily_remaining
+    from src.settings.llm.service import fetch_llm_config
+    from src.settings.llm.usage import daily_remaining
     from src.shared.config import get_token_for_org
 
     token = get_token_for_org(org) or ""
@@ -88,7 +88,7 @@ def _dispatch_scanner_jobs(
         }
         if base_sha:
             env["BASE_SHA"] = base_sha
-        if scanner == "secrets":
+        if scanner == "secret_scanning":
             env["SCAN_DEPTH"] = "deep"
 
         create_job(job_type=job_type, org=org, run_id=run_id, env_vars=env)
@@ -179,78 +179,207 @@ def _parse_submitted_at(meta: dict[str, Any]) -> datetime:
     return datetime.now(timezone.utc)
 
 
+_REPO_SCANNERS = frozenset({"dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"})
+_IMAGE_SCANNERS = frozenset({"container_scanning"})
+_CLOUD_SCANNERS: frozenset[str] = frozenset()  # populated when cloud scanners exist
+
+
+class ScannerNotApplicableError(ValueError):
+    """Caller asked for a scanner that doesn't apply to this asset_type."""
+
+
+def _validate_scanners_for_asset_type(asset_type: str, scanners: list[str]) -> None:
+    valid = {"repo": _REPO_SCANNERS, "image": _IMAGE_SCANNERS, "cloud": _CLOUD_SCANNERS}.get(asset_type)
+    if valid is None:
+        raise ScannerNotApplicableError(f"unsupported asset_type: {asset_type!r}")
+    bad = [s for s in scanners if s not in valid]
+    if bad:
+        raise ScannerNotApplicableError(
+            f"scanner_types {bad} not applicable to asset_type={asset_type!r}; "
+            f"valid choices: {sorted(valid)}"
+        )
+
+
 async def submit_scan(
     asset_id: str,
-    commit_sha: str,
-    scanner_types: list[str] | None,
     user_id: str,
+    *,
+    commit_sha: str | None = None,
+    image_digest: str | None = None,
+    scanner_types: list[str] | None = None,
 ) -> ScanSubmission | None:
-    """Insert a queued scan_run for a user-triggered pre-release scan.
+    """Polymorphic manual-scan dispatcher — routes by Asset.type.
 
     Returns None if no Asset row exists for the given asset_id.
+    Raises ScannerNotApplicableError if scanner_types don't apply to the asset.
+    Raises NotImplementedError for asset types whose dispatch isn't wired yet.
     """
-    scanners = scanner_types or _DEFAULT_SCANNERS
-    scan_id = f"scan-{uuid.uuid4()}"
-    submitted_at = datetime.now(timezone.utc)
-
     async with get_session() as session:
         from src.db.models import Asset
-        # Derive runner dispatch params from the Asset.external_ref.
-        # Format is "github:<owner>/<name>".
         asset_row = (await session.execute(
             select(Asset).where(Asset.id == asset_id)
         )).scalar_one_or_none()
         if asset_row is None:
             return None
 
-        ext_ref = asset_row.external_ref or ""
-        # external_ref: "github:owner/name"
-        if ":" in ext_ref:
-            _, path = ext_ref.split(":", 1)
+        asset_type = asset_row.type
+
+        # Default scanner selection per asset type.
+        if scanner_types is None:
+            if asset_type == "repo":
+                scanners = _DEFAULT_SCANNERS
+            elif asset_type == "image":
+                scanners = ["container_scanning"]
+            elif asset_type == "cloud":
+                scanners = []
+            else:
+                raise ScannerNotApplicableError(f"unsupported asset_type: {asset_type!r}")
         else:
-            path = ext_ref
-        parts = path.split("/", 1)
-        owner = parts[0] if parts else ""
-        name = parts[1] if len(parts) > 1 else ""
-        repo_id = f"{owner}/{name}"
-        org = owner  # org_label for runner job dispatch
+            scanners = scanner_types
 
-        metadata = {
-            "commit_sha": commit_sha,
-            "repo_id": repo_id,
-            "org_label": org,
-            "scanner_types": scanners,
-            "submitted_by": user_id,
-            "submitted_at": submitted_at.isoformat(),
-            "source": "user",
-        }
+        _validate_scanners_for_asset_type(asset_type, scanners)
 
-        # tool="pre_release" identifies this row as a user-triggered scan envelope;
-        # produced findings carry their own tool values ("dependencies", etc.) and feed posture.
-        row = ScanRun(
-            id=scan_id,
-            tool="pre_release",
-            asset_id=asset_id,
-            status="queued",
-            started_at=None,
-            finished_at=None,
-            progress=None,
-            error=None,
-            metadata_json=metadata,
-        )
-        session.add(row)
-        await session.commit()
-        _dispatch_scanner_jobs(scan_id, repo_id, commit_sha, scanners, org)
+        if asset_type == "repo":
+            if commit_sha is None:
+                raise ScannerNotApplicableError("commit_sha is required for repo scans")
+            return await _submit_repo_scan(session, asset_row, commit_sha, scanners, user_id)
 
-        return ScanSubmission(
-            scan_id=scan_id,
-            repo_id=repo_id,
-            commit_sha=commit_sha,
-            scanner_types=scanners,
-            status="queued",
-            submitted_at=submitted_at,
-            submitted_by=user_id,
-        )
+        if asset_type == "image":
+            return await _submit_image_scan(session, asset_row, image_digest, scanners, user_id)
+
+        if asset_type == "cloud":
+            return await _submit_cloud_scan(session, asset_row, scanners, user_id)
+
+        raise ScannerNotApplicableError(f"unsupported asset_type: {asset_type!r}")
+
+
+async def _submit_repo_scan(
+    session,
+    asset_row,
+    commit_sha: str,
+    scanners: list[str],
+    user_id: str,
+) -> ScanSubmission:
+    scan_id = f"scan-{uuid.uuid4()}"
+    submitted_at = datetime.now(timezone.utc)
+
+    ext_ref = asset_row.external_ref or ""
+    if ":" in ext_ref:
+        _, path = ext_ref.split(":", 1)
+    else:
+        path = ext_ref
+    parts = path.split("/", 1)
+    owner = parts[0] if parts else ""
+    name = parts[1] if len(parts) > 1 else ""
+    repo_id = f"{owner}/{name}"
+    org = owner
+
+    metadata = {
+        "commit_sha": commit_sha,
+        "repo_id": repo_id,
+        "org_label": org,
+        "scanner_types": scanners,
+        "submitted_by": user_id,
+        "submitted_at": submitted_at.isoformat(),
+        "source": "user",
+    }
+
+    # tool="pre_release" identifies this row as a user-triggered scan envelope;
+    # produced findings carry their own tool values ("dependencies", etc.) and feed posture.
+    row = ScanRun(
+        id=scan_id,
+        tool="pre_release",
+        asset_id=asset_row.id,
+        status="queued",
+        started_at=None,
+        finished_at=None,
+        progress=None,
+        error=None,
+        metadata_json=metadata,
+    )
+    session.add(row)
+    await session.commit()
+    _dispatch_scanner_jobs(scan_id, repo_id, commit_sha, scanners, org)
+
+    return ScanSubmission(
+        scan_id=scan_id,
+        repo_id=repo_id,
+        commit_sha=commit_sha,
+        scanner_types=scanners,
+        status="queued",
+        submitted_at=submitted_at,
+        submitted_by=user_id,
+    )
+
+
+async def _submit_image_scan(
+    session,
+    asset_row,
+    image_digest: str | None,
+    scanners: list[str],
+    user_id: str,
+) -> ScanSubmission:
+    # Per-image runner dispatch is not wired — TODO.md tracks the follow-up.
+    # Until then, /scans/manual returns 501 for image assets (router translates).
+    raise NotImplementedError(
+        "per-image scan dispatch not yet wired; images are scanned org-wide by the scheduler"
+    )
+
+
+async def _submit_cloud_scan(
+    session,
+    asset_row,
+    scanners: list[str],
+    user_id: str,
+) -> ScanSubmission:
+    raise NotImplementedError(
+        "cloud scan dispatch not yet wired; no cloud connector or scanner exists today"
+    )
+
+
+async def record_byo_scan_run(
+    session,
+    *,
+    asset_id: str,
+    display_name: str,
+    scanner: str,
+    finding_counts: dict[str, int],
+    user_id: str,
+) -> str:
+    """Record a terminal ScanRun envelope for a Bring-Your-Own import.
+
+    BYO findings arrive out-of-band from an external scanner, so the envelope is
+    born ``completed`` — there is no queued→running lifecycle and, deliberately,
+    no runner job is dispatched (unlike the ``_submit_*_scan`` paths). The row
+    exists so a BYO import surfaces at ``/scans/{scan_id}`` and in the scan trail
+    alongside scanner-triggered runs.
+
+    The row is added to the caller's session but NOT committed; the caller commits
+    it atomically with the imported findings so an envelope never outlives a failed
+    import.
+    """
+    scan_id = f"scan-{uuid.uuid4()}"
+    now = datetime.now(timezone.utc)
+    metadata = {
+        "repo_id": display_name,
+        "scanner_types": [scanner],
+        "submitted_by": user_id,
+        "submitted_at": now.isoformat(),
+        "source": "byo",
+    }
+    row = ScanRun(
+        id=scan_id,
+        tool="byo_import",
+        asset_id=asset_id,
+        status="completed",
+        started_at=now,
+        finished_at=now,
+        progress={"finding_counts": finding_counts},
+        error=None,
+        metadata_json=metadata,
+    )
+    session.add(row)
+    return scan_id
 
 
 async def find_inflight_scan(*, org: str, source_id: str, commit_sha: str) -> ScanRun | None:
@@ -283,7 +412,14 @@ async def cancel_older_queued_for_pr(
     The SELECT-then-UPDATE is intentionally non-atomic; concurrent triggers may
     each observe and cancel the same set, but writing 'cancelled' twice is
     idempotent.
+
+    Also cancels the matching RunnerJob rows so the runner stops processing the
+    obsolete jobs. Without this, the runner runs each superseded scan to
+    completion, uploads results, posts /complete — and the backend's ingest
+    step drops the work because the ScanRun is already marked cancelled.
     """
+    from src.runner.jobs import cancel_jobs_for_scans
+
     async with get_session() as session:
         rows = (await session.execute(
             select(ScanRun.id)
@@ -299,10 +435,17 @@ async def cancel_older_queued_for_pr(
         await session.execute(
             update(ScanRun)
             .where(ScanRun.id.in_(rows))
-            .values(status="cancelled", cancelled_reason="superseded")
+            .values(
+                status="cancelled",
+                cancelled_reason="superseded",
+                finished_at=datetime.now(timezone.utc),
+            )
         )
         await session.commit()
-        return list(rows)
+
+    scan_ids = list(rows)
+    cancel_jobs_for_scans(scan_ids)
+    return scan_ids
 
 
 async def submit_ci_scan(
@@ -340,7 +483,7 @@ async def submit_ci_scan(
     async with get_session() as session:
         run = ScanRun(
             id=scan_id,
-            tool="dependencies",  # umbrella row — per-scanner sub-runs created by dispatch
+            tool="dependencies_scanning",  # umbrella row — per-scanner sub-runs created by dispatch
             asset_id=source_id,
             status="queued",
             triggered_by=triggered_by,
@@ -399,17 +542,102 @@ async def submit_ci_scan(
     )
 
 
-async def get_scan(scan_id: str, asset_id: str) -> ScanDetail | None:
-    """Read a scan_run, returning None if absent or not associated with the given asset.
+async def cancel_scan(
+    *,
+    scan_id: str,
+    asset_ids: list[str],
+    actor_user_id: str | None = None,
+) -> str | None:
+    """Cancel an active scan and stop the runner from processing it.
 
-    Callers that cannot provide an asset_id (e.g. the /scans/{id} read endpoint
-    which resolves auth via org) may pass asset_id=None to skip the asset filter
-    and rely solely on the org-level gate already applied at the router.
+    Returns:
+      * the scan_id when a transition fires
+      * "already_terminal" when the scan was already in a terminal state
+        (completed/failed/cancelled) — idempotent no-op
+      * None when the scan does not exist OR the caller has no scope on it
+        (callers must treat None as 404 to avoid leaking existence)
+
+    On a real transition, three things fire after the DB commit:
+      1. Cancel matching RunnerJob rows so the runner stops working on the
+         obsolete job at its next progress poll (without this the runner
+         runs to completion and the result gets dropped on ingest — see
+         cancel_older_queued_for_pr for the same pattern fixed in #795).
+      2. Record a `scan.cancelled` audit event with the caller's user_id
+         so the trail of who cancelled what is preserved for compliance.
+      3. Publish a `scan.cancelled` SSE event so other browser sessions
+         viewing the same scan refresh in real-time instead of waiting
+         for the next periodic refetch.
     """
+    from src.audit_log.recorder import ActorInfo, get_recorder
+    from src.runner.jobs import cancel_jobs_for_scans
+    from src.shared.event_bus import Event, get_event_bus
+
+    if not asset_ids:
+        return None
+
     async with get_session() as session:
-        stmt = select(ScanRun).where(ScanRun.id == scan_id)
-        if asset_id:
-            stmt = stmt.where(ScanRun.asset_id == asset_id)
+        row = (await session.execute(
+            select(ScanRun)
+            .where(ScanRun.id == scan_id)
+            .where(ScanRun.asset_id.in_(asset_ids))
+        )).scalar_one_or_none()
+        if row is None:
+            return None
+
+        if row.status in ("completed", "failed", "cancelled"):
+            return "already_terminal"
+
+        row.status = "cancelled"
+        row.cancelled_reason = "user"
+        row.finished_at = datetime.now(timezone.utc)
+        if not row.error:
+            row.error = "Cancelled by user"
+
+        meta: dict[str, Any] = row.metadata_json or {}
+        scanner_types = meta.get("scanner_types") or []
+        repo_id = meta.get("repo_id", "")
+        org = meta.get("org_label", "")
+        await session.commit()
+
+    cancel_jobs_for_scans([scan_id])
+
+    get_recorder().record(
+        action="scan.cancelled",
+        resource_type="scan_run",
+        resource_id=scan_id,
+        actor=ActorInfo(user_id=actor_user_id or "system"),
+        metadata={"scanner_types": scanner_types, "repo_id": repo_id, "org": org},
+    )
+
+    get_event_bus().publish_sync(Event(
+        event_type="scan.cancelled",
+        data={
+            "scanId": scan_id,
+            "scannerTypes": scanner_types,
+            "org": org,
+            "repoId": repo_id,
+        },
+    ))
+
+    return scan_id
+
+
+async def get_scan(scan_id: str, *, asset_ids: list[str]) -> ScanDetail | None:
+    """Read a scan_run scoped to the caller's accessible assets.
+
+    The scan must belong to one of the asset_ids the caller can see; otherwise
+    the function returns None. An empty asset_ids list is treated as "no
+    access" (fail-closed) — callers must resolve the caller's scope via
+    ``resolve_asset_ids_from_request`` before invoking.
+    """
+    if not asset_ids:
+        return None
+    async with get_session() as session:
+        stmt = (
+            select(ScanRun)
+            .where(ScanRun.id == scan_id)
+            .where(ScanRun.asset_id.in_(asset_ids))
+        )
         row = (await session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None
@@ -441,7 +669,7 @@ async def _verification_summary_for_scan(session, scan_id: str) -> dict[str, Any
 
     Returns None when the scan touched no findings.
     """
-    from sqlalchemy import distinct, func, select as sa_select
+    from sqlalchemy import distinct, select as sa_select
     from src.db.models import Finding, FindingEvent
 
     actor_prefix = f"{scan_id}:%"

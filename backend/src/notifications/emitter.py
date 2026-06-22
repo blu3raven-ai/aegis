@@ -9,7 +9,7 @@ import html
 import logging
 from typing import Any
 
-from src.notifications.store import emit_notification, emit_notification_to_all
+from src.notifications.store import emit_notification_to_all
 from src.shared.event_bus import Event, get_event_bus
 
 logger = logging.getLogger(__name__)
@@ -19,9 +19,9 @@ from src.shared.ttl_cache import TtlCache
 _user_cache = TtlCache(ttl_seconds=30)
 
 TOOL_LABELS = {
-    "dependencies": "Dependencies",
+    "dependencies_scanning": "Dependencies",
     "code_scanning": "Code Scanning",
-    "secrets": "Secrets",
+    "secret_scanning": "Secrets",
     "container_scanning": "Containers",
 }
 
@@ -86,7 +86,6 @@ def _publish_notification_sse(notif: dict[str, Any], require_admin: bool = False
     ))
 
 
-# ── Scan lifecycle ────────────────────────────────────────────────────────────
 
 
 def notify_scan_completed(
@@ -114,7 +113,7 @@ def notify_scan_completed(
 
     title = f"{label} scan completed"
     message = f"{label} scan for {org} completed — {summary}"
-    link = f"/{_tool_to_path(tool)}/dashboard"
+    link = f"/findings?scanner={tool}"
 
     try:
         user_ids = _get_active_user_ids()
@@ -138,7 +137,7 @@ def notify_scan_failed(tool: str, org: str, run_id: str, error: str) -> None:
     label = TOOL_LABELS.get(tool, tool)
     title = f"{label} scan failed"
     message = f"{label} scan for {org} failed: {html.escape(error[:200])}"
-    link = f"/{_tool_to_path(tool)}/dashboard"
+    link = f"/findings?scanner={tool}"
 
     try:
         user_ids = _get_active_user_ids()
@@ -157,7 +156,6 @@ def notify_scan_failed(tool: str, org: str, run_id: str, error: str) -> None:
         logger.warning("Failed to emit scan failed notification", exc_info=True)
 
 
-# ── Finding alerts ────────────────────────────────────────────────────────────
 
 
 def notify_new_critical_findings(
@@ -188,7 +186,7 @@ def notify_new_critical_findings(
     pkg = _finding_label(top)
     detail = f" — {pkg}" if pkg else ""
     message = f"{label} scan for {org}: {title}{detail}"
-    link = f"/{_tool_to_path(tool)}/dashboard"
+    link = f"/findings?scanner={tool}"
 
     try:
         user_ids = _get_active_user_ids()
@@ -207,7 +205,6 @@ def notify_new_critical_findings(
         logger.warning("Failed to emit new findings notification", exc_info=True)
 
 
-# ── System: Runner ────────────────────────────────────────────────────────────
 
 
 def notify_runner_offline(runner_id: str, runner_name: str) -> None:
@@ -235,7 +232,6 @@ def notify_runner_offline(runner_id: str, runner_name: str) -> None:
         logger.warning("Failed to emit runner offline notification", exc_info=True)
 
 
-# ── System: Source sync ───────────────────────────────────────────────────────
 
 
 def notify_source_synced(
@@ -266,7 +262,7 @@ def notify_source_synced(
             title=title,
             message=body,
             context={"connectionId": connection_id, "success": success},
-            link="/settings/sources/code-repositories",
+            link=f"/sources/{connection_id}",
         )
         _publish_notification_sse(
             {"title": title, "severity": severity, "category": "system", "message": body},
@@ -276,7 +272,6 @@ def notify_source_synced(
         logger.warning("Failed to emit source sync notification", exc_info=True)
 
 
-# ── Settings ──────────────────────────────────────────────────────────────────
 
 
 def notify_settings_changed(tool: str, actor: str) -> None:
@@ -284,7 +279,7 @@ def notify_settings_changed(tool: str, actor: str) -> None:
     label = TOOL_LABELS.get(tool, tool)
     title = f"{label} settings updated"
     message = f"{label} settings were updated by {actor}"
-    link = f"/{_tool_to_path(tool)}/dashboard?tab=settings"
+    link = f"/settings/{_tool_to_settings_path(tool)}"
 
     try:
         user_ids = _get_admin_user_ids()
@@ -303,15 +298,16 @@ def notify_settings_changed(tool: str, actor: str) -> None:
         logger.warning("Failed to emit settings changed notification", exc_info=True)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _tool_to_path(tool: str) -> str:
+def _tool_to_settings_path(tool: str) -> str:
+    """Map an internal scanner name to its settings route segment."""
     return {
-        "dependencies": "dependencies",
+        "dependencies_scanning": "dependencies",
         "code_scanning": "code",
-        "secrets": "secrets",
+        "secret_scanning": "secrets",
         "container_scanning": "containers",
+        "iac_scanning": "iac-security",
     }.get(tool, tool)
 
 

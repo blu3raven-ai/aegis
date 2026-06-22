@@ -50,7 +50,7 @@ LEAN_KEYS: dict[str, set[str]] = {
         "fileClass",
         "ruleIds",
     },
-    "dependencies": {
+    "dependencies_scanning": {
         "ecosystem",
         "advisoryId",
         "vulnerableVersionRange",
@@ -63,7 +63,7 @@ LEAN_KEYS: dict[str, set[str]] = {
         "cvssScore",
         "advisoryUrl",
     },
-    "secrets": {
+    "secret_scanning": {
         "organization",
         "secretIdentity",
         "fingerprint",

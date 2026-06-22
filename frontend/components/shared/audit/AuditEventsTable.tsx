@@ -2,11 +2,14 @@
 
 import type { AuditEvent } from "@/lib/client/audit-api"
 import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
+import { Card } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { ActionBadge } from "./ActionBadge"
 import { ActorBadge } from "./ActorBadge"
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string | undefined): string {
+  if (!iso) return "—"
   const diff = Date.now() - new Date(iso).getTime()
   const secs = Math.floor(diff / 1000)
   if (secs < 60) return `${secs}s ago`
@@ -38,7 +41,7 @@ function SkeletonRow() {
     <Tr>
       {[1, 2, 3, 4, 5, 6].map((i) => (
         <Td key={i}>
-          <div className="h-4 w-full animate-pulse rounded bg-[var(--color-surface-raised)]" />
+          <Skeleton className="h-4 w-full" />
         </Td>
       ))}
     </Tr>
@@ -67,7 +70,7 @@ export function AuditEventsTable({
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE))
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+    <Card padding="none" elevation="sm" className="overflow-hidden rounded-2xl">
       <Table>
         <Thead>
           <Tr>
@@ -150,6 +153,6 @@ export function AuditEventsTable({
           label="events"
         />
       )}
-    </div>
+    </Card>
   )
 }

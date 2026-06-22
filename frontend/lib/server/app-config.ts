@@ -12,7 +12,7 @@ export interface AppConfig {
     recoveryCodePolicy: "mandatory" | "optional" | "disabled"
   }
   tools: {
-    dependencies: {
+    dependencies_scanning: {
       enabled: boolean
       autoRerunEnabled: boolean
       rerunScheduleType: "simple" | "cron"
@@ -25,7 +25,7 @@ export interface AppConfig {
       ghsaApiKey: string
       ghsaApiKeyHint: string
     }
-    codeScanning: {
+    code_scanning: {
       enabled: boolean
       scanConcurrency: string
       rulesets: string[]
@@ -33,7 +33,7 @@ export interface AppConfig {
       rerunScheduleType: "simple" | "cron"
       rerunScheduleValue: string
     }
-    secrets: {
+    secret_scanning: {
       enabled: boolean
       scanConcurrency: string
       scanDepth: string
@@ -42,7 +42,7 @@ export interface AppConfig {
       rerunScheduleType: "simple" | "cron"
       rerunScheduleValue: string
     }
-    containerScanning: {
+    container_scanning: {
       enabled: boolean
       autoRerunEnabled: boolean
       rerunScheduleType: "simple" | "cron"
@@ -58,7 +58,7 @@ export interface AppConfig {
       argusApiKey: string
       argusApiKeyHint: string
     }
-    iacSecurity: {
+    iac_scanning: {
       enabled: boolean
     }
   }
@@ -87,7 +87,7 @@ function configFromEnv(env: EnvMap): AppConfig {
       recoveryCodePolicy: (env.AUTH_SECURITY_RECOVERY_CODE_POLICY as any) ?? "mandatory",
     },
     tools: {
-      dependencies: {
+      dependencies_scanning: {
         enabled: toBoolean(env.SCA_ENABLED, false),
         autoRerunEnabled: toBoolean(env.SCA_AUTO_RERUN_ENABLED, false),
         rerunScheduleType: env.SCA_RERUN_SCHEDULE_TYPE === "cron" ? "cron" : "simple",
@@ -100,7 +100,7 @@ function configFromEnv(env: EnvMap): AppConfig {
         ghsaApiKey: env.SCA_GHSA_API_KEY ?? "",
         ghsaApiKeyHint: "",
       },
-      codeScanning: {
+      code_scanning: {
         enabled: toBoolean(env.SAST_ENABLED, false),
         scanConcurrency: env.SAST_SCAN_CONCURRENCY ?? "2",
         rulesets: (env.SAST_RULESETS ?? "p/owasp-top-ten,p/cwe-top-25").split(","),
@@ -108,7 +108,7 @@ function configFromEnv(env: EnvMap): AppConfig {
         rerunScheduleType: env.SAST_RERUN_SCHEDULE_TYPE === "cron" ? "cron" : "simple",
         rerunScheduleValue: env.SAST_RERUN_SCHEDULE_VALUE ?? "02:00",
       },
-      secrets: {
+      secret_scanning: {
         enabled: toBoolean(env.SECRETS_ENABLED, false),
         scanConcurrency: env.SECRET_SCANNER_CONCURRENCY ?? env.SECRETS_SCAN_CONCURRENCY ?? "4",
         scanDepth: env.SECRETS_SCAN_DEPTH ?? "light",
@@ -117,7 +117,7 @@ function configFromEnv(env: EnvMap): AppConfig {
         rerunScheduleType: env.SECRETS_RERUN_SCHEDULE_TYPE === "cron" ? "cron" : "simple",
         rerunScheduleValue: env.SECRETS_RERUN_SCHEDULE_VALUE ?? "02:00",
       },
-      containerScanning: {
+      container_scanning: {
         enabled: toBoolean(env.CONTAINER_SCANNING_ENABLED, false),
         autoRerunEnabled: toBoolean(env.CONTAINER_SCANNING_AUTO_RERUN_ENABLED, false),
         rerunScheduleType: env.CONTAINER_SCANNING_RERUN_SCHEDULE_TYPE === "cron" ? "cron" : "simple",
@@ -133,7 +133,7 @@ function configFromEnv(env: EnvMap): AppConfig {
         argusApiKey: env.CONTAINER_SCANNING_ARGUS_API_KEY ?? "",
         argusApiKeyHint: "",
       },
-      iacSecurity: {
+      iac_scanning: {
         enabled: toBoolean(env.IAC_SECURITY_ENABLED, false),
       },
     },
@@ -155,54 +155,54 @@ function normalizeConfig(value: Partial<AppConfig> | null, fallback: AppConfig):
       recoveryCodePolicy: value?.authSecurity?.recoveryCodePolicy ?? fallback.authSecurity.recoveryCodePolicy,
     },
     tools: {
-      dependencies: {
-        enabled: value?.tools?.dependencies?.enabled ?? fallback.tools.dependencies.enabled,
-        autoRerunEnabled: value?.tools?.dependencies?.autoRerunEnabled ?? fallback.tools.dependencies.autoRerunEnabled,
-        rerunScheduleType: value?.tools?.dependencies?.rerunScheduleType ?? fallback.tools.dependencies.rerunScheduleType,
-        rerunScheduleValue: value?.tools?.dependencies?.rerunScheduleValue ?? fallback.tools.dependencies.rerunScheduleValue,
-        scanConcurrency: value?.tools?.dependencies?.scanConcurrency ?? fallback.tools.dependencies.scanConcurrency,
-        nvdEnabled: value?.tools?.dependencies?.nvdEnabled ?? fallback.tools.dependencies.nvdEnabled,
-        nvdApiKey: value?.tools?.dependencies?.nvdApiKey ?? fallback.tools.dependencies.nvdApiKey,
-        nvdApiKeyHint: value?.tools?.dependencies?.nvdApiKeyHint ?? fallback.tools.dependencies.nvdApiKeyHint,
-        ghsaEnabled: value?.tools?.dependencies?.ghsaEnabled ?? fallback.tools.dependencies.ghsaEnabled,
-        ghsaApiKey: value?.tools?.dependencies?.ghsaApiKey ?? fallback.tools.dependencies.ghsaApiKey,
-        ghsaApiKeyHint: value?.tools?.dependencies?.ghsaApiKeyHint ?? fallback.tools.dependencies.ghsaApiKeyHint,
+      dependencies_scanning: {
+        enabled: value?.tools?.dependencies_scanning?.enabled ?? fallback.tools.dependencies_scanning.enabled,
+        autoRerunEnabled: value?.tools?.dependencies_scanning?.autoRerunEnabled ?? fallback.tools.dependencies_scanning.autoRerunEnabled,
+        rerunScheduleType: value?.tools?.dependencies_scanning?.rerunScheduleType ?? fallback.tools.dependencies_scanning.rerunScheduleType,
+        rerunScheduleValue: value?.tools?.dependencies_scanning?.rerunScheduleValue ?? fallback.tools.dependencies_scanning.rerunScheduleValue,
+        scanConcurrency: value?.tools?.dependencies_scanning?.scanConcurrency ?? fallback.tools.dependencies_scanning.scanConcurrency,
+        nvdEnabled: value?.tools?.dependencies_scanning?.nvdEnabled ?? fallback.tools.dependencies_scanning.nvdEnabled,
+        nvdApiKey: value?.tools?.dependencies_scanning?.nvdApiKey ?? fallback.tools.dependencies_scanning.nvdApiKey,
+        nvdApiKeyHint: value?.tools?.dependencies_scanning?.nvdApiKeyHint ?? fallback.tools.dependencies_scanning.nvdApiKeyHint,
+        ghsaEnabled: value?.tools?.dependencies_scanning?.ghsaEnabled ?? fallback.tools.dependencies_scanning.ghsaEnabled,
+        ghsaApiKey: value?.tools?.dependencies_scanning?.ghsaApiKey ?? fallback.tools.dependencies_scanning.ghsaApiKey,
+        ghsaApiKeyHint: value?.tools?.dependencies_scanning?.ghsaApiKeyHint ?? fallback.tools.dependencies_scanning.ghsaApiKeyHint,
       },
-      codeScanning: {
-        enabled: value?.tools?.codeScanning?.enabled ?? fallback.tools.codeScanning.enabled,
-        scanConcurrency: value?.tools?.codeScanning?.scanConcurrency ?? fallback.tools.codeScanning.scanConcurrency,
-        rulesets: value?.tools?.codeScanning?.rulesets ?? fallback.tools.codeScanning.rulesets,
-        autoRerunEnabled: value?.tools?.codeScanning?.autoRerunEnabled ?? fallback.tools.codeScanning.autoRerunEnabled,
-        rerunScheduleType: value?.tools?.codeScanning?.rerunScheduleType ?? fallback.tools.codeScanning.rerunScheduleType,
-        rerunScheduleValue: value?.tools?.codeScanning?.rerunScheduleValue ?? fallback.tools.codeScanning.rerunScheduleValue,
+      code_scanning: {
+        enabled: value?.tools?.code_scanning?.enabled ?? fallback.tools.code_scanning.enabled,
+        scanConcurrency: value?.tools?.code_scanning?.scanConcurrency ?? fallback.tools.code_scanning.scanConcurrency,
+        rulesets: value?.tools?.code_scanning?.rulesets ?? fallback.tools.code_scanning.rulesets,
+        autoRerunEnabled: value?.tools?.code_scanning?.autoRerunEnabled ?? fallback.tools.code_scanning.autoRerunEnabled,
+        rerunScheduleType: value?.tools?.code_scanning?.rerunScheduleType ?? fallback.tools.code_scanning.rerunScheduleType,
+        rerunScheduleValue: value?.tools?.code_scanning?.rerunScheduleValue ?? fallback.tools.code_scanning.rerunScheduleValue,
       },
-      secrets: {
-        enabled: value?.tools?.secrets?.enabled ?? fallback.tools.secrets.enabled,
-        scanConcurrency: value?.tools?.secrets?.scanConcurrency ?? fallback.tools.secrets.scanConcurrency,
-        scanDepth: value?.tools?.secrets?.scanDepth ?? fallback.tools.secrets.scanDepth,
-        scanHistoryWindow: value?.tools?.secrets?.scanHistoryWindow ?? fallback.tools.secrets.scanHistoryWindow,
-        autoRerunEnabled: value?.tools?.secrets?.autoRerunEnabled ?? fallback.tools.secrets.autoRerunEnabled,
-        rerunScheduleType: value?.tools?.secrets?.rerunScheduleType ?? fallback.tools.secrets.rerunScheduleType,
-        rerunScheduleValue: value?.tools?.secrets?.rerunScheduleValue ?? fallback.tools.secrets.rerunScheduleValue,
+      secret_scanning: {
+        enabled: value?.tools?.secret_scanning?.enabled ?? fallback.tools.secret_scanning.enabled,
+        scanConcurrency: value?.tools?.secret_scanning?.scanConcurrency ?? fallback.tools.secret_scanning.scanConcurrency,
+        scanDepth: value?.tools?.secret_scanning?.scanDepth ?? fallback.tools.secret_scanning.scanDepth,
+        scanHistoryWindow: value?.tools?.secret_scanning?.scanHistoryWindow ?? fallback.tools.secret_scanning.scanHistoryWindow,
+        autoRerunEnabled: value?.tools?.secret_scanning?.autoRerunEnabled ?? fallback.tools.secret_scanning.autoRerunEnabled,
+        rerunScheduleType: value?.tools?.secret_scanning?.rerunScheduleType ?? fallback.tools.secret_scanning.rerunScheduleType,
+        rerunScheduleValue: value?.tools?.secret_scanning?.rerunScheduleValue ?? fallback.tools.secret_scanning.rerunScheduleValue,
       },
-      containerScanning: {
-        enabled: value?.tools?.containerScanning?.enabled ?? fallback.tools.containerScanning.enabled,
-        autoRerunEnabled: value?.tools?.containerScanning?.autoRerunEnabled ?? fallback.tools.containerScanning.autoRerunEnabled,
-        rerunScheduleType: value?.tools?.containerScanning?.rerunScheduleType ?? fallback.tools.containerScanning.rerunScheduleType,
-        rerunScheduleValue: value?.tools?.containerScanning?.rerunScheduleValue ?? fallback.tools.containerScanning.rerunScheduleValue,
-        scanConcurrency: value?.tools?.containerScanning?.scanConcurrency ?? fallback.tools.containerScanning.scanConcurrency,
-        nvdEnabled: value?.tools?.containerScanning?.nvdEnabled ?? fallback.tools.containerScanning.nvdEnabled,
-        nvdApiKey: value?.tools?.containerScanning?.nvdApiKey ?? fallback.tools.containerScanning.nvdApiKey,
-        nvdApiKeyHint: value?.tools?.containerScanning?.nvdApiKeyHint ?? fallback.tools.containerScanning.nvdApiKeyHint,
-        ghsaEnabled: value?.tools?.containerScanning?.ghsaEnabled ?? fallback.tools.containerScanning.ghsaEnabled,
-        ghsaApiKey: value?.tools?.containerScanning?.ghsaApiKey ?? fallback.tools.containerScanning.ghsaApiKey,
-        ghsaApiKeyHint: value?.tools?.containerScanning?.ghsaApiKeyHint ?? fallback.tools.containerScanning.ghsaApiKeyHint,
-        argusEnabled: value?.tools?.containerScanning?.argusEnabled ?? fallback.tools.containerScanning.argusEnabled,
-        argusApiKey: value?.tools?.containerScanning?.argusApiKey ?? fallback.tools.containerScanning.argusApiKey,
-        argusApiKeyHint: value?.tools?.containerScanning?.argusApiKeyHint ?? fallback.tools.containerScanning.argusApiKeyHint,
+      container_scanning: {
+        enabled: value?.tools?.container_scanning?.enabled ?? fallback.tools.container_scanning.enabled,
+        autoRerunEnabled: value?.tools?.container_scanning?.autoRerunEnabled ?? fallback.tools.container_scanning.autoRerunEnabled,
+        rerunScheduleType: value?.tools?.container_scanning?.rerunScheduleType ?? fallback.tools.container_scanning.rerunScheduleType,
+        rerunScheduleValue: value?.tools?.container_scanning?.rerunScheduleValue ?? fallback.tools.container_scanning.rerunScheduleValue,
+        scanConcurrency: value?.tools?.container_scanning?.scanConcurrency ?? fallback.tools.container_scanning.scanConcurrency,
+        nvdEnabled: value?.tools?.container_scanning?.nvdEnabled ?? fallback.tools.container_scanning.nvdEnabled,
+        nvdApiKey: value?.tools?.container_scanning?.nvdApiKey ?? fallback.tools.container_scanning.nvdApiKey,
+        nvdApiKeyHint: value?.tools?.container_scanning?.nvdApiKeyHint ?? fallback.tools.container_scanning.nvdApiKeyHint,
+        ghsaEnabled: value?.tools?.container_scanning?.ghsaEnabled ?? fallback.tools.container_scanning.ghsaEnabled,
+        ghsaApiKey: value?.tools?.container_scanning?.ghsaApiKey ?? fallback.tools.container_scanning.ghsaApiKey,
+        ghsaApiKeyHint: value?.tools?.container_scanning?.ghsaApiKeyHint ?? fallback.tools.container_scanning.ghsaApiKeyHint,
+        argusEnabled: value?.tools?.container_scanning?.argusEnabled ?? fallback.tools.container_scanning.argusEnabled,
+        argusApiKey: value?.tools?.container_scanning?.argusApiKey ?? fallback.tools.container_scanning.argusApiKey,
+        argusApiKeyHint: value?.tools?.container_scanning?.argusApiKeyHint ?? fallback.tools.container_scanning.argusApiKeyHint,
       },
-      iacSecurity: {
-        enabled: value?.tools?.iacSecurity?.enabled ?? fallback.tools.iacSecurity.enabled,
+      iac_scanning: {
+        enabled: value?.tools?.iac_scanning?.enabled ?? fallback.tools.iac_scanning.enabled,
       },
     },
   }
@@ -256,36 +256,36 @@ function configToEnv(config: AppConfig): EnvMap {
   env.AUTH_SECURITY_TRUSTED_SESSION_DURATION = String(config.authSecurity.trustedSessionDurationDays)
   env.AUTH_SECURITY_RECOVERY_CODE_POLICY = config.authSecurity.recoveryCodePolicy
 
-  env.SCA_ENABLED = config.tools.dependencies.enabled ? "true" : "false"
-  env.SCA_AUTO_RERUN_ENABLED = config.tools.dependencies.autoRerunEnabled ? "true" : "false"
-  env.SCA_RERUN_SCHEDULE_TYPE = config.tools.dependencies.rerunScheduleType
-  env.SCA_RERUN_SCHEDULE_VALUE = config.tools.dependencies.rerunScheduleValue
-  env.SCA_SCAN_CONCURRENCY = config.tools.dependencies.scanConcurrency
-  env.SAST_ENABLED = config.tools.codeScanning.enabled ? "true" : "false"
-  env.SAST_SCAN_CONCURRENCY = config.tools.codeScanning.scanConcurrency
-  env.SAST_RULESETS = Array.isArray(config.tools.codeScanning.rulesets) ? config.tools.codeScanning.rulesets.join(",") : config.tools.codeScanning.rulesets
-  env.SAST_AUTO_RERUN_ENABLED = config.tools.codeScanning.autoRerunEnabled ? "true" : "false"
-  env.SAST_RERUN_SCHEDULE_TYPE = config.tools.codeScanning.rerunScheduleType
-  env.SAST_RERUN_SCHEDULE_VALUE = config.tools.codeScanning.rerunScheduleValue
-  env.SECRETS_ENABLED = config.tools.secrets.enabled ? "true" : "false"
-  env.SECRET_SCANNER_CONCURRENCY = config.tools.secrets.scanConcurrency
-  env.SECRETS_SCAN_CONCURRENCY = config.tools.secrets.scanConcurrency
-  env.SECRETS_SCAN_DEPTH = config.tools.secrets.scanDepth
-  env.SECRETS_AUTO_RERUN_ENABLED = config.tools.secrets.autoRerunEnabled ? "true" : "false"
-  env.SECRETS_RERUN_SCHEDULE_TYPE = config.tools.secrets.rerunScheduleType
-  env.SECRETS_RERUN_SCHEDULE_VALUE = config.tools.secrets.rerunScheduleValue
-  env.CONTAINER_SCANNING_ENABLED = config.tools.containerScanning.enabled ? "true" : "false"
-  env.CONTAINER_SCANNING_AUTO_RERUN_ENABLED = config.tools.containerScanning.autoRerunEnabled ? "true" : "false"
-  env.CONTAINER_SCANNING_RERUN_SCHEDULE_TYPE = config.tools.containerScanning.rerunScheduleType
-  env.CONTAINER_SCANNING_RERUN_SCHEDULE_VALUE = config.tools.containerScanning.rerunScheduleValue
-  env.CONTAINER_SCANNING_SCAN_CONCURRENCY = config.tools.containerScanning.scanConcurrency
-  env.CONTAINER_SCANNING_NVD_ENABLED = config.tools.containerScanning.nvdEnabled ? "true" : "false"
-  env.CONTAINER_SCANNING_NVD_API_KEY = config.tools.containerScanning.nvdApiKey
-  env.CONTAINER_SCANNING_GHSA_ENABLED = config.tools.containerScanning.ghsaEnabled ? "true" : "false"
-  env.CONTAINER_SCANNING_GHSA_API_KEY = config.tools.containerScanning.ghsaApiKey
-  env.CONTAINER_SCANNING_ARGUS_ENABLED = config.tools.containerScanning.argusEnabled ? "true" : "false"
-  env.CONTAINER_SCANNING_ARGUS_API_KEY = config.tools.containerScanning.argusApiKey
-  env.IAC_SECURITY_ENABLED = config.tools.iacSecurity.enabled ? "true" : "false"
+  env.SCA_ENABLED = config.tools.dependencies_scanning.enabled ? "true" : "false"
+  env.SCA_AUTO_RERUN_ENABLED = config.tools.dependencies_scanning.autoRerunEnabled ? "true" : "false"
+  env.SCA_RERUN_SCHEDULE_TYPE = config.tools.dependencies_scanning.rerunScheduleType
+  env.SCA_RERUN_SCHEDULE_VALUE = config.tools.dependencies_scanning.rerunScheduleValue
+  env.SCA_SCAN_CONCURRENCY = config.tools.dependencies_scanning.scanConcurrency
+  env.SAST_ENABLED = config.tools.code_scanning.enabled ? "true" : "false"
+  env.SAST_SCAN_CONCURRENCY = config.tools.code_scanning.scanConcurrency
+  env.SAST_RULESETS = Array.isArray(config.tools.code_scanning.rulesets) ? config.tools.code_scanning.rulesets.join(",") : config.tools.code_scanning.rulesets
+  env.SAST_AUTO_RERUN_ENABLED = config.tools.code_scanning.autoRerunEnabled ? "true" : "false"
+  env.SAST_RERUN_SCHEDULE_TYPE = config.tools.code_scanning.rerunScheduleType
+  env.SAST_RERUN_SCHEDULE_VALUE = config.tools.code_scanning.rerunScheduleValue
+  env.SECRETS_ENABLED = config.tools.secret_scanning.enabled ? "true" : "false"
+  env.SECRET_SCANNER_CONCURRENCY = config.tools.secret_scanning.scanConcurrency
+  env.SECRETS_SCAN_CONCURRENCY = config.tools.secret_scanning.scanConcurrency
+  env.SECRETS_SCAN_DEPTH = config.tools.secret_scanning.scanDepth
+  env.SECRETS_AUTO_RERUN_ENABLED = config.tools.secret_scanning.autoRerunEnabled ? "true" : "false"
+  env.SECRETS_RERUN_SCHEDULE_TYPE = config.tools.secret_scanning.rerunScheduleType
+  env.SECRETS_RERUN_SCHEDULE_VALUE = config.tools.secret_scanning.rerunScheduleValue
+  env.CONTAINER_SCANNING_ENABLED = config.tools.container_scanning.enabled ? "true" : "false"
+  env.CONTAINER_SCANNING_AUTO_RERUN_ENABLED = config.tools.container_scanning.autoRerunEnabled ? "true" : "false"
+  env.CONTAINER_SCANNING_RERUN_SCHEDULE_TYPE = config.tools.container_scanning.rerunScheduleType
+  env.CONTAINER_SCANNING_RERUN_SCHEDULE_VALUE = config.tools.container_scanning.rerunScheduleValue
+  env.CONTAINER_SCANNING_SCAN_CONCURRENCY = config.tools.container_scanning.scanConcurrency
+  env.CONTAINER_SCANNING_NVD_ENABLED = config.tools.container_scanning.nvdEnabled ? "true" : "false"
+  env.CONTAINER_SCANNING_NVD_API_KEY = config.tools.container_scanning.nvdApiKey
+  env.CONTAINER_SCANNING_GHSA_ENABLED = config.tools.container_scanning.ghsaEnabled ? "true" : "false"
+  env.CONTAINER_SCANNING_GHSA_API_KEY = config.tools.container_scanning.ghsaApiKey
+  env.CONTAINER_SCANNING_ARGUS_ENABLED = config.tools.container_scanning.argusEnabled ? "true" : "false"
+  env.CONTAINER_SCANNING_ARGUS_API_KEY = config.tools.container_scanning.argusApiKey
+  env.IAC_SECURITY_ENABLED = config.tools.iac_scanning.enabled ? "true" : "false"
   return env
 }
 

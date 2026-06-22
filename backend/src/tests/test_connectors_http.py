@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import httpx
-import pytest
 
 from src.connectors.http import DEFAULT_TIMEOUT_S, default_client, with_retry
 

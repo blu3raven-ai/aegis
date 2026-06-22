@@ -16,7 +16,7 @@ async def test_sse_stream_requires_auth():
     # Use "http://testserver" so TrustedHostMiddleware accepts the Host header.
     # Without a session cookie the SessionAuthMiddleware returns 401.
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        resp = await client.get("/api/v1/events/stream")
+        resp = await client.get("/api/v1/history/events/stream")
         assert resp.status_code == 401
 
 
@@ -30,8 +30,8 @@ async def test_sse_stream_receives_event(monkeypatch):
     the streaming body ourselves — this is the correct approach for SSE tests.
     """
     from unittest.mock import MagicMock
-    import src.shared.events_router as er
-    from src.shared.events_router import sse_stream
+    import src.history.events_router as er
+    from src.history.events_router import sse_stream
 
     bus = get_event_bus()
 

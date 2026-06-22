@@ -1,16 +1,13 @@
-"""ContainerScanner — embedded port of scanners/container/run.sh.
+"""ContainerScanner — per-image syft SBOM build + register.
 
-Orchestrates per-image syft (SBOM) -> grype match -> normalize, then aggregates
-findings.jsonl and writes the _done manifest marker. Supports two scan modes:
+Orchestrates per-image syft (SBOM) generation, registers the SBOM (and a
+digest marker) for upload, then writes the _done manifest marker. Vulnerability
+matching happens in the backend against the OSV mirror — the runner produces
+SBOMs only.
 
-* ``full`` (default) — pull image with syft, build SBOM, run grype. Honours
-  ``PREVIOUS_DIGESTS`` to skip images whose registry manifest digest has not
-  changed since the last run.
-* ``advisories_only`` — re-run grype against previously stored SBOMs from
-  MinIO without re-pulling images. Used by the backend to refresh advisory
-  matches after a new vuln-DB update.
-
-Private registry auth is configured up-front from the REGISTRY_AUTHS env var.
+``PREVIOUS_DIGESTS`` is honoured to skip images whose registry manifest digest
+has not changed since the last run. Private registry auth is configured up-front
+from the REGISTRY_AUTHS env var.
 """
 from __future__ import annotations
 
@@ -31,9 +28,6 @@ from runner.scanners._shared import (
     JobEnv,
     ProgressEmitter,
     ScannerConfigError,
-    TIMEOUT_GRYPE_DB_CHECK,
-    TIMEOUT_GRYPE_DB_UPDATE,
-    TIMEOUT_GRYPE_MATCH,
     TIMEOUT_SYFT_IMAGE,
     log_finished,
     log_scanning_image,
@@ -48,8 +42,6 @@ from runner.scanners._subprocess import (
 from runner.scanners.base import ExecutionResult
 from runner.scanners.container import (
     digest_compare,
-    download_sbom,
-    normalize,
     registry_auth,
     registry_digest,
 )
@@ -57,19 +49,15 @@ from runner.scanners.container import (
 logger = logging.getLogger(__name__)
 
 
-_GRYPE_VULNS_FOUND_RC = 1  # grype convention — not an error
-
 # Mirrors bash validate_image_ref regex: ^[a-zA-Z0-9][a-zA-Z0-9._/:@-]*$
 _VALID_IMAGE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]*$")
 # Mirrors bash sanitize_name: s/[^a-zA-Z0-9._-]/_/g
 _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]")
 
 SCAN_MODE_FULL = "full"
-SCAN_MODE_ADVISORIES_ONLY = "advisories_only"
 SCAN_MODE_SBOM_ONLY = "sbom_only"
 SUPPORTED_SCAN_MODES = {
     SCAN_MODE_FULL,
-    SCAN_MODE_ADVISORIES_ONLY,
     SCAN_MODE_SBOM_ONLY,
 }
 DEFERRED_SCAN_MODES: set[str] = set()
@@ -105,7 +93,7 @@ class ContainerScanConfig(BaseScanConfig):
 
 
 class ContainerScanner:
-    SCANNER_TYPE = "container"
+    SCANNER_TYPE = "container_scanning"
 
     def run_scan(
         self,
@@ -185,13 +173,6 @@ class ContainerScanner:
         except Exception as e:  # noqa: BLE001
             logger.warning("[!] Registry auth setup failed: %s", e)
 
-        self._ensure_grype_db(cancel_event)
-
-        skip_grype = cfg.scan_mode == SCAN_MODE_SBOM_ONLY
-
-        backend_client = job.get("_backend") if cfg.scan_mode == SCAN_MODE_ADVISORIES_ONLY else None
-        adv_job_id = str(job.get("jobId", "")) if cfg.scan_mode == SCAN_MODE_ADVISORIES_ONLY else ""
-
         def _scan_one(image_ref: str) -> Path | None:
             if cancel_event is not None and cancel_event.is_set():
                 return None
@@ -201,15 +182,6 @@ class ContainerScanner:
             safe_name = _sanitize_name(image_ref)
             emitter.scanning(safe_name)
             try:
-                if cfg.scan_mode == SCAN_MODE_ADVISORIES_ONLY:
-                    return self._scan_image_advisories_only(
-                        image_ref,
-                        out_dir,
-                        cancel_event=cancel_event,
-                        log_tail=log_tail,
-                        backend_client=backend_client,
-                        job_id=adv_job_id,
-                    )
                 return self._scan_image(
                     image_ref,
                     out_dir,
@@ -217,7 +189,6 @@ class ContainerScanner:
                     cancel_event=cancel_event,
                     previous_digests=previous_digests,
                     log_tail=log_tail,
-                    skip_grype=skip_grype,
                 )
             except ScannerTimeoutError as e:
                 log_tail.append(f"[!] Timeout scanning {image_ref}: {e}")
@@ -235,20 +206,6 @@ class ContainerScanner:
             list(pool.map(_scan_one, images))
 
         emitter.normalizing()
-
-        # sbom_only produces no per-image findings.json, so normalization is
-        # a no-op — skip it to match bash run.sh:322-335 (the loop is gated
-        # on findings.json existing).
-        if not skip_grype:
-            try:
-                total, errors = normalize.normalize_grype_output(cfg.org_label, out_dir)
-                log_tail.append(
-                    f"[+] Normalized {total} container findings ({errors} errors)"
-                )
-            except Exception as e:  # noqa: BLE001
-                log_tail.append(f"[!] Normalization failed: {e}")
-                logger.exception("[!] Normalization failed")
-
         write_done_marker(out_dir)
         emitter.done()
 
@@ -263,30 +220,6 @@ class ContainerScanner:
     # internal helpers
     # ------------------------------------------------------------------
 
-    def _ensure_grype_db(self, cancel_event: threading.Event | None) -> None:
-        if shutil.which("grype") is None:
-            logger.warning("[!] grype not on PATH - skipping DB check")
-            return
-        rc, _, _ = run_tool(
-            ["grype", "db", "check"],
-            timeout=TIMEOUT_GRYPE_DB_CHECK,
-            cancel_event=cancel_event,
-        )
-        if rc == 0:
-            return
-        logger.info("[+] Updating Grype vulnerability database...")
-        rc, _, stderr = run_tool(
-            ["grype", "db", "update"],
-            timeout=TIMEOUT_GRYPE_DB_UPDATE,
-            cancel_event=cancel_event,
-        )
-        if rc != 0:
-            logger.warning(
-                "[!] Grype DB update failed - scanning may produce incomplete "
-                "results: %s",
-                (stderr or "")[:200],
-            )
-
     def _scan_image(
         self,
         image_ref: str,
@@ -296,7 +229,6 @@ class ContainerScanner:
         cancel_event: threading.Event | None,
         previous_digests: dict[str, str] | None = None,
         log_tail: list[str] | None = None,
-        skip_grype: bool = False,
     ) -> Path | None:
         safe_name = _sanitize_name(image_ref)
         image_out = out_dir / safe_name
@@ -304,9 +236,8 @@ class ContainerScanner:
         log_scanning_image(image_ref)
 
         # Skip-unchanged optimisation — compare the registry HEAD digest
-        # against the backend-supplied previous digest *before* running syft.
-        # Matches bash check_digest_changed which performs a HEAD against the
-        # registry, avoiding the expensive image pull when nothing changed.
+        # against the backend-supplied previous digest *before* running syft,
+        # avoiding the expensive image pull when nothing changed.
         prev = (
             digest_compare.lookup_previous_digest(image_ref, previous_digests)
             if previous_digests
@@ -343,15 +274,6 @@ class ContainerScanner:
         if syft_json_path.exists() and syft_json_path.stat().st_size > 0:
             register_output(out_dir, syft_json_path, safe_name)
 
-        # Bash run.sh:210-214 — sbom_only: register SBOM, log finished, return.
-        # No grype, no findings.json, no digest.txt.
-        if skip_grype:
-            log_finished(image_ref)
-            return None
-
-        findings_json = image_out / "findings.json"
-        self._run_grype(sbom_path, findings_json, cancel_event)
-
         # Prefer the SBOM hash. Fall back to a registry HEAD digest so backend
         # dedup (which keys on imageDigest) keeps working when some registries
         # don't surface SHA-256 hashes via syft.
@@ -367,61 +289,8 @@ class ContainerScanner:
                 (image_out / "digest.txt").write_text(fallback)
                 register_output(out_dir, image_out / "digest.txt", safe_name)
 
-        if findings_json.exists():
-            register_output(out_dir, findings_json, safe_name)
-
         log_finished(image_ref)
-        return findings_json if findings_json.exists() else None
-
-    def _scan_image_advisories_only(
-        self,
-        image_ref: str,
-        out_dir: Path,
-        *,
-        cancel_event: threading.Event | None,
-        log_tail: list[str],
-        backend_client: Any,
-        job_id: str,
-    ) -> Path | None:
-        """Run grype against a previously stored SBOM fetched via presigned URL.
-
-        Mirrors bash ``scan_advisories_only``: no syft, no image pull. A
-        missing SBOM logs loudly but the overall scan continues — matches
-        bash's per-image error handling."""
-        safe_name = _sanitize_name(image_ref)
-        image_out = out_dir / safe_name
-        image_out.mkdir(parents=True, exist_ok=True)
-        log_scanning_image(image_ref)
-
-        sbom_path = image_out / "sbom.cdx.json"
-        try:
-            download_sbom.download_sbom_for_image(
-                image_ref,
-                sbom_path,
-                backend_client=backend_client,
-                job_id=job_id,
-            )
-        except download_sbom.SbomDownloadError as e:
-            log_tail.append(f"[!] No stored SBOM for {image_ref}: {e}")
-            logger.warning("[!] No stored SBOM for %s: %s", image_ref, e)
-            log_finished(image_ref)
-            return None
-
-        register_output(out_dir, sbom_path, safe_name)
-
-        findings_json = image_out / "findings.json"
-        self._run_grype(sbom_path, findings_json, cancel_event)
-
-        digest = _read_sbom_sha256(sbom_path)
-        if digest:
-            (image_out / "digest.txt").write_text(f"sha256:{digest}")
-            register_output(out_dir, image_out / "digest.txt", safe_name)
-
-        if findings_json.exists():
-            register_output(out_dir, findings_json, safe_name)
-
-        log_finished(image_ref)
-        return findings_json if findings_json.exists() else None
+        return sbom_path
 
     def _record_skipped_image(
         self,
@@ -436,9 +305,9 @@ class ContainerScanner:
         """Persist the digest marker for an unchanged image and emit progress.
 
         Backend dedup pairs findings with ``imageDigest``; even though no new
-        findings are produced this run, digest.txt must still exist (and
-        appear in the manifest) so the agent reports the image as scanned and
-        so any subsequent ``PREVIOUS_DIGESTS`` payload still includes it.
+        SBOM is produced this run, digest.txt must still exist (and appear in
+        the manifest) so the agent reports the image as scanned and so any
+        subsequent ``PREVIOUS_DIGESTS`` payload still includes it.
         """
         normalized = digest_compare.normalize_digest(digest) or ""
         marker = f"sha256:{normalized}" if normalized else digest
@@ -488,30 +357,6 @@ class ContainerScanner:
             return False
         output.write_text(stdout)
         return output.exists() and output.stat().st_size > 0
-
-    def _run_grype(
-        self,
-        sbom: Path,
-        output: Path,
-        cancel_event: threading.Event | None,
-    ) -> bool:
-        if shutil.which("grype") is None:
-            return False
-        rc, stdout, stderr = run_tool(
-            ["grype", f"sbom:{sbom}", "-o", "json", "--quiet"],
-            timeout=TIMEOUT_GRYPE_MATCH,
-            cancel_event=cancel_event,
-        )
-        if rc in (0, _GRYPE_VULNS_FOUND_RC):
-            output.write_text(stdout)
-            return True
-        logger.warning(
-            "[!] Grype failed (exit %d) for %s: %s",
-            rc,
-            sbom.name,
-            (stderr or "")[:200],
-        )
-        return False
 
 
 def _validate_image_ref(ref: str) -> bool:

@@ -1,6 +1,7 @@
 // components/shared/FindingDrawer/DrawerAttribution.tsx
 
 import { relativeTime } from "@/lib/shared/relative-time"
+import { Card } from "@/components/ui/Card"
 
 export interface AttributionFields {
   introduced_by_commit_sha: string | null | undefined
@@ -28,7 +29,7 @@ export function DrawerAttribution({ fields }: { fields: AttributionFields }) {
   const shortSha = introduced_by_commit_sha ? introduced_by_commit_sha.slice(0, 7) : null
 
   return (
-    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <Card as="section" padding="none" className="rounded-xl">
       <div className="px-4 pt-4 pb-2">
         <p className="text-2xs font-semibold uppercase tracking-[0.6px] text-[var(--color-text-tertiary)]">
           Introduced by
@@ -72,7 +73,7 @@ export function DrawerAttribution({ fields }: { fields: AttributionFields }) {
           </a>
         )}
       </div>
-    </section>
+    </Card>
   )
 }
 

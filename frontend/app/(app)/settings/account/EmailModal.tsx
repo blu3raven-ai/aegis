@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Modal } from "./Modal"
 import { apiClient } from "@/lib/client/api-client.ts"
@@ -27,15 +28,18 @@ export function EmailModal({
     setError(null)
     startTransition(async () => {
       try {
-        await apiClient("/api/v1/settings/account/email", {
+        await apiClient("/api/v1/auth/email", {
           method: "PATCH",
-          body: { email: email.trim() || null },
+          body: { email: email.trim() },
         })
         onSuccess()
       } catch (err) {
         if (err instanceof ApiClientError) {
-          const body = err.body as { error?: string } | null
-          setError(body?.error ?? "Failed to update email.")
+          const detail =
+            typeof err.body === "object" && err.body !== null && "detail" in err.body
+              ? String((err.body as { detail?: unknown }).detail ?? "")
+              : ""
+          setError(detail || "Failed to update email.")
         } else {
           setError("Failed to update email.")
         }
@@ -46,23 +50,23 @@ export function EmailModal({
   return (
     <Modal open={open} title="Change email" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-            Email address
-          </label>
+        <FormField
+          label="Email address"
+          htmlFor="account-email"
+          hint="Leave blank to remove your email. You can sign in with email or username."
+          error={error ?? undefined}
+        >
           <Input
+            id="account-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             autoFocus
             autoComplete="email"
+            invalid={!!error}
           />
-          <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">
-            Leave blank to remove your email. You can sign in with email or username.
-          </p>
-        </div>
-        {error && <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>}
+        </FormField>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" size="md" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" size="md" isLoading={isPending} disabled={isPending}>

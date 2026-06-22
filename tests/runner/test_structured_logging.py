@@ -80,10 +80,10 @@ class TestJsonFormatter:
     def test_extra_context_merged_into_payload(self):
         formatter = JsonFormatter(agent_id="agent-x")
         record = _make_record("job started")
-        record._extra = {"job_id": "abc123", "scanner_type": "dependencies"}
+        record._extra = {"job_id": "abc123", "scanner_type": "dependencies_scanning"}
         parsed = json.loads(formatter.format(record))
         assert parsed["job_id"] == "abc123"
-        assert parsed["scanner_type"] == "dependencies"
+        assert parsed["scanner_type"] == "dependencies_scanning"
 
     def test_exception_included_when_present(self):
         formatter = JsonFormatter(agent_id="agent-x")
@@ -237,12 +237,12 @@ class TestLogWithContext:
         test_logger.addHandler(handler)
         test_logger.propagate = False
         try:
-            log_with_context(test_logger, logging.INFO, "job assigned", job_id="jj1", scanner_type="secrets")
+            log_with_context(test_logger, logging.INFO, "job assigned", job_id="jj1", scanner_type="secret_scanning")
             assert len(captured) == 1
             record = captured[0]
             assert hasattr(record, "_extra")
             assert record._extra["job_id"] == "jj1"
-            assert record._extra["scanner_type"] == "secrets"
+            assert record._extra["scanner_type"] == "secret_scanning"
             assert record.getMessage() == "job assigned"
         finally:
             test_logger.removeHandler(handler)

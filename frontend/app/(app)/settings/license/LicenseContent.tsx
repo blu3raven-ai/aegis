@@ -9,7 +9,9 @@ import { sectionHeadingClass } from "@/lib/shared/settings-styles"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { ApiClientError } from "@/lib/client/api-client.types.ts"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 function formatExpiryDate(value: string | number): string {
   const ts = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value
@@ -58,8 +60,11 @@ export function LicenseContent() {
       setLocalStatus(updated)
     } catch (err) {
       if (err instanceof ApiClientError) {
-        const body = err.body as { error?: string } | null
-        setActivateMsg({ ok: false, text: body?.error ?? "Invalid license key. Check the key and try again." })
+        const body = err.body as { detail?: string; error?: string } | null
+        setActivateMsg({
+          ok: false,
+          text: body?.detail ?? body?.error ?? "Invalid license key. Check the key and try again.",
+        })
       } else {
         setActivateMsg({ ok: false, text: "Network error. Check your connection and try again." })
       }
@@ -87,9 +92,9 @@ export function LicenseContent() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-20 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
-        <div className="h-16 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
-        <div className="h-40 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
+        <Skeleton className="h-20 rounded-lg" />
+        <Skeleton className="h-16 rounded-lg" />
+        <Skeleton className="h-40 rounded-lg" />
       </div>
     )
   }
@@ -110,7 +115,7 @@ export function LicenseContent() {
         {/* Current plan */}
         <div>
           <p className={sectionHeadingClass}>Current Plan</p>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+          <Card padding="none" className="px-6 py-5">
             <div className="flex items-center gap-3">
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${TIER_COLORS[displayTier]}`}>
                 {TIER_LABELS[displayTier]}
@@ -131,13 +136,13 @@ export function LicenseContent() {
                 You're on the free Community plan. All scanning tools and dashboard features are included.
               </p>
             )}
-          </div>
+          </Card>
         </div>
 
         {/* Activate license */}
         <div>
           <p className={sectionHeadingClass}>Activate License</p>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+          <Card padding="none" className="px-6 py-5">
             <div className="flex gap-3">
               <div className="flex-1">
                 <label htmlFor="license-key" className="sr-only">License key</label>
@@ -172,13 +177,13 @@ export function LicenseContent() {
                 {activateMsg.text}
               </p>
             )}
-          </div>
+          </Card>
         </div>
 
         {/* Resource Usage */}
         <div>
           <p className={sectionHeadingClass}>Resource Usage</p>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+          <Card padding="none" className="divide-y divide-[var(--color-border)]">
             {([
               { label: "Users", used: displayUsage.users, max: displayLimits.max_users },
               { label: "Source Connections", used: displayUsage.source_connections, max: displayLimits.max_source_connections },
@@ -216,14 +221,14 @@ export function LicenseContent() {
                 </div>
               )
             })}
-          </div>
+          </Card>
         </div>
 
         {/* Remove license */}
         {displayLicense && (
           <div>
             <p className={sectionHeadingClass}>Remove License</p>
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+            <Card padding="none" className="px-6 py-5">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-[var(--color-text-primary)]">Remove current license</p>
@@ -242,7 +247,7 @@ export function LicenseContent() {
                   {removing ? "Removing…" : "Remove License"}
                 </Button>
               </div>
-            </div>
+            </Card>
           </div>
         )}
 

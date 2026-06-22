@@ -1,4 +1,4 @@
-"""Tests for POST /api/v1/sources/{source_id}/scans/trigger.
+"""Tests for POST /api/v1/scans/ci.
 
 Validation errors return 422 (FastAPI/pydantic default), not 400.
 The plan describes "400 when commit_sha missing" — we accept 422 here since
@@ -25,17 +25,18 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
 os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
 from src.db.models import ApiKey, Asset, ScanRun  # noqa: E402
+from src.scans.ci_router import router as ci_router  # noqa: E402
 from src.scans.service import ScanSubmission  # noqa: E402
-from src.scans.trigger_router import router as trigger_router  # noqa: E402
 
 
-# ── App factory ───────────────────────────────────────────────────────────────
+_CI_URL = "/api/v1/scans/ci"
+
 
 def _make_app(state: dict | None = None) -> FastAPI:
     app = FastAPI()
@@ -45,11 +46,9 @@ def _make_app(state: dict | None = None) -> FastAPI:
             for k, v in state.items():
                 setattr(request.state, k, v)
             return await call_next(request)
-    app.include_router(trigger_router)
+    app.include_router(ci_router)
     return app
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
@@ -68,7 +67,7 @@ def _fake_submission(scan_id: str, source_id: str, commit_sha: str) -> ScanSubmi
         scan_id=scan_id,
         repo_id=source_id,
         commit_sha=commit_sha,
-        scanner_types=["dependencies"],
+        scanner_types=["dependencies_scanning"],
         status="queued",
         submitted_at=datetime(2026, 6, 14, tzinfo=timezone.utc),
         submitted_by="api_key:1",
@@ -83,8 +82,6 @@ _DEFAULT_STATE = {
     "api_key_allowed_source_ids": None,
 }
 
-
-# ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
 def _clear_rate_limit_buckets():
@@ -132,15 +129,12 @@ async def api_key_row(db_session):
     await db_session.commit()
 
 
-# ── Pure-mock tests (no DB) ───────────────────────────────────────────────────
-
 def test_401_when_no_api_key_state():
     """No api_key_id in request.state returns 401 (simulates non-API-key caller)."""
-    # Build app with NO state injection — api_key_id will be absent on request.state
     client = TestClient(_make_app())
     resp = client.post(
-        f"/api/v1/sources/{_ANY_SOURCE}/scans/trigger",
-        json={"commit_sha": "abc12345"},
+        _CI_URL,
+        json={"source_id": _ANY_SOURCE, "commit_sha": "abc12345"},
     )
     assert resp.status_code == 401
 
@@ -149,8 +143,18 @@ def test_422_when_commit_sha_missing():
     """Body without commit_sha returns 422 (FastAPI pydantic validation)."""
     client = TestClient(_make_app(_DEFAULT_STATE))
     resp = client.post(
-        f"/api/v1/sources/{_ANY_SOURCE}/scans/trigger",
-        json={},
+        _CI_URL,
+        json={"source_id": _ANY_SOURCE},
+    )
+    assert resp.status_code == 422
+
+
+def test_422_when_source_id_missing():
+    """Body without source_id returns 422."""
+    client = TestClient(_make_app(_DEFAULT_STATE))
+    resp = client.post(
+        _CI_URL,
+        json={"commit_sha": "abc12345"},
     )
     assert resp.status_code == 422
 
@@ -164,8 +168,8 @@ def test_403_when_api_key_lacks_scope():
     }
     client = TestClient(_make_app(state))
     resp = client.post(
-        f"/api/v1/sources/{_ANY_SOURCE}/scans/trigger",
-        json={"commit_sha": "abc12345"},
+        _CI_URL,
+        json={"source_id": _ANY_SOURCE, "commit_sha": "abc12345"},
     )
     assert resp.status_code == 403
     body = resp.json()
@@ -183,11 +187,11 @@ def test_404_when_source_not_found():
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_ctx.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("src.scans.trigger_router.get_session", return_value=mock_ctx):
+    with patch("src.scans.ci_router.get_session", return_value=mock_ctx):
         client = TestClient(_make_app(_DEFAULT_STATE))
         resp = client.post(
-            f"/api/v1/sources/{_ANY_SOURCE}/scans/trigger",
-            json={"commit_sha": "abc12345"},
+            _CI_URL,
+            json={"source_id": _ANY_SOURCE, "commit_sha": "abc12345"},
         )
     assert resp.status_code == 404
 
@@ -205,11 +209,11 @@ def test_409_when_asset_archived():
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_ctx.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("src.scans.trigger_router.get_session", return_value=mock_ctx):
+    with patch("src.scans.ci_router.get_session", return_value=mock_ctx):
         client = TestClient(_make_app(_DEFAULT_STATE))
         resp = client.post(
-            f"/api/v1/sources/{source_id}/scans/trigger",
-            json={"commit_sha": "abc12345"},
+            _CI_URL,
+            json={"source_id": source_id, "commit_sha": "abc12345"},
         )
     assert resp.status_code == 409
     assert resp.json()["detail"]["error"] == "source_disabled"
@@ -230,14 +234,14 @@ def test_202_happy_path():
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_ctx.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("src.scans.trigger_router.get_session", return_value=mock_ctx), \
-         patch("src.scans.trigger_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
-         patch("src.scans.trigger_router.submit_ci_scan", new=AsyncMock(return_value=submission)), \
-         patch("src.scans.trigger_router.cancel_older_queued_for_pr", new=AsyncMock(return_value=[])):
+    with patch("src.scans.ci_router.get_session", return_value=mock_ctx), \
+         patch("src.scans.ci_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
+         patch("src.scans.ci_router.submit_ci_scan", new=AsyncMock(return_value=submission)), \
+         patch("src.scans.ci_router.cancel_older_queued_for_pr", new=AsyncMock(return_value=[])):
         client = TestClient(_make_app(_DEFAULT_STATE))
         resp = client.post(
-            f"/api/v1/sources/{source_id}/scans/trigger",
-            json={"commit_sha": "abc12345def67890", "branch": "main"},
+            _CI_URL,
+            json={"source_id": source_id, "commit_sha": "abc12345def67890", "branch": "main"},
         )
 
     assert resp.status_code == 202, resp.text
@@ -268,24 +272,21 @@ def test_dedup_returns_existing_scan_without_new_submission():
 
     mock_submit = AsyncMock()
 
-    with patch("src.scans.trigger_router.get_session", return_value=mock_ctx), \
-         patch("src.scans.trigger_router.find_inflight_scan", new=AsyncMock(return_value=inflight)), \
-         patch("src.scans.trigger_router.submit_ci_scan", new=mock_submit):
+    with patch("src.scans.ci_router.get_session", return_value=mock_ctx), \
+         patch("src.scans.ci_router.find_inflight_scan", new=AsyncMock(return_value=inflight)), \
+         patch("src.scans.ci_router.submit_ci_scan", new=mock_submit):
         client = TestClient(_make_app(_DEFAULT_STATE))
         resp = client.post(
-            f"/api/v1/sources/{source_id}/scans/trigger",
-            json={"commit_sha": "abc12345def67890"},
+            _CI_URL,
+            json={"source_id": source_id, "commit_sha": "abc12345def67890"},
         )
 
     assert resp.status_code == 202, resp.text
     body = resp.json()
     assert body["scan_id"] == existing_scan_id
     assert body["deduplicated"] is True
-    # submit_ci_scan must NOT have been called
     mock_submit.assert_not_called()
 
-
-# ── DB-backed tests ───────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_db_dedup_returns_existing_scan(db_session, asset, api_key_row):
@@ -294,10 +295,9 @@ async def test_db_dedup_returns_existing_scan(db_session, asset, api_key_row):
     commit_sha = "dec01234" + "a" * 32
     scan_id_first = str(uuid.uuid4())
 
-    # Seed an in-flight scan for the same commit
     existing = ScanRun(
         id=scan_id_first,
-        tool="dependencies",
+        tool="dependencies_scanning",
         asset_id=asset.id,
         status="queued",
         commit_sha=commit_sha,
@@ -321,14 +321,13 @@ async def test_db_dedup_returns_existing_scan(db_session, asset, api_key_row):
             "api_key_allowed_source_ids": None,
         }
 
-        # find_inflight_scan returns the existing row
-        with patch("src.scans.trigger_router.get_session", return_value=mock_ctx), \
-             patch("src.scans.trigger_router.find_inflight_scan", new=AsyncMock(return_value=existing)), \
-             patch("src.scans.trigger_router.submit_ci_scan", new=AsyncMock()) as mock_submit:
+        with patch("src.scans.ci_router.get_session", return_value=mock_ctx), \
+             patch("src.scans.ci_router.find_inflight_scan", new=AsyncMock(return_value=existing)), \
+             patch("src.scans.ci_router.submit_ci_scan", new=AsyncMock()) as mock_submit:
             client = TestClient(_make_app(state))
             resp = client.post(
-                f"/api/v1/sources/{asset.id}/scans/trigger",
-                json={"commit_sha": commit_sha},
+                _CI_URL,
+                json={"source_id": asset.id, "commit_sha": commit_sha},
             )
 
         assert resp.status_code == 202, resp.text
@@ -350,10 +349,9 @@ async def test_db_force_push_cancels_older_pr_scan(db_session, asset, api_key_ro
     old_scan_id = str(uuid.uuid4())
     new_scan_id = str(uuid.uuid4())
 
-    # Seed the "old" queued scan
     old_scan = ScanRun(
         id=old_scan_id,
-        tool="dependencies",
+        tool="dependencies_scanning",
         asset_id=asset.id,
         status="queued",
         commit_sha="ab1111" + "a" * 34,
@@ -364,12 +362,11 @@ async def test_db_force_push_cancels_older_pr_scan(db_session, asset, api_key_ro
     await db_session.commit()
 
     try:
-        # Seed the "new" scan that the second push returns
         new_submission = _fake_submission(new_scan_id, asset.id, "bef222" + "b" * 34)
         new_submission.scan_id = new_scan_id
         new_submission_row = ScanRun(
             id=new_scan_id,
-            tool="dependencies",
+            tool="dependencies_scanning",
             asset_id=asset.id,
             status="queued",
             commit_sha="bef222" + "b" * 34,
@@ -397,7 +394,6 @@ async def test_db_force_push_cancels_older_pr_scan(db_session, asset, api_key_ro
         from src.db.engine import DATABASE_URL
         from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-        # Give cancel_older_queued_for_pr its own real session (separate engine instance)
         cancel_engine = create_async_engine(DATABASE_URL, echo=False)
         cancel_factory = async_sessionmaker(cancel_engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -406,34 +402,33 @@ async def test_db_force_push_cancels_older_pr_scan(db_session, asset, api_key_ro
             async with cancel_factory() as s:
                 yield s
 
-        with patch("src.scans.trigger_router.get_session", return_value=mock_ctx), \
-             patch("src.scans.trigger_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
-             patch("src.scans.trigger_router.submit_ci_scan", new=AsyncMock(return_value=new_submission)), \
+        with patch("src.scans.ci_router.get_session", return_value=mock_ctx), \
+             patch("src.scans.ci_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
+             patch("src.scans.ci_router.submit_ci_scan", new=AsyncMock(return_value=new_submission)), \
              patch("src.scans.service.get_session", _real_get_session_for_cancel):
             client = TestClient(_make_app(state))
             resp = client.post(
-                f"/api/v1/sources/{asset.id}/scans/trigger",
-                json={"commit_sha": "bef222" + "b" * 34, "branch": "feat/pr", "pr_number": pr_number},
+                _CI_URL,
+                json={"source_id": asset.id, "commit_sha": "bef222" + "b" * 34, "branch": "feat/pr", "pr_number": pr_number},
             )
 
         await cancel_engine.dispose()
 
         assert resp.status_code == 202, resp.text
 
-        # Verify via direct DB read
         await db_session.refresh(old_scan)
         await db_session.refresh(new_submission_row)
 
         assert old_scan.status == "cancelled", f"expected cancelled, got {old_scan.status}"
         assert old_scan.cancelled_reason == "superseded"
+        # finished_at must be stamped so the run sorts/paginates in the history feed.
+        assert old_scan.finished_at is not None
         assert new_submission_row.status == "queued"
 
     finally:
         await db_session.execute(delete(ScanRun).where(ScanRun.id.in_([old_scan_id, new_scan_id])))
         await db_session.commit()
 
-
-# ── Rate-limit tests ──────────────────────────────────────────────────────────
 
 def test_rate_limit_blocks_second_request_within_window():
     """Second trigger within 10s for same source returns 429 with Retry-After."""
@@ -449,17 +444,17 @@ def test_rate_limit_blocks_second_request_within_window():
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_ctx.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("src.scans.trigger_router.get_session", return_value=mock_ctx), \
-         patch("src.scans.trigger_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
-         patch("src.scans.trigger_router.submit_ci_scan", new=AsyncMock(return_value=submission)):
+    with patch("src.scans.ci_router.get_session", return_value=mock_ctx), \
+         patch("src.scans.ci_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
+         patch("src.scans.ci_router.submit_ci_scan", new=AsyncMock(return_value=submission)):
         client = TestClient(_make_app(_DEFAULT_STATE))
         r1 = client.post(
-            f"/api/v1/sources/{source_id}/scans/trigger",
-            json={"commit_sha": "abc12345"},
+            _CI_URL,
+            json={"source_id": source_id, "commit_sha": "abc12345"},
         )
         r2 = client.post(
-            f"/api/v1/sources/{source_id}/scans/trigger",
-            json={"commit_sha": "def67890"},
+            _CI_URL,
+            json={"source_id": source_id, "commit_sha": "def67890"},
         )
 
     assert r1.status_code == 202
@@ -485,17 +480,17 @@ def test_rate_limit_keyed_by_source_id():
     mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
     mock_ctx.__aexit__ = AsyncMock(return_value=None)
 
-    with patch("src.scans.trigger_router.get_session", return_value=mock_ctx), \
-         patch("src.scans.trigger_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
-         patch("src.scans.trigger_router.submit_ci_scan", new=AsyncMock(side_effect=[submission_a, submission_b])):
+    with patch("src.scans.ci_router.get_session", return_value=mock_ctx), \
+         patch("src.scans.ci_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
+         patch("src.scans.ci_router.submit_ci_scan", new=AsyncMock(side_effect=[submission_a, submission_b])):
         client = TestClient(_make_app(_DEFAULT_STATE))
         r1 = client.post(
-            f"/api/v1/sources/{source_a}/scans/trigger",
-            json={"commit_sha": "abc12345"},
+            _CI_URL,
+            json={"source_id": source_a, "commit_sha": "abc12345"},
         )
         r2 = client.post(
-            f"/api/v1/sources/{source_b}/scans/trigger",
-            json={"commit_sha": "abc12345"},
+            _CI_URL,
+            json={"source_id": source_b, "commit_sha": "abc12345"},
         )
 
     assert r1.status_code == 202

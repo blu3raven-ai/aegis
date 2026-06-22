@@ -16,7 +16,6 @@ Will be removed once all call sites migrate (Phase 1+).
 """
 from __future__ import annotations
 
-import os
 import secrets
 import threading
 from datetime import datetime, timezone
@@ -32,6 +31,7 @@ __all__ = [
     "STALE_JOB_SECONDS",
     "assign_next_job",
     "cancel_jobs_for_org",
+    "cancel_jobs_for_scans",
     "cancel_stale_jobs",
     "complete_job",
     "create_job",
@@ -55,9 +55,7 @@ _encrypt_env_vars = encrypt_env_vars
 _decrypt_env_vars = decrypt_env_vars
 
 
-# ---------------------------------------------------------------------------
 # _inner helpers — called by both module-level API and PostgresBackedQueue
-# ---------------------------------------------------------------------------
 
 def _create_job_inner(
     *,
@@ -68,8 +66,6 @@ def _create_job_inner(
     expected_repo_count: int | None = None,
 ) -> str:
     job_id = f"job-{secrets.token_hex(8)}"
-    # Store expected_repo_count in env vars so it survives DB round-trip
-    # (RunnerJob model only persists envVars, not arbitrary fields)
     if expected_repo_count is not None:
         env_vars["EXPECTED_REPO_COUNT"] = str(expected_repo_count)
     job: dict[str, Any] = {
@@ -88,14 +84,6 @@ def _create_job_inner(
 
 
 def _assign_next_job_inner(*, runner_id: str) -> dict[str, Any] | None:
-    # SECURITY NOTE: This assigns the oldest queued job regardless of org.
-    # This is acceptable for single-tenant deployments where all runners are
-    # trusted. The Runner model has no org/allowed_orgs field by design.
-    #
-    # TODO(multi-tenant): For multi-tenant deployments, add org-scoped runner
-    # groups. Runners should declare allowed_orgs and this function must filter
-    # queued jobs to only those whose job["org"] is in the runner's allowed set.
-    # See also: Runner model in src/db/models.py (needs allowed_orgs column).
     with _assign_lock:
         queued = list_jobs(status="queued")
         if not queued:
@@ -147,9 +135,7 @@ def _read_job_inner(job_id: str) -> dict[str, Any] | None:
     return job
 
 
-# ---------------------------------------------------------------------------
 # Module-level public API — preserved for backward compat
-# ---------------------------------------------------------------------------
 
 def create_job(
     job_type: str,
@@ -208,6 +194,38 @@ def cancel_jobs_for_org(org: str, job_type: str | None = None) -> list[dict[str,
         if job.get("status") not in ("queued", "assigned", "running"):
             continue
         if job_type and job.get("jobType") != job_type:
+            continue
+        job["status"] = "cancelled"
+        job["completedAt"] = now_iso()
+        write_job(job)
+        cancelled.append(job)
+    return cancelled
+
+
+def cancel_jobs_for_scans(scan_ids: list[str]) -> list[dict[str, Any]]:
+    """Cancel active runner jobs whose runId is keyed off any of the given scan IDs.
+
+    Used by the supersede path (cancel_older_queued_for_pr) so that when a newer
+    scan replaces older queued ones, the runner stops processing the obsolete
+    jobs instead of running them to completion and having the result dropped on
+    ingest. The runId pattern is ``f"{scan_id}:{scanner}"`` (see
+    scans/service.py::_dispatch_scanner_jobs), so one scan ID maps to one job
+    per scanner.
+
+    Runner-side cancellation propagates on the next progress poll:
+    runner/router.py::post_progress re-reads the job, sees status=='cancelled',
+    and the response sets ``cancelled: true`` so the runner triggers its own
+    cancel path.
+    """
+    if not scan_ids:
+        return []
+    prefixes = tuple(f"{sid}:" for sid in scan_ids)
+    cancelled: list[dict[str, Any]] = []
+    for job in list_jobs():
+        if job.get("status") not in ("queued", "assigned", "running"):
+            continue
+        run_id = job.get("runId", "")
+        if not run_id.startswith(prefixes):
             continue
         job["status"] = "cancelled"
         job["completedAt"] = now_iso()

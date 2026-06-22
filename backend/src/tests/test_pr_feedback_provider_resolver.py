@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import pytest
-
 from src.pr_feedback.git_pr_providers.azure_devops import AzureDevOpsPrProvider
 from src.pr_feedback.git_pr_providers.bitbucket import BitbucketPrProvider
 from src.pr_feedback.git_pr_providers.github import GitHubPrProvider

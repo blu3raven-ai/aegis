@@ -61,6 +61,30 @@ const iconSize: Record<ButtonSize, string> = {
   md: "h-4 w-4",
 }
 
+// Shared with LinkButton so the two stay visually identical without a refactor
+// every time the chrome ticks.
+export function buttonClassName({
+  variant,
+  size,
+  iconOnly = false,
+}: {
+  variant: ButtonVariant
+  size: ButtonSize
+  iconOnly?: boolean
+}): string {
+  const sizing =
+    variant === "link"
+      ? linkSizeClasses[size]
+      : iconOnly
+        ? iconOnlySizeClasses[size]
+        : sizeClasses[size]
+  return cn(base, variantClasses[variant], sizing)
+}
+
+export function buttonIconClassName(size: ButtonSize): string {
+  return iconSize[size]
+}
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     variant = "secondary",
@@ -77,12 +101,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   },
   ref,
 ) {
-  const sizing =
-    variant === "link"
-      ? linkSizeClasses[size]
-      : iconOnly
-        ? iconOnlySizeClasses[size]
-        : sizeClasses[size]
   const isDisabled = disabled || isLoading
 
   return (
@@ -90,17 +108,23 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       disabled={isDisabled}
-      className={cn(base, variantClasses[variant], sizing, className)}
+      className={cn(buttonClassName({ variant, size, iconOnly }), className)}
       {...rest}
     >
       {isLoading ? (
         <Spinner className={iconSize[size]} />
       ) : (
-        leadingIcon && <span className={cn("shrink-0", iconSize[size])}>{leadingIcon}</span>
+        leadingIcon && (
+          <span className={cn("inline-flex shrink-0 items-center justify-center", iconSize[size])}>
+            {leadingIcon}
+          </span>
+        )
       )}
       {!iconOnly && children}
       {!isLoading && trailingIcon && (
-        <span className={cn("shrink-0", iconSize[size])}>{trailingIcon}</span>
+        <span className={cn("inline-flex shrink-0 items-center justify-center", iconSize[size])}>
+          {trailingIcon}
+        </span>
       )}
     </button>
   )

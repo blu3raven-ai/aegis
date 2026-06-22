@@ -6,7 +6,7 @@ from runner.scanners.secrets.scanner import SecretsScanConfig
 
 def _job(**env):
     return {
-        "jobType": "secrets",
+        "jobType": "secret_scanning",
         "envVars": {
             "GIT_REPOS": "https://example.com/x.git",
             **env,

@@ -4,6 +4,7 @@ import { useState } from "react"
 import type { NotificationDestination, CreateDestinationPayload, UpdateDestinationPayload } from "@/lib/client/destinations-api"
 import { EventFilterBuilder, type EventFilter } from "./EventFilterBuilder"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 
@@ -37,7 +38,6 @@ function validateEmail(addr: string): boolean {
 
 interface DestinationFormProps {
   initial?: NotificationDestination | null
-  orgId: string
   onSubmit: (payload: CreateDestinationPayload | (UpdateDestinationPayload & { id: number })) => Promise<void>
   onCancel: () => void
   submitting?: boolean
@@ -45,7 +45,6 @@ interface DestinationFormProps {
 
 export function DestinationForm({
   initial,
-  orgId,
   onSubmit,
   onCancel,
   submitting = false,
@@ -138,7 +137,6 @@ export function DestinationForm({
       })
     } else {
       await onSubmit({
-        org_id: orgId,
         destination_type: type,
         name: name.trim(),
         config,
@@ -148,17 +146,13 @@ export function DestinationForm({
     }
   }
 
-  const labelClass =
+  const eyebrowClass =
     "block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
-  const errorClass = "mt-1 text-[11px] text-[var(--color-severity-critical)]"
 
   return (
     <form onSubmit={(e) => { void handleSubmit(e) }} className="space-y-5">
       {/* Name */}
-      <div>
-        <label htmlFor="dest-name" className={labelClass}>
-          Name
-        </label>
+      <FormField label="Name" htmlFor="dest-name" error={errors.name}>
         <Input
           id="dest-name"
           type="text"
@@ -166,14 +160,14 @@ export function DestinationForm({
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Security alerts"
           autoComplete="off"
+          invalid={!!errors.name}
         />
-        {errors.name && <p className={errorClass}>{errors.name}</p>}
-      </div>
+      </FormField>
 
       {/* Type — locked in edit mode */}
       {!isEditing && (
         <div>
-          <label className={labelClass}>Destination type</label>
+          <label className={eyebrowClass}>Destination type</label>
           <div className="flex gap-2">
             {(["slack", "webhook", "email"] as const).map((t) => (
               <button
@@ -195,43 +189,39 @@ export function DestinationForm({
 
       {/* Per-type config */}
       {type === "slack" && (
-        <div>
-          <label htmlFor="dest-slack-url" className={labelClass}>
-            Slack webhook URL
-          </label>
+        <FormField
+          label="Slack webhook URL"
+          htmlFor="dest-slack-url"
+          error={errors.webhookUrl}
+        >
           <Input
             id="dest-slack-url"
             type="url"
             value={slackUrl}
             onChange={(e) => setSlackUrl(e.target.value)}
             placeholder="https://hooks.slack.com/services/..."
+            invalid={!!errors.webhookUrl}
           />
-          {errors.webhookUrl && <p className={errorClass}>{errors.webhookUrl}</p>}
-        </div>
+        </FormField>
       )}
 
       {type === "webhook" && (
         <>
-          <div>
-            <label htmlFor="dest-webhook-url" className={labelClass}>
-              Webhook URL
-            </label>
+          <FormField label="Webhook URL" htmlFor="dest-webhook-url" error={errors.url}>
             <Input
               id="dest-webhook-url"
               type="url"
               value={webhookUrl}
               onChange={(e) => setWebhookUrl(e.target.value)}
               placeholder="https://example.com/hooks/aegis"
+              invalid={!!errors.url}
             />
-            {errors.url && <p className={errorClass}>{errors.url}</p>}
-          </div>
-          <div>
-            <label htmlFor="dest-webhook-secret" className={labelClass}>
-              Signing secret{" "}
-              <span className="font-normal normal-case text-[var(--color-text-tertiary)]">
-                (optional)
-              </span>
-            </label>
+          </FormField>
+          <FormField
+            label={<>Signing secret <span className="font-normal text-[var(--color-text-tertiary)]">(optional)</span></>}
+            htmlFor="dest-webhook-secret"
+            hint="When set, Aegis signs payloads using HMAC-SHA256."
+          >
             <Input
               id="dest-webhook-secret"
               type="password"
@@ -240,18 +230,17 @@ export function DestinationForm({
               placeholder="Optional HMAC-SHA256 secret"
               autoComplete="new-password"
             />
-            <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
-              When set, Aegis signs payloads using HMAC-SHA256.
-            </p>
-          </div>
+          </FormField>
         </>
       )}
 
       {type === "email" && (
-        <div>
-          <label htmlFor="dest-email-addrs" className={labelClass}>
-            Recipients
-          </label>
+        <FormField
+          label="Recipients"
+          htmlFor="dest-email-addrs"
+          hint={errors.toAddresses ? undefined : "Comma- or newline-separated email addresses."}
+          error={errors.toAddresses}
+        >
           <Textarea
             id="dest-email-addrs"
             value={toAddresses}
@@ -259,12 +248,9 @@ export function DestinationForm({
             placeholder={"security@example.com, oncall@example.com"}
             rows={3}
             className="resize-none"
+            invalid={!!errors.toAddresses}
           />
-          <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
-            Comma- or newline-separated email addresses.
-          </p>
-          {errors.toAddresses && <p className={errorClass}>{errors.toAddresses}</p>}
-        </div>
+        </FormField>
       )}
 
       {/* Event filter */}

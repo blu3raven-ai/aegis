@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
 
-export function GitHubActionSteps({ sourceId, aegisUrl }: { sourceId: string; aegisUrl: string }) {
+export function GitHubActionSteps({ aegisUrl }: { aegisUrl: string }) {
   const [copied, setCopied] = useState(false);
 
   const snippet = `name: Aegis security scan
@@ -17,7 +17,6 @@ jobs:
         with:
           aegis-url:  ${aegisUrl}
           api-key:    \${{ secrets.AEGIS_API_KEY }}
-          source-id:  ${sourceId || "<your-source-id>"}
           fail-on:    high
 `;
 

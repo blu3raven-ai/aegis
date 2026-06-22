@@ -48,17 +48,44 @@ async function loadModule() {
 // ---------------------------------------------------------------------------
 
 test("page load: listDestinations fetches org destinations", async () => {
-  const rows = [
-    { id: 1, org_id: "example-org", destination_type: "slack", name: "Sec Slack", config: { webhook_url: "https://hooks.slack.com/x" }, enabled: true, event_filter: {}, created_at: "2026-05-01T00:00:00Z", updated_at: "2026-05-01T00:00:00Z" },
-    { id: 2, org_id: "example-org", destination_type: "email", name: "PagerDuty mail", config: { to_addresses: ["pager@example.com"] }, enabled: false, event_filter: { min_severity: "high" }, created_at: "2026-05-02T00:00:00Z", updated_at: "2026-05-02T00:00:00Z" },
-  ]
-  const { mock, calls } = makeFetchMock({ destinations: rows })
+  // listDestinations speaks GraphQL — wrap response in {data: {notifications: {destinations: [...]}}}
+  // with the camelCase resolver shape (configJson / eventFilterJson strings).
+  const payload = {
+    data: {
+      notifications: {
+        destinations: [
+          {
+            id: 1,
+            destinationType: "slack",
+            name: "Sec Slack",
+            configJson: JSON.stringify({ webhook_url: "https://hooks.slack.com/x" }),
+            enabled: true,
+            eventFilterJson: JSON.stringify({}),
+            createdAt: "2026-05-01T00:00:00Z",
+            updatedAt: "2026-05-01T00:00:00Z",
+          },
+          {
+            id: 2,
+            destinationType: "email",
+            name: "PagerDuty mail",
+            configJson: JSON.stringify({ to_addresses: ["pager@example.com"] }),
+            enabled: false,
+            eventFilterJson: JSON.stringify({ min_severity: "high" }),
+            createdAt: "2026-05-02T00:00:00Z",
+            updatedAt: "2026-05-02T00:00:00Z",
+          },
+        ],
+      },
+    },
+  }
+  const { mock, calls } = makeFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDestinations } = await loadModule()
   const result = await listDestinations("example-org")
 
   assert.equal(calls.length, 1)
+  assert.equal(calls[0].url, "/api/v1/graphql")
   assert.equal(result.length, 2)
   assert.equal(result[0].name, "Sec Slack")
   assert.equal(result[1].enabled, false)
@@ -245,26 +272,32 @@ test("delete flow: throws typed error on 404", async () => {
 // ---------------------------------------------------------------------------
 
 test("delivery history: fetches last 25 deliveries for destination", async () => {
-  const deliveries = [
-    { id: 1, destination_id: 1, event_id: "evt-1", event_type: "chain.created", status: "delivered", response_code: 200, attempted_at: "2026-05-20T10:00:00Z" },
-    { id: 2, destination_id: 1, event_id: "evt-2", event_type: "finding.created", status: "failed", error: "connection refused", attempted_at: "2026-05-20T11:00:00Z" },
-  ]
-  const { mock, calls } = makeFetchMock({ deliveries })
+  // listDeliveries speaks GraphQL — wrap the rows in {data: {notifications: {deliveries: [...]}}}
+  // with the camelCase resolver shape.
+  const payload = {
+    data: {
+      notifications: {
+        deliveries: [
+          { id: "1", destinationId: 1, eventId: "evt-1", eventType: "chain.created", status: "delivered", payloadSummary: null, responseCode: 200, error: null, attemptedAt: "2026-05-20T10:00:00Z" },
+          { id: "2", destinationId: 1, eventId: "evt-2", eventType: "finding.created", status: "failed", payloadSummary: null, responseCode: null, error: "connection refused", attemptedAt: "2026-05-20T11:00:00Z" },
+        ],
+      },
+    },
+  }
+  const { mock, calls } = makeFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDeliveries } = await loadModule()
   const result = await listDeliveries(1, 25)
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.pathname, "/api/v1/notifications/destinations/1/deliveries")
-  assert.equal(url.searchParams.get("limit"), "25")
+  assert.equal(calls[0].url, "/api/v1/graphql")
   assert.equal(result.length, 2)
   assert.equal(result[1].status, "failed")
   assert.equal(result[1].error, "connection refused")
 })
 
 test("delivery history: returns empty array when no deliveries", async () => {
-  const { mock } = makeFetchMock({ deliveries: [] })
+  const { mock } = makeFetchMock({ data: { notifications: { deliveries: [] } } })
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDeliveries } = await loadModule()

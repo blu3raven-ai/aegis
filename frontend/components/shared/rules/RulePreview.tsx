@@ -5,7 +5,6 @@ import { previewRule, type RulePreviewResponse } from "@/lib/client/rules-api"
 import { Button } from "@/components/ui/Button"
 
 interface RulePreviewProps {
-  orgId: string
   ruleId: string | null
   /**
    * Incrementing this value re-runs the preview. The parent bumps it
@@ -26,7 +25,7 @@ function matchCountLabel(count: number): string {
   return `${count} findings would match this rule.`
 }
 
-export function RulePreview({ orgId, ruleId, refreshKey = 0 }: RulePreviewProps) {
+export function RulePreview({ ruleId, refreshKey = 0 }: RulePreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "idle" })
   const [retryCount, setRetryCount] = useState(0)
 
@@ -36,7 +35,7 @@ export function RulePreview({ orgId, ruleId, refreshKey = 0 }: RulePreviewProps)
     let cancelled = false
     setState({ status: "loading" })
 
-    previewRule(orgId, ruleId)
+    previewRule(ruleId)
       .then((data) => {
         if (!cancelled) setState({ status: "success", data })
       })
@@ -51,7 +50,7 @@ export function RulePreview({ orgId, ruleId, refreshKey = 0 }: RulePreviewProps)
     return () => {
       cancelled = true
     }
-  }, [orgId, ruleId, refreshKey, retryCount])
+  }, [ruleId, refreshKey, retryCount])
 
   // Create mode — no rule persisted yet
   if (ruleId === null) {

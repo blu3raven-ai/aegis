@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { cn } from "@/lib/shared/utils";
-import type { Integration, ConnectorCategory as IntegrationCategory } from "@/lib/client/connectors-api";
+import type { Integration } from "@/lib/client/integrations-catalog-api";
 import { IntegrationLogoMark } from "./IntegrationLogo";
 
 const STATUS_BADGE: Record<Integration["status"], string> = {
@@ -15,9 +15,11 @@ const STATUS_BADGE: Record<Integration["status"], string> = {
     "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
 };
 
-const CATEGORY_LABEL: Record<IntegrationCategory, string> = {
-  ci: "CI/CD",
-  notification: "Notification",
+const CATEGORY_LABEL: Record<string, string> = {
+  cicd: "CI/CD",
+  notifications: "Notifications",
+  ticketing: "Ticketing",
+  automation: "Automation",
   runner: "Runner",
 };
 
@@ -72,7 +74,7 @@ export function IntegrationCard({ i, onSelect }: IntegrationCardProps) {
             {i.version}
           </span>
           <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--color-text-tertiary)]">
-            {CATEGORY_LABEL[i.category]}
+            {CATEGORY_LABEL[i.category] ?? i.category}
           </span>
         </div>
         <span className="shrink-0 text-xs font-semibold text-[var(--color-accent)] transition-transform group-hover:translate-x-0.5">

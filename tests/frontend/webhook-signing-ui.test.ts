@@ -19,14 +19,14 @@ test("listSigningSecrets constructs correct URL", async () => {
 
   // Inline minimal reimplementation of the API client to test URL construction
   async function listSigningSecrets(destId: number, fetchFn = mockFetch): Promise<unknown[]> {
-    const res = await fetchFn(`/api/v1/notification-channels/${destId}/signing-secret`)
+    const res = await fetchFn(`/api/v1/notifications/destinations/${destId}/signing-secret`)
     const data = await res.json() as { secrets: unknown[] }
     return data.secrets ?? []
   }
 
   const result = await listSigningSecrets(42)
   assert.deepEqual(result, [])
-  assert.equal(calls[0], "/api/v1/notification-channels/42/signing-secret")
+  assert.equal(calls[0], "/api/v1/notifications/destinations/42/signing-secret")
 })
 
 test("rotateSigningSecret sends POST and returns raw secret in response", async () => {
@@ -51,7 +51,7 @@ test("rotateSigningSecret sends POST and returns raw secret in response", async 
   }
 
   async function rotateSigningSecret(destId: number, fetchFn = mockFetch) {
-    const res = await fetchFn(`/api/v1/notification-channels/${destId}/signing-secret`, {
+    const res = await fetchFn(`/api/v1/notifications/destinations/${destId}/signing-secret`, {
       method: "POST",
     })
     return res.json()
@@ -71,14 +71,14 @@ test("revokeSigningSecret sends DELETE to correct URL", async () => {
   }
 
   async function revokeSigningSecret(destId: number, version: number, fetchFn = mockFetch) {
-    await fetchFn(`/api/v1/notification-channels/${destId}/signing-secret/${version}`, {
+    await fetchFn(`/api/v1/notifications/destinations/${destId}/signing-secret/${version}`, {
       method: "DELETE",
     })
   }
 
   await revokeSigningSecret(42, 1)
   assert.equal(calls[0]?.method, "DELETE")
-  assert.equal(calls[0]?.url, "/api/v1/notification-channels/42/signing-secret/1")
+  assert.equal(calls[0]?.url, "/api/v1/notifications/destinations/42/signing-secret/1")
 })
 
 // ── RotateModal state machine ─────────────────────────────────────────────────

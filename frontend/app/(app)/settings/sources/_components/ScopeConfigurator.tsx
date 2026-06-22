@@ -4,7 +4,6 @@ import { useState, useMemo } from "react"
 import type { ScanScope } from "@/lib/shared/sources-types"
 import { Button } from "@/components/ui/Button"
 
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface ScopeConfiguratorProps {
   itemLabel: string
@@ -16,7 +15,6 @@ interface ScopeConfiguratorProps {
   availableItems?: string[]
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function ScopeConfigurator({
   itemLabel,

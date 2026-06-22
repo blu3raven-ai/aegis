@@ -43,7 +43,6 @@ def _delivery_to_dict(d: NotificationDelivery) -> dict[str, Any]:
     }
 
 
-# ── Destination CRUD ──────────────────────────────────────────────────────────
 
 
 def list_destinations() -> list[dict[str, Any]]:
@@ -142,7 +141,6 @@ def delete_destination(dest_id: int) -> bool:
     return run_db(_q)
 
 
-# ── Delivery record helpers ───────────────────────────────────────────────────
 
 
 def record_delivery(

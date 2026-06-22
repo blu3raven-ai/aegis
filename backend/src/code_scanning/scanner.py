@@ -163,7 +163,7 @@ def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | No
         new_findings = _apply_lifecycle(code_scanning_hooks, ctx, all_findings)
 
         try:
-            from src.settings.llm_usage import record_usage_from_findings
+            from src.settings.llm.usage import record_usage_from_findings
             record_usage_from_findings(all_findings)
         except Exception:
             logger.warning("Failed to record LLM usage from code_scanning ingest", exc_info=True)
@@ -224,8 +224,6 @@ def execute_code_scanning_scan_once(
     config = scanner_config or get_code_scanning_scanner_config()
 
     update_code_scanning_run(org, run_id, {"scanMode": scan_mode})
-
-    run_output_dir = _build_run_output_dir(org, run_id)
 
     all_sources = [s for s in get_scan_sources_for_org(org) if s.repo_urls]
     total_repos = sum(len(s.repo_urls) for s in all_sources)
@@ -297,3 +295,6 @@ def execute_code_scanning_scan_once(
             runtime.discard_cancelled(run_id)
             if runtime_started:
                 runtime.release(org)
+
+
+_code_scanning_runtime = InMemoryScanRuntime()

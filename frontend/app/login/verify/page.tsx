@@ -1,8 +1,5 @@
 import { VerifyForm } from "./VerifyForm"
 
-// The MFA pending token is stored in sessionStorage by LoginForm.tsx after a
-// successful /auth/login call. VerifyForm reads it client-side; there is no
-// server-side MFA cookie to check here.
 export default function VerifyPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--color-background)] px-4">

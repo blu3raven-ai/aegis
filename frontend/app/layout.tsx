@@ -29,10 +29,10 @@ const VENDOR_DEFAULT_TITLE = "Blu3Raven | Aegis - Vulnerability Management Porta
 
 async function getDefaultTitle(): Promise<string> {
   try {
-    const res = await fetch(
-      `${process.env.INTERNAL_API_URL ?? "http://localhost:8000"}/api/v1/branding`,
-      { cache: "no-store" },
-    )
+    const base = process.env.INTERNAL_API_URL ?? "http://localhost:8000"
+    const res = await fetch(`${base}/api/v1/settings/organisations/branding`, {
+      cache: "no-store",
+    })
     if (!res.ok) throw new Error("branding fetch failed")
     const body = (await res.json()) as { name: string | null }
     // NULL is the only vendor sentinel; any non-NULL name renders as-is.

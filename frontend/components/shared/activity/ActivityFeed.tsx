@@ -4,8 +4,8 @@ import { ActivityItem } from "./ActivityItem"
 import { EmptyActivityState } from "./EmptyActivityState"
 import type { ActivityEvent } from "@/lib/client/activity-api"
 import { Button } from "@/components/ui/Button"
+import { Skeleton } from "@/components/ui/Skeleton"
 
-// ── Day grouping ──────────────────────────────────────────────────────────────
 
 function dayLabel(isoString: string): string {
   try {
@@ -39,7 +39,6 @@ function groupByDay(events: ActivityEvent[]): Array<{ label: string; events: Act
   return Array.from(groups.entries()).map(([label, evts]) => ({ label, events: evts }))
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 
 interface ActivityFeedProps {
   events: ActivityEvent[]
@@ -60,10 +59,9 @@ export function ActivityFeed({
     return (
       <div className="flex flex-col gap-2 py-8" data-testid="activity-feed-loading">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div
+          <Skeleton
             key={i}
-            className="h-14 animate-pulse rounded-lg bg-[var(--color-surface-raised)]"
-            aria-hidden="true"
+            className="h-14 rounded-lg"
           />
         ))}
       </div>

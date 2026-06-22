@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { buildOrgQuery } from "@/lib/shared/org-query"
 import { formatScanTimestamp } from "@/lib/shared/utils"
-import { fetchCurrentUser, type CurrentUser } from "@/lib/client/auth"
-import { can } from "@/lib/shared/auth/roles.ts"
+import { useHasPermission } from "@/lib/client/use-permission"
 import { useSSE } from "@/components/providers/SSEProvider"
 import type { ScanCompletedEvent, ScanFailedEvent } from "@/lib/shared/sse-types"
 import { Button } from "@/components/ui/Button"
@@ -55,7 +54,6 @@ export function ToolRefreshControls({
   cancelRuns,
   modeOptions,
 }: ToolRefreshControlsProps) {
-  const [user, setUser] = useState<CurrentUser | null>(null)
   const [latestRun, setLatestRun] = useState<ScanRun | null>(null)
   const [lastCompletedRun, setLastCompletedRun] = useState<ScanRun | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -66,11 +64,7 @@ export function ToolRefreshControls({
 
   const orgQuery = useMemo(() => buildOrgQuery(org), [org])
   const isRunning = Boolean(latestRun && RUNNING_STATUSES.has(latestRun.status))
-  const canRun = user ? can(user.role, "run_scans") : false
-
-  useEffect(() => {
-    void fetchCurrentUser().then(setUser)
-  }, [])
+  const { allowed: canRun } = useHasPermission("run_scans")
 
   const loadRuns = useCallback(async () => {
     if (!orgQuery) return

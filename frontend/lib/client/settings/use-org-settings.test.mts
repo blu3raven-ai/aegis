@@ -4,8 +4,8 @@ import assert from "node:assert/strict"
 
 const SRC = readFileSync(new URL("./use-org-settings.ts", import.meta.url), "utf8")
 
-test("useOrgSettings fetches /api/v1/settings/org", () => {
-  assert.match(SRC, /apiClient<.*>\("\/api\/v1\/settings\/org"/)
+test("useOrgSettings PATCHes /api/v1/settings/organisations for name updates", () => {
+  assert.match(SRC, /apiClient<.*>\("\/api\/v1\/settings\/organisations"/)
 })
 
 test("useOrgSettings exposes saveOrgSettings, setOrgLogo, clearOrgLogo", () => {

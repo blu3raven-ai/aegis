@@ -5,7 +5,7 @@ Covers the chain that PRs #475-#478 wired together:
   1. Admin configures the BYO LLM key via the settings service
   2. _dispatch_scanner_jobs reads the config and injects LLM_* env into
      the runner job
-  3. Runner posts findings with verdict / evidence_json / exploit_chain
+  3. Runner posts findings with verdict / evidence / exploit_chain
      populated; upsert_finding promotes them to typed columns
   4. The scan detail's verification_summary aggregate sees them
 
@@ -67,7 +67,7 @@ def _ingest_verified_finding(asset_id: str, identity: str) -> int:
         "filePath": "app.py",
         "startLine": 10,
         "verdict": "confirmed",
-        "evidence_json": [
+        "evidence": [
             {
                 "file": "app.py",
                 "line": 10,
@@ -232,7 +232,7 @@ def test_configure_llm_then_findings_persist_verdict(monkeypatch):
         reread = _read_finding(finding_id)
         assert reread.verdict == "confirmed"
         assert reread.exploit_chain == "http_request -> eval"
-        assert reread.evidence_json[0]["snippet"] == "eval(user_input)"
+        assert reread.evidence[0]["snippet"] == "eval(user_input)"
         assert reread.verification_metadata["tokens_in"] == 412
         assert reread.verification_metadata["model"] == "claude-sonnet-4-6"
 
@@ -251,5 +251,20 @@ def test_configure_llm_then_findings_persist_verdict(monkeypatch):
         assert summary["tokens_in"] == 412
         assert summary["tokens_out"] == 88
         assert summary["model"] == "claude-sonnet-4-6"
+
+        # ── 6. Storage dict (consumed by GraphQL resolver) surfaces the
+        #      verifier columns end-to-end so CodeScanningFinding.evidence
+        #      et al. render non-null on the wire.
+        from src.storage import read_code_scanning_findings
+
+        dicts = read_code_scanning_findings(asset_ids=[asset_id])
+        assert len(dicts) == 1
+        row = dicts[0]
+        assert row["verdict"] == "confirmed"
+        assert row["exploit_chain"] == "http_request -> eval"
+        assert isinstance(row["evidence"], list)
+        assert row["evidence"][0]["snippet"] == "eval(user_input)"
+        assert row["verification_metadata"]["tokens_in"] == 412
+        assert row["verification_metadata"]["model"] == "claude-sonnet-4-6"
     finally:
         _cleanup(asset_id, scan_id, finding_id)

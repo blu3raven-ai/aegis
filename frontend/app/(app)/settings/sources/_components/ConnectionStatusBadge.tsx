@@ -7,7 +7,7 @@ const STATUS_CONFIG: Record<ConnectionStatus, { label: string; color: string; an
   syncing: { label: "Syncing", color: "var(--color-accent)", animate: true },
   error: { label: "Error", color: "var(--color-severity-critical)" },
   disconnected: { label: "Disconnected", color: "var(--color-severity-critical)" },
-  "not-synced": { label: "Not synced", color: "var(--color-text-secondary)" },
+  "not-synced": { label: "Not Synced", color: "var(--color-text-secondary)" },
 }
 
 export function ConnectionStatusBadge({ status }: { status: ConnectionStatus }) {

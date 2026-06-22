@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import AppConfig, Role, User
-from src.settings.roles_store import BUILTIN_PERMISSION_IDS
+from src.authz.roles.service import BUILTIN_PERMISSION_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ DEFAULT_ROLES = [
             "manage_access_scope",
             "view_sources",
             "manage_sources",
+            "manage_runners",
             "view_audit",
             "manage_organisations",
             "refresh_dashboard",
@@ -113,12 +114,14 @@ async def seed_if_empty(session: AsyncSession) -> None:
     # Seed admin user (scrypt format matching frontend's verifyPassword)
     password = os.environ.get("ADMIN_PASSWORD", "").strip()
     if not password:
-        logger.error("ADMIN_PASSWORD env var is required for initial seed. Skipping admin user creation.")
-        existing_config = await session.get(AppConfig, 1)
-        if not existing_config:
-            session.add(AppConfig(id=1, config={}, updated_at=datetime.now(timezone.utc)))
-            await session.flush()
-        return
+        # Half-seeding (roles + AppConfig but no admin user) leaves the
+        # workspace permanently locked out because the next boot sees a
+        # non-empty DB and skips seeding. Refuse the entire transaction so
+        # the operator sets ADMIN_PASSWORD and retries cleanly.
+        raise RuntimeError(
+            "ADMIN_PASSWORD environment variable is required for initial seed. "
+            "Set it before first boot; subsequent boots can omit it once the admin user exists."
+        )
 
     username = os.environ.get("ADMIN_USERNAME", "admin").strip()
     email = os.environ.get("ADMIN_EMAIL", "admin@example.com").strip()

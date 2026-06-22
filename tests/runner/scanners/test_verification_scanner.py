@@ -31,7 +31,7 @@ def _two_scanner_inputs(input_dir: Path, repo: str = "acme__widget"):
             {
                 "id": "s1",
                 "repository": repo,
-                "scanner": "secrets",
+                "scanner": "secret_scanning",
                 "severity": "high",
                 "detectorName": "aws-secret-key",
                 "redactedMatch": "AKIAxx",
@@ -89,7 +89,7 @@ def test_no_llm_runs_orchestrator_and_dedupe_only(tmp_path, monkeypatch):
             {
                 "id": "s2",
                 "repository": "acme__widget",
-                "scanner": "secrets",
+                "scanner": "secret_scanning",
                 "severity": "high",
                 "detectorName": "aws-secret-key",
                 "redactedMatch": "AKIAxx",
@@ -159,10 +159,9 @@ def test_runs_correlator_when_llm_configured(tmp_path, monkeypatch):
                 prompt_hash="h",
             )
 
-    monkeypatch.setenv("LLM_API_KEY", "stub-key")
     monkeypatch.setattr(
         "runner.scanners.verification.scanner._build_llm_client",
-        lambda: _StubLlm(),
+        lambda env: _StubLlm(),
     )
 
     input_dir = tmp_path / "input"
@@ -170,7 +169,7 @@ def test_runs_correlator_when_llm_configured(tmp_path, monkeypatch):
     (input_dir / "acme__widget" / "_checkout").mkdir(parents=True)
 
     scanner = VerificationScanner()
-    result = scanner.run_scan(_job(), tmp_path)
+    result = scanner.run_scan(_job(envVars={"LLM_API_KEY": "stub-key"}), tmp_path)
     assert result.exit_code == 0
 
     payload = json.loads((tmp_path / "aggregate-verification.json").read_text())

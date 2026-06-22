@@ -35,8 +35,6 @@ def test_take_posture_snapshots_swallows_errors():
 
 def test_compute_and_store_uses_run_db_with_today_default(monkeypatch):
     """compute_and_store_daily_snapshots dispatches to run_db with the current date by default."""
-    from datetime import date
-
     from src.posture import service
 
     captured = {}

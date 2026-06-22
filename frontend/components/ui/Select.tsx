@@ -32,10 +32,13 @@ const validityClasses = (invalid: boolean) =>
 const caretSvg = encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>',
 )
+// No `color` override here: the chevron SVG uses stroke="currentColor", which
+// resolves to the select's own text color (--color-text-primary from `base`).
+// Setting a dimmer color inline would also dim the selected value text, making
+// the field read as disabled — especially in dark mode.
 const caretStyle = {
   backgroundImage: `url("data:image/svg+xml;utf8,${caretSvg}")`,
   backgroundSize: "1rem",
-  color: "var(--color-text-tertiary)",
 }
 
 // Native <select> with the canonical chrome — same focus ring, border,

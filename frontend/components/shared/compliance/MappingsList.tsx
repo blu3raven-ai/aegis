@@ -26,6 +26,20 @@ interface MappingsListProps {
   emptyMessage?: string
 }
 
+function findingTitle(finding: ComplianceFindingBrief): string {
+  // Service intentionally omits a free-form title to keep wire size down; the
+  // tool + truncated identity key still gives auditors something to pivot on.
+  const shortKey = finding.identity_key.length > 80
+    ? `${finding.identity_key.slice(0, 80)}…`
+    : finding.identity_key
+  return `${finding.tool}: ${shortKey}`
+}
+
+function findingSourceLabel(finding: ComplianceFindingBrief): string | null {
+  if (!finding.org) return null
+  return finding.repo ? `${finding.org}/${finding.repo}` : finding.org
+}
+
 export function MappingsList({ findings, emptyMessage = "No findings mapped to this control." }: MappingsListProps) {
   if (findings.length === 0) {
     return (
@@ -37,26 +51,29 @@ export function MappingsList({ findings, emptyMessage = "No findings mapped to t
 
   return (
     <div className="divide-y divide-[var(--color-border)]">
-      {findings.map((finding) => (
-        <div key={finding.id} className="flex items-start justify-between gap-4 py-3">
-          <div className="min-w-0 flex-1">
-            <Link
-              href={`/findings/${finding.id}`}
-              className="block truncate text-sm font-medium text-[var(--color-text-primary)] hover:underline"
-            >
-              {finding.title}
-            </Link>
-            {finding.scanner_type && (
-              <span className="mt-0.5 inline-block text-[11px] text-[var(--color-text-secondary)]">
-                {finding.scanner_type}
-              </span>
-            )}
+      {findings.map((finding) => {
+        const sourceLabel = findingSourceLabel(finding)
+        return (
+          <div key={finding.id} className="flex items-start justify-between gap-4 py-3">
+            <div className="min-w-0 flex-1">
+              <Link
+                href={`/findings/${finding.id}`}
+                className="block truncate text-sm font-medium text-[var(--color-text-primary)] hover:underline"
+              >
+                {findingTitle(finding)}
+              </Link>
+              {sourceLabel && (
+                <span className="mt-0.5 inline-block text-[11px] text-[var(--color-text-secondary)]">
+                  {sourceLabel}
+                </span>
+              )}
+            </div>
+            <div className="shrink-0">
+              <SeverityBadge severity={finding.severity ?? "info"} />
+            </div>
           </div>
-          <div className="shrink-0">
-            <SeverityBadge severity={finding.severity} />
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

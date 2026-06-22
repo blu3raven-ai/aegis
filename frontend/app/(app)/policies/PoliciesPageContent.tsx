@@ -29,12 +29,9 @@ import type {
 import { listDestinations } from "@/lib/client/destinations-api"
 import type { NotificationDestination } from "@/lib/client/destinations-api"
 import { Button } from "@/components/ui/Button"
-import { useSession } from "@/lib/client/use-session"
-import { can } from "@/lib/shared/auth/roles"
+import { useHasPermission } from "@/lib/client/use-permission"
 import { timeAgo } from "@/lib/shared/time-ago"
 import { KillSwitchDialog } from "@/components/shared/rules/KillSwitchDialog"
-
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
 
 function SlaIcon() {
   return (
@@ -113,17 +110,10 @@ function RetentionIcon() {
 }
 
 export function PoliciesPageContent() {
-  const { user } = useSession()
-  const canManageSla = user ? can(user.role as any, "manage_sla_rules") : false
-  const canManageScannerCoverage = user
-    ? can(user.role as any, "manage_scanner_coverage_rules")
-    : false
-  const canManageAutoDismiss = user
-    ? can(user.role as any, "manage_auto_dismiss_rules")
-    : false
-  const canManageDataRetention = user
-    ? can(user.role as any, "manage_data_retention_rules")
-    : false
+  const { allowed: canManageSla } = useHasPermission("manage_sla_rules")
+  const { allowed: canManageScannerCoverage } = useHasPermission("manage_scanner_coverage_rules")
+  const { allowed: canManageAutoDismiss } = useHasPermission("manage_auto_dismiss_rules")
+  const { allowed: canManageDataRetention } = useHasPermission("manage_data_retention_rules")
 
   const [slaRules, setSlaRules] = useState<RuleSummary[] | null>(null)
   const [scannerCoverageRules, setScannerCoverageRules] = useState<RuleSummary[] | null>(null)
@@ -152,7 +142,7 @@ export function PoliciesPageContent() {
 
   useEffect(() => {
     let cancelled = false
-    listDestinations(ORG_ID)
+    listDestinations()
       .then((ds) => {
         if (!cancelled) setDestinations(ds)
       })
@@ -171,12 +161,12 @@ export function PoliciesPageContent() {
       setLoading(true)
       try {
         const [s, slaList, coverageList, autoList, retentionList, ks] = await Promise.all([
-          getRulesSummary(ORG_ID),
-          listRules(ORG_ID, { category: "sla" }),
-          listRules(ORG_ID, { category: "scanner_coverage" }),
-          listRules(ORG_ID, { category: "auto_dismiss" }),
-          listRules(ORG_ID, { category: "data_retention" }),
-          listKillSwitches(ORG_ID),
+          getRulesSummary(),
+          listRules({ category: "sla" }),
+          listRules({ category: "scanner_coverage" }),
+          listRules({ category: "auto_dismiss" }),
+          listRules({ category: "data_retention" }),
+          listKillSwitches(),
         ])
         if (cancelled) return
         setStats(s)
@@ -209,12 +199,12 @@ export function PoliciesPageContent() {
     setLoading(true)
     try {
       const [s, slaList, coverageList, autoList, retentionList, ks] = await Promise.all([
-        getRulesSummary(ORG_ID),
-        listRules(ORG_ID, { category: "sla" }),
-        listRules(ORG_ID, { category: "scanner_coverage" }),
-        listRules(ORG_ID, { category: "auto_dismiss" }),
-        listRules(ORG_ID, { category: "data_retention" }),
-        listKillSwitches(ORG_ID),
+        getRulesSummary(),
+        listRules({ category: "sla" }),
+        listRules({ category: "scanner_coverage" }),
+        listRules({ category: "auto_dismiss" }),
+        listRules({ category: "data_retention" }),
+        listKillSwitches(),
       ])
       if (cancelledRef.current) return
       setStats(s)
@@ -237,7 +227,7 @@ export function PoliciesPageContent() {
 
   async function handleToggle(rule: RuleSummary) {
     try {
-      await toggleRule(ORG_ID, rule.id)
+      await toggleRule(rule.id)
       await reload()
     } catch (err) {
       console.error("Failed to toggle rule", err)
@@ -246,7 +236,7 @@ export function PoliciesPageContent() {
 
   async function handleDelete(rule: RuleSummary) {
     try {
-      await deleteRule(ORG_ID, rule.id)
+      await deleteRule(rule.id)
       await reload()
     } catch (err) {
       console.error("Failed to delete rule", err)
@@ -287,7 +277,7 @@ export function PoliciesPageContent() {
     setKillSwitchSaving(true)
     setKillSwitchError(null)
     try {
-      await engageKillSwitch(ORG_ID, "auto_dismiss", reason || undefined)
+      await engageKillSwitch("auto_dismiss", reason || undefined)
       setKillSwitchDialogOpen(false)
       await reload()
     } catch (err) {
@@ -303,7 +293,7 @@ export function PoliciesPageContent() {
   async function handleDisengageKillSwitch() {
     setKillSwitchError(null)
     try {
-      await disengageKillSwitch(ORG_ID, "auto_dismiss")
+      await disengageKillSwitch("auto_dismiss")
       await reload()
     } catch (err) {
       console.error("Failed to disengage kill switch", err)
@@ -320,7 +310,7 @@ export function PoliciesPageContent() {
       if (payload.create) {
         await createRule(payload.create)
       } else if (payload.update && editorRule) {
-        await updateRule(ORG_ID, editorRule.id, payload.update)
+        await updateRule(editorRule.id, payload.update)
       }
       setEditorOpen(false)
       await reload()
@@ -483,7 +473,6 @@ export function PoliciesPageContent() {
         category={editorCategory}
         initialRule={editorRule}
         destinations={destinations}
-        orgId={ORG_ID}
         onClose={() => setEditorOpen(false)}
         onSave={handleSave}
         saving={editorSaving}

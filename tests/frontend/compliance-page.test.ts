@@ -35,11 +35,13 @@ async function loadApi() {
 // ---------------------------------------------------------------------------
 
 test("framework list returns three supported frameworks", async () => {
-  const body = [
-    { id: "soc2", label: "SOC 2" },
-    { id: "iso27001", label: "ISO 27001" },
-    { id: "pci-dss", label: "PCI DSS" },
-  ]
+  const body = {
+    frameworks: [
+      { id: "soc2", label: "SOC 2" },
+      { id: "iso27001", label: "ISO 27001" },
+      { id: "pci-dss", label: "PCI DSS" },
+    ],
+  }
   const { mock } = makeFetchMock(() => ({ body }))
   globalThis.fetch = mock as unknown as typeof fetch
 
@@ -120,8 +122,8 @@ test("page: switching framework fetches new summary", async () => {
 test("detail page: highest severity selected in order critical > high > medium > low", () => {
   const findings = [
     { id: 1, title: "A", severity: "medium", scanner_type: "sast", state: "open" },
-    { id: 2, title: "B", severity: "high", scanner_type: "dependencies", state: "open" },
-    { id: 3, title: "C", severity: "low", scanner_type: "secrets", state: "open" },
+    { id: 2, title: "B", severity: "high", scanner_type: "dependencies_scanning", state: "open" },
+    { id: 3, title: "C", severity: "low", scanner_type: "secret_scanning", state: "open" },
   ]
   const order = ["critical", "high", "medium", "low"]
   const highest = order.find((sev) => findings.some((f) => f.severity === sev)) ?? null
@@ -131,7 +133,7 @@ test("detail page: highest severity selected in order critical > high > medium >
 test("detail page: only open findings count toward highest severity", () => {
   const findings = [
     { id: 1, title: "A", severity: "critical", scanner_type: "sast", state: "resolved" },
-    { id: 2, title: "B", severity: "medium", scanner_type: "dependencies", state: "open" },
+    { id: 2, title: "B", severity: "medium", scanner_type: "dependencies_scanning", state: "open" },
   ]
   const openFindings = findings.filter((f) => f.state === "open")
   const order = ["critical", "high", "medium", "low"]
@@ -154,21 +156,23 @@ test("detail page: null when no open findings", () => {
 // ---------------------------------------------------------------------------
 
 test("detail page: loads control metadata and findings in parallel", async () => {
-  const controls = [
-    { id: 1, framework: "soc2", control_id: "CC6.1", title: "Logical access restrictions", description: "Ensure access is restricted.", category: "Access" },
-  ]
+  const controlsEnv = {
+    controls: [
+      { id: 1, framework: "soc2", control_id: "CC6.1", title: "Logical access restrictions", description: "Ensure access is restricted.", category: "Access" },
+    ],
+  }
   const findingsResp = {
     framework: "soc2",
     control_id: "CC6.1",
     findings: [
-      { id: 10, title: "Exposed secret in env file", severity: "critical", scanner_type: "secrets", state: "open" },
+      { id: 10, title: "Exposed secret in env file", severity: "critical", scanner_type: "secret_scanning", state: "open" },
       { id: 11, title: "Weak password policy", severity: "high", scanner_type: "sast", state: "open" },
     ],
   }
 
   const { mock } = makeFetchMock((url) => {
-    if (url.includes("/frameworks/")) return { body: controls }
-    return { body: findingsResp }
+    if (url.includes("/controls/CC6.1/findings")) return { body: findingsResp }
+    return { body: controlsEnv }
   })
   globalThis.fetch = mock as unknown as typeof fetch
 
@@ -176,7 +180,7 @@ test("detail page: loads control metadata and findings in parallel", async () =>
 
   const [allControls, resp] = await Promise.all([
     listFrameworkControls("soc2"),
-    getControlFindings("soc2", "CC6.1", "example-org"),
+    getControlFindings("soc2", "CC6.1"),
   ])
 
   const found = allControls.find((c) => c.control_id === "CC6.1")
@@ -189,10 +193,12 @@ test("detail page: loads control metadata and findings in parallel", async () =>
 })
 
 test("detail page: control not found yields null gracefully", async () => {
-  const controls = [
-    { id: 1, framework: "soc2", control_id: "CC6.6", title: "Other control", description: null, category: null },
-  ]
-  const { mock } = makeFetchMock(() => ({ body: controls }))
+  const body = {
+    controls: [
+      { id: 1, framework: "soc2", control_id: "CC6.6", title: "Other control", description: null, category: null },
+    ],
+  }
+  const { mock } = makeFetchMock(() => ({ body }))
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listFrameworkControls } = await loadApi()

@@ -13,15 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import MANAGE_SETTINGS  # noqa: E402
 from src.db.helpers import run_db  # noqa: E402
 from src.db.models import LlmConfig  # noqa: E402
-from src.settings.llm_router import router as llm_router  # noqa: E402
+from src.settings.llm.router import router as llm_router  # noqa: E402
 
 _ADMIN_PERMS = {"manage_settings"}
 _NO_PERMS: set[str] = set()
 
 
-def _make_app() -> FastAPI:
+def _make_app(*, allow_manage_settings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(llm_router)
 
@@ -32,6 +34,8 @@ def _make_app() -> FastAPI:
         request.state.user_role_id = None
         return await call_next(request)
 
+    if allow_manage_settings:
+        app.dependency_overrides[Permission(MANAGE_SETTINGS)] = lambda: None
     return app
 
 
@@ -46,7 +50,7 @@ def _cleanup_llm_config():
 
 
 def test_get_returns_404_when_unconfigured():
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_ADMIN_PERMS):
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_ADMIN_PERMS):
         client = TestClient(_make_app())
         resp = client.get("/api/v1/settings/llm")
         assert resp.status_code == 404
@@ -54,7 +58,7 @@ def test_get_returns_404_when_unconfigured():
 
 
 def test_put_stores_config_and_returns_safe_view():
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_ADMIN_PERMS):
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_ADMIN_PERMS):
         client = TestClient(_make_app())
         resp = client.put(
             "/api/v1/settings/llm",
@@ -80,7 +84,7 @@ def test_put_stores_config_and_returns_safe_view():
 
 def test_response_never_leaks_api_key():
     secret = "sk-super-secret-do-not-leak"
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_ADMIN_PERMS):
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_ADMIN_PERMS):
         client = TestClient(_make_app())
         put_resp = client.put(
             "/api/v1/settings/llm",
@@ -100,7 +104,7 @@ def test_response_never_leaks_api_key():
 
 
 def test_non_admin_forbidden():
-    with patch("src.settings.router._resolve_effective_permissions", return_value=_NO_PERMS):
-        client = TestClient(_make_app())
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False):
+        client = TestClient(_make_app(allow_manage_settings=False))
         resp = client.get("/api/v1/settings/llm")
         assert resp.status_code == 403

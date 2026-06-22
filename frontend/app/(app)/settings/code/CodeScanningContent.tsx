@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import type { AppConfig } from "@/lib/server/app-config"
 import { formatSettingsError, getSettings } from "@/lib/client/settings-api"
-import { listSourceConnections } from "@/lib/client/sources-api"
+import { listSourceConnections } from "@/lib/client/source-connections-api"
 import type { SourceConnection } from "@/lib/shared/sources-types"
 import { CodeScanningSetupForm } from "./CodeScanningSetupForm"
 import { NoSourcesBanner } from "@/components/shared/NoSourcesBanner"
@@ -172,11 +172,11 @@ export function CodeScanningContent({ canEdit = true }: { canEdit?: boolean }) {
         />
       ) : (<>
       <CodeScanningSetupForm
-        initialScanConcurrency={settings.tools.codeScanning.scanConcurrency}
-        initialRulesets={Array.isArray(settings.tools.codeScanning.rulesets) ? settings.tools.codeScanning.rulesets.join(",") : settings.tools.codeScanning.rulesets}
-        initialAutoRerunEnabled={settings.tools.codeScanning.autoRerunEnabled}
-        initialRerunScheduleType={settings.tools.codeScanning.rerunScheduleType}
-        initialRerunScheduleValue={settings.tools.codeScanning.rerunScheduleValue}
+        initialScanConcurrency={settings.tools.code_scanning.scanConcurrency}
+        initialRulesets={Array.isArray(settings.tools.code_scanning.rulesets) ? settings.tools.code_scanning.rulesets.join(",") : settings.tools.code_scanning.rulesets}
+        initialAutoRerunEnabled={settings.tools.code_scanning.autoRerunEnabled}
+        initialRerunScheduleType={settings.tools.code_scanning.rerunScheduleType}
+        initialRerunScheduleValue={settings.tools.code_scanning.rerunScheduleValue}
         prereqItems={prereqItems}
         prereqRefreshing={prereqRefreshing}
         refreshPrereqs={refreshPrereqs}

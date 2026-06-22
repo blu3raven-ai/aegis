@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from uuid import uuid4
 
 import pytest
@@ -25,6 +26,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 _PLACEHOLDER_URL = "postgresql+asyncpg://test:test@localhost:5432/test"
 
 
+# WeasyPrint can't locate Homebrew's gobject/cairo via ctypes on Apple Silicon
+# without this lookup hint. No-op on Linux/CI.
+if sys.platform == "darwin":
+    _HOMEBREW_LIB = "/opt/homebrew/lib"
+    if os.path.isdir(_HOMEBREW_LIB):
+        _existing = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+        if _HOMEBREW_LIB not in _existing.split(":"):
+            os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
+                f"{_HOMEBREW_LIB}:{_existing}" if _existing else _HOMEBREW_LIB
+            )
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_configure(config):
     existing = os.environ.get("DATABASE_URL", "")
@@ -32,6 +45,7 @@ def pytest_configure(config):
         # Outer conftest already provided a real URL — nothing to do.
         os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
         os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
+        os.environ.setdefault("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
         return
 
     # Standalone run — try to spin up a testcontainer.
@@ -48,6 +62,7 @@ def pytest_configure(config):
 
     os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
     os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
+    os.environ.setdefault("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
 
 
 def pytest_unconfigure(config):
@@ -101,6 +116,47 @@ async def db_session():
     async with factory() as session:
         yield session
     await engine.dispose()
+
+
+def _reload_connector_modules(*module_paths: str) -> None:
+    """Reset the connector registry and re-execute the given modules so their
+    @register_connector decorators run exactly once into the empty registry.
+
+    Imports run before the reset so any package-level __init__ imports (which
+    can register additional siblings as a side effect) populate sys.modules
+    first; then the reset wipes the registry and the reloads re-execute each
+    module body, registering the connectors fresh."""
+    import importlib
+    import sys
+
+    from src.connectors.registry import _reset_registry
+
+    # First, ensure every requested module is in sys.modules (which may
+    # trigger package __init__ imports that register siblings as a side effect).
+    for path in module_paths:
+        if path not in sys.modules:
+            importlib.import_module(path)
+
+    # Then wipe and reload — the reloads now re-execute clean module bodies
+    # into an empty registry.
+    _reset_registry()
+    for path in module_paths:
+        importlib.reload(sys.modules[path])
+
+
+@pytest.fixture
+def reset_and_reload_connectors():
+    """Fixture factory that returns the helper above. Tests opt in via:
+
+        @pytest.fixture(autouse=True)
+        def _setup(reset_and_reload_connectors):
+            reset_and_reload_connectors("src.notifications.senders.slack", ...)
+            yield
+
+    Or simply call the helper directly from a fixture body. Centralised here so
+    new test modules don't each reinvent the reset-and-reload pattern.
+    """
+    return _reload_connector_modules
 
 
 @pytest_asyncio.fixture

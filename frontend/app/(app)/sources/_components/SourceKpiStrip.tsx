@@ -3,13 +3,11 @@
 import type { SourceConnection } from "@/lib/shared/sources-types"
 import { timeAgo } from "@/lib/shared/time-ago"
 
-// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface SourceKpiStripProps {
   connections: SourceConnection[]
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SourceKpiStrip({ connections }: SourceKpiStripProps) {
   const total = connections.length

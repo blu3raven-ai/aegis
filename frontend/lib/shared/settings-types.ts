@@ -21,23 +21,29 @@ export type ScannerPrerequisitesResult =
     }
   | { ok: false; error: string }
 
+export interface TeamAsset {
+  assetId: string
+  type: "repo" | "image"
+  displayName: string
+  externalRef: string
+  source: "manual" | "github"
+}
+
 export interface OrganisationTeam {
   id: string
   name: string
   description: string
   source: "manual" | "github"
   members: Array<{ userId: string; source: "manual" | "github" }>
-  repositories: Array<{ org: string; repo: string; source: "manual" | "github" }>
-  containerImages: Array<{ image: string }>
+  assets: TeamAsset[]
+  isShared?: boolean
   createdAt: string
   updatedAt: string
   lastSyncedAt?: string
 }
 
-export interface ResourceSharingIndex {
-  repositories: Record<string, string[]>
-  containerImages: Record<string, string[]>
-}
+/** assetId → list of teamIds that own it. Computed client-side from the teams list. */
+export type ResourceSharingIndex = Record<string, string[]>
 
 export interface UserDirectoryEntry {
   id: string
@@ -66,11 +72,17 @@ export interface RoleInput {
   permissions: string[]
 }
 
-export interface DirectGrant {
-  userId: string
-  resourceType: "repository" | "containerImage"
-  resourceKey: string
-  source: "github-direct" | "manual-direct"
+export interface Grant {
+  subjectType: "user" | "team"
+  subjectId: string
+  assetId: string
+  source: string
   createdAt: string
+  assetType?: string
+  assetDisplayName?: string
+  assetExternalRef?: string
 }
+
+/** @deprecated Use Grant */
+export type DirectGrant = Grant
 

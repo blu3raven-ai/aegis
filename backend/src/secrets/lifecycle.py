@@ -16,10 +16,18 @@ if TYPE_CHECKING:
 
 
 class SecretsHooks(LifecycleHooks):
-    tool = "secrets"
+    tool = "secret_scanning"
 
     def compute_identity_key(self, raw: dict[str, Any]) -> str:
-        return raw.get("secretIdentity") or build_secret_identity(raw) or ""
+        # Per-repo identity so each repo's occurrence is its own row (scoped by
+        # that repo's grants) without the shared lifecycle's identity_key-keyed
+        # maps colliding. The repo-independent secretIdentity stays in detail so
+        # the UI can group a secret's per-repo findings together.
+        base = raw.get("secretIdentity") or build_secret_identity(raw) or ""
+        if not base:
+            return ""
+        repo = (raw.get("repository") or "").strip()
+        return f"{base}::{repo}" if repo else base
 
     def initial_state(self, raw: dict[str, Any]) -> str:
         return "open"
@@ -28,7 +36,7 @@ class SecretsHooks(LifecycleHooks):
         return False
 
     def extract_repo(self, raw: dict[str, Any]) -> str | None:
-        return None  # Secrets are org-scoped, locations in detail
+        return (raw.get("repository") or "").strip() or None
 
     def extract_severity(self, raw: dict[str, Any]) -> str | None:
         return raw.get("severity") or "high"
@@ -54,9 +62,17 @@ class SecretsHooks(LifecycleHooks):
 
 
     def canonical_external_ref(self, ctx: "ScanContext", raw: dict[str, Any]) -> tuple[str, str] | None:
-        # Secrets are org-scoped, not repo-scoped. Returning None tells
-        # apply_lifecycle to leave Finding.asset_id NULL for secrets findings.
-        return None
+        # Scope each secret to the repo it was found in, so it inherits that
+        # repo's grants. Same secret in another repo of the source becomes its
+        # own finding (shared identity_key lets the UI group them). Findings
+        # without a repo (e.g. non-source scans) stay global (asset_id NULL).
+        repo = self.extract_repo(raw)
+        if not repo or ctx.source_type is None:
+            return None
+        from src.assets.refs import repo_ref
+
+        name = repo.split("/", 1)[-1]
+        return repo_ref(ctx.source_type, ctx.org, name), "repo"
 
 
 secrets_hooks = SecretsHooks()

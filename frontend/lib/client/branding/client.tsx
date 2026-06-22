@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { apiClient } from "../api-client.ts"
 
 export interface Branding {
   name: string | null
@@ -23,7 +22,9 @@ export async function fetchBranding(): Promise<Branding> {
     return cachedBranding
   }
   try {
-    const data = await apiClient<Branding>("/api/v1/branding")
+    const res = await fetch("/api/v1/settings/organisations/branding")
+    if (!res.ok) return NULL_BRANDING
+    const data = (await res.json()) as Branding
     cachedBranding = data
     cacheTimestamp = Date.now()
     return data

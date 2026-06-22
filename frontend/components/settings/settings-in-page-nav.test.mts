@@ -10,16 +10,16 @@ test("useActiveSection accepts ids and an optional rootMargin", () => {
   assert.match(hook, /IntersectionObserver/)
 })
 
-test("SettingsInPageNav groups Personal at the top and three sub-buckets below", () => {
-  for (const label of ["Personal", "Identity & Access", "Security & Audit", "Operations"]) {
+test("SettingsInPageNav groups items under Personal and Organization", () => {
+  for (const label of ["Personal", "Organization"]) {
     assert.match(nav, new RegExp(`label:\\s*"${label}"`))
   }
 })
 
-test("SettingsInPageNav drops the horizontal divider between buckets", () => {
-  // Spacing between groups now comes from the group-heading rhythm alone —
-  // no extra divider line.
-  assert.doesNotMatch(nav, /border-t border-\[var\(--color-border\)\]/)
+test("SettingsInPageNav separates groups with a divider", () => {
+  // Groups after the first carry a top divider (withDivider).
+  assert.match(nav, /withDivider=\{index > 0\}/)
+  assert.match(nav, /border-t border-\[var\(--color-border\)\]/)
 })
 
 test("SettingsInPageNav uses anchor links to every section id", () => {
@@ -35,8 +35,11 @@ test("SettingsInPageNav no longer surfaces a duplicate Personal API tokens row",
   assert.doesNotMatch(nav, /href:\s*"#tokens"/)
 })
 
-test("SettingsInPageNav is sticky", () => {
-  assert.match(nav, /sticky\s/)
+test("SettingsInPageNav is a scrollable sidebar column", () => {
+  // The settings shell owns scroll-locking; the nav is a fixed-width column
+  // that scrolls internally rather than being position: sticky.
+  assert.match(nav, /overflow-y-auto/)
+  assert.match(nav, /md:flex md:flex-col/)
 })
 
 test("SettingsInPageNav highlights the active section", () => {

@@ -91,8 +91,8 @@ def test_load_repo_subject_populates_all_fields_from_repo():
     now = datetime.now(timezone.utc)
     ts_deps = now - timedelta(hours=2)
     ts_secrets = now - timedelta(hours=1)
-    _seed_scan_run(scan_id="sr-deps", tool="dependencies", finished_at=ts_deps)
-    _seed_scan_run(scan_id="sr-secrets", tool="secrets", finished_at=ts_secrets)
+    _seed_scan_run(scan_id="sr-deps", tool="dependencies_scanning", finished_at=ts_deps)
+    _seed_scan_run(scan_id="sr-secrets", tool="secret_scanning", finished_at=ts_secrets)
 
     subject = _load(repo_id, now=now)
 
@@ -102,7 +102,7 @@ def test_load_repo_subject_populates_all_fields_from_repo():
     assert subject.archived is False
     assert subject.image_registry == "ghcr.io"
     # Ordering matches _SCANNER_TYPES ordering (dependencies before secrets).
-    assert subject.scanners_with_coverage == ["dependencies", "secrets"]
+    assert subject.scanners_with_coverage == ["dependencies_scanning", "secret_scanning"]
     assert subject.last_scanned_at is not None
     assert abs((subject.last_scanned_at - ts_secrets).total_seconds()) < 1
     # Last scan was an hour ago — fewer than 1 day, so .days == 0.
@@ -131,7 +131,7 @@ def test_load_repo_subject_ignores_failed_scans():
     repo_id = _seed_repo()
     _seed_scan_run(
         scan_id="sr-failed",
-        tool="dependencies",
+        tool="dependencies_scanning",
         status="failed",
         finished_at=datetime.now(timezone.utc),
     )
@@ -153,7 +153,7 @@ def test_load_repo_subject_last_scan_age_days_computed_from_now():
     repo_id = _seed_repo()
     now = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
     ts = now - timedelta(days=10, hours=3)
-    _seed_scan_run(scan_id="sr-deps", tool="dependencies", finished_at=ts)
+    _seed_scan_run(scan_id="sr-deps", tool="dependencies_scanning", finished_at=ts)
 
     subject = _load(repo_id, now=now)
 

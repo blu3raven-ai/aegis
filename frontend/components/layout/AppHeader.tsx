@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { usePathname } from "next/navigation"
 import { useMobileSidebar } from "@/components/layout/MobileSidebarContext"
 import { ThemeToggleButton } from "@/components/layout/ThemeToggleButton"
@@ -9,12 +9,13 @@ import { NotificationBell } from "@/components/layout/NotificationBell"
 import { HeaderCTAs } from "@/components/layout/HeaderCTAs"
 import { HelpButton } from "@/components/layout/HelpButton"
 import Link from "next/link"
-import { useConnectorCatalog, type Integration } from "@/lib/client/connectors-api"
+import { useConnectorCatalog, type Integration } from "@/lib/client/integrations-catalog-api"
+import { getSourceConnection } from "@/lib/client/source-connections-api"
+import { sourceDisplayName } from "@/lib/shared/sources-types"
 
 /** Map of URL path segments to their display labels. */
 const SEGMENT_LABELS: Record<string, string> = {
   settings: "Settings",
-  dashboard: "Dashboard",
   account: "Account",
   general: "General",
   sources: "Sources",
@@ -30,7 +31,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   containers: "Containers",
   dependencies: "Dependencies",
   secrets: "Secrets",
-  iac: "IaC",
   "iac-security": "IaC Security",
   sbom: "SBOM Explorer",
   diff: "Diff",
@@ -47,6 +47,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   repos: "Repositories",
   releases: "Releases",
   activity: "Activity",
+  history: "History",
+  triage: "Triage",
   "api-keys": "API Keys",
   sso: "SSO",
   audit: "Audit Log",
@@ -56,7 +58,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   integrations: "Integrations",
   "sla_policies": "SLA Policies",
   llm: "LLM",
-  "ci-integration": "CI Integration",
 }
 
 /** Segments that should be hidden from breadcrumbs (intermediate route segments). */
@@ -84,7 +85,7 @@ function titleCase(segment: string): string {
  *   "/settings/account"      → [{ label: "Settings" }, { label: "Account" }]
  *   "/settings/dependencies" → [{ label: "Settings" }, { label: "Tools" }, { label: "Dependencies" }]
  * */
-function buildBreadcrumbs(pathname: string, catalog: Integration[]): { label: string; href?: string }[] {
+function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?: string | null): { label: string; href?: string }[] {
   if (pathname === "/") return [{ label: "Home" }]
 
   const segments = pathname.split("/").filter(Boolean)
@@ -184,6 +185,13 @@ function buildBreadcrumbs(pathname: string, catalog: Integration[]): { label: st
       }
     }
 
+    // Source detail sub-routes: the segment after "sources" is an opaque ID — use the
+    // fetched source name when available, falling back to "Source" while loading.
+    if (i > 0 && segments[i - 1] === "sources" && !(segment in SEGMENT_LABELS)) {
+      crumbs.push({ label: sourceName ?? "Source", href: prefix })
+      continue
+    }
+
     const label = SEGMENT_LABELS[segment] ?? titleCase(segment)
     crumbs.push({ label, href: prefix })
   }
@@ -208,7 +216,28 @@ export function AppHeader({
   const pathname = usePathname()
   const { setOpen } = useMobileSidebar()
   const { catalog } = useConnectorCatalog()
-  const crumbs = buildBreadcrumbs(pathname, catalog)
+  const [sourceName, setSourceName] = useState<string | null>(null)
+
+  // Resolve the opaque source ID segment to a human name for the breadcrumb.
+  // Runs only when the path contains /sources/<id>.
+  useEffect(() => {
+    const segments = pathname.split("/").filter(Boolean)
+    const idx = segments.indexOf("sources")
+    const sourceId = idx >= 0 && idx + 1 < segments.length && !(segments[idx + 1] in SEGMENT_LABELS)
+      ? segments[idx + 1]
+      : null
+    if (!sourceId) {
+      setSourceName(null)
+      return
+    }
+    let cancelled = false
+    getSourceConnection(sourceId)
+      .then((r) => { if (!cancelled && r.ok) setSourceName(sourceDisplayName(r.data.connection)) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [pathname])
+
+  const crumbs = buildBreadcrumbs(pathname, catalog, sourceName)
 
   // Global ⌘K listener to open/close search modal
   useEffect(() => {
@@ -223,7 +252,7 @@ export function AppHeader({
   }, [open, setSearchOpen])
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+    <header className="flex h-14 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6">
       {/* Left: hamburger (mobile) + breadcrumbs */}
       <div className="flex items-center gap-2 min-w-0">
         {/* Mobile hamburger */}

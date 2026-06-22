@@ -4,6 +4,7 @@ import { useState } from "react"
 import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
 import { AVAILABLE_SCOPES } from "./ScopesBadgeList"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 
@@ -52,18 +53,16 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
       <div className="p-6">
         <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">Create API key</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className="block mb-1 text-xs font-medium text-[var(--color-text-secondary)]">
-              Name
-            </label>
+          <FormField label="Name" htmlFor="apikey-name" required>
             <Input
+              id="apikey-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. ci-pipeline-key"
               required
             />
-          </div>
+          </FormField>
 
           <div>
             <label className="block mb-1 text-xs font-medium text-[var(--color-text-secondary)]">
@@ -84,11 +83,9 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
             </div>
           </div>
 
-          <div>
-            <label className="block mb-1 text-xs font-medium text-[var(--color-text-secondary)]">
-              Expires in
-            </label>
+          <FormField label="Expires in" htmlFor="apikey-expires">
             <Select
+              id="apikey-expires"
               value={expiresDays}
               onChange={(e) => setExpiresDays(e.target.value)}
             >
@@ -99,7 +96,7 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
               <option value="365">365 days</option>
               <option value="never">Never</option>
             </Select>
-          </div>
+          </FormField>
 
           {error && (
             <p className="text-xs text-[var(--color-red)]">{error}</p>

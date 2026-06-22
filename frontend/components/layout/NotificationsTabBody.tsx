@@ -10,6 +10,7 @@ import {
 import { refreshNotificationCount } from "@/lib/client/use-notifications"
 import { timeAgo } from "@/lib/shared/time-ago"
 import { Button } from "@/components/ui/Button"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 const PAGE_SIZE = 20
 
@@ -76,10 +77,9 @@ export function NotificationsTabBody({ onNavigate }: NotificationsTabBodyProps) 
     return (
       <div className="flex flex-col gap-2 p-3" aria-label="Loading notifications">
         {[1, 2, 3].map((n) => (
-          <div
+          <Skeleton
             key={n}
-            className="h-14 animate-pulse rounded-lg bg-[var(--color-surface-raised)]"
-            aria-hidden="true"
+            className="h-14 rounded-lg"
           />
         ))}
       </div>

@@ -8,10 +8,12 @@ import type {
   UserDirectoryEntry,
   RoleRecord,
   RoleInput,
+  Grant,
   DirectGrant,
 } from "@/lib/shared/settings-types"
 import { apiClient } from "./api-client.ts"
 import { ApiClientError } from "./api-client.types.ts"
+import { gqlQuery } from "./graphql-client.ts"
 
 export type {
   GetSettingsResult,
@@ -22,10 +24,11 @@ export type {
   UserDirectoryEntry,
   RoleRecord,
   RoleInput,
+  Grant,
   DirectGrant,
 }
 
-type ToolKey = "dependencies" | "codeScanning" | "secrets" | "iacSecurity" | "containerScanning"
+type ToolKey = "dependencies_scanning" | "code_scanning" | "secret_scanning" | "iac_scanning" | "container_scanning"
 
 type JsonRecord = Record<string, unknown>
 
@@ -46,9 +49,9 @@ function getErrorMessage(payload: unknown, fallback: string) {
   return fallback
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestJsonAbsolute<T>(url: string, init?: RequestInit): Promise<T> {
   try {
-    return await apiClient<T>(`${SETTINGS_API_BASE}${path}`, {
+    return await apiClient<T>(url, {
       method: init?.method,
       body: init?.body ? JSON.parse(init.body as string) : undefined,
       headers: init?.headers as Record<string, string> | undefined,
@@ -59,6 +62,10 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw err
   }
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  return requestJsonAbsolute<T>(`${SETTINGS_API_BASE}${path}`, init)
 }
 
 async function requestResult(path: string, init: RequestInit): Promise<SaveSettingsResult> {
@@ -213,6 +220,90 @@ export async function saveToolSettings(input: {
   return result
 }
 
+// ---------------------------------------------------------------------------
+// Workspace — GraphQL
+// ---------------------------------------------------------------------------
+
+type GqlTeamMember = { userId: string; source: string }
+type GqlTeamAsset = {
+  assetId: string
+  type: string
+  displayName: string
+  externalRef: string
+  source: string
+}
+type GqlTeam = {
+  id: string
+  name: string
+  description: string
+  source: string
+  members: GqlTeamMember[]
+  assets: GqlTeamAsset[]
+  isShared: boolean
+  createdAt: string
+  updatedAt: string
+}
+type GqlRole = {
+  id: string
+  name: string
+  description: string
+  permissions: string[]
+  isSystem: boolean
+  isLocked: boolean
+  createdAt: string
+  updatedAt: string
+}
+type GqlGrant = {
+  subjectType: string
+  subjectId: string
+  assetId: string
+  assetType: string
+  assetDisplayName: string
+  assetExternalRef: string
+  source: string
+  createdAt: string
+}
+
+const TEAM_FIELDS = `
+  id name description source
+  members { userId source }
+  assets { assetId type displayName externalRef source }
+  isShared createdAt updatedAt
+`
+
+function gqlTeamToOrganisationTeam(t: GqlTeam): OrganisationTeam {
+  return {
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    source: t.source as "manual" | "github",
+    members: t.members.map((m) => ({ userId: m.userId, source: m.source as "manual" | "github" })),
+    assets: t.assets.map((a) => ({
+      assetId: a.assetId,
+      type: a.type as "repo" | "image",
+      displayName: a.displayName,
+      externalRef: a.externalRef,
+      source: a.source as "manual" | "github",
+    })),
+    isShared: t.isShared,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+  }
+}
+
+function gqlGrantToGrant(g: GqlGrant): Grant {
+  return {
+    subjectType: g.subjectType as "user" | "team",
+    subjectId: g.subjectId,
+    assetId: g.assetId,
+    source: g.source,
+    createdAt: g.createdAt,
+    assetType: g.assetType || undefined,
+    assetDisplayName: g.assetDisplayName || undefined,
+    assetExternalRef: g.assetExternalRef || undefined,
+  }
+}
+
 function normalizeRoleRecord(role: Omit<RoleRecord, "slug"> & { slug?: string }): RoleRecord {
   const fallbackSlug = role.id.startsWith("role_") ? role.id.slice(5) : "custom"
   return {
@@ -221,9 +312,13 @@ function normalizeRoleRecord(role: Omit<RoleRecord, "slug"> & { slug?: string })
   }
 }
 
+// ---------------------------------------------------------------------------
+// Roles
+// ---------------------------------------------------------------------------
+
 export async function listRoles(): Promise<{ ok: true; roles: RoleRecord[] } | { ok: false; error: string }> {
   try {
-    const data = await requestJson<{ roles: RoleRecord[] }>("/roles")
+    const data = await apiClient<{ roles: GqlRole[] }>("/api/v1/workspace/roles")
     return { ok: true, roles: data.roles.map(normalizeRoleRecord) }
   } catch (error) {
     return { ok: false, error: formatSettingsError(error) }
@@ -232,18 +327,27 @@ export async function listRoles(): Promise<{ ok: true; roles: RoleRecord[] } | {
 
 export async function getRole(roleId: string): Promise<{ ok: true; role: RoleRecord } | { ok: false; error: string }> {
   try {
-    const data = await requestJson<{ role: RoleRecord }>(`/roles/${encodeURIComponent(roleId)}`)
+    const data = await apiClient<{ role: GqlRole }>(
+      `/api/v1/workspace/roles/${encodeURIComponent(roleId)}`,
+    )
     return { ok: true, role: normalizeRoleRecord(data.role) }
   } catch (error) {
+    if (error instanceof ApiClientError && error.status === 404) {
+      return { ok: false, error: "Role not found." }
+    }
     return { ok: false, error: formatSettingsError(error) }
   }
 }
 
 export async function createRole(input: RoleInput): Promise<{ ok: true; role: RoleRecord } | { ok: false; error: string }> {
   try {
-    const data = await requestJson<{ role: RoleRecord }>("/roles", {
+    const data = await apiClient<{ role: GqlRole }>("/api/v1/workspace/roles", {
       method: "POST",
-      body: JSON.stringify(input),
+      body: {
+        name: input.name,
+        description: input.description,
+        permissions: input.permissions,
+      },
     })
     return { ok: true, role: normalizeRoleRecord(data.role) }
   } catch (error) {
@@ -251,70 +355,66 @@ export async function createRole(input: RoleInput): Promise<{ ok: true; role: Ro
   }
 }
 
-export async function updateRole(roleId: string, input: RoleInput): Promise<{ ok: true; role: RoleRecord } | { ok: false; error: string }> {
+export async function updateRole(
+  roleId: string,
+  input: RoleInput,
+): Promise<{ ok: true; role: RoleRecord } | { ok: false; error: string }> {
   try {
-    const data = await requestJson<{ role: RoleRecord }>(`/roles/${encodeURIComponent(roleId)}`, {
-      method: "PATCH",
-      body: JSON.stringify(input),
-    })
+    const data = await apiClient<{ role: GqlRole }>(
+      `/api/v1/workspace/roles/${encodeURIComponent(roleId)}`,
+      {
+        method: "PATCH",
+        body: {
+          name: input.name,
+          description: input.description,
+          permissions: input.permissions,
+        },
+      },
+    )
     return { ok: true, role: normalizeRoleRecord(data.role) }
   } catch (error) {
     return { ok: false, error: formatSettingsError(error) }
   }
 }
 
-export async function duplicateRole(roleId: string): Promise<{ ok: true; role: RoleRecord } | { ok: false; error: string }> {
-  try {
-    const data = await requestJson<{ role: RoleRecord }>(`/roles/${encodeURIComponent(roleId)}/duplicate`, {
-      method: "POST",
-    })
-    return { ok: true, role: data.role }
-  } catch (error) {
-    return { ok: false, error: formatSettingsError(error) }
-  }
+export async function duplicateRole(source: RoleRecord): Promise<{ ok: true; role: RoleRecord } | { ok: false; error: string }> {
+  return createRole({
+    name: `${source.name} Copy`,
+    description: source.description,
+    permissions: source.permissions,
+  })
 }
 
 export async function deleteRole(roleId: string, replacementRoleId?: string): Promise<SaveSettingsResult> {
   try {
-    await requestJson(`/roles/${encodeURIComponent(roleId)}`, {
-      method: "DELETE",
-      body: JSON.stringify({ replacementRoleId }),
-    })
+    const qs = replacementRoleId
+      ? `?replacement_role_id=${encodeURIComponent(replacementRoleId)}`
+      : ""
+    await apiClient(
+      `/api/v1/workspace/roles/${encodeURIComponent(roleId)}${qs}`,
+      { method: "DELETE" },
+    )
     return { ok: true }
   } catch (error) {
     return { ok: false, error: formatSettingsError(error) }
   }
 }
 
-type OrganisationTeamMutationResult =
-  | { ok: true; team: OrganisationTeam; sharing: ResourceSharingIndex }
-  | { ok: false; error: string }
-
-async function requestOrganisationTeamMutation(
-  path: string,
-  init: RequestInit,
-): Promise<OrganisationTeamMutationResult> {
-  try {
-    const data = await requestJson<{ team: OrganisationTeam; sharing?: ResourceSharingIndex }>(path, init)
-    return {
-      ok: true,
-      team: data.team,
-      sharing: data.sharing ?? { repositories: {}, containerImages: {} },
-    }
-  } catch (error) {
-    return { ok: false, error: formatSettingsError(error) }
-  }
-}
+// ---------------------------------------------------------------------------
+// Teams
+// ---------------------------------------------------------------------------
 
 export async function listOrganisationTeams(): Promise<
-  { ok: true; teams: OrganisationTeam[]; sharing: ResourceSharingIndex } | { ok: false; error: string }
+  { ok: true; teams: OrganisationTeam[] } | { ok: false; error: string }
 > {
   try {
-    const data = await requestJson<{ teams: OrganisationTeam[]; sharing?: ResourceSharingIndex }>("/organisations")
+    const data = await gqlQuery<{ workspace: { teams: GqlTeam[] } }>(`
+      query WorkspaceTeams { workspace { teams { ${TEAM_FIELDS} } } }
+    `)
+    const teams = data.workspace?.teams
     return {
       ok: true,
-      teams: Array.isArray(data.teams) ? data.teams : [],
-      sharing: data.sharing ?? { repositories: {}, containerImages: {} },
+      teams: Array.isArray(teams) ? teams.map(gqlTeamToOrganisationTeam) : [],
     }
   } catch (error) {
     return { ok: false, error: formatSettingsError(error) }
@@ -325,116 +425,202 @@ export async function listUserDirectory(): Promise<
   { ok: true; users: UserDirectoryEntry[] } | { ok: false; error: string }
 > {
   try {
-    const data = await requestJson<{ users: UserDirectoryEntry[] }>("/users/directory")
-    return { ok: true, users: Array.isArray(data.users) ? data.users : [] }
+    const data = await gqlQuery<{ workspace: { userDirectory: UserDirectoryEntry[] } }>(`
+      query WorkspaceUserDirectory { workspace { userDirectory { id username email role status } } }
+    `)
+    const users = data.workspace?.userDirectory
+    return { ok: true, users: Array.isArray(users) ? users : [] }
   } catch (error) {
     return { ok: false, error: formatSettingsError(error) }
   }
 }
 
-export async function createOrganisationTeam(input: { name: string; description: string }): Promise<OrganisationTeamMutationResult> {
-  return requestOrganisationTeamMutation("/organisations", {
-    method: "POST",
-    body: JSON.stringify(input),
-  })
+export async function createOrganisationTeam(
+  input: { name: string; description: string },
+): Promise<{ ok: true; team: OrganisationTeam } | { ok: false; error: string }> {
+  try {
+    const data = await apiClient<GqlTeam>("/api/v1/workspace/teams", {
+      method: "POST",
+      body: { name: input.name, description: input.description },
+    })
+    return { ok: true, team: gqlTeamToOrganisationTeam(data) }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
 }
 
-export async function updateOrganisationTeam(teamId: string, input: { name: string; description: string }): Promise<OrganisationTeamMutationResult> {
-  return requestOrganisationTeamMutation(`/organisations/${encodeURIComponent(teamId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  })
+export async function updateOrganisationTeam(
+  teamId: string,
+  input: { name: string; description: string },
+): Promise<{ ok: true; team: OrganisationTeam } | { ok: false; error: string }> {
+  try {
+    const data = await apiClient<GqlTeam>(`/api/v1/workspace/teams/${teamId}`, {
+      method: "PATCH",
+      body: { name: input.name, description: input.description },
+    })
+    return { ok: true, team: gqlTeamToOrganisationTeam(data) }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
 }
 
-export async function deleteOrganisationTeam(teamId: string) {
-  return requestResult(`/organisations/${encodeURIComponent(teamId)}`, { method: "DELETE" })
+export async function deleteOrganisationTeam(teamId: string): Promise<SaveSettingsResult> {
+  try {
+    await apiClient(`/api/v1/workspace/teams/${teamId}`, { method: "DELETE" })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
 }
 
 export async function addOrganisationTeamMember(
   teamId: string,
   input: { userId: string },
-): Promise<OrganisationTeamMutationResult> {
-  return requestOrganisationTeamMutation(`/organisations/${encodeURIComponent(teamId)}/members`, {
-    method: "POST",
-    body: JSON.stringify(input),
-  })
-}
-
-export async function removeOrganisationTeamMember(
-  teamId: string,
-  userId: string,
-): Promise<OrganisationTeamMutationResult> {
-  return requestOrganisationTeamMutation(
-    `/organisations/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}`,
-    { method: "DELETE" },
-  )
-}
-
-export async function addOrganisationRepository(teamId: string, repository: string): Promise<OrganisationTeamMutationResult> {
-  return requestOrganisationTeamMutation(`/organisations/${encodeURIComponent(teamId)}/repositories`, {
-    method: "POST",
-    body: JSON.stringify({ repository }),
-  })
-}
-
-export async function removeOrganisationRepository(
-  teamId: string,
-  org: string,
-  repo: string,
-): Promise<OrganisationTeamMutationResult> {
-  return requestOrganisationTeamMutation(
-    `/organisations/${encodeURIComponent(teamId)}/repositories/${encodeURIComponent(org)}/${encodeURIComponent(repo)}`,
-    { method: "DELETE" },
-  )
-}
-
-export async function addOrganisationContainerImage(teamId: string, image: string): Promise<OrganisationTeamMutationResult> {
-  return requestOrganisationTeamMutation(`/organisations/${encodeURIComponent(teamId)}/container-images`, {
-    method: "POST",
-    body: JSON.stringify({ image }),
-  })
-}
-
-export async function removeOrganisationContainerImage(
-  teamId: string,
-  image: string,
-): Promise<OrganisationTeamMutationResult> {
-  return requestOrganisationTeamMutation(
-    `/organisations/${encodeURIComponent(teamId)}/container-images?image=${encodeURIComponent(image)}`,
-    { method: "DELETE" },
-  )
-}
-
-export async function listDirectGrants(): Promise<{ ok: true; grants: DirectGrant[] } | { ok: false; error: string }> {
+): Promise<{ ok: true; team: OrganisationTeam } | { ok: false; error: string }> {
   try {
-    const data = await requestJson<{ grants: DirectGrant[] }>("/direct-grants")
-    return { ok: true, grants: Array.isArray(data.grants) ? data.grants : [] }
+    const data = await apiClient<GqlTeam>(`/api/v1/workspace/teams/${teamId}/members`, {
+      method: "POST",
+      body: { userId: input.userId },
+    })
+    return { ok: true, team: gqlTeamToOrganisationTeam(data) }
   } catch (error) {
     return { ok: false, error: formatSettingsError(error) }
   }
 }
 
-export async function addDirectGrant(
+export async function removeOrganisationTeamMember(
+  teamId: string,
   userId: string,
-  resourceType: "repository" | "containerImage",
-  resourceKey: string,
-): Promise<SaveSettingsResult> {
-  return requestResult("/direct-grants", {
-    method: "POST",
-    body: JSON.stringify({ userId, resourceType, resourceKey }),
-  })
+): Promise<{ ok: true; team: OrganisationTeam } | { ok: false; error: string }> {
+  try {
+    const data = await apiClient<GqlTeam>(`/api/v1/workspace/teams/${teamId}/members/${userId}`, {
+      method: "DELETE",
+    })
+    return { ok: true, team: gqlTeamToOrganisationTeam(data) }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
 }
 
-export async function removeDirectGrant(
-  userId: string,
-  resourceType: string,
-  resourceKey: string,
-): Promise<SaveSettingsResult> {
-  return requestResult(
-    `/direct-grants/${encodeURIComponent(userId)}/${encodeURIComponent(resourceType)}/${encodeURIComponent(resourceKey)}`,
-    { method: "DELETE" },
-  )
+// ---------------------------------------------------------------------------
+// Asset grants
+// ---------------------------------------------------------------------------
+
+export async function attachAssetToTeam(teamId: string, assetId: string): Promise<SaveSettingsResult> {
+  try {
+    await apiClient("/api/v1/workspace/grants", {
+      method: "POST",
+      body: { subject_type: "team", subject_id: teamId, asset_id: assetId },
+    })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
 }
+
+export async function detachAssetFromTeam(teamId: string, assetId: string): Promise<SaveSettingsResult> {
+  try {
+    await apiClient("/api/v1/workspace/grants", {
+      method: "DELETE",
+      body: { subject_type: "team", subject_id: teamId, asset_id: assetId },
+    })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
+}
+
+export async function addOrganisationRepository(teamId: string, repository: string): Promise<SaveSettingsResult> {
+  const trimmed = repository.trim()
+  const slash = trimmed.indexOf("/")
+  if (slash <= 0 || slash === trimmed.length - 1) {
+    return { ok: false, error: "Repository must use org/repo format." }
+  }
+  const owner = trimmed.slice(0, slash)
+  const name = trimmed.slice(slash + 1)
+  let assetId: string
+  try {
+    const created = await requestJsonAbsolute<{ asset_id: string }>("/api/v1/sources/manual", {
+      method: "POST",
+      body: JSON.stringify({ type: "repo", source_type: "github", owner, name }),
+    })
+    assetId = created.asset_id
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
+  return attachAssetToTeam(teamId, assetId)
+}
+
+export async function removeOrganisationRepository(teamId: string, assetId: string): Promise<SaveSettingsResult> {
+  return detachAssetFromTeam(teamId, assetId)
+}
+
+export async function addOrganisationContainerImage(teamId: string, image: string): Promise<SaveSettingsResult> {
+  const trimmed = image.trim()
+  const parts = trimmed.split("/")
+  if (parts.length < 3 || parts.some((p) => !p)) {
+    return { ok: false, error: "Container image must use registry/org/image format." }
+  }
+  const [registry, ...rest] = parts
+  let assetId: string
+  try {
+    const created = await requestJsonAbsolute<{ asset_id: string }>("/api/v1/sources/manual", {
+      method: "POST",
+      body: JSON.stringify({ type: "image", registry, image: rest.join("/"), tag: "" }),
+    })
+    assetId = created.asset_id
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
+  return attachAssetToTeam(teamId, assetId)
+}
+
+export async function removeOrganisationContainerImage(teamId: string, assetId: string): Promise<SaveSettingsResult> {
+  return detachAssetFromTeam(teamId, assetId)
+}
+
+// ---------------------------------------------------------------------------
+// Direct user grants
+// ---------------------------------------------------------------------------
+
+export async function listDirectGrants(): Promise<{ ok: true; grants: Grant[] } | { ok: false; error: string }> {
+  try {
+    const data = await apiClient<{ grants: GqlGrant[] }>(
+      "/api/v1/workspace/grants?subject_type=user",
+    )
+    return { ok: true, grants: Array.isArray(data.grants) ? data.grants.map(gqlGrantToGrant) : [] }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
+}
+
+export async function addDirectGrant(userId: string, assetId: string): Promise<SaveSettingsResult> {
+  try {
+    await apiClient("/api/v1/workspace/grants", {
+      method: "POST",
+      body: { subject_type: "user", subject_id: userId, asset_id: assetId },
+    })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
+}
+
+export async function removeDirectGrant(userId: string, assetId: string): Promise<SaveSettingsResult> {
+  try {
+    await apiClient("/api/v1/workspace/grants", {
+      method: "DELETE",
+      body: { subject_type: "user", subject_id: userId, asset_id: assetId },
+    })
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, error: formatSettingsError(error) }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Source searches (REST)
+// ---------------------------------------------------------------------------
 
 export async function searchOrganisationRepositories(
   org: string | null,
@@ -442,8 +628,8 @@ export async function searchOrganisationRepositories(
 ): Promise<{ repositories: Array<{ org: string; repo: string; fullName: string }>; error?: string }> {
   try {
     const orgParam = org ? `org=${encodeURIComponent(org)}&` : ""
-    return await requestJson<{ repositories: Array<{ org: string; repo: string; fullName: string }>; error?: string }>(
-      `/resources/repositories?${orgParam}q=${encodeURIComponent(q)}`,
+    return await requestJsonAbsolute<{ repositories: Array<{ org: string; repo: string; fullName: string }>; error?: string }>(
+      `/api/v1/sources/repos/search?${orgParam}q=${encodeURIComponent(q)}`,
     )
   } catch (error) {
     return { repositories: [], error: formatSettingsError(error) }
@@ -456,22 +642,11 @@ export async function searchOrganisationContainerImages(
 ): Promise<{ images: Array<{ image: string; name: string }>; error?: string }> {
   try {
     const orgParam = org ? `org=${encodeURIComponent(org)}&` : ""
-    return await requestJson<{ images: Array<{ image: string; name: string }>; error?: string }>(
-      `/resources/container-images?${orgParam}q=${encodeURIComponent(q)}`,
+    return await requestJsonAbsolute<{ images: Array<{ image: string; name: string }>; error?: string }>(
+      `/api/v1/sources/images/search?${orgParam}q=${encodeURIComponent(q)}`,
     )
   } catch (error) {
     return { images: [], error: formatSettingsError(error) }
   }
 }
 
-export async function saveAuthSecuritySettings(input: {
-  requireMfaManualUsers: boolean
-  requireMfaAdmins: boolean
-  trustedSessionDurationDays: number
-  recoveryCodePolicy: "mandatory" | "optional" | "disabled"
-}): Promise<SaveSettingsResult> {
-  return requestResult("/auth-security", {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  })
-}

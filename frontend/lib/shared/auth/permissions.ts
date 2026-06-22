@@ -10,6 +10,7 @@ export type Permission =
   | "export_reports"
   | "view_settings"
   | "manage_settings"
+  | "manage_runners"
   | "view_users"
   | "manage_users"
   | "view_roles"
@@ -114,6 +115,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { id: "view_settings", label: "View Settings", description: "Access the settings pages." },
       { id: "manage_settings", label: "Manage Settings", description: "Change global and tool configuration." },
+      { id: "manage_runners", label: "Manage Runners", description: "Configure, approve, and revoke self-hosted scan runners." },
     ],
   },
   {
@@ -130,7 +132,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
 ]
 
 export const IMPLIED_PERMISSIONS: Partial<Record<Permission, Permission[]>> = {
-  manage_settings: ["view_settings"],
+  manage_settings: ["view_settings", "manage_runners"],
   manage_users: ["view_users"],
   manage_roles: ["view_roles"],
   manage_access_scope: ["view_access_scope"],

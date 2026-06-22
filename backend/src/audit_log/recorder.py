@@ -1,13 +1,9 @@
-"""AuditRecorder — writes structured audit events to the database.
-
-Enabled by default. Set AEGIS_AUDIT_LOG_ENABLED=false to disable (e.g. during
-unit tests that don't have a database). In production you want this on.
-"""
+"""AuditRecorder — writes structured audit events to the database."""
 from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 

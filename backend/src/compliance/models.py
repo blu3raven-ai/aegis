@@ -83,9 +83,7 @@ class ComplianceControlMapping(Base):
     )
 
 
-# ---------------------------------------------------------------------------
 # Pydantic schemas
-# ---------------------------------------------------------------------------
 
 
 class FrameworkControlSchema(BaseModel):
@@ -182,3 +180,69 @@ class ControlUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     category: str | None = None
+
+
+# Read envelopes for the GET endpoints. The shapes mirror the existing JSON the
+# handlers already return — kept distinct from the CRUD models above so that
+# adding/removing internal fields (e.g. created_by_user_id) on a write response
+# doesn't accidentally change what reads expose.
+
+
+class ComplianceFrameworkBrief(BaseModel):
+    """Lightweight {id, label} pair used by the catalog list."""
+    id: str
+    label: str
+
+
+class FrameworksList(BaseModel):
+    frameworks: list[ComplianceFrameworkBrief]
+
+
+class ControlReadItem(BaseModel):
+    id: int
+    framework: str
+    control_id: str
+    title: str
+    description: str | None
+    category: str | None
+
+
+class FrameworkControlsList(BaseModel):
+    controls: list[ControlReadItem]
+
+
+class FrameworkSummaryResponse(BaseModel):
+    framework: str
+    label: str
+    controls: list[ControlSummaryItem]
+
+
+class ComplianceFindingBriefResponse(BaseModel):
+    id: int
+    tool: str
+    org: str
+    repo: str | None
+    severity: str | None
+    state: str
+    identity_key: str
+    confidence: float
+    rationale: str | None
+
+
+class ControlFindingsResponse(BaseModel):
+    framework: str
+    control_id: str
+    findings: list[ComplianceFindingBriefResponse]
+
+
+class ControlMappingResponse(BaseModel):
+    framework: str
+    control_id: str
+    title: str
+    confidence: float
+    rationale: str | None
+
+
+class FindingControlsResponse(BaseModel):
+    finding_id: int
+    mappings: list[ControlMappingResponse]

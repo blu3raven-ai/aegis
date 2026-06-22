@@ -1,7 +1,7 @@
-"""REST endpoints for /api/v1/reports."""
+"""REST endpoints for /api/v1/findings/reports."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from src.audit_log.recorder import ActorInfo, get_recorder
 from src.reports.models import (
@@ -29,10 +29,11 @@ from src.reports.service import (
     get_report,
     list_reports,
 )
-from src.settings.router import require_permission
-from src.shared.scope import resolve_asset_ids_from_request
+from src.authz.enforcement.dependencies import Permission
+from src.authz.enforcement.scope import resolve_asset_ids_from_request
+from src.authz.permissions.catalog import VIEW_FINDINGS
 
-router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
+router = APIRouter(prefix="/api/v1/findings/reports", tags=["findings"])
 
 
 def _to_summary(row) -> ReportSummary:
@@ -70,8 +71,11 @@ def _identify_caller(request: Request) -> str:
 
 
 @router.post("", status_code=201, response_model=ReportDetail, summary="Generate a report")
-async def create_report(body: GenerateReportRequest, request: Request) -> ReportDetail:
-    require_permission(request, "view_findings")
+async def create_report(
+    body: GenerateReportRequest,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> ReportDetail:
     if body.report_type == "posture" and body.format == "csv":
         raise HTTPException(
             status_code=422,
@@ -100,8 +104,8 @@ async def list_reports_endpoint(
     request: Request,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    _: None = Depends(Permission(VIEW_FINDINGS)),
 ) -> ReportsListResponse:
-    require_permission(request, "view_findings")
     viewer_id = _identify_caller(request)
     viewer_asset_ids = await resolve_asset_ids_from_request(request)
     rows, total = list_reports(
@@ -126,8 +130,11 @@ def _record_audit(*, request: Request, action: str, schedule_id: int, metadata: 
 
 @router.post("/scheduled", status_code=201, response_model=ScheduledReportResponse,
              summary="Create a scheduled report")
-async def create_scheduled_report(body: ScheduledReportCreate, request: Request) -> ScheduledReportResponse:
-    require_permission(request, "view_findings")
+async def create_scheduled_report(
+    body: ScheduledReportCreate,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> ScheduledReportResponse:
     created_by = _identify_caller(request)
     asset_ids = await resolve_asset_ids_from_request(request)
     try:
@@ -141,16 +148,21 @@ async def create_scheduled_report(body: ScheduledReportCreate, request: Request)
 
 @router.get("/scheduled", response_model=ScheduledReportsListResponse,
             summary="List scheduled reports")
-async def list_scheduled_reports(request: Request) -> ScheduledReportsListResponse:
-    require_permission(request, "view_findings")
+async def list_scheduled_reports(
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> ScheduledReportsListResponse:
     items = list_schedules()
     return ScheduledReportsListResponse(items=[ScheduledReportResponse(**i) for i in items])
 
 
 @router.get("/scheduled/{schedule_id}", response_model=ScheduledReportResponse,
             summary="Get a scheduled report by id")
-async def get_scheduled_report(schedule_id: int, request: Request) -> ScheduledReportResponse:
-    require_permission(request, "view_findings")
+async def get_scheduled_report(
+    schedule_id: int,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> ScheduledReportResponse:
     result = get_schedule(schedule_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Scheduled report not found")
@@ -159,8 +171,12 @@ async def get_scheduled_report(schedule_id: int, request: Request) -> ScheduledR
 
 @router.patch("/scheduled/{schedule_id}", response_model=ScheduledReportResponse,
               summary="Update a scheduled report")
-async def update_scheduled_report(schedule_id: int, body: ScheduledReportUpdate, request: Request) -> ScheduledReportResponse:
-    require_permission(request, "view_findings")
+async def update_scheduled_report(
+    schedule_id: int,
+    body: ScheduledReportUpdate,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> ScheduledReportResponse:
     patch = body.model_dump(exclude_unset=True)
     if not patch:
         raise HTTPException(status_code=422, detail="empty patch body")
@@ -177,16 +193,22 @@ async def update_scheduled_report(schedule_id: int, body: ScheduledReportUpdate,
 
 @router.delete("/scheduled/{schedule_id}", status_code=204,
                summary="Delete a scheduled report")
-async def delete_scheduled_report(schedule_id: int, request: Request) -> None:
-    require_permission(request, "view_findings")
+async def delete_scheduled_report(
+    schedule_id: int,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> None:
     if not delete_schedule(schedule_id):
         raise HTTPException(status_code=404, detail="Scheduled report not found")
     _record_audit(request=request, action="scheduled_report.deleted", schedule_id=schedule_id)
 
 
 @router.get("/{report_id}", response_model=ReportDetail, summary="Get report detail + download URL")
-async def get_report_endpoint(report_id: int, request: Request) -> ReportDetail:
-    require_permission(request, "view_findings")
+async def get_report_endpoint(
+    report_id: int,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> ReportDetail:
     viewer_id = _identify_caller(request)
     viewer_asset_ids = await resolve_asset_ids_from_request(request)
     row = get_report(report_id=report_id, viewer_id=viewer_id, viewer_asset_ids=viewer_asset_ids)
@@ -196,8 +218,11 @@ async def get_report_endpoint(report_id: int, request: Request) -> ReportDetail:
 
 
 @router.delete("/{report_id}", status_code=204, summary="Delete a report")
-async def delete_report_endpoint(report_id: int, request: Request) -> None:
-    require_permission(request, "view_findings")
+async def delete_report_endpoint(
+    report_id: int,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> None:
     viewer_id = _identify_caller(request)
     viewer_asset_ids = await resolve_asset_ids_from_request(request)
     if not delete_report(

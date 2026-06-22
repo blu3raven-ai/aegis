@@ -1,30 +1,7 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import { Suspense } from "react"
-import { FindingsBoardView } from "@/components/shared/findings/FindingsBoardView"
-import { InboxIcon } from "@/lib/shared/ui/page-icons"
-import { InboxQueueSidebar } from "./InboxQueueSidebar"
-
+// /inbox has no content of its own — Triage is the default tab and lives at
+// /inbox/triage (sibling to /inbox/history). Redirect so the URL is explicit.
 export default function InboxPage() {
-  return (
-    <FindingsBoardView
-      pageTitle="Inbox"
-      pageIcon={<InboxIcon />}
-      pageDescription="Triage open findings, newest first."
-      initialStateFilter={["open"]}
-      showSummaryStrip={false}
-      compactHeader
-      flat
-      leftSidebar={(api) => (
-        <Suspense fallback={null}>
-          <InboxQueueSidebar
-            applyView={api.applyView}
-            currentUrlState={api.currentUrlState}
-            savedViewsRefreshSignal={api.savedViewsRefreshSignal}
-            onSavedViewCreated={api.onSavedViewCreated}
-          />
-        </Suspense>
-      )}
-    />
-  )
+  redirect("/inbox/triage")
 }

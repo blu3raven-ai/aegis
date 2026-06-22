@@ -464,7 +464,7 @@ def test_evaluator_skips_non_matching_conditions():
     now = datetime.now(timezone.utc)
     scan_id = _seed_scan_run(
         finished_at=now - timedelta(days=400),
-        tool="dependencies",
+        tool="dependencies_scanning",
     )
     _seed_data_retention_rule(
         action={"type": "archive", "after_days": 365},

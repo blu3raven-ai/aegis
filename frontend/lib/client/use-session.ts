@@ -21,7 +21,7 @@ export function useSession(): { user: SessionUser | null; loading: boolean } {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    apiClient<MeResponse>("/auth/me", { suppressUnauthorizedRedirect: false })
+    apiClient<MeResponse>("/api/v1/auth/me", { suppressUnauthorizedRedirect: true })
       .then((res) => setUser(res.user))
       .catch(() => setUser(null))
       .finally(() => setLoading(false))

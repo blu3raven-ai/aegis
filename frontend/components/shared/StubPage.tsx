@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { PageHeader } from "@/components/layout/PageHeader"
+import { Card } from "@/components/ui/Card"
 
 function StubIcon() {
   return (
@@ -31,7 +32,7 @@ export function StubPage({ title, phase, purpose }: StubPageProps) {
   return (
     <>
       <PageHeader icon={<StubIcon />} title={title} />
-      <div className="mx-auto mt-12 max-w-lg rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-8 text-center">
+      <Card padding="none" className="mx-auto mt-12 max-w-lg px-6 py-8 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
           Coming in Phase {phase}
         </p>
@@ -44,7 +45,7 @@ export function StubPage({ title, phase, purpose }: StubPageProps) {
         >
           Back to Home
         </Link>
-      </div>
+      </Card>
     </>
   )
 }

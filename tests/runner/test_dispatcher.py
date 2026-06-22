@@ -9,10 +9,10 @@ from runner.scanners.code_scanning.scanner import CodeScanningScanner
 
 
 @pytest.mark.parametrize("scanner_type,expected_cls", [
-    ("dependencies", DependenciesScanner),
-    ("container", ContainerScanner),
-    ("secrets", SecretsScanner),
-    ("code-scanning", CodeScanningScanner),
+    ("dependencies_scanning", DependenciesScanner),
+    ("container_scanning", ContainerScanner),
+    ("secret_scanning", SecretsScanner),
+    ("code_scanning", CodeScanningScanner),
 ])
 def test_get_scanner_returns_correct_instance(scanner_type, expected_cls):
     scanner = get_scanner(scanner_type)
@@ -26,18 +26,18 @@ def test_get_scanner_raises_on_unknown_type():
 
 def test_get_scanner_returns_same_instance():
     """Scanners are singletons — dispatcher returns the same instance each time."""
-    a = get_scanner("dependencies")
-    b = get_scanner("dependencies")
+    a = get_scanner("dependencies_scanning")
+    b = get_scanner("dependencies_scanning")
     assert a is b
 
 
 def test_supported_types_lists_all_scanners():
     types = supported_types()
     assert set(types) == {
-        "dependencies",
-        "container",
-        "secrets",
-        "code-scanning",
-        "iac",
+        "dependencies_scanning",
+        "container_scanning",
+        "secret_scanning",
+        "code_scanning",
+        "iac_scanning",
         "verification",
     }

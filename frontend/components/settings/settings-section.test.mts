@@ -19,11 +19,11 @@ test("SettingsSection renders the title as a small-caps <h2>", () => {
 })
 
 test("SettingsSection is the outer bordered card", () => {
-  // The section wraps children in the outer rounded card; inner sub-cards
-  // sit inside as visual wells.
+  // The section wraps children in the outer rounded card via the Card
+  // primitive; inner sub-cards sit inside as visual wells.
   assert.match(section, /rounded-xl/)
-  assert.match(section, /border border-\[var\(--color-border\)\]/)
-  assert.match(section, /bg-\[var\(--color-surface\)\]/)
+  assert.match(section, /from "@\/components\/ui\/Card"/)
+  assert.match(section, /<Card\b[^>]*as="section"/)
 })
 
 test("SettingsCard is the inner sub-card with optional heading", () => {

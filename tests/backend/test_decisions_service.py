@@ -261,7 +261,7 @@ def _seed_cross_org_findings():
         )
         session.add(
             Finding(
-                tool="dependencies",
+                tool="dependencies_scanning",
                 org=_ISO_ORG_A,
                 repo=f"{_ISO_ORG_A}/api",
                 identity_key="iso-a-critical",

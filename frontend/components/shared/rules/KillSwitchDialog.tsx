@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { RuleCategory } from "@/lib/client/rules-api"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Textarea } from "@/components/ui/Textarea"
 
@@ -108,13 +109,11 @@ export function KillSwitchDialog({
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
           <p className="text-sm text-[var(--color-text-primary)]">{body}</p>
 
-          <div>
-            <label
-              htmlFor="kill-switch-reason"
-              className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-            >
-              Why are you killing auto-dismiss? (optional)
-            </label>
+          <FormField
+            label="Why are you killing auto-dismiss? (optional)"
+            htmlFor="kill-switch-reason"
+            labelSuffix={`${reason.length}/${REASON_MAX}`}
+          >
             <Textarea
               id="kill-switch-reason"
               ref={reasonRef}
@@ -125,18 +124,19 @@ export function KillSwitchDialog({
               maxLength={REASON_MAX}
               placeholder="Incident response, suspected misconfiguration, etc."
             />
-            <p className="mt-1 text-2xs text-[var(--color-text-tertiary)]">
-              {reason.length}/{REASON_MAX}
-            </p>
-          </div>
+          </FormField>
 
-          <div>
-            <label
-              htmlFor="kill-switch-confirm"
-              className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-            >
-              Type to confirm
-            </label>
+          <FormField
+            label="Type to confirm"
+            htmlFor="kill-switch-confirm"
+            error={
+              <>
+                Type <span className="font-mono">{requiredPhrase}</span> to engage
+                the kill switch. All auto-dismiss rules will stop acting on new
+                findings.
+              </>
+            }
+          >
             <Input
               id="kill-switch-confirm"
               type="text"
@@ -148,12 +148,7 @@ export function KillSwitchDialog({
               disabled={loading}
               invalid
             />
-            <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
-              Type <span className="font-mono">{requiredPhrase}</span> to engage
-              the kill switch. All auto-dismiss rules will stop acting on new
-              findings.
-            </p>
-          </div>
+          </FormField>
 
           {error && (
             <div

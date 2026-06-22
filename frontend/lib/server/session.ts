@@ -15,14 +15,14 @@ export interface SessionPayload {
   sessionVersion: number
 }
 
-/** Read the current session by calling /auth/me on FastAPI. Returns null if unauthenticated. */
+/** Read the current session by calling /api/v1/auth/me on FastAPI. Returns null if unauthenticated. */
 export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)
   if (!sessionCookie) return null
 
   try {
-    const response = await fetch(`${FASTAPI_URL}/auth/me`, {
+    const response = await fetch(`${FASTAPI_URL}/api/v1/auth/me`, {
       headers: { Cookie: `${SESSION_COOKIE_NAME}=${sessionCookie.value}` },
       cache: "no-store",
     })

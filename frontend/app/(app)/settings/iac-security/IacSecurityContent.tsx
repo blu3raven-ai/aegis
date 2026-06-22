@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react"
 import type { AppConfig } from "@/lib/server/app-config"
 import { ToolSettingsForm } from "../ToolSettingsForm"
 import { formatSettingsError, getSettings } from "@/lib/client/settings-api"
-import { listSourceConnections } from "@/lib/client/sources-api"
+import { listSourceConnections } from "@/lib/client/source-connections-api"
 import type { SourceConnection } from "@/lib/shared/sources-types"
 import { NoSourcesBanner } from "@/components/shared/NoSourcesBanner"
 import { Button } from "@/components/ui/Button"
@@ -91,10 +91,10 @@ export function IacSecurityContent() {
         />
       ) : (
       <ToolSettingsForm
-        tool="iacSecurity"
+        tool="iac_scanning"
         title="Infrastructure as Code (IaC) Security"
         description="Configure security scanning for infrastructure-as-code templates and configurations."
-        enabled={settings.tools.iacSecurity.enabled}
+        enabled={settings.tools.iac_scanning.enabled}
         initialValues={{}}
         fields={[]}
       />

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.graphql.schema import Query
+from src.graphql.schema import SlaQuery
 from src.graphql.types import BreachSummary, EpssTopResponse, SeverityBreachStat
 
 
@@ -17,7 +17,7 @@ def _info() -> SimpleNamespace:
 @pytest.fixture
 def empty_scope_ctx():
     with patch(
-        "src.graphql.schema.get_graphql_context",
+        "src.graphql.auth.get_graphql_context",
         new=AsyncMock(return_value={
             "user_id": "u", "role": "viewer", "asset_ids": [],
             "tier": "community", "request": object(), "_cache": {},
@@ -29,7 +29,7 @@ def empty_scope_ctx():
 @pytest.fixture
 def one_asset_scope_ctx():
     with patch(
-        "src.graphql.schema.get_graphql_context",
+        "src.graphql.auth.get_graphql_context",
         new=AsyncMock(return_value={
             "user_id": "u", "role": "viewer", "asset_ids": ["a-1"],
             "tier": "community", "request": object(), "_cache": {},
@@ -40,7 +40,7 @@ def one_asset_scope_ctx():
 
 @pytest.mark.asyncio
 async def test_epss_top_empty_for_empty_scope(empty_scope_ctx):
-    result = await Query().epss_top(_info(), org=None, limit=5)
+    result = await SlaQuery().epss_top(_info(), org=None, limit=5)
     assert isinstance(result, EpssTopResponse)
     assert result.findings == []
     assert result.count == 0
@@ -48,7 +48,7 @@ async def test_epss_top_empty_for_empty_scope(empty_scope_ctx):
 
 @pytest.mark.asyncio
 async def test_sla_breach_summary_zeroed_for_empty_scope(empty_scope_ctx):
-    result = await Query().sla_breach_summary(_info(), org=None)
+    result = await SlaQuery().breach_summary(_info(), org=None)
     assert isinstance(result, BreachSummary)
     for sev in (result.critical, result.high, result.medium, result.low):
         assert isinstance(sev, SeverityBreachStat)
@@ -59,7 +59,7 @@ async def test_sla_breach_summary_zeroed_for_empty_scope(empty_scope_ctx):
 async def test_epss_top_passes_asset_ids_when_scoped(one_asset_scope_ctx):
     with patch("src.graphql.schema.epss_top") as resolver:
         resolver.return_value = EpssTopResponse(findings=[], count=0)
-        await Query().epss_top(_info(), org=None, limit=5)
+        await SlaQuery().epss_top(_info(), org=None, limit=5)
     resolver.assert_called_once()
     assert resolver.call_args.kwargs["asset_ids"] == ["a-1"]
 
@@ -94,7 +94,7 @@ async def test_top_repositories_dict_shape_matches_graphql_type(db_session):
         external_ref=external_ref, display_name=display_name,
     )
     db_session.add(Finding(
-        tool="dependencies", asset_id=asset_id, identity_key=identity_key,
+        tool="dependencies_scanning", asset_id=asset_id, identity_key=identity_key,
         state="open", severity="critical",
     ))
     await db_session.commit()

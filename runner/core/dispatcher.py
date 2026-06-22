@@ -1,8 +1,8 @@
 """Scanner dispatcher: maps backend job["type"] to an embedded scanner instance.
 
 Replaces the Docker-per-scan execution model with in-process Python scanner
-modules. The mapping keys are the exact strings the backend sends in job["type"],
-which is why "code-scanning" uses a hyphen (the Python package uses underscore)."""
+modules. The mapping keys are the exact strings the backend sends in job["type"]
+(see backend src/scans/service.py::_SCANNER_JOB_TYPES)."""
 from __future__ import annotations
 
 from runner.scanners.base import BaseScanner
@@ -14,11 +14,11 @@ from runner.scanners.secrets.scanner import SecretsScanner
 from runner.scanners.verification.scanner import VerificationScanner
 
 _SCANNERS: dict[str, BaseScanner] = {
-    "dependencies": DependenciesScanner(),
-    "container": ContainerScanner(),
-    "secrets": SecretsScanner(),
-    "code-scanning": CodeScanningScanner(),
-    "iac": IacScanner(),
+    "dependencies_scanning": DependenciesScanner(),
+    "container_scanning": ContainerScanner(),
+    "secret_scanning": SecretsScanner(),
+    "code_scanning": CodeScanningScanner(),
+    "iac_scanning": IacScanner(),
     "verification": VerificationScanner(),
 }
 

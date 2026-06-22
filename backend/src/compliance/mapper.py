@@ -59,13 +59,13 @@ def map_finding(
 
     # ── Rule 2: All dependency/container findings → system monitoring ────────
     # Even medium/low severity implies the detection machinery must be in place.
-    if scanner_type in ("dependencies", "containers"):
+    if scanner_type in ("dependencies_scanning", "containers"):
         mappings.append(_MappingDraft("soc2", "CC7.1", 0.75, "Continuous vulnerability monitoring required"))
 
     # ── Rule 3: Exposed secrets ───────────────────────────────────────────────
     # Credential exposure directly violates access-control and cryptography
     # controls.
-    if scanner_type == "secrets":
+    if scanner_type == "secret_scanning":
         mappings += [
             _MappingDraft("soc2", "CC6.1", 0.95, "Credential exposure undermines logical access controls"),
             _MappingDraft("iso27001", "A.9.4", 0.95, "Access credential leaked in source or config"),

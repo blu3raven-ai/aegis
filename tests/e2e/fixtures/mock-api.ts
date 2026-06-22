@@ -49,18 +49,8 @@ export async function mockGraphQL(page: Page, overrides?: Record<string, unknown
         json: { data: { secretsFilterOptions: overrides?.secretsFilterOptions ?? DEFAULT_SECRET_FILTER_OPTIONS } },
       })
     }
-    if (op === "SecretCounts" || query.includes("secretCounts")) {
-      return route.fulfill({
-        json: { data: { secretCounts: overrides?.secretCounts ?? DEFAULT_SEVERITY_COUNTS } },
-      })
-    }
 
     // Dependencies
-    if (op === "DependenciesCounts" || query.includes("dependenciesCounts")) {
-      return route.fulfill({
-        json: { data: { dependenciesCounts: overrides?.dependenciesCounts ?? DEFAULT_SEVERITY_COUNTS } },
-      })
-    }
     if (op === "DependenciesFindings" || query.includes("dependenciesFindings")) {
       return route.fulfill({
         json: {
@@ -76,11 +66,6 @@ export async function mockGraphQL(page: Page, overrides?: Record<string, unknown
     }
 
     // Code Scanning
-    if (op === "CodeScanningCounts" || query.includes("codeScanningCounts")) {
-      return route.fulfill({
-        json: { data: { codeScanningCounts: overrides?.codeScanningCounts ?? DEFAULT_SEVERITY_COUNTS } },
-      })
-    }
     if (op === "CodeScanningFindings" || query.includes("codeScanningFindings")) {
       return route.fulfill({
         json: {
@@ -95,41 +80,24 @@ export async function mockGraphQL(page: Page, overrides?: Record<string, unknown
       })
     }
 
-    // Container
-    if (op === "ContainerCounts" || query.includes("containerCounts")) {
+    // Cross-scanner counts (sidebar + sources page)
+    if (op === "ScannerCounts" || query.includes("query ScannerCounts")) {
       return route.fulfill({
-        json: { data: { containerCounts: overrides?.containerCounts ?? DEFAULT_SEVERITY_COUNTS } },
+        json: {
+          data: {
+            scans: {
+              dependenciesScanning: { counts: overrides?.scannerCounts ?? DEFAULT_SEVERITY_COUNTS },
+              codeScanning: { counts: overrides?.scannerCounts ?? DEFAULT_SEVERITY_COUNTS },
+              containerScanning: { counts: overrides?.scannerCounts ?? DEFAULT_SEVERITY_COUNTS },
+              secretScanning: { counts: overrides?.scannerCounts ?? DEFAULT_SEVERITY_COUNTS },
+            },
+          },
+        },
       })
     }
 
     return route.continue()
   })
-}
-
-/**
- * Intercept REST API calls used by dashboards.
- * Only intercepts data endpoints — never /auth/login or /auth/me.
- */
-export async function mockSecretsREST(page: Page) {
-  await page.route("**/api/v1/secrets/runs?*", (route) =>
-    route.fulfill({
-      json: { latest: null, runs: [], lastCompleted: null },
-    })
-  )
-
-  await page.route("**/api/v1/secrets/review-queue?*", (route) =>
-    route.fulfill({ json: { empty: true, queue: [] } })
-  )
-
-  await page.route("**/api/v1/secrets/insights?*", (route) =>
-    route.fulfill({ json: { triagePriority: [], trend: [] } })
-  )
-
-  await page.route("**/api/v1/secrets/health?*", (route) =>
-    route.fulfill({
-      json: { empty: true, runHistory: [], coverageGaps: [], scannerHitRates: [] },
-    })
-  )
 }
 
 /** Mock the /auth/me endpoint to return a test admin user. */

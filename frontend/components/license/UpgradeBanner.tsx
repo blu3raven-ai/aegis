@@ -1,6 +1,7 @@
 import Link from "next/link"
 import type { Tier } from "@/lib/shared/license/types"
 import { TIER_LABELS } from "@/lib/shared/license/types"
+import { Card } from "@/components/ui/Card"
 
 interface UpgradeBannerProps {
   requiredTier: Tier
@@ -9,7 +10,7 @@ interface UpgradeBannerProps {
 
 export function UpgradeBanner({ requiredTier, feature }: UpgradeBannerProps) {
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-10 text-center">
+    <Card padding="none" className="rounded-xl px-6 py-10 text-center">
       <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent)]/10">
         <svg className="h-5 w-5 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
@@ -27,6 +28,6 @@ export function UpgradeBanner({ requiredTier, feature }: UpgradeBannerProps) {
       >
         Upgrade plan
       </Link>
-    </div>
+    </Card>
   )
 }

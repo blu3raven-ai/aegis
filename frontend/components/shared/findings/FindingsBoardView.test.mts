@@ -10,7 +10,7 @@ describe("FindingsBoardView filter bar additions", () => {
   })
 
   it("ships a SCANNER_FILTER_OPTIONS array with the five scanner buckets the backend supports", () => {
-    for (const value of ['"all"', '"deps"', '"sast"', '"secrets"', '"container"', '"iac"']) {
+    for (const value of ['"all"', '"dependencies_scanning"', '"code_scanning"', '"secret_scanning"', '"container_scanning"', '"iac_scanning"']) {
       assert.ok(src.includes(`value: ${value}`), `SCANNER_FILTER_OPTIONS should include ${value}`)
     }
   })

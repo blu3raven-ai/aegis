@@ -134,7 +134,7 @@ export async function mockAuditAPI(
 
 /** Intercept the SSE stream so tests don't block on it. */
 export async function mockSSE(page: Page) {
-  await page.route("**/api/v1/events/stream**", (route) =>
+  await page.route("**/api/v1/history/events/stream**", (route) =>
     route.fulfill({
       status: 200,
       headers: {

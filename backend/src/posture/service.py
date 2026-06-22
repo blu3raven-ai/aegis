@@ -1,7 +1,7 @@
 """Posture snapshot service.
 
-Aggregates org-scoped findings + repos and delegates to build_analytics() in
-src.shared.analytics.
+Aggregates asset-scoped findings + repos and delegates to build_analytics()
+in src.shared.analytics.
 """
 from __future__ import annotations
 
@@ -36,31 +36,18 @@ def _asset_to_repo_dict(asset: Asset) -> dict[str, Any]:
     }
 
 
-def get_posture_snapshot(
-    org: str | None = None,
-    *,
-    asset_ids: list[str] | None = None,
-) -> AnalyticsPayload:
+def get_posture_snapshot(*, asset_ids: list[str]) -> AnalyticsPayload:
     """Fetch findings + repos and return the analytics payload.
 
-    Supply either ``org`` (legacy path) or ``asset_ids`` (asset-identity path).
     Passing ``asset_ids=[]`` returns an empty payload immediately.
     """
-    if asset_ids is None and org is None:
-        raise ValueError("either org or asset_ids is required")
-
     async def _query(session: AsyncSession) -> AnalyticsPayload:
-        if asset_ids is not None and not asset_ids:
+        if not asset_ids:
             return build_analytics(open_findings=[], fixed_findings=[], repos=[])
 
-        if asset_ids is not None:
-            finding_filter_open = Finding.asset_id.in_(asset_ids)
-            finding_filter_fixed = Finding.asset_id.in_(asset_ids)
-            asset_filter = Asset.id.in_(asset_ids)
-        else:
-            raise ValueError(
-                "get_posture_snapshot: org-only path not supported after Plan D; supply asset_ids"
-            )
+        finding_filter_open = Finding.asset_id.in_(asset_ids)
+        finding_filter_fixed = Finding.asset_id.in_(asset_ids)
+        asset_filter = Asset.id.in_(asset_ids)
 
         open_rows = (await session.execute(
             exclude_archived(
@@ -160,44 +147,37 @@ def compute_and_store_daily_snapshots(*, today: _date | None = None) -> int:
     return run_db(_run)
 
 
-def get_posture_by_team(
-    org: str | None = None,
-    *,
-    asset_ids: list[str] | None = None,
-) -> list[dict]:
-    """Return per-team posture snapshots keyed by TeamAsset memberships.
+def get_posture_by_team(*, asset_ids: list[str]) -> list[dict]:
+    """Return per-team posture snapshots keyed by team grants.
 
-    Supply ``asset_ids`` (asset-identity path). The legacy ``org`` parameter is
-    no longer supported after Plan D — pass asset_ids resolved from the org instead.
-    Teams with no TeamAsset rows in scope are excluded.
+    Teams with no grants in scope are excluded.
     """
-    if asset_ids is None:
-        raise ValueError(
-            "get_posture_by_team: org-only path not supported after Plan D; supply asset_ids"
-        )
-
     from dataclasses import asdict
 
-    from src.db.models import Team, TeamAsset
+    from src.db.models import Grant, Team
 
     async def _query(session: AsyncSession) -> list[dict]:
+        if not asset_ids:
+            return []
+
         teams = (await session.execute(select(Team))).scalars().all()
         if not teams:
             return []
 
-        if not asset_ids:
-            return []
         finding_filter_open = Finding.asset_id.in_(asset_ids)
         finding_filter_fixed = Finding.asset_id.in_(asset_ids)
         asset_filter = Asset.id.in_(asset_ids)
 
-        # Map team → asset_ids via TeamAsset (replaces legacy TeamRepository)
+        # Map team → asset_ids via unified grants table
         team_asset_rows = (await session.execute(
-            select(TeamAsset).where(TeamAsset.asset_id.in_(asset_ids))
+            select(Grant).where(
+                Grant.subject_type == "team",
+                Grant.asset_id.in_(asset_ids),
+            )
         )).scalars().all()
         team_assets: dict[str, list[str]] = {}
         for ta in team_asset_rows:
-            team_assets.setdefault(ta.team_id, []).append(ta.asset_id)
+            team_assets.setdefault(ta.subject_id, []).append(ta.asset_id)
 
         all_open = (await session.execute(
             exclude_archived(
@@ -243,23 +223,17 @@ def get_posture_by_team(
     return run_db(_query)
 
 
-def get_posture_trend(
-    org: str | None = None,  # kept for back-compat, ignored
-    days: int = 30,
-    *,
-    asset_ids: list[str] | None = None,
-) -> list[dict]:
+def get_posture_trend(*, asset_ids: list[str], days: int = 30) -> list[dict]:
     """Return daily severity totals for the caller's accessible assets.
 
-    Asset-scoped: aggregates posture_snapshots rows WHERE asset_id IN asset_ids
-    GROUP BY snapshot_date. Empty asset_ids -> empty result. The legacy org-only
-    path is no longer supported (returns []).
+    Aggregates posture_snapshots rows WHERE asset_id IN asset_ids
+    GROUP BY snapshot_date. Empty asset_ids -> empty result.
     """
     from sqlalchemy import func
 
     from src.db.models import PostureSnapshot
 
-    if asset_ids is None or not asset_ids:
+    if not asset_ids:
         return []
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date()

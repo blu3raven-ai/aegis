@@ -40,7 +40,7 @@ export function deriveDayStats(events: ActivityEvent[]): DayStats {
     criticalFindings: events.filter(isCriticalFinding).length,
     fixed: events.filter((e) => e.type === "finding.fixed").length,
     decisions: events.filter((e) => e.type === "finding.dismissed").length,
-    scans: events.filter((e) => e.type === "scan.completed").length,
+    scans: events.filter((e) => e.type.startsWith("scan.")).length,
     byType,
   }
 }

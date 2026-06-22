@@ -26,8 +26,11 @@ describe("search-api module", () => {
   it("accepts AbortSignal", () => {
     assert.ok(apiSrc.includes("signal"))
   })
-  it("hits /api/v1/search", () => {
-    assert.ok(apiSrc.includes("/api/v1/search"))
+  it("hits /api/v1/graphql", () => {
+    assert.ok(apiSrc.includes("/api/v1/graphql"))
+  })
+  it("uses the GlobalSearch operation", () => {
+    assert.ok(apiSrc.includes("GlobalSearch"))
   })
 })
 

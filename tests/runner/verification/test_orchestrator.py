@@ -103,7 +103,7 @@ def test_cross_scanner_bonus_only_when_multiple_scanners_in_same_repo():
 
     findings = [
         _f(id="a", scanner="code-scanning"),
-        _f(id="b", scanner="secrets"),
+        _f(id="b", scanner="secret_scanning"),
     ]
     cross_scorer = score_finding(findings[0], all_findings=findings)
     solo_scorer = score_finding(_f(id="a"), all_findings=[_f(id="a")])
@@ -112,7 +112,7 @@ def test_cross_scanner_bonus_only_when_multiple_scanners_in_same_repo():
 
 def test_score_bounded_to_max():
     monster = _f(severity="critical", kev=True, epss=1.0, verdict="confirmed")
-    findings = [monster, _f(id="b", scanner="secrets"), _f(id="c", scanner="sca")]
+    findings = [monster, _f(id="b", scanner="secret_scanning"), _f(id="c", scanner="sca")]
     assert score_finding(monster, all_findings=findings) <= 150
 
 
@@ -181,7 +181,7 @@ def test_deep_tier_processes_highest_score_first():
 def test_correlation_group_count_matches_cross_scanner_repos():
     findings = [
         _f(id="a", scanner="code-scanning", repository="r1"),
-        _f(id="b", scanner="secrets", repository="r1"),
+        _f(id="b", scanner="secret_scanning", repository="r1"),
         _f(id="c", scanner="code-scanning", repository="r2"),  # solo scanner
         _f(id="d", scanner="code-scanning", repository="r3"),
         _f(id="e", scanner="sca", repository="r3"),

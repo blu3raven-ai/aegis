@@ -1,20 +1,20 @@
 import { getAppConfigEnvValue } from "@/lib/server/app-config"
 import { getOrgsForCategories } from "@/lib/server/source-connections"
 
-type ToolKey = "dependencies" | "codeScanning" | "secrets" | "containerScanning"
+type ToolKey = "dependencies_scanning" | "code_scanning" | "secret_scanning" | "container_scanning"
 
 const TOOL_CATEGORIES: Record<ToolKey, string[]> = {
-  secrets: ["code-repositories"],
-  dependencies: ["code-repositories"],
-  codeScanning: ["code-repositories"],
-  containerScanning: ["container-registry"],
+  secret_scanning: ["code-repositories"],
+  dependencies_scanning: ["code-repositories"],
+  code_scanning: ["code-repositories"],
+  container_scanning: ["container-registry"],
 }
 
 const TOOL_ENV_PREFIX: Record<ToolKey, string> = {
-  secrets: "SECRETS",
-  dependencies: "Dependencies",
-  codeScanning: "Code",
-  containerScanning: "CONTAINER_SCANNING",
+  secret_scanning: "SECRETS",
+  dependencies_scanning: "Dependencies",
+  code_scanning: "Code",
+  container_scanning: "CONTAINER_SCANNING",
 }
 
 function parseOrgList(raw: string) {

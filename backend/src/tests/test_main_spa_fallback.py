@@ -32,6 +32,9 @@ def _build_fallback(static_root: Path):
             raise HTTPException(status_code=400, detail="invalid path")
         if candidate.is_file():
             return FileResponse(candidate)
+        html_candidate = candidate.parent / f"{candidate.name}.html"
+        if html_candidate.is_file() and html_candidate.is_relative_to(static_root_resolved):
+            return FileResponse(html_candidate, media_type="text/html")
         return FileResponse(static_root_resolved / "index.html", media_type="text/html")
 
     return spa_fallback, static_root_resolved
@@ -83,3 +86,26 @@ def test_fallback_returns_index_for_unknown_route() -> None:
         result = asyncio.run(handler("dashboard"))
         assert isinstance(result, FileResponse)
         assert str(result.path).endswith("index.html")
+
+
+def test_fallback_serves_prerendered_html_for_route() -> None:
+    """A route with a sibling "<route>.html" (Next export, trailingSlash:false)
+    must serve that page, not the app index — otherwise /login renders the
+    authenticated shell instead of the login form."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "index.html").write_text("<html>app shell</html>")
+        (root / "login.html").write_text("<html>login form</html>")
+        # The export also emits a "login/" directory (for /login/verify), so the
+        # bare "login" path resolves to a directory, not a file.
+        (root / "login").mkdir()
+        (root / "login" / "verify.html").write_text("<html>verify</html>")
+        handler, _ = _build_fallback(root)
+        import asyncio
+
+        result = asyncio.run(handler("login"))
+        assert isinstance(result, FileResponse)
+        assert str(result.path).endswith("login.html")
+
+        nested = asyncio.run(handler("login/verify"))
+        assert str(nested.path).endswith("verify.html")

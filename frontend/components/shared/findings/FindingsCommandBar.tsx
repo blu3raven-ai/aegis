@@ -55,11 +55,11 @@ const STATIC_ATTRIBUTES: AttributeDef[] = [
     description: "SCA · SAST · Containers · Secrets · IaC",
     type: "enum",
     options: [
-      { value: "deps", label: "SCA" },
-      { value: "sast", label: "SAST" },
-      { value: "container", label: "Container" },
-      { value: "secrets", label: "Secrets" },
-      { value: "iac", label: "IaC" },
+      { value: "dependencies_scanning", label: "SCA" },
+      { value: "code_scanning", label: "SAST" },
+      { value: "container_scanning", label: "Container" },
+      { value: "secret_scanning", label: "Secrets" },
+      { value: "iac_scanning", label: "IaC" },
     ],
   },
   {

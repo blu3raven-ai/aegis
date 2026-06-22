@@ -1,8 +1,9 @@
 import Link from "next/link"
 import { RepoCoverageBadge } from "./RepoCoverageBadge"
+import { RescanButton } from "./RescanButton"
 import { ScannerCoverageIcons } from "./ScannerCoverageIcons"
 import { SeverityCounts } from "@/components/shared/SeverityCounts"
-import type { RepoSummary } from "@/lib/client/repos-api"
+import type { RepoSummary } from "@/lib/client/sources-api"
 
 function relativeTime(iso: string | null | undefined): string {
   if (!iso) return "never"
@@ -60,6 +61,10 @@ export function RepoSummaryRow({ repo }: RepoSummaryRowProps) {
             <span className="font-mono text-2xs text-[var(--color-text-tertiary)]">{ref}</span>
           )}
         </div>
+      </td>
+
+      <td className="px-5 py-4 text-right">
+        <RescanButton repoId={repo.repo_id} lastScannedSha={repo.last_scanned_sha} />
       </td>
     </tr>
   )

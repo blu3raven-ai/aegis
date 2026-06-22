@@ -1,22 +1,36 @@
-"""REST endpoints for the unified Rules engine."""
+"""REST endpoints for the Rules engine."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 
 from src.rules import store
 from src.rules.action_schemas import validate_action_for_category
 from src.rules.schemas import (
     DryRunConfirmation,
+    KillSwitchList,
+    KillSwitchRead,
     KillSwitchRequest,
     RuleCreate,
+    RuleList,
     RulePreviewRequest,
+    RuleRead,
+    RuleReadResponse,
+    RuleSummaryResponse,
     RuleUpdate,
+    RuleViolationPageResponse,
+    RuleViolationRead,
 )
-from src.settings.router import require_permission
-from src.shared.scope import resolve_asset_ids_from_request
+from src.authz.enforcement import require_permission
+from src.authz.enforcement.dependencies import Permission
+from src.authz.enforcement.scope import resolve_asset_ids_from_request
+from src.authz.permissions.catalog import MANAGE_PERMISSION_BY_RULE_CATEGORY, VIEW_RULES
+
+
+VIOLATIONS_MAX_LIMIT = 200
+VIOLATIONS_DEFAULT_LIMIT = 50
 
 
 _DRY_RUN_TOKEN_TTL = timedelta(hours=1)
@@ -38,47 +52,93 @@ def _resolve_user_identity(request: Request) -> str:
 router = APIRouter(prefix="/api/v1/rules", tags=["rules"])
 
 
-_MANAGE_PERMISSION_BY_CATEGORY = {
-    "sla": "manage_sla_rules",
-    "scanner_coverage": "manage_scanner_coverage_rules",
-    "auto_dismiss": "manage_auto_dismiss_rules",
-    "data_retention": "manage_data_retention_rules",
-}
-
-
 def _manage_permission_for(category: str) -> str:
     try:
-        return _MANAGE_PERMISSION_BY_CATEGORY[category]
+        return MANAGE_PERMISSION_BY_RULE_CATEGORY[category]
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=f"unknown category: {category!r}") from exc
 
 
-@router.get("")
-def list_rules(
+@router.get(
+    "",
+    response_model=RuleList,
+    summary="List rules with optional filters",
+)
+def list_rules_handler(
     request: Request,
     category: str | None = None,
     enabled: bool | None = None,
     q: str | None = None,
-) -> dict:
-    require_permission(request, "view_rules")
-    return {"rules": store.list_rules(category=category, enabled=enabled, q=q)}
+    _: None = Depends(Permission(VIEW_RULES)),
+) -> RuleList:
+    rows = store.list_rules(category=category, enabled=enabled, q=q)
+    return RuleList(rules=[RuleRead.model_validate(r) for r in rows])
 
 
-@router.get("/summary")
-def get_summary(request: Request) -> dict:
-    require_permission(request, "view_rules")
-    return {"summary": store.summary()}
+@router.get(
+    "/summary",
+    response_model=RuleSummaryResponse,
+    summary="Rule summary KPI counts",
+)
+def get_rule_summary_handler(
+    request: Request,
+    _: None = Depends(Permission(VIEW_RULES)),
+) -> RuleSummaryResponse:
+    return RuleSummaryResponse.model_validate(store.summary())
 
 
-# ── Kill switch ──────────────────────────────────────────────────────────────
-# Declared before any /{rule_id} route so FastAPI's first-match routing doesn't
-# treat "kill-switch" as a rule id.
+@router.get(
+    "/kill-switches",
+    response_model=KillSwitchList,
+    summary="List engaged kill switches",
+)
+def list_kill_switches_handler(
+    request: Request,
+    _: None = Depends(Permission(VIEW_RULES)),
+) -> KillSwitchList:
+    rows = store.list_kill_switches()
+    return KillSwitchList(kill_switches=[KillSwitchRead.model_validate(r) for r in rows])
 
 
-@router.get("/kill-switch")
-def list_kill_switches(request: Request) -> dict:
-    require_permission(request, "view_rules")
-    return {"kill_switches": store.list_kill_switches()}
+@router.get(
+    "/{rule_id}",
+    response_model=RuleReadResponse,
+    summary="Get a single rule by id",
+)
+def get_rule_handler(
+    request: Request,
+    rule_id: str,
+    _: None = Depends(Permission(VIEW_RULES)),
+) -> RuleReadResponse:
+    row = store.get_rule_by_id(rule_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="rule not found")
+    return RuleReadResponse(rule=RuleRead.model_validate(row))
+
+
+@router.get(
+    "/{rule_id}/violations",
+    response_model=RuleViolationPageResponse,
+    summary="List violations for a rule (paginated)",
+)
+def list_rule_violations_handler(
+    request: Request,
+    rule_id: str,
+    limit: int = VIOLATIONS_DEFAULT_LIMIT,
+    offset: int = 0,
+    _: None = Depends(Permission(VIEW_RULES)),
+) -> RuleViolationPageResponse:
+    clamped_limit = max(1, min(limit, VIOLATIONS_MAX_LIMIT))
+    clamped_offset = max(0, offset)
+    page = store.list_violations_for_rule(
+        rule_id, limit=clamped_limit, offset=clamped_offset,
+    )
+    return RuleViolationPageResponse(
+        violations=[RuleViolationRead.model_validate(v) for v in page["violations"]],
+        total=page["total"],
+        limit=page["limit"],
+        offset=page["offset"],
+    )
 
 
 @router.post("/kill-switch/{category}", status_code=201)
@@ -106,29 +166,6 @@ def disengage_kill_switch(request: Request, category: str) -> None:
         raise HTTPException(
             status_code=404, detail=f"no kill switch engaged for {category}"
         )
-
-
-@router.get("/{rule_id}")
-def get_rule(request: Request, rule_id: str) -> dict:
-    require_permission(request, "view_rules")
-    rule = store.get_rule_by_id(rule_id)
-    if rule is None:
-        raise HTTPException(status_code=404, detail="rule not found")
-    return {"rule": rule}
-
-
-@router.get("/{rule_id}/violations")
-def list_violations(
-    request: Request,
-    rule_id: str,
-    limit: int = 50,
-    offset: int = 0,
-) -> dict:
-    require_permission(request, "view_rules")
-    rule = store.get_rule_by_id(rule_id)
-    if rule is None:
-        raise HTTPException(status_code=404, detail="rule not found")
-    return store.list_violations_for_rule(rule_id, limit=limit, offset=offset)
 
 
 @router.post("", status_code=201)
@@ -165,7 +202,11 @@ def create_rule(request: Request, body: RuleCreate) -> dict:
 def update_rule(
     request: Request, rule_id: str, body: RuleUpdate
 ) -> dict:
-    require_permission(request, "view_rules")
+    # The category-specific manage permission below is the authoritative
+    # write gate. A separate VIEW_RULES check at the entry would be
+    # redundant — and worse, it reads at a glance like the write only
+    # needs view_rules, inviting a future refactor that accidentally
+    # drops the real manage check and opens the write to any viewer.
     existing = store.get_rule_by_id(rule_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="rule not found")
@@ -229,7 +270,6 @@ def _enforce_dry_run_gate(*, rule_id: str, submitted_token: str | None) -> None:
 
 @router.delete("/{rule_id}", status_code=204)
 def delete_rule(request: Request, rule_id: str) -> None:
-    require_permission(request, "view_rules")
     existing = store.get_rule_by_id(rule_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="rule not found")
@@ -239,7 +279,6 @@ def delete_rule(request: Request, rule_id: str) -> None:
 
 @router.post("/{rule_id}/toggle")
 def toggle_rule(request: Request, rule_id: str) -> dict:
-    require_permission(request, "view_rules")
     existing = store.get_rule_by_id(rule_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="rule not found")
@@ -255,9 +294,11 @@ def toggle_rule(request: Request, rule_id: str) -> dict:
 
 @router.post("/{rule_id}/preview")
 def preview_rule(
-    request: Request, rule_id: str, body: RulePreviewRequest
+    request: Request,
+    rule_id: str,
+    body: RulePreviewRequest,
+    _: None = Depends(Permission(VIEW_RULES)),
 ) -> dict:
-    require_permission(request, "view_rules")
     rule = store.get_rule_by_id(rule_id)
     if rule is None:
         raise HTTPException(status_code=404, detail="rule not found")
@@ -272,7 +313,6 @@ def preview_rule(
 async def dry_run_and_confirm(
     request: Request, rule_id: str
 ) -> DryRunConfirmation:
-    require_permission(request, "view_rules")
     existing = store.get_rule_by_id(rule_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="rule not found")

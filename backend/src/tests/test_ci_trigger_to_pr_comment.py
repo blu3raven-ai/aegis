@@ -19,7 +19,7 @@ os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 from src.db.engine import DATABASE_URL  # noqa: E402
 from src.db.models import Asset, ScanRun  # noqa: E402
 from src.pr_feedback import poster as pr_poster  # noqa: E402
-from src.scans.trigger_router import router as trigger_router  # noqa: E402
+from src.scans.ci_router import router as ci_router  # noqa: E402
 
 
 def _make_app(state: dict) -> FastAPI:
@@ -31,7 +31,7 @@ def _make_app(state: dict) -> FastAPI:
             setattr(request.state, k, v)
         return await call_next(request)
 
-    app.include_router(trigger_router)
+    app.include_router(ci_router)
     return app
 
 
@@ -98,7 +98,7 @@ async def test_ci_trigger_to_comment_full_chain(db_session, asset, monkeypatch):
     sess_for_service, eng_for_service = _make_session_patch(DATABASE_URL)
     monkeypatch.setattr("src.scans.service.get_session", sess_for_service)
     sess_for_router, eng_for_router = _make_session_patch(DATABASE_URL)
-    monkeypatch.setattr("src.scans.trigger_router.get_session", sess_for_router)
+    monkeypatch.setattr("src.scans.ci_router.get_session", sess_for_router)
 
     state = {
         "api_key_id": 99,
@@ -110,8 +110,9 @@ async def test_ci_trigger_to_comment_full_chain(db_session, asset, monkeypatch):
     with patch("src.scans.service._dispatch_scanner_jobs", return_value=None):
         client = TestClient(_make_app(state))
         resp = client.post(
-            f"/api/v1/sources/{asset.id}/scans/trigger",
+            "/api/v1/scans/ci",
             json={
+                "source_id": asset.id,
                 "commit_sha": "abc12345def67890",
                 "branch": "feat/x",
                 "pr_number": 247,

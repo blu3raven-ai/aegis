@@ -2,6 +2,7 @@
 
 import { PageHeader } from "@/components/layout/PageHeader"
 import { CloudIcon } from "@/lib/shared/ui/page-icons"
+import { Card } from "@/components/ui/Card"
 
 export default function CloudInfrastructurePage() {
   return (
@@ -12,10 +13,10 @@ export default function CloudInfrastructurePage() {
         description="No accounts connected"
       />
       <main className="px-6 py-8">
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8">
+        <Card padding="none" className="rounded-2xl p-8">
           <div className="max-w-lg">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
-              In development
+              In Development
             </p>
             <h2 className="mt-3 text-base font-semibold text-[var(--color-text-primary)]">
               Cloud infrastructure scanning is not available yet
@@ -24,7 +25,7 @@ export default function CloudInfrastructurePage() {
               This will let you connect AWS, Azure, or GCP accounts to scan for infrastructure misconfigurations and compliance issues. You can start with Git Repository or Container Registry sources in the meantime.
             </p>
           </div>
-        </div>
+        </Card>
       </main>
     </>
   )

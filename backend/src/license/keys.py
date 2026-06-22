@@ -6,9 +6,6 @@ import jwt
 
 from .types import LicenseClaims, Tier
 
-# Embedded public key for license verification (ES384 / P-384).
-# The matching private key is held by the license issuer and is NOT in this repo.
-# Replacing this key will invalidate all legitimately issued license keys.
 EMBEDDED_PUBLIC_KEY = """\
 -----BEGIN PUBLIC KEY-----
 MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEmrko1m/cV5LeWAFq8vFDDDzpQP0YCXH8

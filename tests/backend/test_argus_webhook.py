@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from src.argus.webhook import router, verify_signature
+from src.connectors.webhooks.providers.argus import router
+from src.connectors.webhooks.signature import verify_hmac_sha256 as verify_signature
 
 
 # ── verify_signature ──────────────────────────────────────────────────────────
@@ -65,7 +66,7 @@ def _post_webhook(client, payload: dict, secret: str = "webhook-secret", headers
     h = {"X-Argus-Signature": sig, "Content-Type": "application/json"}
     if headers:
         h.update(headers)
-    return client.post("/argus/webhook", content=body, headers=h)
+    return client.post("/integrations/argus/webhook", content=body, headers=h)
 
 
 @pytest.fixture
@@ -84,7 +85,7 @@ def _set_secret(monkeypatch):
 def test_missing_signature_returns_401(client):
     body = json.dumps({"event_type": "cve_published", "org_id": "acme-org", "data": {}}).encode()
     resp = client.post(
-        "/argus/webhook",
+        "/integrations/argus/webhook",
         content=body,
         headers={"Content-Type": "application/json"},
     )
@@ -94,7 +95,7 @@ def test_missing_signature_returns_401(client):
 def test_invalid_signature_returns_401(client):
     body = json.dumps({"event_type": "cve_published", "org_id": "acme-org", "data": {}}).encode()
     resp = client.post(
-        "/argus/webhook",
+        "/integrations/argus/webhook",
         content=body,
         headers={
             "X-Argus-Signature": "sha256=0000000000000000",
@@ -107,7 +108,7 @@ def test_invalid_signature_returns_401(client):
 # ── event publishing ──────────────────────────────────────────────────────────
 
 
-@patch("src.argus.webhook.get_event_publisher")
+@patch("src.connectors.webhooks.providers.argus.get_event_publisher")
 def test_cve_published_event_published(mock_pub_factory, client):
     mock_pub = MagicMock()
     mock_pub_factory.return_value = mock_pub
@@ -128,7 +129,7 @@ def test_cve_published_event_published(mock_pub_factory, client):
     assert published_event.source_component == "argus.webhook"
 
 
-@patch("src.argus.webhook.get_event_publisher")
+@patch("src.connectors.webhooks.providers.argus.get_event_publisher")
 def test_epss_changed_event_published(mock_pub_factory, client):
     mock_pub = MagicMock()
     mock_pub_factory.return_value = mock_pub
@@ -145,7 +146,7 @@ def test_epss_changed_event_published(mock_pub_factory, client):
     assert published_event.event_type == "intel.epss_changed"
 
 
-@patch("src.argus.webhook.get_event_publisher")
+@patch("src.connectors.webhooks.providers.argus.get_event_publisher")
 def test_exploit_availability_changed_published(mock_pub_factory, client):
     mock_pub = MagicMock()
     mock_pub_factory.return_value = mock_pub
@@ -162,7 +163,7 @@ def test_exploit_availability_changed_published(mock_pub_factory, client):
     assert published_event.event_type == "intel.exploit_availability_changed"
 
 
-@patch("src.argus.webhook.get_event_publisher")
+@patch("src.connectors.webhooks.providers.argus.get_event_publisher")
 def test_rule_pack_updated_published(mock_pub_factory, client):
     mock_pub = MagicMock()
     mock_pub_factory.return_value = mock_pub
@@ -179,7 +180,7 @@ def test_rule_pack_updated_published(mock_pub_factory, client):
     assert published_event.event_type == "intel.rule_pack_updated"
 
 
-@patch("src.argus.webhook.get_event_publisher")
+@patch("src.connectors.webhooks.providers.argus.get_event_publisher")
 def test_unknown_event_type_acknowledged_not_published(mock_pub_factory, client):
     mock_pub = MagicMock()
     mock_pub_factory.return_value = mock_pub
@@ -201,7 +202,7 @@ def test_malformed_json_returns_400(client, monkeypatch):
     body = b"not-valid-json"
     sig = _make_sig(body, secret)
     resp = client.post(
-        "/argus/webhook",
+        "/integrations/argus/webhook",
         content=body,
         headers={"X-Argus-Signature": sig, "Content-Type": "application/json"},
     )

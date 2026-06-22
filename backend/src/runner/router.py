@@ -33,7 +33,7 @@ from src.shared.object_store import generate_download_url, generate_upload_url, 
 from src.shared.paths import now_iso, SAFE_RELATIVE_PATH
 from src.shared.rate_limit import rate_limit_by_ip, rate_limit_by_runner
 
-router = APIRouter(prefix="/api/v1/runner", tags=["runner"])
+router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
 
 def _runner_from_request(request: Request) -> dict[str, Any] | None:
@@ -53,9 +53,7 @@ def _require_runner(request: Request) -> tuple[dict[str, Any] | None, JSONRespon
     return runner, None
 
 
-# ---------------------------------------------------------------------------
 # Registration
-# ---------------------------------------------------------------------------
 
 
 class RegisterRequest(BaseModel):
@@ -86,9 +84,7 @@ def register(request: Request, body: RegisterRequest) -> JSONResponse:
     })
 
 
-# ---------------------------------------------------------------------------
 # Heartbeat
-# ---------------------------------------------------------------------------
 
 
 class HeartbeatRequest(BaseModel):
@@ -134,9 +130,7 @@ def post_heartbeat(request: Request, body: HeartbeatRequest | None = None) -> JS
     return JSONResponse(response)
 
 
-# ---------------------------------------------------------------------------
 # Job polling
-# ---------------------------------------------------------------------------
 
 
 @router.get("/jobs/next")
@@ -170,6 +164,9 @@ async def poll_next_job(request: Request, wait: int = 0) -> JSONResponse:
                 "runId": job["runId"],
                 "envVars": job.get("envVars", {}),
                 "expectedRepoCount": int(job.get("envVars", {}).get("EXPECTED_REPO_COUNT", 0)) or None,
+                # The runner observes pickup latency (creation → claim) as a
+                # Prometheus metric. Without this, the metric stays at zero.
+                "createdAt": job.get("createdAt"),
             })
 
         if wait <= 0 or time.monotonic() >= deadline:
@@ -179,9 +176,7 @@ async def poll_next_job(request: Request, wait: int = 0) -> JSONResponse:
         await asyncio.sleep(poll_interval)
 
 
-# ---------------------------------------------------------------------------
 # Progress
-# ---------------------------------------------------------------------------
 
 
 class ProgressRequest(BaseModel):
@@ -238,10 +233,10 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
 
     # Read current run to get expectedRepos and existing counters
     current = None
-    if job_type == "dependencies":
+    if job_type == "dependencies_scanning":
         from src.storage import update_dependencies_run, list_dependencies_runs
         current = next((r for r in list_dependencies_runs(org) if str(r.get("id", "")) == run_id), None)
-    elif job_type == "secrets":
+    elif job_type == "secret_scanning":
         from src.storage import update_secret_run, read_secret_run
         current = read_secret_run(org, run_id)
     elif job_type == "code_scanning":
@@ -267,9 +262,9 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
     }
     patch: dict[str, Any] = {"logTail": log_tail, "progress": merged}
 
-    if job_type == "dependencies":
+    if job_type == "dependencies_scanning":
         update_dependencies_run(org, run_id, patch)
-    elif job_type == "secrets":
+    elif job_type == "secret_scanning":
         update_secret_run(org, run_id, patch)
     elif job_type == "code_scanning":
         update_code_scanning_run(org, run_id, patch)
@@ -277,7 +272,12 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
         update_container_scanning_run(org, run_id, patch)
 
     # Publish SSE event
-    tool_label = {"dependencies": "dependencies", "code_scanning": "code_scanning", "secrets": "secrets", "container_scanning": "container_scanning"}.get(job_type)
+    tool_label = {
+        "dependencies_scanning": "dependencies_scanning",
+        "code_scanning": "code_scanning",
+        "secret_scanning": "secret_scanning",
+        "container_scanning": "container_scanning",
+    }.get(job_type)
     if tool_label:
         log_tail_trimmed = (log_tail or [])[-8:]
         get_event_bus().publish_sync(Event(
@@ -292,9 +292,7 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
         ))
 
 
-# ---------------------------------------------------------------------------
 # Job completion (MinIO-based upload flow)
-# ---------------------------------------------------------------------------
 
 
 class CompleteRequest(BaseModel):
@@ -344,7 +342,11 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
 
     org = job.get("org", "")
     run_id = job.get("runId", "")
-    job_type = job.get("jobType", "dependencies")
+    job_type = job.get("jobType", "dependencies_scanning")
+    # Required by the per-scanner hooks to resolve each finding's repo asset.
+    # Carried in env_vars (persisted + decrypted on read); the job dict's own
+    # fields are limited to mapped DB columns.
+    source_type = (job.get("envVars") or {}).get("SOURCE_TYPE") or None
 
     # If the run was already cancelled, don't overwrite with ingestion
     run_record = _read_run_record(job_type, org, run_id)
@@ -356,18 +358,18 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
     _update_run_status(job_type, org, run_id, {"status": "ingesting", "progress": {"stage": "ingesting"}})
 
     try:
-        if job_type == "dependencies":
+        if job_type == "dependencies_scanning":
             from src.dependencies.scanner import ingest_dependencies_from_minio
-            ingest_dependencies_from_minio(org, run_id)
-        elif job_type == "secrets":
+            ingest_dependencies_from_minio(org, run_id, source_type=source_type)
+        elif job_type == "secret_scanning":
             from src.secrets.scanner import ingest_secrets_from_minio
-            ingest_secrets_from_minio(org, run_id)
+            ingest_secrets_from_minio(org, run_id, source_type=source_type)
         elif job_type == "code_scanning":
             from src.code_scanning.scanner import ingest_code_scanning_from_minio
-            ingest_code_scanning_from_minio(org, run_id)
+            ingest_code_scanning_from_minio(org, run_id, source_type=source_type)
         elif job_type == "container_scanning":
             from src.containers.scanner import ingest_container_from_minio
-            ingest_container_from_minio(org, run_id)
+            ingest_container_from_minio(org, run_id, source_type=source_type)
         _logger.info("[✓] Ingestion completed for %s %s/%s", job_type, org, run_id)
         get_event_bus().publish_sync(Event(
             event_type="scan.completed",
@@ -397,13 +399,13 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
 def _read_run_record(job_type: str, org: str, run_id: str) -> dict[str, Any] | None:
     """Read a scan run record by tool type. Returns None if not found."""
     try:
-        if job_type == "dependencies":
+        if job_type == "dependencies_scanning":
             from src.storage import list_dependencies_runs
             return next((r for r in list_dependencies_runs(org) if str(r.get("id", "")) == run_id), None)
         elif job_type == "code_scanning":
             from src.storage import list_code_scanning_runs
             return next((r for r in list_code_scanning_runs(org) if str(r.get("id", "")) == run_id), None)
-        elif job_type == "secrets":
+        elif job_type == "secret_scanning":
             from src.storage import read_secret_run
             return read_secret_run(org, run_id)
         elif job_type == "container_scanning":
@@ -417,10 +419,10 @@ def _read_run_record(job_type: str, org: str, run_id: str) -> dict[str, Any] | N
 def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, Any]) -> None:
     """Update a scan run record by tool type."""
     try:
-        if job_type == "dependencies":
+        if job_type == "dependencies_scanning":
             from src.storage import update_dependencies_run
             update_dependencies_run(org, run_id, patch)
-        elif job_type == "secrets":
+        elif job_type == "secret_scanning":
             from src.storage import update_secret_run
             update_secret_run(org, run_id, patch)
         elif job_type == "code_scanning":
@@ -434,9 +436,7 @@ def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, An
         logging.getLogger(__name__).warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)
 
 
-# ---------------------------------------------------------------------------
 # Upload presign
-# ---------------------------------------------------------------------------
 
 
 class PresignUploadsRequest(BaseModel):
@@ -474,9 +474,7 @@ def presign_uploads(job_id: str, body: PresignUploadsRequest, request: Request) 
     return JSONResponse({"urls": urls, "expiresIn": 300})
 
 
-# ---------------------------------------------------------------------------
 # SBOM list (presigned download URLs)
-# ---------------------------------------------------------------------------
 
 
 @router.get("/jobs/{job_id}/sboms")
@@ -506,9 +504,7 @@ def list_job_sboms(request: Request, job_id: str) -> JSONResponse:
     return JSONResponse({"sboms": sboms, "count": len(sboms), "expiresIn": 300})
 
 
-# ---------------------------------------------------------------------------
 # Failure reporting
-# ---------------------------------------------------------------------------
 
 
 class FailRequest(BaseModel):
@@ -533,14 +529,14 @@ def report_failure(job_id: str, body: FailRequest, request: Request) -> JSONResp
     # Update the scan run record
     org = job.get("org", "")
     run_id = job.get("runId", "")
-    job_type = job.get("jobType", "dependencies")
+    job_type = job.get("jobType", "dependencies_scanning")
     status = "cancelled" if body.cancelled else "failed"
     fail_patch = {"status": status, "finishedAt": now_iso(), "error": body.error}
 
-    if job_type == "dependencies":
+    if job_type == "dependencies_scanning":
         from src.storage import update_dependencies_run
         update_dependencies_run(org, run_id, fail_patch)
-    elif job_type == "secrets":
+    elif job_type == "secret_scanning":
         from src.storage import update_secret_run
         update_secret_run(org, run_id, fail_patch)
     elif job_type == "code_scanning":

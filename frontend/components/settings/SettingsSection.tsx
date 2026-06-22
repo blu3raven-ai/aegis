@@ -1,4 +1,5 @@
 import type React from "react"
+import { Card } from "@/components/ui/Card"
 
 export interface SettingsSectionProps {
   id: string
@@ -21,9 +22,11 @@ export function SettingsSection({
   children,
 }: SettingsSectionProps) {
   return (
-    <section
+    <Card
+      as="section"
+      padding="none"
       id={id}
-      className="scroll-mt-20 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+      className="scroll-mt-4 rounded-xl p-4"
     >
       <header className="mb-3 flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -39,6 +42,6 @@ export function SettingsSection({
         {headerExtra}
       </header>
       <div className="space-y-3">{children}</div>
-    </section>
+    </Card>
   )
 }

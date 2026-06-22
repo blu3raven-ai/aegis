@@ -1,6 +1,10 @@
 "use client"
 
 import { useRef } from "react"
+import { AlertTriangle, Loader2, X } from "lucide-react"
+import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { cn } from "@/lib/shared/utils"
 
 interface RunProgress {
   expectedRepos?: number | null
@@ -30,10 +34,27 @@ interface ScanRunningBannerProps {
   showSyncLabel?: boolean
   /** Override progress capping logic — return the adjusted progress value */
   progressOverride?: (raw: number, progress: RunProgress | null | undefined, isInitializing: boolean) => number
+  /** Per-scanner status counts, to show how many are queued vs running vs done. */
+  runCounts?: { total: number; queued: number; running: number; completed: number; failed: number }
+  /** Label of the scanner the repo count belongs to — the bar % is the overall
+   *  average across scanners, so the repo count is scoped to avoid confusion. */
+  activeScannerLabel?: string
+  /** When set, renders an inline Cancel control so the scan can be stopped
+   *  from anywhere the banner is shown, not only the source detail page. */
+  onCancel?: () => void
+  isCancelling?: boolean
 }
 
 const ACTIVE_STATUSES = new Set(["queued", "running", "ingesting"])
 const VISIBLE_STATUSES = new Set(["queued", "running", "ingesting", "failed"])
+
+/** "1 of 3 scanners" style progress through the scan's scanners (failures
+ *  count as finished, and are called out separately when present). */
+function scannerSummary(c: NonNullable<ScanRunningBannerProps["runCounts"]>): string {
+  const finished = c.completed + c.failed
+  const base = `${finished} of ${c.total} scanner${c.total === 1 ? "" : "s"}`
+  return c.failed ? `${base} · ${c.failed} failed` : base
+}
 
 function formatElapsed(startedAt: string | null, nowMs: number): string {
   if (!startedAt) return "0s"
@@ -93,6 +114,10 @@ export function ScanRunningBanner({
   extraStages,
   showSyncLabel,
   progressOverride,
+  runCounts,
+  activeScannerLabel,
+  onCancel,
+  isCancelling,
 }: ScanRunningBannerProps) {
   const highestProgressRef = useRef<number>(0)
 
@@ -136,67 +161,97 @@ export function ScanRunningBanner({
   const tone: Tone = isFailed ? "failed" : isQueued ? "queued" : "running"
   const cfg = toneClasses(tone)
 
+  const StatusIcon = isFailed ? AlertTriangle : Loader2
+  const chipClass = isFailed
+    ? "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
+    : isQueued
+    ? "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]"
+    : "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
+
   const headline = isFailed
     ? `${scanLabel ?? "Scan"} failed for ${organization}`
     : isQueued
-    ? `Waiting for runner to pick up ${scanLabel ?? "scan"} for ${organization}`
+    ? `Waiting for runner to pick up scanning for ${organization}`
     : isInitializing
     ? "Preparing scanner"
-    : `${scanLabel ?? "Scan"} in progress for ${currentRepo ?? organization}`
+    : `Scanning in progress for ${organization}`
 
   const recentLogLines = (logTail ?? []).slice(-4)
-  const progressFillWidth = isQueued ? 100 : Math.min(100, isActive ? Math.max(3, displayProgress) : displayProgress)
+  // No meaningful percent yet while queued or spinning up — show an
+  // indeterminate bar instead of a misleading full bar at 0%.
+  const isIndeterminate = isActive && (isQueued || isInitializing)
+  const progressFillWidth = Math.min(100, isActive ? Math.max(3, displayProgress) : displayProgress)
+  const barColor = isFailed
+    ? "bg-[var(--color-severity-critical)]"
+    : isQueued
+    ? "bg-[var(--color-state-pending)]"
+    : "bg-[var(--color-accent)]"
 
   return (
-    <div
+    <Card
+      padding="none"
       role="status"
       aria-live="polite"
-      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
+      className="overflow-hidden rounded-2xl shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5"
     >
       <div className="space-y-4 p-4 text-sm text-[var(--color-text-primary)]">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              className={`inline-block h-2 w-2 rounded-full ${cfg.dot} ${cfg.pulse ? "motion-safe:animate-[scan-pulse_1.6s_ease-in-out_infinite]" : ""}`}
+        <div className="flex items-start gap-3">
+          <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-xl", chipClass)}>
+            <StatusIcon
+              className={cn("h-[18px] w-[18px]", !isFailed && "motion-safe:animate-spin")}
               aria-hidden="true"
             />
-            <span className={`text-xs font-medium uppercase tracking-wide ${cfg.text}`}>
-              {stageLabel}
-            </span>
-            <span className="truncate text-[var(--color-text-primary)]">{headline}</span>
-          </div>
-          <span className="text-xs tabular-nums text-[var(--color-text-secondary)]">
-            {elapsed}
           </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className={cn("text-2xs font-semibold uppercase tracking-[0.14em]", cfg.text)}>
+                {stageLabel}
+              </span>
+              <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-secondary)]">
+                {elapsed}
+              </span>
+            </div>
+            <p className="mt-0.5 line-clamp-2 text-sm text-[var(--color-text-primary)]" title={headline}>
+              {headline}
+            </p>
+          </div>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <span
-              className="relative block h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-border)]"
+              className="relative block h-2 flex-1 overflow-hidden rounded-full bg-[var(--color-border)]"
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={Math.round(displayProgress)}
+              aria-valuenow={isIndeterminate ? undefined : Math.round(displayProgress)}
               aria-label="Scan progress"
             >
-              <span
-                className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out ${
-                  isFailed
-                    ? "bg-[var(--color-severity-critical)]"
-                    : isQueued
-                    ? "bg-[var(--color-severity-medium)] motion-safe:animate-[scan-pulse_1.6s_ease-in-out_infinite]"
-                    : "bg-[var(--color-accent)]"
-                }`}
-                style={{ width: `${progressFillWidth}%` }}
-              />
+              {isIndeterminate ? (
+                <span
+                  className={cn(
+                    "absolute inset-y-0 left-0 w-1/3 rounded-full motion-safe:animate-[scan-indeterminate_1.4s_ease-in-out_infinite]",
+                    barColor,
+                  )}
+                />
+              ) : (
+                <span
+                  className={cn("absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out", barColor)}
+                  style={{ width: `${progressFillWidth}%` }}
+                />
+              )}
             </span>
-            <span className="w-10 text-right text-xs tabular-nums text-[var(--color-text-secondary)]">
-              {Math.round(displayProgress)}%
-            </span>
+            {isIndeterminate ? (
+              <span className="w-10 shrink-0 text-right text-xs text-[var(--color-text-tertiary)]">···</span>
+            ) : (
+              <span className="w-10 shrink-0 text-right text-xs tabular-nums text-[var(--color-text-secondary)]">
+                {Math.round(displayProgress)}%
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--color-text-secondary)]">
+            {runCounts && runCounts.total > 0 && <span>{scannerSummary(runCounts)}</span>}
             {currentClassifying ? (
               <span>
                 Classified <span className="font-mono text-[var(--color-text-primary)]">{currentClassifying}</span>
@@ -208,15 +263,17 @@ export function ScanRunningBanner({
                   {String(progress.ingestedRepos ?? 0).padStart(String(progress.expectedIngest).length, "0")}/{progress.expectedIngest}
                 </span>
               </span>
-            ) : (
+            ) : hasRepoActivity ? (
               <span>
-                Repositories <span className="tabular-nums text-[var(--color-text-primary)]">{repoCountLabel}</span>
+                {activeScannerLabel ? `${activeScannerLabel}: ` : "Repositories "}
+                <span className="tabular-nums text-[var(--color-text-primary)]">{repoCountLabel}</span>
+                {activeScannerLabel ? " repos" : ""}
               </span>
-            )}
+            ) : null}
             {showSyncLabel && <span>Sync: docker logs</span>}
             {currentRepo && !currentClassifying && (
               <span className="truncate" title={currentRepo}>
-                Current <span className="font-mono text-[var(--color-text-primary)]">{currentRepo}</span>
+                Current scan: <span className="font-mono text-[var(--color-text-primary)]">{currentRepo}</span>
               </span>
             )}
           </div>
@@ -259,7 +316,22 @@ export function ScanRunningBanner({
             Still initializing after 2 minutes. Check scanner container or logs if this does not progress.
           </p>
         )}
+
+        {onCancel && isActive && (
+          <div className="flex justify-end border-t border-[var(--color-border)] pt-3">
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={onCancel}
+              disabled={isCancelling}
+              leadingIcon={<X className="h-3.5 w-3.5" strokeWidth={2.5} />}
+              className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+            >
+              {isCancelling ? "Cancelling…" : "Cancel scan"}
+            </Button>
+          </div>
+        )}
       </div>
-    </div>
+    </Card>
   )
 }

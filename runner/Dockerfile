@@ -94,8 +94,9 @@ ENV PYTHONUNBUFFERED=1 \
 #   git        — repository clone
 #   libstdc++6 — cdxgen native bits
 #   libicu76   — cyclonedx-cli (.NET) globalization
+#   procps     — pgrep, used by the HEALTHCHECK below
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates git libstdc++6 libicu76 \
+        ca-certificates git libstdc++6 libicu76 procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Scanner CLIs

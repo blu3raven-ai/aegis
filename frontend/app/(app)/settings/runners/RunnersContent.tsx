@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { RUNNERS_API } from "@/lib/shared/api-paths"
-import { apiClient } from "@/lib/client/api-client.ts"
+import { fetchRunners, setRunnerMode } from "@/lib/client/settings/use-runners"
 import { AddRunnerModal } from "./AddRunnerModal"
 import { RemoteRunnerList } from "./RemoteRunnerList"
 import type { Runner } from "./types"
 import { useSSE } from "@/components/providers/SSEProvider"
 import { Button } from "@/components/ui/Button"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 export function RunnersContent({ canEdit }: { canEdit: boolean }) {
   const router = useRouter()
@@ -20,7 +20,7 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
 
   const loadRunners = useCallback(async () => {
     try {
-      const data = await apiClient<{ mode?: string; runners?: Runner[] }>(RUNNERS_API.list, { cache: "no-store" })
+      const data = await fetchRunners()
       setMode(data.mode as "local" | "remote" || "local")
       setRunners(data.runners || [])
     } catch { /* ignore */ }
@@ -47,15 +47,12 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
   async function commitModeChange(newMode: "local" | "remote") {
     setConfirmModeSwitch(null)
     setMode(newMode)
-    await apiClient(RUNNERS_API.mode, {
-      method: "POST",
-      body: { mode: newMode },
-    })
+    await setRunnerMode(newMode)
   }
 
   if (loading) {
     return (
-      <div className="h-40 motion-safe:animate-pulse rounded-lg bg-[var(--color-surface-raised)]" />
+      <Skeleton className="h-40 rounded-lg" />
     )
   }
 
@@ -95,6 +92,7 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
             canEdit={canEdit}
             onAddClick={() => setShowAddModal(true)}
             onRowClick={(r) => router.push(`/settings/runners/${r.id}`)}
+            onChange={() => void loadRunners()}
           />
         )}
       </div>
@@ -125,7 +123,6 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
   )
 }
 
-// ── Segmented toggle ────────────────────────────────────────────────────────
 
 interface SegmentedOption<T extends string> {
   value: T
@@ -187,7 +184,6 @@ function SegmentedToggle<T extends string>({
   )
 }
 
-// ── Local status body ───────────────────────────────────────────────────────
 
 function LocalStatusBody({ online }: { online: boolean }) {
   return (
@@ -217,7 +213,6 @@ function LocalStatusBody({ online }: { online: boolean }) {
   )
 }
 
-// ── Remote status body ──────────────────────────────────────────────────────
 
 interface RemoteStatusBodyProps {
   runners: Runner[]
@@ -226,6 +221,7 @@ interface RemoteStatusBodyProps {
   canEdit: boolean
   onAddClick: () => void
   onRowClick: (runner: Runner) => void
+  onChange: () => void
 }
 
 function RemoteStatusBody({
@@ -235,6 +231,7 @@ function RemoteStatusBody({
   canEdit,
   onAddClick,
   onRowClick,
+  onChange,
 }: RemoteStatusBodyProps) {
   return (
     <>
@@ -270,7 +267,14 @@ function RemoteStatusBody({
         )}
       </div>
 
-      {!isEmpty && <RemoteRunnerList runners={runners} onRowClick={onRowClick} />}
+      {!isEmpty && (
+        <RemoteRunnerList
+          runners={runners}
+          canApprove={canEdit}
+          onRowClick={onRowClick}
+          onChange={onChange}
+        />
+      )}
     </>
   )
 }

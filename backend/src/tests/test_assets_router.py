@@ -1,4 +1,9 @@
-"""Smoke + behavior tests for /api/v1/assets/manual."""
+"""Smoke + behavior tests for the manual-upload and BYO-import routes.
+
+These two endpoints both create assets and hand-off to the identity layer:
+  - POST /api/v1/sources/manual   (sources router)
+  - POST /api/v1/scans/import     (scans byo router)
+"""
 from __future__ import annotations
 
 import os
@@ -13,15 +18,18 @@ import pytest_asyncio  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
 from sqlalchemy import delete, select  # noqa: E402
 
-from src.assets.router import _db, assets_router, scans_router  # noqa: E402
-from src.db.models import Asset, Finding, Team, TeamAsset, TeamMember, User  # noqa: E402
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import MANAGE_SOURCES, RUN_SCANS  # noqa: E402
+from src.sources.router import _db as _sources_db, router as sources_router  # noqa: E402
+from src.scans.byo_router import _db as _byo_db, router as scans_byo_router  # noqa: E402
+from src.db.models import Asset, Finding, Grant, Team, TeamMember, User  # noqa: E402
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def _clean_router(db_session):
     yield
     await db_session.execute(delete(Finding).where(Finding.tool == "container_scanning"))
-    await db_session.execute(delete(TeamAsset))
+    await db_session.execute(delete(Grant))
     await db_session.execute(delete(TeamMember))
     await db_session.execute(delete(Team))
     await db_session.execute(delete(Asset))
@@ -29,10 +37,10 @@ async def _clean_router(db_session):
     await db_session.commit()
 
 
-def _make_app(user_id: str, db_session) -> FastAPI:
+def _make_app(user_id: str, db_session, *, allow_permissions: bool = True) -> FastAPI:
     app = FastAPI()
-    app.include_router(assets_router)
-    app.include_router(scans_router)
+    app.include_router(sources_router)
+    app.include_router(scans_byo_router)
 
     @app.middleware("http")
     async def inject_user(request: Request, call_next):
@@ -43,7 +51,13 @@ def _make_app(user_id: str, db_session) -> FastAPI:
     async def _override_db():
         yield db_session
 
-    app.dependency_overrides[_db] = _override_db
+    app.dependency_overrides[_sources_db] = _override_db
+    app.dependency_overrides[_byo_db] = _override_db
+    if allow_permissions:
+        # These tests cover upload/grant behavior, not the permission gate.
+        # The gate itself is exercised in the dedicated _requires_* tests below.
+        app.dependency_overrides[Permission(MANAGE_SOURCES)] = lambda: None
+        app.dependency_overrides[Permission(RUN_SCANS, MANAGE_SOURCES)] = lambda: None
     return app
 
 
@@ -75,7 +89,7 @@ async def test_manual_repo_upload_creates_asset_and_grants_to_primary_team(db_se
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/api/v1/assets/manual",
+            "/api/v1/sources/manual",
             json={"type": "repo", "source_type": "github", "owner": "acme", "name": "foo"},
         )
     assert response.status_code == 200, response.text
@@ -86,8 +100,10 @@ async def test_manual_repo_upload_creates_asset_and_grants_to_primary_team(db_se
     # The asset exists and is granted to the user's team
     asset = (await db_session.execute(select(Asset).where(Asset.external_ref == "github:acme/foo"))).scalar_one()
     assert asset.source == "manual_upload"
-    grant = (await db_session.execute(select(TeamAsset).where(TeamAsset.asset_id == asset.id))).scalar_one()
-    assert grant.team_id == team_id
+    grant = (await db_session.execute(
+        select(Grant).where(Grant.asset_id == str(asset.id), Grant.subject_type == "team")
+    )).scalar_one()
+    assert grant.subject_id == team_id
 
 
 @pytest.mark.asyncio
@@ -98,7 +114,7 @@ async def test_manual_image_upload_creates_asset(db_session):
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/api/v1/assets/manual",
+            "/api/v1/sources/manual",
             json={"type": "image", "registry": "ghcr", "image": "acme/img", "tag": "v1.2.3"},
         )
     assert response.status_code == 200, response.text
@@ -113,7 +129,7 @@ async def test_manual_upload_rejects_user_without_team(db_session):
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
-            "/api/v1/assets/manual",
+            "/api/v1/sources/manual",
             json={"type": "repo", "source_type": "github", "owner": "acme", "name": "foo"},
         )
     assert response.status_code == 400, response.text
@@ -169,3 +185,51 @@ async def test_byo_import_rejects_unresolvable_target(db_session):
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/v1/scans/import", json=payload)
     assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Permission-gate tests — lock in the new authorization requirements so a
+# future change that drops the Depends(Permission(...)) is caught in CI.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_manual_upload_requires_manage_sources(db_session):
+    """Manual asset registration is a source-management operation."""
+    user_id, _ = await _seed_user_with_team(db_session)
+    app = _make_app(user_id, db_session, allow_permissions=False)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/sources/manual",
+            json={"type": "repo", "source_type": "github", "owner": "acme", "name": "foo"},
+        )
+    assert response.status_code == 403
+    assert "manage_sources" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_byo_import_requires_run_scans_and_manage_sources(db_session):
+    """BYO both ingests scan data (RUN_SCANS) and upserts assets (MANAGE_SOURCES).
+
+    AND-semantics: a role with only one of the two cannot import. Locks in
+    the least-privilege gate so a security-role user (run_scans but not
+    manage_sources) gets 403 rather than silently widening their own scope.
+    """
+    user_id, _ = await _seed_user_with_team(db_session)
+    app = _make_app(user_id, db_session, allow_permissions=False)
+    payload = {
+        "scanner": "trivy",
+        "targets": [{"type": "repo", "source_type": "github", "owner": "acme", "name": "foo"}],
+        "findings": [],
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post("/api/v1/scans/import", json=payload)
+    assert response.status_code == 403
+    # The first failing permission in the AND-list wins; assert one of the
+    # two appears in the detail so future re-ordering doesn't break the test.
+    detail = response.json()["detail"]
+    assert "run_scans" in detail or "manage_sources" in detail

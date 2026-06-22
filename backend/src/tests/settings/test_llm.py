@@ -9,7 +9,7 @@ from cryptography.fernet import Fernet
 
 os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
 
-from src.settings.llm import (  # noqa: E402
+from src.settings.llm.service import (  # noqa: E402
     LlmConfigUpsert,
     fetch_llm_config,
     fetch_public_llm_config,

@@ -114,12 +114,6 @@ cd backend && python -m pytest ../tests/backend/ -v --rootdir=.
 cd frontend && npm run test:frontend
 ```
 
-### Contract Tests
-
-```bash
-cd frontend && npm run test:contracts
-```
-
 ### E2E Tests
 
 ```bash

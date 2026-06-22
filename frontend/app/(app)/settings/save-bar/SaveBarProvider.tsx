@@ -24,13 +24,20 @@ interface SectionRegistration extends SaveBarSection {
   onDiscard: () => void
 }
 
-interface SaveBarContextValue {
+interface SaveBarApiContextValue {
   register: (reg: SectionRegistration) => void
   unregister: (id: string) => void
-  sections: ReadonlyMap<string, SectionRegistration>
 }
 
-const SaveBarContext = createContext<SaveBarContextValue | null>(null)
+// Stable context: register/unregister are memoised with [] deps and never
+// change reference. useSaveBarSection reads only here so its effect deps
+// don't fire when sections state changes, preventing a cascade re-register
+// loop that previously caused an OOM renderer crash.
+const SaveBarApiContext = createContext<SaveBarApiContextValue | null>(null)
+
+// State context: a new Map reference each time any section mutates.
+// Only useSaveBarAggregate (read-only) subscribes here.
+const SaveBarStateContext = createContext<ReadonlyMap<string, SectionRegistration>>(new Map())
 
 export function SaveBarProvider({ children }: { children: ReactNode }) {
   const [sections, setSections] = useState<ReadonlyMap<string, SectionRegistration>>(
@@ -54,12 +61,18 @@ export function SaveBarProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
-  const value = useMemo<SaveBarContextValue>(
-    () => ({ register, unregister, sections }),
-    [register, unregister, sections],
+  const apiValue = useMemo<SaveBarApiContextValue>(
+    () => ({ register, unregister }),
+    [register, unregister],
   )
 
-  return <SaveBarContext.Provider value={value}>{children}</SaveBarContext.Provider>
+  return (
+    <SaveBarApiContext.Provider value={apiValue}>
+      <SaveBarStateContext.Provider value={sections}>
+        {children}
+      </SaveBarStateContext.Provider>
+    </SaveBarApiContext.Provider>
+  )
 }
 
 interface UseSaveBarSectionArgs {
@@ -86,7 +99,7 @@ export function useSaveBarSection({
   onSave,
   onDiscard,
 }: UseSaveBarSectionArgs) {
-  const ctx = useContext(SaveBarContext)
+  const ctx = useContext(SaveBarApiContext)
   const onSaveRef = useRef(onSave)
   const onDiscardRef = useRef(onDiscard)
   onSaveRef.current = onSave
@@ -117,11 +130,10 @@ export interface SaveBarAggregate {
 }
 
 export function useSaveBarAggregate(): SaveBarAggregate {
-  const ctx = useContext(SaveBarContext)
-  const sections = ctx?.sections
+  const sections = useContext(SaveBarStateContext)
 
   return useMemo<SaveBarAggregate>(() => {
-    const list = sections ? Array.from(sections.values()) : []
+    const list = Array.from(sections.values())
     const dirtySections = list.filter((s) => s.dirty)
     const anyDirty = dirtySections.length > 0
     const anySaving = list.some((s) => s.saving)

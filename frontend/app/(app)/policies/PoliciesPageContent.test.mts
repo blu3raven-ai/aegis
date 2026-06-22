@@ -108,18 +108,18 @@ describe("PoliciesPageContent Kill auto-dismiss button", () => {
 })
 
 describe("PoliciesPageContent data retention activation", () => {
-  it("imports can() from the shared auth roles", () => {
+  it("imports useHasPermission from the permission hook", () => {
     assert.match(
       src,
-      /import\s*\{\s*can\s*\}\s*from\s*["']@\/lib\/shared\/auth\/roles["']/,
-      "should import can() from shared auth roles",
+      /import\s*\{\s*useHasPermission\s*\}\s*from\s*["']@\/lib\/client\/use-permission["']/,
+      "should import useHasPermission for permission-based gating",
     )
   })
 
   it("checks the manage_data_retention_rules permission", () => {
     assert.match(
       src,
-      /can\(user\.role as any, "manage_data_retention_rules"\)/,
+      /useHasPermission\("manage_data_retention_rules"\)/,
       "should gate on manage_data_retention_rules",
     )
   })
@@ -135,7 +135,7 @@ describe("PoliciesPageContent data retention activation", () => {
   it("loads data retention rules on mount via Promise.all", () => {
     assert.match(
       src,
-      /listRules\(ORG_ID, \{ category: "data_retention" \}\)/,
+      /listRules\(\{ category: "data_retention" \}\)/,
       "should fetch data_retention rules",
     )
   })

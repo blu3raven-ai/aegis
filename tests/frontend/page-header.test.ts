@@ -14,11 +14,11 @@ describe("PageHeader", () => {
     assert.ok(/controls\?:\s*React\.ReactNode/.test(src), "controls prop must exist")
   })
 
-  it("renders a non-sticky <header> bounded to the surface token", () => {
+  it("renders a sticky <header> bounded to the surface token", () => {
     assert.ok(src.includes("<header"), "must be a <header> landmark")
-    // Sticky was removed across the app — every page scrolls the header off
-    // intentionally so the body has the full viewport once you scroll.
-    assert.ok(!src.includes("sticky top-0"), "header must not be sticky")
+    // The page title pins under the breadcrumb bar so it stays in view while
+    // the body scrolls; the opaque surface bg keeps scrolled content hidden.
+    assert.ok(src.includes("sticky top-0"), "header must be sticky")
     assert.ok(src.includes("bg-[var(--color-surface)]"))
     assert.ok(src.includes("border-[var(--color-border)]"))
   })

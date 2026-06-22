@@ -154,14 +154,42 @@ test("filter toggle: preserves other types when removing one", () => {
 // Pagination (load-more) composition
 // ---------------------------------------------------------------------------
 
-interface FetchCall { url: string }
+// listActivity speaks GraphQL — wrap responses in the activity envelope and
+// translate the snake_case test events into the camelCase shape the resolver
+// emits.
+
+interface FetchCall { url: string; body: { variables: Record<string, unknown> } }
+
+function gqlEnvelope(events: ActivityEvent[], nextCursor: string | null) {
+  return {
+    data: {
+      history: {
+        events: {
+          events: events.map((e) => ({
+            id: e.id,
+            type: e.type,
+            occurredAt: e.occurred_at,
+            actor: e.actor,
+            repoId: e.repo_id,
+            summary: e.summary,
+            payloadJson: JSON.stringify(e.payload),
+          })),
+          nextCursor,
+        },
+      },
+    },
+  }
+}
 
 function makeFetchMock(responses: unknown[]) {
   const calls: FetchCall[] = []
   let index = 0
-  const mock = async (input: RequestInfo | URL): Promise<Response> => {
+  const mock = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const body = responses[Math.min(index, responses.length - 1)]
-    calls.push({ url: input.toString() })
+    calls.push({
+      url: input.toString(),
+      body: JSON.parse(init?.body as string) as FetchCall["body"],
+    })
     index++
     return new Response(JSON.stringify(body), {
       status: 200,
@@ -176,11 +204,8 @@ async function loadApi() {
 }
 
 test("load-more: second call includes cursor from first response", async () => {
-  const page1 = {
-    events: [makeEvent("1"), makeEvent("2")],
-    next_cursor: "cursor-page2",
-  }
-  const page2 = { events: [makeEvent("3")], next_cursor: null }
+  const page1 = gqlEnvelope([makeEvent("1"), makeEvent("2")], "cursor-page2")
+  const page2 = gqlEnvelope([makeEvent("3")], null)
 
   const { mock, calls } = makeFetchMock([page1, page2])
   globalThis.fetch = mock as unknown as typeof fetch
@@ -194,12 +219,11 @@ test("load-more: second call includes cursor from first response", async () => {
   assert.equal(r2.next_cursor, null)
   assert.equal(r2.events.length, 1)
 
-  const url2 = new URL(calls[1].url, "http://localhost")
-  assert.equal(url2.searchParams.get("cursor"), "cursor-page2")
+  assert.equal(calls[1].body.variables.cursor, "cursor-page2")
 })
 
 test("load-more: no next_cursor means no more pages", async () => {
-  const resp = { events: [makeEvent("1")], next_cursor: null }
+  const resp = gqlEnvelope([makeEvent("1")], null)
   const { mock } = makeFetchMock([resp])
   globalThis.fetch = mock as unknown as typeof fetch
 
@@ -219,8 +243,8 @@ async function loadEventLabels() {
 test("eventTypeLabel returns human label for known types", async () => {
   const { eventTypeLabel } = await loadEventLabels()
   assert.equal(eventTypeLabel("finding.created"), "New findings")
+  assert.equal(eventTypeLabel("finding.fixed"), "Fixed")
   assert.equal(eventTypeLabel("scan.completed"), "Scans")
-  assert.equal(eventTypeLabel("kev.added"), "KEV updates")
 })
 
 test("eventTypeLabel returns the raw type for unknown types", async () => {

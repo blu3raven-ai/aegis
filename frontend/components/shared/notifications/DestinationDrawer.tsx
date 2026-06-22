@@ -27,7 +27,6 @@ const TAB_LABELS: Record<DestinationTab, string> = {
 
 interface DestinationDrawerProps {
   destination: NotificationDestination | null
-  orgId: string
   open: boolean
   onClose: () => void
   onUpdated: (dest: NotificationDestination) => void
@@ -39,7 +38,6 @@ const EDITABLE_TYPES = new Set(["slack", "webhook", "email"])
 
 export function DestinationDrawer({
   destination,
-  orgId,
   open,
   onClose,
   onUpdated,
@@ -148,7 +146,6 @@ export function DestinationDrawer({
                 )}
                 <DestinationForm
                   initial={destination}
-                  orgId={orgId}
                   onSubmit={(payload) => handleUpdate(payload as UpdateDestinationPayload & { id: number })}
                   onCancel={() => setEditing(false)}
                   submitting={submitting}

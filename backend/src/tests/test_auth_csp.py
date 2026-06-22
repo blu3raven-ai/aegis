@@ -1,8 +1,18 @@
 """CSP hash computation utility tests."""
+import base64
+import hashlib
+import json
 import tempfile
 from pathlib import Path
 
-from src.auth.csp import compute_inline_script_hashes
+from src.auth.authentication.csp import (
+    compute_inline_script_hashes,
+    inline_script_hashes_for_html,
+)
+
+
+def _b64(data: bytes) -> str:
+    return base64.b64encode(hashlib.sha256(data).digest()).decode()
 
 
 def test_compute_hashes_returns_base64_sha256():
@@ -50,3 +60,38 @@ def test_compute_hashes_skips_directories():
         (d / "fake.js").mkdir()  # directory whose name matches the pattern
         hashes = compute_inline_script_hashes(d)
         assert len(hashes) == 1  # only real.js
+
+
+def test_inline_script_hashes_hashes_inline_bodies():
+    """Inline <script> bodies must be hashed from their exact text content."""
+    body = '(self.__next_f=self.__next_f||[]).push([0])'
+    html = f"<html><body><script>{body}</script></body></html>"
+    assert _b64(body.encode("utf-8")) in inline_script_hashes_for_html(html)
+
+
+def test_inline_script_hashes_ignores_external_src_scripts():
+    """<script src=...> chunks are same-origin (covered by 'self'), not hashed."""
+    html = '<script src="/_next/static/chunks/main.js" async></script>'
+    assert inline_script_hashes_for_html(html) == []
+
+
+def test_inline_script_hashes_is_sorted_and_deduped():
+    body = "x"
+    html = f"<script>{body}</script><script>{body}</script>"
+    assert inline_script_hashes_for_html(html) == [_b64(b"x")]
+
+
+def test_inline_script_hashes_covers_next_s_reinjected_children():
+    """next/script beforeInteractive scripts are re-injected at runtime as new
+    <script> elements whose body is the wrapper's `children` — that injected
+    body needs its own hash, not just the wrapper's."""
+    child = "try{var t=localStorage.getItem('theme')}catch(e){}"
+    wrapper = (
+        '(self.__next_s=self.__next_s||[]).push([0,'
+        + json.dumps({"children": child})
+        + "])"
+    )
+    html = f"<script>{wrapper}</script>"
+    hashes = inline_script_hashes_for_html(html)
+    assert _b64(wrapper.encode("utf-8")) in hashes   # the wrapper itself
+    assert _b64(child.encode("utf-8")) in hashes      # the re-injected body

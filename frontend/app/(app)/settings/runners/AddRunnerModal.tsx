@@ -1,8 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { RUNNERS_API } from "@/lib/shared/api-paths"
-import { apiClient } from "@/lib/client/api-client.ts"
+import { generateRunnerToken } from "@/lib/client/settings/use-runners"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Sheet } from "@/components/ui/Sheet"
 
@@ -49,7 +48,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
     if (!open) return
     async function generate() {
       try {
-        const data = await apiClient<{ token: string; expiresAt: string }>(RUNNERS_API.tokens, { method: "POST" })
+        const data = await generateRunnerToken()
         setToken(data.token)
         setExpiresAt(data.expiresAt)
       } catch {

@@ -4,7 +4,7 @@ import { apiClient } from "@/lib/client/api-client.ts"
 
 export function LogoutButton() {
   async function handleLogout() {
-    await apiClient("/auth/logout", { method: "POST" }).catch(() => {})
+    await apiClient("/api/v1/auth/logout", { method: "POST" }).catch(() => {})
     window.location.href = "/login"
   }
 

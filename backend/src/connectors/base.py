@@ -7,7 +7,7 @@ from typing import ClassVar, Literal
 
 ConnectorKind = Literal["sender", "ingester", "runner", "wizard"]
 ConnectorStatus = Literal["stable", "beta", "preview", "deprecated"]
-ConnectorCategory = Literal["ci", "notification", "runner"]
+ConnectorCategory = Literal["ci", "notification", "runner", "intel"]
 
 
 @dataclass
@@ -77,7 +77,10 @@ class BaseIngester(BaseConnector):
 
     `verify_signature` lets each ingester pick the right primitive
     (`verify_hmac_sha256` or `verify_token_eq`) — the handler stays
-    algorithm-agnostic.
+    algorithm-agnostic. Concrete implementations resolve the shared
+    secret DB-first (per-provider `webhook_endpoints` rows) and fall
+    back to the legacy env-var for bootstrap deployments — see
+    `src.connectors.webhooks.secret_resolver`.
     """
     kind: ClassVar[ConnectorKind] = "ingester"
 

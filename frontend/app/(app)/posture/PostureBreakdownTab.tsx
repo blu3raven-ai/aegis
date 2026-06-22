@@ -5,6 +5,7 @@ import type {
   PostureTopRepository,
   PostureAgeBucket,
 } from "@/lib/client/posture-api"
+import { Card } from "@/components/ui/Card"
 
 const SEV_VARS = {
   critical: "var(--color-severity-critical)",
@@ -20,7 +21,6 @@ const SEV_CLASSES = {
   low: "text-[var(--color-severity-low)]",
 }
 
-// ── SeverityDonut ─────────────────────────────────────────────────────────────
 
 function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
   const counts = snap.counts
@@ -42,7 +42,7 @@ function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
   }))
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Severity breakdown
       </p>
@@ -76,7 +76,9 @@ function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
                 strokeDashoffset={seg.dashOffset}
                 strokeLinecap="butt"
                 transform="rotate(-90 54 54)"
-              />
+              >
+                <title>{`${seg.key}: ${seg.value.toLocaleString()} (${Math.round((seg.value / counts.total) * 100)}%)`}</title>
+              </circle>
             ))}
           </svg>
           <span className="absolute inset-0 flex flex-col items-center justify-center">
@@ -107,17 +109,16 @@ function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
           ))}
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
-// ── TopReposPanel ─────────────────────────────────────────────────────────────
 
 function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
   if (repos.length === 0) return null
   const maxOpen = Math.max(...repos.map((r) => r.open), 1)
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Top repositories by findings
       </p>
@@ -146,6 +147,7 @@ function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
               {repo.critical > 0 && (
                 <span
                   className="h-full"
+                  title={`Critical: ${repo.critical.toLocaleString()}`}
                   style={{
                     width: `${(repo.critical / repo.open) * 100}%`,
                     background: SEV_VARS.critical,
@@ -155,6 +157,7 @@ function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
               {repo.high > 0 && (
                 <span
                   className="h-full"
+                  title={`High: ${repo.high.toLocaleString()}`}
                   style={{
                     width: `${(repo.high / repo.open) * 100}%`,
                     background: SEV_VARS.high,
@@ -164,6 +167,7 @@ function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
               {repo.open - repo.critical - repo.high > 0 && (
                 <span
                   className="h-full flex-1"
+                  title={`Other: ${(repo.open - repo.critical - repo.high).toLocaleString()}`}
                   style={{ background: SEV_VARS.medium, opacity: 0.5 }}
                 />
               )}
@@ -171,16 +175,15 @@ function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   )
 }
 
-// ── CoverageAndRemediation ────────────────────────────────────────────────────
 
 function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
   const { repositoryCoverage: cov, remediation: rem } = snap
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Repository coverage
       </p>
@@ -250,11 +253,10 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
           </p>
         </div>
       </div>
-    </div>
+    </Card>
   )
 }
 
-// ── AgeBucketsPanel ───────────────────────────────────────────────────────────
 
 function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
   const total = buckets.reduce((sum, b) => sum + b.count, 0)
@@ -267,7 +269,7 @@ function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
     "var(--color-severity-critical)",
   ]
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card className="rounded-2xl">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Finding age distribution
       </p>
@@ -280,6 +282,7 @@ function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
             <div className="h-5 flex-1 overflow-hidden rounded bg-[var(--color-surface-raised)]">
               <div
                 className="h-full rounded"
+                title={`${bucket.label}: ${bucket.count.toLocaleString()}`}
                 style={{
                   width: `${(bucket.count / maxCount) * 100}%`,
                   background: ageColors[i] ?? ageColors[3],
@@ -298,11 +301,10 @@ function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
           {buckets[3].count.toLocaleString()} findings are over 90 days old
         </p>
       )}
-    </div>
+    </Card>
   )
 }
 
-// ── PostureBreakdownTab ───────────────────────────────────────────────────────
 
 export interface PostureBreakdownTabProps {
   snap: PostureSnapshotResponse

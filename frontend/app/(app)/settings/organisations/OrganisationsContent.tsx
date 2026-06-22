@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from "react"
 import { listOrganisationTeams } from "@/lib/client/settings-api"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import type { OrganisationTeam, ResourceSharingIndex } from "./team-types"
 import { CreateTeamPanel } from "./CreateTeamPanel"
 import { TeamList } from "./TeamList"
@@ -20,7 +21,6 @@ interface OrganisationsContentProps {
 
 export function OrganisationsContent({ canEdit = true, createTriggerRef }: OrganisationsContentProps) {
   const [teams, setTeams] = useState<OrganisationTeam[]>([])
-  const [sharing, setSharing] = useState<ResourceSharingIndex>({ repositories: {}, containerImages: {} })
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null)
   const [query, setQuery] = useState("")
   const [showCreate, setShowCreate] = useState(false)
@@ -35,7 +35,6 @@ export function OrganisationsContent({ canEdit = true, createTriggerRef }: Organ
     const result = await listOrganisationTeams()
     if (result.ok) {
       setTeams(result.teams)
-      setSharing(result.sharing)
       setSelectedTeamId((current) => {
         if (!current) return result.teams[0]?.id ?? null
         const exists = result.teams.some((t) => t.id === current)
@@ -64,6 +63,19 @@ export function OrganisationsContent({ canEdit = true, createTriggerRef }: Organ
     () => teams.find((team) => team.id === selectedTeamId) ?? teams[0] ?? null,
     [selectedTeamId, teams],
   )
+
+  /** Derived index: assetId → list of teams holding that asset. Used to flag
+   *  resources shared across multiple teams in the per-team scope tabs. */
+  const sharing = useMemo<ResourceSharingIndex>(() => {
+    const index: ResourceSharingIndex = {}
+    for (const team of teams) {
+      for (const asset of team.assets) {
+        if (!index[asset.assetId]) index[asset.assetId] = []
+        index[asset.assetId].push(team.id)
+      }
+    }
+    return index
+  }, [teams])
 
   const showLoading = loading && teams.length === 0
   const showEmpty = !loading && teams.length === 0
@@ -95,11 +107,11 @@ export function OrganisationsContent({ canEdit = true, createTriggerRef }: Organ
       {error && <p className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2 text-sm text-[var(--color-severity-critical)]">{error}</p>}
 
       {showLoading ? (
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-text-secondary)]">Loading teams...</div>
+        <Card padding="lg" className="text-sm text-[var(--color-text-secondary)]">Loading teams...</Card>
       ) : showEmpty ? (
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-sm text-[var(--color-text-secondary)]">
+        <Card padding="lg" className="text-sm text-[var(--color-text-secondary)]">
           No teams yet. Create your first team to start grouping members and access.
-        </div>
+        </Card>
       ) : (
         <div className="flex flex-col gap-6 md:min-h-[calc(100vh-12rem)] md:flex-row md:items-start">
           <TeamList teams={teams} selectedTeamId={selectedTeam?.id ?? null} query={query} onQueryChange={setQuery} onSelect={setSelectedTeamId} />

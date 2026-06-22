@@ -19,7 +19,6 @@ from src.db.models import (
     AuditEvent,
     Finding,
     NotificationDestination,
-    ScanRun,
 )
 
 
@@ -167,7 +166,7 @@ class SearchService:
                     id=str(r.id),
                     title=title,
                     subtitle=f"{r.severity or 'unknown'}",
-                    href=f"/{r.tool}/dashboard",
+                    href=f"/findings?scanner={r.tool}",
                     score=score,
                     metadata={
                         "tool": r.tool,

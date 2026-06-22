@@ -240,7 +240,7 @@ def test_finding_to_secret_dict_hydrates_fat_keys():
         "raw": {},
     }
     blob_key = "findings/20/detail.json"
-    f = _make_lean_finding(id=20, tool="secrets", detail_blob_key=blob_key, lean_detail=lean_detail)
+    f = _make_lean_finding(id=20, tool="secret_scanning", detail_blob_key=blob_key, lean_detail=lean_detail)
     # review_status is read as an attribute
     f.review_status = "new"
 
@@ -269,7 +269,7 @@ def test_finding_to_secret_dict_no_minio_when_no_blob():
         "commit": "deadbeef",
         "detectedAt": "2026-01-01T00:00:00Z",
     }
-    f = _make_lean_finding(id=21, tool="secrets", detail_blob_key=None, lean_detail=lean_detail)
+    f = _make_lean_finding(id=21, tool="secret_scanning", detail_blob_key=None, lean_detail=lean_detail)
     f.review_status = "new"
 
     with patch("src.shared.object_store.download_bytes") as mock_dl:

@@ -104,7 +104,7 @@ class AutoRerunScheduler:
         from src.shared.config import get_orgs_from_source_connections
         all_orgs = get_orgs_from_source_connections()
 
-        dependencies = tools.get("dependencies") if isinstance(tools.get("dependencies"), dict) else {}
+        dependencies = tools.get("dependencies_scanning") if isinstance(tools.get("dependencies_scanning"), dict) else {}
         if dependencies and dependencies.get("autoRerunEnabled") and _matches_schedule(
             dependencies.get("rerunScheduleType", "simple"),
             dependencies.get("rerunScheduleValue", "02:00"),
@@ -112,7 +112,7 @@ class AutoRerunScheduler:
         ):
             self._trigger_dependencies(dependencies, all_orgs)
 
-        container_scanning = tools.get("containerScanning") if isinstance(tools.get("containerScanning"), dict) else {}
+        container_scanning = tools.get("container_scanning") if isinstance(tools.get("container_scanning"), dict) else {}
         if container_scanning and container_scanning.get("autoRerunEnabled") and _matches_schedule(
             container_scanning.get("rerunScheduleType", "simple"),
             container_scanning.get("rerunScheduleValue", "02:00"),
@@ -120,7 +120,7 @@ class AutoRerunScheduler:
         ):
             self._trigger_container_scanning(container_scanning, all_orgs)
 
-        secrets = tools.get("secrets") if isinstance(tools.get("secrets"), dict) else {}
+        secrets = tools.get("secret_scanning") if isinstance(tools.get("secret_scanning"), dict) else {}
         if secrets and secrets.get("autoRerunEnabled") and _matches_schedule(
             secrets.get("rerunScheduleType", "simple"),
             secrets.get("rerunScheduleValue", "02:00"),
@@ -128,7 +128,7 @@ class AutoRerunScheduler:
         ):
             self._trigger_secrets(secrets, all_orgs)
 
-        code_scanning = tools.get("codeScanning") if isinstance(tools.get("codeScanning"), dict) else {}
+        code_scanning = tools.get("code_scanning") if isinstance(tools.get("code_scanning"), dict) else {}
         if code_scanning and code_scanning.get("autoRerunEnabled") and _matches_schedule(
             code_scanning.get("rerunScheduleType", "simple"),
             code_scanning.get("rerunScheduleValue", "02:00"),
@@ -151,6 +151,11 @@ class AutoRerunScheduler:
         if _matches_cron("15 3 * * *", now):
             self._trigger_epss_refresh()
 
+        # Daily OSV catalog refresh + dispatch (02:00 — earliest of the daily jobs
+        # so its dispatch can ride the dependency-scan rerun if both fire today)
+        if _matches_cron("0 2 * * *", now):
+            self._trigger_osv_refresh()
+
         # Hourly SLA breach recompute + escalations
         if _matches_cron("0 * * * *", now):
             self._trigger_sla_recompute(all_orgs)
@@ -163,6 +168,71 @@ class AutoRerunScheduler:
         # the two heavy nightly evaluators don't contend for DB at the same minute)
         if _matches_cron("30 4 * * *", now):
             self._trigger_data_retention_recompute(all_orgs)
+
+        # Per-source sync / auto-scan schedules (preset or cron, configured per source)
+        self._tick_source_schedules(now)
+
+    def _tick_source_schedules(self, now: datetime) -> None:
+        from src.sources import store as sources_store
+        from src.sources.scheduling import is_schedule_due
+
+        try:
+            connections = sources_store.list_connections_with_secrets()
+        except Exception:
+            logger.exception("Source schedule tick: failed to load connections")
+            return
+
+        for conn in connections:
+            try:
+                if is_schedule_due(
+                    conn.get("syncScheduleMode", "preset"),
+                    conn.get("syncSchedule", "6h"),
+                    conn.get("syncScheduleCron"),
+                    now,
+                ):
+                    self._run_source_sync(conn.get("id"))
+
+                if conn.get("scanAutoEnabled") and is_schedule_due(
+                    conn.get("scanScheduleMode", "preset"),
+                    conn.get("scanSchedulePreset", "24h"),
+                    conn.get("scanScheduleCron"),
+                    now,
+                ):
+                    self._run_source_scan(conn)
+            except Exception:
+                logger.exception("Source schedule tick failed for %s", conn.get("id"))
+
+    def _run_source_sync(self, connection_id: str) -> None:
+        import asyncio
+        import threading
+
+        def _run() -> None:
+            try:
+                from src.sources.triggers import run_source_sync
+                asyncio.run(run_source_sync(connection_id))
+                logger.info("Scheduled source sync complete: %s", connection_id)
+            except Exception:
+                logger.exception("Scheduled source sync failed: %s", connection_id)
+
+        threading.Thread(target=_run, daemon=True, name="source-sync").start()
+
+    def _run_source_scan(self, connection: dict[str, Any]) -> None:
+        import threading
+
+        def _run() -> None:
+            try:
+                from src.sources.triggers import dispatch_source_scan
+                queued = dispatch_source_scan(connection, run_prefix="scheduled")
+                logger.info(
+                    "Scheduled source scan dispatched %d job(s) for %s",
+                    len(queued), connection.get("id"),
+                )
+            except ValueError as exc:
+                logger.warning("Scheduled source scan skipped for %s: %s", connection.get("id"), exc)
+            except Exception:
+                logger.exception("Scheduled source scan failed: %s", connection.get("id"))
+
+        threading.Thread(target=_run, daemon=True, name="source-scan").start()
 
     def _tick_scheduled_reports(self, now: datetime) -> None:
         try:
@@ -207,6 +277,24 @@ class AutoRerunScheduler:
                 logger.exception("EPSS refresh failed")
 
         threading.Thread(target=_run, daemon=True, name="epss-refresh").start()
+
+    def _trigger_osv_refresh(self) -> None:
+        """Run the OSV mirror refresh + reconcile in a daemon thread.
+
+        Matches _trigger_kev_refresh's shape so threading + lifecycle
+        behaviour is identical.
+        """
+        import threading
+
+        def _run() -> None:
+            try:
+                from src.jobs.osv_refresh import refresh_osv_catalog
+                result = refresh_osv_catalog()
+                logger.info("OSV refresh complete: %s", result)
+            except Exception:
+                logger.exception("OSV refresh failed")
+
+        threading.Thread(target=_run, daemon=True, name="osv-refresh").start()
 
     def _trigger_sla_recompute(self, all_orgs: list[str]) -> None:
         import threading
@@ -268,7 +356,7 @@ class AutoRerunScheduler:
             get_source_type_for_org, org_has_source_connections,
         )
         from src.dependencies.scanner import execute_dependencies_scan_once
-        from src.dependencies.router import _dependencies_runtime
+        from src.dependencies.scanner import _dependencies_runtime
         from src.storage import create_dependencies_run
 
         orgs = _resolve_orgs(all_orgs)
@@ -304,7 +392,7 @@ class AutoRerunScheduler:
             get_source_type_for_org, org_has_source_connections,
         )
         from src.containers.scanner import execute_container_scan_once
-        from src.containers.router import _container_scanning_runtime
+        from src.containers.scanner import _container_scanning_runtime
         from src.storage import create_container_scanning_run
 
         orgs = _resolve_orgs(all_orgs)
@@ -351,7 +439,7 @@ class AutoRerunScheduler:
             get_source_type_for_org, org_has_source_connections,
         )
         from src.code_scanning.scanner import execute_code_scanning_scan_once
-        from src.code_scanning.router import _code_scanning_runtime
+        from src.code_scanning.scanner import _code_scanning_runtime
         from src.storage import create_code_scanning_run
 
         orgs = _resolve_orgs(all_orgs)

@@ -11,7 +11,8 @@ import { ChangesDiffTable } from "./ChangesDiffTable"
 import type { AuditEvent } from "@/lib/client/audit-api"
 import { Button } from "@/components/ui/Button"
 
-function formatTimestamp(iso: string): string {
+function formatTimestamp(iso: string | undefined): string {
+  if (!iso) return "—"
   try {
     return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "long" }).format(new Date(iso))
   } catch {
@@ -37,7 +38,7 @@ export function AuditEventDrawer({ event, open, onClose }: AuditEventDrawerProps
   }
 
   const detailItems = [
-    { label: "Resource type", value: event.resource_type },
+    { label: "Resource type", value: event.resource_type ?? "—" },
     { label: "Resource ID", value: event.resource_id ?? "—" },
     { label: "Status code", value: event.status_code != null ? String(event.status_code) : "—" },
     { label: "Method", value: event.request_method ?? "—" },

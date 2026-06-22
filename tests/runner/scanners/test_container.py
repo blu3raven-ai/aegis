@@ -189,6 +189,44 @@ def test_container_normalize_file_emits_expected_shape(tmp_path):
     assert f["imageName"] == "gcr.io/acme/api"
     assert f["imageTag"] == "1.2.3"
     assert f["imageDigest"] == "sha256:abc123"
+    # Container advisory parity with SCA (C8): aliases + synthesized
+    # manifestSnippet so the verifier prompt has the same fields the SCA
+    # verifier consumes. The snippet must be multi-line so the prompt's
+    # triple-backtick code fence renders with actual content.
+    assert f["advisoryAliases"] == []
+    assert f["manifestSnippet"]
+    snippet_lines = f["manifestSnippet"].split("\n")
+    assert len(snippet_lines) >= 2
+    assert "package: openssl@1.1.1k" in snippet_lines
+    assert "ecosystem: deb" in snippet_lines
+    assert "manifest_path: /usr/lib/openssl" in snippet_lines
+
+
+def test_container_normalize_file_aliases_from_related(tmp_path):
+    """advisoryAliases must include related CVE/GHSA ids distinct from the primary."""
+    from runner.scanners.container.normalize import normalize_file
+
+    grype_path = tmp_path / "findings.json"
+    grype_path.write_text(
+        json.dumps(
+            {
+                "matches": [
+                    _container_grype_match(
+                        advisory_id="GHSA-aaaa-bbbb-cccc",
+                        related=[
+                            {"id": "CVE-2024-1111"},
+                            {"id": "CVE-2024-2222"},
+                            # duplicates and self-reference must be filtered out
+                            {"id": "CVE-2024-1111"},
+                            {"id": "GHSA-aaaa-bbbb-cccc"},
+                        ],
+                    )
+                ]
+            }
+        )
+    )
+    f = normalize_file(grype_path, "acme", "alpine:3.18", "")[0]
+    assert f["advisoryAliases"] == ["CVE-2024-1111", "CVE-2024-2222"]
 
 
 def test_container_normalize_file_extracts_cve_from_related(tmp_path):
@@ -326,6 +364,146 @@ def test_container_normalize_grype_output_handles_empty(tmp_path):
     assert (tmp_path / "findings.jsonl").exists()
 
 
+def test_container_attach_advisory_details_enriches_by_primary_id(tmp_path, monkeypatch):
+    """attach_advisory_details populates advisoryDetail keyed on advisoryId."""
+    from runner.scanners.container import normalize as container_normalize
+    from runner.scanners.dependencies.advisory_enrichment import AdvisoryDetail
+
+    captured: dict = {}
+
+    def fake_fetch(advisory_ids, *, cache_dir=None, nvd_api_key=None):
+        captured["ids"] = list(advisory_ids)
+        return {
+            "CVE-2024-1234": AdvisoryDetail(
+                advisory_id="CVE-2024-1234",
+                summary="long-form summary",
+                description="long-form description from NVD",
+                references=("https://nvd.nist.gov/vuln/detail/CVE-2024-1234",),
+                cwes=("CWE-79",),
+                vulnerable_version_range="< 1.2.3",
+            ),
+        }
+
+    monkeypatch.setattr(
+        container_normalize.advisory_enrichment,
+        "fetch_advisory_details",
+        fake_fetch,
+    )
+
+    findings = [
+        {"advisoryId": "CVE-2024-1234", "advisoryAliases": ["GHSA-zzzz-yyyy-xxxx"]},
+        {"advisoryId": "", "advisoryAliases": []},
+    ]
+    container_normalize.attach_advisory_details(findings)
+
+    assert "CVE-2024-1234" in captured["ids"]
+    assert findings[0]["advisoryDetail"]["summary"] == "long-form summary"
+    assert findings[0]["advisoryDetail"]["cwes"] == ["CWE-79"]
+    # Finding without an advisory id gets a None placeholder — matches SCA shape.
+    assert findings[1]["advisoryDetail"] is None
+
+
+def test_container_attach_advisory_details_falls_back_to_alias(tmp_path, monkeypatch):
+    """When the primary id is unknown to enrichment, fall back to an alias hit."""
+    from runner.scanners.container import normalize as container_normalize
+    from runner.scanners.dependencies.advisory_enrichment import AdvisoryDetail
+
+    def fake_fetch(advisory_ids, *, cache_dir=None, nvd_api_key=None):
+        return {
+            "CVE-2024-9999": AdvisoryDetail(
+                advisory_id="CVE-2024-9999",
+                summary="aliased advisory",
+                description="",
+            ),
+        }
+
+    monkeypatch.setattr(
+        container_normalize.advisory_enrichment,
+        "fetch_advisory_details",
+        fake_fetch,
+    )
+
+    findings = [
+        {"advisoryId": "GHSA-1111-2222-3333", "advisoryAliases": ["CVE-2024-9999"]},
+    ]
+    container_normalize.attach_advisory_details(findings)
+    assert findings[0]["advisoryDetail"]["summary"] == "aliased advisory"
+
+
+def test_container_normalize_grype_output_invokes_enrichment(tmp_path, monkeypatch):
+    """End-to-end: normalize_grype_output should attach advisoryDetail when not disabled."""
+    from runner.scanners.container import normalize as container_normalize
+    from runner.scanners.dependencies.advisory_enrichment import AdvisoryDetail
+
+    monkeypatch.delenv("AEGIS_DISABLE_EAGER_ENRICHMENT", raising=False)
+
+    def fake_fetch(advisory_ids, *, cache_dir=None, nvd_api_key=None):
+        return {
+            "GHSA-aaaa-bbbb-cccc": AdvisoryDetail(
+                advisory_id="GHSA-aaaa-bbbb-cccc",
+                summary="nvd summary",
+                description="long description",
+                cwes=("CWE-122",),
+            ),
+        }
+
+    monkeypatch.setattr(
+        container_normalize.advisory_enrichment,
+        "fetch_advisory_details",
+        fake_fetch,
+    )
+
+    image_dir = tmp_path / "alpine__3.18"
+    image_dir.mkdir()
+    (image_dir / "findings.json").write_text(
+        json.dumps({"matches": [_container_grype_match()]})
+    )
+    (image_dir / "sbom.cdx.json").write_text(
+        json.dumps({"metadata": {"component": {"name": "alpine:3.18"}}})
+    )
+
+    total, errors = container_normalize.normalize_grype_output("acme", tmp_path)
+    assert total == 1 and errors == 0
+
+    line = (tmp_path / "findings.jsonl").read_text().splitlines()[0]
+    finding = json.loads(line)
+    assert finding["advisoryDetail"]["summary"] == "nvd summary"
+    assert finding["advisoryDetail"]["cwes"] == ["CWE-122"]
+
+
+def test_container_normalize_grype_output_skips_enrichment_when_disabled(
+    tmp_path, monkeypatch
+):
+    """AEGIS_DISABLE_EAGER_ENRICHMENT=1 must skip the NVD/OSV fetch entirely."""
+    from runner.scanners.container import normalize as container_normalize
+
+    monkeypatch.setenv("AEGIS_DISABLE_EAGER_ENRICHMENT", "1")
+
+    called: list = []
+
+    def fake_fetch(advisory_ids, *, cache_dir=None, nvd_api_key=None):
+        called.append(advisory_ids)
+        return {}
+
+    monkeypatch.setattr(
+        container_normalize.advisory_enrichment,
+        "fetch_advisory_details",
+        fake_fetch,
+    )
+
+    image_dir = tmp_path / "alpine__3.18"
+    image_dir.mkdir()
+    (image_dir / "findings.json").write_text(
+        json.dumps({"matches": [_container_grype_match()]})
+    )
+    (image_dir / "sbom.cdx.json").write_text(
+        json.dumps({"metadata": {"component": {"name": "alpine:3.18"}}})
+    )
+
+    container_normalize.normalize_grype_output("acme", tmp_path)
+    assert called == []
+
+
 def test_container_normalize_output_uses_compact_json(tmp_path):
     """Confirms separators=(',', ':') — no whitespace between fields."""
     from runner.scanners.container.normalize import normalize_grype_output
@@ -353,7 +531,7 @@ def test_container_normalize_output_uses_compact_json(tmp_path):
 def test_container_scanner_has_correct_type():
     from runner.scanners.container.scanner import ContainerScanner
 
-    assert ContainerScanner.SCANNER_TYPE == "container"
+    assert ContainerScanner.SCANNER_TYPE == "container_scanning"
 
 
 def test_container_scanner_implements_base_protocol():

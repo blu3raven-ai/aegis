@@ -1,7 +1,7 @@
 """Tests for scan:trigger scope checks on API keys."""
 from __future__ import annotations
 
-from src.api_keys.auth import require_scope_and_source
+from src.auth.credentials.auth import require_scope_and_source
 
 
 class _FakeKey:

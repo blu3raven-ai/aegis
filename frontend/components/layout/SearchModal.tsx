@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { search, type SearchHit } from "@/lib/client/search-api"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 const ICON_SEARCH =
   "M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
@@ -16,10 +17,10 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/findings?scanner=deps", label: "Dependency Scanning (SCA)", category: "Tools" },
-  { href: "/findings?scanner=container", label: "Container Scanning", category: "Tools" },
-  { href: "/findings?scanner=secrets", label: "Secret Scanning", category: "Tools" },
-  { href: "/findings?scanner=sast", label: "Code Scanning (SAST)", category: "Tools" },
+  { href: "/findings?scanner=dependencies_scanning", label: "Dependency Scanning (SCA)", category: "Tools" },
+  { href: "/findings?scanner=container_scanning", label: "Container Scanning", category: "Tools" },
+  { href: "/findings?scanner=secret_scanning", label: "Secret Scanning", category: "Tools" },
+  { href: "/findings?scanner=code_scanning", label: "Code Scanning (SAST)", category: "Tools" },
   { href: "/sources", label: "Sources", category: "Sources" },
   { href: "/settings/account", label: "Account", category: "Settings" },
   { href: "/settings/users", label: "Members", category: "Settings" },
@@ -272,8 +273,8 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           <div className="py-2 space-y-1 px-3">
             {[1, 2, 3].map((n) => (
               <div key={n} className="flex items-center gap-2.5 py-2">
-                <div className="h-3 flex-1 rounded bg-[var(--color-surface-raised)] animate-pulse" />
-                <div className="h-3 w-12 rounded bg-[var(--color-surface-raised)] animate-pulse" />
+                <Skeleton className="h-3 flex-1" />
+                <Skeleton className="h-3 w-12" />
               </div>
             ))}
           </div>

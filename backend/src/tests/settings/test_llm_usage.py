@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from src.settings.llm_usage import daily_remaining, record_usage
+from src.settings.llm.usage import daily_remaining, record_usage
 
 
 @pytest.fixture

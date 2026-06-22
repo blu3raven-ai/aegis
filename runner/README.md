@@ -71,7 +71,7 @@ Required environment for normal operation:
 
 | Variable | Purpose |
 |---|---|
-| `RUNNER_BACKEND_URL` | Base URL of the backend `/api/v1/runner/*` endpoints |
+| `RUNNER_BACKEND_URL` | Base URL of the backend `/api/v1/agent/*` endpoints |
 | `RUNNER_AUTH_TOKEN` | Bearer token issued by the backend for this runner |
 | `RUNNER_WORKSPACE` | Local scratch directory for per-job work (default `/workspace`) |
 | `RUNNER_METRICS_PORT` | Optional Prometheus scrape port (skipped if unset) |

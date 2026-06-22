@@ -1,4 +1,4 @@
-"""Pydantic I/O models for /api/v1/reports."""
+"""Pydantic I/O models for /api/v1/findings/reports."""
 from __future__ import annotations
 from typing import Literal
 from pydantic import BaseModel

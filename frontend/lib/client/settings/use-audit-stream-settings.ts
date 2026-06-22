@@ -22,7 +22,7 @@ export async function fetchAuditStreamSettings(): Promise<AuditStreamSettings | 
   const now = Date.now()
   if (cached && now - cacheTimestamp < CACHE_TTL_MS) return cached
   try {
-    const data = await apiClient<AuditStreamSettings>("/api/v1/settings/audit-stream")
+    const data = await apiClient<AuditStreamSettings>("/api/v1/settings/audit/stream")
     cached = data; cacheTimestamp = Date.now()
     return data
   } catch {
@@ -36,13 +36,13 @@ export async function saveAuditStreamSettings(patch: Partial<{
   endpointUrl: string | null
   authToken: string
 }>): Promise<AuditStreamSettings> {
-  const data = await apiClient<AuditStreamSettings>("/api/v1/settings/audit-stream", { method: "PATCH", body: patch })
+  const data = await apiClient<AuditStreamSettings>("/api/v1/settings/audit/stream", { method: "PATCH", body: patch })
   cached = data; cacheTimestamp = Date.now()
   return data
 }
 
 export async function testAuditStream(): Promise<{ ok: boolean; error?: string }> {
-  return apiClient<{ ok: boolean; error?: string }>("/api/v1/settings/audit-stream/test", { method: "POST" })
+  return apiClient<{ ok: boolean; error?: string }>("/api/v1/settings/audit/stream/test", { method: "POST" })
 }
 
 export function useAuditStreamSettings(): {

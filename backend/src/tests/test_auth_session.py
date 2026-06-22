@@ -31,9 +31,8 @@ def test_rate_limit_bucket_columns():
     assert cols == {"key", "window_start", "request_count", "updated_at"}
 
 
-# ── SessionService integration tests ─────────────────────────────────────────
 
-from src.auth.session import SessionService  # noqa: E402
+from src.auth.authentication.session import SessionService  # noqa: E402
 
 
 @pytest_asyncio.fixture

@@ -7,6 +7,8 @@ import { TeamRepositoriesTab } from "./TeamRepositoriesTab"
 import { deleteOrganisationTeam, updateOrganisationTeam } from "@/lib/client/settings-api"
 import { Dialog } from "@/components/layout/Dialog"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { NavTabs } from "@/components/ui/NavTabs"
 import { Textarea } from "@/components/ui/Textarea"
@@ -105,7 +107,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
   }
 
   return (
-    <section className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <Card as="section" className="min-w-0 flex-1">
       <Dialog
         open={showDeleteDialog}
         onClose={() => setShowDeleteDialog(false)}
@@ -118,30 +120,31 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
       <div className="border-b border-[var(--color-border)] pb-5">
         {isEditing ? (
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
-                Team Name
-              </label>
+            <FormField
+              label="Team Name"
+              htmlFor="team-name"
+              error={error && !name.trim() ? error : undefined}
+            >
               <Input
+                id="team-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Platform Team"
                 autoFocus
+                invalid={!!error && !name.trim()}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
-                Description
-              </label>
+            </FormField>
+            <FormField label="Description" htmlFor="team-description">
               <Textarea
+                id="team-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 className="resize-none"
                 placeholder="What does this team do?"
               />
-            </div>
-            {error && <p className="text-xs text-[var(--color-severity-critical)]">{error}</p>}
+            </FormField>
+            {error && name.trim() && <p className="text-xs text-[var(--color-severity-critical)]">{error}</p>}
             <div className="flex gap-2">
               <Button
                 variant="primary"
@@ -212,8 +215,8 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
         )}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           <span>{team.members.length} members</span>
-          <span>{team.repositories.length} repos</span>
-          <span>{team.containerImages.length} images</span>
+          <span>{team.assets.filter((a) => a.type === "repo").length} repos</span>
+          <span>{team.assets.filter((a) => a.type === "image").length} images</span>
         </div>
       </div>
 
@@ -244,6 +247,6 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
           shared resources.
         </p>
       </div>
-    </section>
+    </Card>
   )
 }

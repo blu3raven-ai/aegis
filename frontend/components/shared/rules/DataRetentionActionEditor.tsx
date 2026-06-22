@@ -17,6 +17,7 @@ import type {
   DataRetentionAction,
   DeleteAction,
 } from "@/lib/client/rules-api"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 
 const ARCHIVE_MIN_DAYS = 30
@@ -107,13 +108,12 @@ export function DataRetentionActionEditor({
         </div>
       )}
 
-      <div>
-        <label
-          htmlFor="retention-after-days"
-          className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-        >
-          {value.type === "delete" ? "Delete after" : "Archive after"}
-        </label>
+      <FormField
+        label={value.type === "delete" ? "Delete after" : "Archive after"}
+        htmlFor="retention-after-days"
+        hint={daysInvalid ? undefined : `Must be at least ${minDays} days (max ${MAX_DAYS}).`}
+        error={daysInvalid ? `Enter a whole number between ${minDays} and ${MAX_DAYS} days.` : undefined}
+      >
         <div className="flex items-center gap-2">
           <Input
             id="retention-after-days"
@@ -135,15 +135,7 @@ export function DataRetentionActionEditor({
             days after the scan finished
           </span>
         </div>
-        <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
-          Must be at least {minDays} days (max {MAX_DAYS}).
-        </p>
-        {daysInvalid && (
-          <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
-            Enter a whole number between {minDays} and {MAX_DAYS} days.
-          </p>
-        )}
-      </div>
+      </FormField>
     </div>
   )
 }

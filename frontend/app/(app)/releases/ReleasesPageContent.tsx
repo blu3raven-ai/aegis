@@ -5,7 +5,10 @@ import Link from "next/link"
 import { listReleases, type ReleaseSummary } from "@/lib/client/releases-api"
 import { relativeTime } from "@/components/shared/releases/_helpers"
 import { Button } from "@/components/ui/Button"
+import { LinkButton } from "@/components/ui/LinkButton"
+import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 type Verdict = ReleaseSummary["verdict"]
 
@@ -31,8 +34,6 @@ const VERDICT_FILTERS = [
   { id: "warn"  as const, label: "WARN" },
   { id: "no_go" as const, label: "NO-GO" },
 ]
-
-const CARD = "rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
 
 function triggeredByLabel(release: ReleaseSummary): string {
   const { triggered_by } = release
@@ -81,7 +82,7 @@ export function ReleasesPageContent({ onCountChange }: ReleasesPageContentProps 
   if (listState === "error") {
     return (
       <div className="px-6 py-5">
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-12 text-center">
+        <Card padding="none" className="px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">Could not load releases</p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
             The backend may be unavailable. Check that the server is running and try again.
@@ -91,7 +92,7 @@ export function ReleasesPageContent({ onCountChange }: ReleasesPageContentProps 
               Retry
             </Button>
           </div>
-        </div>
+        </Card>
       </div>
     )
   }
@@ -113,26 +114,26 @@ export function ReleasesPageContent({ onCountChange }: ReleasesPageContentProps 
       </div>
 
       {listState === "loading" ? (
-        <div className={CARD}>
+        <Card padding="none">
           {[0, 1, 2, 3].map((i) => (
             <div
               key={i}
               className={`flex items-center gap-4 px-5 py-3.5 ${i === 0 ? "" : "border-t border-[var(--color-border)]"}`}
             >
-              <div className="h-8 w-8 rounded-full bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+              <Skeleton className="h-8 w-8 rounded-full" />
               <div className="flex-1 space-y-1.5">
-                <div className="h-3 w-32 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
-                <div className="h-3 w-48 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-3 w-48" />
               </div>
-              <div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
-              <div className="h-3 w-16 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-16" />
             </div>
           ))}
-        </div>
+        </Card>
       ) : releases.length === 0 ? (
         <ReleasesEmptyState filtered={verdictFilter !== "all"} onClearFilter={() => setVerdictFilter("all")} />
       ) : (
-        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        <Card padding="none" className="divide-y divide-[var(--color-border)]">
           {releases.map((release) => {
             const icon = VERDICT_ICONS[release.verdict] ?? VERDICT_ICONS.unknown
             const refLabel = release.ref ?? release.short_sha
@@ -178,7 +179,7 @@ export function ReleasesPageContent({ onCountChange }: ReleasesPageContentProps 
               </Link>
             )
           })}
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -225,15 +226,18 @@ function ReleasesEmptyState({
           Trigger a pre-release scan from any repository to see verdicts, blockers, and diff against main collected here.
         </p>
       </div>
-      <Link
+      <LinkButton
         href="/sources"
-        className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[var(--color-accent)] px-3.5 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
+        variant="primary"
+        size="md"
+        trailingIcon={
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M5 12h14M13 5l7 7-7 7" />
+          </svg>
+        }
       >
         Trigger a release scan
-        <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M5 12h14M13 5l7 7-7 7" />
-        </svg>
-      </Link>
+      </LinkButton>
     </div>
   )
 }

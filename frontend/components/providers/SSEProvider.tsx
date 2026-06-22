@@ -48,7 +48,6 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     } catch { /* ignore parse errors */ }
   }, [dispatch])
 
-  // BroadcastChannel for cross-tab sharing
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return
 
@@ -82,7 +81,6 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     }
   }, [dispatch])
 
-  // Leader election
   const tryBecomeLeader = useCallback(() => {
     if (isLeaderRef.current) return
     const channel = channelRef.current
@@ -109,17 +107,16 @@ export function SSEProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // EventSource connection
   const openEventSource = useCallback(() => {
     if (eventSourceRef.current) return
 
     const jitter = Math.random() * RECONNECT_JITTER_MS
     setTimeout(() => {
-      const es = new EventSource("/api/v1/events/stream")
+      const es = new EventSource("/api/v1/history/events/stream")
       eventSourceRef.current = es
 
       const eventTypes: SSEEventType[] = [
-        "scan.progress", "scan.completed", "scan.failed",
+        "scan.progress", "scan.completed", "scan.failed", "scan.cancelled",
         "source.synced", "runner.status", "notification.new",
       ]
       for (const et of eventTypes) {
@@ -147,7 +144,6 @@ export function SSEProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleSSEMessage])
 
-  // Visibility change: sync on tab foreground
   useEffect(() => {
     function onVisible() {
       if (document.visibilityState === "visible") {

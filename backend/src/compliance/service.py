@@ -173,8 +173,17 @@ async def get_framework_summary(
 async def get_controls_for_finding(
     session: AsyncSession,
     finding_id: int,
+    *,
+    asset_ids: list[str],
 ) -> list[dict[str, Any]]:
-    """Return all control mappings for a single finding, with control metadata."""
+    """Return all control mappings for a single finding, with control metadata.
+
+    Scoped to the caller's accessible ``asset_ids`` — empty list yields no
+    mappings. Findings with ``asset_id IS NULL`` (e.g. secrets findings) are
+    also out of scope here, mirroring the ``get_findings_for_control`` posture.
+    """
+    if not asset_ids:
+        return []
     rows = await session.execute(
         select(ComplianceControlMapping, FrameworkControl)
         .join(
@@ -182,7 +191,11 @@ async def get_controls_for_finding(
             (ComplianceControlMapping.framework == FrameworkControl.framework)
             & (ComplianceControlMapping.control_id == FrameworkControl.control_id),
         )
-        .where(ComplianceControlMapping.finding_id == finding_id)
+        .join(Finding, ComplianceControlMapping.finding_id == Finding.id)
+        .where(
+            ComplianceControlMapping.finding_id == finding_id,
+            Finding.asset_id.in_(asset_ids),
+        )
         .order_by(ComplianceControlMapping.framework, ComplianceControlMapping.control_id)
     )
     results = []
@@ -334,9 +347,7 @@ async def build_attestation_payload(
     }
 
 
-# ---------------------------------------------------------------------------
 # Write-side CRUD helpers (custom frameworks + custom controls)
-# ---------------------------------------------------------------------------
 
 
 async def create_framework(

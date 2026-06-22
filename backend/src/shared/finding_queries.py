@@ -25,9 +25,7 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-# ---------------------------------------------------------------------------
 # Finding CRUD
-# ---------------------------------------------------------------------------
 
 async def read_findings(
     session: AsyncSession,
@@ -68,7 +66,7 @@ async def read_dependency_finding_detail_by_key(
         )
         .join(Asset, Asset.id == Finding.asset_id)
         .where(
-            Finding.tool == "dependencies",
+            Finding.tool == "dependencies_scanning",
             Finding.asset_id.in_(asset_ids),
             Finding.identity_key == identity_key,
         )
@@ -128,7 +126,7 @@ async def upsert_finding(
 
     # Promote verification fields from `detail` into typed columns.
     v_verdict = detail.get("verdict")
-    v_evidence = detail.get("evidence_json")
+    v_evidence = detail.get("evidence")
     v_chain = detail.get("exploit_chain")
     v_meta = detail.get("verification_metadata")
 
@@ -149,7 +147,7 @@ async def upsert_finding(
         if v_verdict is not None:
             existing.verdict = v_verdict
         if v_evidence is not None:
-            existing.evidence_json = v_evidence
+            existing.evidence = v_evidence
         if v_chain is not None:
             existing.exploit_chain = v_chain
         if v_meta is not None:
@@ -191,7 +189,7 @@ async def upsert_finding(
             package_name=queryable["package_name"],
             engine=engine,
             verdict=v_verdict,
-            evidence_json=v_evidence,
+            evidence=v_evidence,
             exploit_chain=v_chain,
             verification_metadata=v_meta,
             first_seen_at=first_seen_at or now,
@@ -243,9 +241,7 @@ async def update_finding_state(
         finding.fixed_at = None
 
 
-# ---------------------------------------------------------------------------
 # Decision CRUD
-# ---------------------------------------------------------------------------
 
 async def read_decisions_for_asset(
     session: AsyncSession,
@@ -354,9 +350,7 @@ async def delete_decision(
     return result.rowcount > 0
 
 
-# ---------------------------------------------------------------------------
 # Event logging
-# ---------------------------------------------------------------------------
 
 async def insert_event(
     session: AsyncSession,
@@ -380,36 +374,7 @@ async def insert_event(
     ))
 
 
-# ---------------------------------------------------------------------------
-# Secrets review status
-# ---------------------------------------------------------------------------
-
-def set_secret_review_status(org: str, identity_key: str, review_status: str | None) -> None:
-    # Secrets have asset_id=NULL by design (they're scanner-emitted but don't
-    # bind to a specific repo asset). Match by (tool, identity_key) only.
-    # Multi-tenant isolation for secrets is intentionally deferred until a
-    # per-secret-source identity model is needed.
-    from src.db.helpers import run_db
-
-    async def _run(session: AsyncSession) -> None:
-        result = await session.execute(
-            select(Finding).where(
-                Finding.tool == "secrets",
-                Finding.asset_id.is_(None),
-                Finding.identity_key == identity_key,
-            )
-        )
-        finding = result.scalars().first()
-        if finding:
-            finding.review_status = review_status
-            finding.updated_at = _utcnow()
-
-    run_db(_run)
-
-
-# ---------------------------------------------------------------------------
 # Analytics (pure functions operating on query results)
-# ---------------------------------------------------------------------------
 
 def compute_severity_counts(rows: list[tuple[str, int]]) -> dict[str, int]:
     """Convert [(severity, count), ...] rows into a counts dict."""

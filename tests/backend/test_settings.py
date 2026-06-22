@@ -337,7 +337,7 @@ async def test_patch_account_rejects_wrong_current_password(client, isolated_con
     )
 
     response = client.patch(
-        "/api/v1/settings/account",
+        "/api/v1/account",
         json={
             "username": "ops-admin",
             "current_password": "wrong-password",
@@ -381,7 +381,7 @@ async def test_patch_account_updates_username_and_password(client, isolated_conf
     )
 
     response = client.patch(
-        "/api/v1/settings/account",
+        "/api/v1/account",
         json={
             "username": "security-admin",
             "current_password": "current-password",
@@ -655,7 +655,7 @@ async def test_get_rate_limit_uses_org_token_and_normalizes_response(client, iso
 
     monkeypatch.setattr(settings_router, "fetch_rate_limit", fake_fetch_rate_limit)
 
-    response = client.get("/api/v1/settings/orgs/Example-Org/rate-limit")
+    response = client.get("/api/v1/sources/github/Example-Org/rate-limit")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -780,32 +780,21 @@ def test_get_rate_limit_missing_saved_pat_returns_404(client, isolated_config):
         }
     )
 
-    response = client.get("/api/v1/settings/orgs/no-such-org/rate-limit")
+    response = client.get("/api/v1/sources/github/no-such-org/rate-limit")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "No PAT saved for no-such-org. Enter a token first."}
 
 
-def test_get_secrets_prerequisites_returns_no_runner_when_offline(client, isolated_config, monkeypatch):
-    """Prerequisites fail when no runner is online."""
-    response = client.get("/api/v1/settings/tools/secrets/prerequisites")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["runner_connected"] is False
-    assert payload["scanner_status"] == "no_runner"
-    assert payload["error"] is not None
-
-
 def test_get_roles_returns_seeded_roles(client):
-    response = client.get("/api/v1/settings/roles")
+    response = client.get("/api/v1/workspace/roles")
     assert response.status_code == 200
     payload = response.json()
     assert any(role["name"] == "Owner" for role in payload["roles"])
 
 def test_post_role_creates_custom_role(client):
     response = client.post(
-        "/api/v1/settings/roles",
+        "/api/v1/workspace/roles",
         json={
             "name": "Results Viewer",
             "description": "Read-only results role.",
@@ -826,12 +815,12 @@ def test_require_permission_uses_assigned_role_permissions(isolated_config, monk
 
     # Viewer should not be able to get roles
     viewer_client = make_authed_client(role="viewer", user_id="perm-test-viewer")
-    response = viewer_client.get("/api/v1/settings/roles")
+    response = viewer_client.get("/api/v1/workspace/roles")
     assert response.status_code == 403
 
     # Admin should be able to get roles
     admin_client = make_authed_client(role="admin", user_id="perm-test-admin")
-    response = admin_client.get("/api/v1/settings/roles")
+    response = admin_client.get("/api/v1/workspace/roles")
     assert response.status_code == 200
 
     # Custom role via roleId — create a user with the custom role_id set
@@ -886,5 +875,5 @@ def test_require_permission_uses_assigned_role_permissions(isolated_config, monk
         headers={"X-CSRF-Token": csrf_token},
     )
     # Using the custom roleId (viewer 'role' string but custom role_id) should allow access
-    response = custom_role_client.get("/api/v1/settings/roles")
+    response = custom_role_client.get("/api/v1/workspace/roles")
     assert response.status_code == 200

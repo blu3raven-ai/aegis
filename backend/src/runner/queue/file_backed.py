@@ -17,7 +17,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
-from src.runner.encryption import SENSITIVE_KEYS, encrypt_env_vars, decrypt_env_vars
+from src.runner.encryption import encrypt_env_vars, decrypt_env_vars
 from src.shared.paths import now_iso
 
 _DEFAULT_DIR = Path(os.environ.get("DATA_DIR", "/var/lib/aegis")) / "jobs"

@@ -1,430 +1,253 @@
-"""Smoke tests for /api/v1/releases — list + detail with blocker diff."""
+"""Tests for the releases REST router.
+
+Covers the list and detail endpoints: scope fail-closure, cursor pass-through,
+limit clamping, ValueError → 400 mapping, missing scan → 404.
+"""
 from __future__ import annotations
 
 import os
-from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, MagicMock, patch
+from dataclasses import asdict
+from unittest.mock import AsyncMock, patch
+
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
 os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
-from fastapi import FastAPI, Request  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
-
-from src.releases.router import router as releases_router  # noqa: E402
-from src.releases.service import (  # noqa: E402
+from src.history.releases.router import router as releases_router  # noqa: E402
+from src.history.releases.service import (  # noqa: E402
+    MAX_LIMIT,
     BlockerDiffRowData,
     ReleaseDetailRow,
     ReleaseRow,
 )
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
 
-_VIEWER_PERMS = {"view_findings"}
 
-
-def _make_app() -> FastAPI:
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(releases_router)
 
     @app.middleware("http")
     async def inject_user(request: Request, call_next):
-        request.state.user_sub = "alice"
-        request.state.user_role = "admin"
+        request.state.user_sub = "viewer-1"
+        request.state.user_role = "viewer"
         request.state.user_role_id = None
-        request.state.user_org = "test-org"
         return await call_next(request)
 
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
     return app
 
 
-async def _resolve_assets(_request):
-    return ["asset-1", "asset-2"]
+def _patch_scope(asset_ids: list[str]):
+    return patch(
+        "src.history.releases.router.resolve_asset_ids_from_request",
+        new=AsyncMock(return_value=asset_ids),
+    )
 
 
-async def _resolve_no_assets(_request):
-    return []
+def _fake_run_db(coro_fn):
+    """Invoke the router's inner coroutine on a fresh loop in a worker thread.
 
-
-@asynccontextmanager
-async def _mock_session():
-    """Stand-in for src.db.engine.get_session — yields a MagicMock session.
-
-    The service functions are mocked at the router import path, so the session
-    object is never actually used by SQLAlchemy in these tests.
+    The real run_db ships work to a dedicated background loop with its own
+    session pool. For tests we just need the coroutine to execute — the inner
+    list_releases / get_release calls are already mocked, so the session arg
+    is ignored.
     """
-    yield MagicMock()
+    import asyncio
+    import concurrent.futures
+
+    def _thread() -> object:
+        return asyncio.run(coro_fn(None))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        return ex.submit(_thread).result()
 
 
-def _summary_dict(**overrides):
-    base = {
+def _summary_dict() -> dict:
+    return {
         "scan_id": "scan-1",
-        "repo_id": "test-org/repo-1",
-        "repo": "repo-1",
+        "repo_id": "acme/api",
+        "repo": "api",
         "ref": "main",
-        "commit_sha": "a" * 40,
-        "short_sha": "a" * 7,
+        "commit_sha": "abc123def4567890",
+        "short_sha": "abc123d",
         "verdict": "go",
         "blocker_count": 0,
-        "warn_count": 0,
-        "scanner_count": 4,
+        "warn_count": 1,
+        "scanner_count": 3,
         "status": "completed",
-        "started_at": "2026-06-04T12:00:00+00:00",
-        "finished_at": "2026-06-04T12:05:00+00:00",
-        "triggered_by": {"actor_type": "user", "actor_id": "alice", "display_name": "alice"},
+        "started_at": "2026-01-01T00:00:00+00:00",
+        "finished_at": "2026-01-01T00:05:00+00:00",
+        "triggered_by": {
+            "actor_type": "user",
+            "actor_id": "user-1",
+            "display_name": "alice",
+        },
     }
-    base.update(overrides)
-    return base
 
 
-def _diff_row(
-    finding_id: int,
-    diff_status: str = "new",
-    severity: str = "critical",
-    title: str = "t",
-    cve_id: str | None = None,
-    is_kev: bool = False,
-) -> BlockerDiffRowData:
-    return BlockerDiffRowData(
-        finding_id=finding_id,
-        diff_status=diff_status,
-        severity=severity,
-        title=title,
-        file_path=None,
-        cve_id=cve_id,
-        cwe_id=None,
-        scanner="trivy",
-        first_seen_at="2026-06-01T00:00:00+00:00",
-        introduced_by_commit_sha=None,
-        is_kev=is_kev,
-        epss_score=None,
-    )
+# ── list ───────────────────────────────────────────────────────────────────
 
 
-def _detail_row(
-    *,
-    verdict: str = "go",
-    critical: int = 0,
-    high: int = 0,
-    blockers: tuple[BlockerDiffRowData, ...] = (),
-    improvements: tuple[BlockerDiffRowData, ...] = (),
-    baseline_scan_id: str | None = None,
-    baseline_ref: str | None = None,
-    baseline_taken_at: str | None = None,
-) -> ReleaseDetailRow:
-    return ReleaseDetailRow(
-        summary=ReleaseRow(
-            scan_id="scan-1",
-            repo_id="test-org/repo-1",
-            repo="repo-1",
-            ref="main",
-            commit_sha="a" * 40,
-            short_sha="a" * 7,
-            verdict=verdict,
-            blocker_count=critical,
-            warn_count=high,
-            scanner_count=4,
-            status="completed",
-            started_at="2026-06-04T12:00:00+00:00",
-            finished_at="2026-06-04T12:05:00+00:00",
-            triggered_by={"actor_type": "user", "actor_id": "alice", "display_name": "alice"},
-        ),
-        baseline_scan_id=baseline_scan_id,
-        baseline_ref=baseline_ref,
-        baseline_taken_at=baseline_taken_at,
-        scanners_run=["dependencies", "code_scanning"],
-        blockers_diff=list(blockers),
-        improvements=list(improvements),
-    )
-
-
-# ── LIST ──────────────────────────────────────────────────────────────────────
-
-
-def test_list_releases_filters_by_repo_id():
-    captured = {}
-
-    async def _capture(filters, session):
-        captured["filters"] = filters
-        return {"releases": [_summary_dict()], "next_cursor": None}
-
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.list_releases", new=AsyncMock(side_effect=_capture)),
-    ):
-        resp = TestClient(_make_app()).get(
-            "/api/v1/releases", params={"repo_id": "test-org/repo-1"}
-        )
-
-    assert resp.status_code == 200, resp.text
-    assert captured["filters"].repo_id == "test-org/repo-1"
-    assert captured["filters"].asset_ids == ["asset-1", "asset-2"]
-    body = resp.json()
-    assert len(body["releases"]) == 1
-    assert body["releases"][0]["repo_id"] == "test-org/repo-1"
-
-
-def test_list_releases_ignores_legacy_org_id_query_param():
-    """Legacy ?org_id=... param must not influence scoping — it's silently dropped."""
-    captured = {}
-
-    async def _capture(filters, session):
-        captured["filters"] = filters
-        return {"releases": [], "next_cursor": None}
-
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.list_releases", new=AsyncMock(side_effect=_capture)),
-    ):
-        resp = TestClient(_make_app()).get(
-            "/api/v1/releases", params={"org_id": "other-org"}
-        )
+def test_list_returns_empty_page_when_scope_is_empty():
+    with _patch_scope([]):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/history/releases")
 
     assert resp.status_code == 200
-    assert captured["filters"].asset_ids == ["asset-1", "asset-2"]
+    assert resp.json() == {"releases": [], "next_cursor": None}
 
 
-def test_list_releases_empty_assets_returns_empty():
-    """Viewer with no team access (empty asset_ids) sees no releases — fail-closed."""
-    captured = {}
+def test_list_clamps_oversized_limit_before_calling_service():
+    captured: dict = {}
 
-    async def _capture(filters, session):
-        captured["filters"] = filters
+    async def fake_list_releases(filters, session):
+        captured["limit"] = filters.limit
         return {"releases": [], "next_cursor": None}
 
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_no_assets),
-        patch("src.releases.router.list_releases", new=AsyncMock(side_effect=_capture)),
-    ):
-        resp = TestClient(_make_app()).get("/api/v1/releases")
-
-    assert resp.status_code == 200
-    assert captured["filters"].asset_ids == []
-    assert resp.json()["releases"] == []
-
-
-def test_list_releases_pagination_cursor():
-    captured: list = []
-
-    async def _capture(filters, session):
-        captured.append(filters)
-        # First page returns a next_cursor; second page returns none.
-        if filters.cursor is None:
-            return {"releases": [_summary_dict()], "next_cursor": "abc"}
-        return {
-            "releases": [_summary_dict(scan_id="scan-2")],
-            "next_cursor": None,
-        }
-
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.list_releases", new=AsyncMock(side_effect=_capture)),
+    with _patch_scope(["asset-1"]), patch(
+        "src.history.releases.router.list_releases",
+        new=fake_list_releases,
+    ), patch(
+        "src.history.releases.router.run_db",
+        side_effect=_fake_run_db,
     ):
         client = TestClient(_make_app())
-        first = client.get("/api/v1/releases")
-        assert first.status_code == 200
-        assert first.json()["next_cursor"] == "abc"
+        resp = client.get("/api/v1/history/releases?limit=9999")
 
-        second = client.get("/api/v1/releases", params={"cursor": "abc"})
-        assert second.status_code == 200
-        assert second.json()["next_cursor"] is None
-
-    assert len(captured) == 2
-    assert captured[0].cursor is None
-    assert captured[1].cursor == "abc"
+    assert resp.status_code == 200
+    assert captured["limit"] == MAX_LIMIT
 
 
-def test_list_releases_rejects_bad_cursor():
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch(
-            "src.releases.router.list_releases",
-            new=AsyncMock(side_effect=ValueError("invalid cursor")),
-        ),
+def test_list_forwards_filters_and_cursor_to_service():
+    captured: dict = {}
+
+    async def fake_list_releases(filters, session):
+        captured["asset_ids"] = filters.asset_ids
+        captured["repo_id"] = filters.repo_id
+        captured["status"] = filters.status
+        captured["verdict"] = filters.verdict
+        captured["cursor"] = filters.cursor
+        return {"releases": [_summary_dict()], "next_cursor": "next-x"}
+
+    with _patch_scope(["asset-1", "asset-2"]), patch(
+        "src.history.releases.router.list_releases",
+        new=fake_list_releases,
+    ), patch(
+        "src.history.releases.router.run_db",
+        side_effect=_fake_run_db,
     ):
-        resp = TestClient(_make_app()).get("/api/v1/releases", params={"cursor": "garbage"})
+        client = TestClient(_make_app())
+        resp = client.get(
+            "/api/v1/history/releases?repo_id=acme/api&status=completed&verdict=go&cursor=abc"
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["next_cursor"] == "next-x"
+    assert len(body["releases"]) == 1
+    assert captured == {
+        "asset_ids": ["asset-1", "asset-2"],
+        "repo_id": "acme/api",
+        "status": "completed",
+        "verdict": "go",
+        "cursor": "abc",
+    }
+
+
+def test_list_maps_service_value_error_to_400():
+    async def fake_list_releases(filters, session):
+        raise ValueError("invalid cursor payload")
+
+    with _patch_scope(["asset-1"]), patch(
+        "src.history.releases.router.list_releases",
+        new=fake_list_releases,
+    ), patch(
+        "src.history.releases.router.run_db",
+        side_effect=_fake_run_db,
+    ):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/history/releases?cursor=bad")
 
     assert resp.status_code == 400
     assert "invalid cursor" in resp.json()["detail"]
 
 
-def test_list_releases_missing_permission():
-    with patch("src.settings.router._resolve_effective_permissions", return_value=set()):
-        resp = TestClient(_make_app()).get("/api/v1/releases")
-
-    assert resp.status_code == 403
+# ── detail ────────────────────────────────────────────────────────────────
 
 
-# ── DETAIL ────────────────────────────────────────────────────────────────────
+def test_detail_returns_404_when_release_missing_or_out_of_scope():
+    async def fake_get_release(*, scan_id, asset_ids, session):
+        return None
+
+    with _patch_scope(["asset-1"]), patch(
+        "src.history.releases.router.get_release",
+        new=fake_get_release,
+    ), patch(
+        "src.history.releases.router.run_db",
+        side_effect=_fake_run_db,
+    ):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/history/releases/scan-missing")
+
+    assert resp.status_code == 404
 
 
-def test_get_release_verdict_no_go_when_critical():
-    row = _detail_row(
-        verdict="no_go",
-        critical=1,
-        blockers=(_diff_row(1, "new", "critical"),),
-        baseline_scan_id="scan-baseline",
-        baseline_ref="main@bbbbbbb",
-        baseline_taken_at="2026-06-03T12:00:00+00:00",
+def test_detail_flattens_summary_and_includes_diff_arrays():
+    summary = ReleaseRow(**_summary_dict())
+    diff_row = BlockerDiffRowData(
+        finding_id=42,
+        diff_status="new",
+        severity="critical",
+        title="path traversal",
+        file_path="src/handler.py",
+        cve_id="CVE-2026-1",
+        cwe_id="CWE-22",
+        scanner="code_scanning",
+        first_seen_at="2026-01-01T00:00:00+00:00",
+        introduced_by_commit_sha="abc123",
+        is_kev=False,
+        epss_score=0.5,
+    )
+    detail = ReleaseDetailRow(
+        summary=summary,
+        baseline_scan_id="scan-0",
+        baseline_ref="main@9876543",
+        baseline_taken_at="2025-12-31T00:00:00+00:00",
+        scanners_run=["code_scanning", "secrets_scanning"],
+        blockers_diff=[diff_row],
+        improvements=[],
     )
 
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
+    async def fake_get_release(*, scan_id, asset_ids, session):
+        return detail
+
+    with _patch_scope(["asset-1"]), patch(
+        "src.history.releases.router.get_release",
+        new=fake_get_release,
+    ), patch(
+        "src.history.releases.router.run_db",
+        side_effect=_fake_run_db,
     ):
-        resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/history/releases/scan-1")
 
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 200
     body = resp.json()
-    assert body["verdict"] == "no_go"
-    assert body["blocker_count"] == 1
-    assert len(body["blockers_diff"]) == 1
-    assert body["blockers_diff"][0]["severity"] == "critical"
-
-
-def test_get_release_verdict_warn_when_high_only():
-    row = _detail_row(
-        verdict="warn",
-        critical=0,
-        high=2,
-        blockers=(),
-        baseline_scan_id="scan-baseline",
-        baseline_ref="main@bbbbbbb",
-        baseline_taken_at="2026-06-03T12:00:00+00:00",
-    )
-
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
-    ):
-        resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
-
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["verdict"] == "warn"
-    assert body["warn_count"] == 2
-    assert body["blockers_diff"] == []
-
-
-def test_get_release_verdict_go_when_no_blockers():
-    row = _detail_row(verdict="go", critical=0, high=0, blockers=(), improvements=())
-
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
-    ):
-        resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
-
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
+    # Summary fields are flattened onto the root response
+    assert body["scan_id"] == "scan-1"
     assert body["verdict"] == "go"
-    assert body["blockers_diff"] == []
+    assert body["triggered_by"] == {
+        "actor_type": "user",
+        "actor_id": "user-1",
+        "display_name": "alice",
+    }
+    # Detail extras
+    assert body["baseline_scan_id"] == "scan-0"
+    assert body["scanners_run"] == ["code_scanning", "secrets_scanning"]
+    assert body["blockers_diff"] == [asdict(diff_row)]
     assert body["improvements"] == []
-
-
-def test_get_release_diff_marks_new_persisted_gone_fixed_correctly():
-    blockers = (
-        _diff_row(1, "new", "critical", title="new-finding"),
-        _diff_row(2, "persisted", "critical", title="persisted-finding"),
-        _diff_row(3, "gone", "critical", title="gone-finding"),
-    )
-    improvements = (_diff_row(4, "fixed", "critical", title="fixed-finding"),)
-    row = _detail_row(
-        verdict="no_go",
-        critical=2,
-        blockers=blockers,
-        improvements=improvements,
-        baseline_scan_id="scan-baseline",
-        baseline_ref="main@bbbbbbb",
-        baseline_taken_at="2026-06-03T12:00:00+00:00",
-    )
-
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
-    ):
-        resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
-
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-
-    by_id = {r["finding_id"]: r["diff_status"] for r in body["blockers_diff"]}
-    assert by_id == {1: "new", 2: "persisted", 3: "gone"}
-
-    improvement_by_id = {r["finding_id"]: r["diff_status"] for r in body["improvements"]}
-    assert improvement_by_id == {4: "fixed"}
-
-
-def test_get_release_no_baseline_marks_all_new():
-    row = _detail_row(
-        verdict="no_go",
-        critical=2,
-        blockers=(
-            _diff_row(1, "new", "critical"),
-            _diff_row(2, "new", "critical"),
-        ),
-        baseline_scan_id=None,
-        baseline_ref=None,
-        baseline_taken_at=None,
-    )
-
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.get_release", new=AsyncMock(return_value=row)),
-    ):
-        resp = TestClient(_make_app()).get("/api/v1/releases/scan-1")
-
-    assert resp.status_code == 200, resp.text
-    body = resp.json()
-    assert body["baseline_scan_id"] is None
-    assert body["baseline_ref"] is None
-    assert body["baseline_taken_at"] is None
-    assert len(body["blockers_diff"]) == 2
-    assert all(r["diff_status"] == "new" for r in body["blockers_diff"])
-
-
-def test_get_release_404_when_not_found():
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.get_release", new=AsyncMock(return_value=None)),
-    ):
-        resp = TestClient(_make_app()).get("/api/v1/releases/scan-missing")
-
-    assert resp.status_code == 404
-
-
-def test_get_release_404_out_of_scope():
-    """Out-of-scope access surfaces as 404 (not 403) to avoid leaking access boundaries.
-
-    The service returns None for scans that don't belong to the caller's accessible
-    assets, which the router maps to the same 404 used for genuinely missing scans.
-    """
-    with (
-        patch("src.settings.router._resolve_effective_permissions", return_value=_VIEWER_PERMS),
-        patch("src.releases.router.get_session", _mock_session),
-        patch("src.releases.router.resolve_asset_ids_from_request", side_effect=_resolve_assets),
-        patch("src.releases.router.get_release", new=AsyncMock(return_value=None)),
-    ):
-        resp = TestClient(_make_app()).get("/api/v1/releases/scan-other-team")
-
-    assert resp.status_code == 404

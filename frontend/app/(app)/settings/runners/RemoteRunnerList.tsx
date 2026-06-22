@@ -1,6 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
+import { Button } from "@/components/ui/Button"
+import { approveRunner } from "@/lib/client/settings/use-runners"
 import type { Runner } from "./types"
 
 const STATUS_DOT: Record<string, string> = {
@@ -40,7 +43,9 @@ function MiniHealthBar({ percent }: { percent: number | null | undefined }) {
 
 interface RemoteRunnerListProps {
   runners: Runner[]
+  canApprove: boolean
   onRowClick: (runner: Runner) => void
+  onChange: () => void
 }
 
 /**
@@ -48,7 +53,7 @@ interface RemoteRunnerListProps {
  * top border to separate from the status header but has no outer rounded
  * border of its own.
  */
-export function RemoteRunnerList({ runners, onRowClick }: RemoteRunnerListProps) {
+export function RemoteRunnerList({ runners, canApprove, onRowClick, onChange }: RemoteRunnerListProps) {
   return (
     <div className="overflow-x-auto border-t border-[var(--color-border)]">
       <Table className="table-fixed">
@@ -56,9 +61,9 @@ export function RemoteRunnerList({ runners, onRowClick }: RemoteRunnerListProps)
           <col className="w-[25%]" />
           <col className="w-[15%]" />
           <col className="w-[20%]" />
-          <col className="w-[20%]" />
           <col className="w-[15%]" />
-          <col className="w-8" />
+          <col className="w-[15%]" />
+          <col className="w-[10%]" />
         </colgroup>
         <Thead>
           <Tr>
@@ -67,7 +72,7 @@ export function RemoteRunnerList({ runners, onRowClick }: RemoteRunnerListProps)
             <Th className="py-2.5 whitespace-nowrap hidden sm:table-cell">Platform</Th>
             <Th className="py-2.5 whitespace-nowrap hidden md:table-cell">Health</Th>
             <Th className="py-2.5 whitespace-nowrap hidden md:table-cell">Concurrency</Th>
-            <Th className="py-2.5 w-8" />
+            <Th className="py-2.5" />
           </Tr>
         </Thead>
         <Tbody divided={false}>
@@ -100,21 +105,69 @@ export function RemoteRunnerList({ runners, onRowClick }: RemoteRunnerListProps)
               <Td className="hidden tabular-nums text-[var(--color-text-secondary)] md:table-cell">
                 {r.maxConcurrent ?? "—"}
               </Td>
-              <Td className="text-[var(--color-text-secondary)]">
-                <svg
-                  className="h-4 w-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
+              <Td>
+                <RowActions runner={r} canApprove={canApprove} onChange={onChange} />
               </Td>
             </Tr>
           ))}
         </Tbody>
       </Table>
     </div>
+  )
+}
+
+
+/**
+ * Per-row actions. Pending runners get a quick inline Approve so admins
+ * don't have to drill into the detail page just to flip the gate. Other
+ * statuses fall back to the chevron — the detail page has the full
+ * lifecycle controls (Revoke / Rotate / Delete).
+ */
+function RowActions({
+  runner,
+  canApprove,
+  onChange,
+}: {
+  runner: Runner
+  canApprove: boolean
+  onChange: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+
+  if (runner.status === "pending_approval" && canApprove) {
+    return (
+      <Button
+        variant="primary"
+        size="xs"
+        isLoading={busy}
+        disabled={busy}
+        onClick={async (e) => {
+          e.stopPropagation()
+          setBusy(true)
+          try {
+            await approveRunner(runner.id)
+            onChange()
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        Approve
+      </Button>
+    )
+  }
+
+  return (
+    <span className="flex justify-end text-[var(--color-text-secondary)]">
+      <svg
+        className="h-4 w-4"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path d="M9 18l6-6-6-6" />
+      </svg>
+    </span>
   )
 }

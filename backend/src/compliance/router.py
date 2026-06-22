@@ -1,21 +1,28 @@
-"""REST endpoints for compliance framework mapping."""
+"""REST endpoints for compliance frameworks: catalog reads, framework/control CRUD, and PDF attestations."""
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from src.audit_log.recorder import ActorInfo, get_recorder
 from src.compliance.models import (
+    ComplianceFindingBriefResponse,
+    ComplianceFrameworkBrief,
     ControlCreate,
+    ControlFindingsResponse,
+    ControlMappingResponse,
+    ControlReadItem,
     ControlResponse,
     ControlUpdate,
-    FrameworkControlSchema,
+    FindingControlsResponse,
+    FrameworkControlsList,
     FrameworkCreate,
     FrameworkResponse,
+    FrameworkSummaryResponse,
+    FrameworksList,
     FrameworkUpdate,
 )
 from src.compliance.service import (
@@ -40,8 +47,9 @@ from src.compliance.service import (
 )
 from src.db.helpers import run_db
 from src.exports.pdf import TEMPLATE_DIR, render_pdf
-from src.settings.router import require_permission
-from src.shared.scope import resolve_asset_ids_from_request
+from src.authz.enforcement.dependencies import Permission
+from src.authz.enforcement.scope import resolve_asset_ids_from_request
+from src.authz.permissions.catalog import MANAGE_SETTINGS, VIEW_FINDINGS
 
 logger = logging.getLogger(__name__)
 
@@ -55,48 +63,169 @@ _jinja_env = Environment(
 )
 
 
-@router.get("/frameworks")
-async def get_frameworks() -> list[dict[str, str]]:
-    """List supported compliance frameworks."""
-    return run_db(list_frameworks)
+@router.get(
+    "/frameworks",
+    response_model=FrameworksList,
+    summary="List all registered compliance frameworks",
+)
+async def list_frameworks_handler(
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> FrameworksList:
+    async def _query(session):
+        return await list_frameworks(session)
+
+    rows = run_db(_query)
+    return FrameworksList(
+        frameworks=[ComplianceFrameworkBrief(**row) for row in rows],
+    )
 
 
-@router.get("/frameworks/{framework}/controls")
-def get_controls(framework: str) -> list[dict[str, Any]]:
-    """List all controls in a given framework."""
+@router.get(
+    "/findings/{finding_id}/controls",
+    response_model=FindingControlsResponse,
+    summary="List control mappings for a finding",
+)
+async def get_finding_controls_handler(
+    finding_id: int,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> FindingControlsResponse:
+    asset_ids = await resolve_asset_ids_from_request(request)
+
+    async def _query(session):
+        return await get_controls_for_finding(
+            session, finding_id, asset_ids=asset_ids,
+        )
+
+    mappings = run_db(_query)
+    return FindingControlsResponse(
+        finding_id=finding_id,
+        mappings=[
+            ControlMappingResponse(
+                framework=m["framework"],
+                control_id=m["control_id"],
+                title=m["title"],
+                confidence=m["confidence"],
+                rationale=m["rationale"],
+            )
+            for m in mappings
+        ],
+    )
+
+
+@router.get(
+    "/frameworks/{framework}/controls",
+    response_model=FrameworkControlsList,
+    summary="List reference controls for a framework",
+)
+async def list_framework_controls_handler(
+    framework: str,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> FrameworkControlsList:
     async def _query(session):
         if await get_framework(session, framework) is None:
-            raise HTTPException(status_code=404, detail=f"Unknown framework: {framework}")
+            return None
         rows = await list_controls_for_framework(session, framework)
-        return [FrameworkControlSchema.model_validate(r).model_dump() for r in rows]
+        return [
+            ControlReadItem(
+                id=r.id,
+                framework=r.framework,
+                control_id=r.control_id,
+                title=r.title,
+                description=r.description,
+                category=r.category,
+            )
+            for r in rows
+        ]
 
-    return run_db(_query)
+    rows = run_db(_query)
+    if rows is None:
+        raise HTTPException(status_code=404, detail=f"Unknown framework: {framework}")
+    return FrameworkControlsList(controls=rows)
 
 
-@router.get("/frameworks/{framework}/summary")
-async def get_summary(framework: str, request: Request) -> dict[str, Any]:
-    """Return per-control finding counts scoped to the caller's accessible assets."""
-    require_permission(request, "view_findings")
+@router.get(
+    "/frameworks/{framework}/summary",
+    response_model=FrameworkSummaryResponse,
+    summary="Summarise a framework's controls with finding counts",
+)
+async def get_framework_summary_handler(
+    framework: str,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> FrameworkSummaryResponse:
     asset_ids = await resolve_asset_ids_from_request(request)
 
     async def _query(session):
         fw = await get_framework(session, framework)
         if fw is None:
-            raise HTTPException(status_code=404, detail=f"Unknown framework: {framework}")
+            return None
         items = await get_framework_summary(session, framework, asset_ids=asset_ids)
-        return {
-            "framework": framework,
-            "label": fw.label,
-            "controls": [item.model_dump() for item in items],
-        }
+        return fw, items
 
-    return run_db(_query)
+    result = run_db(_query)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Unknown framework: {framework}")
+    fw, items = result
+    return FrameworkSummaryResponse(
+        framework=framework,
+        label=fw.label,
+        controls=items,
+    )
+
+
+@router.get(
+    "/frameworks/{framework}/controls/{control_id}/findings",
+    response_model=ControlFindingsResponse,
+    summary="List open findings mapped to a control",
+)
+async def get_control_findings_handler(
+    framework: str,
+    control_id: str,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> ControlFindingsResponse:
+    asset_ids = await resolve_asset_ids_from_request(request)
+
+    async def _query(session):
+        if await get_framework(session, framework) is None:
+            return None
+        return await get_findings_for_control(
+            session, framework, control_id, asset_ids=asset_ids,
+        )
+
+    briefs = run_db(_query)
+    if briefs is None:
+        raise HTTPException(status_code=404, detail=f"Unknown framework: {framework}")
+    return ControlFindingsResponse(
+        framework=framework,
+        control_id=control_id,
+        findings=[
+            ComplianceFindingBriefResponse(
+                id=b.id,
+                tool=b.tool,
+                org=b.org,
+                repo=b.repo,
+                severity=b.severity,
+                state=b.state,
+                identity_key=b.identity_key,
+                confidence=b.confidence,
+                rationale=b.rationale,
+            )
+            for b in briefs
+        ],
+    )
 
 
 @router.get("/frameworks/{framework}/attestation.pdf")
-async def get_attestation_pdf(framework: str, request: Request) -> Response:
+async def get_attestation_pdf(
+    framework: str,
+    request: Request,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> Response:
     """Stream the framework's attestation as a PDF."""
-    require_permission(request, "view_findings")
     asset_ids = await resolve_asset_ids_from_request(request)
 
     async def _query(session):
@@ -127,42 +256,7 @@ async def get_attestation_pdf(framework: str, request: Request) -> Response:
     )
 
 
-@router.get("/controls/{framework}/{control_id}/findings")
-async def get_findings_by_control(
-    framework: str, control_id: str, request: Request
-) -> dict[str, Any]:
-    """Return open findings mapped to a specific control, scoped to the caller's accessible assets."""
-    require_permission(request, "view_findings")
-    asset_ids = await resolve_asset_ids_from_request(request)
-
-    async def _query(session):
-        if await get_framework(session, framework) is None:
-            raise HTTPException(status_code=404, detail=f"Unknown framework: {framework}")
-        briefs = await get_findings_for_control(
-            session, framework, control_id, asset_ids=asset_ids
-        )
-        return {
-            "framework": framework,
-            "control_id": control_id,
-            "findings": [b.model_dump() for b in briefs],
-        }
-
-    return run_db(_query)
-
-
-@router.get("/findings/{finding_id}/controls")
-def get_controls_for_finding_endpoint(finding_id: int) -> dict[str, Any]:
-    """Return all compliance controls a finding violates."""
-    async def _query(session):
-        return await get_controls_for_finding(session, finding_id)
-
-    mappings = run_db(_query)
-    return {"finding_id": finding_id, "controls": mappings}
-
-
-# ---------------------------------------------------------------------------
 # Write endpoints: custom frameworks and controls
-# ---------------------------------------------------------------------------
 
 
 def _identify_caller(request: Request) -> str:
@@ -195,8 +289,11 @@ def _record_audit(
     response_model=FrameworkResponse,
     summary="Create a custom framework",
 )
-async def post_framework(body: FrameworkCreate, request: Request) -> FrameworkResponse:
-    require_permission(request, "manage_settings")
+async def post_framework(
+    body: FrameworkCreate,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> FrameworkResponse:
     created_by = _identify_caller(request)
 
     async def _query(session):
@@ -230,9 +327,11 @@ async def post_framework(body: FrameworkCreate, request: Request) -> FrameworkRe
     summary="Update a custom framework",
 )
 async def patch_framework(
-    framework_id: str, body: FrameworkUpdate, request: Request,
+    framework_id: str,
+    body: FrameworkUpdate,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
 ) -> FrameworkResponse:
-    require_permission(request, "manage_settings")
     patch_fields = body.model_dump(exclude_unset=True)
     if not patch_fields:
         raise HTTPException(status_code=422, detail="empty patch body")
@@ -268,9 +367,11 @@ async def patch_framework(
     status_code=204,
     summary="Delete a custom framework",
 )
-async def del_framework(framework_id: str, request: Request) -> None:
-    require_permission(request, "manage_settings")
-
+async def del_framework(
+    framework_id: str,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> None:
     async def _query(session):
         try:
             await delete_framework(session, framework_id)
@@ -295,9 +396,11 @@ async def del_framework(framework_id: str, request: Request) -> None:
     summary="Add a control to a custom framework",
 )
 async def post_control(
-    framework_id: str, body: ControlCreate, request: Request,
+    framework_id: str,
+    body: ControlCreate,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
 ) -> ControlResponse:
-    require_permission(request, "manage_settings")
     created_by = _identify_caller(request)
 
     async def _query(session):
@@ -337,9 +440,12 @@ async def post_control(
     summary="Update a custom-framework control",
 )
 async def patch_control(
-    framework_id: str, control_id: str, body: ControlUpdate, request: Request,
+    framework_id: str,
+    control_id: str,
+    body: ControlUpdate,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
 ) -> ControlResponse:
-    require_permission(request, "manage_settings")
     patch_fields = body.model_dump(exclude_unset=True)
     if not patch_fields:
         raise HTTPException(status_code=422, detail="empty patch body")
@@ -379,9 +485,12 @@ async def patch_control(
     status_code=204,
     summary="Delete a custom-framework control",
 )
-async def del_control(framework_id: str, control_id: str, request: Request) -> None:
-    require_permission(request, "manage_settings")
-
+async def del_control(
+    framework_id: str,
+    control_id: str,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> None:
     async def _query(session):
         try:
             await delete_control(session, framework_id, control_id)

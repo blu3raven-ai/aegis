@@ -40,11 +40,11 @@ def test_auth_gate_passes_health_endpoints():
 
 
 def test_auth_login_endpoint_reachable_without_session():
-    """/auth/login must be public so users can log in."""
+    """/api/v1/auth/login must be public so users can log in."""
     from src.main import app
     client = TestClient(app)
     # POST with no body returns 422 (Pydantic validation), NOT 401
-    r = client.post("/auth/login")
+    r = client.post("/api/v1/auth/login")
     assert r.status_code == 422
 
 

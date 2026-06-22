@@ -1,0 +1,159 @@
+"""Tests for building backend-match findings from an asset's SBOM components.
+
+Verifies the produced finding shape and, critically, that running the findings
+through the existing lifecycle resolves to the SAME asset the components belong
+to (no duplicate asset rows).
+"""
+from __future__ import annotations
+
+import uuid
+
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from src.db.engine import DATABASE_URL
+from src.db.models import Asset, Finding, SbomComponent
+from src.osv.store import OsvStore
+
+
+def _adv(adv_id, ecosystem, name, fixed, *, cve=None, severity="HIGH"):
+    return {
+        "id": adv_id,
+        "summary": f"{name} vuln",
+        "details": f"{name} has a flaw",
+        "aliases": [cve] if cve else [],
+        "severity": [{"type": "CVSS_V3", "score": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}],
+        "database_specific": {"severity": severity},
+        "references": [{"type": "WEB", "url": f"https://example.test/{adv_id}"}],
+        "published": "2026-06-01T00:00:00Z",
+        "modified": "2026-06-10T00:00:00Z",
+        "affected": [{
+            "package": {"name": name, "ecosystem": ecosystem},
+            "ranges": [{"type": "SEMVER", "events": [{"introduced": "0"}, {"fixed": fixed}]}],
+        }],
+    }
+
+
+_BODIES = {
+    "GHSA-lodash": _adv("GHSA-lodash", "npm", "lodash", "4.17.21", cve="CVE-2021-23337"),
+    "PYSEC-req": _adv("PYSEC-req", "PyPI", "requests", "2.31.0", severity="MODERATE"),
+}
+
+
+async def _new_session():
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    return engine, factory
+
+
+@pytest.mark.asyncio
+async def test_build_and_roundtrip_to_existing_asset(monkeypatch):
+    store = OsvStore()
+    monkeypatch.setattr("src.osv.store._upload_blob", lambda *a, **k: None)
+    # Lifecycle offloads "fat" detail fields to MinIO; the isolated-DB test
+    # harness has no object store, so stub the blob write.
+    monkeypatch.setattr("src.shared.finding_detail_blob.put_detail_blob", lambda *a, **k: None)
+    # The builder reads advisory bodies from MinIO; serve them from memory.
+    monkeypatch.setattr(
+        "src.osv.sca_findings._download_blob",
+        lambda key, bucket=None: __import__("json").dumps(
+            _BODIES[key.split("/")[-1].removesuffix(".json")]
+        ).encode(),
+    )
+    await store.upsert_advisories([_BODIES["GHSA-lodash"]], ecosystem="npm")
+    await store.upsert_advisories([_BODIES["PYSEC-req"]], ecosystem="PyPI")
+
+    asset_id = str(uuid.uuid4())
+    engine, factory = await _new_session()
+    try:
+        async with factory() as s:
+            s.add(Asset(
+                id=asset_id, type="repo", source="source_connection",
+                external_ref="github:acme/app", display_name="acme/app", asset_metadata={},
+            ))
+            for purl, name, ver, eco in [
+                ("pkg:npm/lodash@4.17.20", "lodash", "4.17.20", "npm"),
+                ("pkg:pypi/requests@2.30.0", "requests", "2.30.0", "pypi"),
+                ("pkg:npm/leftpad@1.0.0", "leftpad", "1.0.0", "npm"),  # no advisory
+            ]:
+                s.add(SbomComponent(
+                    asset_id=asset_id, purl=purl, name=name, version=ver, ecosystem=eco,
+                ))
+            await s.commit()
+
+        from src.osv.sca_findings import build_backend_match_findings
+        async with factory() as s:
+            raw = await build_backend_match_findings(
+                s, asset_id=asset_id, external_ref="github:acme/app", kind="dependencies",
+            )
+    finally:
+        await engine.dispose()
+
+    by_pkg = {f["dependency"]["package"]["name"]: f for f in raw}
+    assert set(by_pkg) == {"lodash", "requests"}
+    lod = by_pkg["lodash"]
+    assert lod["security_advisory"]["ghsa_id"] == "GHSA-lodash"
+    assert lod["security_advisory"]["cve_id"] == "CVE-2021-23337"
+    assert lod["security_advisory"]["severity"] == "high"
+    assert lod["security_vulnerability"]["first_patched_version"] == {"identifier": "4.17.21"}
+    assert lod["current_version"] == "4.17.20"
+    assert lod["repository"] == {"name": "app", "full_name": "acme/app"}
+    assert lod["match_source"] == "backend_match"
+    assert by_pkg["requests"]["security_advisory"]["severity"] == "medium"
+
+    # Asset round-trip: the lifecycle hook must reproduce the asset's exact
+    # external_ref from the built finding, so apply_lifecycle attaches to the
+    # existing asset instead of creating a duplicate.
+    from src.shared.lifecycle import ScanContext
+    from src.dependencies.lifecycle import dependencies_hooks
+
+    ctx = ScanContext(tool="dependencies_scanning", org="acme", run_id="osv-1", source_type="github")
+    assert dependencies_hooks.canonical_external_ref(ctx, lod) == ("github:acme/app", "repo")
+    # identity key is stable + advisory-specific
+    assert dependencies_hooks.compute_identity_key(lod) == "app::lodash::npm::GHSA-lodash::"
+
+
+@pytest.mark.asyncio
+async def test_container_findings_roundtrip_to_image_asset(monkeypatch):
+    body = _adv("GHSA-zlib", "Alpine", "zlib", "1.2.13-r1", cve="CVE-2022-37434")
+    store = OsvStore()
+    monkeypatch.setattr("src.osv.store._upload_blob", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "src.osv.sca_findings._download_blob",
+        lambda key, bucket=None: __import__("json").dumps(body).encode(),
+    )
+    await store.upsert_advisories([body], ecosystem="Alpine")
+
+    asset_id = str(uuid.uuid4())
+    engine, factory = await _new_session()
+    try:
+        async with factory() as s:
+            s.add(Asset(
+                id=asset_id, type="image", source="source_connection",
+                external_ref="ghcr:acme/app:1.2.3", display_name="acme/app:1.2.3", asset_metadata={},
+            ))
+            s.add(SbomComponent(
+                asset_id=asset_id, purl="pkg:apk/alpine/zlib@1.2.13-r0",
+                name="zlib", version="1.2.13-r0", ecosystem="apk",
+            ))
+            await s.commit()
+
+        from src.osv.sca_findings import build_backend_match_findings
+        async with factory() as s:
+            raw = await build_backend_match_findings(
+                s, asset_id=asset_id, external_ref="ghcr:acme/app:1.2.3", kind="container",
+            )
+    finally:
+        await engine.dispose()
+
+    assert len(raw) == 1
+    f = raw[0]
+    assert f["imageName"] == "acme/app" and f["imageTag"] == "1.2.3"
+    assert f["dependency"]["package"]["name"] == "zlib"
+    assert f["security_advisory"]["ghsa_id"] == "GHSA-zlib"
+
+    from src.shared.lifecycle import ScanContext
+    from src.containers.lifecycle import container_scanning_hooks
+
+    ctx = ScanContext(tool="container_scanning", org="acme", run_id="osv-1", source_type="ghcr")
+    assert container_scanning_hooks.canonical_external_ref(ctx, f) == ("ghcr:acme/app:1.2.3", "image")

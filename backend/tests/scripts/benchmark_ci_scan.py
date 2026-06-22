@@ -1,6 +1,6 @@
 """End-to-end timing for a CI-triggered scan.
 
-Submits a scan via /api/v1/scans/trigger and polls the scan run until terminal
+Submits a scan via /api/v1/scans/ci and polls the scan run until terminal
 status, measuring wall-clock time across submit / queued / running / completed.
 
 Usage:
@@ -41,7 +41,7 @@ def submit_scan(*, aegis_url, api_key, source_id, commit_sha, branch, pr_number)
 
     t0 = time.monotonic()
     resp = httpx.post(
-        f"{aegis_url}/api/v1/scans/trigger",
+        f"{aegis_url}/api/v1/scans/ci",
         json=body,
         headers={"Authorization": f"Bearer {api_key}"},
         timeout=30.0,

@@ -3,7 +3,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.auth.redirects import LegacyRedirectMiddleware
+from src.auth.authentication.redirects import LegacyRedirectMiddleware
 
 REDIRECT_CASES = [
     ("/settings/sources/code-repositories", "/sources/code-repositories"),
@@ -12,17 +12,9 @@ REDIRECT_CASES = [
     ("/settings/sources/container-images/def-456", "/sources/container-registry/def-456"),
     ("/settings/sources/ci-cd-pipelines", "/sources/code-repositories"),
     ("/settings/sources/ci-cd-pipelines/x/y/z", "/sources/code-repositories"),
-    ("/settings/dependencies", "/dependencies/dashboard?tab=settings"),
-    ("/settings/containers", "/containers/dashboard?tab=settings"),
-    ("/settings/code", "/code/dashboard?tab=settings"),
-    ("/settings/secrets", "/secrets/dashboard?tab=settings"),
 
     # Trailing-slash variants — Next.js used /?$ optional slash too
-    ("/settings/dependencies/", "/dependencies/dashboard?tab=settings"),
     ("/settings/sources/code-repositories/", "/sources/code-repositories"),
-
-    # Query string on legacy URL — Next.js drops inbound query when destination has its own
-    ("/settings/dependencies?foo=bar", "/dependencies/dashboard?tab=settings"),
 
     # Query string on the :id variant — destination keeps the id, drops the query
     ("/settings/sources/code-repositories/abc?ref=link", "/sources/code-repositories/abc"),

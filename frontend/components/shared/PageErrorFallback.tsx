@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, type ReactNode } from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/Button"
+import { LinkButton } from "@/components/ui/LinkButton"
 
 interface PageErrorFallbackProps {
   /** The error thrown inside the route. Logged to the console on mount. */
@@ -22,10 +22,7 @@ const DEFAULT_SECONDARY = { href: "/", label: "Go home" }
 
 /**
  * Centered "Something went wrong" panel used by every (app)/**\/error.tsx
- * boundary so the same chrome doesn't drift across 10+ copies. The
- * canonical Button primitive is wired for the primary "Try again" CTA; the
- * secondary action stays a next/link Link styled to match the Button
- * secondary geometry so middle-click / open-in-new-tab semantics survive.
+ * boundary so the same chrome doesn't drift across 10+ copies.
  */
 export function PageErrorFallback({
   error,
@@ -65,12 +62,9 @@ export function PageErrorFallback({
         <Button variant="primary" size="md" onClick={reset}>
           Try again
         </Button>
-        <Link
-          href={secondaryAction.href}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 text-sm font-semibold text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
-        >
+        <LinkButton href={secondaryAction.href} variant="secondary" size="md">
           {secondaryAction.label}
-        </Link>
+        </LinkButton>
       </div>
     </div>
   )

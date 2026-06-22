@@ -1,7 +1,7 @@
 /**
  * TypeScript client for the webhook signing secrets REST API (Phase 44).
  *
- * Endpoints: /api/v1/notification-channels/{id}/signing-secret
+ * Endpoints: /api/v1/notifications/destinations/{id}/signing-secret
  */
 
 import { apiClient } from "./api-client.ts"
@@ -21,7 +21,7 @@ export interface RotateSecretResponse {
   notice: string
 }
 
-const BASE = "/api/v1/notification-channels"
+const BASE = "/api/v1/notifications/destinations"
 
 export async function listSigningSecrets(destId: number): Promise<SigningSecretMeta[]> {
   const data = await apiClient<{ secrets: SigningSecretMeta[] }>(

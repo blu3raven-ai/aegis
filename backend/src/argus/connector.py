@@ -511,7 +511,6 @@ class NullArgusConnector(ArgusConnector):
         return []
 
 
-# ── factory ───────────────────────────────────────────────────────────────────
 
 def get_argus_connector() -> ArgusConnector:
     """Return a real ArgusConnector if env is configured, else NullArgusConnector."""
@@ -522,7 +521,6 @@ def get_argus_connector() -> ArgusConnector:
     return NullArgusConnector()
 
 
-# ── internal helpers ──────────────────────────────────────────────────────────
 
 class _ArgusError(Exception):
     """Base class for Argus connector errors."""

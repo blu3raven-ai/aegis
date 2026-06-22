@@ -59,8 +59,8 @@ class TestJobsProcessedCounter:
         counter = _make_counter(
             "aegis_test_jobs_processed_total", ["scanner_type", "status"], reg
         )
-        counter.labels(scanner_type="dependencies", status="success").inc()
-        val = _sample_value(counter, {"scanner_type": "dependencies", "status": "success"})
+        counter.labels(scanner_type="dependencies_scanning", status="success").inc()
+        val = _sample_value(counter, {"scanner_type": "dependencies_scanning", "status": "success"})
         assert val == 1.0
 
     def test_increments_on_failure(self) -> None:
@@ -77,12 +77,12 @@ class TestJobsProcessedCounter:
         counter = _make_counter(
             "aegis_test_multi_scanner_total", ["scanner_type", "status"], reg
         )
-        counter.labels(scanner_type="dependencies", status="success").inc()
-        counter.labels(scanner_type="dependencies", status="success").inc()
-        counter.labels(scanner_type="secrets", status="success").inc()
+        counter.labels(scanner_type="dependencies_scanning", status="success").inc()
+        counter.labels(scanner_type="dependencies_scanning", status="success").inc()
+        counter.labels(scanner_type="secret_scanning", status="success").inc()
 
-        deps_val = _sample_value(counter, {"scanner_type": "dependencies", "status": "success"})
-        secrets_val = _sample_value(counter, {"scanner_type": "secrets", "status": "success"})
+        deps_val = _sample_value(counter, {"scanner_type": "dependencies_scanning", "status": "success"})
+        secrets_val = _sample_value(counter, {"scanner_type": "secret_scanning", "status": "success"})
         assert deps_val == 2.0
         assert secrets_val == 1.0
 
@@ -99,15 +99,15 @@ class TestJobDurationHistogram:
             reg,
             buckets=(1, 5, 10, 60),
         )
-        hist.labels(scanner_type="dependencies").observe(3.0)
+        hist.labels(scanner_type="dependencies_scanning").observe(3.0)
 
         # Check _sum sample
         samples = {s.name: s.value for s in hist.collect()[0].samples
-                   if s.labels == {"scanner_type": "dependencies", "le": "+Inf"}
-                   or s.name.endswith("_sum") and s.labels == {"scanner_type": "dependencies"}}
+                   if s.labels == {"scanner_type": "dependencies_scanning", "le": "+Inf"}
+                   or s.name.endswith("_sum") and s.labels == {"scanner_type": "dependencies_scanning"}}
         sum_sample = next(
             s.value for s in hist.collect()[0].samples
-            if s.name.endswith("_sum") and s.labels == {"scanner_type": "dependencies"}
+            if s.name.endswith("_sum") and s.labels == {"scanner_type": "dependencies_scanning"}
         )
         assert sum_sample == pytest.approx(3.0)
 
@@ -119,12 +119,12 @@ class TestJobDurationHistogram:
             reg,
             buckets=(0.05, 0.5, 5, 30),
         )
-        hist.labels(scanner_type="secrets", dispatch_mode="poll").observe(0.3)
+        hist.labels(scanner_type="secret_scanning", dispatch_mode="poll").observe(0.3)
 
         sum_sample = next(
             s.value for s in hist.collect()[0].samples
             if s.name.endswith("_sum")
-            and s.labels == {"scanner_type": "secrets", "dispatch_mode": "poll"}
+            and s.labels == {"scanner_type": "secret_scanning", "dispatch_mode": "poll"}
         )
         assert sum_sample == pytest.approx(0.3)
 

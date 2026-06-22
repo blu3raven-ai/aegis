@@ -24,13 +24,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.auth.cookies import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
-from src.auth.login_router import _get_db, login_router
+from src.auth.authentication.cookies import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
+from src.auth.authentication.login_router import _get_db, login_router
 from src.db.engine import DATABASE_URL
 from src.db.models import RateLimitBucket, User, UserSession
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
 
 def _scrypt_hash(password: str) -> str:
     salt = bytes.fromhex("aabbccddeeff00112233445566778899")
@@ -132,7 +131,6 @@ def _make_app(engine) -> FastAPI:
     return app
 
 
-# ── fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture(autouse=True, scope="session")
 def clean_testclient_rl_once():
@@ -230,11 +228,10 @@ def seed_mfa_user_with_password():
     _teardown(user_id)
 
 
-# ── /auth/login ───────────────────────────────────────────────────────────────
 
 def test_login_with_valid_credentials_issues_session(app_client, seed_user_with_password):
     email, password, user_id = seed_user_with_password
-    r = app_client.post("/auth/login", json={"identifier": email, "password": password})
+    r = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
     assert r.status_code == 200
     assert SESSION_COOKIE_NAME in r.cookies
     assert CSRF_COOKIE_NAME in r.cookies
@@ -245,7 +242,7 @@ def test_login_with_valid_credentials_issues_session(app_client, seed_user_with_
 
 def test_login_with_wrong_password_returns_401(app_client, seed_user_with_password):
     email, _, _ = seed_user_with_password
-    r = app_client.post("/auth/login", json={"identifier": email, "password": "wrong-password"})
+    r = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": "wrong-password"})
     assert r.status_code == 401
     assert SESSION_COOKIE_NAME not in r.cookies
     assert r.json()["detail"] == "invalid credentials"
@@ -253,7 +250,7 @@ def test_login_with_wrong_password_returns_401(app_client, seed_user_with_passwo
 
 def test_login_with_unknown_email_returns_401_same_message(app_client):
     """No username enumeration — unknown identifier must return identical message and code."""
-    r = app_client.post("/auth/login", json={"identifier": "ghost@example.com", "password": "anything"})
+    r = app_client.post("/api/v1/auth/login", json={"identifier": "ghost@example.com", "password": "anything"})
     assert r.status_code == 401
     assert r.json()["detail"] == "invalid credentials"
 
@@ -262,8 +259,8 @@ def test_login_rate_limit_kicks_in_after_5_attempts_same_ip(app_client):
     """6th attempt from the same IP within 60 s must return 429."""
     email = f"ratelimit-{uuid4()}@example.com"
     for _ in range(5):
-        app_client.post("/auth/login", json={"identifier": email, "password": "wrong"})
-    r = app_client.post("/auth/login", json={"identifier": email, "password": "wrong"})
+        app_client.post("/api/v1/auth/login", json={"identifier": email, "password": "wrong"})
+    r = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": "wrong"})
     assert r.status_code == 429
 
 
@@ -271,7 +268,7 @@ def test_login_with_mfa_returns_pending_token_no_session_cookie(
     app_client, seed_mfa_user_with_password
 ):
     email, password, _, _ = seed_mfa_user_with_password
-    r = app_client.post("/auth/login", json={"identifier": email, "password": password})
+    r = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
     assert r.status_code == 200
     assert SESSION_COOKIE_NAME not in r.cookies
     body = r.json()
@@ -282,7 +279,7 @@ def test_login_with_mfa_returns_pending_token_no_session_cookie(
 def test_login_by_username_succeeds(app_client, seed_user_with_username_and_password):
     """Username-based login (not email) — preserves BFF behavior."""
     username, _email, password, user_id = seed_user_with_username_and_password
-    r = app_client.post("/auth/login", json={"identifier": username, "password": password})
+    r = app_client.post("/api/v1/auth/login", json={"identifier": username, "password": password})
     assert r.status_code == 200
     assert SESSION_COOKIE_NAME in r.cookies
     assert CSRF_COOKIE_NAME in r.cookies
@@ -293,22 +290,21 @@ def test_login_by_username_succeeds(app_client, seed_user_with_username_and_pass
 def test_login_by_email_still_works_with_identifier_field(app_client, seed_user_with_username_and_password):
     """Email-based login via the identifier field still works."""
     _username, email, password, user_id = seed_user_with_username_and_password
-    r = app_client.post("/auth/login", json={"identifier": email, "password": password})
+    r = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
     assert r.status_code == 200
     body = r.json()
     assert body["user"]["id"] == user_id
 
 
-# ── /auth/login/verify ────────────────────────────────────────────────────────
 
 def test_login_verify_with_correct_totp_completes_login(
     app_client, seed_mfa_user_with_password
 ):
     email, password, totp_code, user_id = seed_mfa_user_with_password
-    r1 = app_client.post("/auth/login", json={"identifier": email, "password": password})
+    r1 = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
     pending = r1.json()["pending_token"]
 
-    r2 = app_client.post("/auth/login/verify", json={"pending_token": pending, "code": totp_code})
+    r2 = app_client.post("/api/v1/auth/login/verify", json={"pending_token": pending, "code": totp_code})
     assert r2.status_code == 200
     assert SESSION_COOKIE_NAME in r2.cookies
     assert CSRF_COOKIE_NAME in r2.cookies
@@ -317,17 +313,17 @@ def test_login_verify_with_correct_totp_completes_login(
 
 def test_login_verify_with_bad_code_returns_401(app_client, seed_mfa_user_with_password):
     email, password, _, _ = seed_mfa_user_with_password
-    r1 = app_client.post("/auth/login", json={"identifier": email, "password": password})
+    r1 = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
     pending = r1.json()["pending_token"]
 
-    r2 = app_client.post("/auth/login/verify", json={"pending_token": pending, "code": "000000"})
+    r2 = app_client.post("/api/v1/auth/login/verify", json={"pending_token": pending, "code": "000000"})
     assert r2.status_code == 401
     assert SESSION_COOKIE_NAME not in r2.cookies
 
 
 def test_login_verify_with_expired_or_unknown_token_returns_401(app_client):
     r = app_client.post(
-        "/auth/login/verify", json={"pending_token": "nonexistent-ghost-token", "code": "123456"}
+        "/api/v1/auth/login/verify", json={"pending_token": "nonexistent-ghost-token", "code": "123456"}
     )
     assert r.status_code == 401
 
@@ -335,29 +331,28 @@ def test_login_verify_with_expired_or_unknown_token_returns_401(app_client):
 def test_login_verify_token_is_single_use(app_client, seed_mfa_user_with_password):
     """A pending token consumed by a successful verify cannot be replayed."""
     email, password, totp_code, _ = seed_mfa_user_with_password
-    r1 = app_client.post("/auth/login", json={"identifier": email, "password": password})
+    r1 = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
     pending = r1.json()["pending_token"]
 
-    r2 = app_client.post("/auth/login/verify", json={"pending_token": pending, "code": totp_code})
+    r2 = app_client.post("/api/v1/auth/login/verify", json={"pending_token": pending, "code": totp_code})
     assert r2.status_code == 200
 
     replay = app_client.post(
-        "/auth/login/verify", json={"pending_token": pending, "code": totp_code}
+        "/api/v1/auth/login/verify", json={"pending_token": pending, "code": totp_code}
     )
     assert replay.status_code == 401
 
 
-# ── /auth/logout ──────────────────────────────────────────────────────────────
 
 def test_logout_revokes_session_and_clears_cookies(app_client, seed_user_with_password):
     email, password, _ = seed_user_with_password
-    login = app_client.post("/auth/login", json={"identifier": email, "password": password})
+    login = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
     assert login.status_code == 200
 
     session_cookie = login.cookies[SESSION_COOKIE_NAME]
     app_client.cookies.set(SESSION_COOKIE_NAME, session_cookie)
 
-    logout = app_client.post("/auth/logout")
+    logout = app_client.post("/api/v1/auth/logout")
     assert logout.status_code == 200
 
     sc_headers = logout.headers.get_list("set-cookie")
@@ -368,12 +363,11 @@ def test_logout_revokes_session_and_clears_cookies(app_client, seed_user_with_pa
 
 def test_logout_is_idempotent_without_session(app_client):
     """Logout with no session cookie must return 200 (idempotent)."""
-    r = app_client.post("/auth/logout")
+    r = app_client.post("/api/v1/auth/logout")
     assert r.status_code == 200
     assert r.json() == {"ok": True}
 
 
-# ── Security regression tests ─────────────────────────────────────────────────
 
 def test_login_timing_is_consistent_unknown_vs_wrong_password(app_client, seed_user_with_password):
     """No user-enumeration via response timing.
@@ -389,14 +383,14 @@ def test_login_timing_is_consistent_unknown_vs_wrong_password(app_client, seed_u
     # Warm the scrypt path before measuring — the very first call after
     # process start absorbs interpreter/import overhead that has nothing
     # to do with the constant-time-equality property under test.
-    app_client.post("/auth/login", json={"identifier": email, "password": "warmup"})
+    app_client.post("/api/v1/auth/login", json={"identifier": email, "password": "warmup"})
 
     t0 = time.perf_counter()
-    app_client.post("/auth/login", json={"identifier": email, "password": "wrong"})
+    app_client.post("/api/v1/auth/login", json={"identifier": email, "password": "wrong"})
     wrong_pw_elapsed = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    app_client.post("/auth/login", json={"identifier": ghost_email, "password": "wrong"})
+    app_client.post("/api/v1/auth/login", json={"identifier": ghost_email, "password": "wrong"})
     unknown_user_elapsed = time.perf_counter() - t0
 
     # Both should take at least 50% of scrypt's typical ~60ms — if unknown-user

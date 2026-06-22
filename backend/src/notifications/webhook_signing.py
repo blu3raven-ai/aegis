@@ -1,23 +1,4 @@
-"""HMAC-SHA256 signing and verification for outbound webhook payloads.
-
-Stripe-style versioned signatures: `v1=<hex>`.
-Signed string: `{unix_timestamp}.{canonical_json}` — the timestamp prevents
-replay attacks outside the tolerance window.
-
-Headers added to every outbound webhook:
-  X-Aegis-Timestamp: <unix seconds>
-  X-Aegis-Signature: v1=<hex>[,v1=<hex2>]   (comma-separated during rotation)
-  X-Aegis-Signature-Version: 1
-
-Storage approach
-----------------
-Raw secrets are stored in the destination's config JSON under reserved keys
-  "_signing_secrets": [{"version": N, "raw": "..."}]
-so they survive server restarts and stay co-located with the channel.  The
-webhook_signing_secrets table stores only metadata (version, status, hash for
-audit) — it does NOT hold the raw secret.  Raw values are returned exactly once
-on creation/rotation and must be copied by the receiver.
-"""
+"""Signing and verification for outbound webhook payloads."""
 from __future__ import annotations
 
 import hashlib
@@ -32,6 +13,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from src.connectors.webhooks.signature import sign_hmac_sha256
 from src.db.helpers import run_db
 from src.db.models import NotificationDestination, WebhookSigningSecret
 
@@ -41,7 +23,6 @@ _SIG_VERSION = "v1"
 TOLERANCE_SECONDS = 300  # 5-minute replay window
 
 
-# ── Token generation & hashing ────────────────────────────────────────────────
 
 def _generate_secret() -> str:
     """Return a URL-safe 32-byte (256-bit) random secret."""
@@ -52,7 +33,6 @@ def _hash_secret(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-# ── Core signing primitives ───────────────────────────────────────────────────
 
 def sign_payload(
     payload: dict[str, Any],
@@ -68,8 +48,7 @@ def sign_payload(
     ts_str = str(int(ts.timestamp()))
     payload_str = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     signed = f"{ts_str}.{payload_str}".encode()
-    sig = hmac.new(secret.encode(), signed, hashlib.sha256).hexdigest()
-    return ts_str, f"{_SIG_VERSION}={sig}"
+    return ts_str, f"{_SIG_VERSION}={sign_hmac_sha256(signed, secret)}"
 
 
 def verify_signature(
@@ -122,7 +101,6 @@ def build_signing_headers(
     }
 
 
-# ── DB helpers ────────────────────────────────────────────────────────────────
 
 def _secret_to_dict(row: WebhookSigningSecret) -> dict[str, Any]:
     return {
@@ -174,7 +152,6 @@ def create_signing_secret(channel_id: int) -> tuple[dict[str, Any], str]:
         latest = result.scalars().first()
         next_version = (latest.version + 1) if latest else 1
 
-        # Demote active secrets so both keys remain valid during rotation window
         active_q = await session.execute(
             select(WebhookSigningSecret).where(
                 WebhookSigningSecret.channel_id == channel_id,
@@ -276,7 +253,6 @@ def persist_raw_secret_to_channel(
         if dest is None:
             return
 
-        # Deep-copy so SQLAlchemy registers the mutation on the JSONB column
         existing: list[dict[str, Any]] = copy.deepcopy(dest.config.get("_signing_secrets") or [])
         for entry in existing:
             if isinstance(entry, dict) and entry.get("status") == "active":

@@ -9,8 +9,6 @@ import { CreatedKeyDialog } from "@/components/shared/api-keys/CreatedKeyDialog"
 import { RevokeKeyConfirmDialog } from "@/components/shared/api-keys/RevokeKeyConfirmDialog"
 import { EmptyApiKeysState } from "@/components/shared/api-keys/EmptyApiKeysState"
 
-const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
-
 interface ApiKeysContentProps {
   /**
    * When provided, the section's "Create token" button lives in the parent
@@ -26,7 +24,7 @@ export function ApiKeysContent({ createTriggerRef }: ApiKeysContentProps = {}) {
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null)
 
   async function load() {
-    const data = await listApiKeys(ORG_ID)
+    const data = await listApiKeys()
     setKeys(data)
   }
 
@@ -47,7 +45,7 @@ export function ApiKeysContent({ createTriggerRef }: ApiKeysContentProps = {}) {
     scopes: string[]
     expires_in_days: number | null
   }) {
-    const created: CreatedApiKey = await createApiKey(ORG_ID, payload)
+    const created: CreatedApiKey = await createApiKey(payload)
     setShowCreate(false)
     setCreatedToken(created.token)
     void load()
@@ -55,7 +53,7 @@ export function ApiKeysContent({ createTriggerRef }: ApiKeysContentProps = {}) {
 
   async function handleRevoke() {
     if (!revokeTarget) return
-    await revokeApiKey(revokeTarget.id, ORG_ID)
+    await revokeApiKey(revokeTarget.id)
     setRevokeTarget(null)
     void load()
   }

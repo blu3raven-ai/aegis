@@ -119,7 +119,7 @@ def test_get_users_strips_password_hash_for_authenticated_user(client):
         }
     ])
 
-    response = client.get("/api/v1/settings/users")
+    response = client.get("/api/v1/workspace/users")
 
     assert response.status_code == 200
     users = response.json()["users"]
@@ -136,7 +136,7 @@ def test_get_users_rejects_non_admin(role):
     from conftest import make_authed_client
     c = make_authed_client(role=role, user_id=f"usr_{role}", raise_server_exceptions=True)
 
-    response = c.get("/api/v1/settings/users")
+    response = c.get("/api/v1/workspace/users")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Permission denied: manage_users"
@@ -154,7 +154,7 @@ def test_post_users_creates_user_hashes_password_and_writes_audit(client):
     ])
 
     response = client.post(
-        "/api/v1/settings/users",
+        "/api/v1/workspace/users",
         json={"username": "NewUser", "email": "new@example.com", "password": "secret-pass!!", "role": "viewer"},
     )
 
@@ -194,7 +194,7 @@ def test_post_users_rejects_case_insensitive_duplicate_usernames(client):
     ])
 
     response = client.post(
-        "/api/v1/settings/users",
+        "/api/v1/workspace/users",
         json={"username": "admin", "email": "admin@example.com", "password": "secret-pass!!", "role": "viewer"},
     )
 
@@ -207,7 +207,7 @@ def test_post_users_rejects_non_admin_create():
     c = make_authed_client(role="viewer", user_id="usr_viewer", raise_server_exceptions=True)
 
     response = c.post(
-        "/api/v1/settings/users",
+        "/api/v1/workspace/users",
         json={"username": "NewUser", "email": "new@example.com", "password": "secret-pass!!", "role": "viewer"},
     )
 
@@ -217,7 +217,7 @@ def test_post_users_rejects_non_admin_create():
 
 def test_post_users_rejects_admin_creating_owner(client):
     response = client.post(
-        "/api/v1/settings/users",
+        "/api/v1/workspace/users",
         json={"username": "NewOwner", "email": "owner@example.com", "password": "secret-pass!!", "role": "owner"},
     )
 
@@ -237,7 +237,7 @@ def test_post_disable_rejects_last_active_owner():
     ])
     c = make_authed_client(role="owner", user_id="usr_owner", raise_server_exceptions=True)
 
-    response = c.post("/api/v1/settings/users/usr_owner/disable")
+    response = c.post("/api/v1/workspace/users/usr_owner/disable")
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Cannot disable the last active owner."
@@ -255,7 +255,7 @@ def test_post_enable_sets_user_active_and_audits(client):
         },
     ])
 
-    response = client.post("/api/v1/settings/users/usr_user/enable")
+    response = client.post("/api/v1/workspace/users/usr_user/enable")
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
@@ -290,7 +290,7 @@ def test_patch_role_requires_owner_for_owner_target():
     c = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
     response = c.patch(
-        "/api/v1/settings/users/usr_owner/role",
+        "/api/v1/workspace/users/usr_owner/role",
         json={"role": "viewer"},
     )
 
@@ -314,7 +314,7 @@ def test_patch_role_owner_target_requires_owner_actor():
     c = make_authed_client(role="admin", user_id="usr_actor_admin", raise_server_exceptions=True)
 
     response = c.patch(
-        "/api/v1/settings/users/usr_owner/role",
+        "/api/v1/workspace/users/usr_owner/role",
         json={"role": "admin"},
     )
 
@@ -337,7 +337,7 @@ def test_patch_role_rejects_self_role_change():
     c = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
     response = c.patch(
-        "/api/v1/settings/users/usr_admin/role",
+        "/api/v1/workspace/users/usr_admin/role",
         json={"role": "viewer"},
     )
 
@@ -349,19 +349,19 @@ def test_get_direct_grants_requires_workspace_admin():
     from conftest import make_authed_client
     c = make_authed_client(role="viewer", user_id="usr_viewer", raise_server_exceptions=True)
 
-    response = c.get("/api/v1/settings/direct-grants")
+    response = c.get("/api/v1/grants")
     assert response.status_code == 403
 
 
 def test_manage_direct_grants_flow(client):
     # 1. List (empty)
-    response = client.get("/api/v1/settings/direct-grants")
+    response = client.get("/api/v1/grants")
     assert response.status_code == 200
     assert response.json()["grants"] == []
 
     # 2. Add repository grant
     response = client.post(
-        "/api/v1/settings/direct-grants",
+        "/api/v1/grants",
         json={
             "userId": "usr_1",
             "resourceType": "repository",
@@ -373,7 +373,7 @@ def test_manage_direct_grants_flow(client):
 
     # 3. Add container image grant
     response = client.post(
-        "/api/v1/settings/direct-grants",
+        "/api/v1/grants",
         json={
             "userId": "usr_1",
             "resourceType": "containerImage",
@@ -383,18 +383,18 @@ def test_manage_direct_grants_flow(client):
     assert response.status_code == 200
 
     # 4. List again
-    response = client.get("/api/v1/settings/direct-grants")
+    response = client.get("/api/v1/grants")
     grants = response.json()["grants"]
     assert len(grants) == 2
     assert any(g["resourceKey"] == "org/repo" and g["source"] == "manual-direct" for g in grants)
     assert any(g["resourceKey"] == "ghcr.io/org/image" and g["source"] == "manual-direct" for g in grants)
 
     # 5. Remove grant
-    response = client.delete("/api/v1/settings/direct-grants/usr_1/repository/org/repo")
+    response = client.delete("/api/v1/grants/usr_1/repository/org/repo")
     assert response.status_code == 200
 
     # 6. Final check
-    response = client.get("/api/v1/settings/direct-grants")
+    response = client.get("/api/v1/grants")
     grants = response.json()["grants"]
     assert len(grants) == 1
     assert grants[0]["resourceKey"] == "ghcr.io/org/image"
@@ -412,7 +412,7 @@ def test_delete_user_removes_user_and_writes_audit(client):
         },
     ])
 
-    response = client.delete("/api/v1/settings/users/usr_user")
+    response = client.delete("/api/v1/workspace/users/usr_user")
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
@@ -433,7 +433,7 @@ def test_delete_user_rejects_non_admin():
     from conftest import make_authed_client
     c = make_authed_client(role="viewer", user_id="usr_viewer", raise_server_exceptions=True)
 
-    response = c.delete("/api/v1/settings/users/usr_user")
+    response = c.delete("/api/v1/workspace/users/usr_user")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Permission denied: manage_users"
@@ -453,7 +453,7 @@ def test_delete_user_rejects_self_delete():
     # Actor user_id matches target — should be rejected
     c = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
-    response = c.delete("/api/v1/settings/users/usr_admin")
+    response = c.delete("/api/v1/workspace/users/usr_admin")
 
     assert response.status_code == 400
     assert response.json()["detail"] == "You cannot delete your own account."
@@ -474,7 +474,7 @@ def test_delete_user_owner_target_requires_owner_actor():
     # Actor has admin role — should get 403 before reaching the last-owner check
     c = make_authed_client(role="admin", user_id="usr_actor_admin", raise_server_exceptions=True)
 
-    response = c.delete("/api/v1/settings/users/usr_owner")
+    response = c.delete("/api/v1/workspace/users/usr_owner")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Only owners can delete owner users."
@@ -507,14 +507,14 @@ def test_delete_user_requires_owner_for_owner_target():
     ])
     c = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
-    response = c.delete("/api/v1/settings/users/usr_owner_2")
+    response = c.delete("/api/v1/workspace/users/usr_owner_2")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Only owners can delete owner users."
 
 
 def test_delete_user_returns_not_found_for_unknown_user(client):
-    response = client.delete("/api/v1/settings/users/usr_missing")
+    response = client.delete("/api/v1/workspace/users/usr_missing")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found."
@@ -542,7 +542,7 @@ def test_get_users_directory_allows_workspace_admin():
     ])
     c = make_authed_client(role="owner", user_id="usr_1", raise_server_exceptions=True)
 
-    response = c.get("/api/v1/settings/users/directory")
+    response = c.get("/api/v1/workspace/users/directory")
 
     assert response.status_code == 200
     users = response.json()["users"]
@@ -572,7 +572,7 @@ def test_get_users_directory_allows_team_admin(monkeypatch):
     monkeypatch.setattr(users_router, "list_admin_team_ids", lambda user_id: ["team_1"])
     c = make_authed_client(role="viewer", user_id="usr_1", raise_server_exceptions=True)
 
-    response = c.get("/api/v1/settings/users/directory")
+    response = c.get("/api/v1/workspace/users/directory")
 
     assert response.status_code == 200
     assert len(response.json()["users"]) == 1
@@ -583,7 +583,7 @@ def test_get_users_directory_rejects_regular_user(monkeypatch):
     monkeypatch.setattr(users_router, "list_admin_team_ids", lambda user_id: [])
     c = make_authed_client(role="viewer", user_id="usr_viewer", raise_server_exceptions=True)
 
-    response = c.get("/api/v1/settings/users/directory")
+    response = c.get("/api/v1/workspace/users/directory")
 
     assert response.status_code == 403
 
@@ -620,7 +620,7 @@ def test_patch_user_role_assigns_role_id():
 
     c = make_authed_client(role="owner", user_id="usr_admin", raise_server_exceptions=True)
     response = c.patch(
-        "/api/v1/settings/users/usr_viewer/role",
+        "/api/v1/workspace/users/usr_viewer/role",
         json={"roleId": new_role["id"]},
     )
 
@@ -641,7 +641,7 @@ def test_password_reset_required_flag_behavior(client):
 
     # 1. New local user should not force a reset before sign-in
     response = client.post(
-        "/api/v1/settings/users",
+        "/api/v1/workspace/users",
         json={"username": "LocalUser", "email": "local@example.com", "password": "password12345", "role": "viewer"},
     )
     assert response.status_code == 200
@@ -658,7 +658,7 @@ def test_create_user_with_role_id_applies_correct_role(client):
     _seed_users([{"id": "usr_owner", "username": "owner", "passwordHash": "x", "role": "owner", "status": "active"}])
 
     response = client.post(
-        "/api/v1/settings/users",
+        "/api/v1/workspace/users",
         json={
             "username": "ViewerUser",
             "email": "viewer@example.com",

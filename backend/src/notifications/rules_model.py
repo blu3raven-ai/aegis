@@ -39,7 +39,6 @@ def _rule_to_domain(rule: NotificationRule) -> Rule:
     )
 
 
-# ── CRUD ──────────────────────────────────────────────────────────────────────
 
 
 def list_rules() -> list[dict[str, Any]]:

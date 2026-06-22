@@ -123,20 +123,22 @@ describe("FindingsBoardView component", () => {
 })
 
 describe("/inbox page", () => {
-  it("no longer renders StubPage", () => {
+  // /inbox redirects to its default tab; the open-findings queue lives at
+  // /inbox/triage (sibling to /inbox/history).
+  it("redirects to /inbox/triage", () => {
     const src = read("app/(app)/inbox/page.tsx")
-    assert.ok(!src.includes("StubPage"), "/inbox must not render StubPage")
+    assert.ok(src.includes('redirect("/inbox/triage")'), "/inbox must redirect to triage")
   })
 
-  it("renders FindingsBoardView with state: ['open']", () => {
-    const src = read("app/(app)/inbox/page.tsx")
+  it("triage renders FindingsBoardView with state: ['open']", () => {
+    const src = read("app/(app)/inbox/triage/page.tsx")
     assert.ok(src.includes("FindingsBoardView"), "must import FindingsBoardView")
     assert.ok(src.includes('initialStateFilter={["open"]}'), "must pass initialStateFilter open")
     assert.ok(src.includes('pageTitle="Inbox"'), "must pass pageTitle Inbox")
   })
 
-  it("uses InboxIcon from page-icons", () => {
-    const src = read("app/(app)/inbox/page.tsx")
+  it("triage uses InboxIcon from page-icons", () => {
+    const src = read("app/(app)/inbox/triage/page.tsx")
     assert.ok(src.includes("InboxIcon"), "must import InboxIcon")
   })
 })

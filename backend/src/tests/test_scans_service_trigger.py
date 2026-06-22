@@ -18,7 +18,6 @@ _BRANCH = "main"
 _PR_NUMBER = 42
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest_asyncio.fixture
 async def asset(db_session):
@@ -61,7 +60,7 @@ async def _seed_scan(db_session, asset_id: str, *, status: str,
     """Insert a ScanRun row with the given status."""
     row = ScanRun(
         id=str(uuid.uuid4()),
-        tool="dependencies",
+        tool="dependencies_scanning",
         asset_id=asset_id,
         status=status,
         commit_sha=commit_sha,
@@ -73,7 +72,6 @@ async def _seed_scan(db_session, asset_id: str, *, status: str,
     return row
 
 
-# ── find_inflight_scan ────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_find_inflight_returns_existing_queued_scan(db_session, asset):
@@ -101,7 +99,6 @@ async def test_find_inflight_returns_none_for_completed(db_session, asset):
     assert result is None
 
 
-# ── cancel_older_queued_for_pr ────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_cancel_older_queued_for_pr_marks_older_cancelled(db_session, asset):
@@ -129,7 +126,6 @@ async def test_cancel_older_queued_for_pr_marks_older_cancelled(db_session, asse
     assert kept.status == "queued"
 
 
-# ── submit_ci_scan ────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_submit_ci_scan_creates_run_with_metadata(db_session, asset):
@@ -196,7 +192,6 @@ async def test_submit_ci_scan_no_pr_sets_not_applicable(db_session, asset):
     assert row.trigger_metadata == {"api_key_id": 3}
 
 
-# ── webhook caller shape (api_key_id=None, triggered_by="webhook") ──────────
 
 @pytest.mark.asyncio
 async def test_submit_ci_scan_webhook_shape(db_session, asset):

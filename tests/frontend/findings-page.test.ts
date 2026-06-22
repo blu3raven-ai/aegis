@@ -3,21 +3,31 @@ import assert from "node:assert/strict"
 
 // ---------------------------------------------------------------------------
 // Tests for the findings inbox page data-flow behaviour that doesn't require
-// a DOM. Validates the API client wiring (URL composition, filter forwarding,
-// cursor pagination) and the row-mapping helper that converts an aggregated
-// API row into the local Finding shape rendered by the table.
+// a DOM. Validates the API client wiring (GraphQL query, filter forwarding,
+// pagination) and the row-mapping helper that converts an aggregated API row
+// into the local Finding shape rendered by the table.
 // ---------------------------------------------------------------------------
 
-interface FetchCall { url: string }
+interface FetchCall { url: string; body: unknown }
+
+interface GqlPayload {
+  operationName?: string
+  query?: string
+  variables?: Record<string, unknown>
+}
 
 function makeFetchMock(responses: unknown[]) {
   const calls: FetchCall[] = []
   let index = 0
-  const mock = async (input: RequestInfo | URL): Promise<Response> => {
+  const mock = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const body = responses[Math.min(index, responses.length - 1)]
-    calls.push({ url: input.toString() })
+    let parsed: unknown = null
+    if (init?.body) {
+      try { parsed = JSON.parse(init.body as string) } catch { parsed = init.body }
+    }
+    calls.push({ url: input.toString(), body: parsed })
     index++
-    return new Response(JSON.stringify(body), {
+    return new Response(JSON.stringify({ data: body }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     })
@@ -28,8 +38,11 @@ function makeFetchMock(responses: unknown[]) {
 function makeErrorFetchMock(status = 500) {
   const calls: FetchCall[] = []
   const mock = async (input: RequestInfo | URL): Promise<Response> => {
-    calls.push({ url: input.toString() })
-    return new Response("upstream failure", { status })
+    calls.push({ url: input.toString(), body: null })
+    return new Response(JSON.stringify({ errors: [{ message: "upstream failure" }] }), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    })
   }
   return { mock, calls }
 }
@@ -42,6 +55,45 @@ async function loadMapper() {
   return import("../../frontend/lib/shared/findings/row-mapper.ts")
 }
 
+function makeGqlFinding(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "f-1",
+    scanner: "deps",
+    severity: "critical",
+    state: "open",
+    title: "log4j JNDI RCE",
+    cve: "CVE-2021-44228",
+    package: "log4j-core",
+    filePath: null,
+    line: null,
+    repo: "acme-org/api",
+    orgId: "acme-org",
+    createdAt: "2026-05-30T00:00:00Z",
+    updatedAt: "2026-05-30T00:00:00Z",
+    epssPercentile: 0.98,
+    kev: false,
+    cwe: null,
+    riskScore: null,
+    assigneeUserId: null,
+    verdict: null,
+    ...overrides,
+  }
+}
+
+function gqlOk(rows: unknown[], totalCount = rows.length) {
+  return {
+    findings: {
+      search: {
+        findings: rows,
+        nextCursor: null,
+        totalCount,
+        verdictCounts: null,
+      },
+    },
+  }
+}
+
+// API-shape (snake_case) finding fixture used by the row-mapper tests.
 function makeApiFinding(overrides: Record<string, unknown> = {}) {
   return {
     id: "f-1",
@@ -57,19 +109,17 @@ function makeApiFinding(overrides: Record<string, unknown> = {}) {
     org_id: "acme-org",
     created_at: "2026-05-30T00:00:00Z",
     updated_at: "2026-05-30T00:00:00Z",
-    epss_percentile: 0.98,
+    epssPercentile: 0.98,
     ...overrides,
   }
 }
 
 // ---------------------------------------------------------------------------
-// Initial mount — page loads findings from the aggregated endpoint
+// Initial mount — page loads findings from the findingsSearch GraphQL query
 // ---------------------------------------------------------------------------
 
-test("page load: listFindings hits /api/v1/findings with org_id", async () => {
-  const { mock, calls } = makeFetchMock([
-    { findings: [makeApiFinding()], next_cursor: null, total_count: 1 },
-  ])
+test("page load: listFindings posts to the GraphQL endpoint with org variable", async () => {
+  const { mock, calls } = makeFetchMock([gqlOk([makeGqlFinding()])])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
@@ -77,21 +127,17 @@ test("page load: listFindings hits /api/v1/findings with org_id", async () => {
 
   assert.equal(calls.length, 1)
   const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.pathname, "/api/v1/findings")
-  assert.equal(url.searchParams.get("org_id"), "acme-org")
-  assert.equal(url.searchParams.get("limit"), "50")
+  assert.equal(url.pathname, "/api/v1/graphql")
+  const payload = calls[0].body as GqlPayload
+  assert.match(payload.query ?? "", /findings\s*\{\s*\n?\s*search\b/)
+  assert.equal(payload.variables?.org, "acme-org")
+  assert.equal(payload.variables?.limit, 50)
   assert.equal(resp.findings.length, 1)
   assert.equal(resp.total_count, 1)
 })
 
 test("page load: rows render with normalised epssPercentile", async () => {
-  const { mock } = makeFetchMock([
-    {
-      findings: [makeApiFinding({ epss_percentile: 0.9762 })],
-      next_cursor: null,
-      total_count: 1,
-    },
-  ])
+  const { mock } = makeFetchMock([gqlOk([makeGqlFinding({ epssPercentile: 0.9762 })])])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
@@ -107,7 +153,7 @@ test("page load: rows render with normalised epssPercentile", async () => {
 // ---------------------------------------------------------------------------
 
 test("empty state: zero findings returns empty array and null cursor", async () => {
-  const { mock } = makeFetchMock([{ findings: [], next_cursor: null, total_count: 0 }])
+  const { mock } = makeFetchMock([gqlOk([], 0)])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
@@ -127,10 +173,7 @@ test("error state: 500 response surfaces as a thrown error", async () => {
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
-  await assert.rejects(
-    () => listFindings({ orgId: "acme-org" }),
-    /500/,
-  )
+  await assert.rejects(() => listFindings({ orgId: "acme-org" }))
 })
 
 test("error state: client rejects empty orgId before fetching", async () => {
@@ -149,76 +192,63 @@ test("error state: client rejects empty orgId before fetching", async () => {
 })
 
 // ---------------------------------------------------------------------------
-// Severity filter — selected chip is forwarded as a CSV query param
+// Severity filter — selected chip is forwarded as a CSV variable
 // ---------------------------------------------------------------------------
 
 test("severity filter: critical filter forwards severity=critical", async () => {
-  const { mock, calls } = makeFetchMock([
-    { findings: [], next_cursor: null, total_count: 0 },
-  ])
+  const { mock, calls } = makeFetchMock([gqlOk([])])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
   await listFindings({ orgId: "acme-org", severity: ["critical"] })
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.searchParams.get("severity"), "critical")
+  const payload = calls[0].body as GqlPayload
+  assert.equal(payload.variables?.severity, "critical")
 })
 
 test("severity filter: multiple severities are joined with comma", async () => {
-  const { mock, calls } = makeFetchMock([
-    { findings: [], next_cursor: null, total_count: 0 },
-  ])
+  const { mock, calls } = makeFetchMock([gqlOk([])])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
   await listFindings({ orgId: "acme-org", severity: ["critical", "high"] })
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.searchParams.get("severity"), "critical,high")
+  const payload = calls[0].body as GqlPayload
+  assert.equal(payload.variables?.severity, "critical,high")
 })
 
-test("severity filter: empty severity array is omitted from URL", async () => {
-  const { mock, calls } = makeFetchMock([
-    { findings: [], next_cursor: null, total_count: 0 },
-  ])
+test("severity filter: empty severity array is forwarded as null", async () => {
+  const { mock, calls } = makeFetchMock([gqlOk([])])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
   await listFindings({ orgId: "acme-org", severity: [] })
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.searchParams.has("severity"), false)
+  const payload = calls[0].body as GqlPayload
+  assert.equal(payload.variables?.severity, null)
 })
 
 // ---------------------------------------------------------------------------
-// Page-number pagination — second call forwards `page` in the query string
+// Page-number pagination — second call forwards `page` in variables
 // ---------------------------------------------------------------------------
 
-test("pagination: page=1 is omitted from URL (default)", async () => {
-  const { mock, calls } = makeFetchMock([
-    { findings: [makeApiFinding()], next_cursor: null, total_count: 1 },
-  ])
+test("pagination: page is forwarded in variables", async () => {
+  const { mock, calls } = makeFetchMock([gqlOk([makeGqlFinding()])])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
   await listFindings({ orgId: "acme-org", limit: 2, page: 1 })
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.searchParams.get("page"), "1")
+  const payload = calls[0].body as GqlPayload
+  assert.equal(payload.variables?.page, 1)
 })
 
-test("pagination: second call carries page=N in the URL", async () => {
-  const page1 = {
-    findings: [makeApiFinding({ id: "f-1" }), makeApiFinding({ id: "f-2" })],
-    next_cursor: null,
-    total_count: 3,
-  }
-  const page2 = {
-    findings: [makeApiFinding({ id: "f-3" })],
-    next_cursor: null,
-    total_count: 3,
-  }
+test("pagination: second call carries page=N in variables", async () => {
+  const page1 = gqlOk(
+    [makeGqlFinding({ id: "f-1" }), makeGqlFinding({ id: "f-2" })],
+    3,
+  )
+  const page2 = gqlOk([makeGqlFinding({ id: "f-3" })], 3)
 
   const { mock, calls } = makeFetchMock([page1, page2])
   ;(globalThis as any).fetch = mock
@@ -231,22 +261,20 @@ test("pagination: second call carries page=N in the URL", async () => {
   assert.equal(r2.findings.length, 1)
   assert.equal(r2.total_count, 3)
 
-  const url2 = new URL(calls[1].url, "http://localhost")
-  assert.equal(url2.searchParams.get("page"), "2")
-  assert.equal(url2.searchParams.get("limit"), "2")
+  const payload2 = calls[1].body as GqlPayload
+  assert.equal(payload2.variables?.page, 2)
+  assert.equal(payload2.variables?.limit, 2)
 })
 
-test("pagination: page is omitted from URL when not provided", async () => {
-  const { mock, calls } = makeFetchMock([
-    { findings: [makeApiFinding()], next_cursor: null, total_count: 1 },
-  ])
+test("pagination: page defaults to 1 when not provided", async () => {
+  const { mock, calls } = makeFetchMock([gqlOk([makeGqlFinding()])])
   ;(globalThis as any).fetch = mock
 
   const { listFindings } = await loadApi()
   await listFindings({ orgId: "acme-org" })
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.searchParams.has("page"), false)
+  const payload = calls[0].body as GqlPayload
+  assert.equal(payload.variables?.page, 1)
 })
 
 // ---------------------------------------------------------------------------
@@ -255,24 +283,24 @@ test("pagination: page is omitted from URL when not provided", async () => {
 // would silently corrupt rendering.
 // ---------------------------------------------------------------------------
 
-test("mapApiFinding: maps scanner `container` to the UI `containers` token", async () => {
+test("mapApiFinding: passes canonical scanner names through unchanged", async () => {
   const { mapApiFinding } = await loadMapper()
-  const row = mapApiFinding(makeApiFinding({ scanner: "container" }) as any)
-  assert.equal(row.scanner, "containers")
-})
-
-test("mapApiFinding: passes through known scanner tokens unchanged", async () => {
-  const { mapApiFinding } = await loadMapper()
-  for (const scanner of ["deps", "sast", "secrets"]) {
+  for (const scanner of [
+    "dependencies_scanning",
+    "code_scanning",
+    "container_scanning",
+    "secret_scanning",
+    "iac_scanning",
+  ]) {
     const row = mapApiFinding(makeApiFinding({ scanner }) as any)
     assert.equal(row.scanner, scanner)
   }
 })
 
-test("mapApiFinding: unknown scanner falls back to deps so the row still renders", async () => {
+test("mapApiFinding: unknown scanner falls back to dependencies_scanning so the row still renders", async () => {
   const { mapApiFinding } = await loadMapper()
   const row = mapApiFinding(makeApiFinding({ scanner: "wat" }) as any)
-  assert.equal(row.scanner, "deps")
+  assert.equal(row.scanner, "dependencies_scanning")
 })
 
 test("mapApiFinding: title falls back to cve when title is null", async () => {
@@ -311,4 +339,60 @@ test("mapApiFinding: severity defaults to `low` when server returns null", async
   const { mapApiFinding } = await loadMapper()
   const row = mapApiFinding(makeApiFinding({ severity: null }) as any)
   assert.equal(row.severity, "low")
+})
+
+// ---------------------------------------------------------------------------
+// Readable titles + paths — strip the runner's ephemeral clone prefix and
+// rebuild code-scanning titles that leak the workspace path + rule id.
+// ---------------------------------------------------------------------------
+
+test("mapApiFinding: strips the /workspace/job-<hash>/ prefix from filePath", async () => {
+  const { mapApiFinding } = await loadMapper()
+  const row = mapApiFinding(makeApiFinding({
+    file_path: "/workspace/job-a1b95d663fec5bac/ilmu-asr-poc/_checkout/server.py",
+    line: 93,
+  }) as any)
+  assert.equal(row.filePath, "ilmu-asr-poc/_checkout/server.py:93")
+})
+
+test("mapApiFinding: rebuilds a leaked code-scanning title as file:line", async () => {
+  const { mapApiFinding } = await loadMapper()
+  const row = mapApiFinding(makeApiFinding({
+    scanner: "code_scanning",
+    title: "ilmu-asr-poc:/workspace/job-a1b95d663fec5bac/ilmu-asr-poc/_checkout/server.py:opt.semgrep.rules.python.lang.security.audit.insecure-transport.requests.request-with-http:93",
+    cve: null,
+    file_path: "/workspace/job-a1b95d663fec5bac/ilmu-asr-poc/_checkout/server.py",
+    line: 93,
+  }) as any)
+  assert.equal(row.title, "server.py:93")
+})
+
+test("mapApiFinding: leaves a normal title untouched", async () => {
+  const { mapApiFinding } = await loadMapper()
+  const row = mapApiFinding(makeApiFinding({ title: "log4j JNDI RCE" }) as any)
+  assert.equal(row.title, "log4j JNDI RCE")
+})
+
+test("mapApiFinding: rebuilds a secret hash title as a readable location", async () => {
+  const { mapApiFinding } = await loadMapper()
+  const row = mapApiFinding(makeApiFinding({
+    scanner: "secret_scanning",
+    title: "fdcbc1f7e9a0a0809ed791b68260ac9edfbf109f",
+    cve: null,
+    file_path: "src/ocr_main.py",
+    line: 34,
+  }) as any)
+  assert.equal(row.title, "Secret in ocr_main.py:34")
+})
+
+test("mapApiFinding: a non-hash secret title is left untouched", async () => {
+  const { mapApiFinding } = await loadMapper()
+  const row = mapApiFinding(makeApiFinding({
+    scanner: "secret_scanning",
+    title: "AWS Access Key",
+    cve: null,
+    file_path: "src/ocr_main.py",
+    line: 34,
+  }) as any)
+  assert.equal(row.title, "AWS Access Key")
 })

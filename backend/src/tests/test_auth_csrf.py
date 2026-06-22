@@ -2,8 +2,8 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.auth.cookies import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
-from src.auth.csrf import (
+from src.auth.authentication.cookies import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
+from src.auth.authentication.csrf import (
     CSRFMiddleware,
     compute_csrf_token,
     verify_csrf_token,
@@ -47,20 +47,24 @@ def _build_app_with_middleware():
     def state_change():
         return {"ok": True}
 
-    @app.post("/auth/login")
+    @app.post("/api/v1/auth/login")
     def login():
         return {"ok": True}
 
-    @app.post("/auth/login/verify")
+    @app.post("/api/v1/auth/login/verify")
     def login_verify():
         return {"ok": True}
 
-    @app.post("/auth/logout")
+    @app.post("/api/v1/auth/logout")
     def logout():
         return {"ok": True}
 
     @app.get("/safe")
     def safe():
+        return {"ok": True}
+
+    @app.post("/api/v1/graphql")
+    def graphql():
         return {"ok": True}
 
     return app
@@ -115,19 +119,35 @@ def test_login_bypasses_csrf_even_with_stale_session_cookie():
     """
     client = TestClient(_build_app_with_middleware())
     client.cookies.set(SESSION_COOKIE_NAME, "stale-session-from-previous-run")
-    response = client.post("/auth/login")
+    response = client.post("/api/v1/auth/login")
     assert response.status_code == 200
 
 
 def test_login_verify_bypasses_csrf_with_stale_session():
     client = TestClient(_build_app_with_middleware())
     client.cookies.set(SESSION_COOKIE_NAME, "stale-session")
-    response = client.post("/auth/login/verify")
+    response = client.post("/api/v1/auth/login/verify")
     assert response.status_code == 200
 
 
 def test_logout_bypasses_csrf_with_stale_session():
     client = TestClient(_build_app_with_middleware())
     client.cookies.set(SESSION_COOKIE_NAME, "stale-session")
-    response = client.post("/auth/logout")
+    response = client.post("/api/v1/auth/logout")
+    assert response.status_code == 200
+
+
+def test_graphql_post_requires_csrf_when_docs_disabled(monkeypatch):
+    monkeypatch.delenv("ENABLE_BACKEND_DOCS", raising=False)
+    client = TestClient(_build_app_with_middleware())
+    client.cookies.set(SESSION_COOKIE_NAME, "session-A")
+    response = client.post("/api/v1/graphql", json={})
+    assert response.status_code == 403
+
+
+def test_graphql_post_bypasses_csrf_when_docs_enabled(monkeypatch):
+    monkeypatch.setenv("ENABLE_BACKEND_DOCS", "true")
+    client = TestClient(_build_app_with_middleware())
+    client.cookies.set(SESSION_COOKIE_NAME, "session-A")
+    response = client.post("/api/v1/graphql", json={})
     assert response.status_code == 200

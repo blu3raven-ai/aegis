@@ -29,6 +29,9 @@ def pytest_configure(config):
     # Provide a test-only SESSION_SECRET so the PR 3 middleware registrations
     # don't raise RuntimeError during import. Must be set before src.main loads.
     os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
+    # TrustedHostMiddleware fails loudly when ALLOWED_HOSTS is unset; the
+    # FastAPI TestClient drives requests with Host: testserver by default.
+    os.environ.setdefault("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
 
     # Skip testcontainers if DATABASE_URL is already set (e.g., CI with external DB)
     if os.environ.get("DATABASE_URL"):
@@ -270,8 +273,8 @@ def make_authed_client(
     """
     from fastapi.testclient import TestClient
     from src.main import app
-    from src.auth.cookies import SESSION_COOKIE_NAME, CSRF_COOKIE_NAME
-    from src.auth.csrf import compute_csrf_token
+    from src.auth.authentication.cookies import SESSION_COOKIE_NAME, CSRF_COOKIE_NAME
+    from src.auth.authentication.csrf import compute_csrf_token
 
     uid = user_id or f"test-usr-{role}"
     session_id = _make_test_session(uid, role=role)

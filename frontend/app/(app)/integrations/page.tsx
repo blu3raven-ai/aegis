@@ -1,31 +1,37 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FilterChip } from "@/components/ui/FilterChip";
+import { Card } from "@/components/ui/Card";
 import { IntegrationsIcon } from "@/lib/shared/ui/page-icons";
 import { IntegrationCard } from "./_components/IntegrationCard";
 import { IntegrationDrawer } from "./_components/IntegrationDrawer";
-import { useConnectorCatalog, type Integration, type ConnectorCategory as IntegrationCategory } from "@/lib/client/connectors-api";
+import { useConnectorCatalog, type Integration } from "@/lib/client/integrations-catalog-api";
 
-type CategoryFilter = "all" | IntegrationCategory;
+type CategoryFilter = "all" | string;
 
-const CATEGORY_LABELS: Record<IntegrationCategory, string> = {
-  ci: "CI/CD",
-  notification: "Notifications",
+const CATEGORY_LABELS: Record<string, string> = {
+  cicd: "CI/CD",
+  notifications: "Notifications",
+  ticketing: "Ticketing",
+  automation: "Automation",
   runner: "Federated runners",
 };
 
-const CATEGORY_ORDER: IntegrationCategory[] = ["ci", "notification", "runner"];
+const CATEGORY_ORDER: string[] = ["cicd", "notifications", "ticketing", "automation", "runner"];
 
-export default function IntegrationsPage() {
-  const [filter, setFilter] = useState<CategoryFilter>("all");
+function IntegrationsPageContent() {
+  const searchParams = useSearchParams();
+  const initialCategory = searchParams.get("category") ?? "all";
+  const [filter, setFilter] = useState<CategoryFilter>(initialCategory);
   const [selected, setSelected] = useState<Integration | null>(null);
 
   const { catalog: INTEGRATIONS, loading } = useConnectorCatalog();
 
   const categoryCounts = useMemo(() => {
-    const counts = new Map<IntegrationCategory, number>();
+    const counts = new Map<string, number>();
     for (const i of INTEGRATIONS) counts.set(i.category, (counts.get(i.category) ?? 0) + 1);
     return counts;
   }, [INTEGRATIONS]);
@@ -59,13 +65,13 @@ export default function IntegrationsPage() {
           ))}
         </div>
         {loading ? (
-          <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
+          <Card padding="none" className="rounded-xl border-dashed px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
             Loading integrations…
-          </p>
+          </Card>
         ) : items.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
+          <Card padding="none" className="rounded-xl border-dashed px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
             No integrations in this category yet.
-          </p>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-3">
             {items.map(i => <IntegrationCard key={i.slug} i={i} onSelect={setSelected} />)}
@@ -74,5 +80,13 @@ export default function IntegrationsPage() {
       </div>
       <IntegrationDrawer integration={selected} onClose={() => setSelected(null)} />
     </>
+  );
+}
+
+export default function IntegrationsPage() {
+  return (
+    <Suspense>
+      <IntegrationsPageContent />
+    </Suspense>
   );
 }

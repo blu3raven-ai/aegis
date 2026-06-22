@@ -4,7 +4,8 @@
  */
 import { RepoCoverageBadge } from "./RepoCoverageBadge"
 import { ScannerCoverageIcons } from "./ScannerCoverageIcons"
-import type { RepoDetail } from "@/lib/client/repos-api"
+import type { RepoDetail } from "@/lib/client/sources-api"
+import { Card } from "@/components/ui/Card"
 
 function relativeTime(iso: string | null | undefined): string {
   if (!iso) return "never"
@@ -27,7 +28,7 @@ export function RepoDetailHero({ repo }: RepoDetailHeroProps) {
   const totalFindings = critical + high + medium + low
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+    <Card padding="none" className="px-6 py-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         {/* Title block */}
         <div className="min-w-0">
@@ -79,6 +80,6 @@ export function RepoDetailHero({ repo }: RepoDetailHeroProps) {
 
         </div>
       </div>
-    </div>
+    </Card>
   )
 }

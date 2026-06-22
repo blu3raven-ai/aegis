@@ -5,9 +5,11 @@ import { gqlQuery } from "@/lib/client/graphql-client"
 import { useLicense } from "@/lib/client/license/client"
 import { timeAgo } from "@/lib/shared/time-ago"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Select } from "@/components/ui/Select"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { Textarea } from "@/components/ui/Textarea"
 
@@ -21,37 +23,45 @@ const SBOM_SEARCH_QUERY = `
     $repos: [String!], $versionOp: String, $versionValue: String,
     $versionValueEnd: String, $filterLogic: String, $page: Int, $perPage: Int
   ) {
-    sbomSearch(
-      search: $search, ecosystems: $ecosystems, source: $source,
-      repos: $repos, versionOp: $versionOp, versionValue: $versionValue,
-      versionValueEnd: $versionValueEnd, filterLogic: $filterLogic, page: $page, perPage: $perPage
-    ) {
-      items {
-        name version ecosystem purl repo org sourceTool scannedAt
+    sbom {
+      search(
+        search: $search, ecosystems: $ecosystems, source: $source,
+        repos: $repos, versionOp: $versionOp, versionValue: $versionValue,
+        versionValueEnd: $versionValueEnd, filterLogic: $filterLogic, page: $page, perPage: $perPage
+      ) {
+        items {
+          name version ecosystem purl repo org sourceTool scannedAt
+        }
+        total page perPage totalPages
       }
-      total page perPage totalPages
     }
   }
 `
 
 const SBOM_FILTER_OPTIONS_QUERY = `
   query SbomFilterOptions {
-    sbomFilterOptions { ecosystems repositories sources }
+    sbom {
+      filterOptions { ecosystems repositories sources }
+    }
   }
 `
 
 const SBOM_CROSS_REFERENCES_QUERY = `
   query SbomCrossReferences($purl: String!) {
-    sbomCrossReferences(purl: $purl) {
-      repo org version sourceTool scannedAt
+    sbom {
+      crossReferences(purl: $purl) {
+        repo org version sourceTool scannedAt
+      }
     }
   }
 `
 
 const SBOM_BULK_LOOKUP_QUERY = `
   query SbomBulkLookup($queries: [String!]!) {
-    sbomBulkLookup(queries: $queries) {
-      query found name version ecosystem purl repos
+    sbom {
+      bulkLookup(queries: $queries) {
+        query found name version ecosystem purl repos
+      }
     }
   }
 `
@@ -66,14 +76,18 @@ interface SbomComponent {
 }
 
 interface SbomSearchResult {
-  sbomSearch: {
-    items: SbomComponent[]; total: number; page: number
-    perPage: number; totalPages: number
+  sbom: {
+    search: {
+      items: SbomComponent[]; total: number; page: number
+      perPage: number; totalPages: number
+    }
   }
 }
 
 interface SbomFilterResult {
-  sbomFilterOptions: { ecosystems: string[]; repositories: string[]; sources: string[] }
+  sbom: {
+    filterOptions: { ecosystems: string[]; repositories: string[]; sources: string[] }
+  }
 }
 
 interface CrossRef {
@@ -295,8 +309,8 @@ export function SbomExplorer() {
   const [page, setPage] = useState(1)
   const perPage = 50
 
-  const [data, setData] = useState<SbomSearchResult["sbomSearch"] | null>(null)
-  const [filters, setFilters] = useState<SbomFilterResult["sbomFilterOptions"] | null>(null)
+  const [data, setData] = useState<SbomSearchResult["sbom"]["search"] | null>(null)
+  const [filters, setFilters] = useState<SbomFilterResult["sbom"]["filterOptions"] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -321,7 +335,7 @@ export function SbomExplorer() {
   // Load filter options
   useEffect(() => {
     gqlQuery<SbomFilterResult>(SBOM_FILTER_OPTIONS_QUERY)
-      .then((r) => setFilters(r.sbomFilterOptions))
+      .then((r) => setFilters(r.sbom.filterOptions))
       .catch(() => {})
   }, [])
 
@@ -342,7 +356,7 @@ export function SbomExplorer() {
         page,
         perPage,
       })
-      setData(result.sbomSearch)
+      setData(result.sbom.search)
     } catch (e: any) {
       setError(e.message || "Failed to load SBOM data")
     } finally {
@@ -358,14 +372,14 @@ export function SbomExplorer() {
     setExpandedPurl(purl)
     setCrossRefsLoading(true)
     try {
-      const result = await gqlQuery<{ sbomCrossReferences: CrossRef[] }>(SBOM_CROSS_REFERENCES_QUERY, { purl })
-      setCrossRefs(result.sbomCrossReferences)
+      const result = await gqlQuery<{ sbom: { crossReferences: CrossRef[] } }>(SBOM_CROSS_REFERENCES_QUERY, { purl })
+      setCrossRefs(result.sbom.crossReferences)
     } catch { setCrossRefs([]) }
     finally { setCrossRefsLoading(false) }
   }
 
   function handleExport(org: string, repoName: string) {
-    window.open(`/api/sbom/download?${new URLSearchParams({ org, repo: repoName })}`, "_blank")
+    window.open(`/api/v1/sboms/download?${new URLSearchParams({ org, repo: repoName })}`, "_blank")
   }
 
   function resetFilters() {
@@ -383,8 +397,8 @@ export function SbomExplorer() {
     setBulkLoading(true)
     setBulkError(null)
     try {
-      const result = await gqlQuery<{ sbomBulkLookup: BulkMatch[] }>(SBOM_BULK_LOOKUP_QUERY, { queries: parsedPackages })
-      setBulkResults(result.sbomBulkLookup)
+      const result = await gqlQuery<{ sbom: { bulkLookup: BulkMatch[] } }>(SBOM_BULK_LOOKUP_QUERY, { queries: parsedPackages })
+      setBulkResults(result.sbom.bulkLookup)
     } catch (e: any) {
       setBulkError(e.message || "Bulk lookup failed")
     } finally {
@@ -450,7 +464,7 @@ export function SbomExplorer() {
       ) : (
         <>
           {/* Search and filters */}
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3">
+          <Card padding="none" className="rounded-2xl p-4 space-y-3">
             {/* Row 1: search + multi-selects */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <div className="flex-1">
@@ -546,7 +560,7 @@ export function SbomExplorer() {
             <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
               {loading ? <span className="motion-safe:animate-pulse">Searching...</span> : <>{total.toLocaleString()} component{total !== 1 ? "s" : ""} found</>}
             </p>
-          </div>
+          </Card>
 
           {/* Error */}
           {error && (
@@ -558,7 +572,7 @@ export function SbomExplorer() {
 
           {/* Results table */}
           {!error && (
-            <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+            <Card padding="none" className="overflow-hidden rounded-2xl">
               <div className="overflow-x-auto">
                 <Table>
                   <Thead>
@@ -577,7 +591,7 @@ export function SbomExplorer() {
                       Array.from({ length: 8 }).map((_, i) => (
                         <Tr key={i}>
                           {Array.from({ length: 7 }).map((_, j) => (
-                            <Td key={j}><div className="h-4 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" style={{ width: `${45 + ((i * 7 + j) * 13 % 35)}%` }} /></Td>
+                            <Td key={j}><Skeleton className="h-4" style={{ width: `${45 + ((i * 7 + j) * 13 % 35)}%` }} /></Td>
                           ))}
                         </Tr>
                       ))
@@ -624,7 +638,7 @@ export function SbomExplorer() {
                   </div>
                 </div>
               )}
-            </div>
+            </Card>
           )}
         </>
       )}
@@ -648,7 +662,7 @@ function BulkLookupPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3">
+      <Card padding="none" className="rounded-2xl p-4 space-y-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             Bulk exposure check
@@ -677,7 +691,7 @@ function BulkLookupPanel({
             {loading ? "Checking..." : "Check Exposure"}
           </button>
         </div>
-      </div>
+      </Card>
 
       {error && (
         <div className="rounded-xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
@@ -686,7 +700,7 @@ function BulkLookupPanel({
       )}
 
       {results && (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+        <Card padding="none" className="rounded-2xl overflow-hidden">
           {/* Summary bar */}
           <div className="flex items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
             <p className="text-xs font-medium text-[var(--color-text-primary)]">
@@ -740,7 +754,7 @@ function BulkLookupPanel({
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   )
@@ -791,7 +805,7 @@ function ComponentRow({
               </p>
               {crossRefsLoading ? (
                 <div className="space-y-2">
-                  {[1, 2].map((i) => <div key={i} className="h-4 w-64 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />)}
+                  {[1, 2].map((i) => <Skeleton key={i} className="h-4 w-64" />)}
                 </div>
               ) : crossRefs.length === 0 ? (
                 <p className="text-xs text-[var(--color-text-secondary)]">No cross-references found.</p>
@@ -804,7 +818,7 @@ function ComponentRow({
                       <SourceBadge sourceTool={r.sourceTool} />
                       <span className="ml-auto text-[var(--color-text-tertiary)]">{timeAgo(r.scannedAt)}</span>
                       {isEnterprise && (
-                        <Button variant="secondary" size="xs" onClick={() => window.open(`/api/sbom/download?${new URLSearchParams({ org: r.org, repo: r.repo })}`, "_blank")}>Export</Button>
+                        <Button variant="secondary" size="xs" onClick={() => window.open(`/api/v1/sboms/download?${new URLSearchParams({ org: r.org, repo: r.repo })}`, "_blank")}>Export</Button>
                       )}
                     </div>
                   ))}

@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { saveToolSettings } from "@/lib/client/settings-api"
 import { useSaveBarSection } from "./save-bar/SaveBarProvider"
 
-type ToolKey = "dependencies" | "containerScanning" | "codeScanning" | "secrets" | "iacSecurity"
+type ToolKey = "dependencies_scanning" | "container_scanning" | "code_scanning" | "secret_scanning" | "iac_scanning"
 
 interface FieldConfig {
   key: string
@@ -167,17 +168,21 @@ export function ToolSettingsForm({
                   </span>
                 </label>
               ) : (
-                <>
-                  <label className="mb-2 block text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">{field.label}</label>
+                <FormField
+                  label={field.label}
+                  htmlFor={`tool-field-${field.key}`}
+                  hint={field.help}
+                  required={field.required ?? true}
+                >
                   <Input
+                    id={`tool-field-${field.key}`}
                     type={field.type}
                     min={field.type === "number" ? 1 : undefined}
                     value={values[field.key] ?? ""}
                     onChange={(e) => setFieldValue(field.key, e.target.value)}
                     required={field.required ?? true}
                   />
-                  <p className="mt-1.5 text-xs text-[var(--color-text-secondary)]">{field.help}</p>
-                </>
+                </FormField>
               )}
             </div>
           ))}

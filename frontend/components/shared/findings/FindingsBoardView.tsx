@@ -21,7 +21,9 @@ import { type FindingsMoreFiltersValues } from "./FindingsMoreFiltersPopover"
 import { FindingsPagination } from "./FindingsPagination"
 import { EpssScoreCell } from "@/components/shared/findings/EpssScoreCell"
 import { Button } from "@/components/ui/Button"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
+import { cn } from "@/lib/shared/utils"
 import { FindingDetailActions } from "@/components/shared/findings/FindingDetailActions"
 import { FindingAssigneeEditor } from "@/components/shared/findings/FindingAssigneeEditor"
 import { FindingOriginSection } from "@/components/shared/findings/FindingOriginSection"
@@ -39,7 +41,8 @@ import {
   type FindingsSummary,
   type VerdictCounts,
 } from "@/lib/client/findings-api"
-import { listRepos, type RepoSummary } from "@/lib/client/repos-api"
+import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
+import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { EnableLlmBanner } from "@/components/shared/findings/EnableLlmBanner"
 import { VerdictFilterChips } from "@/components/shared/findings/VerdictFilterChips"
 import type { VerdictFilter } from "@/lib/shared/findings/verdicts"
@@ -50,7 +53,6 @@ import {
   type FindingSeverity as Severity,
 } from "@/lib/shared/findings/row-mapper"
 
-// ── Constants ────────────────────────────────────────────────────────────────
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
 const PAGE_SIZE = 25
@@ -70,35 +72,35 @@ const SEV_COLOR: Record<Severity, string> = {
 }
 
 const SCANNER_LABEL: Record<Scanner, string> = {
-  deps: "SCA",
-  sast: "SAST",
-  containers: "CONT",
-  secrets: "SEC",
-  iac: "IaC",
+  dependencies_scanning: "SCA",
+  code_scanning: "SAST",
+  container_scanning: "CONT",
+  secret_scanning: "SEC",
+  iac_scanning: "IaC",
 }
 
 const SCANNER_BG: Record<Scanner, string> = {
-  deps: "rgba(15,188,255,0.18)",
-  sast: "rgba(192,132,252,0.18)",
-  containers: "rgba(52,211,153,0.18)",
-  secrets: "rgba(251,146,60,0.18)",
-  iac: "rgba(96,165,250,0.18)",
+  dependencies_scanning: "rgba(15,188,255,0.18)",
+  code_scanning: "rgba(192,132,252,0.18)",
+  container_scanning: "rgba(52,211,153,0.18)",
+  secret_scanning: "rgba(251,146,60,0.18)",
+  iac_scanning: "rgba(96,165,250,0.18)",
 }
 
 const SCANNER_FG: Record<Scanner, string> = {
-  deps: "#5fcdff",
-  sast: "#d4b0fc",
-  containers: "#6ee0b4",
-  secrets: "#ffba7c",
-  iac: "#93c2fa",
+  dependencies_scanning: "#5fcdff",
+  code_scanning: "#d4b0fc",
+  container_scanning: "#6ee0b4",
+  secret_scanning: "#ffba7c",
+  iac_scanning: "#93c2fa",
 }
 
 const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
-  deps: "Dependencies",
-  sast: "Code Scanning",
-  containers: "Containers",
-  secrets: "Secrets",
-  iac: "Infrastructure as Code",
+  dependencies_scanning: "Dependencies",
+  code_scanning: "Code Scanning",
+  container_scanning: "Containers",
+  secret_scanning: "Secrets",
+  iac_scanning: "Infrastructure as Code",
 }
 
 const SEVERITY_GROUP_LABEL: Record<Severity, string> = {
@@ -109,7 +111,7 @@ const SEVERITY_GROUP_LABEL: Record<Severity, string> = {
 }
 
 // Stable ordering per group key keeps the visual scan rhythm consistent.
-const SCANNER_ORDER: Scanner[] = ["deps", "sast", "secrets", "containers", "iac"]
+const SCANNER_ORDER: Scanner[] = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning"]
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"]
 
 const INITIAL_ROWS_PER_GROUP = 5
@@ -160,7 +162,6 @@ function groupSeverityCounts(rows: Finding[]) {
   return counts
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export interface FindingsViewApi {
   applyView: (state: Record<string, string>) => void
@@ -199,17 +200,29 @@ export interface FindingsBoardViewProps {
    * grouped view stays the canonical /findings shape. Defaults to false.
    */
   flat?: boolean
+  /**
+   * Suppress the built-in PageHeader. Used when the view is embedded under a
+   * shared header that owns the title and tab navigation (e.g. the Inbox page
+   * which stacks Findings and Activity tabs under one "Inbox" header).
+   */
+  hideHeader?: boolean
+  /**
+   * Restrict findings to these repos (each an Asset.display_name, e.g.
+   * "github:acme/foo"). Used by the per-source Findings tab to scope to that
+   * source's repositories. The repo dropdown still narrows within this scope.
+   */
+  scopeRepos?: string[]
 }
 
 type ScannerFilter = FindingScanner | "all"
 
 const SCANNER_FILTER_OPTIONS: { value: ScannerFilter; label: string }[] = [
-  { value: "all",       label: "Tool: All" },
-  { value: "deps",      label: "Tool: Dependencies" },
-  { value: "sast",      label: "Tool: Code scanning" },
-  { value: "secrets",   label: "Tool: Secrets" },
-  { value: "container", label: "Tool: Container" },
-  { value: "iac",       label: "Tool: IaC" },
+  { value: "all",                    label: "Tool: All" },
+  { value: "dependencies_scanning",  label: "Tool: Dependencies" },
+  { value: "code_scanning",          label: "Tool: Code scanning" },
+  { value: "secret_scanning",        label: "Tool: Secrets" },
+  { value: "container_scanning",     label: "Tool: Container" },
+  { value: "iac_scanning",           label: "Tool: IaC" },
 ]
 
 type StateFilter = FindingState | "all"
@@ -231,14 +244,70 @@ function initialStateFromProp(initial: FindingState[] | undefined): StateFilter 
 }
 
 const VALID_SEVERITIES = new Set<Severity | "all">(["all", "critical", "high", "medium", "low"])
-// Saved-view serialization uses the API-client scanner vocabulary ("container"),
-// distinct from the row-mapper's "containers".
-const VALID_SCANNERS = new Set<ScannerFilter>(["all", "deps", "container", "sast", "secrets", "iac"])
+// Saved-view serialization uses the canonical wire-level scanner names.
+const VALID_SCANNERS = new Set<ScannerFilter>([
+  "all",
+  "dependencies_scanning",
+  "code_scanning",
+  "container_scanning",
+  "secret_scanning",
+  "iac_scanning",
+])
 const VALID_STATES = new Set<StateFilter>(["all", "open", "closed", "fixed", "dismissed"])
 const VALID_SORT_KEYS = new Set<SortKey>(["severity_age", "epss", "risk_score", "newest", "oldest"])
 const VALID_AGE_PRESETS = new Set<AgePresetKey>(["any", "24h", "7d", "30d"])
 
 const SEARCH_DEBOUNCE_MS = 250
+
+type SortDirection = "ascending" | "descending" | "none"
+
+/**
+ * Column header that drives the shared `sortKey` state. Renders a real
+ * <button> (keyboard-reachable) inside the <th>, mirrors the active sort
+ * onto `aria-sort` for screen readers, and shows a caret affordance so the
+ * sort state is visible — not just available via the Sort dropdown.
+ */
+function SortableTh({
+  label,
+  direction,
+  onClick,
+  className,
+}: {
+  label: string
+  direction: SortDirection
+  onClick: () => void
+  className?: string
+}) {
+  const active = direction !== "none"
+  return (
+    <Th aria-sort={direction} className={className}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="group inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] rounded-sm"
+        aria-label={`Sort by ${label}`}
+      >
+        {label}
+        <svg
+          viewBox="0 0 12 12"
+          aria-hidden="true"
+          className={cn(
+            "h-3 w-3 shrink-0 transition-opacity",
+            active
+              ? "text-[var(--color-accent)] opacity-100"
+              : "opacity-0 group-hover:opacity-50",
+          )}
+        >
+          {direction === "ascending" ? (
+            <path d="M6 3.5 9 7.5H3z" fill="currentColor" />
+          ) : (
+            <path d="M6 8.5 3 4.5h6z" fill="currentColor" />
+          )}
+        </svg>
+      </button>
+    </Th>
+  )
+}
 
 function readFromSet<T extends string>(
   state: Record<string, string>,
@@ -251,7 +320,7 @@ function readFromSet<T extends string>(
   return fallback
 }
 
-export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initialStateFilter, initialScannerFilter, leftSidebar, showSummaryStrip = true, compactHeader = false, flat = false }: FindingsBoardViewProps) {
+export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initialStateFilter, initialScannerFilter, leftSidebar, showSummaryStrip = true, compactHeader = false, flat = false, hideHeader = false, scopeRepos }: FindingsBoardViewProps) {
   const sidebarOwnsSavedViews = typeof leftSidebar === "function"
   const [sevFilter, setSevFilter] = useState<Severity | "all">("all")
   const [scannerFilter, setScannerFilter] = useState<ScannerFilter>(initialScannerFilter ?? "all")
@@ -268,6 +337,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   })
   const [page, setPage] = useState<number>(1)
   const [repoOptions, setRepoOptions] = useState<string[]>([])
+  const [hasSourceConnections, setHasSourceConnections] = useState<boolean | null>(null)
   const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [groupBy, setGroupBy] = useState<GroupKey>("scanner")
@@ -346,7 +416,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
   useEffect(() => {
     let cancelled = false
-    listFindingsSummary(ORG_ID)
+    listFindingsSummary()
       .then((data) => { if (!cancelled) setSummary(data) })
       .catch(() => { if (!cancelled) setSummary(null) })
     return () => { cancelled = true }
@@ -363,6 +433,19 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         setRepoOptions(slugs)
       })
       .catch(() => { if (!cancelled) setRepoOptions([]) })
+    return () => { cancelled = true }
+  }, [])
+
+  // Determine whether any source connection exists so the empty state can
+  // distinguish "no source connected" from "source connected, no findings yet".
+  useEffect(() => {
+    let cancelled = false
+    listSourceConnections()
+      .then((result) => {
+        if (cancelled) return
+        setHasSourceConnections(result.ok ? result.data.connections.length > 0 : false)
+      })
+      .catch(() => { if (!cancelled) setHasSourceConnections(false) })
     return () => { cancelled = true }
   }, [])
 
@@ -409,7 +492,14 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         ...(severity !== "all" ? { severity: [severity] } : {}),
         ...(scanner !== "all" ? { scanner: [scanner] } : {}),
         ...(q ? { q } : {}),
-        ...(repo !== "all" ? { repo } : {}),
+        // The repo dropdown narrows to one repo; otherwise fall back to the
+        // per-source scope (if any). `repo` is a comma-separated display_name
+        // list the backend matches with IN.
+        ...(repo !== "all"
+          ? { repo }
+          : scopeRepos && scopeRepos.length
+            ? { repo: scopeRepos.join(",") }
+            : {}),
         ...(state !== "all" ? { state: [state] } : {}),
         ...(firstSeenAfter ? { first_seen_after: firstSeenAfter } : {}),
         ...(moreFilters.cwe ? { cwe: moreFilters.cwe } : {}),
@@ -526,23 +616,25 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     <div className="flex h-full flex-col overflow-hidden bg-[var(--color-bg)]">
       <IntelLiveBanner message={intelMessage} onDismiss={handleIntelDismiss} />
 
-      <PageHeader
-        icon={pageIcon}
-        title={pageTitle}
-        description={pageDescription ?? "Unified cross-scanner findings with Argus risk scoring."}
-        count={totalCount}
-        controls={
-          sidebarOwnsSavedViews ? null : (
-            <ExportFindingsButton
-              filters={{
-                ...(sevFilter !== "all" ? { severity: sevFilter } : {}),
-                ...(scannerFilter !== "all" ? { scanner: scannerFilter } : {}),
-                ...(repoFilter !== "all" ? { repo_id: repoFilter } : {}),
-              }}
-            />
-          )
-        }
-      />
+      {!hideHeader && (
+        <PageHeader
+          icon={pageIcon}
+          title={pageTitle}
+          description={pageDescription ?? "Unified cross-scanner findings with Argus risk scoring."}
+          count={totalCount}
+          controls={
+            sidebarOwnsSavedViews ? null : (
+              <ExportFindingsButton
+                filters={{
+                  ...(sevFilter !== "all" ? { severity: sevFilter } : {}),
+                  ...(scannerFilter !== "all" ? { scanner: scannerFilter } : {}),
+                  ...(repoFilter !== "all" ? { repo_id: repoFilter } : {}),
+                }}
+              />
+            )
+          }
+        />
+      )}
 
       {staleViewKeys.length > 0 && (
         <div
@@ -612,10 +704,10 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-3">
                 <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
-                <div className="h-3 w-[40%] rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
-                <div className="ml-auto h-3 w-12 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse hidden md:block" />
-                <div className="h-3 w-24 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse hidden lg:block" />
-                <div className="h-3 w-10 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+                <Skeleton className="h-3 w-[40%]" />
+                <Skeleton className="ml-auto h-3 w-12 hidden md:block" />
+                <Skeleton className="h-3 w-24 hidden lg:block" />
+                <Skeleton className="h-3 w-10" />
               </div>
             ))}
           </div>
@@ -632,7 +724,16 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
         {showGhostPreview ? (
           <div className="space-y-4 px-5 py-4">
-            <EmptyOverviewBanner />
+            {hasSourceConnections !== null && (
+              <EmptyOverviewBanner
+                {...(hasSourceConnections === true && {
+                  title: "No findings yet",
+                  description: "Your source is connected. Run a scan to start seeing findings here.",
+                  ctaHref: "/sources",
+                  ctaLabel: "View sources",
+                })}
+              />
+            )}
             <GhostPreviewWrapper>
               <FindingsGhostPreview flat={flat} />
             </GhostPreviewWrapper>
@@ -742,19 +843,41 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
         {showTable && !compactHeader && (
           <>
-            <Table className="border-collapse">
+            {/* table-fixed so columns share the page width: the Finding column
+                flexes into the remaining space while the rest stay fixed,
+                instead of the table overflowing and clipping later columns. */}
+            <Table className="border-collapse table-fixed w-full">
               <Thead className="sticky top-0 z-10 bg-[var(--color-surface)]">
                 <Tr>
-                  <Th className="w-4 px-4 py-2.5" />
+                  <Th className="w-8 px-4 py-2.5" />
                   <Th className="px-3 py-2.5">Finding</Th>
-                  <Th className="px-3 py-2.5 hidden md:table-cell">Scanner</Th>
-                  <Th className="px-3 py-2.5 hidden lg:table-cell">Repository</Th>
-                  <Th className="px-3 py-2.5">Chain</Th>
-                  <Th className="px-3 py-2.5 text-right">Risk</Th>
-                  <Th className="px-3 py-2.5 text-right hidden sm:table-cell">
-                    EPSS
-                  </Th>
-                  <Th className="px-3 py-2.5 text-right hidden sm:table-cell">Age</Th>
+                  <Th className="w-[14rem] px-3 py-2.5 hidden md:table-cell">Scanner</Th>
+                  <Th className="w-[12rem] px-3 py-2.5 hidden lg:table-cell">Repository</Th>
+                  <Th className="w-[4.5rem] px-3 py-2.5">Chain</Th>
+                  <SortableTh
+                    label="Risk"
+                    className="w-[7rem] px-3 py-2.5 text-right [&>button]:justify-end [&>button]:w-full"
+                    direction={sortKey === "risk_score" ? "descending" : "none"}
+                    onClick={() => setSortKey("risk_score")}
+                  />
+                  <SortableTh
+                    label="EPSS"
+                    className="w-[5.5rem] px-3 py-2.5 text-right hidden sm:table-cell [&>button]:justify-end [&>button]:w-full"
+                    direction={sortKey === "epss" ? "descending" : "none"}
+                    onClick={() => setSortKey("epss")}
+                  />
+                  <SortableTh
+                    label="Age"
+                    className="w-[4.5rem] px-3 py-2.5 text-right hidden sm:table-cell [&>button]:justify-end [&>button]:w-full"
+                    direction={
+                      sortKey === "oldest"
+                        ? "descending"
+                        : sortKey === "newest"
+                          ? "ascending"
+                          : "none"
+                    }
+                    onClick={() => setSortKey(sortKey === "newest" ? "oldest" : "newest")}
+                  />
                 </Tr>
               </Thead>
               {groups.map((group) => (
@@ -814,7 +937,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
                             <Td className="px-3 py-3">
                               <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-medium text-[var(--color-text-primary)] truncate max-w-[22rem]">
+                                <span className="font-medium text-[var(--color-text-primary)] truncate">
                                   {finding.title}
                                 </span>
                                 <FindingRowTags
@@ -1006,7 +1129,6 @@ const CRITICAL = "text-[var(--color-severity-critical)]"
 const WARN = "text-[var(--color-severity-high)]"
 const OK = "text-[var(--color-state-fixed)]"
 
-// ── Compact finding row + bulk action bar ────────────────────────────────────
 
 function statusPillLabel(state: string | undefined): string {
   switch (state) {
@@ -1207,7 +1329,6 @@ function BulkActionBar({
   )
 }
 
-// ── Detail-pane activity timeline ────────────────────────────────────────────
 
 function formatTimelineDate(iso: string | undefined): string {
   if (!iso) return ""

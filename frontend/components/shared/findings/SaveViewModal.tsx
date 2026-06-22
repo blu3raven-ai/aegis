@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { createSavedView, type SavedView } from "@/lib/client/saved-views-api"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Sheet } from "@/components/ui/Sheet"
 
@@ -37,18 +38,18 @@ export function SaveViewModal({ open, onClose, currentUrlState, onSaved }: SaveV
   return (
     <Sheet open={open} onClose={onClose} title="Save view" size="sm">
       <form onSubmit={handleSubmit}>
-        <label className="flex flex-col gap-1 text-xs text-[var(--color-text-secondary)]">
-          Name
+        <FormField label="Name" htmlFor="save-view-name" error={error ?? undefined}>
           <Input
+            id="save-view-name"
             type="text"
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={255}
             placeholder="e.g. Critical KEV in main repo"
+            invalid={!!error}
           />
-        </label>
-        {error && <p className="mt-2 text-xs text-[var(--color-severity-critical)]">{error}</p>}
+        </FormField>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel

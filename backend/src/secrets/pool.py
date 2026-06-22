@@ -10,7 +10,7 @@ from src.db.models import ScanCheckpoint, Finding
 from src.secrets.store import build_secret_identity
 
 
-def read_checkpoints(tool: str = "secrets") -> dict[str, dict[str, Any]]:
+def read_checkpoints(tool: str = "secret_scanning") -> dict[str, dict[str, Any]]:
     """Read all scan checkpoints for a tool from the DB, keyed by asset_id."""
     async def _query(session):
         result = await session.execute(
@@ -31,7 +31,7 @@ def write_checkpoint_for_asset(
     asset_id: str,
     last_commit_sha: str | None,
     last_scanned_at: str,
-    tool: str = "secrets",
+    tool: str = "secret_scanning",
 ) -> None:
     """Write a checkpoint for an asset to the DB."""
     async def _query(session):
@@ -54,12 +54,11 @@ def read_pool(pool_path: Any = None, org: str = "") -> dict[str, dict[str, Any]]
     """Read the finding pool from the DB. The path param is ignored (kept for compat).
 
     The org parameter is no longer used for DB filtering after Plan D (Finding.org dropped).
-    Secrets findings have asset_id=NULL and are global per instance.
+    Returns every secret finding (across repos); merge_pool re-groups them by
+    (secretIdentity, repository) for the per-source carry-forward.
     """
     async def _query(session):
-        stmt = select(Finding).where(Finding.tool == "secrets")
-        # Secrets are intentionally instance-global — asset_id=NULL by design.
-        # Per-source isolation will require a secrets-specific identity model.
+        stmt = select(Finding).where(Finding.tool == "secret_scanning")
         result = await session.execute(stmt)
         pool: dict[str, dict[str, Any]] = {}
         for f in result.scalars().all():
@@ -108,7 +107,7 @@ def _entries_to_append(
     return [e for e in new_entries if e.get("runId") not in existing_run_ids]
 
 
-def reset_checkpoints(asset_ids: list[str] | None = None, tool: str = "secrets") -> None:
+def reset_checkpoints(asset_ids: list[str] | None = None, tool: str = "secret_scanning") -> None:
     """Delete checkpoints for a tool, optionally scoped to a set of assets.
 
     With ``asset_ids=None`` (default), deletes every row (across all tools and
@@ -137,9 +136,12 @@ def merge_pool(
     current_findings: list[dict[str, Any]],
     previous_findings: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Deduplicate secrets by secretIdentity — pure function, no DB access.
+    """Deduplicate secrets by (secretIdentity, repository) — pure function, no DB.
 
-    Same secret in multiple repos = one finding with locations[] array.
+    One finding per secret *per repository*, so each maps to its own repo asset
+    and is scoped by that repo's grants. The shared secretIdentity still lets the
+    UI group a secret's per-repo findings together. Occurrences in the same repo
+    (multiple files/commits) collapse into one finding's locations[].
     Merges classificationHistory entries from previous findings.
 
     Args:
@@ -147,25 +149,26 @@ def merge_pool(
         previous_findings: Previous findings read from DB (via read_latest_findings).
 
     Returns:
-        Deduplicated list of findings, one per unique secretIdentity.
+        Deduplicated list of findings, one per (secretIdentity, repository).
     """
-    # Build previous lookup for classification history carry-forward
-    prev_by_identity: dict[str, dict[str, Any]] = {}
+    # Build previous lookup for classification history carry-forward, keyed by
+    # (identity, repo) to match the per-repo grouping.
+    prev_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     for f in previous_findings:
         identity = f.get("secretIdentity") or ""
         if identity:
-            prev_by_identity[identity] = f
+            prev_by_key[(identity, str(f.get("repository") or ""))] = f
 
-    # Group current findings by secretIdentity
-    groups: dict[str, list[dict[str, Any]]] = {}
+    # Group current findings by (secretIdentity, repository)
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for f in current_findings:
         identity = f.get("secretIdentity") or build_secret_identity(f) or ""
         if not identity:
             continue
-        groups.setdefault(identity, []).append(f)
+        groups.setdefault((identity, str(f.get("repository") or "")), []).append(f)
 
     merged: list[dict[str, Any]] = []
-    for identity, occurrences in groups.items():
+    for (identity, repo), occurrences in groups.items():
         # Build locations from all occurrences
         locations: list[dict[str, Any]] = []
         for occ in occurrences:
@@ -183,7 +186,7 @@ def merge_pool(
         seen_run_ids: set[str] = set()
 
         # Previous history first
-        prev = prev_by_identity.get(identity)
+        prev = prev_by_key.get((identity, repo))
         if prev:
             for entry in prev.get("classificationHistory") or []:
                 run_id = entry.get("runId")
@@ -204,6 +207,7 @@ def merge_pool(
         finding = {
             **base,
             "secretIdentity": identity,
+            "repository": repo,
             "locations": locations,
             "classificationHistory": all_history,
         }

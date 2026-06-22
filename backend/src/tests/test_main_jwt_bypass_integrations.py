@@ -18,7 +18,13 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from src.main import _is_integrations_webhook_path
+from types import SimpleNamespace
+
+from src.main import (
+    _is_dev_graphiql_request,
+    _is_integrations_webhook_path,
+    _propagate_session_to_state,
+)
 
 
 def _build_app() -> FastAPI:
@@ -102,3 +108,55 @@ def test_admin_list_route_under_integrations_requires_auth():
     client = TestClient(_build_app())
     resp = client.get("/integrations/admin/list")
     assert resp.status_code == 401
+
+
+def test_dev_graphiql_requires_docs_env(monkeypatch):
+    monkeypatch.delenv("ENABLE_BACKEND_DOCS", raising=False)
+    assert _is_dev_graphiql_request("GET", "/api/v1/graphql") is False
+    assert _is_dev_graphiql_request("POST", "/api/v1/graphql") is False
+
+
+def test_dev_graphiql_get_passes_with_docs_env(monkeypatch):
+    monkeypatch.setenv("ENABLE_BACKEND_DOCS", "true")
+    assert _is_dev_graphiql_request("GET", "/api/v1/graphql") is True
+
+
+def test_dev_graphiql_post_passes_with_docs_env(monkeypatch):
+    """POST queries also need to bypass require_jwt so resolvers can return
+    a clean UNAUTHENTICATED error instead of the bearer-token envelope."""
+    monkeypatch.setenv("ENABLE_BACKEND_DOCS", "true")
+    assert _is_dev_graphiql_request("POST", "/api/v1/graphql") is True
+
+
+def test_dev_graphiql_rejects_other_methods(monkeypatch):
+    monkeypatch.setenv("ENABLE_BACKEND_DOCS", "true")
+    assert _is_dev_graphiql_request("PUT", "/api/v1/graphql") is False
+    assert _is_dev_graphiql_request("DELETE", "/api/v1/graphql") is False
+
+
+def test_dev_graphiql_only_matches_graphql_path(monkeypatch):
+    monkeypatch.setenv("ENABLE_BACKEND_DOCS", "true")
+    assert _is_dev_graphiql_request("GET", "/api/v1/findings") is False
+    assert _is_dev_graphiql_request("POST", "/api/v1/findings") is False
+
+
+def test_propagate_session_populates_user_sub_for_graphql_bypass():
+    """Regression: the docs-mode GraphQL bypass must still forward the
+    SessionAuthMiddleware-attached session onto request.state, otherwise
+    authenticated resolvers see user_sub=None and raise UNAUTHENTICATED."""
+    request = SimpleNamespace(state=SimpleNamespace())
+    request.state.session = SimpleNamespace(
+        user_id="user-123",
+        user=SimpleNamespace(role_id="role-admin"),
+    )
+    _propagate_session_to_state(request)
+    assert request.state.user_sub == "user-123"
+    assert request.state.user_role_id == "role-admin"
+
+
+def test_propagate_session_noop_when_no_session():
+    """Unauthenticated GraphiQL hits — no session attached — must not crash and
+    must not invent an identity. Resolvers will then raise UNAUTHENTICATED."""
+    request = SimpleNamespace(state=SimpleNamespace())
+    _propagate_session_to_state(request)
+    assert not hasattr(request.state, "user_sub")

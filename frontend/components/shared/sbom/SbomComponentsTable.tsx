@@ -4,8 +4,10 @@ import { useState, useMemo } from "react"
 import type { CycloneDxComponent } from "@/lib/client/sbom-api"
 import { ComponentLicenseBadge } from "./ComponentLicenseBadge"
 import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
+import { Card } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 const PER_PAGE = 50
@@ -17,8 +19,8 @@ function SkeletonRow() {
     <Tr>
       {[60, 25, 20, 30, 45].map((w, i) => (
         <Td key={i}>
-          <div
-            className="h-3.5 rounded bg-[var(--color-surface-raised)] motion-safe:animate-pulse"
+          <Skeleton
+            className="h-3.5"
             style={{ width: `${w}%` }}
           />
         </Td>
@@ -66,7 +68,7 @@ export function SbomComponentsTable({
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
+    <Card padding="none" elevation="sm" className="flex flex-col overflow-hidden rounded-xl">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
         <div className="flex-1 min-w-[160px]">
@@ -198,6 +200,6 @@ export function SbomComponentsTable({
           label="components"
         />
       )}
-    </div>
+    </Card>
   )
 }

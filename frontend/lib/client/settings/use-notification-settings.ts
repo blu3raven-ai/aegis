@@ -27,7 +27,7 @@ export async function fetchNotifications(): Promise<NotificationSettings> {
   const now = Date.now()
   if (cached && now - cacheTimestamp < CACHE_TTL_MS) return cached
   try {
-    const data = await apiClient<NotificationSettings>("/api/v1/settings/notifications")
+    const data = await apiClient<NotificationSettings>("/api/v1/settings/account/notification-prefs")
     cached = data
     cacheTimestamp = Date.now()
     return data
@@ -37,9 +37,15 @@ export async function fetchNotifications(): Promise<NotificationSettings> {
 }
 
 export async function saveNotifications(patch: Partial<NotificationSettings>): Promise<NotificationSettings> {
-  const data = await apiClient<NotificationSettings>("/api/v1/settings/notifications", {
+  const data = await apiClient<NotificationSettings>("/api/v1/settings/account/notification-prefs", {
     method: "PATCH",
-    body: patch,
+    body: {
+      assignments: patch.assignments ?? null,
+      mentions: patch.mentions ?? null,
+      kev: patch.kev ?? null,
+      weeklyDigest: patch.weeklyDigest ?? null,
+      marketing: patch.marketing ?? null,
+    },
   })
   cached = data
   cacheTimestamp = Date.now()

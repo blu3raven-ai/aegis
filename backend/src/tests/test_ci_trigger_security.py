@@ -22,7 +22,6 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
@@ -31,13 +30,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
 os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 
-from src.api_keys.auth import require_scope_and_source  # noqa: E402
+from src.auth.credentials.auth import require_scope_and_source  # noqa: E402
 from src.db.engine import DATABASE_URL  # noqa: E402
 from src.db.models import Asset, AuditEvent, ScanRun  # noqa: E402
-from src.scans.trigger_router import router as trigger_router  # noqa: E402
+from src.scans.ci_router import router as ci_router  # noqa: E402
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
 
 def _make_app(state: dict | None = None) -> FastAPI:
     app = FastAPI()
@@ -47,7 +45,7 @@ def _make_app(state: dict | None = None) -> FastAPI:
             for k, v in state.items():
                 setattr(request.state, k, v)
             return await call_next(request)
-    app.include_router(trigger_router)
+    app.include_router(ci_router)
     return app
 
 
@@ -78,7 +76,6 @@ def _clear_rate_limit_buckets():
     yield
 
 
-# ── tests ─────────────────────────────────────────────────────────────────────
 
 def test_api_key_without_scope_blocked():
     """API key lacking scan:trigger scope returns 403 missing_scope."""
@@ -89,8 +86,8 @@ def test_api_key_without_scope_blocked():
     }
     client = TestClient(_make_app(state))
     resp = client.post(
-        f"/api/v1/sources/{uuid.uuid4()}/scans/trigger",
-        json={"commit_sha": "abc12345"},
+        "/api/v1/scans/ci",
+        json={"source_id": str(uuid.uuid4()), "commit_sha": "abc12345"},
     )
     assert resp.status_code == 403
     body = resp.json()
@@ -111,8 +108,8 @@ def test_source_allowlist_blocks_other_sources():
     # src_b is blocked at scope check — no DB lookup needed
     client = TestClient(_make_app(state))
     resp = client.post(
-        f"/api/v1/sources/{src_b}/scans/trigger",
-        json={"commit_sha": "abc12345"},
+        "/api/v1/scans/ci",
+        json={"source_id": src_b, "commit_sha": "abc12345"},
     )
     assert resp.status_code == 403
     body = resp.json()
@@ -137,20 +134,20 @@ def test_source_allowlist_permits_listed_source():
         scan_id=str(uuid.uuid4()),
         repo_id=src_a,
         commit_sha="abc12345",
-        scanner_types=["dependencies"],
+        scanner_types=["dependencies_scanning"],
         status="queued",
         submitted_at=datetime(2026, 6, 14, tzinfo=timezone.utc),
         submitted_by="api_key:1",
     )
 
-    with patch("src.scans.trigger_router.get_session", return_value=mock_ctx), \
-         patch("src.scans.trigger_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
-         patch("src.scans.trigger_router.submit_ci_scan", new=AsyncMock(return_value=submission)), \
-         patch("src.scans.trigger_router.cancel_older_queued_for_pr", new=AsyncMock(return_value=[])):
+    with patch("src.scans.ci_router.get_session", return_value=mock_ctx), \
+         patch("src.scans.ci_router.find_inflight_scan", new=AsyncMock(return_value=None)), \
+         patch("src.scans.ci_router.submit_ci_scan", new=AsyncMock(return_value=submission)), \
+         patch("src.scans.ci_router.cancel_older_queued_for_pr", new=AsyncMock(return_value=[])):
         client = TestClient(_make_app(state))
         resp = client.post(
-            f"/api/v1/sources/{src_a}/scans/trigger",
-            json={"commit_sha": "abc12345"},
+            "/api/v1/scans/ci",
+            json={"source_id": src_a, "commit_sha": "abc12345"},
         )
 
     assert resp.status_code == 202
@@ -200,7 +197,7 @@ async def test_audit_event_recorded_on_trigger(db_session, monkeypatch):
                 yield s
 
         monkeypatch.setattr("src.scans.service.get_session", _get_session_a)
-        monkeypatch.setattr("src.scans.trigger_router.get_session", _get_session_b)
+        monkeypatch.setattr("src.scans.ci_router.get_session", _get_session_b)
         monkeypatch.setattr("src.scans.service._dispatch_scanner_jobs", lambda *a, **k: None)
 
         state = {
@@ -210,8 +207,8 @@ async def test_audit_event_recorded_on_trigger(db_session, monkeypatch):
         }
         client = TestClient(_make_app(state))
         resp = client.post(
-            f"/api/v1/sources/{asset_id}/scans/trigger",
-            json={"commit_sha": "abc12345"},
+            "/api/v1/scans/ci",
+            json={"source_id": asset_id, "commit_sha": "abc12345"},
         )
         assert resp.status_code == 202, resp.text
         scan_id = resp.json()["scan_id"]

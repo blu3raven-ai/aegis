@@ -4,8 +4,8 @@ import assert from "node:assert/strict"
 
 const SRC = readFileSync(new URL("./client.tsx", import.meta.url), "utf8")
 
-test("useBranding fetches /api/v1/branding", () => {
-  assert.match(SRC, /apiClient<.*>\("\/api\/v1\/branding"/)
+test("useBranding fetches /api/v1/settings/organisations/branding", () => {
+  assert.match(SRC, /fetch\("\/api\/v1\/settings\/organisations\/branding"/)
 })
 
 test("useBranding falls back to /logo-brand.png when logoDataUrl is null", () => {

@@ -53,7 +53,7 @@ export async function getSettingsServer(user: { id: string; role: string; roleId
 
 export async function getUserCountServer(user: { id: string; role: string; roleId?: string | null }): Promise<number | undefined> {
   try {
-    const data = await getJson<{ users: any[] }>("/api/v1/settings/users", user)
+    const data = await getJson<{ users: any[] }>("/api/v1/workspace/users", user)
     return Array.isArray(data.users) ? data.users.length : undefined
   } catch {
     return undefined
@@ -62,7 +62,7 @@ export async function getUserCountServer(user: { id: string; role: string; roleI
 
 export async function getTeamCountServer(user: { id: string; role: string; roleId?: string | null }): Promise<number | undefined> {
   try {
-    const data = await getJson<{ teams?: unknown[] }>("/api/v1/settings/organisations", user)
+    const data = await getJson<{ teams?: unknown[] }>("/api/v1/workspace/teams", user)
     return Array.isArray(data.teams) ? data.teams.length : undefined
   } catch {
     return undefined
@@ -71,7 +71,7 @@ export async function getTeamCountServer(user: { id: string; role: string; roleI
 
 export async function getRoleCountServer(user: { id: string; role: string; roleId?: string | null }): Promise<number | undefined> {
   try {
-    const data = await getJson<{ roles?: unknown[] }>("/api/v1/settings/roles", user)
+    const data = await getJson<{ roles?: unknown[] }>("/api/v1/workspace/roles", user)
     return Array.isArray(data.roles) ? data.roles.length : undefined
   } catch {
     return undefined

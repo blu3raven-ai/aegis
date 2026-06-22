@@ -18,9 +18,7 @@ EXEMPT_EXACT = (
     "/openapi.json",
     "/docs",
     "/redoc",
-    # GraphQL endpoint (mounted under /api with its own version semantics)
-    "/api/graphql",
-    # k8s probe root — sub-routes match the "/health/" prefix entry below
+    # Unversioned health probe — convention for monitoring/k8s probes
     "/health",
 )
 
@@ -28,17 +26,19 @@ EXEMPT_EXACT = (
 # Prefix exemptions — entire trees rooted at these paths.
 # Every entry MUST end with "/" so the matcher forces a path-segment boundary.
 EXEMPT_PREFIXES = (
-    # k8s liveness/readiness probes — convention is unversioned
-    "/health/",
-    # Auth / SSO browser-redirect URLs (cookie scope, registered with IdPs)
-    "/auth/",
+    # SSO browser-redirect URLs (OIDC/SAML callbacks registered with the customer's IdP).
+    # The first-party auth JSON API (login/logout/me/totp/api-keys/email) lives at
+    # /api/v1/auth/*; only the protocol-bound browser flow stays at the bare prefix.
+    "/auth/sso/",
     # SCIM v2 protocol (RFC 7644)
     "/scim/v2/",
     # External webhook URLs (registered with third-party providers)
     "/integrations/github/",
     "/integrations/gitlab/",
     "/integrations/bitbucket/",
-    "/argus/",
+    "/integrations/azure-devops/",
+    "/integrations/jenkins/",
+    "/integrations/argus/",
 )
 
 

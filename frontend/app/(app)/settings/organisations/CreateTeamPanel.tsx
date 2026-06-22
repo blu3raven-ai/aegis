@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { createOrganisationTeam } from "@/lib/client/settings-api"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Sheet } from "@/components/ui/Sheet"
 import { Textarea } from "@/components/ui/Textarea"
@@ -68,25 +69,25 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
       }
     >
       <form id="create-team-form" onSubmit={onSubmit} className="space-y-4">
-        <label className="block space-y-1.5">
-          <span className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Team name</span>
+        <FormField label="Team name" htmlFor="create-team-name" required>
           <Input
+            id="create-team-name"
             required
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus
             placeholder="Platform"
           />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Description</span>
+        </FormField>
+        <FormField label="Description" htmlFor="create-team-description">
           <Textarea
+            id="create-team-description"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             rows={3}
             placeholder="Owns the shared application platform and supporting services."
           />
-        </label>
+        </FormField>
         {error && (
           <p
             role="alert"

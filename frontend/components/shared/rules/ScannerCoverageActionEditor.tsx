@@ -18,19 +18,20 @@ import type {
   StaleAlertAction,
 } from "@/lib/client/rules-api"
 import type { NotificationDestination } from "@/lib/client/destinations-api"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 
 const SCANNER_OPTIONS: { value: ScannerType; label: string }[] = [
-  { value: "dependencies", label: "SCA / Dependencies" },
+  { value: "dependencies_scanning", label: "SCA / Dependencies" },
   { value: "code_scanning", label: "SAST / Code scanning" },
   { value: "container_scanning", label: "Container scanning" },
-  { value: "secrets", label: "Secret detection" },
+  { value: "secret_scanning", label: "Secret detection" },
 ]
 
 export const REQUIRE_DEFAULT: RequireScannersAction = {
   type: "require_scanners",
-  required_scanners: ["dependencies"],
+  required_scanners: ["dependencies_scanning"],
 }
 
 const STALE_DEFAULT: StaleAlertAction = {
@@ -170,13 +171,11 @@ function StaleAlertFields({
 
   return (
     <div className="space-y-4">
-      <div>
-        <label
-          htmlFor="stale-after-days"
-          className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-        >
-          Stale after
-        </label>
+      <FormField
+        label="Stale after"
+        htmlFor="stale-after-days"
+        error={daysInvalid ? "Must be a whole number between 1 and 365." : undefined}
+      >
         <div className="flex items-center gap-2">
           <Input
             id="stale-after-days"
@@ -198,20 +197,13 @@ function StaleAlertFields({
             days without a completed scan
           </span>
         </div>
-        {daysInvalid && (
-          <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
-            Must be a whole number between 1 and 365.
-          </p>
-        )}
-      </div>
+      </FormField>
 
-      <div>
-        <label
-          htmlFor="stale-channel"
-          className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-        >
-          Notify channel
-        </label>
+      <FormField
+        label="Notify channel"
+        htmlFor="stale-channel"
+        error={channelInvalid ? "Select a notification destination." : undefined}
+      >
         {enabledDestinations.length === 0 && (
           <p className="mb-2 text-xs text-[var(--color-text-tertiary)]">
             Set up a notification destination first →{" "}
@@ -241,12 +233,7 @@ function StaleAlertFields({
             </option>
           ))}
         </Select>
-        {channelInvalid && (
-          <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
-            Select a notification destination.
-          </p>
-        )}
-      </div>
+      </FormField>
 
       <label className="flex cursor-pointer select-none items-center gap-2">
         <input

@@ -1,6 +1,6 @@
 import { apiClient } from "./api-client.ts"
 
-const BASE = "/api/v1/reports"
+const BASE = "/api/v1/findings/reports"
 
 export interface FindingsReportFilters {
   severity?: string[]
@@ -14,11 +14,11 @@ export interface GenerateReportPayload {
   format: "json" | "csv" | "pdf"
   title?: string
   filters?: FindingsReportFilters
+  include_archived?: boolean
 }
 
 export interface ReportSummary {
   id: number
-  org: string
   title: string
   report_type: string
   format: string

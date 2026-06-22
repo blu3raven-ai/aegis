@@ -9,9 +9,9 @@ import { AppShell } from "./AppShell"
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarProps, setSidebarProps] = useState({
     dependenciesEnabled: false,
-    containerScanningEnabled: false,
+    container_scanningEnabled: false,
     secretsEnabled: false,
-    codeScanningEnabled: false,
+    code_scanningEnabled: false,
     iacEnabled: false,
     policy: null as any,
   })
@@ -21,7 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       try {
         const [settingsResult, meResult] = await Promise.allSettled([
           getSettings(),
-          apiClient<{ user: { roleId?: string | null } }>("/auth/me", {
+          apiClient<{ user: { roleId?: string | null } }>("/api/v1/auth/me", {
             suppressUnauthorizedRedirect: false,
           }),
         ])
@@ -35,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (meResult.status === "fulfilled" && meResult.value.user.roleId) {
           try {
             const roleData = await apiClient<{ role: RoleRecord }>(
-              `/api/v1/settings/roles/${encodeURIComponent(meResult.value.user.roleId)}`,
+              `/api/v1/workspace/roles/${encodeURIComponent(meResult.value.user.roleId)}`,
             )
             policy = roleData.role
           } catch {
@@ -44,11 +44,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }
 
         setSidebarProps({
-          dependenciesEnabled: tools?.dependencies?.enabled ?? false,
-          containerScanningEnabled: tools?.containerScanning?.enabled ?? false,
-          secretsEnabled: tools?.secrets?.enabled ?? false,
-          codeScanningEnabled: tools?.codeScanning?.enabled ?? false,
-          iacEnabled: tools?.iacSecurity?.enabled ?? false,
+          dependenciesEnabled: tools?.dependencies_scanning?.enabled ?? false,
+          container_scanningEnabled: tools?.container_scanning?.enabled ?? false,
+          secretsEnabled: tools?.secret_scanning?.enabled ?? false,
+          code_scanningEnabled: tools?.code_scanning?.enabled ?? false,
+          iacEnabled: tools?.iac_scanning?.enabled ?? false,
           policy: policy as any,
         })
       } catch {

@@ -92,7 +92,7 @@ def test_normalize_secrets_output_uses_compact_separators(tmp_path):
 def test_secrets_scanner_has_correct_type():
     from runner.scanners.secrets.scanner import SecretsScanner
 
-    assert SecretsScanner.SCANNER_TYPE == "secrets"
+    assert SecretsScanner.SCANNER_TYPE == "secret_scanning"
 
 
 def test_secrets_scanner_implements_base_protocol():

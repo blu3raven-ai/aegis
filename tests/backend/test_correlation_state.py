@@ -81,7 +81,7 @@ def test_lookup_findings_by_org():
 
 
 def test_lookup_findings_by_scanner_type():
-    _insert_finding(identity_key="dep-1", tool="dependencies")
+    _insert_finding(identity_key="dep-1", tool="dependencies_scanning")
     _insert_finding(identity_key="sast-1", tool="code_scanning")
     state = CorrelationState()
     findings = state.lookup_findings(org_id=ORG, scanner_type="code_scanning")

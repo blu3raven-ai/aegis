@@ -6,7 +6,7 @@ from runner.scanners.iac.scanner import IacScanConfig
 
 def _job(**env):
     return {
-        "jobType": "iac",
+        "jobType": "iac_scanning",
         "envVars": {
             "GIT_REPOS": "https://example.com/x.git",
             **env,

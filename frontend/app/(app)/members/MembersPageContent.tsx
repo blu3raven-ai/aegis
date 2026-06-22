@@ -4,17 +4,15 @@ import { useRef } from "react"
 import { Button } from "@/components/ui/Button"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { MembersIcon } from "@/lib/shared/ui/page-icons"
-import { useSession } from "@/lib/client/use-session"
-import { can } from "@/lib/shared/auth/roles"
+import { useHasPermission } from "@/lib/client/use-permission"
 import { UsersSettingsForm } from "@/app/(app)/settings/users/UsersSettingsForm"
 
 export function MembersPageContent() {
-  const { user } = useSession()
   // canEdit controls only the inner form's edit affordances. The header
   // button stays visible (matching /sources); the API enforces permissions
   // when the user actually submits, avoiding a button that flicker-appears
   // after the session resolves.
-  const canEdit = user ? can(user.role as any, "manage_users") : false
+  const { allowed: canEdit } = useHasPermission("manage_users")
   const inviteTriggerRef = useRef<(() => void) | null>(null)
 
   return (

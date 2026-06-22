@@ -4,8 +4,8 @@ import assert from "node:assert/strict"
 
 const SRC = readFileSync(new URL("./sso-availability.ts", import.meta.url), "utf8")
 
-test("useSsoAvailability fetches /api/v1/sso/sso-availability", () => {
-  assert.match(SRC, /\/api\/v1\/sso\/sso-availability/)
+test("useSsoAvailability fetches /api/v1/auth/sso/availability", () => {
+  assert.match(SRC, /\/api\/v1\/auth\/sso\/availability/)
 })
 
 test("hook returns enabled + protocol", () => {

@@ -48,7 +48,7 @@ test("resource tabs show source labels and locks", () => {
 
   assert.match(repoSource, /searchOrganisationRepositories/)
   assert.match(repoSource, /ResourceAutocomplete/)
-  assert.match(repoSource, /repo\.source === "github"/)
+  assert.match(repoSource, /asset\.source === "github"/)
   assert.match(repoSource, /synced from a source connection/)
 
   assert.match(imageSource, /searchOrganisationContainerImages/)

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Copy } from "lucide-react";
 
-export function AzureDevOpsTaskSteps({ sourceId, aegisUrl }: { sourceId: string; aegisUrl: string }) {
+export function AzureDevOpsTaskSteps({ aegisUrl }: { aegisUrl: string }) {
   const [copied, setCopied] = useState(false);
 
   const snippet = `- task: Aegis@0
@@ -10,7 +10,6 @@ export function AzureDevOpsTaskSteps({ sourceId, aegisUrl }: { sourceId: string;
   inputs:
     aegisUrl: ${aegisUrl}
     apiKey: $(AEGIS_API_KEY)
-    sourceId: ${sourceId || "<your-source-id>"}
 `;
 
   async function copy() {

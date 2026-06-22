@@ -17,6 +17,7 @@ import type { NotificationDestination } from "@/lib/client/destinations-api"
 import { ConditionBuilder } from "@/components/shared/rules-engine/ConditionBuilder"
 import { NOTIFICATION_ROUTING_FIELDS } from "@/lib/rules-engine/field-schemas"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 
@@ -24,7 +25,6 @@ interface RuleEditorModalProps {
   open: boolean
   rule: NotificationRule | null   // null = create mode
   destinations: NotificationDestination[]
-  orgId: string
   onClose: () => void
   onSave: (payload: CreateRulePayload) => Promise<void>
   saving?: boolean
@@ -35,7 +35,6 @@ export function RuleEditorModal({
   open,
   rule,
   destinations,
-  orgId,
   onClose,
   onSave,
   saving,
@@ -71,7 +70,6 @@ export function RuleEditorModal({
     if (!channelId) return
 
     await onSave({
-      org_id: orgId,
       name,
       channel_id: channelId as number,
       conditions,
@@ -117,13 +115,7 @@ export function RuleEditorModal({
           <div className="space-y-5 px-6 py-5">
 
             {/* Name */}
-            <div>
-              <label
-                htmlFor="rule-name"
-                className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-              >
-                Rule name
-              </label>
+            <FormField label="Rule name" htmlFor="rule-name" required>
               <Input
                 id="rule-name"
                 type="text"
@@ -133,16 +125,15 @@ export function RuleEditorModal({
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Crits to #sec-incidents"
               />
-            </div>
+            </FormField>
 
             {/* Channel */}
-            <div>
-              <label
-                htmlFor="rule-channel"
-                className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-              >
-                Channel
-              </label>
+            <FormField
+              label="Channel"
+              htmlFor="rule-channel"
+              required
+              hint={destinations.length === 0 ? "No destinations configured. Add one in Notification destinations first." : undefined}
+            >
               <Select
                 id="rule-channel"
                 required
@@ -156,22 +147,16 @@ export function RuleEditorModal({
                   </option>
                 ))}
               </Select>
-              {destinations.length === 0 && (
-                <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
-                  No destinations configured. Add one in Notification destinations first.
-                </p>
-              )}
-            </div>
+            </FormField>
 
             {/* Priority + Enabled */}
             <div className="flex items-end gap-4">
-              <div className="flex-1">
-                <label
-                  htmlFor="rule-priority"
-                  className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1"
-                >
-                  Priority
-                </label>
+              <FormField
+                label="Priority"
+                htmlFor="rule-priority"
+                hint="Lower = higher priority. First match wins."
+                className="flex-1"
+              >
                 <Input
                   id="rule-priority"
                   type="number"
@@ -179,10 +164,7 @@ export function RuleEditorModal({
                   value={priority}
                   onChange={(e) => setPriority(Math.max(0, Number(e.target.value)))}
                 />
-                <p className="mt-1 text-[11px] text-[var(--color-text-tertiary)]">
-                  Lower = higher priority. First match wins.
-                </p>
-              </div>
+              </FormField>
 
               <div className="pb-5">
                 <label className="flex items-center gap-2 cursor-pointer select-none">

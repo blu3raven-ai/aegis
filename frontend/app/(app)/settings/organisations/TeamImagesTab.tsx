@@ -19,6 +19,8 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const imageAssets = team.assets.filter((a) => a.type === "image")
+
   async function updateValue(next: string) {
     setValue(next)
     try {
@@ -47,8 +49,8 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
     setSubmitting(false)
   }
 
-  async function removeImage(image: string) {
-    const result = await removeOrganisationContainerImage(team.id, image)
+  async function removeImage(assetId: string) {
+    const result = await removeOrganisationContainerImage(team.id, assetId)
     if (result.ok) {
       await onChanged()
     } else {
@@ -59,12 +61,12 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        {team.containerImages.map((image) => {
-          const sharedTeamCount = sharing.containerImages[image.image]?.length ?? 0
+        {imageAssets.map((asset) => {
+          const sharedTeamCount = sharing[asset.assetId]?.length ?? 0
           return (
-            <div key={image.image} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
+            <div key={asset.assetId} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
               <div className="flex flex-1 items-center gap-2 min-w-0">
-                <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{image.image}</span>
+                <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{asset.displayName}</span>
                 {sharedTeamCount > 1 && (
                   <span className="rounded bg-[var(--color-state-pending-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-state-pending)] whitespace-nowrap">
                     shared with {sharedTeamCount} teams
@@ -75,7 +77,7 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
                 disabled={!canEdit}
                 variant="secondary"
                 size="sm"
-                onClick={() => void removeImage(image.image)}
+                onClick={() => void removeImage(asset.assetId)}
                 className="border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
               >
                 Remove
@@ -83,7 +85,7 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
             </div>
           )
         })}
-        {team.containerImages.length === 0 && (
+        {imageAssets.length === 0 && (
           <p className="py-4 text-center text-xs text-[var(--color-text-secondary)] italic">No container images assigned to this team.</p>
         )}
       </div>

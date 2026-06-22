@@ -185,7 +185,7 @@ def test_require_scanners_opens_violation_when_missing():
     rule_id = _seed_scanner_coverage_rule(
         action={
             "type": "require_scanners",
-            "required_scanners": ["dependencies", "secrets"],
+            "required_scanners": ["dependencies_scanning", "secret_scanning"],
         },
     )
 
@@ -196,7 +196,7 @@ def test_require_scanners_opens_violation_when_missing():
     assert len(violations) == 1
     assert violations[0].subject_type == "repo"
     assert violations[0].subject_id == f"{_ORG}/api"
-    assert violations[0].context["missing_scanners"] == ["dependencies", "secrets"]
+    assert violations[0].context["missing_scanners"] == ["dependencies_scanning", "secret_scanning"]
 
 
 def test_require_scanners_resolves_violation_when_coverage_added():
@@ -204,15 +204,15 @@ def test_require_scanners_resolves_violation_when_coverage_added():
     rule_id = _seed_scanner_coverage_rule(
         action={
             "type": "require_scanners",
-            "required_scanners": ["dependencies", "secrets"],
+            "required_scanners": ["dependencies_scanning", "secret_scanning"],
         },
     )
 
     evaluate_scanner_coverage_for_org(_ORG)
     assert len(_open_violations_for(rule_id)) == 1
 
-    _seed_scan_run(tool="dependencies")
-    _seed_scan_run(tool="secrets")
+    _seed_scan_run(tool="dependencies_scanning")
+    _seed_scan_run(tool="secret_scanning")
 
     result = evaluate_scanner_coverage_for_org(_ORG)
     assert result.violations_resolved == 1
@@ -230,7 +230,7 @@ def test_require_scanners_no_match_resolves_violation():
     rule_id = _seed_scanner_coverage_rule(
         action={
             "type": "require_scanners",
-            "required_scanners": ["dependencies"],
+            "required_scanners": ["dependencies_scanning"],
         },
         conditions={"field": "tier", "op": "eq", "value": "production"},
     )
@@ -254,7 +254,7 @@ def test_require_scanners_no_match_resolves_violation():
 def test_stale_alert_dispatches_once_per_fresh_open():
     _seed_repo(repo="api", tier="production")
     _seed_scan_run(
-        tool="dependencies",
+        tool="dependencies_scanning",
         finished_at=datetime.now(timezone.utc) - timedelta(days=30),
     )
     rule_id = _seed_scanner_coverage_rule(
@@ -293,7 +293,7 @@ def test_stale_alert_dispatches_once_per_fresh_open():
 def test_stale_alert_does_not_dispatch_on_subsequent_runs():
     _seed_repo(repo="api", tier="production")
     _seed_scan_run(
-        tool="dependencies",
+        tool="dependencies_scanning",
         finished_at=datetime.now(timezone.utc) - timedelta(days=30),
     )
     _seed_scanner_coverage_rule(
@@ -320,7 +320,7 @@ def test_stale_alert_does_not_dispatch_on_subsequent_runs():
 def test_stale_alert_auto_retrigger_enqueues_scan():
     _seed_repo(repo="api", tier="production")
     _seed_scan_run(
-        tool="dependencies",
+        tool="dependencies_scanning",
         finished_at=datetime.now(timezone.utc) - timedelta(days=30),
     )
     rule_id = _seed_scanner_coverage_rule(
@@ -357,7 +357,7 @@ def test_archived_repos_excluded():
     rule_id = _seed_scanner_coverage_rule(
         action={
             "type": "require_scanners",
-            "required_scanners": ["dependencies"],
+            "required_scanners": ["dependencies_scanning"],
         },
     )
 
@@ -373,7 +373,7 @@ def test_evaluator_skips_disabled_rule():
         enabled=False,
         action={
             "type": "require_scanners",
-            "required_scanners": ["dependencies"],
+            "required_scanners": ["dependencies_scanning"],
         },
     )
 
@@ -388,7 +388,7 @@ def test_evaluator_marks_last_evaluated_at():
     rule_id = _seed_scanner_coverage_rule(
         action={
             "type": "require_scanners",
-            "required_scanners": ["dependencies"],
+            "required_scanners": ["dependencies_scanning"],
         },
     )
 

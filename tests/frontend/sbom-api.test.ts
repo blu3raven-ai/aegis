@@ -25,74 +25,83 @@ async function loadModule() {
 }
 
 // ---------------------------------------------------------------------------
-// fetchSbomHistory
+// fetchSbomHistory — GraphQL (Query.sbom.history)
 // ---------------------------------------------------------------------------
 
-test("fetchSbomHistory builds URL with repoId", async () => {
-  const history = [
-    { manifest_set_hash: "abc123", created_at: "2026-05-01T00:00:00Z", blob_pointer: "s3://bucket/abc123" },
-  ]
-  const { mock, calls } = makeFetchMock(history)
+function gqlHistoryResponse(history: Array<{ runId: string; createdAt: string | null; key: string }>) {
+  return { data: { sbom: { history } } }
+}
+
+function makeGqlFetchMock(payload: unknown, status = 200) {
+  const calls: Array<{ url: string; body: { operationName: string; variables: Record<string, unknown> } }> = []
+  const mock = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    calls.push({
+      url: input.toString(),
+      body: JSON.parse(init?.body as string) as { operationName: string; variables: Record<string, unknown> },
+    })
+    return new Response(JSON.stringify(payload), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+  return { mock, calls }
+}
+
+test("fetchSbomHistory POSTs to /api/v1/graphql with operationName SbomHistory", async () => {
+  const { mock, calls } = makeGqlFetchMock(gqlHistoryResponse([]))
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { fetchSbomHistory } = await loadModule()
-  const result = await fetchSbomHistory("payments-api")
+  await fetchSbomHistory("payments-api")
 
   assert.equal(calls.length, 1)
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.pathname, "/api/v1/sboms/repo/payments-api/history")
-  assert.equal(result.length, 1)
-  assert.equal(result[0].manifest_set_hash, "abc123")
+  assert.equal(calls[0].url, "/api/v1/graphql")
+  assert.equal(calls[0].body.operationName, "SbomHistory")
 })
 
-test("fetchSbomHistory encodes special chars in repoId", async () => {
-  const { mock, calls } = makeFetchMock([])
+test("fetchSbomHistory passes repo + default limit variables", async () => {
+  const { mock, calls } = makeGqlFetchMock(gqlHistoryResponse([]))
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { fetchSbomHistory } = await loadModule()
-  await fetchSbomHistory("org/repo name")
+  await fetchSbomHistory("payments-api")
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.ok(url.pathname.includes("org%2Frepo%20name"), `Expected encoded path, got: ${url.pathname}`)
+  assert.equal(calls[0].body.variables.repo, "payments-api")
+  assert.equal(calls[0].body.variables.limit, 10)
 })
 
-test("fetchSbomHistory forwards optional limit param", async () => {
-  const { mock, calls } = makeFetchMock([])
+test("fetchSbomHistory forwards explicit limit variable", async () => {
+  const { mock, calls } = makeGqlFetchMock(gqlHistoryResponse([]))
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { fetchSbomHistory } = await loadModule()
   await fetchSbomHistory("payments-api", 5)
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.searchParams.get("limit"), "5")
+  assert.equal(calls[0].body.variables.limit, 5)
 })
 
-test("fetchSbomHistory accepts wrapped { items: [...] } shape", async () => {
-  const { mock } = makeFetchMock({
-    items: [
-      { manifest_set_hash: "def456", created_at: "2026-05-10T00:00:00Z", blob_pointer: "s3://bucket/def456" },
-    ],
-  })
+test("fetchSbomHistory maps camelCase response to snake_case entries", async () => {
+  const payload = gqlHistoryResponse([
+    { runId: "run-abc", createdAt: "2026-05-01T00:00:00Z", key: "sboms/run-abc.cdx.json" },
+  ])
+  const { mock } = makeGqlFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { fetchSbomHistory } = await loadModule()
   const result = await fetchSbomHistory("payments-api")
+
   assert.equal(result.length, 1)
-  assert.equal(result[0].manifest_set_hash, "def456")
+  assert.equal(result[0].run_id, "run-abc")
+  assert.equal(result[0].created_at, "2026-05-01T00:00:00Z")
+  assert.equal(result[0].key, "sboms/run-abc.cdx.json")
 })
 
-test("fetchSbomHistory throws on non-OK response", async () => {
-  const { mock } = makeFetchMock({ detail: "not found" }, 404)
+test("fetchSbomHistory throws when GraphQL response has errors", async () => {
+  const { mock } = makeGqlFetchMock({ errors: [{ message: "denied" }] })
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { fetchSbomHistory } = await loadModule()
-  await assert.rejects(
-    () => fetchSbomHistory("unknown-repo"),
-    (err: any) => {
-      assert.equal(err.status, 404)
-      return true
-    },
-  )
+  await assert.rejects(() => fetchSbomHistory("payments-api"), /denied/)
 })
 
 // ---------------------------------------------------------------------------

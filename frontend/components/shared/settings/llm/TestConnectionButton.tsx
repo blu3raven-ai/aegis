@@ -2,8 +2,16 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/Button"
+import { apiClient } from "@/lib/client/api-client"
+import { ApiClientError } from "@/lib/client/api-client.types"
 
 type State = "idle" | "testing" | "ok" | "failed"
+
+interface TestResult {
+  ok: boolean
+  detail?: string
+  error?: string
+}
 
 export function TestConnectionButton() {
   const [state, setState] = useState<State>("idle")
@@ -25,13 +33,7 @@ export function TestConnectionButton() {
     setState("testing")
     setError("")
     try {
-      const r = await fetch("/api/v1/settings/llm/test", { method: "POST" })
-      if (r.status === 404) {
-        setState("failed")
-        setError("LLM is not configured. Save your config first.")
-        return
-      }
-      const body = await r.json()
+      const body = await apiClient<TestResult>("/api/v1/settings/llm/test", { method: "POST" })
       if (body.ok) {
         setState("ok")
         return
@@ -40,6 +42,15 @@ export function TestConnectionButton() {
       setError(body.detail || body.error || "Unknown error")
     } catch (e) {
       setState("failed")
+      if (e instanceof ApiClientError) {
+        if (e.status === 404) {
+          setError("LLM is not configured. Save your config first.")
+          return
+        }
+        const body = e.body as TestResult | null
+        setError(body?.detail || body?.error || `Request failed (${e.status})`)
+        return
+      }
       setError(e instanceof Error ? e.message : String(e))
     }
   }

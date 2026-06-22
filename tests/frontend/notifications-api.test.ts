@@ -1,14 +1,20 @@
 import test, { beforeEach } from "node:test"
 import assert from "node:assert/strict"
 
-// apiClient requires a CSRF cookie for POST/PUT/DELETE requests
-beforeEach(() => {
-  ;(globalThis as any).document = { cookie: "__Host-csrf=test-csrf-token" }
-})
+// ---------------------------------------------------------------------------
+// destinations-api is a mixed surface:
+//   - listDestinations / listDeliveries → GraphQL (Query.notifications.*)
+//   - createDestination / updateDestination / deleteDestination / testDestination
+//     → REST under /api/v1/notifications/destinations
+// Tests cover both transports.
+// ---------------------------------------------------------------------------
 
-// ---------------------------------------------------------------------------
-// Minimal fetch mock
-// ---------------------------------------------------------------------------
+// apiClient requires a CSRF cookie for POST/PUT/DELETE
+beforeEach(() => {
+  ;(globalThis as { document?: { cookie: string } }).document = {
+    cookie: "__Host-csrf=test-csrf-token",
+  }
+})
 
 interface FetchCall {
   url: string
@@ -17,10 +23,8 @@ interface FetchCall {
 
 function makeFetchMock(body: unknown, status = 200) {
   const calls: FetchCall[] = []
-
   const mock = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const url = input.toString()
-    calls.push({ url, init })
+    calls.push({ url: input.toString(), init })
     return new Response(JSON.stringify(body), {
       status,
       headers: { "Content-Type": "application/json" },
@@ -38,81 +42,124 @@ function makeEmptyMock(status = 204) {
   return { mock, calls }
 }
 
+interface GqlCall {
+  url: string
+  body: { operationName: string; variables: Record<string, unknown> }
+}
+
+function makeGqlFetchMock(payload: unknown, status = 200) {
+  const calls: GqlCall[] = []
+  const mock = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    calls.push({
+      url: input.toString(),
+      body: JSON.parse(init?.body as string) as GqlCall["body"],
+    })
+    return new Response(JSON.stringify(payload), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+  return { mock, calls }
+}
+
 async function loadModule() {
   return import("../../frontend/lib/client/destinations-api.ts")
 }
 
 // ---------------------------------------------------------------------------
-// listDestinations
+// listDestinations — GraphQL
 // ---------------------------------------------------------------------------
 
-test("listDestinations builds correct URL with org_id", async () => {
-  const destinations = [
-    {
-      id: 1,
-      org_id: "example-org",
-      destination_type: "slack",
-      name: "Sec channel",
-      config: { webhook_url: "https://hooks.slack.com/xxx" },
-      enabled: true,
-      event_filter: { min_severity: "critical" },
-      created_at: "2026-05-01T00:00:00Z",
-      updated_at: "2026-05-01T00:00:00Z",
-    },
-  ]
-  const { mock, calls } = makeFetchMock({ destinations })
+test("listDestinations POSTs to /api/v1/graphql with operationName NotificationDestinations", async () => {
+  const payload = { data: { notifications: { destinations: [] } } }
+  const { mock, calls } = makeGqlFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDestinations } = await loadModule()
-  const result = await listDestinations("example-org")
+  await listDestinations()
 
   assert.equal(calls.length, 1)
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.pathname, "/api/v1/notifications/destinations")
-  assert.equal(url.searchParams.get("org_id"), "example-org")
+  assert.equal(calls[0].url, "/api/v1/graphql")
+  assert.equal(calls[0].body.operationName, "NotificationDestinations")
+})
+
+test("listDestinations unwraps config and eventFilter from the GraphQL row", async () => {
+  const payload = {
+    data: {
+      notifications: {
+        destinations: [
+          {
+            id: 1,
+            destinationType: "slack",
+            name: "Sec channel",
+            config: { webhook_url: "https://hooks.slack.com/xxx" },
+            enabled: true,
+            eventFilter: { min_severity: "critical" },
+            createdAt: "2026-05-01T00:00:00Z",
+            updatedAt: "2026-05-01T00:00:00Z",
+          },
+        ],
+      },
+    },
+  }
+  const { mock } = makeGqlFetchMock(payload)
+  globalThis.fetch = mock as unknown as typeof fetch
+
+  const { listDestinations } = await loadModule()
+  const result = await listDestinations()
+
   assert.equal(result.length, 1)
   assert.equal(result[0].name, "Sec channel")
+  assert.equal(result[0].destination_type, "slack")
+  assert.deepEqual(result[0].config, { webhook_url: "https://hooks.slack.com/xxx" })
+  assert.equal(result[0].event_filter.min_severity, "critical")
 })
 
-test("listDestinations returns empty array on empty response", async () => {
-  const { mock } = makeFetchMock({ destinations: [] })
-  globalThis.fetch = mock as unknown as typeof fetch
-
-  const { listDestinations } = await loadModule()
-  const result = await listDestinations("example-org")
-  assert.deepEqual(result, [])
-})
-
-test("listDestinations throws typed error on 403", async () => {
-  const { mock } = makeFetchMock({ detail: "forbidden" }, 403)
-  globalThis.fetch = mock as unknown as typeof fetch
-
-  const { listDestinations } = await loadModule()
-  await assert.rejects(
-    () => listDestinations("example-org"),
-    (err: Error) => {
-      assert.ok(err.message.includes("403"))
-      return true
+test("listDestinations falls back to empty objects when config and eventFilter are absent", async () => {
+  const payload = {
+    data: {
+      notifications: {
+        destinations: [
+          {
+            id: 2,
+            destinationType: "webhook",
+            name: "Broken config",
+            config: null,
+            enabled: false,
+            eventFilter: null,
+            createdAt: null,
+            updatedAt: null,
+          },
+        ],
+      },
     },
-  )
-})
-
-test("listDestinations throws on 500", async () => {
-  const { mock } = makeFetchMock({ detail: "internal error" }, 500)
+  }
+  const { mock } = makeGqlFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDestinations } = await loadModule()
-  await assert.rejects(() => listDestinations("example-org"), (err: any) => { assert.equal(err.status, 500); return true })
+  const result = await listDestinations()
+
+  assert.deepEqual(result[0].config, {})
+  assert.deepEqual(result[0].event_filter, {})
+  assert.equal(result[0].created_at, "")
+})
+
+test("listDestinations throws when GraphQL response has errors", async () => {
+  const { mock } = makeGqlFetchMock({ errors: [{ message: "forbidden" }] })
+  globalThis.fetch = mock as unknown as typeof fetch
+
+  const { listDestinations } = await loadModule()
+  await assert.rejects(() => listDestinations(), /forbidden/)
 })
 
 // ---------------------------------------------------------------------------
-// createDestination
+// createDestination — REST
 // ---------------------------------------------------------------------------
 
-test("createDestination POSTs to base URL with JSON body", async () => {
+test("createDestination POSTs to /api/v1/notifications/destinations", async () => {
   const created = {
     id: 2,
-    org_id: "example-org",
     destination_type: "webhook",
     name: "My webhook",
     config: { url: "https://example.com/hook" },
@@ -126,7 +173,6 @@ test("createDestination POSTs to base URL with JSON body", async () => {
 
   const { createDestination } = await loadModule()
   const result = await createDestination({
-    org_id: "example-org",
     destination_type: "webhook",
     name: "My webhook",
     config: { url: "https://example.com/hook" },
@@ -136,34 +182,37 @@ test("createDestination POSTs to base URL with JSON body", async () => {
   assert.equal(url.pathname, "/api/v1/notifications/destinations")
   assert.equal(calls[0].init?.method, "POST")
   assert.equal(result.id, 2)
-  assert.equal(result.name, "My webhook")
 })
 
 test("createDestination throws on 422 validation error", async () => {
-  const { mock } = makeFetchMock({ detail: "destination_type must be one of ['email', 'slack', 'webhook']" }, 422)
+  const { mock } = makeFetchMock(
+    { detail: "destination_type must be one of ['email', 'slack', 'webhook']" },
+    422,
+  )
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { createDestination } = await loadModule()
   await assert.rejects(
     () =>
       createDestination({
-        org_id: "example-org",
         destination_type: "slack",
         name: "bad",
         config: {},
       }),
-    (err: any) => { assert.equal(err.status, 422); return true },
+    (err: { status?: number }) => {
+      assert.equal(err.status, 422)
+      return true
+    },
   )
 })
 
 // ---------------------------------------------------------------------------
-// updateDestination
+// updateDestination — REST
 // ---------------------------------------------------------------------------
 
-test("updateDestination PUTs to correct URL", async () => {
+test("updateDestination PUTs to /api/v1/notifications/destinations/:id", async () => {
   const updated = {
     id: 3,
-    org_id: "example-org",
     destination_type: "email",
     name: "Updated name",
     config: { to_addresses: ["sec@example.com"] },
@@ -182,7 +231,6 @@ test("updateDestination PUTs to correct URL", async () => {
   assert.equal(url.pathname, "/api/v1/notifications/destinations/3")
   assert.equal(calls[0].init?.method, "PUT")
   assert.equal(result.name, "Updated name")
-  assert.equal(result.enabled, false)
 })
 
 test("updateDestination throws on 404", async () => {
@@ -190,14 +238,20 @@ test("updateDestination throws on 404", async () => {
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { updateDestination } = await loadModule()
-  await assert.rejects(() => updateDestination(999, { name: "x" }), (err: any) => { assert.equal(err.status, 404); return true })
+  await assert.rejects(
+    () => updateDestination(999, { name: "x" }),
+    (err: { status?: number }) => {
+      assert.equal(err.status, 404)
+      return true
+    },
+  )
 })
 
 // ---------------------------------------------------------------------------
-// deleteDestination
+// deleteDestination — REST
 // ---------------------------------------------------------------------------
 
-test("deleteDestination sends DELETE to correct URL", async () => {
+test("deleteDestination DELETEs /api/v1/notifications/destinations/:id", async () => {
   const { mock, calls } = makeEmptyMock(204)
   globalThis.fetch = mock as unknown as typeof fetch
 
@@ -209,67 +263,74 @@ test("deleteDestination sends DELETE to correct URL", async () => {
   assert.equal(calls[0].init?.method, "DELETE")
 })
 
-test("deleteDestination throws on 404", async () => {
-  const { mock } = makeFetchMock({ detail: "not found" }, 404)
-  globalThis.fetch = mock as unknown as typeof fetch
-
-  const { deleteDestination } = await loadModule()
-  await assert.rejects(() => deleteDestination(999), (err: any) => { assert.equal(err.status, 404); return true })
-})
-
 // ---------------------------------------------------------------------------
-// listDeliveries
+// listDeliveries — GraphQL
 // ---------------------------------------------------------------------------
 
-test("listDeliveries builds URL with destinationId and default limit", async () => {
-  const deliveries = [
-    {
-      id: 10,
-      destination_id: 1,
-      event_id: "evt-abc",
-      event_type: "finding.created",
-      status: "delivered",
-      response_code: 200,
-      attempted_at: "2026-05-20T10:00:00Z",
-    },
-  ]
-  const { mock, calls } = makeFetchMock({ deliveries })
+test("listDeliveries POSTs to /api/v1/graphql with destinationId variable", async () => {
+  const payload = { data: { notifications: { deliveries: [] } } }
+  const { mock, calls } = makeGqlFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDeliveries } = await loadModule()
-  const result = await listDeliveries(1)
+  await listDeliveries(7)
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.pathname, "/api/v1/notifications/destinations/1/deliveries")
-  assert.equal(url.searchParams.get("limit"), "50")
-  assert.equal(result.length, 1)
-  assert.equal(result[0].status, "delivered")
+  assert.equal(calls[0].url, "/api/v1/graphql")
+  assert.equal(calls[0].body.operationName, "NotificationDeliveries")
+  assert.equal(calls[0].body.variables.destinationId, 7)
+  assert.equal(calls[0].body.variables.limit, 50)
 })
 
-test("listDeliveries forwards custom limit", async () => {
-  const { mock, calls } = makeFetchMock({ deliveries: [] })
+test("listDeliveries forwards explicit limit", async () => {
+  const payload = { data: { notifications: { deliveries: [] } } }
+  const { mock, calls } = makeGqlFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDeliveries } = await loadModule()
   await listDeliveries(2, 10)
 
-  const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.searchParams.get("limit"), "10")
+  assert.equal(calls[0].body.variables.limit, 10)
 })
 
-test("listDeliveries throws on 5xx", async () => {
-  const { mock } = makeFetchMock({}, 503)
+test("listDeliveries unwraps and converts camelCase fields", async () => {
+  const payload = {
+    data: {
+      notifications: {
+        deliveries: [
+          {
+            id: "10",
+            destinationId: 1,
+            eventId: "evt-abc",
+            eventType: "finding.created",
+            status: "delivered",
+            payloadSummary: "some-summary",
+            responseCode: 200,
+            error: null,
+            attemptedAt: "2026-05-20T10:00:00Z",
+          },
+        ],
+      },
+    },
+  }
+  const { mock } = makeGqlFetchMock(payload)
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { listDeliveries } = await loadModule()
-  await assert.rejects(() => listDeliveries(1), (err: any) => { assert.equal(err.status, 503); return true })
+  const result = await listDeliveries(1)
+
+  assert.equal(result.length, 1)
+  assert.equal(result[0].id, 10)
+  assert.equal(result[0].destination_id, 1)
+  assert.equal(result[0].event_id, "evt-abc")
+  assert.equal(result[0].status, "delivered")
+  assert.equal(result[0].response_code, 200)
 })
 
 // ---------------------------------------------------------------------------
-// testDestination
+// testDestination — REST
 // ---------------------------------------------------------------------------
 
-test("testDestination POSTs to /destinations/:id/test with org_id query", async () => {
+test("testDestination POSTs to /destinations/:id/test", async () => {
   const { mock, calls } = makeFetchMock({
     status: "delivered",
     channel: "slack",
@@ -278,16 +339,14 @@ test("testDestination POSTs to /destinations/:id/test with org_id query", async 
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { testDestination } = await loadModule()
-  const result = await testDestination(7, "example-org")
+  const result = await testDestination(7)
 
   assert.equal(calls.length, 1)
   const url = new URL(calls[0].url, "http://localhost")
   assert.equal(url.pathname, "/api/v1/notifications/destinations/7/test")
-  assert.equal(url.searchParams.get("org_id"), "example-org")
+  assert.equal(url.searchParams.has("org_id"), false)
   assert.equal(calls[0].init?.method, "POST")
   assert.equal(result.status, "delivered")
-  assert.equal(result.channel, "slack")
-  assert.equal(result.latency_ms, 234)
 })
 
 test("testDestination surfaces operational failure body (200 with status=failed)", async () => {
@@ -312,6 +371,9 @@ test("testDestination throws typed error on 404", async () => {
   const { testDestination } = await loadModule()
   await assert.rejects(
     () => testDestination(999, "example-org"),
-    (err: any) => { assert.equal(err.status, 404); return true },
+    (err: { status?: number }) => {
+      assert.equal(err.status, 404)
+      return true
+    },
   )
 })

@@ -29,12 +29,34 @@ from runner.scanners._subprocess import (
 )
 from runner.scanners.base import ExecutionResult
 from runner.scanners.iac.parse import parse_checkov_results
+from runner.verification.budget import ScanBudget, make_iac_budget
+from runner.verification.verifiers.iac import verify_iac_finding
 
 logger = logging.getLogger(__name__)
 
 
 TIMEOUT_CHECKOV: float = 600.0
 _FAILURE_EXIT_CODE = 2
+
+_IAC_VERIFY_SEVERITIES = {"high", "critical"}
+
+
+def _build_llm_client(env: JobEnv):
+    """Return an LLM client or None when LLM_API_KEY is unset.
+
+    Reads from job['envVars'] via JobEnv — the backend ships LLM config there,
+    not in the runner process environment.
+    """
+    from runner.verification.llm_client import LlmClient
+
+    api_key = env.get("LLM_API_KEY")
+    if not api_key:
+        return None
+    return LlmClient(
+        api_key=api_key,
+        api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
+        model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,7 +81,7 @@ class IacScanConfig:
 
 
 class IacScanner:
-    SCANNER_TYPE = "iac"
+    SCANNER_TYPE = "iac_scanning"
 
     def run_scan(
         self,
@@ -120,58 +142,70 @@ class IacScanner:
                 exit_code=_FAILURE_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
             )
 
+        # Wrap everything from this point in try/finally so the clone tree is
+        # always cleaned up — even if findings.jsonl serialization, verification,
+        # or any sibling step raises unexpectedly.
         try:
-            raw = _run_checkov(clone_dir, log_tail, cancel_event)
-        except ScannerTimeoutError as e:
-            log_tail.append(f"[!] checkov timeout: {e}")
-            raw = {"results": {"failed_checks": []}}
-        except Exception as e:  # noqa: BLE001
-            log_tail.append(f"[!] checkov error: {e}")
-            logger.exception("[!] checkov error")
-            raw = {"results": {"failed_checks": []}}
-
-        findings = parse_checkov_results(raw, repo_root=str(clone_dir))
-
-        if cfg.scan_scope == "diff_scoped" and cfg.base_sha:
             try:
-                head_sha_out = subprocess.run(
-                    ["git", "-C", str(clone_dir), "rev-parse", "HEAD"],
-                    capture_output=True, text=True, check=True, timeout=10,
-                ).stdout.strip()
-            except subprocess.CalledProcessError:
-                head_sha_out = ""
+                raw = _run_checkov(clone_dir, log_tail, cancel_event)
+            except ScannerTimeoutError as e:
+                log_tail.append(f"[!] checkov timeout: {e}")
+                raw = {"results": {"failed_checks": []}}
+            except Exception as e:  # noqa: BLE001
+                log_tail.append(f"[!] checkov error: {e}")
+                logger.exception("[!] checkov error")
+                raw = {"results": {"failed_checks": []}}
 
-            if head_sha_out:
+            findings = parse_checkov_results(raw, repo_root=str(clone_dir))
+
+            if cfg.scan_scope == "diff_scoped" and cfg.base_sha:
                 try:
-                    diff_files = set(
-                        compute_diff_files(str(clone_dir), cfg.base_sha, head_sha_out)
-                    )
-                    before = len(findings)
-                    findings = [f for f in findings if f.get("file") in diff_files]
-                    logger.info(
-                        "[+] checkov diff-scoped: %d -> %d findings (diff %d files)",
-                        before, len(findings), len(diff_files),
-                    )
-                except ValueError as e:
-                    logger.warning(
-                        "[!] checkov diff resolution failed (%s) - keeping full results", e
-                    )
+                    head_sha_out = subprocess.run(
+                        ["git", "-C", str(clone_dir), "rev-parse", "HEAD"],
+                        capture_output=True, text=True, check=True, timeout=10,
+                    ).stdout.strip()
+                except subprocess.CalledProcessError:
+                    head_sha_out = ""
 
-        findings_path = out_dir / "findings.jsonl"
-        with findings_path.open("w", encoding="utf-8") as fh:
-            for f in findings:
-                fh.write(json.dumps(f) + "\n")
+                if head_sha_out:
+                    try:
+                        diff_files = set(
+                            compute_diff_files(str(clone_dir), cfg.base_sha, head_sha_out)
+                        )
+                        before = len(findings)
+                        findings = [f for f in findings if f.get("file") in diff_files]
+                        logger.info(
+                            "[+] checkov diff-scoped: %d -> %d findings (diff %d files)",
+                            before, len(findings), len(diff_files),
+                        )
+                    except ValueError as e:
+                        logger.warning(
+                            "[!] checkov diff resolution failed (%s) - keeping full results", e
+                        )
 
-        register_output(out_dir, findings_path, repo_name)
+            env = JobEnv(job)
+            findings = self._maybe_verify_iac(
+                findings=findings,
+                repo_root=str(clone_dir),
+                llm=_build_llm_client(env),
+                scan_budget=make_iac_budget(env),
+                cancel_event=cancel_event,
+            )
 
-        log_tail.append(f"[+] iac scan complete — {len(findings)} findings")
-        emitter.finished(repo_name)
-        emitter.normalizing()
-        write_done_marker(out_dir)
-        emitter.done()
+            findings_path = out_dir / "findings.jsonl"
+            with findings_path.open("w", encoding="utf-8") as fh:
+                for f in findings:
+                    fh.write(json.dumps(f) + "\n")
 
-        # Drop the working tree once we are done with it; findings already in place.
-        shutil.rmtree(clone_dir, ignore_errors=True)
+            register_output(out_dir, findings_path, repo_name)
+
+            log_tail.append(f"[+] iac scan complete — {len(findings)} findings")
+            emitter.finished(repo_name)
+            emitter.normalizing()
+            write_done_marker(out_dir)
+            emitter.done()
+        finally:
+            shutil.rmtree(clone_dir, ignore_errors=True)
 
         exit_code = 0
         if cancel_event is not None and cancel_event.is_set():
@@ -179,6 +213,70 @@ class IacScanner:
         return ExecutionResult(
             exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
         )
+
+    def _maybe_verify_iac(
+        self,
+        *,
+        findings: list[dict],
+        repo_root: str,
+        llm,
+        scan_budget: ScanBudget,
+        cancel_event: threading.Event | None = None,
+    ) -> list[dict]:
+        out: list[dict] = []
+        for f in findings:
+            copy = dict(f)
+            metadata: dict = copy.setdefault("verification_metadata", {})
+
+            # Honour the outer cancel signal between findings. The verifier
+            # itself can spend tens of seconds on LLM round-trips per finding,
+            # so a long backlog otherwise ignores the cancel until the whole
+            # loop drains.
+            if cancel_event is not None and cancel_event.is_set():
+                copy["verdict"] = "possible"
+                metadata["skipped"] = "cancelled"
+                out.append(copy)
+                continue
+
+            if llm is None:
+                copy["verdict"] = None
+                metadata["skipped"] = "llm_disabled"
+                out.append(copy)
+                continue
+
+            sev = (copy.get("severity") or "").lower()
+            if sev not in _IAC_VERIFY_SEVERITIES:
+                copy["verdict"] = None
+                metadata["skipped"] = "below_severity"
+                out.append(copy)
+                continue
+
+            if not scan_budget.allow():
+                copy["verdict"] = "possible"
+                metadata["skipped"] = scan_budget.skip_reason
+                out.append(copy)
+                continue
+
+            try:
+                result = verify_iac_finding(
+                    finding=copy, repo_root=repo_root, llm=llm
+                )
+                scan_budget.record(
+                    tokens_in=result.tokens_in, tokens_out=result.tokens_out
+                )
+                copy["verdict"] = result.verdict
+                copy["evidence"] = result.evidence
+                copy["exploit_chain"] = result.exploit_chain
+                copy["verification_metadata"] = result.verification_metadata
+            except Exception as e:  # noqa: BLE001
+                copy["verdict"] = None
+                metadata["skipped"] = f"llm_error:{type(e).__name__}"
+                logger.exception(
+                    "[!] iac verification failed for %s", copy.get("check_id")
+                )
+
+            out.append(copy)
+        return out
 
 
 def _run_checkov(

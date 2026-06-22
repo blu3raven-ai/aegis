@@ -9,6 +9,8 @@
 import Link from "next/link"
 import type { ReleaseSummary } from "@/lib/client/releases-api"
 import { relativeTime } from "./_helpers"
+import { Card } from "@/components/ui/Card"
+import { Skeleton } from "@/components/ui/Skeleton"
 
 interface RecentReleaseChecksTableProps {
   releases: ReleaseSummary[]
@@ -41,8 +43,6 @@ function rowHref(release: ReleaseSummary): string {
   return `/sources/${encodeURIComponent(release.repo_id)}?tab=scans&scan_id=${encodeURIComponent(release.scan_id)}`
 }
 
-const CARD = "rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
-
 export function RecentReleaseChecksTable({ releases, loading }: RecentReleaseChecksTableProps) {
   return (
     <section className="flex flex-col gap-3">
@@ -59,28 +59,28 @@ export function RecentReleaseChecksTable({ releases, loading }: RecentReleaseChe
       </header>
 
       {loading ? (
-        <div className={CARD}>
+        <Card padding="none">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
               className={`flex items-center gap-4 px-5 py-3.5 ${i === 0 ? "" : "border-t border-[var(--color-border)]"}`}
             >
-              <div className="h-8 w-8 rounded-full bg-[var(--color-surface-raised)] animate-pulse" />
+              <Skeleton className="h-8 w-8 rounded-full" />
               <div className="flex-1 space-y-1.5">
-                <div className="h-3 w-32 rounded bg-[var(--color-surface-raised)] animate-pulse" />
-                <div className="h-3 w-48 rounded bg-[var(--color-surface-raised)] animate-pulse" />
+                <Skeleton className="h-3 w-32" />
+                <Skeleton className="h-3 w-48" />
               </div>
-              <div className="h-3 w-20 rounded bg-[var(--color-surface-raised)] animate-pulse" />
-              <div className="h-3 w-16 rounded bg-[var(--color-surface-raised)] animate-pulse" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-16" />
             </div>
           ))}
-        </div>
+        </Card>
       ) : releases.length === 0 ? (
-        <div className={`${CARD} p-6 text-center text-sm text-[var(--color-text-secondary)]`}>
+        <Card padding="lg" className="text-center text-sm text-[var(--color-text-secondary)]">
           No recent release checks
-        </div>
+        </Card>
       ) : (
-        <div className={`${CARD} divide-y divide-[var(--color-border)]`}>
+        <Card padding="none" className="divide-y divide-[var(--color-border)]">
           {releases.map((release) => {
             const icon = VERDICT_ICONS[release.verdict] ?? VERDICT_ICONS.unknown
             const refLabel = release.ref ?? release.short_sha
@@ -126,7 +126,7 @@ export function RecentReleaseChecksTable({ releases, loading }: RecentReleaseChe
               </Link>
             )
           })}
-        </div>
+        </Card>
       )}
     </section>
   )

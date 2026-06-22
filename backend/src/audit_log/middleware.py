@@ -30,7 +30,6 @@ _AUDITABLE_PREFIXES = (
     "/api/v1/notifications/",
     "/api/v1/admin/",
     "/api/v1/integrations/",
-    "/api/v1/audit/",
     "/api/v1/settings/",
 )
 
@@ -40,13 +39,15 @@ _AUDITABLE_PREFIXES = (
 #   DELETE /api/v1/notifications/destinations/42   → notification.destination.deleted
 #
 # The mapping below handles known high-value paths explicitly; everything else
-# falls back to a generic "<segment>.<method>" name.
+# falls back to a generic "<segment>.<method>" name. Action names are stable
+# across URL renames — the map updates when paths change but downstream audit
+# consumers see the same action string.
 _EXPLICIT_ACTION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     # (METHOD, path_pattern): (action, resource_type)
     ("POST",   "/api/v1/notifications/destinations"):       ("notification.destination.created",  "notification_destination"),
     ("PUT",    r"/api/v1/notifications/destinations/\d+"):  ("notification.destination.updated",  "notification_destination"),
     ("DELETE", r"/api/v1/notifications/destinations/\d+"):  ("notification.destination.deleted",  "notification_destination"),
-    ("POST",   "/argus/webhook"):                           ("argus.webhook.received",             "argus_event"),
+    ("POST",   "/integrations/argus/webhook"):              ("argus.webhook.received",             "argus_event"),
 }
 
 

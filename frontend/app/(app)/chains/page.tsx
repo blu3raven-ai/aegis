@@ -256,7 +256,6 @@ export default function ChainsPreviewPage() {
   )
 }
 
-// ─── Preview banner ──────────────────────────────────────────────────────────
 
 function PreviewBanner() {
   return (
@@ -289,7 +288,6 @@ function PreviewBanner() {
   )
 }
 
-// ─── Stat strip ──────────────────────────────────────────────────────────────
 
 function StatStrip() {
   return (
@@ -346,7 +344,6 @@ function StatItem({
   )
 }
 
-// ─── Chain card ──────────────────────────────────────────────────────────────
 
 function ChainCard({ chain }: { chain: MockChain }) {
   const isCritical = chain.severity === "critical"
@@ -411,7 +408,6 @@ function ChainCard({ chain }: { chain: MockChain }) {
   )
 }
 
-// ─── Chain graph (mock-data inline visualization) ────────────────────────────
 
 function ChainGraph({ nodes }: { nodes: MockNode[] }) {
   return (
@@ -521,7 +517,6 @@ function NodeTag({ kind, label }: { kind: TagKind; label: string }) {
   )
 }
 
-// ─── Tactics strip ───────────────────────────────────────────────────────────
 
 function TacticsStrip({ tactics }: { tactics: string[] }) {
   return (
@@ -536,7 +531,6 @@ function TacticsStrip({ tactics }: { tactics: string[] }) {
   )
 }
 
-// ─── Recommendation footer ───────────────────────────────────────────────────
 
 function ChainRecommendation({ recommendation }: { recommendation: MockChain["recommendation"] }) {
   return (
@@ -571,7 +565,6 @@ function ChainRecommendation({ recommendation }: { recommendation: MockChain["re
   )
 }
 
-// ─── Inline UI atoms ─────────────────────────────────────────────────────────
 
 function SeverityPill({ severity }: { severity: Severity }) {
   const isCritical = severity === "critical"
@@ -611,7 +604,6 @@ function MetaTag({ children }: { children: React.ReactNode }) {
   )
 }
 
-// ─── Inline icons ────────────────────────────────────────────────────────────
 
 function GlobeIcon() {
   return (

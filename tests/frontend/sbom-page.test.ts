@@ -63,13 +63,22 @@ test("export flow: fetchSbom called with spdx-json format", async () => {
 // History drawer state logic
 // ---------------------------------------------------------------------------
 
-test("history drawer: loads entries, selects latest hash by default", async () => {
-  const history = [
-    { manifest_set_hash: "latest111", created_at: "2026-05-30T10:00:00Z", blob_pointer: "s3://a" },
-    { manifest_set_hash: "older222", created_at: "2026-05-29T10:00:00Z", blob_pointer: "s3://b" },
-    { manifest_set_hash: "oldest333", created_at: "2026-05-28T10:00:00Z", blob_pointer: "s3://c" },
-  ]
-  const { mock, calls } = makeFetchMock(() => ({ body: history }))
+test("history drawer: loads entries, selects latest run by default", async () => {
+  // fetchSbomHistory speaks GraphQL — wrap the history list in the
+  // {data: {sbom: {history: [...]}}} envelope and use the camelCase fields
+  // the resolver emits.
+  const gqlPayload = {
+    data: {
+      sbom: {
+        history: [
+          { runId: "run-latest", createdAt: "2026-05-30T10:00:00Z", key: "sboms/run-latest.cdx.json" },
+          { runId: "run-older", createdAt: "2026-05-29T10:00:00Z", key: "sboms/run-older.cdx.json" },
+          { runId: "run-oldest", createdAt: "2026-05-28T10:00:00Z", key: "sboms/run-oldest.cdx.json" },
+        ],
+      },
+    },
+  }
+  const { mock, calls } = makeFetchMock(() => ({ body: gqlPayload }))
   globalThis.fetch = mock as unknown as typeof fetch
 
   const { fetchSbomHistory } = await loadSbomApi()
@@ -77,15 +86,13 @@ test("history drawer: loads entries, selects latest hash by default", async () =
 
   assert.equal(calls.length, 1)
   assert.equal(result.length, 3)
-  // First entry is the latest — UI picks this as selected hash
-  assert.equal(result[0].manifest_set_hash, "latest111")
+  assert.equal(result[0].run_id, "run-latest")
 })
 
 test("history drawer: clicking a version re-fetches SBOM", async () => {
-  let callCount = 0
+  const emptyHistory = { data: { sbom: { history: [] } } }
   const { mock, calls } = makeFetchMock((url) => {
-    callCount++
-    if (url.includes("/history")) return { body: [] }
+    if (url === "/api/v1/graphql") return { body: emptyHistory }
     return { body: JSON.stringify({ components: [], dependencies: [] }), isText: true }
   })
   globalThis.fetch = mock as unknown as typeof fetch
@@ -99,7 +106,7 @@ test("history drawer: clicking a version re-fetches SBOM", async () => {
   // User selects a different version — page re-fetches SBOM
   await fetchSbom({ repoId: "payments-api", format: "cyclonedx-json" })
 
-  // Should have made 3 calls: 1 history + 2 SBOM fetches
+  // Should have made 3 calls: 1 GraphQL history + 2 REST SBOM fetches
   assert.equal(calls.length, 3)
 })
 

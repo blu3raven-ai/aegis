@@ -3,12 +3,11 @@
 import { RoutingRulesPanel } from "@/components/shared/notifications/RoutingRulesPanel"
 
 interface RoutingViewProps {
-  orgId: string
   // keyHint re-mounts the panel so it re-fetches its own destination list when one is added or removed
   keyHint: number
 }
 
-export function RoutingView({ orgId, keyHint }: RoutingViewProps) {
+export function RoutingView({ keyHint }: RoutingViewProps) {
   return (
     <div className="space-y-8 px-6 py-8">
       <section>
@@ -19,7 +18,7 @@ export function RoutingView({ orgId, keyHint }: RoutingViewProps) {
             Evaluated top-down · first match wins per channel
           </p>
         </div>
-        <RoutingRulesPanel key={keyHint} orgId={orgId} />
+        <RoutingRulesPanel key={keyHint} />
       </section>
     </div>
   )

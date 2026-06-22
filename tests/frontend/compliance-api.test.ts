@@ -28,7 +28,7 @@ async function loadModule() {
 // ---------------------------------------------------------------------------
 
 test("listFrameworks fetches from /api/v1/compliance/frameworks", async () => {
-  const body = [{ id: "soc2", label: "SOC 2" }, { id: "iso27001", label: "ISO 27001" }]
+  const body = { frameworks: [{ id: "soc2", label: "SOC 2" }, { id: "iso27001", label: "ISO 27001" }] }
   const { mock, calls } = makeFetchMock(body)
   globalThis.fetch = mock as unknown as typeof fetch
 
@@ -56,9 +56,11 @@ test("listFrameworks throws on non-ok response", async () => {
 // ---------------------------------------------------------------------------
 
 test("listFrameworkControls builds correct URL", async () => {
-  const body = [
-    { id: 1, framework: "soc2", control_id: "CC6.1", title: "Logical access", description: null, category: "Access" },
-  ]
+  const body = {
+    controls: [
+      { id: 1, framework: "soc2", control_id: "CC6.1", title: "Logical access", description: null, category: "Access" },
+    ],
+  }
   const { mock, calls } = makeFetchMock(body)
   globalThis.fetch = mock as unknown as typeof fetch
 
@@ -145,7 +147,7 @@ test("getControlFindings builds correct URL scoped to viewer assets server-side"
     framework: "soc2",
     control_id: "CC6.1",
     findings: [
-      { id: 1, title: "CVE-2024-1234", severity: "high", scanner_type: "dependencies", state: "open" },
+      { id: 1, title: "CVE-2024-1234", severity: "high", scanner_type: "dependencies_scanning", state: "open" },
     ],
   }
   const { mock, calls } = makeFetchMock(body)
@@ -155,7 +157,7 @@ test("getControlFindings builds correct URL scoped to viewer assets server-side"
   const result = await getControlFindings("soc2", "CC6.1")
 
   const url = new URL(calls[0].url, "http://localhost")
-  assert.equal(url.pathname, "/api/v1/compliance/controls/soc2/CC6.1/findings")
+  assert.equal(url.pathname, "/api/v1/compliance/frameworks/soc2/controls/CC6.1/findings")
   assert.equal(url.searchParams.get("org_id"), null)
   assert.equal(result.findings.length, 1)
   assert.equal(result.findings[0].severity, "high")

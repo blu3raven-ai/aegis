@@ -18,10 +18,12 @@ import {
   listRoles,
   type OrganisationTeam,
   type UserDirectoryEntry,
-  type DirectGrant,
+  type Grant,
   type RoleRecord,
 } from "@/lib/client/settings-api"
 import { Button } from "@/components/ui/Button"
+import { Card } from "@/components/ui/Card"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Sheet } from "@/components/ui/Sheet"
@@ -73,7 +75,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
   const [users, setUsers] = useState<UserEntry[]>([])
   const [roles, setRoles] = useState<RoleRecord[]>([])
   const [teams, setTeams] = useState<OrganisationTeam[]>([])
-  const [directGrants, setDirectGrants] = useState<DirectGrant[]>([])
+  const [directGrants, setDirectGrants] = useState<Grant[]>([])
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
   const [expandedDirectAccessUserId, setExpandedDirectAccessUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -127,7 +129,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
     setLoading(true)
     try {
       const [usersResult, rolesRes, teamsRes, grantsRes] = await Promise.all([
-        apiClient<{ users?: any[] }>("/api/v1/settings/users").then(
+        apiClient<{ users?: any[] }>("/api/v1/workspace/users").then(
           (data) => ({ ok: true as const, data, status: 200 }),
           (err) => ({ ok: false as const, data: null, status: err instanceof ApiClientError ? err.status : 0, body: err instanceof ApiClientError ? err.body : null }),
         ),
@@ -163,8 +165,8 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
 
         const enriched = rawUsers.map(u => ({
           ...u,
-          manualDirectGrantCount: currentGrants.filter(g => g.userId === u.id && g.source === "manual-direct").length,
-          githubDirectGrantCount: currentGrants.filter(g => g.userId === u.id && g.source === "github-direct").length,
+          manualDirectGrantCount: currentGrants.filter(g => g.subjectId === u.id && g.source === "manual").length,
+          githubDirectGrantCount: currentGrants.filter(g => g.subjectId === u.id && g.source === "github").length,
         }))
         setUsers(enriched)
       }
@@ -200,7 +202,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
     setSubmitting(true)
     setDialogError(null)
     try {
-      await apiClient("/api/v1/settings/users", {
+      await apiClient("/api/v1/workspace/users", {
         method: "POST",
         body: {
           username: newUsername,
@@ -237,7 +239,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
       try {
         const endpoint = user.status === "active" ? "disable" : "enable"
         try {
-          await apiClient(`/api/v1/settings/users/${user.id}/${endpoint}`, { method: "POST" })
+          await apiClient(`/api/v1/workspace/users/${user.id}/${endpoint}`, { method: "POST" })
         } catch (err) {
           const fallback = endpoint === "disable" ? "Disable failed" : "Enable failed"
           if (err instanceof ApiClientError) {
@@ -285,7 +287,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
       setError(null)
       try {
         try {
-          await apiClient(`/api/v1/settings/users/${user.id}/role`, {
+          await apiClient(`/api/v1/workspace/users/${user.id}/role`, {
             method: "PATCH",
             body: { roleId },
           })
@@ -326,7 +328,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
     setSubmitting(true)
     setDialogError(null)
     try {
-      await apiClient(`/api/v1/settings/users/${showResetPassword.id}/reset-password`, {
+      await apiClient(`/api/v1/workspace/users/${showResetPassword.id}/reset-password`, {
         method: "POST",
         body: { password: resetPasswordValue },
       })
@@ -362,7 +364,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
         setError(null)
         try {
           try {
-            await apiClient(`/api/v1/settings/users/${user.id}`, { method: "DELETE" })
+            await apiClient(`/api/v1/workspace/users/${user.id}`, { method: "DELETE" })
           } catch (err) {
             if (err instanceof ApiClientError) {
               throw new Error(extractErrorMessage(err.body, "Delete failed"))
@@ -425,9 +427,49 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
     }
   }
 
+  async function _refreshDirectGrants() {
+    const grantsRes = await listDirectGrants()
+    if (grantsRes.ok) {
+      setDirectGrants(grantsRes.grants)
+      const enriched = users.map(u => ({
+        ...u,
+        manualDirectGrantCount: grantsRes.grants.filter(g => g.subjectId === u.id && g.source === "manual").length,
+        githubDirectGrantCount: grantsRes.grants.filter(g => g.subjectId === u.id && g.source === "github").length,
+      }))
+      setUsers(enriched)
+    }
+  }
+
   async function handleAddDirectGrant(userId: string, type: "repository" | "containerImage", key: string) {
     setError(null)
-    const result = await addDirectGrant(userId, type, key)
+    const trimmed = key.trim()
+    if (!trimmed) return
+    // Upsert the asset, then create the grant
+    let assetId: string
+    try {
+      const assetPayload =
+        type === "repository"
+          ? (() => {
+              const slash = trimmed.indexOf("/")
+              const owner = trimmed.slice(0, slash)
+              const name = trimmed.slice(slash + 1)
+              return { type: "repo", source_type: "github", owner, name }
+            })()
+          : (() => {
+              const parts = trimmed.split("/")
+              const [registry, ...rest] = parts
+              return { type: "image", registry, image: rest.join("/"), tag: "" }
+            })()
+      const created = await apiClient<{ asset_id: string }>("/api/v1/sources/manual", {
+        method: "POST",
+        body: assetPayload,
+      })
+      assetId = created.asset_id
+    } catch {
+      setError("Could not create asset. Please try again.")
+      return
+    }
+    const result = await addDirectGrant(userId, assetId)
     if (result.ok) {
       if (type === "repository") {
         setDirectRepoValue("")
@@ -438,35 +480,17 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
         setDirectImageSuggestions([])
         setDirectImageError(null)
       }
-      const grantsRes = await listDirectGrants()
-      if (grantsRes.ok) {
-        setDirectGrants(grantsRes.grants)
-        const enriched = users.map(u => ({
-          ...u,
-          manualDirectGrantCount: grantsRes.grants.filter(g => g.userId === u.id && g.source === "manual-direct").length,
-          githubDirectGrantCount: grantsRes.grants.filter(g => g.userId === u.id && g.source === "github-direct").length,
-        }))
-        setUsers(enriched)
-      }
+      await _refreshDirectGrants()
     } else {
       setError(result.error)
     }
   }
 
-  async function handleRemoveDirectGrant(userId: string, type: string, key: string) {
+  async function handleRemoveDirectGrant(userId: string, assetId: string) {
     setError(null)
-    const result = await removeDirectGrant(userId, type, key)
+    const result = await removeDirectGrant(userId, assetId)
     if (result.ok) {
-      const grantsRes = await listDirectGrants()
-      if (grantsRes.ok) {
-        setDirectGrants(grantsRes.grants)
-        const enriched = users.map(u => ({
-          ...u,
-          manualDirectGrantCount: grantsRes.grants.filter(g => g.userId === u.id && g.source === "manual-direct").length,
-          githubDirectGrantCount: grantsRes.grants.filter(g => g.userId === u.id && g.source === "github-direct").length,
-        }))
-        setUsers(enriched)
-      }
+      await _refreshDirectGrants()
     } else {
       setError(result.error)
     }
@@ -548,39 +572,39 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
             </div>
           )}
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Username</label>
+            <FormField label="Username" htmlFor="invite-username" required>
               <Input
+                id="invite-username"
                 type="text"
                 required
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
                 placeholder="Enter username"
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Email address</label>
+            </FormField>
+            <FormField label="Email address" htmlFor="invite-email" required>
               <Input
+                id="invite-email"
                 type="email"
                 required
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 placeholder="name@example.com"
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Password</label>
+            </FormField>
+            <FormField label="Password" htmlFor="invite-password" required>
               <Input
+                id="invite-password"
                 type="password"
                 required
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Set a password"
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Assigned role</label>
+            </FormField>
+            <FormField label="Assigned role" htmlFor="invite-role">
               <Select
+                id="invite-role"
                 value={newRoleId}
                 onChange={(e) => setNewRoleId(e.target.value)}
               >
@@ -588,7 +612,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                   <option key={role.id} value={role.id}>{role.name}</option>
                 ))}
               </Select>
-            </div>
+            </FormField>
           </div>
         </form>
       </Sheet>
@@ -608,16 +632,16 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                 {dialogError}
               </div>
             )}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">New Password</label>
+            <FormField label="New Password" htmlFor="reset-password" required>
               <Input
+                id="reset-password"
                 type="password"
                 required
                 value={resetPasswordValue}
                 onChange={(e) => setResetPasswordValue(e.target.value)}
                 placeholder="Enter new password"
               />
-            </div>
+            </FormField>
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)] mt-6">
             <Button variant="ghost" size="md" onClick={() => setShowResetPassword(null)}>Cancel</Button>
@@ -628,7 +652,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
         </form>
       </Dialog>
 
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+      <Card padding="none" className="overflow-hidden">
         <Table>
           <Thead>
             <Tr>
@@ -824,20 +848,20 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                         <div className="space-y-3">
                           <h4 className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Effective Direct Grants</h4>
                           <div className="flex flex-wrap gap-2">
-                            {directGrants.filter(g => g.userId === user.id).length === 0 && (
+                            {directGrants.filter(g => g.subjectId === user.id).length === 0 && (
                               <p className="text-xs text-[var(--color-text-secondary)] italic">No direct grants for this user.</p>
                             )}
-                            {directGrants.filter(g => g.userId === user.id).map((grant, idx) => (
-                              <div key={`${grant.resourceType}-${grant.resourceKey}-${idx}`} className="group flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1">
+                            {directGrants.filter(g => g.subjectId === user.id).map((grant, idx) => (
+                              <div key={`${grant.assetId}-${idx}`} className="group flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1">
                                 <div className="flex flex-col mr-2">
-                                  <span className="text-xs font-medium">{grant.resourceKey}</span>
+                                  <span className="text-xs font-medium">{grant.assetDisplayName ?? grant.assetId}</span>
                                   <span className="text-2xs text-[var(--color-text-secondary)]">
-                                    {grant.resourceType === "repository" ? "Repo" : "Image"} • {grant.source === "github-direct" ? "Synced" : "Manual"}
+                                    {grant.assetType === "repo" ? "Repo" : "Image"} • {grant.source === "github" ? "Synced" : "Manual"}
                                   </span>
                                 </div>
-                                {grant.source === "manual-direct" && (
+                                {grant.source === "manual" && (
                                   <button
-                                    onClick={() => void handleRemoveDirectGrant(user.id, grant.resourceType, grant.resourceKey)}
+                                    onClick={() => void handleRemoveDirectGrant(user.id, grant.assetId)}
                                     className="text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical)]"
                                   >
                                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -857,7 +881,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
             ))}
           </Tbody>
         </Table>
-      </div>
+      </Card>
 
       <Dialog
         open={confirmDialog.open}

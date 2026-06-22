@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
-from src.auth.rate_limit import RateLimitService
+from src.auth.authentication.rate_limit import RateLimitService
 from src.db.models import RateLimitBucket
 
 
@@ -76,7 +76,7 @@ async def test_separate_keys_separate_buckets(rate_limit_service):
 @pytest.mark.asyncio
 async def test_window_resets_after_expiry(rate_limit_service, monkeypatch):
     """Once window_seconds elapses, the bucket resets and traffic resumes."""
-    from src.auth import rate_limit as rl_mod
+    from src.auth.authentication import rate_limit as rl_mod
 
     now = dt.datetime(2026, 6, 2, 12, 0, 0, tzinfo=dt.timezone.utc)
     monkeypatch.setattr(rl_mod, "_utcnow", lambda: now)

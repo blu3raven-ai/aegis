@@ -98,15 +98,15 @@ def email_dest_id() -> int:
 class TestListSecrets:
     def test_empty_list_for_new_channel(self, webhook_dest_id):
         c = _client()
-        resp = c.get(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
+        resp = c.get(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
         assert resp.status_code == 200
         assert resp.json()["secrets"] == []
 
     def test_lists_metadata_only(self, webhook_dest_id):
         c = _client()
         # Create a secret first
-        c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
-        resp = c.get(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
+        c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
+        resp = c.get(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
         assert resp.status_code == 200
         secrets = resp.json()["secrets"]
         assert len(secrets) == 1
@@ -118,12 +118,12 @@ class TestListSecrets:
 
     def test_404_for_nonexistent_destination(self):
         c = _client()
-        resp = c.get("/api/v1/notification-channels/999999/signing-secret")
+        resp = c.get("/api/v1/notifications/destinations/999999/signing-secret")
         assert resp.status_code == 404
 
     def test_422_for_non_webhook_destination(self, email_dest_id):
         c = _client()
-        resp = c.get(f"/api/v1/notification-channels/{email_dest_id}/signing-secret")
+        resp = c.get(f"/api/v1/notifications/destinations/{email_dest_id}/signing-secret")
         assert resp.status_code == 422
 
 
@@ -132,7 +132,7 @@ class TestListSecrets:
 class TestRotateSecret:
     def test_returns_raw_secret_once(self, webhook_dest_id):
         c = _client()
-        resp = c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
+        resp = c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
         assert resp.status_code == 201
         body = resp.json()
         assert "raw" in body["secret"]
@@ -140,22 +140,22 @@ class TestRotateSecret:
 
     def test_raw_not_in_subsequent_list(self, webhook_dest_id):
         c = _client()
-        c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
-        resp = c.get(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
+        c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
+        resp = c.get(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
         for s in resp.json()["secrets"]:
             assert "raw" not in s
 
     def test_version_increments_on_rotation(self, webhook_dest_id):
         c = _client()
-        r1 = c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret").json()
-        r2 = c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret").json()
+        r1 = c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret").json()
+        r2 = c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret").json()
         assert r2["signing_secret_version"] == r1["signing_secret_version"] + 1
 
     def test_old_key_demoted_to_rotating(self, webhook_dest_id):
         c = _client()
-        c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
-        c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
-        resp = c.get(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
+        c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
+        c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
+        resp = c.get(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
         secrets = resp.json()["secrets"]
         statuses = {s["version"]: s["status"] for s in secrets}
         assert statuses[2] == "active"
@@ -163,12 +163,12 @@ class TestRotateSecret:
 
     def test_notice_included_in_response(self, webhook_dest_id):
         c = _client()
-        resp = c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
+        resp = c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
         assert "notice" in resp.json()
 
     def test_viewer_cannot_rotate(self, webhook_dest_id):
         c = _client(role="viewer")
-        resp = c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
+        resp = c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
         assert resp.status_code in (403, 401)
 
 
@@ -177,35 +177,35 @@ class TestRotateSecret:
 class TestRevokeVersion:
     def test_revoke_marks_revoked_status(self, webhook_dest_id):
         c = _client()
-        create_resp = c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret").json()
+        create_resp = c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret").json()
         version = create_resp["signing_secret_version"]
 
-        resp = c.delete(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret/{version}")
+        resp = c.delete(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret/{version}")
         assert resp.status_code == 200
         assert resp.json()["revoked"]["status"] == "revoked"
         assert resp.json()["revoked"]["revoked_at"] is not None
 
     def test_list_shows_revoked_status(self, webhook_dest_id):
         c = _client()
-        create_resp = c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret").json()
+        create_resp = c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret").json()
         version = create_resp["signing_secret_version"]
-        c.delete(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret/{version}")
+        c.delete(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret/{version}")
 
-        resp = c.get(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret")
+        resp = c.get(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret")
         s = next(x for x in resp.json()["secrets"] if x["version"] == version)
         assert s["status"] == "revoked"
 
     def test_revoke_nonexistent_version_returns_404(self, webhook_dest_id):
         c = _client()
-        resp = c.delete(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret/999")
+        resp = c.delete(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret/999")
         assert resp.status_code == 404
 
     def test_viewer_cannot_revoke(self, webhook_dest_id):
         c = _client()
-        create_resp = c.post(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret").json()
+        create_resp = c.post(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret").json()
         version = create_resp["signing_secret_version"]
         viewer = _client(role="viewer")
-        resp = viewer.delete(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret/{version}")
+        resp = viewer.delete(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret/{version}")
         assert resp.status_code in (403, 401)
 
 
@@ -216,7 +216,7 @@ class TestRotationFlow:
         """Generate secret, sign a payload, verify the signed headers work."""
         c = _client()
         create_resp = c.post(
-            f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret"
+            f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret"
         ).json()
         raw = create_resp["secret"]["raw"]
         version = create_resp["signing_secret_version"]
@@ -234,12 +234,12 @@ class TestRotationFlow:
         from src.notifications.webhook_signing import get_raw_secrets_for_channel
         c = _client()
         create_resp = c.post(
-            f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret"
+            f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret"
         ).json()
         raw = create_resp["secret"]["raw"]
         version = create_resp["signing_secret_version"]
 
         assert raw in get_raw_secrets_for_channel(webhook_dest_id)
 
-        c.delete(f"/api/v1/notification-channels/{webhook_dest_id}/signing-secret/{version}")
+        c.delete(f"/api/v1/notifications/destinations/{webhook_dest_id}/signing-secret/{version}")
         assert raw not in get_raw_secrets_for_channel(webhook_dest_id)

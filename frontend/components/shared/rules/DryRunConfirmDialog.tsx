@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { DryRunConfirmation } from "@/lib/client/rules-api"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
@@ -216,13 +217,16 @@ export function DryRunConfirmDialog({
             </div>
           )}
 
-          <div>
-            <label
-              htmlFor="dry-run-typed-confirm"
-              className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
-            >
-              Type the rule name to confirm
-            </label>
+          <FormField
+            label="Type the rule name to confirm"
+            htmlFor="dry-run-typed-confirm"
+            error={
+              <>
+                Type <span className="font-mono">{ruleName}</span> to enable. This
+                will start auto-dismissing matching findings immediately.
+              </>
+            }
+          >
             <Input
               id="dry-run-typed-confirm"
               ref={inputRef}
@@ -235,11 +239,7 @@ export function DryRunConfirmDialog({
               disabled={loading}
               invalid
             />
-            <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
-              Type <span className="font-mono">{ruleName}</span> to enable. This
-              will start auto-dismissing matching findings immediately.
-            </p>
-          </div>
+          </FormField>
 
           {error && (
             <div

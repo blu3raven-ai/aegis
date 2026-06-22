@@ -4,8 +4,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from runner.scanners._shared import JobEnv
 from runner.scanners.code_scanning.scanner import CodeScanningScanner, _maybe_verify
 from runner.verification.budget import ScanBudget
+
+
+def _env(api_key: str | None = None) -> JobEnv:
+    env_vars: dict[str, str] = {}
+    if api_key:
+        env_vars["LLM_API_KEY"] = api_key
+    return JobEnv({"envVars": env_vars})
 
 
 def test_no_llm_config_marks_skipped(monkeypatch):
@@ -74,18 +82,19 @@ def test_verify_findings_file_rewrites_with_verdict(tmp_path, monkeypatch):
             "verification_metadata": {"tokens_used": 412},
         })()
 
-    monkeypatch.setenv("LLM_API_KEY", "sk-test")
     monkeypatch.setattr(
         "runner.scanners.code_scanning.scanner.verify_finding",
         _fake_verify,
     )
 
-    CodeScanningScanner()._verify_findings_file(findings_file, repo_root=str(tmp_path))
+    CodeScanningScanner()._verify_findings_file(
+        findings_file, repo_root=str(tmp_path), env=_env(api_key="sk-test"),
+    )
 
     rewritten = [json.loads(l) for l in findings_file.read_text().splitlines() if l.strip()]
     assert len(rewritten) == 1
     assert rewritten[0]["verdict"] == "confirmed"
-    assert rewritten[0]["evidence_json"][0]["snippet"] == "eval(user_input)"
+    assert rewritten[0]["evidence"][0]["snippet"] == "eval(user_input)"
     assert rewritten[0]["exploit_chain"] == "http_request -> eval"
     assert rewritten[0]["verification_metadata"]["tokens_used"] == 412
 
@@ -99,7 +108,9 @@ def test_verify_findings_file_no_llm_key_marks_skipped(tmp_path, monkeypatch):
 
     monkeypatch.delenv("LLM_API_KEY", raising=False)
 
-    CodeScanningScanner()._verify_findings_file(findings_file, repo_root=str(tmp_path))
+    CodeScanningScanner()._verify_findings_file(
+        findings_file, repo_root=str(tmp_path), env=_env(),
+    )
 
     rewritten = [json.loads(l) for l in findings_file.read_text().splitlines() if l.strip()]
     assert rewritten[0]["verdict"] is None
@@ -109,5 +120,5 @@ def test_verify_findings_file_no_llm_key_marks_skipped(tmp_path, monkeypatch):
 def test_verify_findings_file_missing_file_is_noop(tmp_path):
     """No findings.jsonl -> _verify_findings_file silently returns."""
     CodeScanningScanner()._verify_findings_file(
-        tmp_path / "nonexistent.jsonl", repo_root=str(tmp_path),
+        tmp_path / "nonexistent.jsonl", repo_root=str(tmp_path), env=_env(),
     )

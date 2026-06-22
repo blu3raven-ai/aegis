@@ -13,7 +13,7 @@ interface PageHeaderProps {
 export function PageHeader({ icon, title, description, count, meta, controls }: PageHeaderProps) {
   const showCount = typeof count === "number" && Number.isFinite(count)
   return (
-    <header className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
+    <header className="sticky top-0 z-20 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4">
       <div className="flex w-full items-center gap-4">
         <div className="flex items-center gap-3 min-w-0">
           {icon}

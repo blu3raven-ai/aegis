@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react"
 import { Button } from "@/components/ui/Button"
+import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Modal } from "./Modal"
 import { apiClient } from "@/lib/client/api-client.ts"
@@ -24,7 +25,10 @@ export function TotpSetupModal({
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    apiClient<{ qrDataUrl: string; secret: string }>("/api/v1/settings/account/totp", { method: "POST" })
+    apiClient<{ qrDataUrl: string; secret: string }>(
+      "/api/v1/auth/totp/enroll",
+      { method: "POST" },
+    )
       .then((data) => {
         setQrDataUrl(data.qrDataUrl)
         setSecret(data.secret)
@@ -38,15 +42,18 @@ export function TotpSetupModal({
     setError(null)
     startTransition(async () => {
       try {
-        await apiClient("/api/v1/settings/account/totp/verify", {
+        await apiClient("/api/v1/auth/totp/verify", {
           method: "POST",
           body: { code },
         })
         onSuccess()
       } catch (err) {
         if (err instanceof ApiClientError) {
-          const body = err.body as { error?: string } | null
-          setError(body?.error ?? "Invalid code.")
+          const detail =
+            typeof err.body === "object" && err.body !== null && "detail" in err.body
+              ? String((err.body as { detail?: unknown }).detail ?? "")
+              : ""
+          setError(detail || "Invalid code.")
         } else {
           setError("Invalid code.")
         }
@@ -82,11 +89,9 @@ export function TotpSetupModal({
               {secret}
             </code>
           </details>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
-              Verification code
-            </label>
+          <FormField label="Verification code" htmlFor="totp-code" error={error ?? undefined}>
             <Input
+              id="totp-code"
               type="text"
               inputMode="numeric"
               pattern="[0-9]{6}"
@@ -96,10 +101,10 @@ export function TotpSetupModal({
               placeholder="000000"
               required
               autoFocus
+              invalid={!!error}
               className="text-center font-mono tracking-widest"
             />
-          </div>
-          {error && <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>}
+          </FormField>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="md" onClick={onClose}>Cancel</Button>
             <Button type="submit" variant="primary" size="md" isLoading={isPending} disabled={isPending || code.length !== 6}>

@@ -19,7 +19,7 @@ class SlaAction(BaseModel):
 class RequireScannersAction(BaseModel):
     type: Literal["require_scanners"]
     required_scanners: list[
-        Literal["dependencies", "code_scanning", "container_scanning", "secrets"]
+        Literal["dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning"]
     ] = Field(min_length=1)
 
 

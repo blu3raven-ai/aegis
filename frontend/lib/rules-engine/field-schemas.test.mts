@@ -120,10 +120,10 @@ describe("DATA_RETENTION_RULE_FIELDS", () => {
       .filter((l) => l.includes('value: "tool"'))
     assert.ok(toolLines.length > 0, "should declare a tool field")
     toolLines.forEach((line) => {
-      assert.ok(line.includes('"dependencies"'), "tool field should include 'dependencies'")
+      assert.ok(line.includes('"dependencies_scanning"'), "tool field should include 'dependencies'")
       assert.ok(line.includes('"code_scanning"'), "tool field should include 'code_scanning'")
       assert.ok(line.includes('"container_scanning"'), "tool field should include 'container_scanning'")
-      assert.ok(line.includes('"secrets"'), "tool field should include 'secrets'")
+      assert.ok(line.includes('"secret_scanning"'), "tool field should include 'secrets'")
     })
   })
 })
@@ -147,7 +147,7 @@ describe("field value suggestions", () => {
       .filter((l) => l.includes('value: "scanner"'))
     assert.ok(scannerLines.length > 0, "should declare a scanner field")
     scannerLines.forEach((line) => {
-      assert.ok(line.includes('"dependencies"'), "scanner field should include 'dependencies'")
+      assert.ok(line.includes('"dependencies_scanning"'), "scanner field should include 'dependencies'")
     })
   })
 })

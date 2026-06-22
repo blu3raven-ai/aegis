@@ -77,7 +77,7 @@ class GenericWebhookSender(BaseSender):
                     headers[_LEGACY_SIG_HEADER] = _sign(body, legacy_secret)
                     logger.warning(
                         "channel uses legacy signing secret; consider rotating to Phase 44 "
-                        "HMAC headers via POST /api/v1/notification-channels/<id>/signing-secret"
+                        "HMAC headers via POST /api/v1/notifications/destinations/<id>/signing-secret"
                     )
 
             with default_client() as client:

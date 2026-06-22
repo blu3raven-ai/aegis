@@ -1,4 +1,5 @@
 import { ControlBadge } from "./ControlBadge"
+import { Card } from "@/components/ui/Card"
 
 const SEVERITY_COLORS: Record<string, string> = {
   critical: "text-[var(--color-severity-critical)]",
@@ -14,7 +15,6 @@ interface ControlDetailHeroProps {
   description?: string | null
   category?: string | null
   findingCount: number
-  chainCount: number
   highestSeverity?: string | null
 }
 
@@ -25,13 +25,12 @@ export function ControlDetailHero({
   description,
   category,
   findingCount,
-  chainCount,
   highestSeverity,
 }: ControlDetailHeroProps) {
-  const atRisk = findingCount > 0 || chainCount > 0
+  const atRisk = findingCount > 0
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[var(--shadow-card)]">
+    <Card padding="lg" elevation="sm" className="rounded-xl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
@@ -77,17 +76,6 @@ export function ControlDetailHero({
           </div>
         </div>
 
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
-          <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-            Open Chains
-          </div>
-          <div
-            className={`mt-0.5 text-[22px] font-bold ${chainCount > 0 ? "text-[var(--color-severity-high)]" : "text-[var(--color-text-primary)]"}`}
-          >
-            {chainCount}
-          </div>
-        </div>
-
         {highestSeverity && (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
             <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
@@ -101,6 +89,6 @@ export function ControlDetailHero({
           </div>
         )}
       </div>
-    </div>
+    </Card>
   )
 }
