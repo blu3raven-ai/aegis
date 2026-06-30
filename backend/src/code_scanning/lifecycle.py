@@ -1,11 +1,13 @@
 """SAST finding lifecycle hooks for the shared lifecycle engine.
 
-Identity key: {repo}:{file_path}:{rule_id}:{start_line}
+Identity key: {repo}:{file_path}:{rule_id}:{snippet-fingerprint or start_line}
+— a content fingerprint keeps a finding stable when edits shift its line number.
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.code_scanning.ingest import code_finding_identity
 from src.shared.lifecycle import LifecycleHooks
 
 if TYPE_CHECKING:
@@ -16,14 +18,13 @@ class CodeScanningHooks(LifecycleHooks):
     tool = "code_scanning"
 
     def compute_identity_key(self, raw: dict[str, Any]) -> str:
-        def _esc(v: str) -> str:
-            return v.replace(":", "%3A")
-
-        repo = _esc(str(raw.get("repo_full_name") or ""))
-        path = _esc(str(raw.get("file_path") or ""))
-        rule = _esc(str(raw.get("rule_id") or ""))
-        line = raw.get("start_line") or 0
-        return f"{repo}:{path}:{rule}:{line}"
+        return code_finding_identity(
+            repo=str(raw.get("repo_full_name") or ""),
+            file_path=str(raw.get("file_path") or ""),
+            rule_id=str(raw.get("rule_id") or ""),
+            start_line=raw.get("start_line") or 0,
+            snippet=str(raw.get("snippet") or ""),
+        )
 
     def initial_state(self, raw: dict[str, Any]) -> str:
         return "open"
@@ -58,7 +59,7 @@ class CodeScanningHooks(LifecycleHooks):
             "fileClass": raw.get("file_class", ""),
         }
         # Optional large fields — only store when present
-        for key in ("code_flows", "code_window", "imports", "reachability"):
+        for key in ("code_flows", "code_window", "code_window_start_line", "imports", "reachability"):
             val = raw.get(key)
             if val:
                 detail[key] = val

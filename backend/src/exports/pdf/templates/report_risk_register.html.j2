@@ -1,0 +1,47 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ title }}{% endblock %}
+{% block body %}
+<h1>{{ title }}</h1>
+<p class="meta">{{ scope_label }} · {{ open_count }} open risks · {{ accepted_count }} accepted · generated {{ generated_at }}</p>
+
+<h2>Open risk register</h2>
+{% if open_by_severity %}
+{% for severity, rows in open_by_severity.items() %}
+<h3 class="sev-{{ severity }}">{{ severity|capitalize }} ({{ rows|length }})</h3>
+<table>
+  <thead><tr><th>Finding</th><th>Source</th><th>Age</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td>{{ r.title }}</td>
+      <td>{{ r.source }}</td>
+      <td>{% if r.age_days is not none %}{{ r.age_days }}d{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% else %}
+<p class="meta">No open findings in scope.</p>
+{% endif %}
+
+<h2>Accepted risks</h2>
+{% if accepted %}
+<table>
+  <thead><tr><th>Severity</th><th>Finding</th><th>Source</th><th>Rationale</th><th>Accepted by</th></tr></thead>
+  <tbody>
+  {% for r in accepted %}
+    <tr>
+      <td class="sev-{{ r.severity }}">{{ r.severity|capitalize }}</td>
+      <td>{{ r.title }}</td>
+      <td>{{ r.source }}</td>
+      <td>{{ r.reason }}</td>
+      <td>{{ r.decided_by }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="meta">No accepted (dismissed) risks recorded for this scope.</p>
+{% endif %}
+{% endblock %}

@@ -3,13 +3,20 @@
 /**
  * Action button row for the findings detail drawer.
  *
- * All handlers are visual stubs today — when a prop is omitted we fall back
- * to a `console.log` no-op so each button keeps its keyboard, focus, and
- * aria semantics. Backend wiring lands in a follow-up.
+ * Each action renders only when it has a real handler. The Dismiss control is
+ * the accessible DismissPopover primitive (Button-triggered role=menu).
  */
 
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/Button"
+import { DismissPopover } from "@/components/shared/FindingDrawer/DismissPopover"
+
+interface DismissControl {
+  reasons: readonly string[]
+  onDismiss: (reason: string) => void
+  busy?: boolean
+  error?: string | null
+}
 
 interface FindingDetailActionsProps {
   /** When an action is unavailable for this finding (e.g. no PR template),
@@ -18,21 +25,22 @@ interface FindingDetailActionsProps {
   canOpenFixPr?: boolean
   canCreateJira?: boolean
   canNotifySlack?: boolean
-  canAssign?: boolean
   canDefer?: boolean
   onOpenFixPr?: () => void
   onCreateJira?: () => void
   onNotifySlack?: () => void
-  onAssign?: () => void
   onDefer?: () => void
+  /** Assignment is a disposition like Defer/Dismiss, so the real assignee
+   *  picker lives here in the action row (rendered first). */
+  assigneeControl?: ReactNode
+  /** Real disposition control — dismiss the finding with a reason. */
+  dismiss?: DismissControl
+  /** For already-closed findings: reopen is the only useful disposition, so it
+   *  replaces Defer/Dismiss (which the caller simply doesn't pass). */
+  onReopen?: () => void
+  reopenBusy?: boolean
 }
 
-function stub(label: string) {
-  return () => {
-    // No-op stub — see component header for rationale.
-    console.log(`[finding-actions] ${label} clicked`)
-  }
-}
 
 const IconPullRequest: ReactNode = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -58,13 +66,15 @@ export function FindingDetailActions({
   canOpenFixPr = true,
   canCreateJira = true,
   canNotifySlack = true,
-  canAssign = true,
   canDefer = true,
   onOpenFixPr,
   onCreateJira,
   onNotifySlack,
-  onAssign,
   onDefer,
+  assigneeControl,
+  dismiss,
+  onReopen,
+  reopenBusy,
 }: FindingDetailActionsProps) {
   return (
     <div
@@ -72,54 +82,88 @@ export function FindingDetailActions({
       aria-label="Finding actions"
       className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-3"
     >
-      <Button
-        variant="primary"
-        size="sm"
-        leadingIcon={IconPullRequest}
-        onClick={onOpenFixPr ?? stub("open-fix-pr")}
-        disabled={!canOpenFixPr}
-        aria-label="Open a fix pull request for this finding"
-      >
-        Open fix PR
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        leadingIcon={IconTicket}
-        onClick={onCreateJira ?? stub("create-jira")}
-        disabled={!canCreateJira}
-        aria-label="Create a Jira ticket for this finding"
-      >
-        Create Jira ticket
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        leadingIcon={IconBell}
-        onClick={onNotifySlack ?? stub("notify-slack")}
-        disabled={!canNotifySlack}
-        aria-label="Notify Slack about this finding"
-      >
-        Notify Slack
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={onAssign ?? stub("assign")}
-        disabled={!canAssign}
-        aria-label="Assign this finding to a teammate"
-      >
-        Assign
-      </Button>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={onDefer ?? stub("defer")}
-        disabled={!canDefer}
-        aria-label="Defer this finding"
-      >
-        Defer
-      </Button>
+      {assigneeControl}
+      {/* Integration actions render only when actually wired to a handler —
+          PR / Jira / Slack have no backend yet, so they stay hidden rather
+          than masquerade as working buttons. */}
+      {onOpenFixPr && (
+        <Button
+          variant="primary"
+          size="sm"
+          leadingIcon={IconPullRequest}
+          onClick={onOpenFixPr}
+          disabled={!canOpenFixPr}
+          aria-label="Open a fix pull request for this finding"
+        >
+          Open fix PR
+        </Button>
+      )}
+      {onCreateJira && (
+        <Button
+          variant="secondary"
+          size="sm"
+          leadingIcon={IconTicket}
+          onClick={onCreateJira}
+          disabled={!canCreateJira}
+          aria-label="Create a Jira ticket for this finding"
+        >
+          Create Jira ticket
+        </Button>
+      )}
+      {onNotifySlack && (
+        <Button
+          variant="secondary"
+          size="sm"
+          leadingIcon={IconBell}
+          onClick={onNotifySlack}
+          disabled={!canNotifySlack}
+          aria-label="Notify Slack about this finding"
+        >
+          Notify Slack
+        </Button>
+      )}
+      {onDefer && (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onDefer}
+          disabled={!canDefer}
+          aria-label="Defer this finding"
+        >
+          Defer
+        </Button>
+      )}
+
+      {dismiss && (
+        <div className="ml-auto flex items-center gap-2">
+          {dismiss.error && (
+            <span className="text-[11px] text-[var(--color-severity-high)]" role="alert">
+              {dismiss.error}
+            </span>
+          )}
+          <DismissPopover
+            reasons={dismiss.reasons}
+            onDismiss={dismiss.onDismiss}
+            isLoading={Boolean(dismiss.busy)}
+            triggerLabel={dismiss.busy ? "Dismissing…" : "Dismiss"}
+            placement="bottom"
+          />
+        </div>
+      )}
+
+      {onReopen && (
+        <div className="ml-auto">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onReopen}
+            disabled={reopenBusy}
+            aria-label="Reopen this finding"
+          >
+            {reopenBusy ? "Reopening…" : "Reopen"}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -159,6 +159,7 @@ def normalize_file(
                 "stateCandidate": "open",
                 "code_flows": code_flows if code_flows else None,
                 "code_window": ctx_entry.get("code_window"),
+                "code_window_start_line": ctx_entry.get("code_window_start_line"),
                 "imports": ctx_entry.get("imports"),
                 "file_class": file_class,
                 "reachability": reachability.get(ctx_key),

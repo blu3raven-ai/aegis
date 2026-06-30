@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { SbomFormat } from "@/lib/client/sbom-api"
 import { Button } from "@/components/ui/Button"
+import { nextRovingIndex } from "@/lib/ui/menu-nav"
 
 const FORMAT_LABELS: Record<SbomFormat, string> = {
   "cyclonedx-json": "CycloneDX JSON",
@@ -18,6 +19,8 @@ const FORMAT_EXT: Record<SbomFormat, string> = {
   "spdx-tag-value": "spdx.tv",
 }
 
+const FORMATS = Object.keys(FORMAT_LABELS) as SbomFormat[]
+
 export function SbomExportMenu({
   repoName,
   onExport,
@@ -28,30 +31,84 @@ export function SbomExportMenu({
   loading?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  // Roving-tabindex active item; -1 while the menu is closed.
+  const [activeIndex, setActiveIndex] = useState(-1)
   const ref = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+        setActiveIndex(-1)
+      }
     }
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  function handleSelect(fmt: SbomFormat) {
+  // Drive focus from activeIndex so arrow keys move the real focus ring (and a
+  // screen reader follows), keeping the menu a single tab stop.
+  useEffect(() => {
+    if (open && activeIndex >= 0) itemRefs.current[activeIndex]?.focus()
+  }, [open, activeIndex])
+
+  function openMenu(index: number) {
+    setOpen(true)
+    setActiveIndex(index)
+  }
+
+  function closeMenu(restoreFocus: boolean) {
     setOpen(false)
+    setActiveIndex(-1)
+    if (restoreFocus) triggerRef.current?.focus()
+  }
+
+  function handleSelect(fmt: SbomFormat) {
+    closeMenu(true)
     const safeName = repoName.replace(/[^a-z0-9_.-]/gi, "-").toLowerCase()
     onExport(fmt, `${safeName}.${FORMAT_EXT[fmt]}`)
+  }
+
+  function handleTriggerKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      openMenu(0)
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      openMenu(FORMATS.length - 1)
+    }
+  }
+
+  function handleMenuKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault()
+      closeMenu(true)
+      return
+    }
+    if (e.key === "Tab") {
+      // Let focus leave naturally; just dismiss the menu.
+      closeMenu(false)
+      return
+    }
+    const target = nextRovingIndex(e.key, activeIndex, FORMATS.length)
+    if (target !== null) {
+      e.preventDefault()
+      setActiveIndex(target)
+    }
   }
 
   return (
     <div ref={ref} className="relative">
       <Button
+        ref={triggerRef}
         variant="secondary"
         size="sm"
         disabled={loading}
         isLoading={loading}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => (open ? closeMenu(false) : openMenu(0))}
+        onKeyDown={handleTriggerKeyDown}
         aria-haspopup="true"
         aria-expanded={open}
         leadingIcon={
@@ -88,11 +145,21 @@ export function SbomExportMenu({
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-1 min-w-[180px] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg">
-          {(Object.keys(FORMAT_LABELS) as SbomFormat[]).map((fmt) => (
+        <div
+          role="menu"
+          aria-label="Export SBOM format"
+          onKeyDown={handleMenuKeyDown}
+          className="absolute right-0 top-full z-40 mt-1 min-w-[180px] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg"
+        >
+          {FORMATS.map((fmt, i) => (
             <button
               key={fmt}
+              ref={(el) => {
+                itemRefs.current[i] = el
+              }}
               type="button"
+              role="menuitem"
+              tabIndex={i === activeIndex ? 0 : -1}
               onClick={() => handleSelect(fmt)}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             >

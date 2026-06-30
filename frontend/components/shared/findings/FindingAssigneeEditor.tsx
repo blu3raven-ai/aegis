@@ -4,17 +4,20 @@ import { useState } from "react"
 
 import { updateFindingAssignee } from "@/lib/client/findings-api"
 import { FindingAssigneePicker } from "@/components/shared/findings/FindingAssigneePicker"
+import type { ButtonSize } from "@/components/ui/Button"
 
 export interface FindingAssigneeEditorProps {
   findingId: string
   currentAssignee: string | null
   onUpdate: (next: string | null) => void
+  size?: ButtonSize
 }
 
 export function FindingAssigneeEditor({
   findingId,
   currentAssignee,
   onUpdate,
+  size,
 }: FindingAssigneeEditorProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,6 +48,7 @@ export function FindingAssigneeEditor({
         onChange={(next) => void commit(next)}
         emptyLabel="Unassigned"
         disabled={saving}
+        size={size}
         triggerAriaLabel={currentAssignee ? `Change assignee (${currentAssignee})` : "Set assignee"}
       />
       {error && (

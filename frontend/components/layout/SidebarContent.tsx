@@ -61,6 +61,8 @@ const ICON_RELEASES =
   "M9 12.75 11.25 15 15 9.75M3.75 9.75h16.5M3.75 9.75A2.25 2.25 0 0 1 6 7.5h12a2.25 2.25 0 0 1 2.25 2.25v9A2.25 2.25 0 0 1 18 21H6a2.25 2.25 0 0 1-2.25-2.25v-9ZM7.5 7.5V5.25A2.25 2.25 0 0 1 9.75 3h4.5a2.25 2.25 0 0 1 2.25 2.25V7.5"
 const ICON_DATABASE =
   "M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4"
+const ICON_SBOM =
+  "M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z"
 
 const ICON_COMPLIANCE =
   "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"
@@ -165,6 +167,7 @@ export function SidebarContent({
   // absent — releases are reached from /sources/[id] → Pre-release scan.
   const dataItems: NavItem[] = [
     { href: "/sources", label: "Sources", icon: ICON_DATABASE },
+    { href: "/sbom", label: "SBOM", icon: ICON_SBOM },
     { href: "/chains", label: "Chains", icon: ICON_CHAINS, badge: "Preview" },
   ];
 

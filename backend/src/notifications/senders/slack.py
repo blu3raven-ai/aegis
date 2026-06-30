@@ -47,5 +47,12 @@ class SlackSender(BaseSender):
             return SendResult(success=False, error=str(exc)[:500])
 
     def test(self) -> TestResult:
-        """No external probe — registration-time liveness check only."""
-        return TestResult(ok=True)
+        """The destination webhook URL lives in per-destination config, which
+        this no-config capability check never receives, so there is nothing to
+        probe at this layer. Report available but self-report the absence of a
+        liveness probe so an ops surface doesn't read this as "verified
+        reachable" — Slack delivery is exercised per-destination at send time."""
+        return TestResult(
+            ok=True,
+            message="No liveness probe — Slack delivery is verified per-destination at send time",
+        )

@@ -59,9 +59,15 @@ def test_mismatched_context_decrypts_to_empty_string():
 
 def test_runner_encrypt_env_vars_round_trip():
     """encrypt_env_vars + decrypt_env_vars in the runner module still work."""
-    env = {"GIT_TOKEN": "ghp_aaaaaaaaaaaaaaaaaaaaaa", "OTHER": "not-secret"}
+    env = {
+        "GIT_TOKEN": "ghp_aaaaaaaaaaaaaaaaaaaaaa",
+        "ARGUS_TOKEN": "argus-short-lived-access-token",
+        "OTHER": "not-secret",
+    }
     encrypted = encrypt_env_vars(env)
     assert encrypted["GIT_TOKEN"].startswith("ENC:")
+    assert encrypted["ARGUS_TOKEN"].startswith("ENC:")
+    assert "ARGUS_TOKEN" in SENSITIVE_KEYS
     assert encrypted["OTHER"] == "not-secret"
 
     decrypted = decrypt_env_vars(encrypted)

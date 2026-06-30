@@ -94,4 +94,12 @@ class GenericWebhookSender(BaseSender):
             return SendResult(success=False, error=str(exc)[:500])
 
     def test(self) -> TestResult:
-        return TestResult(ok=True)
+        """The destination URL lives in per-destination config, which this
+        no-config capability check never receives, so there is nothing to probe
+        at this layer. Report available but self-report the absence of a
+        liveness probe so an ops surface doesn't read this as "verified
+        reachable" — delivery is exercised per-destination at send time."""
+        return TestResult(
+            ok=True,
+            message="No liveness probe — webhook delivery is verified per-destination at send time",
+        )

@@ -5,7 +5,7 @@ export function DrawerStatusBanner({
   dismissedReason,
   fixedAt,
 }: {
-  state: "open" | "dismissed" | "fixed" | "awaiting_fix" | "deferred"
+  state: string
   dismissedReason?: string
   fixedAt?: string
 }) {
@@ -35,11 +35,15 @@ export function DrawerStatusBanner({
     )
   }
 
-  if (state === "fixed" && fixedAt) {
+  if (state === "fixed" || state === "closed") {
     return (
       <div className="border-b border-[var(--color-border)] bg-[var(--color-state-fixed-subtle)] px-5 py-3">
-        <p className="text-sm font-medium text-[var(--color-state-fixed)]">Fixed</p>
-        <p className="mt-0.5 text-xs text-[var(--color-state-fixed-muted)]">Fixed at: {fixedAt}</p>
+        <p className="text-sm font-medium text-[var(--color-state-fixed)]">
+          {state === "fixed" ? "Fixed" : "Closed"}
+        </p>
+        {fixedAt && (
+          <p className="mt-0.5 text-xs text-[var(--color-state-fixed-muted)]">Fixed at: {fixedAt}</p>
+        )}
       </div>
     )
   }

@@ -89,6 +89,7 @@ interface RestSourceConnection {
   nextSyncAt: string | null
   discoveredItemCount: number | null
   discoveredItems: string[]
+  scopeRefs?: string[]
   createdAt: string | null
   updatedAt: string | null
 }
@@ -123,6 +124,7 @@ function restConnectionToTs(c: RestSourceConnection): SourceConnection {
     ...(c.nextSyncAt ? { nextSyncAt: c.nextSyncAt } : {}),
     ...(c.discoveredItemCount != null ? { discoveredItemCount: c.discoveredItemCount } : {}),
     ...(c.discoveredItems.length ? { discoveredItems: c.discoveredItems } : {}),
+    ...(c.scopeRefs?.length ? { scopeRefs: c.scopeRefs } : {}),
     createdAt: c.createdAt ?? "",
     updatedAt: c.updatedAt ?? "",
   }

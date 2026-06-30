@@ -1,16 +1,42 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import type { ReportSummary } from "@/lib/client/reports-api"
 import { generateReport, listReports, deleteReport } from "@/lib/client/reports-api"
 import { ReportTemplateGrid, type ReportTemplateId } from "@/components/reports/ReportTemplateGrid"
+import {
+  type ReportType,
+  type ReportFormat,
+  REPORT_TYPE_OPTIONS,
+  formatOptionsForType,
+  clampFormat,
+  reportTypeLabel,
+} from "@/lib/shared/report-types"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { FilterChip } from "@/components/ui/FilterChip"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
+import { StatusPill, type Status } from "@/components/ui/StatusPill"
 import { ScheduledReportsPanel } from "./ScheduledReportsPanel"
+
+// A report row's status drives whether its download is usable; surface it so a
+// failed generation isn't a silent dead "Download" link.
+const REPORT_STATUS: Record<string, { tone: Status; label: string }> = {
+  completed: { tone: "healthy", label: "Ready" },
+  pending: { tone: "warning", label: "Generating" },
+  failed: { tone: "failing", label: "Failed" },
+}
+
+// Per-type badge tint so the report kind reads at a glance in the history table.
+const TYPE_BADGE: Record<string, string> = {
+  findings: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
+  posture: "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)]",
+  executive: "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)]",
+  risk_register: "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)]",
+  soc2_evidence: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
+}
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const
 type Severity = (typeof SEVERITIES)[number]
@@ -39,8 +65,8 @@ export function ReportsPageContent() {
   const [listState, setListState] = useState<"loading" | "ok" | "error">("loading")
 
   // Generate form
-  const [reportType, setReportType] = useState<"findings" | "posture">("findings")
-  const [format, setFormat] = useState<"json" | "csv" | "pdf">("csv")
+  const [reportType, setReportType] = useState<ReportType>("findings")
+  const [format, setFormat] = useState<ReportFormat>("csv")
   const [severity, setSeverity] = useState<Severity[]>([])
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
@@ -55,8 +81,28 @@ export function ReportsPageContent() {
   function handleTemplateSelect(id: ReportTemplateId) {
     if (id === "findings-export") {
       setReportType("findings")
+      setFormat((f) => clampFormat("findings", f))
     } else if (id === "posture-snapshot") {
       setReportType("posture")
+      setFormat((f) => clampFormat("posture", f))
+    } else if (id === "monthly-executive") {
+      setReportType("executive")
+      setFormat((f) => clampFormat("executive", f))
+    } else if (id === "quarterly-risk") {
+      setReportType("risk_register")
+      setFormat((f) => clampFormat("risk_register", f))
+    } else if (id === "soc2-evidence") {
+      setReportType("soc2_evidence")
+      setFormat((f) => clampFormat("soc2_evidence", f))
+    } else if (id === "pci-attestation") {
+      // PCI attestation is the compliance attestation for the PCI framework —
+      // requirement-by-requirement status. Reuse it directly rather than minting
+      // a second generator.
+      const a = document.createElement("a")
+      a.href = "/api/v1/compliance/frameworks/pci-dss/attestation.pdf"
+      a.download = ""
+      a.click()
+      return
     } else {
       return
     }
@@ -65,30 +111,30 @@ export function ReportsPageContent() {
     window.setTimeout(() => setFormHighlighted(false), 1200)
   }
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const data = await listReports()
-        setReports(data.reports)
-        setTotal(data.total)
-        setListState("ok")
-      } catch {
-        setListState("error")
-      }
-    })()
+  const loadReports = useCallback(async () => {
+    setListState("loading")
+    try {
+      const data = await listReports()
+      setReports(data.reports)
+      setTotal(data.total)
+      setListState("ok")
+    } catch {
+      setListState("error")
+    }
   }, [])
+
+  useEffect(() => {
+    void loadReports()
+  }, [loadReports])
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault()
     setGenerating(true)
     setGenerateError(null)
     try {
-      // Backend rejects posture+csv, so coerce csv->json for posture.
-      const effectiveFormat: "json" | "csv" | "pdf" =
-        reportType === "posture" && format === "csv" ? "json" : format
       const report = await generateReport({
         report_type: reportType,
-        format: effectiveFormat,
+        format: format,
         ...(reportType === "findings" && severity.length > 0
           ? { filters: { severity } }
           : {}),
@@ -121,7 +167,7 @@ export function ReportsPageContent() {
 
   if (listState === "loading") {
     return (
-      <div className="px-6 py-5 space-y-5">
+      <div className="px-6 py-6 space-y-5">
         <Skeleton className="rounded-lg h-28" />
         <Skeleton className="rounded-lg h-40" />
       </div>
@@ -130,12 +176,12 @@ export function ReportsPageContent() {
 
   if (listState === "error") {
     return (
-      <div className="px-6 py-5">
+      <div className="px-6 py-6">
         <Card padding="none" className="px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">Could not load reports</p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">The backend may be unavailable. Check that the server is running and try again.</p>
           <div className="mt-4 flex justify-center">
-            <Button variant="secondary" onClick={() => window.location.reload()}>
+            <Button variant="secondary" onClick={() => void loadReports()}>
               Retry
             </Button>
           </div>
@@ -145,7 +191,7 @@ export function ReportsPageContent() {
   }
 
   return (
-    <div className="px-6 py-5 space-y-5">
+    <div className="px-6 py-6 space-y-5">
       <ReportTemplateGrid onSelect={handleTemplateSelect} />
 
       <div
@@ -158,40 +204,27 @@ export function ReportsPageContent() {
       >
         <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">Generate new report</h2>
         <form onSubmit={handleGenerate} className="flex flex-col gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-sm text-[var(--color-text-secondary)] w-28">Report type</span>
             <SegmentedControl
               ariaLabel="Report type"
               value={reportType}
               onChange={(t) => {
-                setReportType(t as "findings" | "posture")
-                if (t === "posture" && format === "csv") setFormat("json")
+                const next = t as ReportType
+                setReportType(next)
+                setFormat((f) => clampFormat(next, f))
               }}
-              options={[
-                { id: "findings", label: "Findings" },
-                { id: "posture", label: "Posture" },
-              ]}
+              options={REPORT_TYPE_OPTIONS}
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="w-28 text-sm text-[var(--color-text-secondary)]">Format</span>
             <SegmentedControl
               ariaLabel="Format"
               value={format}
-              onChange={(f) => setFormat(f as "json" | "csv" | "pdf")}
-              options={
-                reportType === "findings"
-                  ? [
-                      { id: "csv", label: "CSV" },
-                      { id: "json", label: "JSON" },
-                      { id: "pdf", label: "PDF" },
-                    ]
-                  : [
-                      { id: "json", label: "JSON" },
-                      { id: "pdf", label: "PDF" },
-                    ]
-              }
+              onChange={(f) => setFormat(f as ReportFormat)}
+              options={formatOptionsForType(reportType)}
             />
           </div>
 
@@ -229,7 +262,7 @@ export function ReportsPageContent() {
               {generating ? "Generating…" : "Generate report"}
             </Button>
             {generateError && (
-              <p className="text-sm text-[var(--color-severity-critical)]">{generateError}</p>
+              <p role="alert" className="text-sm text-[var(--color-severity-critical)]">{generateError}</p>
             )}
           </div>
         </form>
@@ -243,15 +276,23 @@ export function ReportsPageContent() {
       {reports.length === 0 ? (
         <ReportsEmptyState />
       ) : (
+      <div className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Report history</h2>
+        <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
+          {total} {total === 1 ? "report" : "reports"}
+        </span>
+      </div>
       <Card padding="none" className="overflow-auto">
         <Table className="min-w-full">
           <Thead>
             <Tr>
               <Th className="px-5">Title</Th>
               <Th className="px-5">Type</Th>
+              <Th className="px-5">Status</Th>
               <Th className="px-5">Format</Th>
-              <Th className="px-5">Rows</Th>
-              <Th className="px-5">Size</Th>
+              <Th className="px-5 text-right">Rows</Th>
+              <Th className="px-5 text-right">Size</Th>
               <Th className="px-5">Created</Th>
               <Th className="px-5">Actions</Th>
             </Tr>
@@ -260,22 +301,30 @@ export function ReportsPageContent() {
             {(
               reports.map(report => {
                 return (
-                  <Tr key={report.id} interactive>
-                    <Td className="px-5 py-3.5 max-w-xs truncate text-[var(--color-text-primary)]">{report.title}</Td>
+                  <Tr key={report.id}>
+                    <Td className="px-5 py-3.5 max-w-xs truncate text-[var(--color-text-primary)]" title={report.title}>{report.title}</Td>
                     <Td className="px-5 py-3.5">
-                      <span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
-                        report.report_type === "findings"
-                          ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
-                          : "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
+                      <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${
+                        TYPE_BADGE[report.report_type] ?? "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
                       }`}>
-                        {report.report_type}
+                        {reportTypeLabel(report.report_type)}
                       </span>
                     </Td>
+                    <Td className="px-5 py-3.5">
+                      {(() => {
+                        const view = REPORT_STATUS[report.status] ?? { tone: "stale" as Status, label: report.status }
+                        return (
+                          <span title={report.error ?? undefined}>
+                            <StatusPill status={view.tone} label={view.label} />
+                          </span>
+                        )
+                      })()}
+                    </Td>
                     <Td className="px-5 py-3.5 text-xs uppercase text-[var(--color-text-secondary)]">{report.format}</Td>
-                    <Td className="px-5 py-3.5 tabular-nums text-[var(--color-text-secondary)]">
+                    <Td className="px-5 py-3.5 text-right tabular-nums text-[var(--color-text-secondary)]">
                       {report.row_count ?? "—"}
                     </Td>
-                    <Td className="px-5 py-3.5 tabular-nums text-[var(--color-text-secondary)]">
+                    <Td className="px-5 py-3.5 text-right tabular-nums text-[var(--color-text-secondary)]">
                       {formatBytes(report.file_size_bytes)}
                     </Td>
                     <Td className="px-5 py-3.5 text-[var(--color-text-secondary)]">
@@ -289,7 +338,7 @@ export function ReportsPageContent() {
                           target="_blank"
                           rel="noreferrer"
                           aria-disabled={!report.download_url}
-                          className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-semibold transition-colors ${
+                          className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] ${
                             report.download_url
                               ? "text-[var(--color-accent)] hover:bg-[var(--color-bg-hover)]"
                               : "pointer-events-none opacity-40 text-[var(--color-text-secondary)]"
@@ -316,6 +365,7 @@ export function ReportsPageContent() {
           </Tbody>
         </Table>
       </Card>
+      </div>
       )}
     </div>
   )
@@ -331,7 +381,7 @@ function ReportsEmptyState() {
       </div>
       <div className="flex flex-col gap-1">
         <p className="text-base font-semibold text-[var(--color-text-primary)]">No reports yet</p>
-        <p className="max-w-sm text-sm text-[var(--color-text-secondary)]">Generate your first findings or posture report from the form above.</p>
+        <p className="max-w-sm text-sm text-[var(--color-text-secondary)]">Generate your first report by picking a template or using the form above.</p>
       </div>
     </div>
   )

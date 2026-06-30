@@ -62,6 +62,7 @@ class DependenciesHooks(LifecycleHooks):
             "manifestSnippet": raw.get("manifest_snippet"),
             "manifestMatchLine": raw.get("manifest_match_line"),
             "matchedBy": raw.get("matched_by", []),
+            "matchSource": raw.get("match_source"),
         }
 
     def has_fix(self, raw: dict[str, Any]) -> bool:

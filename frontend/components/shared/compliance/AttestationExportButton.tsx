@@ -1,7 +1,7 @@
 "use client"
 
 import { Download } from "lucide-react"
-import { Button } from "@/components/ui/Button"
+import { Button, buttonClassName, buttonIconClassName } from "@/components/ui/Button"
 
 interface Props {
   frameworkId: string | null
@@ -17,6 +17,7 @@ export function AttestationExportButton({ frameworkId }: Props) {
     return (
       <Button
         variant="secondary"
+        size="md"
         disabled
         title="Select a framework first"
         leadingIcon={<Download />}
@@ -30,9 +31,9 @@ export function AttestationExportButton({ frameworkId }: Props) {
     <a
       href={href}
       download
-      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-xs font-semibold text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
+      className={buttonClassName({ variant: "secondary", size: "md" })}
     >
-      <Download className="h-3.5 w-3.5 shrink-0" />
+      <Download className={`${buttonIconClassName("md")} shrink-0`} />
       Export attestation
     </a>
   )

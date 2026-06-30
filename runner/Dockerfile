@@ -4,8 +4,6 @@
 FROM python:3.11-slim AS builder
 
 ARG SYFT_VERSION=1.24.0
-ARG GRYPE_VERSION=0.92.0
-ARG GRYPE_DB_VERSION=0.53.3
 ARG CDXGEN_VERSION=12.3.0
 ARG CDXCLI_VERSION=0.27.1
 ARG TRUFFLEHOG_VERSION=3.95.2
@@ -23,13 +21,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Syft + Grype + grype-db (Anchore install scripts)
+# Syft — CycloneDX/SPDX SBOM generator (Anchore install script). The runner
+# produces SBOMs only; vulnerability matching runs backend-side against the OSV
+# mirror, so grype / grype-db are no longer installed.
 RUN curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | \
-        sh -s -- -b /usr/local/bin v${SYFT_VERSION} && \
-    curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | \
-        sh -s -- -b /usr/local/bin v${GRYPE_VERSION} && \
-    curl -sSfL https://raw.githubusercontent.com/anchore/grype-db/main/install.sh | \
-        sh -s -- -b /usr/local/bin v${GRYPE_DB_VERSION}
+        sh -s -- -b /usr/local/bin v${SYFT_VERSION}
 
 # cdxgen — CycloneDX SBOM generator (arch-aware plugin binaries installed by npm)
 RUN npm install -g @cyclonedx/cdxgen@${CDXGEN_VERSION} && \
@@ -102,8 +98,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Scanner CLIs
 COPY --from=builder \
     /usr/local/bin/syft \
-    /usr/local/bin/grype \
-    /usr/local/bin/grype-db \
     /usr/local/bin/cyclonedx \
     /usr/local/bin/trufflehog \
     /usr/local/bin/
@@ -126,7 +120,7 @@ COPY . /app/runner/
 
 # Non-root user
 RUN useradd --create-home --shell /bin/bash --uid 10001 aegis && \
-    mkdir -p /workspace /home/aegis/.cache/grype && \
+    mkdir -p /workspace && \
     chown -R aegis:aegis /app /workspace /home/aegis
 USER aegis
 

@@ -130,6 +130,20 @@ def verify_finding(
             "snippet": skeptic.mitigation_snippet,
             "reasoning": skeptic.reasoning,
         }
+        mitigation_evidence = [{
+            "kind": "code",
+            "file": skeptic.mitigation_file or "",
+            "line": skeptic.mitigation_line or 0,
+            "snippet": skeptic.mitigation_snippet or "",
+        }]
+        unverified, _ = critic(mitigation_evidence, repo_root)
+        if unverified:
+            metadata["suppression_downgraded"] = unverified
+            return VerificationResult(
+                verdict="needs_verify", exploit_chain=chain, evidence=evidence,
+                tokens_in=tokens_in_total, tokens_out=tokens_out_total,
+                verification_metadata=metadata,
+            )
         return VerificationResult(
             verdict="ruled_out", exploit_chain=chain, evidence=evidence,
             tokens_in=tokens_in_total, tokens_out=tokens_out_total,

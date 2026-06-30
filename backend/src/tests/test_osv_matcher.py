@@ -262,3 +262,85 @@ async def test_match_components_end_to_end(monkeypatch):
     assert "leftpad" not in hit
     # the patched lodash@4.17.21 produced no match
     assert all(c.version != "4.17.21" for c in matched)
+
+
+# ── Distro-release extraction + mapping (pure) ──────────────────────────────
+
+
+def test_parse_purl_distro():
+    from src.osv.matcher import parse_purl_distro
+    assert parse_purl_distro("pkg:deb/debian/openssl@1.1.1n?distro=debian-11") == "debian-11"
+    assert parse_purl_distro("pkg:apk/alpine/musl@1.2?arch=x86_64&distro=alpine-3.18") == "alpine-3.18"
+    assert parse_purl_distro("pkg:npm/lodash@4.17.21") is None
+    assert parse_purl_distro("pkg:deb/debian/openssl@1.1.1n?arch=amd64") is None
+
+
+def test_osv_release_ecosystem_maps_only_verbatim_distros():
+    from src.osv.ecosystems import osv_release_ecosystem
+    # Debian is the only verbatim-safe distro: OSV uses plain "Debian:11".
+    assert osv_release_ecosystem("debian-11") == "Debian:11"
+    # Ubuntu deliberately does NOT map: OSV suffixes LTS releases as
+    # "Ubuntu:22.04:LTS", so exact-equality narrowing to "Ubuntu:22.04" would
+    # drop every LTS advisory (false negative). Falls back to base matching.
+    assert osv_release_ecosystem("ubuntu-22.04") is None
+    # Alpine (v-prefixed in OSV), RPM family, codenames, and missing/garbage
+    # releases also DON'T map → caller falls back to base matching.
+    assert osv_release_ecosystem("alpine-3.18") is None
+    assert osv_release_ecosystem("debian-bookworm") is None
+    assert osv_release_ecosystem("rocky-8") is None
+    assert osv_release_ecosystem(None) is None
+    assert osv_release_ecosystem("debian-") is None
+
+
+@pytest.mark.asyncio
+async def test_release_narrowing_excludes_other_releases(monkeypatch):
+    """A component pinned to Debian 11 must not be flagged by a Debian 12-only
+    advisory whose range happens to include its version — while a component with
+    no mapped release still matches every release (no advisory dropped)."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from src.db.engine import DATABASE_URL
+
+    pkg = "opensslrel"
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        await session.execute(
+            text("DELETE FROM osv_vulnerable_ranges WHERE package_name = :p"), {"p": pkg}
+        )
+        await session.commit()
+    await engine.dispose()
+
+    store = OsvStore()
+    monkeypatch.setattr("src.osv.store._upload_blob", lambda *a, **k: None)
+    # Both releases' advisories have ranges that include 1.1.1n-0+deb11u4
+    # (deb11u4 < deb11u5 and deb11u4 < deb12u1), so without narrowing the
+    # deb11 component would match BOTH — the false positive this fixes.
+    await store.upsert_advisories(
+        [
+            _adv("DEB11", "Debian:11", pkg, "0", "1.1.1n-0+deb11u5"),
+            _adv("DEB12", "Debian:12", pkg, "0", "1.1.1n-0+deb12u1"),
+        ],
+        ecosystem="npm",
+    )
+
+    comps = [
+        ComponentRef(name=pkg, version="1.1.1n-0+deb11u4", purl_type="deb",
+                     namespace="debian", release_ecosystem="Debian:11"),
+        ComponentRef(name=pkg, version="1.1.1n-0+deb11u4", purl_type="deb",
+                     namespace="debian"),  # no mapped release → matches both
+    ]
+
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            matched = await match_components(session, comps)
+    finally:
+        await engine.dispose()
+
+    by_release = {c.release_ecosystem: sorted(m.advisory_id for m in ms) for c, ms in matched.items()}
+    # Pinned to Debian 11 → only the Debian:11 advisory.
+    assert by_release.get("Debian:11") == ["DEB11"]
+    # No mapped release → both (fallback, nothing dropped).
+    assert by_release.get(None) == ["DEB11", "DEB12"]

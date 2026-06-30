@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { getPostureTrend, type TrendPoint } from "@/lib/client/posture-api"
+import { Sparkline } from "@/components/shared/charts/Sparkline"
 
 const NEUTRAL = "text-[var(--color-text-primary)]"
 const OK = "text-[var(--color-state-fixed)]"
@@ -64,40 +65,26 @@ function Body({ points, errored }: { points: TrendPoint[] | null; errored: boole
   const delta = current - first
   const valueClass = delta <= 0 ? OK : CRITICAL
   const arrow = points.length < 2 ? "" : delta < 0 ? "▼" : delta > 0 ? "▲" : "·"
+  // The series is sparse (one row per snapshot date), so points.length counts
+  // days-with-data, not the baseline's age — derive the real span from the dates.
+  const spanDays = Math.round(
+    (Date.parse(points[points.length - 1].date) - Date.parse(points[0].date)) / 86_400_000,
+  )
   const deltaLabel = points.length < 2
     ? "1 day of history"
-    : `${arrow} ${Math.abs(delta)} vs ${points.length} days ago`
+    : `${arrow} ${Math.abs(delta)} vs ${spanDays} ${spanDays === 1 ? "day" : "days"} ago`
 
   return (
     <>
       <p className={`mt-2 text-2xl font-semibold leading-none tabular-nums ${valueClass}`}>
         {current}
       </p>
-      <Sparkline points={points} />
+      <Sparkline
+        values={points.map((p) => p.total)}
+        stroke="var(--color-accent)"
+        className="mt-2 h-7 w-full"
+      />
       <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{deltaLabel}</p>
     </>
-  )
-}
-
-function Sparkline({ points }: { points: TrendPoint[] }) {
-  if (points.length < 2) return null
-
-  const w = 160
-  const h = 28
-  const totals = points.map((p) => p.total)
-  const min = Math.min(...totals)
-  const max = Math.max(...totals)
-  const range = max - min || 1
-  const stepX = points.length > 1 ? w / (points.length - 1) : 0
-  const coords = points.map((p, i) => {
-    const x = i * stepX
-    const y = h - ((p.total - min) / range) * h
-    return `${x.toFixed(2)},${y.toFixed(2)}`
-  }).join(" ")
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="mt-2 h-7 w-full" preserveAspectRatio="none" aria-hidden="true">
-      <polyline points={coords} fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[var(--color-accent)]" />
-    </svg>
   )
 }

@@ -8,8 +8,7 @@ import { Sheet } from "@/components/ui/Sheet"
 import { Textarea } from "@/components/ui/Textarea"
 import { ApiClientError } from "@/lib/client/api-client.types"
 import {
-  createFramework,
-  createFrameworkControl,
+  createFrameworkWithControls,
   type CreateControlBody,
 } from "@/lib/client/compliance-api"
 
@@ -78,7 +77,7 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
     const trimmedId = id.trim()
     const trimmedLabel = label.trim()
     if (!trimmedId || !trimmedLabel) {
-      setError("framework id and label are required")
+      setError("Framework ID and label are required")
       setSubmitting(false)
       return
     }
@@ -98,28 +97,16 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
       .filter((c): c is CreateControlBody => c !== null)
 
     try {
-      await createFramework({
+      await createFrameworkWithControls({
         id: trimmedId,
         label: trimmedLabel,
         description: description.trim() || null,
+        controls: validControls,
       })
-    } catch (err) {
-      setError(readErrorMessage(err, "failed to create framework"))
-      setSubmitting(false)
-      return
-    }
-
-    try {
-      for (const ctrl of validControls) {
-        await createFrameworkControl(trimmedId, ctrl)
-      }
       reset()
       onCreated()
     } catch (err) {
-      // Framework was created; some controls may have failed. Surface the error
-      // so the user knows and can recreate the missing controls via a future
-      // edit surface.
-      setError(readErrorMessage(err, "framework created but some controls failed to save"))
+      setError(readErrorMessage(err, "Failed to create framework"))
       setSubmitting(false)
     }
   }
@@ -187,13 +174,14 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
               {controls.map((c, i) => (
                 <div
                   key={i}
-                  className="grid grid-cols-12 gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-2"
+                  className="grid grid-cols-1 gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-2 sm:grid-cols-12"
                 >
                   <Input
                     size="sm"
                     value={c.control_id}
                     onChange={(e) => updateControl(i, { control_id: e.target.value })}
                     placeholder="A.1"
+                    aria-label="Control ID"
                     className="col-span-2 font-mono"
                   />
                   <Input
@@ -201,6 +189,7 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
                     value={c.title}
                     onChange={(e) => updateControl(i, { title: e.target.value })}
                     placeholder="Access controls"
+                    aria-label="Control title"
                     className="col-span-4"
                   />
                   <Input
@@ -208,6 +197,7 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
                     value={c.category}
                     onChange={(e) => updateControl(i, { category: e.target.value })}
                     placeholder="Category"
+                    aria-label="Control category"
                     className="col-span-2"
                   />
                   <Input
@@ -215,6 +205,7 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
                     value={c.description}
                     onChange={(e) => updateControl(i, { description: e.target.value })}
                     placeholder="Description"
+                    aria-label="Control description"
                     className="col-span-3"
                   />
                   <div className="col-span-1 flex justify-center">
@@ -239,7 +230,10 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
           </div>
 
           {error && (
-            <p className="rounded-md border border-[var(--color-severity-critical)]/40 bg-[var(--color-severity-critical)]/5 px-3 py-2 text-xs text-[var(--color-severity-critical)]">
+            <p
+              role="alert"
+              className="rounded-md border border-[var(--color-severity-critical)]/40 bg-[var(--color-severity-critical)]/5 px-3 py-2 text-xs text-[var(--color-severity-critical)]"
+            >
               {error}
             </p>
           )}

@@ -1,8 +1,75 @@
 "use client"
 
-import { useState } from "react"
-import type { SbomDiffResponse, SbomComponent, SbomVersionChange } from "@/lib/client/sbom-diff-api"
+import { useMemo, useState } from "react"
+import type { SbomDiffResponse, SbomComponent, SbomVersionChange, VulnCounts } from "@/lib/client/sbom-diff-api"
 import { Card } from "@/components/ui/Card"
+import { ComponentVulnBadge } from "@/components/shared/sbom/ComponentVulnBadge"
+import { CATEGORY_META, CATEGORY_RANK } from "@/lib/sbom/license-category"
+
+/** A bump that changes a component's license risk category is a compliance
+ * event — red when it gets more restrictive (e.g. MIT → GPL), green when less. */
+function LicenseChangeBadge({ change }: { change: SbomVersionChange }) {
+  const from = change.from_license_category
+  const to = change.to_license_category
+  if (!from || !to || from === to) return null
+  const worse = CATEGORY_RANK[to] > CATEGORY_RANK[from]
+  const cls = worse
+    ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
+    : "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]"
+  const fromLabel = change.from_license || CATEGORY_META[from].label
+  const toLabel = change.to_license || CATEGORY_META[to].label
+  return (
+    <span
+      title={`License risk ${worse ? "increased" : "decreased"}: ${CATEGORY_META[from].label} → ${CATEGORY_META[to].label}`}
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs font-semibold ${cls}`}
+    >
+      <span aria-hidden="true">{worse ? "▴" : "▾"}</span>
+      {fromLabel} → {toLabel}
+    </span>
+  )
+}
+
+const SEV_TIERS = ["critical", "high", "medium", "low"] as const
+
+function _breakdown(counts: VulnCounts): string {
+  return (
+    SEV_TIERS.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${s}`).join(" · ") ||
+    `${counts.total}`
+  )
+}
+
+/** Advisory set-delta badge from the OSV re-match (Signal B). Kept visually and
+ * verbally distinct from the findings badge — it reads "advisories", colours
+ * green for remediation (resolved/dropped) and red for newly-introduced risk,
+ * and never links to /findings (these are version-matched advisories, not
+ * triaged findings). */
+function AdvisoryBadge({
+  counts,
+  tone,
+  label,
+}: {
+  counts: VulnCounts | undefined
+  tone: "good" | "bad" | "neutral"
+  label: string
+}) {
+  if (!counts || counts.total === 0) return null
+  const cls =
+    tone === "good"
+      ? "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]"
+      : tone === "bad"
+        ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
+        : "border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
+  const glyph = tone === "good" ? "▾" : tone === "bad" ? "▴" : "•"
+  return (
+    <span
+      title={`${label}: ${_breakdown(counts)} (OSV advisories)`}
+      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs font-semibold tabular-nums ${cls}`}
+    >
+      <span aria-hidden="true">{glyph}</span>
+      {label} {counts.total}
+    </span>
+  )
+}
 
 function ChevronIcon({ expanded }: { expanded: boolean }) {
   return (
@@ -38,6 +105,7 @@ function SectionHeader({
     <button
       type="button"
       onClick={onToggle}
+      aria-expanded={expanded}
       className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
     >
       <ChevronIcon expanded={expanded} />
@@ -51,9 +119,9 @@ function SectionHeader({
   )
 }
 
-function ComponentRow({ component }: { component: SbomComponent }) {
+function ComponentRow({ component, kind }: { component: SbomComponent; kind: "added" | "removed" }) {
   return (
-    <li className="flex items-baseline gap-2 py-1 pl-8 text-xs">
+    <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-1 pl-4 text-xs">
       <span className="h-1.5 w-1.5 shrink-0 translate-y-[2px] rounded-full bg-[var(--color-text-tertiary)]" />
       <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">
         {component.name}
@@ -61,13 +129,24 @@ function ComponentRow({ component }: { component: SbomComponent }) {
       {component.version && (
         <span className="text-[var(--color-text-tertiary)]">@{component.version}</span>
       )}
+      {/* Added: advisories this version introduced (red). Removed: advisories the
+          removal dropped (green remediation). */}
+      <AdvisoryBadge
+        counts={component.known_vulns}
+        tone={kind === "removed" ? "good" : "bad"}
+        label={kind === "removed" ? "dropped" : "introduced"}
+      />
+      {/* Current open findings on the to-side asset — only meaningful for added. */}
+      {kind === "added" && component.current_findings && component.current_findings.total > 0 && (
+        <ComponentVulnBadge vulns={component.current_findings} packageName={component.name} />
+      )}
     </li>
   )
 }
 
 function VersionChangeRow({ change }: { change: SbomVersionChange }) {
   return (
-    <li className="flex items-baseline gap-2 py-1 pl-8 text-xs">
+    <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-1 pl-4 text-xs">
       <span className="h-1.5 w-1.5 shrink-0 translate-y-[2px] rounded-full bg-[var(--color-text-tertiary)]" />
       <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">
         {change.name}
@@ -77,33 +156,91 @@ function VersionChangeRow({ change }: { change: SbomVersionChange }) {
         {" → "}
         {change.to_version ?? "?"}
       </span>
+      <AdvisoryBadge counts={change.resolved} tone="good" label="resolved" />
+      <AdvisoryBadge counts={change.introduced} tone="bad" label="introduced" />
+      <AdvisoryBadge counts={change.still_vulnerable} tone="neutral" label="still vuln" />
+      <LicenseChangeBadge change={change} />
+      {change.current_findings && change.current_findings.total > 0 && (
+        <ComponentVulnBadge vulns={change.current_findings} packageName={change.name} />
+      )}
     </li>
   )
 }
 
+function _sum(counts: (VulnCounts | undefined)[]): number {
+  return counts.reduce((acc, c) => acc + (c?.total ?? 0), 0)
+}
+
 function EmptyCategory({ message }: { message: string }) {
   return (
-    <p className="py-2 pl-8 text-xs text-[var(--color-text-tertiary)]">{message}</p>
+    <p className="py-2 pl-4 text-xs text-[var(--color-text-tertiary)]">{message}</p>
   )
 }
 
-interface SectionState {
-  packages: boolean
+/** Footer row shown when a category's list was capped server-side, so the
+ *  rendered rows are a subset of the true count. */
+function TruncatedRow({ shown, total }: { shown: number; total: number }) {
+  if (shown >= total) return null
+  return (
+    <li className="py-2 pl-4 text-2xs text-[var(--color-text-tertiary)]">
+      Showing the first {shown.toLocaleString()} of {total.toLocaleString()} — this diff is too large to
+      list in full.
+    </li>
+  )
 }
 
 export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
-  const [packagesOpen, setPackagesOpen] = useState(true)
-  const [addedOpen, setAddedOpen] = useState(true)
-  const [removedOpen, setRemovedOpen] = useState(true)
-  const [bumpsOpen, setBumpsOpen] = useState(true)
+  // Default each section open only when its true count (not the possibly
+  // server-capped list length) is non-zero, so empty sections collapse and
+  // don't render a redundant "No packages …" filler row.
+  const [addedOpen, setAddedOpen] = useState(diff.added_count > 0)
+  const [removedOpen, setRemovedOpen] = useState(diff.removed_count > 0)
+  const [bumpsOpen, setBumpsOpen] = useState(diff.version_changed_count > 0)
 
+  // True totals (the node lists may be capped on a very large container diff).
   const totalChanges =
-    diff.added.length + diff.removed.length + diff.version_changed.length
+    diff.added_count + diff.removed_count + diff.version_changed_count
+
+  // Float rows carrying a vuln signal to the top of each section, then by name.
+  const added = useMemo(
+    () =>
+      [...diff.added].sort(
+        (a, b) =>
+          (b.known_vulns?.total ?? 0) - (a.known_vulns?.total ?? 0) ||
+          a.name.localeCompare(b.name),
+      ),
+    [diff.added],
+  )
+  const removed = useMemo(
+    () =>
+      [...diff.removed].sort(
+        (a, b) =>
+          (b.known_vulns?.total ?? 0) - (a.known_vulns?.total ?? 0) ||
+          a.name.localeCompare(b.name),
+      ),
+    [diff.removed],
+  )
+  const versionChanged = useMemo(
+    () =>
+      [...diff.version_changed].sort(
+        (a, b) =>
+          (b.resolved?.total ?? 0) + (b.introduced?.total ?? 0) -
+            ((a.resolved?.total ?? 0) + (a.introduced?.total ?? 0)) ||
+          a.name.localeCompare(b.name),
+      ),
+    [diff.version_changed],
+  )
+
+  // Remediation = advisories cleared by dropping a package or bumping past a fix.
+  const resolvedTotal =
+    _sum(diff.version_changed.map((v) => v.resolved)) + _sum(diff.removed.map((c) => c.known_vulns))
+  const introducedTotal =
+    _sum(diff.added.map((c) => c.known_vulns)) + _sum(diff.version_changed.map((v) => v.introduced))
 
   return (
     <Card padding="none" className="flex flex-col gap-0 divide-y divide-[var(--color-border)] rounded-xl overflow-hidden">
       {/* Summary bar */}
-      <div className="flex flex-wrap gap-4 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-4 px-4 py-3">
         <span className="text-xs text-[var(--color-text-secondary)]">
           <span className="font-semibold tabular-nums text-[var(--color-text-primary)]">
             {totalChanges}
@@ -112,19 +249,19 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">
           <span className="font-semibold tabular-nums text-[var(--color-status-ok)]">
-            +{diff.added.length}
+            +{diff.added_count}
           </span>{" "}
           added
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">
           <span className="font-semibold tabular-nums text-[var(--color-severity-critical)]">
-            -{diff.removed.length}
+            -{diff.removed_count}
           </span>{" "}
           removed
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">
           <span className="font-semibold tabular-nums text-[var(--color-accent)]">
-            {diff.version_changed.length}
+            {diff.version_changed_count}
           </span>{" "}
           version bumps
         </span>
@@ -134,80 +271,106 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
           </span>{" "}
           unchanged
         </span>
+
+        {/* OSV advisory delta (Signal B) — labelled "advisories", never "findings". */}
+        {diff.remediation_signal_available ? (
+          (resolvedTotal > 0 || introducedTotal > 0) && (
+            <span className="ml-auto flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+              <span className="text-[var(--color-text-tertiary)]">Advisories</span>
+              {resolvedTotal > 0 && (
+                <span title="Advisories cleared by removing a package or bumping past a fix">
+                  <span className="font-semibold tabular-nums text-[var(--color-status-ok)]">
+                    <span aria-hidden="true">▾</span> {resolvedTotal}
+                  </span>{" "}
+                  resolved
+                </span>
+              )}
+              {introducedTotal > 0 && (
+                <span title="Advisories on newly-added or bumped-into versions">
+                  <span className="font-semibold tabular-nums text-[var(--color-severity-critical)]">
+                    <span aria-hidden="true">▴</span> {introducedTotal}
+                  </span>{" "}
+                  introduced
+                </span>
+              )}
+            </span>
+          )
+        ) : (
+          <span className="ml-auto text-2xs text-[var(--color-text-tertiary)]" title="The OSV advisory mirror is empty or the diff was too large to re-match">
+            Remediation signal unavailable
+          </span>
+        )}
       </div>
 
-      {/* Packages section */}
-      <div className="px-2 py-2">
+      {/* Change sections — flat top-level Added / Removed / Version bumps */}
+      <div className="flex flex-col px-2 py-2">
+        {/* Added */}
         <SectionHeader
-          label="Packages"
-          count={totalChanges}
-          color="bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
-          expanded={packagesOpen}
-          onToggle={() => setPackagesOpen((v) => !v)}
+          label="Added"
+          count={diff.added_count}
+          color="bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
+          expanded={addedOpen}
+          onToggle={() => setAddedOpen((v) => !v)}
         />
-
-        {packagesOpen && (
-          <div className="mt-1 flex flex-col">
-            {/* Added */}
-            <SectionHeader
-              label="Added"
-              count={diff.added.length}
-              color="bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
-              expanded={addedOpen}
-              onToggle={() => setAddedOpen((v) => !v)}
-            />
-            {addedOpen && (
-              <ul>
-                {diff.added.length === 0 ? (
-                  <EmptyCategory message="No packages added" />
-                ) : (
-                  diff.added.map((c) => (
-                    <ComponentRow key={`${c.name}@${c.version}`} component={c} />
-                  ))
-                )}
-              </ul>
+        {addedOpen && (
+          <ul>
+            {added.length === 0 ? (
+              <EmptyCategory message="No packages added" />
+            ) : (
+              <>
+                {added.map((c) => (
+                  <ComponentRow key={`${c.name}@${c.version}`} component={c} kind="added" />
+                ))}
+                <TruncatedRow shown={added.length} total={diff.added_count} />
+              </>
             )}
+          </ul>
+        )}
 
-            {/* Removed */}
-            <SectionHeader
-              label="Removed"
-              count={diff.removed.length}
-              color="bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
-              expanded={removedOpen}
-              onToggle={() => setRemovedOpen((v) => !v)}
-            />
-            {removedOpen && (
-              <ul>
-                {diff.removed.length === 0 ? (
-                  <EmptyCategory message="No packages removed" />
-                ) : (
-                  diff.removed.map((c) => (
-                    <ComponentRow key={`${c.name}@${c.version}`} component={c} />
-                  ))
-                )}
-              </ul>
+        {/* Removed */}
+        <SectionHeader
+          label="Removed"
+          count={diff.removed_count}
+          color="bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
+          expanded={removedOpen}
+          onToggle={() => setRemovedOpen((v) => !v)}
+        />
+        {removedOpen && (
+          <ul>
+            {removed.length === 0 ? (
+              <EmptyCategory message="No packages removed" />
+            ) : (
+              <>
+                {removed.map((c) => (
+                  <ComponentRow key={`${c.name}@${c.version}`} component={c} kind="removed" />
+                ))}
+                <TruncatedRow shown={removed.length} total={diff.removed_count} />
+              </>
             )}
+          </ul>
+        )}
 
-            {/* Version bumps */}
-            <SectionHeader
-              label="Version bumps"
-              count={diff.version_changed.length}
-              color="bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-              expanded={bumpsOpen}
-              onToggle={() => setBumpsOpen((v) => !v)}
-            />
-            {bumpsOpen && (
-              <ul>
-                {diff.version_changed.length === 0 ? (
-                  <EmptyCategory message="No version bumps" />
-                ) : (
-                  diff.version_changed.map((c) => (
-                    <VersionChangeRow key={`${c.name}-${c.from_version}-${c.to_version}`} change={c} />
-                  ))
-                )}
-              </ul>
+        {/* Version bumps */}
+        <SectionHeader
+          label="Version bumps"
+          count={diff.version_changed_count}
+          color="bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+          expanded={bumpsOpen}
+          onToggle={() => setBumpsOpen((v) => !v)}
+        />
+        {bumpsOpen && (
+          <ul>
+            {versionChanged.length === 0 ? (
+              <EmptyCategory message="No version bumps" />
+            ) : (
+              <>
+                {versionChanged.map((c) => (
+                  <VersionChangeRow key={`${c.name}-${c.from_version}-${c.to_version}`} change={c} />
+                ))}
+                <TruncatedRow shown={versionChanged.length} total={diff.version_changed_count} />
+              </>
             )}
-          </div>
+          </ul>
         )}
       </div>
     </Card>

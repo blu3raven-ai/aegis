@@ -22,13 +22,17 @@ from src.authz.enforcement.dependencies import Permission  # noqa: E402
 from src.authz.permissions.catalog import MANAGE_SOURCES, RUN_SCANS  # noqa: E402
 from src.sources.router import _db as _sources_db, router as sources_router  # noqa: E402
 from src.scans.byo_router import _db as _byo_db, router as scans_byo_router  # noqa: E402
-from src.db.models import Asset, Finding, Grant, Team, TeamMember, User  # noqa: E402
+from src.db.models import Asset, Finding, Grant, ScanRun, Team, TeamMember, User  # noqa: E402
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def _clean_router(db_session):
     yield
-    await db_session.execute(delete(Finding).where(Finding.tool == "container_scanning"))
+    # Delete FK-dependents (findings + scan_runs reference assets) before assets,
+    # or the asset delete violates scan_runs_asset_id_fkey and leaves rows behind
+    # that contaminate later asset-counting tests.
+    await db_session.execute(delete(Finding))
+    await db_session.execute(delete(ScanRun))
     await db_session.execute(delete(Grant))
     await db_session.execute(delete(TeamMember))
     await db_session.execute(delete(Team))

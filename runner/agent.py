@@ -367,7 +367,6 @@ class RunnerAgent:
                 pass
 
         try:
-            job["_backend"] = self._backend
             scanner = get_scanner(job_type)
             result = scanner.run_scan(job, job_dir=job_dir, on_progress=on_progress, cancel_event=cancel_event)
 

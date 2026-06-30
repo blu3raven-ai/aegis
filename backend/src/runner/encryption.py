@@ -16,7 +16,7 @@ from src.shared.encryption import decrypt, encrypt
 
 _logger = logging.getLogger(__name__)
 
-SENSITIVE_KEYS: frozenset[str] = frozenset({"GIT_TOKEN", "REGISTRY_TOKEN", "REGISTRY_AUTHS"})
+SENSITIVE_KEYS: frozenset[str] = frozenset({"GIT_TOKEN", "REGISTRY_TOKEN", "REGISTRY_AUTHS", "ARGUS_TOKEN"})
 _ENC_PREFIX = "ENC:"
 _CONTEXT = "runner_job_env"
 

@@ -23,12 +23,12 @@ export function EmptySbomState({ repoName }: { repoName?: string }) {
           No SBOM available{repoName ? ` for ${repoName}` : ""}
         </p>
         <p className="max-w-xs text-sm text-[var(--color-text-secondary)]">
-          Trigger a dependency scan to generate one. SBOMs are produced automatically after each scan completes.
+          Connect a source and run a dependency scan to generate one. SBOMs are produced automatically after each scan completes.
         </p>
       </div>
 
-      <LinkButton href="/findings" variant="secondary" size="md">
-        Go to Findings
+      <LinkButton href="/sources" variant="secondary" size="md">
+        Go to Sources
       </LinkButton>
     </div>
   )

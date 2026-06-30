@@ -28,22 +28,30 @@ def _execute_via_runner(
     repo_urls: str,
     token: str,
     rulesets: str,
+    source_type: str | None = None,
 ) -> dict[str, Any] | None:
     """Create a runner job and poll until completion."""
     from src.runner.jobs import create_job, read_job
+
+    env_vars = {
+        "GIT_TOKEN": token,
+        "GIT_REPOS": repo_urls,
+        "ORG_LABEL": org,
+        "CONCURRENCY": config.get("concurrency") or "4",
+        "RUN_ID": run_id,
+        "RULESETS": rulesets,
+    }
+    # The ingest resolves each finding's repo asset via SOURCE_TYPE (envVars),
+    # so it must be carried through on the scheduled path too — not just on the
+    # canonical "Scan now" dispatch.
+    if source_type:
+        env_vars["SOURCE_TYPE"] = source_type
 
     job = create_job(
         job_type="code_scanning",
         org=org,
         run_id=run_id,
-        env_vars={
-            "GIT_TOKEN": token,
-            "GIT_REPOS": repo_urls,
-            "ORG_LABEL": org,
-            "CONCURRENCY": config.get("concurrency") or "4",
-            "RUN_ID": run_id,
-            "RULESETS": rulesets,
-        },
+        env_vars=env_vars,
         expected_repo_count=len(repo_urls.split(",")) if repo_urls else 0,
     )
 
@@ -262,11 +270,13 @@ def execute_code_scanning_scan_once(
         )
 
         result = _execute_via_runner(
+            org=org,
             run_id=run_id,
             config=config,
             repo_urls=repo_urls_str,
             token=source_token,
             rulesets=rulesets,
+            source_type=source_type,
         )
 
         if runtime and runtime.is_cancelled(run_id):

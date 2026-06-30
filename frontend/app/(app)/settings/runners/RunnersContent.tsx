@@ -1,7 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { handleRovingKeyDown } from "@/components/ui/roving"
 import { fetchRunners, setRunnerMode } from "@/lib/client/settings/use-runners"
 import { AddRunnerModal } from "./AddRunnerModal"
 import { RemoteRunnerList } from "./RemoteRunnerList"
@@ -143,22 +144,39 @@ function SegmentedToggle<T extends string>({
   onChange,
   disabled,
 }: SegmentedToggleProps<T>) {
+  // Mirrors the shared <SegmentedControl> primitive; kept local only because it
+  // also carries a string badge the primitive doesn't yet support. Reuses the
+  // same roving-tabindex keyboard handler so the radiogroup is operable.
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
   return (
     <div
       role="radiogroup"
       aria-label="Execution mode"
       className="inline-flex rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-0.5"
     >
-      {options.map((opt) => {
+      {options.map((opt, i) => {
         const selected = opt.value === value
         return (
           <button
             key={opt.value}
+            ref={(el) => { btnRefs.current[i] = el }}
             type="button"
             role="radio"
             aria-checked={selected}
             disabled={disabled}
+            tabIndex={selected ? 0 : -1}
             onClick={() => onChange(opt.value)}
+            onKeyDown={(e) =>
+              handleRovingKeyDown(e, {
+                index: i,
+                count: options.length,
+                orientation: "horizontal",
+                onMove: (n) => {
+                  onChange(options[n].value)
+                  btnRefs.current[n]?.focus()
+                },
+              })
+            }
             className={`inline-flex items-center gap-1.5 rounded-[5px] px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               selected
                 ? "bg-[var(--color-accent)] text-[var(--color-accent-on)]"

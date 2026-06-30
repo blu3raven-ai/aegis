@@ -30,16 +30,18 @@ function AppShellInner({ children, sidebarProps }: { children: React.ReactNode; 
     container_scanning?: ToolBucket
     code_scanning?: ToolBucket
     secrets?: ToolBucket
+    iac?: ToolBucket
   }>({})
   const fetchScannerCounts = useCallback(async () => {
     try {
       const data = await gqlQuery<GqlScannerCounts>(SCANNER_COUNTS_QUERY, {})
-      const { dependenciesScanning, codeScanning, containerScanning, secretScanning } = data.scans
+      const { dependenciesScanning, codeScanning, containerScanning, secretScanning, iacScanning } = data.scans
       setToolBuckets({
         dependencies: { total: dependenciesScanning.counts.total, critical: dependenciesScanning.counts.critical, high: dependenciesScanning.counts.high },
         container_scanning: { total: containerScanning.counts.total, critical: containerScanning.counts.critical, high: containerScanning.counts.high },
         code_scanning: { total: codeScanning.counts.total, critical: codeScanning.counts.critical, high: codeScanning.counts.high },
         secrets: { total: secretScanning.counts.total, critical: secretScanning.counts.critical, high: secretScanning.counts.high },
+        iac: { total: iacScanning.counts.total, critical: iacScanning.counts.critical, high: iacScanning.counts.high },
       })
     } catch {
       // no findings yet
@@ -55,13 +57,15 @@ function AppShellInner({ children, sidebarProps }: { children: React.ReactNode; 
     const cont = toolBuckets.container_scanning ?? EMPTY_BUCKET
     const code = toolBuckets.code_scanning ?? EMPTY_BUCKET
     const sec = toolBuckets.secrets ?? EMPTY_BUCKET
+    const iac = toolBuckets.iac ?? EMPTY_BUCKET
     return {
-      findings: deps.total + cont.total + code.total + sec.total,
+      findings: deps.total + cont.total + code.total + sec.total + iac.total,
       inbox:
         deps.critical + deps.high +
         cont.critical + cont.high +
         code.critical + code.high +
-        sec.critical + sec.high,
+        sec.critical + sec.high +
+        iac.critical + iac.high,
     }
   }, [toolBuckets])
 

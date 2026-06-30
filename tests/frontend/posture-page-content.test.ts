@@ -10,22 +10,24 @@ const src = readFileSync(
 )
 
 describe("PosturePageContent shell", () => {
-  it("declares both tab values", () => {
-    assert.match(src, /const TABS = \["summary", "breakdown"\] as const/)
+  // #986 collapsed the Summary/Breakdown tab split into one scrollable view,
+  // so the shell no longer hosts a NavTabs switcher or a TABS list.
+  it("renders one single-scroll view (no summary/breakdown tab switch)", () => {
+    assert.doesNotMatch(src, /from "@\/components\/ui\/NavTabs"/)
+    assert.doesNotMatch(src, /const TABS = /)
   })
 
-  it("uses the canonical NavTabs primitive (underline style)", () => {
-    assert.match(src, /from "@\/components\/ui\/NavTabs"/)
-    assert.match(src, /<NavTabs[\s\S]+ariaLabel="Posture views"/)
-  })
-
-  it("delegates to PostureSummaryTab when active", () => {
-    assert.match(src, /import \{ PostureSummaryTab \}/)
+  it("delegates the whole view to PostureSummaryTab", () => {
+    assert.match(src, /import \{ PostureSummaryTab/)
     assert.match(src, /<PostureSummaryTab/)
   })
 
-  it("delegates to PostureBreakdownTab when active", () => {
-    assert.match(src, /import \{ PostureBreakdownTab \}/)
-    assert.match(src, /<PostureBreakdownTab/)
+  it("loads the posture snapshot and trend series", () => {
+    assert.match(src, /getPostureSnapshot\(/)
+    assert.match(src, /getPostureTrend\(/)
+  })
+
+  it("falls back to the ghost preview when there is no data", () => {
+    assert.match(src, /<PostureGhostPreview/)
   })
 })

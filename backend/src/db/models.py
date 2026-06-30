@@ -529,6 +529,10 @@ class Finding(Base):
     title: Mapped[str | None] = mapped_column(String(512), nullable=True)
     rule_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     package_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # The specific installed/affected version this finding is about (e.g. the
+    # SBOM component version OSV matched). Lets vuln counts be attributed per
+    # version, not just per package name. NULL when the source didn't resolve one.
+    package_version: Mapped[str | None] = mapped_column(String(256), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     # Populated at ingest time from git blame; NULL when checkout is unavailable.
@@ -549,6 +553,10 @@ class Finding(Base):
     evidence: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     exploit_chain: Mapped[str | None] = mapped_column(Text, nullable=True)
     verification_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Structured remediation payload promoted from `detail` at ingest. Lets
+    # secrets/IaC/SAST findings carry a runner-emitted fix without it being
+    # buried in the fat MinIO blob (recommended_fix is in no tool's LEAN_KEYS).
+    recommended_fix: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     __table_args__ = (
         sa.UniqueConstraint("tool", "asset_id", "identity_key", name="uq_finding_tool_asset_key"),
@@ -596,6 +604,31 @@ class Sbom(Base):
     )
 
 
+class SbomRun(Base):
+    """One append-only row per ingested SBOM scan run for an asset.
+
+    The single ``Sbom`` row only holds the latest run; these rows preserve
+    prior runs so the snapshot-history picker is an indexed query keyed by
+    ``(asset_id, scanned_at)`` rather than a MinIO bucket listing.
+    """
+    __tablename__ = "sbom_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("assets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    commit_sha: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    __table_args__ = (
+        sa.Index("idx_sbom_runs_asset_scanned", "asset_id", "scanned_at"),
+        sa.UniqueConstraint("asset_id", "run_id", name="uq_sbom_runs_asset_run"),
+    )
+
+
 class SbomComponent(Base):
     __tablename__ = "sbom_components"
 
@@ -611,12 +644,22 @@ class SbomComponent(Base):
     version: Mapped[str] = mapped_column(String(512))
     ecosystem: Mapped[str] = mapped_column(String(100))
     source_tool: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    is_direct: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Tri-state dependency origin: True=direct, False=transitive, NULL=unknown
+    # (graph absent / container-OS / unresolved bom-ref). Classified at ingest.
+    is_direct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # Normalized SPDX display string + the computed risk category (classified at
+    # ingest by src/sbom/licenses.py). Nullable for legacy/license-less rows.
+    license_expression: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    license_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Declared semver constraint for a direct dep (e.g. "^4.17.0"), used for
+    # loose-range exposure evaluation; null for transitive deps / older SBOMs.
+    declared_range: Mapped[str | None] = mapped_column(String(256), nullable=True)
     scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (
         sa.Index("idx_sbom_components_asset_name", "asset_id", "name", "ecosystem"),
         sa.Index("idx_sbom_components_asset_purl", "asset_id", "purl"),
+        sa.Index("idx_sbom_components_asset_license_cat", "asset_id", "license_category"),
         sa.UniqueConstraint("asset_id", "purl", name="uq_sbom_components_asset_purl"),
     )
 
@@ -1243,6 +1286,20 @@ class LlmConfig(Base):
     model: Mapped[str] = mapped_column(String(128), nullable=False)
     scan_token_budget: Mapped[int] = mapped_column(Integer, nullable=False, default=100_000)
     daily_token_budget: Mapped[int] = mapped_column(Integer, nullable=False, default=1_000_000)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class ArgusConnection(Base):
+    """Per-org connection to the hosted Argus verification service."""
+    __tablename__ = "argus_connection"
+
+    org_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    endpoint: Mapped[str] = mapped_column(String(512), nullable=False)
+    token_endpoint: Mapped[str] = mapped_column(String(512), nullable=False)
+    client_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    refresh_token_enc: Mapped[str] = mapped_column(String(2048), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

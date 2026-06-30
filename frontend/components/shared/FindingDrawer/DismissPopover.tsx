@@ -8,6 +8,8 @@ interface DismissPopoverProps {
   onDismiss: (reason: string) => void
   isLoading: boolean
   triggerLabel?: string
+  /** Which way the menu opens — "top" for bottom-anchored bars, "bottom" for top action rows. */
+  placement?: "top" | "bottom"
 }
 
 export function DismissPopover({
@@ -15,16 +17,29 @@ export function DismissPopover({
   onDismiss,
   isLoading,
   triggerLabel = "Dismiss finding",
+  placement = "top",
 }: DismissPopoverProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (open) {
       const first = menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')
       first?.focus()
     }
+  }, [open])
+
+  // Close on an outside click. Ref the OUTER container (not the menu) so that
+  // re-clicking the trigger to toggle-close isn't misread as an outside click.
+  useEffect(() => {
+    if (!open) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onMouseDown)
+    return () => document.removeEventListener("mousedown", onMouseDown)
   }, [open])
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -50,7 +65,7 @@ export function DismissPopover({
   }
 
   return (
-    <div className="relative">
+    <div ref={rootRef} className="relative">
       <Button
         ref={triggerRef}
         variant="secondary"
@@ -67,7 +82,9 @@ export function DismissPopover({
           ref={menuRef}
           role="menu"
           onKeyDown={handleKeyDown}
-          className="absolute bottom-full left-0 z-50 mb-1 min-w-[16rem] max-w-[calc(100%-1rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg"
+          className={`absolute left-0 z-50 min-w-[16rem] max-w-[calc(100%-1rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg ${
+            placement === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
+          }`}
         >
           <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Select reason

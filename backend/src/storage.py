@@ -737,6 +737,100 @@ def list_code_scanning_runs(org_key: str) -> list[dict[str, Any]]:
     return run_db(_query)
 
 
+def create_iac_run(org_key: str, run_id: str) -> dict[str, Any]:
+    run_dict: dict[str, Any] = {
+        "id": run_id,
+        "org": org_key,
+        "status": "queued",
+        "createdAt": now_iso(),
+        "startedAt": None,
+        "finishedAt": None,
+        "findingsCount": 0,
+        "error": None,
+        "logTail": [],
+        "progress": {
+            "expectedRepos": None,
+            "scannedRepos": 0,
+            "finishedRepos": 0,
+            "percent": 0,
+            "currentRepo": None,
+            "stage": "queued",
+        },
+    }
+
+    async def _query(session):
+        session.add(ScanRun(
+            id=run_id,
+            tool="iac_scanning",
+            status="queued",
+            started_at=None,
+            progress=run_dict["progress"],
+            metadata_json={
+                "org_label": org_key,
+                "createdAt": run_dict["createdAt"],
+                "findingsCount": 0,
+                "logTail": [],
+            },
+        ))
+
+    run_db(_query)
+    return run_dict
+
+
+def update_iac_run(org_key: str, run_id: str, patch: dict[str, Any]) -> None:
+    async def _query(session):
+        run = await session.get(ScanRun, run_id)
+        if not run:
+            return
+        meta = dict(run.metadata_json or {})
+
+        if "status" in patch:
+            run.status = patch["status"]
+        if "error" in patch:
+            run.error = patch["error"]
+        if "finishedAt" in patch:
+            try:
+                run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                pass
+        if "startedAt" in patch:
+            try:
+                run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
+            except (ValueError, AttributeError):
+                pass
+
+        if "progress" in patch and isinstance(patch["progress"], dict):
+            existing_progress = run.progress or {}
+            existing_percent = existing_progress.get("percent", 0) if isinstance(existing_progress.get("percent"), (int, float)) else 0
+            patch_percent = patch["progress"].get("percent", existing_percent) if isinstance(patch["progress"].get("percent"), (int, float)) else existing_percent
+            run.progress = {**existing_progress, **patch["progress"], "percent": max(existing_percent, patch_percent)}
+        elif "progress" in patch:
+            run.progress = patch["progress"]
+
+        skip_keys = {"status", "error", "finishedAt", "startedAt", "progress", "id", "org"}
+        for key, value in patch.items():
+            if key not in skip_keys:
+                meta[key] = value
+        run.metadata_json = meta
+
+    run_db(_query)
+
+
+def list_iac_runs(org_key: str) -> list[dict[str, Any]]:
+    async def _query(session):
+        result = await session.execute(
+            select(ScanRun)
+            .where(
+                ScanRun.tool == "iac_scanning",
+                ScanRun.metadata_json["org_label"].astext == org_key,
+            )
+            .order_by(ScanRun.started_at.desc().nullslast())
+        )
+        return [_run_to_dict(r) for r in result.scalars().all()]
+
+    return run_db(_query)
+
+
 # Code Scanning Findings — read from unified Finding table
 
 def read_code_scanning_findings(*, asset_ids: list[str], include_archived_rows: bool = False) -> list[dict[str, Any]]:

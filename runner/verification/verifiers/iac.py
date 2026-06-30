@@ -205,6 +205,16 @@ def verify_iac_finding(
             "snippet": skeptic_model.mitigation_snippet,
             "reasoning": skeptic_model.reasoning,
         }
+        if not (skeptic_model.mitigation_snippet or "").strip():
+            metadata["suppression_downgraded"] = "empty_mitigation_citation"
+            return VerificationResult(
+                verdict="needs_verify",
+                exploit_chain=chain,
+                evidence=evidence,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                verification_metadata=metadata,
+            )
         return VerificationResult(
             verdict="ruled_out",
             exploit_chain=chain,

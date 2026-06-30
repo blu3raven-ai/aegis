@@ -14,7 +14,6 @@ import strawberry
 from src.db.engine import get_session
 from src.findings.service import (
     FindingsListFilters,
-    assign_finding as _assign_finding,
     list_findings,
 )
 
@@ -38,8 +37,10 @@ class FindingRow:
     kev: Optional[bool] = None
     cwe: Optional[str] = None
     risk_score: Optional[int] = None
+    action_band: Optional[str] = None
     assignee_user_id: Optional[str] = None
     verdict: Optional[str] = None
+    has_fix: Optional[bool] = None
 
 
 @strawberry.type
@@ -95,8 +96,10 @@ def _row_from_dict(d: dict[str, Any]) -> FindingRow:
         kev=d.get("kev"),
         cwe=d.get("cwe"),
         risk_score=d.get("risk_score"),
+        action_band=d.get("action_band"),
         assignee_user_id=d.get("assignee_user_id"),
         verdict=d.get("verdict"),
+        has_fix=bool(d.get("recommended_fix")),
     )
 
 
@@ -121,6 +124,7 @@ async def findings_search(
     kev: Optional[bool] = None,
     epss_min: Optional[float] = None,
     risk_score_min: Optional[int] = None,
+    bands: Optional[str] = None,
     assignee: Optional[str] = None,
     verdict: Optional[str] = None,
 ) -> FindingsSearchResult:
@@ -144,6 +148,7 @@ async def findings_search(
             kev=kev,
             epss_min=epss_min,
             risk_score_min=risk_score_min,
+            bands=_split_csv(bands),
             assignee_user_id=assignee,
             page=page,
             verdict=verdict,

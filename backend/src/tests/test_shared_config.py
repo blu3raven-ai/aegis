@@ -4,6 +4,15 @@ from __future__ import annotations
 import pytest
 
 
+def test_container_scanner_config_defaults_nvd_on(monkeypatch):
+    """Container NVD enrichment defaults on, matching the dependencies scanner."""
+    from src.shared import config as cfg
+    monkeypatch.setattr(cfg, "read_app_config", lambda: {"tools": {"container_scanning": {}}})
+    out = cfg.get_container_scanner_config()
+    assert out["nvdEnabled"] == "true"
+    assert out["ghsaEnabled"] == "false"
+
+
 @pytest.fixture
 def _patch_connections(monkeypatch):
     def _set(conns):

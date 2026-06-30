@@ -25,7 +25,7 @@ runner/
     logging.py                JSON-structured logging configuration
 
   scanners/                 embedded scan implementations
-    dependencies/             SCA via syft + grype + advisory enrichment
+    dependencies/             SBOM via syft + cdxgen (matched backend-side against the OSV mirror)
     code_scanning/            SAST via semgrep + tree-sitter reachability
     secrets/                  TruffleHog + LLM-verified secret findings
     container/                container image vulnerability scanning

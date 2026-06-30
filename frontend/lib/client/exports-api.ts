@@ -24,7 +24,7 @@ export interface FindingExportFilters {
  */
 export function buildFindingsExportUrl(
   filters: FindingExportFilters,
-  format: "csv" | "json",
+  format: "csv" | "json" | "sarif",
 ): string {
   const qs = new URLSearchParams()
   qs.set("format", format)

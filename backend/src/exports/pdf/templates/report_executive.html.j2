@@ -1,0 +1,119 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ title }}{% endblock %}
+{% block extra_head %}
+<style>
+  .meta { color: #555; font-size: 9pt; margin: 0 0 10pt 0; }
+  .kpis { width: 100%; border-collapse: separate; border-spacing: 6pt; margin: 4pt 0 2pt 0; }
+  .kpis td {
+    width: 25%; border: 1px solid #e5e7eb; border-radius: 4pt;
+    padding: 7pt 9pt; vertical-align: top; background: #fafafa;
+  }
+  .kpi-label { font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; }
+  .kpi-value { font-size: 17pt; font-weight: 700; color: #111; margin-top: 2pt; }
+  .kpi-sub { font-size: 8pt; color: #6b7280; margin-top: 1pt; }
+  .up { color: #b91c1c; font-weight: 600; }
+  .down { color: #047857; font-weight: 600; }
+  .flat { color: #6b7280; font-weight: 600; }
+  .spark { margin: 4pt 0; }
+  .spark polyline { fill: none; stroke: #2563eb; stroke-width: 2; }
+</style>
+{% endblock %}
+{% block body %}
+<h1>{{ title }}</h1>
+<p class="meta">{{ scope_label }} · {{ period_label }} · generated {{ generated_at }}</p>
+
+<table class="kpis">
+  <tr>
+    <td>
+      <div class="kpi-label">Risk score</div>
+      <div class="kpi-value">{{ risk_score.score }}</div>
+      <div class="kpi-sub">{{ risk_score.rating }}</div>
+    </td>
+    <td>
+      <div class="kpi-label">Open findings</div>
+      <div class="kpi-value">{{ counts.total }}</div>
+      <div class="kpi-sub">
+        {% if open_delta > 0 %}<span class="up">▲ {{ open_delta }}</span>
+        {% elif open_delta < 0 %}<span class="down">▼ {{ open_delta|abs }}</span>
+        {% else %}<span class="flat">no change</span>{% endif %} vs 30d ago
+      </div>
+    </td>
+    <td>
+      <div class="kpi-label">Critical / High</div>
+      <div class="kpi-value"><span class="sev-critical">{{ counts.critical }}</span> / <span class="sev-high">{{ counts.high }}</span></div>
+      <div class="kpi-sub">open, unresolved</div>
+    </td>
+    <td>
+      <div class="kpi-label">Coverage</div>
+      <div class="kpi-value">{{ repository_coverage.percentage }}%</div>
+      <div class="kpi-sub">{{ repository_coverage.affected }}/{{ repository_coverage.total }} repos affected</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div class="kpi-label">Fixed (30d)</div>
+      <div class="kpi-value">{{ remediation.fixedLast30d }}</div>
+      <div class="kpi-sub">remediated</div>
+    </td>
+    <td>
+      <div class="kpi-label">Mean time to fix</div>
+      <div class="kpi-value">{% if remediation.avgDays is not none %}{{ remediation.avgDays }}d{% else %}—{% endif %}</div>
+      <div class="kpi-sub">{% if remediation.medianDays is not none %}median {{ remediation.medianDays }}d{% else %}no fixes yet{% endif %}</div>
+    </td>
+    <td>
+      <div class="kpi-label">Medium / Low</div>
+      <div class="kpi-value"><span class="sev-medium">{{ counts.medium }}</span> / <span class="sev-low">{{ counts.low }}</span></div>
+      <div class="kpi-sub">open, lower priority</div>
+    </td>
+    <td>
+      <div class="kpi-label">Total fixed</div>
+      <div class="kpi-value">{{ remediation.totalFixed }}</div>
+      <div class="kpi-sub">all time</div>
+    </td>
+  </tr>
+</table>
+
+<h2>Open-findings trend</h2>
+{% if trend_sparkline %}
+<svg class="spark" viewBox="0 0 480 44" width="480" height="44" preserveAspectRatio="none">
+  <polyline points="{{ trend_sparkline }}" />
+</svg>
+<p class="meta">{{ counts.total }} open now vs {{ open_30d_ago }} a month ago.</p>
+{% else %}
+<p class="meta">No trend history yet — snapshots accrue daily and will populate this section.</p>
+{% endif %}
+
+{% if top_findings %}
+<h2>Most urgent open findings</h2>
+<table>
+  <thead><tr><th>Severity</th><th>Finding</th><th>Source</th><th>Age</th></tr></thead>
+  <tbody>
+  {% for f in top_findings %}
+    <tr>
+      <td class="sev-{{ f.severity }}">{{ (f.severity or '—')|capitalize }}</td>
+      <td>{{ f.title }}</td>
+      <td>{{ f.source_label }}</td>
+      <td>{% if f.age_days is not none %}{{ f.age_days }}d{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if top_repositories %}
+<h2>Top repositories by open findings</h2>
+<table>
+  <thead><tr><th>Repository</th><th>Open</th><th>Critical</th><th>High</th></tr></thead>
+  <tbody>
+  {% for r in top_repositories %}
+    <tr>
+      <td>{{ r.name }}</td>
+      <td>{{ r.open }}</td>
+      <td class="sev-critical">{{ r.critical }}</td>
+      <td class="sev-high">{{ r.high }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

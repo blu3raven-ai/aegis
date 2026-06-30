@@ -13,7 +13,7 @@ the start) AND ``version < fixed`` (when a fix exists) AND
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,11 +26,23 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ComponentRef:
-    """One SBOM component to match."""
+    """One SBOM component to match.
+
+    ``release_ecosystem`` is the component's release-specific OSV ecosystem
+    (e.g. ``Debian:11``) when it can be mapped from the purl ``distro=``
+    qualifier, else None. When set, matching is narrowed to advisories for that
+    exact release so a (e.g.) Debian 11 package isn't flagged by a Debian 12-only
+    advisory; when None, matching falls back to all releases of the base.
+    """
     name: str
     version: str
     purl_type: str
     namespace: str | None = None
+    release_ecosystem: str | None = None
+    # The original package URL, carried for the premium Argus match. Excluded
+    # from equality/hashing so two refs that differ only by purl still collapse
+    # to one OSV-mirror match key.
+    purl: str | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -65,6 +77,21 @@ def parse_purl(purl: str) -> tuple[str, str | None]:
         if len(segments) >= 2:
             namespace = segments[0]
     return purl_type, namespace
+
+
+def parse_purl_distro(purl: str) -> str | None:
+    """Extract the ``distro`` qualifier from a purl
+    (``pkg:deb/debian/openssl@1.1.1n?distro=debian-11`` -> ``debian-11``), or None.
+    The distro/OS release is what pins a deb/apk/rpm package to a specific OSV
+    release ecosystem."""
+    if not purl or "?" not in purl:
+        return None
+    qualifiers = purl.split("?", 1)[1].split("#", 1)[0]
+    for part in qualifiers.split("&"):
+        key, _, value = part.partition("=")
+        if key == "distro" and value:
+            return value
+    return None
 
 
 def version_in_osv_range(
@@ -142,7 +169,18 @@ async def match_components(
         )
         rows = (await session.execute(stmt)).scalars().all()
         for row in rows:
+            row_is_release_specific = ":" in row.ecosystem
             for comp in comps_by_key.get((base, row.package_name), []):
+                # Release narrowing: a component pinned to a known release only
+                # matches advisories for that release (or release-agnostic base
+                # advisories). Components with no mapped release keep matching all
+                # releases — never narrowed, so a real advisory is never dropped.
+                if (
+                    comp.release_ecosystem is not None
+                    and row_is_release_specific
+                    and row.ecosystem != comp.release_ecosystem
+                ):
+                    continue
                 if version_in_osv_range(
                     comp.version,
                     row.range_introduced,

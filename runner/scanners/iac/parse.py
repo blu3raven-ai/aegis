@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import os
 
+from runner.scanners._context import read_code_window
+
 _SEVERITY_MAP = {
     "CRITICAL": "critical",
     "HIGH": "high",
@@ -38,17 +40,25 @@ def parse_checkov_results(raw: dict, *, repo_root: str) -> list[dict]:
         sev = _SEVERITY_MAP.get((chk.get("severity") or "").upper(), "medium")
         line_range = chk.get("file_line_range") or [1, 1]
         line = int(line_range[0]) if line_range else 1
-        out.append(
-            {
-                "tool": "iac_scanning",
-                "check_id": chk.get("check_id", ""),
-                "title": chk.get("check_name", ""),
-                "severity": sev,
-                "file": _normalize_path(chk.get("file_path", ""), repo_root),
-                "line": line,
-                "resource": chk.get("resource", ""),
-                "guideline": chk.get("guideline", ""),
-                "fingerprint": _fingerprint(chk),
-            }
-        )
+        rel_file = _normalize_path(chk.get("file_path", ""), repo_root)
+        finding = {
+            "tool": "iac_scanning",
+            "check_id": chk.get("check_id", ""),
+            "title": chk.get("check_name", ""),
+            "severity": sev,
+            "file": rel_file,
+            "line": line,
+            "resource": chk.get("resource", ""),
+            "guideline": chk.get("guideline", ""),
+            "fingerprint": _fingerprint(chk),
+        }
+        # Checkov does not emit a code window; the runner reads it from source.
+        # File-level checks report line 0 (no specific line) — anchor their
+        # window at the file head so the analyst still sees the config.
+        window_line = line if line >= 1 else 1
+        window, window_start = read_code_window(repo_root, rel_file, window_line)
+        if window is not None:
+            finding["code_window"] = window
+            finding["code_window_start_line"] = window_start
+        out.append(finding)
     return out

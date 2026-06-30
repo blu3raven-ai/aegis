@@ -172,6 +172,7 @@ def ingest_dependencies_from_minio(org: str, run_id: str, source_type: str | Non
         for asset_id, external_ref in assets.items():
             out.extend(await build_backend_match_findings(
                 session, asset_id=asset_id, external_ref=external_ref, kind="dependencies",
+                match_source="scan",
             ))
         return out
 
@@ -240,6 +241,7 @@ def _execute_via_runner(
     repo_urls: str,
     token: str,
     scan_mode: str = "full",
+    source_type: str | None = None,
 ) -> dict[str, Any] | None:
     """Create a runner job and poll until completion."""
     from src.runner.jobs import create_job, read_job
@@ -252,6 +254,11 @@ def _execute_via_runner(
         "RUN_ID": run_id,
         "SCAN_MODE": scan_mode,
     }
+    # The ingest resolves each finding's repo asset via SOURCE_TYPE (envVars),
+    # so it must be carried through on the scheduled path too — not just on the
+    # canonical "Scan now" dispatch.
+    if source_type:
+        env["SOURCE_TYPE"] = source_type
     if config.get("argusEnabled"):
         argus_endpoint = config.get("argusEndpoint", "")
         argus_api_key = config.get("argusApiKey", "")
@@ -323,11 +330,13 @@ def execute_dependencies_scan_once(
             repo_urls_str = ",".join(source.repo_urls)
 
             result = _execute_via_runner(
+                org=org,
                 run_id=run_id,
                 config=config,
                 repo_urls=repo_urls_str,
                 token=source.token,
                 scan_mode=scan_mode,
+                source_type=source_type,
             )
 
             if runtime and runtime.is_cancelled(run_id):

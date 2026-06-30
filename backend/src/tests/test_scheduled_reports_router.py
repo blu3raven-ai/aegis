@@ -120,6 +120,53 @@ def test_update_scheduled_report_empty_body():
     assert r.status_code == 422
 
 
+def test_update_scheduled_report_edits_fields():
+    app = _make_app()
+    fake_result = {
+        "id": 1, "name": "Monthly posture", "report_type": "posture", "format": "pdf",
+        "schedule_type": "simple", "schedule_value": "06:30", "filters": {},
+        "destination_ids": [10], "created_by": "u", "enabled": True,
+        "last_run_at": None, "last_run_status": None, "last_run_error": None,
+        "created_at": "2026-06-14T00:00:00+00:00", "updated_at": "2026-06-27T00:00:00+00:00",
+    }
+    recorder = MagicMock()
+    with (
+        patch("src.reports.router.update_schedule", return_value=fake_result) as upd,
+        patch("src.reports.router.get_recorder", return_value=recorder),
+    ):
+        r = TestClient(app).patch("/api/v1/findings/reports/scheduled/1", json={
+            "name": "Monthly posture",
+            "report_type": "posture",
+            "format": "pdf",
+            "schedule_type": "simple",
+            "schedule_value": "06:30",
+            "destination_ids": [10],
+        })
+    assert r.status_code == 200, r.text
+    assert r.json()["report_type"] == "posture"
+    schedule_id, patch_arg = upd.call_args.args
+    assert schedule_id == 1
+    # The omitted `enabled`/`filters` stay out of the patch so they aren't reset.
+    assert patch_arg == {
+        "name": "Monthly posture", "report_type": "posture", "format": "pdf",
+        "schedule_type": "simple", "schedule_value": "06:30", "destination_ids": [10],
+    }
+    assert recorder.record.call_args.kwargs["action"] == "scheduled_report.updated"
+
+
+def test_update_scheduled_report_validation_error():
+    app = _make_app()
+    with (
+        patch("src.reports.router.update_schedule",
+              side_effect=ValueError("posture reports do not support csv format")),
+    ):
+        r = TestClient(app).patch("/api/v1/findings/reports/scheduled/1", json={
+            "report_type": "posture", "format": "csv",
+        })
+    assert r.status_code == 422
+    assert "csv" in r.json()["detail"].lower()
+
+
 def test_delete_scheduled_report():
     app = _make_app()
     recorder = MagicMock()
@@ -149,3 +196,37 @@ def test_create_requires_permission():
             "schedule_type": "simple", "schedule_value": "09:00",
         })
     assert r.status_code == 403
+
+
+# ── Per-type (report_type, format) validation ────────────────────────────────
+
+import pytest  # noqa: E402
+
+from src.reports.scheduled import _validate_create_payload  # noqa: E402
+
+
+def _payload(**over):
+    base = {
+        "name": "Weekly", "report_type": "findings", "format": "pdf",
+        "schedule_type": "simple", "schedule_value": "09:00",
+    }
+    base.update(over)
+    return base
+
+
+def test_validate_accepts_new_report_types():
+    # The newer report types are now schedulable with their valid format.
+    _validate_create_payload(_payload(report_type="executive", format="pdf"))
+    _validate_create_payload(_payload(report_type="risk_register", format="csv"))
+    _validate_create_payload(_payload(report_type="soc2_evidence", format="zip"))
+
+
+@pytest.mark.parametrize("rt,fmt", [
+    ("executive", "csv"),       # executive is pdf-only
+    ("soc2_evidence", "pdf"),   # soc2 evidence is zip-only
+    ("posture", "csv"),         # posture has no csv
+    ("bogus", "pdf"),           # unknown type
+])
+def test_validate_rejects_invalid_type_format_pairs(rt, fmt):
+    with pytest.raises(ValueError):
+        _validate_create_payload(_payload(report_type=rt, format=fmt))

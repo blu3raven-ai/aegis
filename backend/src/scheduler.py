@@ -136,6 +136,14 @@ class AutoRerunScheduler:
         ):
             self._trigger_code_scanning(code_scanning, all_orgs)
 
+        iac_scanning = tools.get("iac_scanning") if isinstance(tools.get("iac_scanning"), dict) else {}
+        if iac_scanning and iac_scanning.get("autoRerunEnabled") and _matches_schedule(
+            iac_scanning.get("rerunScheduleType", "simple"),
+            iac_scanning.get("rerunScheduleValue", "02:00"),
+            now,
+        ):
+            self._trigger_iac_scanning(iac_scanning, all_orgs)
+
         # Midnight UTC: write daily posture snapshots
         if now.hour == 0 and now.minute == 0:
             self._take_posture_snapshots()
@@ -156,18 +164,23 @@ class AutoRerunScheduler:
         if _matches_cron("0 2 * * *", now):
             self._trigger_osv_refresh()
 
-        # Hourly SLA breach recompute + escalations
-        if _matches_cron("0 * * * *", now):
-            self._trigger_sla_recompute(all_orgs)
-
-        # Daily scanner-coverage recompute (04:00)
-        if _matches_cron("0 4 * * *", now):
-            self._trigger_scanner_coverage_recompute(all_orgs)
-
-        # Daily data-retention sweep (04:30 — offset from scanner-coverage so
-        # the two heavy nightly evaluators don't contend for DB at the same minute)
-        if _matches_cron("30 4 * * *", now):
-            self._trigger_data_retention_recompute(all_orgs)
+        # Asset-scoped recomputes evaluate findings/scans by asset_id, so they
+        # need asset ids — not the org names that drive the per-source scan
+        # triggers above. Resolve once, only when at least one is due (SLA hourly;
+        # scanner-coverage 04:00; data-retention 04:30, offset so the two heavy
+        # nightly evaluators don't contend for the DB at the same minute).
+        sla_due = _matches_cron("0 * * * *", now)
+        coverage_due = _matches_cron("0 4 * * *", now)
+        retention_due = _matches_cron("30 4 * * *", now)
+        if sla_due or coverage_due or retention_due:
+            from src.assets.service import get_all_asset_ids
+            asset_ids = get_all_asset_ids()
+            if sla_due:
+                self._trigger_sla_recompute(asset_ids)
+            if coverage_due:
+                self._trigger_scanner_coverage_recompute(asset_ids)
+            if retention_due:
+                self._trigger_data_retention_recompute(asset_ids)
 
         # Per-source sync / auto-scan schedules (preset or cron, configured per source)
         self._tick_source_schedules(now)
@@ -296,25 +309,25 @@ class AutoRerunScheduler:
 
         threading.Thread(target=_run, daemon=True, name="osv-refresh").start()
 
-    def _trigger_sla_recompute(self, all_orgs: list[str]) -> None:
+    def _trigger_sla_recompute(self, asset_ids: list[str]) -> None:
         import threading
 
-        if not all_orgs:
+        if not asset_ids:
             return
 
         def _run() -> None:
             try:
                 from src.jobs.sla_recompute import trigger_sla_recompute
-                trigger_sla_recompute(all_orgs)
+                trigger_sla_recompute(asset_ids)
             except Exception:
                 logger.exception("SLA recompute failed")
 
         threading.Thread(target=_run, daemon=True, name="sla-recompute").start()
 
-    def _trigger_scanner_coverage_recompute(self, all_orgs: list[str]) -> None:
+    def _trigger_scanner_coverage_recompute(self, asset_ids: list[str]) -> None:
         import threading
 
-        if not all_orgs:
+        if not asset_ids:
             return
 
         def _run() -> None:
@@ -322,7 +335,7 @@ class AutoRerunScheduler:
                 from src.jobs.scanner_coverage_recompute import (
                     trigger_scanner_coverage_recompute,
                 )
-                trigger_scanner_coverage_recompute(all_orgs)
+                trigger_scanner_coverage_recompute(asset_ids)
             except Exception:
                 logger.exception("Scanner-coverage recompute failed")
 
@@ -330,10 +343,10 @@ class AutoRerunScheduler:
             target=_run, daemon=True, name="scanner-coverage-recompute"
         ).start()
 
-    def _trigger_data_retention_recompute(self, all_orgs: list[str]) -> None:
+    def _trigger_data_retention_recompute(self, asset_ids: list[str]) -> None:
         import threading
 
-        if not all_orgs:
+        if not asset_ids:
             return
 
         def _run() -> None:
@@ -341,7 +354,7 @@ class AutoRerunScheduler:
                 from src.jobs.data_retention_recompute import (
                     trigger_data_retention_recompute,
                 )
-                trigger_data_retention_recompute(all_orgs)
+                trigger_data_retention_recompute(asset_ids)
             except Exception:
                 logger.exception("Data-retention recompute failed")
 
@@ -422,15 +435,30 @@ class AutoRerunScheduler:
             thread.start()
 
     def _trigger_secrets(self, secrets_config: dict[str, Any], all_orgs: list[str]) -> None:
+        import threading
+        from src.shared.config import get_source_type_for_org
         from src.secrets.service_runs import start_secret_runs
+        from src.secrets.scanner import execute_secret_scan_once
 
         orgs = _resolve_orgs(all_orgs)
         if not orgs:
             logger.warning("Secrets auto-rerun: no orgs configured, skipping")
             return
 
+        def _launch(org, run_id, token, runtime, scanner_config, scan_depth):
+            # Resolve the source type per org so ingest can attach findings to
+            # assets. Poll in a daemon thread so a long scan can't block the tick.
+            source_type = get_source_type_for_org(org, "code-repositories")
+            threading.Thread(
+                target=execute_secret_scan_once,
+                args=(org, token, run_id),
+                kwargs={"source_type": source_type, "scanner_config": scanner_config,
+                        "runtime": runtime, "scan_depth": scan_depth},
+                daemon=True,
+            ).start()
+
         logger.info("Secrets auto-rerun triggered for orgs: %s", orgs)
-        start_secret_runs(orgs)
+        start_secret_runs(orgs, run_launcher=_launch)
 
     def _trigger_code_scanning(self, code_scanning_config: dict[str, Any], all_orgs: list[str]) -> None:
         import threading
@@ -464,6 +492,39 @@ class AutoRerunScheduler:
                 target=execute_code_scanning_scan_once,
                 args=(org, token, run_id),
                 kwargs={"source_type": source_type, "scanner_config": scanner_config, "runtime": _code_scanning_runtime},
+                daemon=True,
+            )
+            thread.start()
+
+    def _trigger_iac_scanning(self, iac_config: dict[str, Any], all_orgs: list[str]) -> None:
+        import threading
+        from src.shared.config import (
+            get_token_for_org, get_source_type_for_org, org_has_source_connections,
+        )
+        from src.iac.scanner import execute_iac_scan_once, _iac_runtime
+        from src.storage import create_iac_run
+
+        orgs = _resolve_orgs(all_orgs)
+        if not orgs:
+            logger.warning("IaC scanning auto-rerun: no orgs configured, skipping")
+            return
+
+        for org in orgs:
+            if not org_has_source_connections(org, categories=["code-repositories"]):
+                logger.warning("IaC scanning auto-rerun: no source connections for %s, skipping", org)
+                continue
+            if _iac_runtime.probe(org)["active"]:
+                logger.info("IaC scanning auto-rerun: scan already running for %s, skipping", org)
+                continue
+            source_type = get_source_type_for_org(org, "code-repositories")
+            token = get_token_for_org(org) or ""
+            run_id = f"auto-{int(time.time() * 1000)}"
+            create_iac_run(org, run_id)
+            logger.info("IaC scanning auto-rerun triggered for %s (run %s)", org, run_id)
+            thread = threading.Thread(
+                target=execute_iac_scan_once,
+                args=(org, token, run_id),
+                kwargs={"source_type": source_type, "runtime": _iac_runtime},
                 daemon=True,
             )
             thread.start()

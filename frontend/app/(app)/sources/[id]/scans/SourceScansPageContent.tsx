@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { History, X } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
+import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { StatusPill, type Status } from "@/components/ui/StatusPill"
 import { useSSE } from "@/components/providers/SSEProvider"
@@ -18,6 +19,11 @@ import { timeAgo } from "@/lib/shared/time-ago"
 // A run is still in-flight (and therefore cancellable) until it reaches a
 // terminal state.
 const IN_FLIGHT = new Set(["queued", "running", "ingesting"])
+
+// Scan runs accumulate ~3-4 per scan; page the history client-side so the
+// table stays scannable. The fetch ceiling matches the resolver's own cap.
+const PER_PAGE = 25
+const FETCH_LIMIT = 200
 
 // Map a scan-run status onto the StatusPill colour + a run-specific label.
 // StatusPill's own labels ("Healthy"/"Failing") describe connections, so we
@@ -53,11 +59,12 @@ export function SourceScansPageContent() {
   const { allowed: canCancel } = useHasPermission("manage_sources")
   const [runs, setRuns] = useState<ConnectionScanRun[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
 
   const load = useCallback(async () => {
     if (!connectionId) return
     try {
-      const data = await getConnectionScanRuns(connectionId)
+      const data = await getConnectionScanRuns(connectionId, FETCH_LIMIT)
       setRuns(data)
       setError(null)
     } catch (e) {
@@ -88,6 +95,14 @@ export function SourceScansPageContent() {
       await load()
     }
   }
+
+  const totalCount = runs?.length ?? 0
+  const totalPages = Math.max(1, Math.ceil(totalCount / PER_PAGE))
+  const safePage = Math.min(page, totalPages)
+  const pageRuns = useMemo(
+    () => (runs ?? []).slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE),
+    [runs, safePage],
+  )
 
   if (runs === null) {
     return (
@@ -131,7 +146,7 @@ export function SourceScansPageContent() {
             </tr>
           </thead>
           <tbody>
-            {runs.map((run) => {
+            {pageRuns.map((run) => {
               const view = STATUS_VIEW[run.status] ?? { tone: "stale" as Status, label: run.status }
               const inFlight = IN_FLIGHT.has(run.status)
               return (
@@ -174,6 +189,17 @@ export function SourceScansPageContent() {
             })}
           </tbody>
         </table>
+        {totalPages > 1 && (
+          <PaginatedTableFooter
+            totalCount={totalCount}
+            page={safePage}
+            perPage={PER_PAGE}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            onPerPageChange={() => {}}
+            label="scans"
+          />
+        )}
       </div>
     </div>
   )

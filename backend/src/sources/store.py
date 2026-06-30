@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from src.assets.refs import image_ref, repo_ref
 from src.db.helpers import run_db
 from src.db.models import SourceConnection
 from src.shared.encryption import decrypt_string, encrypt_string, is_encrypted
@@ -134,6 +135,36 @@ def _mask_auth(auth: dict[str, Any]) -> dict[str, Any]:
     return masked
 
 
+def _scope_refs(conn: SourceConnection) -> list[str]:
+    """Canonical asset identifiers for the connection's discovered items.
+
+    ``discovered_items`` are the raw provider names ("owner/repo", or
+    "registry/image:tag"). The findings list scopes by the asset's
+    ``display_name``, which the ingestion lifecycle sets to the canonical
+    ``external_ref`` (e.g. "github:owner/repo"). So map each discovered item
+    through the same ``repo_ref``/``image_ref`` helper that produced those refs,
+    rather than passing the raw provider names — which is why the per-source
+    findings list came up empty. Unconvertible items are skipped.
+    """
+    st = (conn.source_type or "").strip().lower()
+    out: list[str] = []
+    for item in conn.discovered_items or []:
+        if not isinstance(item, str) or not item.strip():
+            continue
+        try:
+            if "/" in item and ":" not in item.rsplit("/", 1)[-1]:
+                owner, name = item.split("/", 1)
+                out.append(repo_ref(st, owner, name))
+            elif "/" in item:
+                # registry/image:tag
+                registry, rest = item.split("/", 1)
+                image, _, tag = rest.partition(":")
+                out.append(image_ref(registry, image, tag))
+        except ValueError:
+            continue
+    return out
+
+
 def _conn_to_dict(conn: SourceConnection) -> dict[str, Any]:
     now = _now_iso()
     return {
@@ -162,6 +193,9 @@ def _conn_to_dict(conn: SourceConnection) -> dict[str, Any]:
         "lastScanAt": None,
         "discoveredItemCount": conn.discovered_item_count,
         "discoveredItems": conn.discovered_items or [],
+        # Canonical asset refs (display_name format) for scoping the per-source
+        # findings list — see _scope_refs.
+        "scopeRefs": _scope_refs(conn),
         "createdAt": _dt_to_iso(conn.created_at) or now,
         "updatedAt": _dt_to_iso(conn.updated_at) or now,
     }

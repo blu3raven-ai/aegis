@@ -15,7 +15,10 @@ from src.pr_feedback.git_pr_providers import resolve_pr_provider
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SCANNERS = ["dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"]
+# Default scanners for a git/repo source. Container scanning targets images, not
+# repos (a repo job supplies no image refs), so it is NOT a repo scanner — it
+# lives in _IMAGE_SCANNERS and image scans request it explicitly.
+_DEFAULT_SCANNERS = ["dependencies_scanning", "code_scanning", "secret_scanning", "iac_scanning"]
 
 _SCANNER_JOB_TYPES: dict[str, str] = {
     "dependencies_scanning": "dependencies_scanning",
@@ -35,16 +38,30 @@ def _dispatch_scanner_jobs(
     *,
     base_sha: str | None = None,
     scan_scope: str = "full_tree",
+    source_type: str | None = None,
+    repo_url: str | None = None,
 ) -> None:
-    """Create one runner job per scanner type after the ScanRun row is committed."""
+    """Create one runner job per scanner type after the ScanRun row is committed.
+
+    `source_type` is carried in env_vars as SOURCE_TYPE so ingest can resolve
+    each finding's repo asset (without it, ingest can't attach findings). When
+    `repo_url` is omitted the caller has not resolved a provider-specific clone
+    URL, so we fall back to the legacy github.com layout.
+    """
     from src.audit_log.recorder import ActorInfo, get_recorder
+    from src.db.helpers import run_db
     from src.runner.jobs import create_job
+    from src.settings.argus.service import (
+        ArgusAuthError,
+        fetch_argus_connection,
+        mint_argus_access_token,
+    )
     from src.settings.llm.service import fetch_llm_config
     from src.settings.llm.usage import daily_remaining
     from src.shared.config import get_token_for_org
 
     token = get_token_for_org(org) or ""
-    repo_url = f"https://github.com/{repo_id}"
+    clone_url = repo_url or f"https://github.com/{repo_id}"
 
     _LLM_CONFIG_KEY = "default"
     llm_cfg = fetch_llm_config(_LLM_CONFIG_KEY)
@@ -68,6 +85,34 @@ def _dispatch_scanner_jobs(
             metadata={"model": llm_cfg.model, "scanners": scanners},
         )
 
+    # A configured Argus connection routes verification to the hosted service;
+    # the runner prefers ARGUS_ENDPOINT over the BYO LLM_API_* path when present.
+    _ARGUS_CONFIG_KEY = "default"
+    argus_conn = run_db(lambda session: fetch_argus_connection(session, _ARGUS_CONFIG_KEY))
+    argus_env: dict[str, str] = {}
+    if argus_conn and argus_conn.enabled:
+        # Mint a fresh, short-lived OAuth access token per scan — the durable
+        # refresh token never leaves the backend. On mint failure the scan
+        # falls back to local/Mode-A verification (no ARGUS_* env shipped).
+        try:
+            access_token = mint_argus_access_token(argus_conn)
+            argus_env = {
+                "ARGUS_ENDPOINT": argus_conn.endpoint,
+                "ARGUS_TOKEN":    access_token,
+            }
+            get_recorder().record(
+                action="scan.verification_started",
+                resource_type="scan_run",
+                resource_id=scan_id,
+                actor=ActorInfo(user_id="system:scan_dispatch"),
+                metadata={"endpoint": argus_conn.endpoint, "scanners": scanners},
+            )
+        except ArgusAuthError as exc:
+            logger.warning(
+                "argus token mint failed; scan %s falls back to local verification: %s",
+                scan_id, exc,
+            )
+
     for scanner in scanners:
         job_type = _SCANNER_JOB_TYPES.get(scanner)
         if not job_type:
@@ -77,7 +122,7 @@ def _dispatch_scanner_jobs(
         run_id = f"{scan_id}:{scanner}"
         env: dict[str, str] = {
             "GIT_TOKEN":   token,
-            "GIT_REPOS":   repo_url,
+            "GIT_REPOS":   clone_url,
             "ORG_LABEL":   org,
             "RUN_ID":      run_id,
             "COMMIT_SHA":  commit_sha,
@@ -85,7 +130,10 @@ def _dispatch_scanner_jobs(
             "CONCURRENCY": "4",
             "SCAN_SCOPE":  scan_scope,
             **llm_env,
+            **argus_env,
         }
+        if source_type:
+            env["SOURCE_TYPE"] = source_type
         if base_sha:
             env["BASE_SHA"] = base_sha
         if scanner == "secret_scanning":
@@ -93,6 +141,33 @@ def _dispatch_scanner_jobs(
 
         create_job(job_type=job_type, org=org, run_id=run_id, env_vars=env)
         logger.info("Dispatched %s runner job for scan %s (repo %s)", scanner, scan_id, repo_id)
+
+
+def _resolve_repo_dispatch_target(external_ref: str) -> tuple[str, str, str, str]:
+    """Resolve runner-dispatch fields from an asset's ``external_ref``.
+
+    Returns ``(source_type, owner, name, clone_url)``. ``external_ref`` is the
+    canonical ``scm_type:owner/name``; the clone URL honours the connection's
+    instanceUrl so self-hosted GHE / GitLab / Gitea target the right host
+    instead of assuming github.com. ``source_type`` must reach the runner as
+    SOURCE_TYPE so ingest can attach each finding to its repo asset.
+    """
+    from src.shared.config import get_instance_url_for_org
+    from src.shared.providers.base import UnknownProvider, get_repo_provider
+
+    if ":" in external_ref:
+        scm_type, path = external_ref.split(":", 1)
+    else:
+        scm_type, path = "github", external_ref
+    parts = path.split("/", 1)
+    owner = parts[0] if parts else ""
+    name = parts[1] if len(parts) > 1 else ""
+    try:
+        instance_url = get_instance_url_for_org(owner, scm_type)
+        clone_url = get_repo_provider(scm_type).clone_url(owner, name, instance_url)
+    except UnknownProvider:
+        clone_url = f"https://github.com/{owner}/{name}"
+    return scm_type, owner, name, clone_url
 
 
 async def _load_source(source_id: str):
@@ -179,7 +254,7 @@ def _parse_submitted_at(meta: dict[str, Any]) -> datetime:
     return datetime.now(timezone.utc)
 
 
-_REPO_SCANNERS = frozenset({"dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"})
+_REPO_SCANNERS = frozenset({"dependencies_scanning", "code_scanning", "secret_scanning", "iac_scanning"})
 _IMAGE_SCANNERS = frozenset({"container_scanning"})
 _CLOUD_SCANNERS: frozenset[str] = frozenset()  # populated when cloud scanners exist
 
@@ -263,14 +338,7 @@ async def _submit_repo_scan(
     scan_id = f"scan-{uuid.uuid4()}"
     submitted_at = datetime.now(timezone.utc)
 
-    ext_ref = asset_row.external_ref or ""
-    if ":" in ext_ref:
-        _, path = ext_ref.split(":", 1)
-    else:
-        path = ext_ref
-    parts = path.split("/", 1)
-    owner = parts[0] if parts else ""
-    name = parts[1] if len(parts) > 1 else ""
+    scm_type, owner, name, repo_url = _resolve_repo_dispatch_target(asset_row.external_ref or "")
     repo_id = f"{owner}/{name}"
     org = owner
 
@@ -299,7 +367,10 @@ async def _submit_repo_scan(
     )
     session.add(row)
     await session.commit()
-    _dispatch_scanner_jobs(scan_id, repo_id, commit_sha, scanners, org)
+    _dispatch_scanner_jobs(
+        scan_id, repo_id, commit_sha, scanners, org,
+        source_type=scm_type, repo_url=repo_url,
+    )
 
     return ScanSubmission(
         scan_id=scan_id,
@@ -481,6 +552,10 @@ async def submit_ci_scan(
         trigger_metadata = {"api_key_id": api_key_id} if api_key_id is not None else {}
 
     async with get_session() as session:
+        from src.db.models import Asset
+        asset = (await session.execute(
+            select(Asset).where(Asset.id == source_id)
+        )).scalar_one_or_none()
         run = ScanRun(
             id=scan_id,
             tool="dependencies_scanning",  # umbrella row — per-scanner sub-runs created by dispatch
@@ -496,6 +571,13 @@ async def submit_ci_scan(
         session.add(run)
         await session.commit()
 
+    # Carry the asset's source type + a provider-correct clone URL to the runner
+    # so it clones the right repo and ingest can attach findings to the asset.
+    source_type: str | None = None
+    repo_url: str | None = None
+    if asset is not None:
+        source_type, _, _, repo_url = _resolve_repo_dispatch_target(asset.external_ref or "")
+
     try:
         _dispatch_scanner_jobs(
             scan_id,
@@ -505,6 +587,8 @@ async def submit_ci_scan(
             org,
             base_sha=base_sha,
             scan_scope=scan_scope,
+            source_type=source_type,
+            repo_url=repo_url,
         )
     except Exception:
         # The ScanRun row is already committed in 'queued'. Surface the orphan

@@ -97,7 +97,13 @@ def download_json(key: str) -> dict[str, Any] | None:
     data = download_bytes(key)
     if not data:
         return None
-    return json.loads(data)
+    try:
+        return json.loads(data)
+    except (json.JSONDecodeError, ValueError):
+        # A truncated/corrupt blob (e.g. an interrupted upload) is treated as
+        # unreadable rather than crashing the caller with a 500.
+        logger.warning("Unparseable JSON blob at %s — treating as missing", key)
+        return None
 
 
 def delete_prefix(prefix: str, bucket: str = _S3_BUCKET) -> int:

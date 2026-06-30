@@ -228,7 +228,9 @@ def get_user(request: Request, user_id: str) -> JSONResponse:
     return JSONResponse(_to_scim(row, request), status_code=200)
 
 
-_NOT_SCIM_MANAGED_DETAIL = "User is not SCIM-managed; refusing to mutate."
+# Avoid disclosing the per-row SCIM-managed flag to a bearer-token holder; the
+# scimType "mutability" already conveys the semantics.
+_NOT_SCIM_MANAGED_DETAIL = "User is not modifiable via SCIM."
 
 
 @scim_router.put("/Users/{user_id}")

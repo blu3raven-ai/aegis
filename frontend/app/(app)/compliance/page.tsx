@@ -11,6 +11,7 @@ import { ComplianceIcon } from "@/lib/shared/ui/page-icons"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { FilterChip } from "@/components/ui/FilterChip"
+import { SearchInput } from "@/components/shared/SearchInput"
 import {
   listFrameworks,
   getFrameworkSummary,
@@ -36,6 +37,7 @@ interface AggregatedStats {
   partialControls: number
   criticalGaps: number
   highGaps: number
+  overdueControls: number
 }
 
 function aggregateStats(
@@ -53,6 +55,7 @@ function aggregateStats(
   let partialControls = 0
   let criticalGaps = 0
   let highGaps = 0
+  let overdueControls = 0
 
   for (const fw of frameworks) {
     const items = summaries[fw.id]
@@ -68,10 +71,12 @@ function aggregateStats(
         if (c.highest_severity === "critical") criticalGaps++
         else if (c.highest_severity === "high") highGaps++
       }
+
+      if (c.overdue === true) overdueControls++
     }
   }
 
-  return { totalControls, metControls, unmetControls, partialControls, criticalGaps, highGaps }
+  return { totalControls, metControls, unmetControls, partialControls, criticalGaps, highGaps, overdueControls }
 }
 
 
@@ -91,21 +96,32 @@ function StatsStrip({
   anyLoading: boolean
 }) {
   const agg = anyLoading ? null : aggregateStats(frameworks, summaries, errors)
+  // Errored frameworks are excluded from the aggregate totals; surface that so
+  // the passing % / open-gap counts aren't read as the whole picture.
+  const erroredCount = frameworks.filter((fw) => errors[fw.id]).length
+  const unavailableSuffix =
+    agg !== null && erroredCount > 0
+      ? ` · ${erroredCount} framework${erroredCount > 1 ? "s" : ""} unavailable`
+      : ""
   const passPct =
     agg !== null && agg.totalControls > 0
       ? `${Math.round((agg.metControls / agg.totalControls) * 100)}%`
       : "—"
   const passCaption =
     agg !== null
-      ? `${agg.metControls} of ${agg.totalControls}`
+      ? `${agg.metControls} of ${agg.totalControls}${unavailableSuffix}`
       : "Loading…"
   const openGaps =
     agg !== null ? String(agg.unmetControls + agg.partialControls) : "—"
+  // Past-due controls are a distinct urgency signal from raw gap severity, so
+  // surface them alongside the critical/high breakdown rather than as a new card.
+  const overdueSuffix =
+    agg !== null && agg.overdueControls > 0 ? ` · ${agg.overdueControls} overdue` : ""
   const gapsCaption =
     agg !== null && (agg.criticalGaps > 0 || agg.highGaps > 0)
-      ? `${agg.criticalGaps} critical · ${agg.highGaps} high`
+      ? `${agg.criticalGaps} critical · ${agg.highGaps} high${overdueSuffix}${unavailableSuffix}`
       : agg !== null
-        ? "—"
+        ? `—${overdueSuffix}${unavailableSuffix}`
         : "Loading…"
   const openGapsValueClass = agg !== null && (agg.unmetControls + agg.partialControls) > 0 ? CRITICAL : NEUTRAL
   const passValueClass = agg !== null && agg.totalControls > 0 && agg.metControls === agg.totalControls ? OK : NEUTRAL
@@ -145,6 +161,7 @@ export default function CompliancePage() {
   const [errors, setErrors] = useState<Record<string, boolean>>({})
   const [selected, setSelected] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [controlQuery, setControlQuery] = useState("")
   const [loadState, setLoadState] = useState<"loading" | "ok" | "error">("loading")
   const [addModalOpen, setAddModalOpen] = useState(false)
 
@@ -188,11 +205,21 @@ export default function CompliancePage() {
       return
     }
     setStatusFilter("all")
+    setControlQuery("")
   }, [selected])
 
   // ── Derived values for ControlsSection ──────────────────────────────────────
   const selectedFw = frameworks.find((f) => f.id === selected)
-  const selectedSummary = selected !== null ? (summaries[selected] ?? []) : []
+  const fullSummary = selected !== null ? (summaries[selected] ?? []) : []
+  // Free-text find across the (now 20-36 control) catalog by id or title.
+  const query = controlQuery.trim().toLowerCase()
+  const selectedSummary = query
+    ? fullSummary.filter(
+        (c) =>
+          c.control_id.toLowerCase().includes(query) ||
+          c.title.toLowerCase().includes(query),
+      )
+    : fullSummary
   const counts = {
     all: selectedSummary.length,
     unmet: selectedSummary.filter((c) => deriveControlStatus(c) === "unmet").length,
@@ -204,11 +231,14 @@ export default function CompliancePage() {
   const anyLoading =
     loadState === "ok" && frameworks.some((fw) => !(fw.id in summaries) && !errors[fw.id])
 
+  // Labels mirror the status pills + hero badge (Compliant / Partial / At Risk)
+  // so a filter and the rows it filters speak one vocabulary; keys stay the
+  // internal met/partial/unmet.
   const filterLabels: { key: StatusFilter; label: string }[] = [
     { key: "all", label: `All (${counts.all})` },
-    { key: "unmet", label: `Unmet (${counts.unmet})` },
+    { key: "unmet", label: `At Risk (${counts.unmet})` },
     { key: "partial", label: `Partial (${counts.partial})` },
-    { key: "met", label: `Met (${counts.met})` },
+    { key: "met", label: `Compliant (${counts.met})` },
   ]
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -341,14 +371,23 @@ export default function CompliancePage() {
 
             {selected !== null && (
               <Card elevation="sm" className="rounded-xl">
-                <div className="mb-4 flex items-center justify-between gap-4">
-                  <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="min-w-0 break-words text-base font-semibold text-[var(--color-text-primary)]">
                     Controls · {selectedFw?.label ?? selected}
                   </h2>
                   {!errors[selected] && (
-                    <span className="shrink-0 text-xs text-[var(--color-text-secondary)]">
-                      Showing {visibleCount} of {counts.all}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-56">
+                        <SearchInput
+                          value={controlQuery}
+                          onChange={setControlQuery}
+                          placeholder="Search controls…"
+                        />
+                      </div>
+                      <span className="shrink-0 text-xs text-[var(--color-text-secondary)] tabular-nums">
+                        {visibleCount} of {fullSummary.length}
+                      </span>
+                    </div>
                   )}
                 </div>
 
@@ -378,6 +417,12 @@ export default function CompliancePage() {
                     {!(selected in summaries) ? (
                       <div className="flex items-center justify-center py-12 text-sm text-[var(--color-text-secondary)]">
                         Loading controls…
+                      </div>
+                    ) : controlQuery.trim() !== "" && selectedSummary.length === 0 ? (
+                      // A search with no matches is distinct from a framework with
+                      // zero controls — don't let the table imply the latter.
+                      <div className="flex items-center justify-center py-12 text-sm text-[var(--color-text-secondary)]">
+                        No controls match your search.
                       </div>
                     ) : (
                       <ControlsSummaryTable

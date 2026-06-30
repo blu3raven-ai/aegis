@@ -11,18 +11,25 @@ export interface SavedViewsDropdownProps {
 
 export function SavedViewsDropdown({ onApply, refreshSignal }: SavedViewsDropdownProps) {
   const [views, setViews] = useState<SavedView[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     let active = true
     listSavedViews("findings")
-      .then((rows) => { if (active) { setViews(rows); setError(null) } })
-      .catch((err) => { if (active) setError(err instanceof Error ? err.message : String(err)) })
+      .then((rows) => { if (active) { setViews(rows); setError(false) } })
+      .catch((err) => {
+        if (active) {
+          console.error("Failed to load saved views", err)
+          setError(true)
+        }
+      })
     return () => { active = false }
   }, [refreshSignal])
 
   if (error) {
-    return <span className="text-2xs text-[var(--color-severity-critical)]">{error}</span>
+    return (
+      <span className="text-2xs text-[var(--color-text-secondary)]">Couldn't load saved views</span>
+    )
   }
 
   return (
@@ -37,7 +44,7 @@ export function SavedViewsDropdown({ onApply, refreshSignal }: SavedViewsDropdow
       }}
       className="w-auto"
     >
-      <option value="">Views ▾</option>
+      <option value="">Views</option>
       {views.map((v) => (
         <option key={v.id} value={v.id}>{v.is_default ? `★ ${v.name}` : v.name}</option>
       ))}

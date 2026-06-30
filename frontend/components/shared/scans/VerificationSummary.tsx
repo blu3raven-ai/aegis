@@ -33,7 +33,7 @@ interface VerificationSummaryProps {
   summary: ScanVerificationSummary
 }
 
-/** Per-scan LLM-verification KPI card for the scan detail page. */
+/** Per-scan Argus-verification KPI card for the scan detail page. */
 export function VerificationSummary({ summary }: VerificationSummaryProps) {
   const totalTokens = (summary.tokens_in ?? 0) + (summary.tokens_out ?? 0)
   const totalVerified =
@@ -47,7 +47,7 @@ export function VerificationSummary({ summary }: VerificationSummaryProps) {
     return (
       <div className="rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] px-5 py-3">
         <p className="text-xs italic text-[var(--color-text-secondary)]">
-          This scan ran without LLM verification.
+          This scan ran without Argus verification.
         </p>
       </div>
     )
@@ -88,7 +88,7 @@ export function VerificationSummary({ summary }: VerificationSummaryProps) {
           </span>{" "}
           tokens ·{" "}
           <span
-            title="Approximation — actual pricing depends on your LLM provider's per-token rates."
+            title="Approximation — actual pricing depends on Argus's per-token rates."
             className="tabular-nums underline decoration-dotted underline-offset-2 cursor-help"
           >
             ~${approxCost.toFixed(3)}

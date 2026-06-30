@@ -11,12 +11,20 @@ import { Sheet } from "@/components/ui/Sheet"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { apiClient } from "@/lib/client/api-client"
 import { listDestinations, type NotificationDestination } from "@/lib/client/destinations-api"
+import {
+  type ReportType,
+  type ReportFormat,
+  REPORT_TYPE_OPTIONS,
+  formatOptionsForType,
+  clampFormat,
+  reportTypeLabel,
+} from "@/lib/shared/report-types"
 
 interface ScheduledReport {
   id: number
   name: string
-  report_type: "findings" | "posture"
-  format: "json" | "csv" | "pdf"
+  report_type: ReportType
+  format: ReportFormat
   schedule_type: "simple" | "cron"
   schedule_value: string
   filters: Record<string, unknown>
@@ -43,10 +51,17 @@ async function deleteSchedule(id: number): Promise<void> {
   await apiClient<void>(`/api/v1/findings/reports/scheduled/${id}`, { method: "DELETE" })
 }
 
+async function setScheduleEnabled(id: number, enabled: boolean): Promise<ScheduledReport> {
+  return apiClient<ScheduledReport>(`/api/v1/findings/reports/scheduled/${id}`, {
+    method: "PATCH",
+    body: { enabled },
+  })
+}
+
 interface CreatePayload {
   name: string
-  report_type: "findings" | "posture"
-  format: "json" | "csv" | "pdf"
+  report_type: ReportType
+  format: ReportFormat
   schedule_type: "simple" | "cron"
   schedule_value: string
   filters?: Record<string, unknown>
@@ -61,10 +76,20 @@ async function createSchedule(payload: CreatePayload): Promise<ScheduledReport> 
   })
 }
 
+type UpdatePayload = Omit<CreatePayload, "enabled">
+
+async function updateSchedule(id: number, payload: UpdatePayload): Promise<ScheduledReport> {
+  return apiClient<ScheduledReport>(`/api/v1/findings/reports/scheduled/${id}`, {
+    method: "PATCH",
+    body: payload,
+  })
+}
+
 export function ScheduledReportsPanel() {
   const [items, setItems] = useState<ScheduledReport[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [showCreate, setShowCreate] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [editing, setEditing] = useState<ScheduledReport | null>(null)
   const [destinations, setDestinations] = useState<NotificationDestination[]>([])
 
   async function refresh() {
@@ -94,6 +119,15 @@ export function ScheduledReportsPanel() {
     }
   }
 
+  async function handleToggle(s: ScheduledReport) {
+    try {
+      const updated = await setScheduleEnabled(s.id, !s.enabled)
+      setItems((prev) => prev?.map((x) => (x.id === s.id ? updated : x)) ?? null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update schedule")
+    }
+  }
+
   return (
     <Card as="section">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -103,13 +137,20 @@ export function ScheduledReportsPanel() {
             Reports run automatically and deliver to configured notification destinations.
           </p>
         </div>
-        <Button variant="primary" size="sm" onClick={() => setShowCreate(true)}>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => {
+            setEditing(null)
+            setShowModal(true)
+          }}
+        >
           Schedule
         </Button>
       </div>
 
       {error && (
-        <p className="mb-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical)]">
+        <p role="alert" className="mb-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical)]">
           {error}
         </p>
       )}
@@ -139,10 +180,10 @@ export function ScheduledReportsPanel() {
                     <span className="text-2xs uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">paused</span>
                   )}
                 </Td>
-                <Td className="px-0 py-2.5 text-[var(--color-text-secondary)]">{s.report_type}</Td>
+                <Td className="px-0 py-2.5 text-[var(--color-text-secondary)]">{reportTypeLabel(s.report_type)}</Td>
                 <Td className="px-0 py-2.5 text-[var(--color-text-secondary)]">{s.format.toUpperCase()}</Td>
                 <Td className="px-0 py-2.5 text-[var(--color-text-secondary)]">
-                  {s.schedule_type === "simple" ? `daily ${s.schedule_value}` : s.schedule_value}
+                  {s.schedule_type === "simple" ? `Daily ${s.schedule_value}` : s.schedule_value}
                 </Td>
                 <Td className="px-0 py-2.5 text-[var(--color-text-secondary)]">
                   {s.last_run_at ? (
@@ -152,6 +193,19 @@ export function ScheduledReportsPanel() {
                   )}
                 </Td>
                 <Td className="px-0 py-2.5 text-right">
+                  <Button variant="ghost" size="xs" onClick={() => handleToggle(s)}>
+                    {s.enabled ? "Pause" : "Resume"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => {
+                      setEditing(s)
+                      setShowModal(true)
+                    }}
+                  >
+                    Edit
+                  </Button>
                   <Button
                     variant="ghost"
                     size="xs"
@@ -167,12 +221,13 @@ export function ScheduledReportsPanel() {
         </Table>
       )}
 
-      <CreateScheduleModal
-        open={showCreate}
+      <ScheduleModal
+        open={showModal}
+        editing={editing}
         destinations={destinations}
-        onClose={() => setShowCreate(false)}
-        onCreated={() => {
-          setShowCreate(false)
+        onClose={() => setShowModal(false)}
+        onSaved={() => {
+          setShowModal(false)
           void refresh()
         }}
       />
@@ -193,53 +248,80 @@ function LastRunCell({
   if (status === "failed") {
     return (
       <span className="text-[var(--color-severity-critical)]" title={error ?? undefined}>
-        failed · {ts}
+        Failed · {ts}
       </span>
     )
   }
   return <span>{ts}</span>
 }
 
-function CreateScheduleModal({
+function ScheduleModal({
   open,
+  editing,
   destinations,
   onClose,
-  onCreated,
+  onSaved,
 }: {
   open: boolean
+  editing: ScheduledReport | null
   destinations: NotificationDestination[]
   onClose: () => void
-  onCreated: () => void
+  onSaved: () => void
 }) {
   const [name, setName] = useState("")
-  const [reportType, setReportType] = useState<"findings" | "posture">("findings")
-  const [format, setFormat] = useState<"json" | "csv" | "pdf">("pdf")
+  const [reportType, setReportType] = useState<ReportType>("findings")
+  const [format, setFormat] = useState<ReportFormat>("pdf")
   const [scheduleType, setScheduleType] = useState<"simple" | "cron">("simple")
   const [scheduleValue, setScheduleValue] = useState("09:00")
   const [destIds, setDestIds] = useState<number[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (open) {
+      setName(editing?.name ?? "")
+      setReportType(editing?.report_type ?? "findings")
+      setFormat(editing?.format ?? "pdf")
+      setScheduleType(editing?.schedule_type ?? "simple")
+      setScheduleValue(editing?.schedule_value ?? "09:00")
+      setDestIds(editing?.destination_ids ?? [])
+      setError(null)
+      setSubmitting(false)
+    }
+  }, [open, editing])
+
+  function handleClose() {
+    if (submitting) return
+    onClose()
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
     setError(null)
     try {
-      // Backend rejects posture+csv; coerce if the user landed there.
-      const effectiveFormat: "json" | "csv" | "pdf" =
-        reportType === "posture" && format === "csv" ? "json" : format
-      await createSchedule({
+      const fields = {
         name: name.trim(),
         report_type: reportType,
-        format: effectiveFormat,
+        format,
         schedule_type: scheduleType,
         schedule_value: scheduleValue.trim(),
         destination_ids: destIds,
-        enabled: true,
-      })
-      onCreated()
+      }
+      if (editing) {
+        await updateSchedule(editing.id, fields)
+      } else {
+        await createSchedule({ ...fields, enabled: true })
+      }
+      onSaved()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to create schedule")
+      setError(
+        e instanceof Error
+          ? e.message
+          : editing
+            ? "Failed to update schedule"
+            : "Failed to create schedule",
+      )
     } finally {
       setSubmitting(false)
     }
@@ -248,8 +330,8 @@ function CreateScheduleModal({
   return (
     <Sheet
       open={open}
-      onClose={onClose}
-      title="New scheduled report"
+      onClose={handleClose}
+      title={editing ? "Edit scheduled report" : "New scheduled report"}
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-3 text-sm">
@@ -270,10 +352,17 @@ function CreateScheduleModal({
                 id="report-type"
                 size="sm"
                 value={reportType}
-                onChange={(e) => setReportType(e.target.value as "findings" | "posture")}
+                onChange={(e) => {
+                  const next = e.target.value as ReportType
+                  setReportType(next)
+                  setFormat((f) => clampFormat(next, f))
+                }}
               >
-                <option value="findings">findings</option>
-                <option value="posture">posture</option>
+                {REPORT_TYPE_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
               </Select>
             </FormField>
             <FormField label="Format" htmlFor="report-format" className="flex-1">
@@ -281,11 +370,13 @@ function CreateScheduleModal({
                 id="report-format"
                 size="sm"
                 value={format}
-                onChange={(e) => setFormat(e.target.value as "json" | "csv" | "pdf")}
+                onChange={(e) => setFormat(e.target.value as ReportFormat)}
               >
-                <option value="pdf">pdf</option>
-                <option value="json">json</option>
-                {reportType === "findings" && <option value="csv">csv</option>}
+                {formatOptionsForType(reportType).map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
               </Select>
             </FormField>
           </div>
@@ -319,7 +410,12 @@ function CreateScheduleModal({
             </FormField>
           </div>
 
-          {destinations.length > 0 && (
+          {destinations.length === 0 ? (
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              No notification destinations configured — this report will be archived to Report
+              history only.
+            </p>
+          ) : (
             <div>
               <span className="text-xs font-medium text-[var(--color-text-secondary)]">Destinations</span>
               <div className="mt-1 flex flex-wrap gap-1.5">
@@ -339,17 +435,22 @@ function CreateScheduleModal({
                   )
                 })}
               </div>
+              {destIds.length === 0 && (
+                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                  Not delivered anywhere — archived to Report history only.
+                </p>
+              )}
             </div>
           )}
 
           {error && (
-            <p className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical)]">
+            <p role="alert" className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical)]">
               {error}
             </p>
           )}
 
           <div className="mt-4 flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={onClose}>
+            <Button type="button" variant="secondary" size="sm" onClick={handleClose} disabled={submitting}>
               Cancel
             </Button>
             <Button
@@ -359,7 +460,7 @@ function CreateScheduleModal({
               isLoading={submitting}
               disabled={submitting || !name.trim() || !scheduleValue.trim()}
             >
-              {submitting ? "Creating…" : "Create"}
+              {submitting ? (editing ? "Saving…" : "Creating…") : editing ? "Save changes" : "Create"}
             </Button>
           </div>
         </form>

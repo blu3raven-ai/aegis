@@ -8,11 +8,10 @@ const src = readFileSync(
 )
 
 describe("FindingRowTags", () => {
-  it("accepts kev, epssPercentile, firstSeen, cwe props", () => {
+  it("accepts kev, epssPercentile, firstSeen props", () => {
     assert.match(src, /kev\?:\s*boolean/)
     assert.match(src, /epssPercentile\?:\s*number/)
     assert.match(src, /firstSeen\?:\s*string/)
-    assert.match(src, /cwe\?:\s*string/)
   })
 
   it("renders KEV chip when kev=true", () => {
@@ -25,10 +24,6 @@ describe("FindingRowTags", () => {
 
   it("renders NEW chip when firstSeen is within last 7 days", () => {
     assert.match(src, /NEW_WINDOW_DAYS\s*=\s*7/)
-  })
-
-  it("renders CWE chip when cwe is set", () => {
-    assert.match(src, /\{cwe && /)
   })
 
   it("uses text-2xs micro-label scale (CLAUDE.md typography)", () => {

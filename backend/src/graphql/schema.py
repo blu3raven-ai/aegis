@@ -32,10 +32,10 @@ from src.posture.resolvers import (
     home_analytics, posture_by_team, posture_snapshot, posture_trend,
 )
 from src.sbom.resolvers import (
-    SbomComponentsConnection, SbomFilterOptions, SbomCrossReference, SbomBulkMatch,
-    SbomHistoryEntry, SbomDiffOrError,
+    SbomComponentsConnection, SbomFilterOptions, SbomCrossRefResult, SbomBulkResult,
+    SbomHistoryEntry, SbomDiffOrError, RepoComponentVulns, RiskyComponentsConnection, PackageRepo,
     sbom_search, sbom_filter_options, sbom_cross_references, sbom_bulk_lookup,
-    sbom_history, sbom_diff,
+    sbom_history, sbom_diff, sbom_component_vulns, sbom_risky_components, sbom_package_repos,
 )
 from src.sla.resolvers import sla_breach_summary
 from src.epss.resolvers import epss_top
@@ -205,6 +205,7 @@ class FindingsQuery:
         kev: Optional[bool] = None,
         epss_min: Optional[float] = None,
         risk_score_min: Optional[int] = None,
+        bands: Optional[str] = None,
         assignee: Optional[str] = None,
         verdict: Optional[str] = None,
     ) -> FindingsSearchResult:
@@ -218,7 +219,8 @@ class FindingsQuery:
                 limit=limit, cursor=cursor, page=page,
                 archived=archived, first_seen_after=first_seen_after,
                 cwe=cwe, kev=kev, epss_min=epss_min,
-                risk_score_min=risk_score_min, assignee=assignee, verdict=verdict,
+                risk_score_min=risk_score_min, bands=bands,
+                assignee=assignee, verdict=verdict,
             )
         except ValueError as exc:
             raise_bad_input(str(exc))
@@ -258,6 +260,9 @@ class SbomQuery:
         version_value: Optional[str] = None,
         version_value_end: Optional[str] = None,
         filter_logic: Optional[str] = None,
+        vulnerable_only: Optional[bool] = None,
+        license_categories: Optional[list[str]] = None,
+        dependency: Optional[str] = None,
         page: int = 1,
         per_page: int = 50,
     ) -> SbomComponentsConnection:
@@ -266,7 +271,8 @@ class SbomQuery:
             search=search, ecosystems=ecosystems, source=source,
             repos=repos, version_op=version_op, version_value=version_value,
             version_value_end=version_value_end, filter_logic=filter_logic,
-            page=page, per_page=per_page, info_context=ctx,
+            vulnerable_only=vulnerable_only, license_categories=license_categories,
+            dependency=dependency, page=page, per_page=per_page, info_context=ctx,
         )
 
     @strawberry.field
@@ -275,14 +281,38 @@ class SbomQuery:
         return sbom_filter_options(info_context=ctx)
 
     @strawberry.field
-    async def cross_references(self, info: strawberry.types.Info, purl: str) -> list[SbomCrossReference]:
+    async def cross_references(self, info: strawberry.types.Info, purl: str) -> SbomCrossRefResult:
         ctx, _ = await unpack_ctx(info)
         return sbom_cross_references(purl=purl, info_context=ctx)
 
     @strawberry.field
-    async def bulk_lookup(self, info: strawberry.types.Info, queries: list[str]) -> list[SbomBulkMatch]:
+    async def component_vulns(self, info: strawberry.types.Info, repo: str) -> list[RepoComponentVulns]:
+        ctx, _ = await unpack_ctx(info)
+        return sbom_component_vulns(repo=repo, info_context=ctx)
+
+    @strawberry.field
+    async def bulk_lookup(self, info: strawberry.types.Info, queries: list[str]) -> SbomBulkResult:
         ctx, _ = await unpack_ctx(info)
         return sbom_bulk_lookup(queries=queries, info_context=ctx)
+
+    @strawberry.field
+    async def risky_components(
+        self,
+        info: strawberry.types.Info,
+        search: Optional[str] = None,
+        ecosystems: Optional[list[str]] = None,
+        page: int = 1,
+        per_page: int = 25,
+    ) -> RiskyComponentsConnection:
+        ctx, _ = await unpack_ctx(info)
+        return sbom_risky_components(
+            search=search, ecosystems=ecosystems, page=page, per_page=per_page, info_context=ctx
+        )
+
+    @strawberry.field
+    async def package_repos(self, info: strawberry.types.Info, package_name: str) -> list[PackageRepo]:
+        ctx, _ = await unpack_ctx(info)
+        return sbom_package_repos(package_name=package_name, info_context=ctx)
 
     @strawberry.field
     async def history(

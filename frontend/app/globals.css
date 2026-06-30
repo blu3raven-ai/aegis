@@ -37,6 +37,9 @@
   --color-status-ok:      #10b981;
   --color-status-ok-subtle: rgb(16 185 129 / 0.1);
   --color-status-ok-border: rgb(16 185 129 / 0.3);
+  /* Legible text variant for labels/values on light surfaces (the fill above
+     is too bright for small/large text — fails WCAG AA). */
+  --color-status-ok-text:   #047857;
 
   /* Generic semantic aliases — components reference these names; they follow
      the theme automatically because var() resolves against the active scope. */
@@ -48,18 +51,24 @@
   --color-severity-critical:        #ef4444;
   --color-severity-critical-subtle: rgb(239 68 68 / 0.1);
   --color-severity-critical-border: rgb(239 68 68 / 0.3);
+  /* -text: darker shade that clears WCAG 4.5:1 on the light surface (the fill
+     tokens above are tuned for dots/borders and fail as text on white). */
+  --color-severity-critical-text: #b91c1c;
 
   --color-severity-high:        #f97316;
   --color-severity-high-subtle: rgb(249 115 22 / 0.1);
   --color-severity-high-border: rgb(249 115 22 / 0.3);
+  --color-severity-high-text: #c2410c;
 
   --color-severity-medium:        #fbbf24;
   --color-severity-medium-subtle: rgb(251 191 36 / 0.12);
   --color-severity-medium-border: rgb(251 191 36 / 0.3);
+  --color-severity-medium-text: #b45309;
 
   --color-severity-low:        #60a5fa;
   --color-severity-low-subtle: rgb(96 165 250 / 0.1);
   --color-severity-low-border: rgb(96 165 250 / 0.3);
+  --color-severity-low-text: #2563eb;
 
   --color-state-dismissed:         #a855f7;
   --color-state-dismissed-subtle:  rgb(168 85 247 / 0.05);
@@ -101,6 +110,7 @@
   --color-state-pending:           #f59e0b;
   --color-state-pending-subtle:    rgb(245 158 11 / 0.1);
   --color-state-pending-border:    rgb(245 158 11 / 0.3);
+  --color-state-pending-text:      #b45309;
 
   --color-scanner-sast-bg:         rgb(168 85 247 / 0.18);
   --color-scanner-sast-fg:         #a855f7;
@@ -174,22 +184,28 @@
   --color-status-ok:        #34d399;
   --color-status-ok-subtle: rgb(52 211 153 / 0.12);
   --color-status-ok-border: rgb(52 211 153 / 0.3);
+  --color-status-ok-text:   #34d399;
 
   --color-severity-critical:        #f87171;
   --color-severity-critical-subtle: rgb(248 113 113 / 0.12);
   --color-severity-critical-border: rgb(248 113 113 / 0.3);
+  /* -text: on the dark surface the bright fills already clear 4.5:1 as text. */
+  --color-severity-critical-text: #f87171;
 
   --color-severity-high:        #fb923c;
   --color-severity-high-subtle: rgb(251 146 60 / 0.12);
   --color-severity-high-border: rgb(251 146 60 / 0.3);
+  --color-severity-high-text: #fb923c;
 
   --color-severity-medium:        #fbbf24;
   --color-severity-medium-subtle: rgb(251 191 36 / 0.12);
   --color-severity-medium-border: rgb(251 191 36 / 0.3);
+  --color-severity-medium-text: #fbbf24;
 
   --color-severity-low:        #60a5fa;
   --color-severity-low-subtle: rgb(96 165 250 / 0.12);
   --color-severity-low-border: rgb(96 165 250 / 0.3);
+  --color-severity-low-text: #60a5fa;
 
   --color-state-dismissed:         #c084fc;
   --color-state-dismissed-subtle:  rgb(192 132 252 / 0.08);
@@ -231,6 +247,7 @@
   --color-state-pending:           #fbbf24;
   --color-state-pending-subtle:    rgb(251 191 36 / 0.12);
   --color-state-pending-border:    rgb(251 191 36 / 0.3);
+  --color-state-pending-text:      #fbbf24;
 
   --color-scanner-sast-bg:         rgb(192 132 252 / 0.18);
   --color-scanner-sast-fg:         #d4b0fc;

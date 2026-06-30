@@ -3,12 +3,12 @@
 Run as: python -m src.shared.finding_queryable_backfill [--batch-size 500] [--dry-run]
 
 Walks the findings table in id-ordered batches, skipping rows that already have
-any of the 5 typed columns (cve_id, file_path, title, rule_name, package_name)
-populated. For each remaining row: call extract_queryable_fields(detail) and
-UPDATE the 5 columns.
+any of the original typed columns (cve_id, file_path, title, rule_name,
+package_name) populated. For each remaining row: call extract_queryable_fields(detail)
+and UPDATE the typed columns (including package_version).
 
 Idempotent: re-runs skip already-populated rows. Rows where the extractor finds
-no matching keys (all 5 columns remain None) are re-processed on subsequent runs
+no matching keys (all columns remain None) are re-processed on subsequent runs
 but no-op DB writes occur — same trade-off as finding_detail_backfill.py for
 lean-only rows.
 """
@@ -101,6 +101,7 @@ async def backfill_batch(
                     title=extracted["title"],
                     rule_name=extracted["rule_name"],
                     package_name=extracted["package_name"],
+                    package_version=extracted["package_version"],
                 )
             )
             stats.processed += 1

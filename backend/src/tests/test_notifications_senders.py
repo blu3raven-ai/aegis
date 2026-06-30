@@ -76,6 +76,23 @@ def test_email_test_method_reports_ok_when_smtp_configured(monkeypatch):
     assert result.ok is True
 
 
+def test_slack_test_self_reports_no_liveness_probe():
+    # The Slack webhook URL is per-destination config, never seen by the
+    # no-config test() check — so test() must honestly self-report that no
+    # probe ran rather than masquerade as "verified reachable" with a bare ok.
+    from src.notifications.senders import slack as _slack
+    result = _slack.SlackSender().test()
+    assert result.ok is True
+    assert "no liveness probe" in (result.message or "").lower()
+
+
+def test_webhook_test_self_reports_no_liveness_probe():
+    from src.notifications.senders import webhook as _webhook
+    result = _webhook.GenericWebhookSender().test()
+    assert result.ok is True
+    assert "no liveness probe" in (result.message or "").lower()
+
+
 
 
 class _FakeResp:

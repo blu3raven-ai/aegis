@@ -73,6 +73,10 @@ export interface SourceConnection {
   nextSyncAt?: string
   discoveredItemCount?: number
   discoveredItems?: string[]
+  /** Canonical asset refs (display_name format, e.g. "github:owner/repo") for
+   *  scoping the per-source findings list. Derived from discoveredItems server-
+   *  side via the same repo_ref/image_ref helper that names the assets. */
+  scopeRefs?: string[]
   createdAt: string
   updatedAt: string
 }

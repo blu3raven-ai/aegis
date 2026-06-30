@@ -1,5 +1,6 @@
-import type { ReactNode } from "react"
+import { useRef, type ReactNode } from "react"
 import { cn } from "@/lib/shared/utils"
+import { handleRovingKeyDown } from "./roving"
 
 export interface SegmentedOption<T extends string> {
   id: T
@@ -33,6 +34,7 @@ export function SegmentedControl<T extends string>({
   className,
 }: SegmentedControlProps<T>) {
   const sizing = sizeClasses[size]
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   return (
     <div
@@ -43,16 +45,32 @@ export function SegmentedControl<T extends string>({
         className,
       )}
     >
-      {options.map((opt) => {
+      {options.map((opt, i) => {
         const active = opt.id === value
         return (
           <button
             key={opt.id}
+            ref={(el) => { btnRefs.current[i] = el }}
             type="button"
             role="radio"
             aria-checked={active}
             disabled={opt.disabled}
+            // Roving tabindex: the checked radio is the only tab stop; arrows
+            // move selection across the group (WAI-ARIA radiogroup pattern).
+            tabIndex={active ? 0 : -1}
             onClick={() => onChange(opt.id)}
+            onKeyDown={(e) =>
+              handleRovingKeyDown(e, {
+                index: i,
+                count: options.length,
+                orientation: "horizontal",
+                isDisabled: (j) => !!options[j].disabled,
+                onMove: (n) => {
+                  onChange(options[n].id)
+                  btnRefs.current[n]?.focus()
+                },
+              })
+            }
             className={cn(
               "inline-flex items-center justify-center gap-1.5 rounded font-semibold transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]",

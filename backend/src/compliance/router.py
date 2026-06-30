@@ -11,7 +11,10 @@ from src.audit_log.recorder import ActorInfo, get_recorder
 from src.compliance.models import (
     ComplianceFindingBriefResponse,
     ComplianceFrameworkBrief,
+    ControlAssessmentResponse,
+    ControlAssessmentUpsert,
     ControlCreate,
+    MappingSuppressRequest,
     ControlFindingsResponse,
     ControlMappingResponse,
     ControlReadItem,
@@ -21,9 +24,13 @@ from src.compliance.models import (
     FrameworkControlsList,
     FrameworkCreate,
     FrameworkResponse,
+    FrameworkWithControlsCreate,
     FrameworkSummaryResponse,
     FrameworksList,
     FrameworkUpdate,
+    MappableFindingsResponse,
+    MappingCreateRequest,
+    MappingCreatedResponse,
 )
 from src.compliance.service import (
     ControlAlreadyExists,
@@ -34,6 +41,8 @@ from src.compliance.service import (
     add_control,
     build_attestation_payload,
     create_framework,
+    create_framework_with_controls,
+    create_manual_mapping,
     delete_control,
     delete_framework,
     get_controls_for_finding,
@@ -42,8 +51,11 @@ from src.compliance.service import (
     get_framework_summary,
     list_controls_for_framework,
     list_frameworks,
+    search_mappable_findings,
+    set_mapping_suppressed,
     update_control,
     update_framework,
+    upsert_control_assessment,
 )
 from src.db.helpers import run_db
 from src.exports.pdf import TEMPLATE_DIR, render_pdf
@@ -192,8 +204,10 @@ async def get_control_findings_handler(
     async def _query(session):
         if await get_framework(session, framework) is None:
             return None
+        # Include suppressed so the UI can render them greyed with a restore
+        # action; they're already excluded from the control's counts/status.
         return await get_findings_for_control(
-            session, framework, control_id, asset_ids=asset_ids,
+            session, framework, control_id, asset_ids=asset_ids, include_suppressed=True,
         )
 
     briefs = run_db(_query)
@@ -213,9 +227,46 @@ async def get_control_findings_handler(
                 identity_key=b.identity_key,
                 confidence=b.confidence,
                 rationale=b.rationale,
+                mapping_id=b.mapping_id,
+                suppressed=b.suppressed,
+                manual=b.manual,
             )
             for b in briefs
         ],
+    )
+
+
+@router.get(
+    "/frameworks/{framework}/controls/{control_id}/mappable-findings",
+    response_model=MappableFindingsResponse,
+    summary="Search findings that can be manually mapped to a control",
+)
+async def get_mappable_findings_handler(
+    framework: str,
+    control_id: str,
+    request: Request,
+    q: str | None = None,
+    limit: int = 20,
+    _: None = Depends(Permission(VIEW_FINDINGS)),
+) -> MappableFindingsResponse:
+    """Open, in-scope findings not already mapped to this control — the
+    candidates the analyst can add."""
+    asset_ids = await resolve_asset_ids_from_request(request)
+    limit = max(1, min(limit, 50))
+
+    async def _query(session):
+        if await get_framework(session, framework) is None:
+            return None
+        return await search_mappable_findings(
+            session, framework, control_id, q=q, asset_ids=asset_ids, limit=limit,
+        )
+
+    items = run_db(_query)
+    if items is None:
+        raise HTTPException(status_code=404, detail=f"Unknown framework: {framework}")
+    # The service already returns validated MappableFindingItem rows.
+    return MappableFindingsResponse(
+        findings=items,
     )
 
 
@@ -317,6 +368,49 @@ async def post_framework(
         resource_type="framework",
         resource_id=fw.id,
         metadata={"label": fw.label},
+    )
+    return FrameworkResponse.model_validate(fw)
+
+
+@router.post(
+    "/frameworks/with-controls",
+    status_code=201,
+    response_model=FrameworkResponse,
+    summary="Create a custom framework and its controls atomically",
+)
+async def post_framework_with_controls(
+    body: FrameworkWithControlsCreate,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> FrameworkResponse:
+    """Single-transaction create so a control failure can't orphan a
+    half-created framework — nothing persists unless everything validates."""
+    created_by = _identify_caller(request)
+
+    async def _query(session):
+        try:
+            return await create_framework_with_controls(
+                session,
+                framework_id=body.id,
+                label=body.label,
+                description=body.description,
+                controls=[c.model_dump() for c in body.controls],
+                created_by_user_id=created_by,
+            )
+        except FrameworkAlreadyExists as exc:
+            raise HTTPException(status_code=409, detail=f"framework {exc} already exists") from exc
+        except ControlAlreadyExists as exc:
+            raise HTTPException(status_code=422, detail=f"duplicate control id: {exc}") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    fw = run_db(_query)
+    _record_audit(
+        request=request,
+        action="framework.created",
+        resource_type="framework",
+        resource_id=fw.id,
+        metadata={"label": fw.label, "control_count": len(body.controls)},
     )
     return FrameworkResponse.model_validate(fw)
 
@@ -508,3 +602,149 @@ async def del_control(
         resource_type="framework_control",
         resource_id=f"{framework_id}:{control_id}",
     )
+
+
+@router.put(
+    "/frameworks/{framework}/controls/{control_id}/assessment",
+    response_model=ControlAssessmentResponse,
+    summary="Set or clear a control's manual attestation and evidence",
+)
+async def put_control_assessment(
+    framework: str,
+    control_id: str,
+    body: ControlAssessmentUpsert,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> ControlAssessmentResponse:
+    """Attest a control — bundled or custom. Unlike control CRUD, this is allowed
+    on bundled frameworks: you sign off on SOC 2 / ISO / PCI controls, you don't
+    edit them."""
+    async def _query(session):
+        try:
+            return await upsert_control_assessment(
+                session,
+                framework,
+                control_id,
+                status=body.status,
+                evidence_note=body.evidence_note,
+                evidence_url=body.evidence_url,
+                owner_user_id=body.owner_user_id,
+                due_date=body.due_date,
+                user_id=_identify_caller(request),
+            )
+        except FrameworkNotFound:
+            raise HTTPException(status_code=404, detail="framework not found")
+        except ControlNotFound:
+            raise HTTPException(status_code=404, detail="control not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    row = run_db(_query)
+    _record_audit(
+        request=request,
+        action="compliance.control_assessed",
+        resource_type="compliance_control",
+        resource_id=f"{framework}:{control_id}",
+        metadata={"status": row.status or "auto"},
+    )
+    return ControlAssessmentResponse(
+        framework=row.framework,
+        control_id=row.control_id,
+        status=row.status,
+        evidence_note=row.evidence_note,
+        evidence_url=row.evidence_url,
+        owner_user_id=row.owner_user_id,
+        due_date=row.due_date.isoformat() if row.due_date else None,
+        assessed_by=row.assessed_by_user_id,
+        assessed_at=row.assessed_at.isoformat() if row.assessed_at else None,
+    )
+
+
+@router.post(
+    "/frameworks/{framework}/controls/{control_id}/mappings",
+    status_code=201,
+    response_model=MappingCreatedResponse,
+    summary="Manually map a finding to a control",
+)
+async def post_control_mapping(
+    framework: str,
+    control_id: str,
+    body: MappingCreateRequest,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> MappingCreatedResponse:
+    """Add a finding→control mapping the auto-mapper missed. Scoped to the
+    caller's assets — mapping an out-of-scope finding 404s rather than letting
+    the caller probe finding ids."""
+    asset_ids = await resolve_asset_ids_from_request(request)
+
+    async def _query(session):
+        try:
+            return await create_manual_mapping(
+                session, framework, control_id, body.finding_id, asset_ids=asset_ids,
+            )
+        except FrameworkNotFound:
+            raise HTTPException(status_code=404, detail="framework not found")
+        except ControlNotFound:
+            raise HTTPException(status_code=404, detail="control not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    result = run_db(_query)
+    if result is None:
+        raise HTTPException(status_code=404, detail="finding not found")
+    row, created = result
+    if created:
+        _record_audit(
+            request=request,
+            action="compliance.mapping_added",
+            resource_type="compliance_mapping",
+            resource_id=str(row.id),
+            metadata={
+                "framework": framework,
+                "control_id": control_id,
+                "finding_id": body.finding_id,
+            },
+        )
+    return MappingCreatedResponse(
+        mapping_id=row.id, finding_id=body.finding_id, created=created,
+    )
+
+
+@router.patch(
+    "/mappings/{mapping_id}",
+    status_code=204,
+    summary="Suppress or restore an auto-generated finding→control mapping",
+)
+async def patch_mapping_suppression(
+    mapping_id: int,
+    body: MappingSuppressRequest,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> Response:
+    """Mark an auto-mapping as a false positive (or restore it). Scoped to the
+    caller's assets — a mapping on an out-of-scope finding 404s rather than
+    letting the caller probe mapping ids."""
+    asset_ids = await resolve_asset_ids_from_request(request)
+
+    async def _query(session):
+        return await set_mapping_suppressed(
+            session,
+            mapping_id,
+            suppressed=body.suppressed,
+            reason=body.reason,
+            user_id=_identify_caller(request),
+            asset_ids=asset_ids,
+        )
+
+    row = run_db(_query)
+    if row is None:
+        raise HTTPException(status_code=404, detail="mapping not found")
+    _record_audit(
+        request=request,
+        action="compliance.mapping_suppressed" if body.suppressed else "compliance.mapping_restored",
+        resource_type="compliance_mapping",
+        resource_id=str(mapping_id),
+        metadata={"framework": row.framework, "control_id": row.control_id},
+    )
+    return Response(status_code=204)

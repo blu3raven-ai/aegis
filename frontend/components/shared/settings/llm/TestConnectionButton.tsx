@@ -44,7 +44,7 @@ export function TestConnectionButton() {
       setState("failed")
       if (e instanceof ApiClientError) {
         if (e.status === 404) {
-          setError("LLM is not configured. Save your config first.")
+          setError("Argus is not configured. Save your config first.")
           return
         }
         const body = e.body as TestResult | null

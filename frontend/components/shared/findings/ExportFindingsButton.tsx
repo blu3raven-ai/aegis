@@ -30,7 +30,7 @@ export function ExportFindingsButton({ filters = {} }: ExportFindingsButtonProps
     return () => document.removeEventListener("mousedown", handleOutsideClick)
   }, [open])
 
-  function handleExport(format: "csv" | "json") {
+  function handleExport(format: "csv" | "json" | "sarif") {
     const url = buildFindingsExportUrl(filters, format)
     const a = document.createElement("a")
     a.href = url
@@ -84,6 +84,16 @@ export function ExportFindingsButton({ filters = {} }: ExportFindingsButtonProps
           >
             <span className="font-[family-name:var(--font-jetbrains-mono)] text-2xs text-[var(--color-text-tertiary)] w-10">JSONL</span>
             Newline JSON
+          </button>
+          <div className="h-px bg-[var(--color-border-divider)]" />
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => handleExport("sarif")}
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] transition-colors"
+          >
+            <span className="font-[family-name:var(--font-jetbrains-mono)] text-2xs text-[var(--color-text-tertiary)] w-10">SARIF</span>
+            Code scanning
           </button>
         </div>
       )}

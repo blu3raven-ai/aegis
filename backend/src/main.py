@@ -30,6 +30,7 @@ from src.auth.workspace.users_router import users_router as workspace_users_rout
 from src.settings.auth_security.router import auth_security_router
 from src.settings.scim.router import scim_settings_router
 from src.settings.sso.router import sso_router
+from src.settings.argus.router import router as argus_settings_router
 from src.settings.llm.router import router as llm_settings_router
 from src.settings.llm.usage_router import router as llm_usage_router
 from src.settings.general.router import router as settings_router
@@ -538,6 +539,7 @@ app.include_router(workspace_grants_router)
 app.include_router(workspace_teams_router)
 app.include_router(llm_settings_router)
 app.include_router(llm_usage_router)
+app.include_router(argus_settings_router)
 app.include_router(settings_router)
 app.include_router(organisations_router)
 app.include_router(source_connections_router)

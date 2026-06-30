@@ -1,19 +1,27 @@
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, select
+from sqlalchemy import select, text
 
-from src.db.models import Asset, Finding, Grant, Team, TeamMember
+from src.db.models import Finding  # noqa: F401  (kept for apply_scope select() tests)
+from src.db.models import Asset, Grant, Team, TeamMember
 from src.authz.enforcement.scope import apply_scope, get_user_asset_ids
+
+
+async def _clean_asset_graph(db_session):
+    # These tests count *all* assets, so any rows left by upstream files skew the
+    # results. TRUNCATE ... CASCADE clears assets + teams and every FK-dependent
+    # table (findings, scan_runs, grants, sbom, posture, ...) in one FK-safe
+    # statement — enumerating the 10 asset-referencing tables by hand is fragile,
+    # and some use ondelete=RESTRICT so an ordered DELETE would block.
+    await db_session.execute(text("TRUNCATE TABLE assets, teams RESTART IDENTITY CASCADE"))
+    await db_session.commit()
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def _clean_scope(db_session):
+    await _clean_asset_graph(db_session)
     yield
-    await db_session.execute(delete(Grant))
-    await db_session.execute(delete(TeamMember))
-    await db_session.execute(delete(Team))
-    await db_session.execute(delete(Asset))
-    await db_session.commit()
+    await _clean_asset_graph(db_session)
 
 
 @pytest.mark.asyncio

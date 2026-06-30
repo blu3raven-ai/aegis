@@ -40,8 +40,10 @@ def _make_app() -> FastAPI:
 class _Session:
     """Minimal async context manager standing in for get_session()."""
 
-    def __init__(self, findings):
+    def __init__(self, findings, user_rows=None):
         self._findings = findings
+        self._user_rows = user_rows or []
+        self.statements = []  # SQL statements passed to execute(), for scope assertions
 
     async def __aenter__(self):
         scalars = MagicMock()
@@ -49,16 +51,25 @@ class _Session:
         scalars.all.return_value = self._findings
         result = MagicMock()
         result.scalars.return_value = scalars
+        result.all.return_value = self._user_rows  # (id, username) rows for resolution
         session = MagicMock()
-        session.execute = AsyncMock(return_value=result)
+
+        async def _execute(stmt, *args, **kwargs):
+            self.statements.append(stmt)
+            return result
+
+        session.execute = AsyncMock(side_effect=_execute)
+        session.add = MagicMock()
+        session.commit = AsyncMock()
+        session.refresh = AsyncMock()
         return session
 
     async def __aexit__(self, *args):
         return None
 
 
-def _finding(*, id: int, asset_id: str | None, tool: str = "dependencies_scanning", key: str = "k") -> SimpleNamespace:
-    return SimpleNamespace(id=id, asset_id=asset_id, tool=tool, identity_key=key, org="acme")
+def _finding(*, id: int, asset_id: str | None, tool: str = "dependencies_scanning", key: str = "k", detail: dict | None = None) -> SimpleNamespace:
+    return SimpleNamespace(id=id, asset_id=asset_id, tool=tool, identity_key=key, org="acme", severity="high", detail=detail or {})
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +219,197 @@ def test_patch_finding_assignee_returns_404_when_service_raises_lookup_error():
             json={"assignee_user_id": "alice"},
         )
 
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /findings/{id}/secret-value — on-demand raw secret reveal
+# ---------------------------------------------------------------------------
+
+
+_SECRET_DETAIL = {"secretSnippet": "AKIAIOSFODNN7EXAMPLE", "raw": {"Secret": "AKIAIOSFODNN7EXAMPLE"}}
+
+
+def test_reveal_secret_returns_value_and_audits_when_in_scope():
+    finding = _finding(id=7, asset_id=_FAKE_ASSET_ID, tool="secret_scanning", detail=_SECRET_DETAIL)
+    records: list[dict] = []
+
+    def fake_record(*, action, actor_user_id=None, target=None, metadata=None, **_):
+        records.append({"action": action, "target": target})
+
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.record_event", side_effect=fake_record):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/7/secret-value")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"value": "AKIAIOSFODNN7EXAMPLE"}
+    assert records == [{"action": "finding.secret_revealed", "target": "7"}]
+
+
+def test_finding_lookup_is_scoped_at_sql_layer():
+    """The finding lookup must filter by asset scope in SQL — not only in the
+    Python backstop — so out-of-scope rows never leave Postgres (matching the
+    already-hardened bulk-PATCH path)."""
+    finding = _finding(id=7, asset_id=_FAKE_ASSET_ID, tool="secret_scanning", detail=_SECRET_DETAIL)
+    sess = _Session([finding])
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=sess), \
+         patch("src.findings.router.record_event"):
+        client = TestClient(_make_app())
+        client.get("/api/v1/findings/7/secret-value")
+    assert any("asset_id IN" in str(s) for s in sess.statements), \
+        "finding lookup is not scoped by asset_id at the SQL layer"
+
+
+def test_reveal_secret_checks_permission():
+    captured = {"perm": None}
+
+    def fake_require(_request, permission):
+        captured["perm"] = permission
+
+    finding = _finding(id=7, asset_id=_FAKE_ASSET_ID, tool="secret_scanning", detail=_SECRET_DETAIL)
+    with patch("src.findings.router.require_permission", side_effect=fake_require), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.record_event"):
+        client = TestClient(_make_app())
+        client.get("/api/v1/findings/7/secret-value")
+    assert captured["perm"] == "review_findings"
+
+
+def test_reveal_secret_404_when_out_of_scope():
+    finding = _finding(id=7, asset_id=_OTHER_ASSET_ID, tool="secret_scanning", detail=_SECRET_DETAIL)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.record_event") as rec:
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/7/secret-value")
+    assert resp.status_code == 404
+    rec.assert_not_called()
+
+
+def test_reveal_secret_404_for_non_secret_finding():
+    finding = _finding(id=7, asset_id=_FAKE_ASSET_ID, tool="code_scanning", detail=_SECRET_DETAIL)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.record_event"):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/7/secret-value")
+    assert resp.status_code == 404
+
+
+def test_reveal_secret_404_when_no_value_on_record():
+    finding = _finding(id=7, asset_id=_FAKE_ASSET_ID, tool="secret_scanning", detail={})
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.record_event"):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/7/secret-value")
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# POST/GET /findings/{id}/comments
+# ---------------------------------------------------------------------------
+
+
+def test_add_comment_stores_and_returns_it_when_in_scope():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.record_event") as rec:
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/comments", json={"comment": "looks exploitable"})
+    assert resp.status_code == 200
+    assert resp.json()["comment"]["body"] == "looks exploitable"
+    rec.assert_called_once()
+
+
+def test_add_comment_resolves_actor_to_username():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session",
+               return_value=_Session([finding], user_rows=[("viewer-1", "alice")])), \
+         patch("src.findings.router.record_event"):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/comments", json={"comment": "looks real"})
+    assert resp.status_code == 200
+    assert resp.json()["comment"]["actor"] == "alice"
+
+
+def test_add_comment_rejects_empty():
+    with patch("src.findings.router.require_permission"):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/comments", json={"comment": "   "})
+    assert resp.status_code == 400
+
+
+def test_add_comment_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.record_event") as rec:
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/comments", json={"comment": "hi"})
+    assert resp.status_code == 404
+    rec.assert_not_called()
+
+
+def test_get_finding_detail_returns_dict_when_in_scope():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.count_related_repos", new=AsyncMock(return_value=3)), \
+         patch("src.findings.router._finding_to_dict",
+               return_value={"id": "42", "description": "boom", "rule": "r"}):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42")
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "finding": {"id": "42", "description": "boom", "rule": "r", "also_affects_repos": 3}
+    }
+
+
+def test_get_finding_detail_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42")
+    assert resp.status_code == 404
+
+
+def test_list_comments_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/comments")
     assert resp.status_code == 404
 
 
@@ -397,6 +599,45 @@ def test_dismiss_finding_records_finding_dismissed_audit_event():
     assert records[0]["metadata"]["tool"] == "dependencies_scanning"
 
 
+def test_defer_finding_calls_lifecycle_and_records_audit():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    deferred = {"called": False}
+    records: list[dict] = []
+
+    def fake_defer(tool, key, user_id, *, asset_id=None, org=None):
+        deferred["called"] = True
+        deferred["asset_id"] = asset_id
+
+    def fake_record(*, action, actor_user_id=None, target=None, metadata=None, **_):
+        records.append({"action": action, "target": target})
+
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.defer_finding", side_effect=fake_defer), \
+         patch("src.findings.router.record_event", side_effect=fake_record):
+        client = TestClient(_make_app())
+        resp = client.patch("/api/v1/findings/42", json={"state": "deferred"})
+
+    assert resp.status_code == 200
+    assert deferred == {"called": True, "asset_id": _FAKE_ASSET_ID}
+    assert records == [{"action": "finding.deferred", "target": "42"}]
+
+
+def test_defer_finding_returns_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.defer_finding") as deferred:
+        client = TestClient(_make_app())
+        resp = client.patch("/api/v1/findings/42", json={"state": "deferred"})
+    assert resp.status_code == 404
+    deferred.assert_not_called()
+
+
 def test_reopen_finding_records_finding_reopened_audit_event():
     finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
     records: list[dict] = []
@@ -457,3 +698,87 @@ def test_bulk_dismiss_records_one_audit_event_per_finding_with_bulk_flag():
     targets = sorted(r["target"] for r in records)
     assert targets == ["1", "2"]
     assert all(r["metadata"].get("bulk") is True for r in records)
+
+
+# ---------------------------------------------------------------------------
+# GET /findings/{id}/advisory — Security Brief enrichment
+# ---------------------------------------------------------------------------
+
+_ADVISORY_DETAIL = {
+    "advisoryId": "GHSA-wr9h-g72x-mwhm",
+    "cveId": "CVE-2025-59425",
+    "cvssVector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "summary": "vLLM denial of service",
+    "vulnerableVersionRange": ">= 0, < 0.11.0",
+    "patchedVersion": "0.11.0",
+    "references": [{"url": "https://github.com/advisories/GHSA-wr9h-g72x-mwhm"}],
+}
+
+
+def test_get_advisory_returns_404_when_asset_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID, detail=_ADVISORY_DETAIL)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/advisory")
+    assert resp.status_code == 404
+
+
+def test_get_related_returns_404_when_asset_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.list_related_findings", new=AsyncMock(return_value=[])):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/related")
+    assert resp.status_code == 404
+
+
+def test_get_related_returns_list_for_scoped_finding():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    related = [{"finding_id": "7", "repo": "acme/api", "severity": "high", "state": "open"}]
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.list_related_findings", new=AsyncMock(return_value=related)):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/related")
+    assert resp.status_code == 200
+    assert resp.json() == {"related": related}
+
+
+def test_get_advisory_returns_null_for_finding_without_advisory():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID, tool="code_scanning", detail={})
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/advisory")
+    assert resp.status_code == 200
+    assert resp.json() == {"advisory": None}
+
+
+def test_get_advisory_returns_brief_with_epss_and_kev_for_scoped_finding():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID, detail=_ADVISORY_DETAIL)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router.advisory_intel",
+               new=AsyncMock(return_value={"epss_percentile": 0.97, "kev": True})):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/advisory")
+    assert resp.status_code == 200
+    adv = resp.json()["advisory"]
+    assert adv["advisory_id"] == "GHSA-wr9h-g72x-mwhm"
+    assert adv["cve_id"] == "CVE-2025-59425"
+    assert adv["cvss_vector"].startswith("CVSS:3.1/")
+    assert adv["fixed_version"] == "0.11.0"
+    assert adv["epss_percentile"] == 0.97
+    assert adv["kev"] is True

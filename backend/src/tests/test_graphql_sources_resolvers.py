@@ -264,7 +264,9 @@ def test_list_connection_runs_maps_and_scopes(monkeypatch):
 
     class _AssetsResult:
         def all(self):
-            return [(_FAKE_REPO_ID, "acme-org/api")]
+            # (id, display_name, external_ref) — owner segment ties the asset to
+            # the connection's org (source_ref is never populated).
+            return [(_FAKE_REPO_ID, "acme-org/api", "github:acme-org/api")]
 
     class _RunsScalars:
         def all(self):
@@ -294,6 +296,10 @@ def test_list_connection_runs_maps_and_scopes(monkeypatch):
             loop.close()
 
     monkeypatch.setattr(srr, "run_db", _fake_run_db)
+    monkeypatch.setattr(
+        srr.sources_store, "get_connection",
+        lambda _cid: {"auth": {"orgOrOwner": "acme-org"}},
+    )
 
     out = srr._list_connection_runs("conn-1", [_FAKE_REPO_ID], limit=50)
     assert len(out) == 1
@@ -327,6 +333,10 @@ def test_list_connection_runs_empty_when_no_assets_in_scope(monkeypatch):
             loop.close()
 
     monkeypatch.setattr(srr, "run_db", _fake_run_db)
+    monkeypatch.setattr(
+        srr.sources_store, "get_connection",
+        lambda _cid: {"auth": {"orgOrOwner": "acme-org"}},
+    )
     assert srr._list_connection_runs("conn-1", [_FAKE_REPO_ID], limit=50) == []
 
 

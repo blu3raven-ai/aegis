@@ -20,6 +20,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
+from runner.scanners._argus import argus_configured, verify_via_argus
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
     BaseScanConfig,
@@ -243,12 +244,20 @@ class SecretsScanner:
             except json.JSONDecodeError:
                 logger.warning("[!] skip non-JSON line in %s", findings_file)
 
-        verified = _maybe_verify_secrets(
-            findings=raw_findings,
-            repo_root=repo_root,
-            llm=_build_llm_client(env),
-            scan_budget=_build_scan_budget(env),
-        )
+        if argus_configured(env):
+            verified = verify_via_argus(
+                scanner="secrets",
+                findings=raw_findings,
+                repo_root=repo_root,
+                env=env,
+            )
+        else:
+            verified = _maybe_verify_secrets(
+                findings=raw_findings,
+                repo_root=repo_root,
+                llm=_build_llm_client(env),
+                scan_budget=_build_scan_budget(env),
+            )
 
         with open(findings_file, "w") as f:
             for finding in verified:
@@ -312,6 +321,12 @@ class SecretsScanner:
                         scan_scope=scan_scope,
                     )
                 )
+            # Capture each finding's code window from the clone now — the clone
+            # is removed in the finally below, and normalization (which builds
+            # the findings) runs only after every repo's clone is gone.
+            for output in produced:
+                normalize.capture_secret_windows(output, clone_dir)
+
             self._cleanup_empty_results(repo_out)
 
             for f in sorted(repo_out.glob("*.json")):

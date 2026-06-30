@@ -202,3 +202,83 @@ def test_budget_split_passed_to_correlator(tmp_path):
     # 60/40 default split
     assert result.plan.budget.total == 10_000
     assert result.plan.budget.correlation_pool == 4_000
+
+
+# ---------------------------------------------------------------------------
+# correlate_fn seam (remote Argus route)
+# ---------------------------------------------------------------------------
+
+
+def _valid_chain_dict(ids: list[str]) -> dict:
+    return {
+        "correlation_id": "corr-0001",
+        "verdict": "chain_confirmed",
+        "chain_severity": "high",
+        "chain_description": "chain",
+        "source_finding_ids": ids,
+    }
+
+
+def test_correlate_fn_produces_parsed_findings(tmp_path):
+    findings = _two_scanner_findings()
+    seen = {}
+
+    def fake_correlate(fs, budget):
+        seen["findings"] = fs
+        seen["budget"] = budget
+        return [_valid_chain_dict(["f1", "f2"])]
+
+    result = run_aggregate_verification(
+        findings, repo_root_for=tmp_path, correlate_fn=fake_correlate
+    )
+
+    assert len(result.correlated_findings) == 1
+    assert result.correlated_findings[0].source_finding_ids == ["f1", "f2"]
+    assert seen["budget"] == result.plan.budget.correlation_pool
+    # to_dict round-trips the parsed CorrelatedFinding
+    payload = result.to_dict()
+    assert json.dumps(payload)
+    assert payload["correlated_findings"][0]["source_finding_ids"] == ["f1", "f2"]
+
+
+def test_correlate_fn_takes_precedence_over_llm(tmp_path):
+    findings = _two_scanner_findings()
+    llm = _StubLlm([_final(_chain_json(["f1", "f2"]))])
+
+    result = run_aggregate_verification(
+        findings,
+        repo_root_for=tmp_path,
+        llm=llm,
+        correlate_fn=lambda fs, b: [_valid_chain_dict(["f1", "f2"])],
+    )
+
+    # The local llm path must not be exercised when correlate_fn is supplied.
+    assert llm.call_count == 0
+    assert len(result.correlated_findings) == 1
+
+
+def test_correlate_fn_skips_malformed_rows(tmp_path):
+    findings = _two_scanner_findings()
+
+    result = run_aggregate_verification(
+        findings,
+        repo_root_for=tmp_path,
+        correlate_fn=lambda fs, b: [{"not": "a-chain"}, _valid_chain_dict(["f1", "f2"])],
+    )
+
+    # Bad row dropped, valid row kept — never crashes.
+    assert len(result.correlated_findings) == 1
+
+
+def test_correlate_fn_failure_does_not_block_dedupe(tmp_path):
+    findings = _two_scanner_findings()
+
+    def boom(fs, b):
+        raise RuntimeError("argus down")
+
+    result = run_aggregate_verification(
+        findings, repo_root_for=tmp_path, correlate_fn=boom
+    )
+
+    assert result.correlated_findings == []
+    assert result.summary["final_primaries"] == 2

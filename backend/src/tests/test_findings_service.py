@@ -11,6 +11,11 @@ from sqlalchemy import delete
 from src.findings.service import (
     _finding_to_dict,
     _normalize_filters,
+    _secret_verified,
+    advisory_intel,
+    count_related_repos,
+    finding_advisory,
+    list_related_findings,
     FindingsListFilters,
     MAX_ASSIGNABLE_USERS_LIMIT,
     VALID_SORTS,
@@ -53,6 +58,10 @@ def make_finding(**overrides) -> Finding:
     f.updated_at = overrides.get("updated_at", None)
     f.risk_score = overrides.get("risk_score", None)
     f.assignee_user_id = overrides.get("assignee_user_id", None)
+    f.recommended_fix = overrides.get("recommended_fix", None)
+    f.evidence = overrides.get("evidence", None)
+    f.exploit_chain = overrides.get("exploit_chain", None)
+    f.verification_metadata = overrides.get("verification_metadata", None)
     return f
 
 
@@ -157,6 +166,287 @@ def test_finding_dict_includes_risk_score_when_set():
     assert out["risk_score"] == 82
 
 
+def test_finding_dict_action_band_act_for_kev_critical():
+    lookup = FakeKevLookup({"CVE-2021-44228"}, {})
+    out = _finding_to_dict(make_finding(severity="critical"), kev_lookup=lookup)
+    assert out["action_band"] == "act"
+
+
+def test_finding_dict_action_band_track_for_no_signal_medium():
+    lookup = FakeKevLookup(set(), {})
+    out = _finding_to_dict(
+        make_finding(severity="medium", cve_id=None, detail={}), kev_lookup=lookup
+    )
+    assert out["action_band"] == "track"
+
+
+def test_finding_dict_surfaces_recommended_fix_from_detail():
+    payload = {
+        "packageName": "log4j-core",
+        "fromVersion": "2.14.0",
+        "toVersion": "2.17.1",
+        "description": "Patch release — no API changes",
+    }
+    out = _finding_to_dict(make_finding(detail={"recommended_fix": payload}))
+    assert out["recommended_fix"] == payload
+
+
+def test_finding_dict_recommended_fix_none_when_detail_empty():
+    out = _finding_to_dict(make_finding(detail={}))
+    assert out["recommended_fix"] is None
+
+
+def test_deps_title_uses_readable_package_slug_not_identity_key():
+    out = _finding_to_dict(
+        make_finding(
+            tool="dependencies",
+            title="ryt-action-ai::vllm::PyPI::GHSA-wr9h-g72x-mwhm::",
+            identity_key="ryt-action-ai::vllm::PyPI::GHSA-wr9h-g72x-mwhm::",
+            package_name="vllm",
+            detail={"package_version": "0.7.3"},
+        )
+    )
+    assert out["title"] == "vllm 0.7.3"
+
+
+def test_deps_title_without_version_is_bare_package():
+    out = _finding_to_dict(
+        make_finding(tool="dependencies", title=None, package_name="vllm", detail={})
+    )
+    assert out["title"] == "vllm"
+
+
+def test_non_package_finding_title_falls_back_to_title_then_cve():
+    out = _finding_to_dict(
+        make_finding(tool="iac_scanning", title="S3 bucket is public", package_name=None)
+    )
+    assert out["title"] == "S3 bucket is public"
+
+
+# The deps/container lifecycle flattens the advisory into these top-level
+# detail keys (no nested security_advisory dict is persisted).
+_ADVISORY_FLAT_DETAIL = {
+    "advisoryId": "GHSA-wr9h-g72x-mwhm",
+    "cveId": "CVE-2025-59425",
+    "cvssVector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+    "summary": "vLLM denial of service",
+    "description": "A crafted request crashes the server.",
+    "vulnerableVersionRange": ">= 0, < 0.11.0",
+    "patchedVersion": "0.11.0",
+    "publishedAt": "2025-09-01T00:00:00Z",
+    "references": [
+        {"url": "https://github.com/advisories/GHSA-wr9h-g72x-mwhm"},
+        {"type": "WEB"},  # no url — dropped
+    ],
+}
+
+
+def test_finding_advisory_surfaces_the_brief_from_flat_detail_keys():
+    out = finding_advisory(
+        make_finding(
+            tool="dependencies",
+            severity="high",
+            package_name="vllm",
+            detail=_ADVISORY_FLAT_DETAIL,
+        )
+    )
+    assert out is not None
+    assert out["advisory_id"] == "GHSA-wr9h-g72x-mwhm"
+    assert out["cve_id"] == "CVE-2025-59425"
+    assert out["severity"] == "high"
+    assert out["cvss_vector"].startswith("CVSS:3.1/")
+    assert out["summary"] == "vLLM denial of service"
+    assert out["affected_range"] == ">= 0, < 0.11.0"
+    assert out["fixed_version"] == "0.11.0"
+    assert out["references"] == ["https://github.com/advisories/GHSA-wr9h-g72x-mwhm"]
+
+
+def test_finding_advisory_none_when_no_advisory_keys():
+    assert finding_advisory(make_finding(tool="code_scanning", detail={})) is None
+
+
+def test_secret_verified_from_scanner_classification():
+    history = [{"source": "scanner", "value": "verified_secret"}]
+    assert _secret_verified({"classificationHistory": history}) is True
+    history = [{"source": "scanner", "value": "uncertain"}]
+    assert _secret_verified({"classificationHistory": history}) is False
+
+
+def test_secret_verified_falls_back_to_raw_flag():
+    assert _secret_verified({"raw": {"Verified": True}}) is True
+    assert _secret_verified({"raw": {"Verified": False}}) is False
+
+
+def test_secret_verified_none_when_unknown():
+    assert _secret_verified({}) is None
+    assert _secret_verified({"raw": {}}) is None
+
+
+def test_finding_dict_exposes_secret_detector_and_validity():
+    out = _finding_to_dict(
+        make_finding(
+            tool="secret_scanning",
+            detail={
+                "detector": "AWS",
+                "classificationHistory": [{"source": "scanner", "value": "verified_secret"}],
+            },
+        )
+    )
+    assert out["secret_detector"] == "AWS secret"
+    assert out["secret_verified"] is True
+
+
+def test_finding_dict_secret_fields_none_for_non_secret():
+    out = _finding_to_dict(make_finding(tool="dependencies", package_name="vllm", detail={}))
+    assert out["secret_detector"] is None
+    assert out["secret_verified"] is None
+
+
+def test_finding_dict_exposes_introducing_commit():
+    out = _finding_to_dict(
+        make_finding(tool="secret_scanning", detail={"commit": "abc123def4567890"})
+    )
+    assert out["introduced_by_commit"] == "abc123def4567890"
+
+
+def test_finding_dict_introducing_commit_none_when_absent():
+    out = _finding_to_dict(make_finding(tool="dependencies", package_name="vllm", detail={}))
+    assert out["introduced_by_commit"] is None
+
+
+def test_finding_dict_exposes_container_image_context():
+    out = _finding_to_dict(
+        make_finding(
+            tool="container_scanning",
+            package_name="openssl",
+            detail={
+                "imageName": "acme/api",
+                "imageTag": "1.4.2",
+                "imageDigest": "sha256:abcd",
+                "baseOs": "debian 12",
+                "layerCount": "9",
+            },
+        )
+    )
+    img = out["container_image"]
+    assert img == {
+        "name": "acme/api",
+        "tag": "1.4.2",
+        "digest": "sha256:abcd",
+        "base_os": "debian 12",
+        "layer_count": 9,
+    }
+
+
+def test_finding_dict_container_image_none_for_non_container_or_missing_image():
+    assert _finding_to_dict(make_finding(tool="dependencies", package_name="vllm", detail={}))[
+        "container_image"
+    ] is None
+    assert _finding_to_dict(make_finding(tool="container_scanning", detail={}))[
+        "container_image"
+    ] is None
+
+
+def test_finding_to_dict_hydrates_fat_code_window_for_detail_view(monkeypatch):
+    import src.shared.finding_detail_blob as blob_mod
+
+    # In production the code window lives in the fat blob, stripped from the
+    # lean column — the detail view must hydrate to surface it.
+    monkeypatch.setattr(
+        blob_mod,
+        "download_json",
+        lambda key: {"code_window": "def f():\n    eval(x)", "code_window_start_line": 10},
+    )
+    finding = make_finding(tool="code_scanning", detail={"startLine": 11, "endLine": 11})
+    finding.detail_blob_key = "blob/key"
+    out = _finding_to_dict(finding, hydrate=True)
+    assert out["code_snippet"] is not None
+    assert "eval" in out["code_snippet"]
+
+
+def test_finding_to_dict_list_path_stays_lean_no_blob_read(monkeypatch):
+    import src.shared.finding_detail_blob as blob_mod
+
+    calls = {"n": 0}
+
+    def _spy(key):
+        calls["n"] += 1
+        return {"code_window": "x"}
+
+    monkeypatch.setattr(blob_mod, "download_json", _spy)
+    finding = make_finding(tool="code_scanning", detail={"startLine": 11})
+    finding.detail_blob_key = "blob/key"
+    out = _finding_to_dict(finding)  # hydrate defaults False
+    assert calls["n"] == 0
+    assert out["code_snippet"] is None
+
+
+@pytest.mark.asyncio
+async def test_advisory_intel_none_cve_returns_empty(db_session):
+    out = await advisory_intel(None, db_session)
+    assert out == {"epss_percentile": None, "kev": False, "kev_detail": None}
+
+
+@pytest.mark.asyncio
+async def test_advisory_intel_returns_epss_percentile_and_kev_detail(db_session):
+    from datetime import date
+
+    from src.db.models import EpssScore, KevEntry
+
+    cve = "CVE-2099-0001"
+    db_session.add(EpssScore(cve=cve, score=0.42, percentile=0.97, scored_date=date(2026, 6, 1)))
+    db_session.add(
+        KevEntry(
+            cve_id=cve,
+            due_date=date(2026, 7, 15),
+            date_added=date(2026, 6, 24),
+            known_ransomware_use=True,
+        )
+    )
+    await db_session.commit()
+    try:
+        out = await advisory_intel(cve, db_session)
+        assert out["epss_percentile"] == 0.97
+        assert out["kev"] is True
+        assert out["kev_detail"] == {
+            "due_date": "2026-07-15",
+            "date_added": "2026-06-24",
+            "known_ransomware": True,
+        }
+    finally:
+        await db_session.execute(delete(EpssScore).where(EpssScore.cve == cve))
+        await db_session.execute(delete(KevEntry).where(KevEntry.cve_id == cve))
+        await db_session.commit()
+
+
+def test_finding_dict_surfaces_verification_reasoning():
+    evidence = [
+        {"file": "app/views.py", "line": 10, "snippet": "q = request.GET['q']", "kind": "source"},
+        {"file": "app/db.py", "line": 42, "snippet": "cursor.execute(q)", "kind": "sink"},
+    ]
+    meta = {"model": "argus", "tokens_in": 1200, "tokens_out": 80}
+    out = _finding_to_dict(
+        make_finding(
+            evidence=evidence,
+            exploit_chain="Tainted query param flows into a raw SQL execute.",
+            verification_metadata=meta,
+            detail={"reachability": "reachable"},
+        )
+    )
+    assert out["evidence"] == evidence
+    assert out["exploit_chain"] == "Tainted query param flows into a raw SQL execute."
+    assert out["verification_metadata"] == meta
+    assert out["reachability"] == "reachable"
+
+
+def test_finding_dict_verification_reasoning_none_when_unverified():
+    out = _finding_to_dict(make_finding(detail={}))
+    assert out["evidence"] is None
+    assert out["exploit_chain"] is None
+    assert out["verification_metadata"] is None
+    assert out["reachability"] is None
+
+
 def test_normalize_filters_accepts_assignee_user_id():
     f = _normalize_filters(FindingsListFilters(org_id="org-1", assignee_user_id="user-42"))
     assert f.assignee_user_id == "user-42"
@@ -185,6 +475,206 @@ def test_finding_dict_includes_assignee_user_id_when_set():
     finding = make_finding(assignee_user_id="user-42")
     out = _finding_to_dict(finding)
     assert out["assignee_user_id"] == "user-42"
+
+
+def test_secret_finding_title_shows_detector_not_identity_hash():
+    # Secret findings have no real title and a hash::repo identity key; the
+    # public title must read as the secret type, never the leaked hash.
+    finding = make_finding(
+        tool="secret_scanning",
+        title=None,
+        identity_key="fdcbc1f7e9a0a0809ed791b68260ac9edfbf109ff8734c14d37334001bfe94d8::ryt-action-ai",
+        detail={"detector": "AWS"},
+    )
+    out = _finding_to_dict(finding)
+    assert out["title"] == "AWS secret"
+    assert "::" not in out["title"]
+
+
+def test_secret_finding_title_humanises_hyphenated_detector():
+    finding = make_finding(
+        tool="secret_scanning", title=None, detail={"detector": "github-pat"}
+    )
+    assert _finding_to_dict(finding)["title"] == "github pat secret"
+
+
+def test_secret_finding_title_falls_back_when_detector_missing():
+    finding = make_finding(
+        tool="secret_scanning", title=None, identity_key="abc123::repo", detail={}
+    )
+    out = _finding_to_dict(finding)
+    assert out["title"] == "Detected secret"
+    assert "::" not in out["title"]
+
+
+def test_secret_finding_detector_already_descriptive_not_doubled():
+    finding = make_finding(
+        tool="secret_scanning", title=None, detail={"detector": "Stripe API Key"}
+    )
+    assert _finding_to_dict(finding)["title"] == "Stripe API Key"
+
+
+def test_code_snippet_exposed_for_sast():
+    finding = make_finding(
+        tool="code_scanning", detail={"snippet": "eval(user_input)"}
+    )
+    assert _finding_to_dict(finding)["code_snippet"] == "eval(user_input)"
+
+
+def test_code_snippet_for_deps_uses_manifest_snippet():
+    finding = make_finding(
+        tool="dependencies_scanning", detail={"manifestSnippet": "log4j-core==2.14.0"}
+    )
+    assert _finding_to_dict(finding)["code_snippet"] == "log4j-core==2.14.0"
+
+
+def test_secret_code_snippet_never_leaks_raw_value():
+    # The raw secret lives in secretSnippet / raw.Secret; the preview must use
+    # only the redacted match so a live credential never reaches the client.
+    finding = make_finding(
+        tool="secret_scanning",
+        title=None,
+        detail={
+            "detector": "AWS",
+            "secretSnippet": "AKIAIOSFODNN7EXAMPLE",
+            "raw": {"Secret": "AKIAIOSFODNN7EXAMPLE", "Redacted": "AKIA****************"},
+        },
+    )
+    snippet = _finding_to_dict(finding)["code_snippet"]
+    assert snippet == "AKIA****************"
+    assert "AKIAIOSFODNN7EXAMPLE" not in (snippet or "")
+
+
+def test_code_snippet_none_when_absent():
+    assert _finding_to_dict(make_finding(detail={}))["code_snippet"] is None
+
+
+def test_code_flows_exposed_when_present():
+    flows = [
+        {"file": "a.py", "line": 3, "snippet": "x = req.args['q']"},
+        {"file": "a.py", "line": 9, "snippet": "db.execute(x)"},
+    ]
+    out = _finding_to_dict(make_finding(tool="code_scanning", detail={"code_flows": flows}))
+    assert out["code_flows"] == flows
+    assert _finding_to_dict(make_finding(detail={}))["code_flows"] is None
+
+
+def test_code_window_anchored_and_highlighted():
+    finding = make_finding(
+        tool="code_scanning",
+        detail={
+            "code_window": "a\nb\nc\nd\ne",
+            "code_window_start_line": 90,
+            "startLine": 92,
+            "endLine": 93,
+        },
+    )
+    out = _finding_to_dict(finding)
+    assert out["code_snippet"] == "a\nb\nc\nd\ne"
+    assert out["code_snippet_start_line"] == 90
+    assert out["code_highlight_start"] == 92
+    assert out["code_highlight_end"] == 93
+
+
+def test_code_window_start_line_derived_for_legacy_data():
+    # Window stored before the runner emitted its start line: anchor it from the
+    # finding line and the known context radius so highlighting still works.
+    finding = make_finding(
+        tool="code_scanning",
+        detail={"code_window": "x\ny\nz", "startLine": 50},
+    )
+    out = _finding_to_dict(finding)
+    assert out["code_snippet_start_line"] == 10  # max(1, 50 - 40)
+    assert out["code_highlight_start"] == 50
+
+
+def test_bare_snippet_highlights_itself_anchored_to_start_line():
+    finding = make_finding(
+        tool="code_scanning",
+        detail={"snippet": "eval(x)", "startLine": 7},
+    )
+    out = _finding_to_dict(finding)
+    assert out["code_snippet"] == "eval(x)"
+    assert out["code_snippet_start_line"] == 7
+    assert out["code_highlight_start"] == 7
+    assert out["code_highlight_end"] == 7
+
+
+def test_deps_preview_anchors_to_manifest_match_line():
+    finding = make_finding(
+        tool="dependencies_scanning",
+        detail={"manifestSnippet": "log4j-core==2.14.0", "manifestMatchLine": 12},
+    )
+    out = _finding_to_dict(finding)
+    assert out["code_snippet"] == "log4j-core==2.14.0"
+    assert out["code_snippet_start_line"] == 12
+    assert out["code_highlight_start"] == 12
+    assert out["code_highlight_end"] == 12
+
+
+def test_iac_finding_gets_anchored_highlighted_snippet():
+    finding = make_finding(
+        tool="iac_scanning",
+        detail={"snippet": "resource aws_s3_bucket {}", "startLine": 5},
+    )
+    out = _finding_to_dict(finding)
+    assert out["code_snippet"] == "resource aws_s3_bucket {}"
+    assert out["code_snippet_start_line"] == 5
+    assert out["code_highlight_start"] == 5
+
+
+def test_secret_preview_has_no_line_anchoring():
+    finding = make_finding(
+        tool="secret_scanning",
+        title=None,
+        detail={"raw": {"Redacted": "AKIA****"}},
+    )
+    out = _finding_to_dict(finding)
+    assert out["code_snippet"] == "AKIA****"
+    assert out["code_snippet_start_line"] is None
+    assert out["code_highlight_start"] is None
+
+
+def test_sast_finding_surfaces_triage_fields():
+    # An analyst needs the explanation, rule, weakness, and fix — all of which
+    # live in detail and must reach the response.
+    finding = make_finding(
+        tool="code_scanning",
+        title="repo:/workspace/job-abc/server.py:py.rule.id:93",
+        cve_id=None,
+        detail={
+            "message": "Detected subprocess call with shell=True; this allows command injection.",
+            "ruleName": "dangerous-subprocess-use",
+            "cwe": ["CWE-78"],
+            "confidence": "High",
+            "fixSuggestion": "Pass args as a list and set shell=False.",
+            "startLine": 93,
+        },
+    )
+    out = _finding_to_dict(finding)
+    # Title becomes the human message, not the leaked clone path.
+    assert out["title"] == "Detected subprocess call with shell=True; this allows command injection."
+    assert "/workspace/" not in out["title"]
+    assert out["description"].startswith("Detected subprocess call")
+    assert out["rule"] == "dangerous-subprocess-use"
+    assert out["cwe"] == "CWE-78"
+    assert out["confidence"] == "high"
+    assert out["remediation"] == "Pass args as a list and set shell=False."
+    assert out["line"] == 93
+
+
+def test_sast_title_falls_back_to_rule_then_raw_title():
+    by_rule = _finding_to_dict(make_finding(
+        tool="code_scanning", title="leaked", detail={"ruleName": "sql-injection"}))
+    assert by_rule["title"] == "sql-injection"
+
+
+def test_triage_fields_absent_for_plain_finding():
+    out = _finding_to_dict(make_finding(detail={}))
+    assert out["description"] is None
+    assert out["rule"] is None
+    assert out["remediation"] is None
+    assert out["confidence"] is None
 
 
 def test_normalize_filters_accepts_more_filters_fields():
@@ -422,6 +912,22 @@ async def test_upsert_finding_accepts_null_asset_id_for_secrets(db_session, _iso
     assert f.asset_id is None
 
 
+@pytest.mark.asyncio
+async def test_upsert_finding_promotes_recommended_fix_from_detail(
+    db_session, _isolated_upsert_finding
+):
+    from src.shared.finding_queries import upsert_finding
+
+    fix = {"kind": "rotation", "title": "Rotate the leaked AWS key"}
+    f = await upsert_finding(
+        db_session, tool="secret_scanning", asset_id=None,
+        org="acme", repo=None,
+        identity_key=f"ut-upsert-{uuid4()}", state="open", severity="high",
+        detail={"recommended_fix": fix},
+    )
+    assert f.recommended_fix == fix
+
+
 # Verdict filter normalization
 
 def test_normalize_filters_accepts_known_verdict():
@@ -462,3 +968,251 @@ def test_normalize_filters_drops_blank_repos_and_caps_count():
     )
     assert out.repo[0] == "github:acme/a"   # trimmed, blanks removed
     assert len(out.repo) == 500              # count capped
+
+
+def test_deps_upgrade_fix_synthesizes_full_payload():
+    finding = make_finding(
+        tool="dependencies_scanning",
+        package_name="lodash",
+        detail={"patchedVersion": "4.17.21", "currentVersion": "4.17.10"},
+    )
+    out = _finding_to_dict(finding)
+    assert out["recommended_fix"] == {
+        "packageName": "lodash",
+        "fromVersion": "4.17.10",
+        "toVersion": "4.17.21",
+    }
+
+
+def test_deps_upgrade_fix_handles_dict_patched_version_shape():
+    # Robustness: handle the raw {"identifier": "..."} shape in case it's
+    # stored before the normalizer extracted the string.
+    finding = make_finding(
+        tool="dependencies_scanning",
+        package_name="lodash",
+        detail={
+            "patchedVersion": {"identifier": "4.17.21"},
+            "currentVersion": "4.17.10",
+        },
+    )
+    out = _finding_to_dict(finding)
+    assert out["recommended_fix"] is not None
+    assert out["recommended_fix"]["toVersion"] == "4.17.21"
+
+
+def test_deps_upgrade_fix_none_when_no_patched_version():
+    finding = make_finding(
+        tool="dependencies_scanning",
+        package_name="lodash",
+        detail={"currentVersion": "4.17.10"},
+    )
+    out = _finding_to_dict(finding)
+    assert out["recommended_fix"] is None
+
+
+def test_deps_upgrade_fix_skipped_for_non_deps_tool():
+    finding = make_finding(
+        tool="code_scanning",
+        detail={"patchedVersion": "1.0.1"},
+    )
+    out = _finding_to_dict(finding)
+    assert out["recommended_fix"] is None
+
+
+def test_stored_recommended_fix_takes_precedence_over_synthesis():
+    stored = {
+        "packageName": "log4j-core",
+        "fromVersion": "2.14.0",
+        "toVersion": "2.17.1",
+    }
+    finding = make_finding(
+        tool="dependencies_scanning",
+        package_name="log4j-core",
+        detail={
+            "recommended_fix": stored,
+            "patchedVersion": "2.15.0",
+            "currentVersion": "2.14.0",
+        },
+    )
+    out = _finding_to_dict(finding)
+    assert out["recommended_fix"] == stored
+
+
+def test_recommended_fix_column_serialized_for_non_deps_finding():
+    fix = {"kind": "rotation", "title": "Rotate the leaked AWS key"}
+    finding = make_finding(
+        tool="secret_scanning",
+        cve_id=None,
+        package_name=None,
+        recommended_fix=fix,
+    )
+    out = _finding_to_dict(finding)
+    assert out["recommended_fix"] == fix
+
+
+def test_recommended_fix_column_wins_over_deps_synthesis():
+    fix = {"kind": "rotation", "title": "Rotate the leaked AWS key"}
+    finding = make_finding(
+        tool="dependencies_scanning",
+        package_name="lodash",
+        detail={"patchedVersion": "4.17.21", "currentVersion": "4.17.10"},
+        recommended_fix=fix,
+    )
+    out = _finding_to_dict(finding)
+    assert out["recommended_fix"] == fix
+
+
+def test_has_fix_true_for_deps_synthesized_fix():
+    from src.findings.resolvers import _row_from_dict
+    finding = make_finding(
+        tool="dependencies_scanning",
+        package_name="lodash",
+        detail={"patchedVersion": "4.17.21", "currentVersion": "4.17.10"},
+    )
+    row = _row_from_dict(_finding_to_dict(finding))
+    assert row.has_fix is True
+
+
+def test_has_fix_true_for_column_set_finding():
+    from src.findings.resolvers import _row_from_dict
+    finding = make_finding(
+        tool="secret_scanning",
+        cve_id=None,
+        package_name=None,
+        recommended_fix={"kind": "rotation", "title": "Rotate the leaked AWS key"},
+    )
+    row = _row_from_dict(_finding_to_dict(finding))
+    assert row.has_fix is True
+
+
+def test_has_fix_false_when_no_fix_available():
+    from src.findings.resolvers import _row_from_dict
+    finding = make_finding(
+        tool="secret_scanning",
+        cve_id=None,
+        package_name=None,
+        detail={},
+    )
+    row = _row_from_dict(_finding_to_dict(finding))
+    assert row.has_fix is False
+
+
+def test_cursor_predicate_returns_none_for_deferred_sorts():
+    """A stray/stale cursor under a page-number sort must not inject a keyset
+    clause keyed on the wrong column (it would silently scramble the page)."""
+    from src.findings.service import _cursor_predicate
+
+    payload = {"id": "00000000-0000-0000-0000-000000000001", "ts": "2026-01-01T00:00:00"}
+    for sort in ("action_band", "risk_score", "severity_age", "epss", "newest", "oldest"):
+        assert _cursor_predicate(payload, sort, "desc") is None
+        assert _cursor_predicate(payload, sort, "asc") is None
+
+
+def test_code_preview_secret_uses_redacted_window():
+    from src.findings.service import _code_preview
+
+    detail = {
+        "raw": {"Raw": "leaked-value", "Redacted": "le...ue"},
+        "code_window": "FOO=bar\nKEY=•••redacted-secret•••\nBAZ=qux",
+        "code_window_start_line": 10,
+        "line": 11,
+    }
+    preview = _code_preview("secret_scanning", detail)
+    assert preview is not None
+    assert "leaked-value" not in preview["text"]
+    assert preview["start_line"] == 10
+    assert preview["highlight_start"] == 11
+
+
+def test_code_preview_secret_window_remasks_raw_value():
+    """Defense in depth: even if the runner missed a value, the backend re-masks it."""
+    from src.findings.service import _code_preview
+
+    detail = {
+        "raw": {"Raw": "still-here-secret"},
+        "code_window": "A=1\nKEY=still-here-secret\nB=2",
+        "code_window_start_line": 5,
+        "line": 6,
+    }
+    preview = _code_preview("secret_scanning", detail)
+    assert "still-here-secret" not in preview["text"]
+
+
+def test_code_preview_secret_falls_back_to_redacted_match_without_window():
+    from src.findings.service import _code_preview
+
+    preview = _code_preview("secret_scanning", {"raw": {"Redacted": "AKIA...MPLE"}})
+    assert preview["text"] == "AKIA...MPLE"
+    assert preview["start_line"] is None
+
+
+def _blast_asset(db_session, label):
+    asset = Asset(
+        type="repo",
+        source="source_connection",
+        external_ref=f"github:acme/{label}-{uuid4().hex[:8]}",
+        display_name=f"acme/{label}",
+    )
+    db_session.add(asset)
+    return asset
+
+
+@pytest.mark.asyncio
+async def test_count_related_repos_counts_other_active_assets_sharing_cve(db_session):
+    cve = "CVE-2099-7777"
+    assets = [_blast_asset(db_session, f"blast{i}") for i in range(3)]
+    await db_session.flush()
+    findings = [
+        Finding(
+            tool="dependencies_scanning",
+            identity_key=f"k-{uuid4()}",
+            state="open",
+            severity="high",
+            cve_id=cve,
+            detail={},
+            asset_id=str(a.id),
+        )
+        for a in assets
+    ]
+    # A fixed finding on a 4th asset must NOT count toward the blast radius.
+    fixed_asset = _blast_asset(db_session, "blastfixed")
+    await db_session.flush()
+    fixed = Finding(
+        tool="dependencies_scanning",
+        identity_key=f"k-{uuid4()}",
+        state="fixed",
+        severity="high",
+        cve_id=cve,
+        detail={},
+        asset_id=str(fixed_asset.id),
+    )
+    db_session.add_all([*findings, fixed])
+    await db_session.commit()
+
+    scope = [str(a.id) for a in assets] + [str(fixed_asset.id)]
+    try:
+        # From the first finding, the other two active assets are the blast radius.
+        assert await count_related_repos(findings[0], scope, db_session) == 2
+        # A finding with neither CVE nor package has no blast radius.
+        no_match = make_finding(tool="code_scanning", cve_id=None, package_name=None)
+        no_match.asset_id = str(assets[0].id)
+        assert await count_related_repos(no_match, scope, db_session) == 0
+        # Empty scope short-circuits to zero.
+        assert await count_related_repos(findings[0], [], db_session) == 0
+
+        # Drill-down: one row per other active repo (the fixed asset is excluded).
+        related = await list_related_findings(findings[0], scope, db_session)
+        assert len(related) == 2
+        repos = {r["repo"] for r in related}
+        assert repos == {assets[1].display_name, assets[2].display_name}
+        assert all(r["severity"] == "high" and r["state"] == "open" for r in related)
+        assert all(isinstance(r["finding_id"], str) for r in related)
+        assert await list_related_findings(no_match, scope, db_session) == []
+    finally:
+        await db_session.execute(
+            delete(Finding).where(Finding.id.in_([f.id for f in [*findings, fixed]]))
+        )
+        await db_session.execute(
+            delete(Asset).where(Asset.id.in_([a.id for a in [*assets, fixed_asset]]))
+        )
+        await db_session.commit()

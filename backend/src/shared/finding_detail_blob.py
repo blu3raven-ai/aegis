@@ -50,6 +50,15 @@ LEAN_KEYS: dict[str, set[str]] = {
         "fileClass",
         "ruleIds",
     },
+    "iac_scanning": {
+        "checkId",
+        "ruleName",
+        "startLine",
+        "resource",
+        "severity",
+        "guideline",
+        "fingerprint",
+    },
     "dependencies_scanning": {
         "ecosystem",
         "advisoryId",
@@ -62,6 +71,7 @@ LEAN_KEYS: dict[str, set[str]] = {
         "matchedBy",
         "cvssScore",
         "advisoryUrl",
+        "matchSource",
     },
     "secret_scanning": {
         "organization",
@@ -93,6 +103,7 @@ LEAN_KEYS: dict[str, set[str]] = {
         "fixState",
         "cvssScore",
         "advisoryUrl",
+        "matchSource",
     },
 }
 

@@ -24,7 +24,7 @@ const SECTIONS = [
   "AuditLogSection",
   "ApiKeysSection",
   "RunnersSection",
-  "LlmSection",
+  "ArgusSection",
   "LicenseSection",
 ] as const
 

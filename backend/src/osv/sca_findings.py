@@ -19,10 +19,35 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import OsvAdvisory, SbomComponent
-from src.osv.matcher import ComponentRef, VulnMatch, match_components, parse_purl
+from src.osv.argus_match import match_via_argus
+from src.osv.matcher import (
+    ComponentRef, VulnMatch, match_components, parse_purl, parse_purl_distro,
+)
+from src.osv.ecosystems import osv_release_ecosystem
 from src.osv.store import _download_blob
+from src.settings.argus.service import fetch_argus_connection
 
 logger = logging.getLogger(__name__)
+
+# The org's single Argus connection is keyed under the default config slot, the
+# same record that routes verification (see scans.service).
+_ARGUS_CONFIG_KEY = "default"
+
+
+def _dedup_key(finding: dict) -> tuple[str | None, str | None, str | None]:
+    """Identity used to keep a premium hit from duplicating a free finding.
+
+    Component identity (package name + current version, falling back to purl) plus
+    advisory identity (the OSV/GHSA id slot, falling back to CVE). A premium hit
+    that already exists in the free set is dropped; the free finding wins.
+    """
+    dep = finding.get("dependency") or {}
+    pkg = dep.get("package") or {}
+    adv = finding.get("security_advisory") or {}
+    component = pkg.get("name") or dep.get("purl")
+    version = finding.get("current_version")
+    advisory = adv.get("ghsa_id") or adv.get("cve_id")
+    return (component, version, advisory)
 
 _SEVERITY_WORD = {
     "CRITICAL": "critical",
@@ -92,8 +117,14 @@ def _build_raw_finding(
     comp: ComponentRef,
     match: VulnMatch,
     adv_body: dict,
+    match_source: str,
 ) -> dict:
-    """Assemble one finding in the nested shape the lifecycle hooks parse."""
+    """Assemble one finding in the nested shape the lifecycle hooks parse.
+
+    ``match_source`` records how the finding was surfaced — ``"scan"`` (an SBOM
+    ingest triggered by a code/image push) or ``"overlay"`` (the scheduled OSV
+    rematch firing when a newly published advisory hits existing components).
+    """
     cve_id = _cve_from_aliases(adv_body)
     raw: dict = {
         "repository": {"name": repo_name, "full_name": repo_full_name},
@@ -122,7 +153,7 @@ def _build_raw_finding(
         "source": "backend_match",
         "scanner": "osv",
         "matched_by": ["osv"],
-        "match_source": "backend_match",
+        "match_source": match_source,
     }
     if kind == "container":
         raw["imageName"] = image_name
@@ -153,11 +184,14 @@ async def build_backend_match_findings(
     asset_id: str,
     external_ref: str,
     kind: str,
+    match_source: str = "scan",
 ) -> list[dict]:
     """Match one asset's SBOM components against OSV and build raw findings.
 
-    ``kind`` is "dependencies" or "container". Returns raw finding dicts ready
-    for advisory enrichment + apply_lifecycle. Pure data — no subprocess.
+    ``kind`` is "dependencies" or "container". ``match_source`` records how the
+    findings were surfaced ("scan" for an SBOM-triggered ingest, "overlay" for
+    the scheduled OSV rematch). Returns raw finding dicts ready for advisory
+    enrichment + apply_lifecycle. Pure data — no subprocess.
     """
     rows = (
         await session.execute(
@@ -168,22 +202,21 @@ async def build_backend_match_findings(
         return []
 
     components: list[ComponentRef] = []
-    comp_purl: dict[ComponentRef, str] = {}
     for r in rows:
         purl_type, namespace = parse_purl(r.purl)
         # Fall back to the stored ecosystem when the purl carries no type.
-        ref = ComponentRef(
-            name=r.name,
-            version=r.version,
-            purl_type=purl_type or (r.ecosystem or ""),
-            namespace=namespace,
+        components.append(
+            ComponentRef(
+                name=r.name,
+                version=r.version,
+                purl_type=purl_type or (r.ecosystem or ""),
+                namespace=namespace,
+                release_ecosystem=osv_release_ecosystem(parse_purl_distro(r.purl)),
+                purl=r.purl,
+            )
         )
-        components.append(ref)
-        comp_purl[ref] = r.purl
 
     matched = await match_components(session, components)
-    if not matched:
-        return []
 
     if kind == "container":
         image_name, image_tag = _parse_image_external_ref(external_ref)
@@ -192,35 +225,54 @@ async def build_backend_match_findings(
         repo_name, repo_full = _parse_repo_external_ref(external_ref)
         image_name = image_tag = None
 
-    # Fetch advisory bodies once per distinct advisory.
-    advisory_ids = {m.advisory_id for ms in matched.values() for m in ms}
-    headers = (
-        await session.execute(
-            select(OsvAdvisory).where(OsvAdvisory.advisory_id.in_(advisory_ids))
-        )
-    ).scalars().all()
-    bodies: dict[str, dict] = {}
-    for h in headers:
-        try:
-            blob = _download_blob(h.blob_key)
-            bodies[h.advisory_id] = json.loads(blob) if blob else {}
-        except Exception:
-            logger.warning("osv: failed to read advisory body %s", h.advisory_id)
-            bodies[h.advisory_id] = {}
-
     findings: list[dict] = []
-    for comp, matches in matched.items():
-        for m in matches:
-            findings.append(
-                _build_raw_finding(
-                    kind=kind,
-                    repo_name=repo_name,
-                    repo_full_name=repo_full,
-                    image_name=image_name,
-                    image_tag=image_tag,
-                    comp=comp,
-                    match=m,
-                    adv_body=bodies.get(m.advisory_id, {}),
-                )
+    if matched:
+        # Fetch advisory bodies once per distinct advisory.
+        advisory_ids = {m.advisory_id for ms in matched.values() for m in ms}
+        headers = (
+            await session.execute(
+                select(OsvAdvisory).where(OsvAdvisory.advisory_id.in_(advisory_ids))
             )
+        ).scalars().all()
+        bodies: dict[str, dict] = {}
+        for h in headers:
+            try:
+                blob = _download_blob(h.blob_key)
+                bodies[h.advisory_id] = json.loads(blob) if blob else {}
+            except Exception:
+                logger.warning("osv: failed to read advisory body %s", h.advisory_id)
+                bodies[h.advisory_id] = {}
+
+        for comp, matches in matched.items():
+            for m in matches:
+                findings.append(
+                    _build_raw_finding(
+                        kind=kind,
+                        repo_name=repo_name,
+                        repo_full_name=repo_full,
+                        image_name=image_name,
+                        image_tag=image_tag,
+                        comp=comp,
+                        match=m,
+                        adv_body=bodies.get(m.advisory_id, {}),
+                        match_source=match_source,
+                    )
+                )
+
+    # Additive premium match: Argus may surface advisories the free OSV mirror
+    # missed. Premium only ADDS findings — it never replaces a free one. Any
+    # Argus error degrades silently to the free set above.
+    conn = await fetch_argus_connection(session, _ARGUS_CONFIG_KEY)
+    premium = await match_via_argus(conn, components, asset_id=asset_id, surface=kind)
+    if premium:
+        seen = {_dedup_key(f) for f in findings}
+        for pf in premium:
+            pf["repository"] = {"name": repo_name, "full_name": repo_full}
+            if kind == "container":
+                pf["imageName"] = image_name
+                pf["imageTag"] = image_tag or "latest"
+            key = _dedup_key(pf)
+            if key not in seen:
+                findings.append(pf)
+                seen.add(key)
     return findings

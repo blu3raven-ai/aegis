@@ -12,8 +12,8 @@ class FindingsReportFilters(BaseModel):
 
 
 class GenerateReportRequest(BaseModel):
-    report_type: Literal["findings", "posture"]
-    format: Literal["json", "csv", "pdf"] = "json"
+    report_type: Literal["findings", "posture", "executive", "risk_register", "soc2_evidence"]
+    format: Literal["json", "csv", "pdf", "zip"] = "json"
     title: str | None = None
     filters: FindingsReportFilters | None = None
     # Compliance opt-in — when true, the report includes archived findings
@@ -33,12 +33,14 @@ class ReportSummary(BaseModel):
     created_by: str
     created_at: str
     expires_at: str
+    # Surfaced on the list too (not just detail) so the history table can offer a
+    # working Download for completed reports and a reason for failed ones.
+    error: str | None = None
+    download_url: str | None = None
 
 
 class ReportDetail(ReportSummary):
     filters: dict | None
-    error: str | None
-    download_url: str | None
 
 
 class ReportsListResponse(BaseModel):
@@ -48,8 +50,8 @@ class ReportsListResponse(BaseModel):
 
 class ScheduledReportCreate(BaseModel):
     name: str
-    report_type: Literal["findings", "posture"]
-    format: Literal["json", "csv", "pdf"]
+    report_type: Literal["findings", "posture", "executive", "risk_register", "soc2_evidence"]
+    format: Literal["json", "csv", "pdf", "zip"]
     schedule_type: Literal["simple", "cron"]
     schedule_value: str
     filters: dict | None = None
@@ -59,8 +61,8 @@ class ScheduledReportCreate(BaseModel):
 
 class ScheduledReportUpdate(BaseModel):
     name: str | None = None
-    report_type: Literal["findings", "posture"] | None = None
-    format: Literal["json", "csv", "pdf"] | None = None
+    report_type: Literal["findings", "posture", "executive", "risk_register", "soc2_evidence"] | None = None
+    format: Literal["json", "csv", "pdf", "zip"] | None = None
     schedule_type: Literal["simple", "cron"] | None = None
     schedule_value: str | None = None
     filters: dict | None = None

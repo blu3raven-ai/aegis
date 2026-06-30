@@ -98,7 +98,7 @@ async def test_build_and_roundtrip_to_existing_asset(monkeypatch):
     assert lod["security_vulnerability"]["first_patched_version"] == {"identifier": "4.17.21"}
     assert lod["current_version"] == "4.17.20"
     assert lod["repository"] == {"name": "app", "full_name": "acme/app"}
-    assert lod["match_source"] == "backend_match"
+    assert lod["match_source"] == "scan"  # default when no explicit source given
     assert by_pkg["requests"]["security_advisory"]["severity"] == "medium"
 
     # Asset round-trip: the lifecycle hook must reproduce the asset's exact
@@ -157,3 +157,53 @@ async def test_container_findings_roundtrip_to_image_asset(monkeypatch):
 
     ctx = ScanContext(tool="container_scanning", org="acme", run_id="osv-1", source_type="ghcr")
     assert container_scanning_hooks.canonical_external_ref(ctx, f) == ("ghcr:acme/app:1.2.3", "image")
+
+
+def _raw_dep_finding(match_source: str) -> dict:
+    """Minimal nested raw finding in the shape the lifecycle hooks parse."""
+    return {
+        "repository": {"name": "app", "full_name": "acme/app"},
+        "dependency": {"package": {"name": "lodash", "ecosystem": "npm"}, "manifest_path": ""},
+        "security_advisory": {
+            "ghsa_id": "GHSA-x", "cve_id": None, "severity": "high", "cvss": {},
+            "summary": "", "description": "", "html_url": "", "references": [], "published_at": "",
+        },
+        "security_vulnerability": {"vulnerable_version_range": "", "first_patched_version": None},
+        "current_version": "1.0.0",
+        "match_source": match_source,
+    }
+
+
+def test_match_source_flows_into_lean_queryable_detail():
+    """matchSource must reach the JSONB column (lean), not the MinIO blob, so an
+    audit query can filter findings by how they were first surfaced."""
+    from src.dependencies.lifecycle import dependencies_hooks
+    from src.containers.lifecycle import container_scanning_hooks
+    from src.shared.finding_detail_blob import split_detail
+
+    raw = _raw_dep_finding("overlay")
+    detail = dependencies_hooks.extract_detail(raw)
+    assert detail["matchSource"] == "overlay"
+    lean, fat = split_detail("dependencies_scanning", detail)
+    assert lean["matchSource"] == "overlay"
+    assert "matchSource" not in fat
+
+    craw = dict(raw, imageName="acme/app", imageTag="1.0.0")
+    cdetail = container_scanning_hooks.extract_detail(craw)
+    assert cdetail["matchSource"] == "overlay"
+    clean, _ = split_detail("container_scanning", cdetail)
+    assert clean["matchSource"] == "overlay"
+
+
+def test_preserve_match_source_is_first_write_wins():
+    """A later run (e.g. a scan re-touching an overlay-surfaced finding) must not
+    rewrite the original provenance."""
+    from src.shared.lifecycle import _preserve_match_source
+
+    prev = {"matchSource": "overlay", "ecosystem": "npm"}
+    incoming = {"matchSource": "scan", "ecosystem": "npm"}
+    assert _preserve_match_source(prev, incoming)["matchSource"] == "overlay"
+    # legacy row with no stored provenance backfills from the incoming detail
+    assert _preserve_match_source({"ecosystem": "npm"}, incoming)["matchSource"] == "scan"
+    # no prior detail at all — incoming wins
+    assert _preserve_match_source(None, incoming)["matchSource"] == "scan"

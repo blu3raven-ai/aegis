@@ -107,3 +107,73 @@ def test_trigger_data_retention_recompute_skips_when_no_orgs():
         scheduler._trigger_data_retention_recompute([])
         time.sleep(0.05)
         assert not mock_job.called
+
+
+def test_tick_feeds_sla_recompute_asset_ids_not_org_names(monkeypatch):
+    """Regression: the SLA evaluator filters findings by ``asset_id``, so the
+    hourly tick must hand it asset ids — not the org names that drive the
+    per-source scan triggers. Feeding org names matched no findings and left
+    ``finding_sla_status`` empty."""
+    import src.assets.service as assets_svc
+    import src.scheduler as sched
+    import src.shared.config as cfg
+
+    monkeypatch.setattr(cfg, "read_app_config", lambda: {"tools": {}})
+    monkeypatch.setattr(cfg, "get_orgs_from_source_connections", lambda: ["acme-org"])
+    monkeypatch.setattr(assets_svc, "get_all_asset_ids", lambda: ["asset-1", "asset-2"])
+    # Fire only the hourly SLA cron; every other scheduled branch stays inert.
+    monkeypatch.setattr(sched, "_matches_cron", lambda expr, now: expr == "0 * * * *")
+
+    scheduler = sched.AutoRerunScheduler()
+    monkeypatch.setattr(scheduler, "_tick_scheduled_reports", lambda now: None)
+    monkeypatch.setattr(scheduler, "_take_posture_snapshots", lambda: None)
+
+    captured: dict = {}
+    monkeypatch.setattr(
+        scheduler, "_trigger_sla_recompute", lambda ids: captured.__setitem__("ids", ids)
+    )
+
+    scheduler._tick()
+
+    assert captured["ids"] == ["asset-1", "asset-2"]
+
+
+def _assert_tick_feeds_asset_ids(monkeypatch, *, cron: str, method: str):
+    """Fire only `cron` and assert the named `_trigger_*` method receives asset
+    ids (from get_all_asset_ids), not the org names from source connections."""
+    import src.assets.service as assets_svc
+    import src.scheduler as sched
+    import src.shared.config as cfg
+
+    monkeypatch.setattr(cfg, "read_app_config", lambda: {"tools": {}})
+    monkeypatch.setattr(cfg, "get_orgs_from_source_connections", lambda: ["acme-org"])
+    monkeypatch.setattr(assets_svc, "get_all_asset_ids", lambda: ["asset-1", "asset-2"])
+    monkeypatch.setattr(sched, "_matches_cron", lambda expr, now: expr == cron)
+
+    scheduler = sched.AutoRerunScheduler()
+    monkeypatch.setattr(scheduler, "_tick_scheduled_reports", lambda now: None)
+    monkeypatch.setattr(scheduler, "_take_posture_snapshots", lambda: None)
+
+    captured: dict = {}
+    monkeypatch.setattr(scheduler, method, lambda ids: captured.__setitem__("ids", ids))
+
+    scheduler._tick()
+
+    assert captured["ids"] == ["asset-1", "asset-2"]
+
+
+def test_tick_feeds_scanner_coverage_recompute_asset_ids(monkeypatch):
+    """Regression: scanner-coverage evaluates findings by asset_id; the daily
+    tick must feed asset ids, not org names."""
+    _assert_tick_feeds_asset_ids(
+        monkeypatch, cron="0 4 * * *", method="_trigger_scanner_coverage_recompute"
+    )
+
+
+def test_tick_feeds_data_retention_recompute_asset_ids(monkeypatch):
+    """Regression: data-retention evaluates scans by asset_id; the daily tick
+    must feed asset ids, not org names (org names matched nothing, so retention
+    rules never ran)."""
+    _assert_tick_feeds_asset_ids(
+        monkeypatch, cron="30 4 * * *", method="_trigger_data_retention_recompute"
+    )

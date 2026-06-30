@@ -84,6 +84,7 @@ def _execute_via_runner(
     scan_mode: str = "full",
     registry_auths: list[dict[str, str]] | None = None,
     prev_digests: dict[str, str] | None = None,
+    source_type: str | None = None,
 ) -> dict[str, Any] | None:
     """Create a runner job and poll until completion."""
     import json as _json
@@ -96,6 +97,11 @@ def _execute_via_runner(
         "RUN_ID": run_id,
         "SCAN_MODE": scan_mode,
     }
+    # The ingest resolves each image asset via SOURCE_TYPE (envVars), so it must
+    # be carried through on the scheduled path too — not just on the canonical
+    # "Scan now" dispatch.
+    if source_type:
+        env_vars["SOURCE_TYPE"] = source_type
 
     if prev_digests:
         env_vars["PREVIOUS_DIGESTS"] = _json.dumps(prev_digests)
@@ -261,6 +267,7 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
         for asset_id, external_ref in assets.items():
             out.extend(await build_backend_match_findings(
                 session, asset_id=asset_id, external_ref=external_ref, kind="container",
+                match_source="scan",
             ))
         return out
 
@@ -273,13 +280,18 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
     ghsa_api_key = config.get("ghsaApiKey", "")
 
     if findings and (nvd_enabled or ghsa_enabled):
-        findings = enrich_findings_with_advisory_data(
-            findings,
-            nvd_enabled=nvd_enabled,
-            nvd_api_key=nvd_api_key,
-            ghsa_enabled=ghsa_enabled,
-            ghsa_api_key=ghsa_api_key,
-        )
+        # Isolate enrichment failures so an NVD/GHSA outage degrades gracefully
+        # instead of failing the whole container ingest (matches the deps path).
+        try:
+            findings = enrich_findings_with_advisory_data(
+                findings,
+                nvd_enabled=nvd_enabled,
+                nvd_api_key=nvd_api_key,
+                ghsa_enabled=ghsa_enabled,
+                ghsa_api_key=ghsa_api_key,
+            )
+        except Exception:
+            logger.warning("Advisory enrichment failed for %s", org)
 
     if findings:
         ctx = ScanContext(
@@ -352,7 +364,7 @@ def execute_container_scan_once(
     })
 
     try:
-        _run_full_or_sbom(org, run_id, config, scan_mode, runtime)
+        _run_full_or_sbom(org, run_id, config, scan_mode, runtime, source_type=source_type)
 
         if runtime and runtime.is_cancelled(run_id):
             return
@@ -378,6 +390,7 @@ def _run_full_or_sbom(
     config: dict[str, Any],
     scan_mode: str,
     runtime: Any,
+    source_type: str | None = None,
 ) -> None:
     """Run full or sbom_only scan via runner."""
     sources = get_scan_sources_for_org(org)
@@ -419,7 +432,7 @@ def _run_full_or_sbom(
         },
     })
 
-    result = _execute_via_runner(org, run_id, config, docker_images, scan_mode, registry_auths=registry_auths, prev_digests=prev_digests)
+    result = _execute_via_runner(org, run_id, config, docker_images, scan_mode, registry_auths=registry_auths, prev_digests=prev_digests, source_type=source_type)
     if not result or result.get("status") in ("failed", "cancelled"):
         if result and result.get("status") == "cancelled":
             return  # Cancelled — don't raise, let is_cancelled() handle it

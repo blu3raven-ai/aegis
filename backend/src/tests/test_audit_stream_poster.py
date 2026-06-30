@@ -857,3 +857,28 @@ def test_batch_hash_cache_short_circuits_in_process_replay():
     assert post_count["n"] == posts_before_tick2, "second tick must not re-POST"
     assert result.get("deduped") is True
     assert write_advanced_to == [22], "cursor must advance even when deduped"
+
+
+def test_json_default_handles_temporal_and_uuid_types():
+    """_batch_hash must serialise datetime/date/UUID deterministically (ISO /
+    str), not via repr(), so the dedup hash is stable across ticks."""
+    from datetime import datetime, date, timezone
+    from uuid import UUID
+
+    dt = datetime(2026, 6, 28, 12, 0, tzinfo=timezone.utc)
+    assert poster._json_default(dt) == dt.isoformat()
+    assert poster._json_default(date(2026, 6, 28)) == "2026-06-28"
+    uid = UUID("12345678-1234-5678-1234-567812345678")
+    assert poster._json_default(uid) == str(uid)
+
+
+def test_json_default_raises_on_unknown_type():
+    """A new non-serialisable payload type must fail loudly here rather than
+    silently degrade dedup via a repr-with-address fallback."""
+    import pytest as _pytest
+
+    class _Weird:
+        pass
+
+    with _pytest.raises(TypeError):
+        poster._json_default(_Weird())

@@ -48,15 +48,16 @@ def _to_summary(row) -> ReportSummary:
         created_by=row.created_by,
         created_at=row.created_at.isoformat(),
         expires_at=row.expires_at.isoformat(),
+        error=row.error,
+        download_url=get_download_url(row),
     )
 
 
 def _to_detail(row) -> ReportDetail:
+    # error + download_url now come from the summary base.
     return ReportDetail(
         **_to_summary(row).model_dump(),
         filters=row.filters,
-        error=row.error,
-        download_url=get_download_url(row),
     )
 
 

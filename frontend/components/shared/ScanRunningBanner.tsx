@@ -1,7 +1,7 @@
 "use client"
 
-import { useRef } from "react"
-import { AlertTriangle, Loader2, X } from "lucide-react"
+import { useRef, useState } from "react"
+import { AlertTriangle, Loader2, Maximize2, Minus, X } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { cn } from "@/lib/shared/utils"
@@ -120,6 +120,10 @@ export function ScanRunningBanner({
   isCancelling,
 }: ScanRunningBannerProps) {
   const highestProgressRef = useRef<number>(0)
+  // Minimize (≠ dismiss): collapse to a compact bar so the user can keep
+  // working while the scan stays pinned and live-updating. State lives here so
+  // it persists for the scan's lifetime (the provider keeps this mounted).
+  const [minimized, setMinimized] = useState(false)
 
   if (!VISIBLE_STATUSES.has(status)) return null
 
@@ -187,6 +191,55 @@ export function ScanRunningBanner({
     ? "bg-[var(--color-state-pending)]"
     : "bg-[var(--color-accent)]"
 
+  if (minimized) {
+    return (
+      <Card
+        padding="none"
+        role="status"
+        aria-live="polite"
+        className="overflow-hidden rounded-2xl shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5"
+      >
+        <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)]">
+          <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg", chipClass)}>
+            <StatusIcon
+              className={cn("h-4 w-4", !isFailed && "motion-safe:animate-spin")}
+              aria-hidden="true"
+            />
+          </span>
+          <p className="min-w-0 flex-1 truncate text-xs font-medium" title={headline}>
+            {headline}
+          </p>
+          {!isIndeterminate && !isFailed && (
+            <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-secondary)]">
+              {Math.round(displayProgress)}%
+            </span>
+          )}
+          <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-tertiary)]">{elapsed}</span>
+          <Button
+            variant="ghost"
+            size="xs"
+            iconOnly
+            aria-label="Restore scan progress"
+            onClick={() => setMinimized(false)}
+            leadingIcon={<Maximize2 className="h-3.5 w-3.5" />}
+          />
+          {onCancel && isActive && (
+            <Button
+              variant="ghost"
+              size="xs"
+              iconOnly
+              aria-label="Cancel scan"
+              onClick={onCancel}
+              disabled={isCancelling}
+              leadingIcon={<X className="h-3.5 w-3.5" strokeWidth={2.5} />}
+              className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+            />
+          )}
+        </div>
+      </Card>
+    )
+  }
+
   return (
     <Card
       padding="none"
@@ -215,6 +268,17 @@ export function ScanRunningBanner({
               {headline}
             </p>
           </div>
+          {isActive && (
+            <Button
+              variant="ghost"
+              size="xs"
+              iconOnly
+              aria-label="Minimize scan progress"
+              onClick={() => setMinimized(true)}
+              leadingIcon={<Minus className="h-3.5 w-3.5" />}
+              className="-mr-1 -mt-1 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+            />
+          )}
         </div>
 
         <div className="space-y-2">

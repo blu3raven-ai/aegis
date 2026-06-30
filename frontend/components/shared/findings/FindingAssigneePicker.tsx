@@ -6,7 +6,7 @@ import {
   listAssignableUsers,
   type AssignableUser,
 } from "@/lib/client/findings-api"
-import { Button } from "@/components/ui/Button"
+import { Button, type ButtonSize } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 
 export interface FindingAssigneePickerProps {
@@ -23,6 +23,8 @@ export interface FindingAssigneePickerProps {
   emptyLabel?: string
   /** Disable the trigger and prevent opening — used while a save is in flight. */
   disabled?: boolean
+  /** Trigger size — match the surrounding controls. Defaults to "xs". */
+  size?: ButtonSize
 }
 
 const SEARCH_DEBOUNCE_MS = 200
@@ -35,6 +37,7 @@ export function FindingAssigneePicker({
   triggerAriaLabel,
   emptyLabel = "Any assignee",
   disabled = false,
+  size = "xs",
 }: FindingAssigneePickerProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -78,7 +81,12 @@ export function FindingAssigneePicker({
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false)
+      // Stop the Escape here (document fires before the Sheet's window listener
+      // in the bubble phase) so closing the picker doesn't also close the panel.
+      if (e.key === "Escape") {
+        e.stopPropagation()
+        setOpen(false)
+      }
     }
     document.addEventListener("mousedown", onClick)
     document.addEventListener("keydown", onKey)
@@ -88,7 +96,12 @@ export function FindingAssigneePicker({
     }
   }, [open])
 
-  const triggerLabel = value ? valueLabel || value : emptyLabel
+  // Remember the label of a just-picked user so the trigger shows their name
+  // immediately, before the parent re-fetches a fresh `valueLabel`.
+  const [pickedLabel, setPickedLabel] = useState<{ id: string; username: string } | null>(null)
+  const resolvedLabel =
+    pickedLabel && pickedLabel.id === value ? pickedLabel.username : valueLabel || value
+  const triggerLabel = value ? resolvedLabel : emptyLabel
 
   return (
     <div ref={rootRef} className="relative inline-block">
@@ -97,7 +110,7 @@ export function FindingAssigneePicker({
       )}
       <Button
         variant="secondary"
-        size="xs"
+        size={size}
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-label={triggerAriaLabel || (value ? `Change assignee (${triggerLabel})` : "Select assignee")}
@@ -142,6 +155,7 @@ export function FindingAssigneePicker({
               aria-selected={false}
               onClick={() => {
                 onChange(null)
+                setPickedLabel(null)
                 setOpen(false)
               }}
               className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"
@@ -172,6 +186,7 @@ export function FindingAssigneePicker({
                     aria-selected={selected}
                     onClick={() => {
                       onChange(u.id)
+                      setPickedLabel({ id: u.id, username: u.username })
                       setOpen(false)
                     }}
                     className={`flex w-full flex-col items-start rounded-md px-2 py-1 text-left hover:bg-[var(--color-surface-raised)] ${selected ? "bg-[var(--color-surface-raised)]" : ""}`}

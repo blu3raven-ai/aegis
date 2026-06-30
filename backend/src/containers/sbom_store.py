@@ -131,6 +131,12 @@ def list_stored_sboms(org: str) -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-def populate_sbom_components(org: str, image_ref: str, sbom: dict[str, Any], asset_id: str | None = None) -> int:
+def populate_sbom_components(
+    org: str, image_ref: str, sbom: dict[str, Any], asset_id: str | None = None,
+    scanned_at: datetime | None = None,
+) -> int:
     """Backward-compatible wrapper for populate_components."""
-    return populate_components(org, image_ref, sbom, source_tool_fn=lambda _: "syft", asset_id=asset_id)
+    return populate_components(
+        org, image_ref, sbom, source_tool_fn=lambda _: "syft",
+        asset_id=asset_id, scanned_at=scanned_at,
+    )

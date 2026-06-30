@@ -1,6 +1,7 @@
 """SAST finding ingestion — read canonical findings.jsonl emitted by the runner."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -50,17 +51,51 @@ def _derive_language(file_path: str) -> str:
     return _FILE_EXTENSION_TO_LANGUAGE.get(ext, "unknown")
 
 
-def finding_identity_key(repo: str, file_path: str, rule_id: str, start_line: int) -> str:
-    """Build a stable identity key: {repo}:{file_path}:{rule_id}:{start_line}"""
-    return f"{repo}:{file_path}:{rule_id}:{start_line}"
+def _snippet_fingerprint(snippet: str) -> str | None:
+    """Line-position-independent fingerprint of a matched code snippet.
+
+    Per-line whitespace is normalised so reindentation does not change identity;
+    returns None when there is nothing to fingerprint.
+    """
+    if not snippet or not snippet.strip():
+        return None
+    normalized = "\n".join(line.strip() for line in snippet.strip().splitlines())
+    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
+
+
+def code_finding_identity(
+    repo: str, file_path: str, rule_id: str, start_line: int, snippet: str = ""
+) -> str:
+    """Identity key for a SAST finding: ``{repo}:{file_path}:{rule_id}:{loc}``.
+
+    ``loc`` is a content fingerprint of the matched snippet when one is present,
+    so a finding keeps its identity — and its triage state — when an unrelated
+    edit shifts its line number. Only when there is no snippet does it fall back
+    to the raw start line. Colons in the components are escaped so they cannot be
+    confused with the separators.
+    """
+    def _esc(v: str) -> str:
+        return str(v).replace(":", "%3A")
+
+    fp = _snippet_fingerprint(snippet)
+    loc = f"h{fp}" if fp else str(start_line or 0)
+    return f"{_esc(repo)}:{_esc(file_path)}:{_esc(rule_id)}:{loc}"
+
+
+def finding_identity_key(
+    repo: str, file_path: str, rule_id: str, start_line: int, snippet: str = ""
+) -> str:
+    """Build a SAST finding identity key (see :func:`code_finding_identity`)."""
+    return code_finding_identity(repo, file_path, rule_id, start_line, snippet)
 
 
 def identity_key_from_finding(finding: dict[str, Any]) -> str:
-    return finding_identity_key(
+    return code_finding_identity(
         finding.get("repo_full_name", ""),
         finding.get("file_path", ""),
         finding.get("rule_id", ""),
         finding.get("start_line", 0),
+        finding.get("snippet", "") or "",
     )
 
 
@@ -146,6 +181,7 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                         "fix_suggestion": raw.get("fix_suggestion", raw.get("fixSuggestion")),
                         "code_flows": raw.get("code_flows") or [],
                         "code_window": raw.get("code_window") or "",
+                        "code_window_start_line": raw.get("code_window_start_line"),
                         "imports": raw.get("imports") or "",
                         "file_class": raw.get("file_class") or "source",
                         "language": _derive_language(raw.get("file_path", raw.get("path", ""))),

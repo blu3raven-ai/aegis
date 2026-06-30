@@ -647,6 +647,8 @@ export function HomeDashboard() {
   const [codeState, setCodeState] = useState<LoadState>("loading")
   const [containerState, setContainerState] = useState<LoadState>("loading")
   const [secretState, setSecretState] = useState<LoadState>("loading")
+  const [iac, setIac] = useState<ToolCounts>(EMPTY)
+  const [iacState, setIacState] = useState<LoadState>("loading")
   const [sources, setSources] = useState<SourceConnection[]>([])
   const [sourcesState, setSourcesState] = useState<LoadState>("loading")
   const [trend, setTrend] = useState<GqlPostureTrendPoint[]>([])
@@ -673,6 +675,7 @@ export function HomeDashboard() {
       setCode(data.scans.codeScanning.counts);             setCodeState("ok")
       setContainers(data.scans.containerScanning.counts);  setContainerState("ok")
       setSecrets(data.scans.secretScanning.counts);        setSecretState("ok")
+      setIac(data.scans.iacScanning.counts);               setIacState("ok")
 
       if (sourcesResult.ok) {
         setSources(sourcesResult.data.connections)
@@ -720,6 +723,7 @@ export function HomeDashboard() {
       setCodeState("error")
       setContainerState("error")
       setSecretState("error")
+      setIacState("error")
       setSourcesState("error")
     } finally {
       setLoading(false)
@@ -735,6 +739,7 @@ export function HomeDashboard() {
     { label: "Containers", href: "/findings?scanner=container", settingsHref: "/settings/containers", counts: containers, state: containerState, icon: "M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" },
     { label: "Code Scanning", href: "/findings?scanner=sast", settingsHref: "/settings/code", counts: code, state: codeState, icon: "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" },
     { label: "Secrets", href: "/findings?scanner=secrets", settingsHref: "/settings/secrets", counts: secrets, state: secretState, icon: "M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" },
+    { label: "IaC Security", href: "/findings?scanner=iac", settingsHref: "/settings/iac-security", counts: iac, state: iacState, icon: "M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" },
   ]
 
   const hasError = tools.some(t => t.state === "error") || sourcesState === "error"

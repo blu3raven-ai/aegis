@@ -10,7 +10,7 @@ import { SsoSection } from "./sections/SsoSection"
 import { AuditLogSection } from "./sections/AuditLogSection"
 import { ApiKeysSection } from "./sections/ApiKeysSection"
 import { RunnersSection } from "./sections/RunnersSection"
-import { LlmSection } from "./sections/LlmSection"
+import { ArgusSection } from "./sections/ArgusSection"
 import { LicenseSection } from "./sections/LicenseSection"
 
 const SETTINGS_ICON = (
@@ -58,7 +58,7 @@ export default function SettingsPage() {
             <SsoSection />
             <AuditLogSection />
             <RunnersSection />
-            <LlmSection />
+            <ArgusSection />
             <LicenseSection />
           </div>
         </div>

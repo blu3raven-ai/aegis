@@ -19,6 +19,11 @@ _SCANNERS: dict[str, BaseScanner] = {
     "secret_scanning": SecretsScanner(),
     "code_scanning": CodeScanningScanner(),
     "iac_scanning": IacScanner(),
+    # Dormant — NOT dead code. The aggregate cross-scanner correlator/dedupe
+    # engine for the upcoming Attack Chains feature (frontend is a mock preview
+    # today). The backend does not dispatch a "verification" job yet, so this
+    # never runs; it's pre-registered so wiring Chains later is backend-only.
+    # Do not delete without removing Chains from the roadmap.
     "verification": VerificationScanner(),
 }
 

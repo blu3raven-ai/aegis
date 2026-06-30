@@ -29,6 +29,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.db.helpers import run_db
 from src.db.models import (
+    Asset,
     Finding,
     FindingSlaStatus,
     NotificationDestination,
@@ -62,18 +63,22 @@ def _ensure_aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
-def _finding_to_subject(finding: Finding, *, age_days: int) -> RuleFindingSubject:
+def _finding_to_subject(
+    finding: Finding, *, age_days: int, repo_id: str | None
+) -> RuleFindingSubject:
     """Build a P1 subject from a Finding row.
 
-    Fields that require joins (kev_matched, repo_labels, repo_archived, etc.)
-    are populated by later phases — P1 leaves them at safe defaults so any
-    rule that predicates on them simply won't match.
+    ``repo_id`` is the human-readable asset display_name resolved by the caller
+    (a Finding carries no repo of its own — org/repo live on the asset's
+    external_ref/display_name). Fields that require joins (kev_matched,
+    repo_labels, repo_archived, etc.) are populated by later phases — P1 leaves
+    them at safe defaults so any rule that predicates on them simply won't match.
     """
     return RuleFindingSubject(
         finding_id=finding.id,
         severity=(finding.severity or "").lower(),
         scanner=finding.tool or "",
-        repo_id=finding.repo or "",
+        repo_id=repo_id or "",
         repo_labels=[],
         repo_archived=False,
         cve_id=finding.cve_id,
@@ -114,6 +119,17 @@ def evaluate_sla_rules(
         )
         findings = list(findings_q.scalars().all())
 
+        # A Finding carries no repo of its own; resolve the human-readable
+        # display_name per asset so subjects evaluated by repo-scoped SLA rules
+        # see the right repo_id.
+        seen_asset_ids = {f.asset_id for f in findings if f.asset_id}
+        asset_display: dict[str, str] = {}
+        if seen_asset_ids:
+            assets_q = await session.execute(
+                select(Asset.id, Asset.display_name).where(Asset.id.in_(seen_asset_ids))
+            )
+            asset_display = {aid: dn for aid, dn in assets_q.all()}
+
         active_findings = [f for f in findings if f.state not in _CLOSED_STATES]
         findings_by_id: dict[int, Finding] = {f.id: f for f in findings}
 
@@ -143,7 +159,9 @@ def evaluate_sla_rules(
 
                 first_seen = _ensure_aware(finding.first_seen_at)
                 age_days = max(0, (current_time - first_seen).days)
-                subject = _finding_to_subject(finding, age_days=age_days)
+                subject = _finding_to_subject(
+                    finding, age_days=age_days, repo_id=asset_display.get(finding.asset_id)
+                )
 
                 try:
                     matched = evaluate_condition(
@@ -185,6 +203,7 @@ def evaluate_sla_rules(
                     pg_insert(RuleViolation)
                     .values(
                         rule_id=rule_id,
+                        asset_id=findings_by_id[finding_id].asset_id,
                         subject_type="finding",
                         subject_id=str(finding_id),
                         status="open",

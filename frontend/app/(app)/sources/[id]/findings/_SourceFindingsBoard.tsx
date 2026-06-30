@@ -20,9 +20,14 @@ export default function SourceFindingsBoard() {
     return () => { cancelled = true }
   }, [id])
 
-  const scopeRepos = connection?.discoveredItems?.length
-    ? connection.discoveredItems
-    : undefined
+  // Scope by the canonical asset refs (the values the findings list matches on
+  // Asset.display_name); fall back to the raw discovered items only if the
+  // server hasn't supplied refs yet (older connection rows).
+  const scopeRepos = connection?.scopeRefs?.length
+    ? connection.scopeRefs
+    : connection?.discoveredItems?.length
+      ? connection.discoveredItems
+      : undefined
 
   return (
     <FindingsBoardView

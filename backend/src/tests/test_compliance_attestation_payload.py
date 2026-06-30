@@ -39,6 +39,7 @@ def _brief(brief_id=1, severity="critical", tool="semgrep", org="acme", repo="ap
         identity_key=f"id-{brief_id}",
         confidence=0.9,
         rationale=None,
+        mapping_id=brief_id,
     )
 
 
