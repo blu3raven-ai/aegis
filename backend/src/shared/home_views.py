@@ -128,15 +128,15 @@ def get_remediation_stats_by_asset_ids(asset_ids: list[str]) -> dict:
             """
             SELECT
                 count(*)                                                                AS total_fixed,
-                avg(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 86400)            AS avg_days,
+                avg(EXTRACT(EPOCH FROM (fixed_at - created_at)) / 86400)               AS avg_days,
                 percentile_cont(0.5) WITHIN GROUP (
-                    ORDER BY EXTRACT(EPOCH FROM (resolved_at - created_at)) / 86400
+                    ORDER BY EXTRACT(EPOCH FROM (fixed_at - created_at)) / 86400
                 )                                                                       AS median_days,
-                count(*) FILTER (WHERE resolved_at >= now() - INTERVAL '30 days')      AS fixed_last_30d
+                count(*) FILTER (WHERE fixed_at >= now() - INTERVAL '30 days')         AS fixed_last_30d
             FROM findings
             WHERE asset_id = ANY(:asset_ids)
               AND state = 'fixed'
-              AND resolved_at IS NOT NULL
+              AND fixed_at IS NOT NULL
               AND created_at IS NOT NULL
             """
         )

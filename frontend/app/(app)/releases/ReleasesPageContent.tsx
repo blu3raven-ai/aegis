@@ -4,29 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { listReleases, type ReleaseSummary } from "@/lib/client/releases-api"
 import { relativeTime } from "@/components/shared/releases/_helpers"
+import { VERDICT_ICONS, type Verdict } from "@/components/shared/releases/verdict-icons"
 import { Button } from "@/components/ui/Button"
 import { LinkButton } from "@/components/ui/LinkButton"
 import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Skeleton } from "@/components/ui/Skeleton"
 
-type Verdict = ReleaseSummary["verdict"]
-
 type VerdictFilter = "all" | Verdict
-
-interface VerdictIcon {
-  glyph: string
-  tone: string
-}
-
-// Re-derived from RecentReleaseChecksTable to keep visual parity for verdict glyphs.
-const VERDICT_ICONS: Record<Verdict, VerdictIcon> = {
-  go:      { glyph: "✓", tone: "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]" },
-  no_go:   { glyph: "×", tone: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]" },
-  warn:    { glyph: "!", tone: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]" },
-  pending: { glyph: "•", tone: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]" },
-  unknown: { glyph: "—", tone: "bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]" },
-}
 
 const VERDICT_FILTERS = [
   { id: "all"   as const, label: "All" },

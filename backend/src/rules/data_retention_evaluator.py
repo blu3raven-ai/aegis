@@ -29,8 +29,9 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
+from src.audit_log.recorder import ActorInfo, get_recorder
 from src.db.helpers import run_db
-from src.db.models import AuditEvent, Rule, ScanRun
+from src.db.models import Rule, ScanRun
 from src.rules.scan_result_subject_loader import build_scan_result_subject
 from src.rules_engine.conditions import evaluate_condition
 from src.rules_engine.subjects import get_scan_result_field
@@ -163,19 +164,16 @@ def _archive_scan_run(session, run: ScanRun, rule_id: str, now: datetime) -> Non
     run.archived_at = now
     run.archived_by_rule_id = rule_id
 
-    # session.add() instead of AuditRecorder.record() — recorder calls run_db()
-    # internally, which would deadlock from inside our async session. Same
-    # rationale applies to the delete path below.
-    session.add(AuditEvent(
+    # record_in_session() instead of record() — we're inside an async session,
+    # and record() would deadlock by nesting another run_db(). Same on delete.
+    get_recorder().record_in_session(
+        session,
         action="rule.data_retention.archived",
         resource_type="scan_run",
         resource_id=str(run.id),
-        actor_username=f"auto-rule:{rule_id}",
-        actor_role="system",
-        metadata_json={"rule_id": rule_id, "tool": run.tool},
-        created_at=now,
-        occurred_at=now,
-    ))
+        actor=ActorInfo(username=f"auto-rule:{rule_id}", role="system"),
+        metadata={"rule_id": rule_id, "tool": run.tool},
+    )
 
 
 async def _delete_scan_run(session, run: ScanRun, rule_id: str, now: datetime) -> None:
@@ -184,20 +182,18 @@ async def _delete_scan_run(session, run: ScanRun, rule_id: str, now: datetime) -
     Audit log is written BEFORE the delete inside the same session so the
     trace survives in the same transaction.
     """
-    session.add(AuditEvent(
+    get_recorder().record_in_session(
+        session,
         action="rule.data_retention.deleted",
         resource_type="scan_run",
         resource_id=str(run.id),
-        actor_username=f"auto-rule:{rule_id}",
-        actor_role="system",
-        metadata_json={
+        actor=ActorInfo(username=f"auto-rule:{rule_id}", role="system"),
+        metadata={
             "rule_id": rule_id,
             "tool": run.tool,
             "deleted_at": now.isoformat(),
         },
-        created_at=now,
-        occurred_at=now,
-    ))
+    )
     # Findings are intentionally preserved — no FK cascade exists between
     # findings and scan_runs (documented V1 trade-off).
     await session.delete(run)

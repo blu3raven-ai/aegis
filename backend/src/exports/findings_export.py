@@ -150,6 +150,136 @@ async def stream_findings_csv(
                 yield chunk.encode()
 
 
+# SARIF 2.1.0 severity mapping. `level` is the qualitative result level GitHub
+# code scanning renders; `security-severity` is the numeric (CVSS-like) string it
+# sorts and gates branch-protection on. Both live in the SARIF spec / GitHub's
+# ingestion contract.
+_SARIF_LEVEL = {
+    "critical": "error",
+    "high": "error",
+    "medium": "warning",
+    "low": "note",
+    "info": "note",
+    "informational": "note",
+}
+_SARIF_SECURITY_SEVERITY = {
+    "critical": "9.5",
+    "high": "8.0",
+    "medium": "5.0",
+    "low": "2.0",
+    "info": "1.0",
+    "informational": "1.0",
+}
+
+
+def _sarif_level(severity: str | None) -> str:
+    return _SARIF_LEVEL.get((severity or "").lower(), "warning")
+
+
+def _sarif_security_severity(severity: str | None) -> str:
+    return _SARIF_SECURITY_SEVERITY.get((severity or "").lower(), "0.0")
+
+
+def _sarif_rule_id(finding: Finding) -> str:
+    """Stable rule identity GitHub groups results under.
+
+    A CVE is the most meaningful grouping for SCA/container findings; SAST/secret
+    findings fall back to their rule name, then the scanner as a last resort.
+    """
+    return finding.cve_id or finding.rule_name or finding.tool
+
+
+def _finding_to_sarif_result(
+    finding: Finding, rules_index: dict[str, int], rules: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Map a Finding to a SARIF result, registering its rule on first sight."""
+    rule_id = _sarif_rule_id(finding)
+    sec = _sarif_security_severity(finding.severity)
+
+    if rule_id not in rules_index:
+        rules_index[rule_id] = len(rules)
+        rules.append({
+            "id": rule_id,
+            "name": finding.rule_name or finding.tool or rule_id,
+            "shortDescription": {"text": finding.title or rule_id},
+            "properties": {"tags": ["security", finding.tool], "security-severity": sec},
+        })
+    else:
+        # A rule's severity is the worst across the findings that share it.
+        props = rules[rules_index[rule_id]]["properties"]
+        if float(sec) > float(props.get("security-severity", "0.0")):
+            props["security-severity"] = sec
+
+    result: dict[str, Any] = {
+        "ruleId": rule_id,
+        "ruleIndex": rules_index[rule_id],
+        "level": _sarif_level(finding.severity),
+        "message": {"text": finding.title or finding.identity_key},
+        "partialFingerprints": {"aegisIdentityKey": finding.identity_key},
+        "properties": {
+            "severity": finding.severity or "",
+            "scanner": finding.tool,
+            "security-severity": sec,
+        },
+    }
+    if finding.cve_id:
+        result["properties"]["cve"] = finding.cve_id
+
+    if finding.file_path:
+        detail: dict = finding.detail or {}
+        physical: dict[str, Any] = {"artifactLocation": {"uri": finding.file_path}}
+        line = detail.get("start_line") or detail.get("line")
+        if isinstance(line, int) and line > 0:
+            physical["region"] = {"startLine": line}
+        result["locations"] = [{"physicalLocation": physical}]
+
+    return result
+
+
+async def build_findings_sarif(
+    filters: FindingFilters,
+    asset_ids: list[str],
+    session: AsyncSession,
+    include_archived_rows: bool = False,
+) -> dict[str, Any]:
+    """Build a SARIF 2.1.0 document for findings matching the filters.
+
+    SARIF is a single JSON object (one tool run with a results array), so unlike
+    CSV/JSONL it is assembled rather than streamed. It is the OASIS standard that
+    GitHub/GitLab code scanning ingest, so this is the export to feed a
+    third-party security dashboard or a branch-protection gate. Scope + the
+    default-exclude-archived contract match the other export formats exactly.
+    """
+    where = _build_where_clauses(filters)
+    stmt = select(Finding).order_by(Finding.id)
+    if where:
+        stmt = stmt.where(and_(*where))
+    stmt = apply_scope(stmt, asset_ids, column=Finding.asset_id)
+    if include_archived_rows:
+        stmt = include_archived(stmt)
+    else:
+        stmt = exclude_archived(stmt, Finding)
+
+    rules_index: dict[str, int] = {}
+    rules: list[dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
+
+    rows = (await session.execute(stmt)).scalars().all()
+    for finding in rows:
+        results.append(_finding_to_sarif_result(finding, rules_index, rules))
+
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {"driver": {"name": "Aegis", "rules": rules}},
+                "results": results,
+            }
+        ],
+    }
+
+
 async def stream_findings_json(
     filters: FindingFilters,
     asset_ids: list[str],

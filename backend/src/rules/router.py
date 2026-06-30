@@ -23,10 +23,12 @@ from src.rules.schemas import (
     RuleViolationPageResponse,
     RuleViolationRead,
 )
+from src.audit_log.recorder import ActorInfo, RequestContext, get_recorder
 from src.authz.enforcement import require_permission
 from src.authz.enforcement.dependencies import Permission
 from src.authz.enforcement.scope import resolve_asset_ids_from_request
 from src.authz.permissions.catalog import MANAGE_PERMISSION_BY_RULE_CATEGORY, VIEW_RULES
+from src.authz.teams.access import actor_global_role, actor_user_id
 
 
 VIOLATIONS_MAX_LIMIT = 200
@@ -48,6 +50,38 @@ def _resolve_user_identity(request: Request) -> str:
     if not user:
         raise HTTPException(status_code=401, detail="missing user identity on request")
     return user
+
+
+def _record_rule_audit(
+    request: Request,
+    *,
+    action: str,
+    resource_id: str | None,
+    resource_type: str = "rule",
+    metadata: dict | None = None,
+) -> None:
+    """Record an audit event for a rules-engine mutation.
+
+    /api/v1/rules is not covered by the global audit middleware, so rule changes
+    — which drive auto-dismiss / auto-archive of findings — must record their own
+    events to stay in the compliance trail.
+    """
+    get_recorder().record(
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        actor=ActorInfo(
+            user_id=actor_user_id(request) or None,
+            role=actor_global_role(request),
+        ),
+        request=RequestContext(
+            method=request.method.upper(),
+            path=request.url.path,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        ),
+        metadata=metadata,
+    )
 
 router = APIRouter(prefix="/api/v1/rules", tags=["rules"])
 
@@ -155,6 +189,13 @@ def engage_kill_switch(
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _record_rule_audit(
+        request,
+        action="rule.kill_switch.engaged",
+        resource_type="rule_kill_switch",
+        resource_id=category,
+        metadata={"reason": body.reason},
+    )
     return row
 
 
@@ -166,6 +207,12 @@ def disengage_kill_switch(request: Request, category: str) -> None:
         raise HTTPException(
             status_code=404, detail=f"no kill switch engaged for {category}"
         )
+    _record_rule_audit(
+        request,
+        action="rule.kill_switch.disengaged",
+        resource_type="rule_kill_switch",
+        resource_id=category,
+    )
 
 
 @router.post("", status_code=201)
@@ -194,6 +241,17 @@ def create_rule(request: Request, body: RuleCreate) -> dict:
         conditions=body.conditions,
         action=body.action,
         created_by=created_by,
+    )
+    _record_rule_audit(
+        request,
+        action="rule.created",
+        resource_id=str(rule.get("id")) if rule.get("id") is not None else None,
+        metadata={
+            "category": body.category,
+            "name": body.name,
+            "enabled": body.enabled,
+            "priority": body.priority,
+        },
     )
     return {"rule": rule}
 
@@ -234,6 +292,15 @@ def update_rule(
         update_kwargs["dry_run_confirmed_at"] = datetime.now(timezone.utc)
 
     rule = store.update_rule(rule_id, **update_kwargs)
+    _record_rule_audit(
+        request,
+        action="rule.updated",
+        resource_id=rule_id,
+        metadata={
+            "category": existing["category"],
+            "fields": sorted(update_kwargs.keys()),
+        },
+    )
     return {"rule": rule}
 
 
@@ -275,6 +342,12 @@ def delete_rule(request: Request, rule_id: str) -> None:
         raise HTTPException(status_code=404, detail="rule not found")
     require_permission(request, _manage_permission_for(existing["category"]))
     store.delete_rule(rule_id)
+    _record_rule_audit(
+        request,
+        action="rule.deleted",
+        resource_id=rule_id,
+        metadata={"category": existing["category"], "name": existing.get("name")},
+    )
 
 
 @router.post("/{rule_id}/toggle")
@@ -289,6 +362,12 @@ def toggle_rule(request: Request, rule_id: str) -> dict:
             detail="auto_dismiss rules cannot be enabled via toggle — use PUT /rules/{rule_id} with a dry-run confirmation token",
         )
     rule = store.toggle_rule(rule_id)
+    _record_rule_audit(
+        request,
+        action="rule.toggled",
+        resource_id=rule_id,
+        metadata={"category": existing["category"], "enabled": rule.get("enabled")},
+    )
     return {"rule": rule}
 
 

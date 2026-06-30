@@ -1,0 +1,78 @@
+name: Backend tests
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-tests.yml'
+  push:
+    branches: [main-v2, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-tests.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: backend-tests
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: aegis_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d aegis_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # A non-placeholder URL so the test conftest uses this service instead of
+      # spinning up a testcontainer. Tables are created via Base.metadata.create_all.
+      DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/aegis_test
+      RUNNER_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      SESSION_SECRET: test-only-session-secret-not-for-production
+      ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install WeasyPrint system libraries
+        # The PDF-report tests (exports/, reports, compliance attestation) render
+        # via WeasyPrint, which needs Pango/Cairo/GDK-Pixbuf at runtime.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
+            libgdk-pixbuf-2.0-0 libcairo2 libffi-dev fonts-dejavu-core
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          uv sync --extra test
+
+      - name: Run backend tests
+        run: |
+          cd backend
+          uv run pytest src/tests/ -q --tb=short

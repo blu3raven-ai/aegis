@@ -44,7 +44,11 @@ def get_audit_stream(
 ) -> JSONResponse:
     """Read the audit-stream config. Same gate as the PATCH next door —
     the row exposes endpoint URL and last error which are admin-only
-    operational intel, not general settings."""
+    operational intel, not general settings.
+
+    Delivery contract for receiver integrators: events are deduplicated on the
+    per-row `event_id`; the legacy `id` field is deprecated and will be removed
+    after v0.7."""
     async def _q(session):
         return _serialize(await _get_singleton(session))
     return JSONResponse(run_db(_q), status_code=200)

@@ -11,6 +11,7 @@ export function SbomHistoryDrawer({
   onClose,
   history,
   loading,
+  atCap = false,
   selectedHash,
   onSelectVersion,
 }: {
@@ -18,6 +19,8 @@ export function SbomHistoryDrawer({
   onClose: () => void
   history: SbomHistoryEntry[]
   loading: boolean
+  /** True when the list hit its fetch cap — older snapshots may exist beyond it. */
+  atCap?: boolean
   selectedHash: string | null
   onSelectVersion: (entry: SbomHistoryEntry) => void
 }) {
@@ -70,6 +73,7 @@ export function SbomHistoryDrawer({
                   key={entry.run_id}
                   type="button"
                   onClick={() => onSelectVersion(entry)}
+                  aria-current={isSelected ? "true" : undefined}
                   className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
                     isSelected
                       ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
@@ -96,7 +100,7 @@ export function SbomHistoryDrawer({
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 text-[11px] text-[var(--color-text-tertiary)]">
+                    <p className="mt-0.5 text-[11px] text-[var(--color-text-secondary)]">
                       {relativeTime(entry.created_at)}
                     </p>
                   </div>
@@ -115,7 +119,9 @@ export function SbomHistoryDrawer({
 
       <div className="border-t border-[var(--color-border)] px-5 py-3">
         <p className="text-[11px] text-[var(--color-text-tertiary)]">
-          {history.length} snapshot{history.length !== 1 ? "s" : ""} stored
+          {atCap
+            ? `Showing the latest ${history.length} snapshots`
+            : `${history.length} snapshot${history.length !== 1 ? "s" : ""} stored`}
         </p>
       </div>
     </FindingsDrawerShell>

@@ -1,7 +1,9 @@
 import type { Finding as ApiFinding } from "../../client/findings-api.ts"
 import { timeAgo } from "../time-ago.ts"
+import type { Verdict } from "./verdicts.ts"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low"
+export type FindingActionBand = "act" | "attend" | "track"
 export type FindingScanner =
   | "dependencies_scanning"
   | "code_scanning"
@@ -9,18 +11,110 @@ export type FindingScanner =
   | "secret_scanning"
   | "iac_scanning"
 
+/** One step in a secret-rotation runbook (secrets `rotation` fix). */
+export interface FindingRecommendedFixStep {
+  order: number
+  label: string
+  detail?: string
+  /** Console/dashboard URL for this step, when one exists. */
+  url?: string
+  /** A CLI command the operator can copy to perform the step. */
+  cli?: string
+  /** Irreversible step (e.g. revoking the live key) — surfaced as a warning. */
+  destructive?: boolean
+}
+
+/**
+ * Server-supplied remediation payload — a discriminated union keyed by `kind`:
+ * deps emit `upgrade` (the original, default shape), SAST `code_patch`, IaC
+ * `config_patch`, secrets `rotation`. Every field is optional and additive so
+ * older payloads (which omit `kind` and carry only the upgrade fields) keep
+ * rendering exactly as before.
+ */
 export interface FindingRecommendedFix {
+  kind?: "upgrade" | "code_patch" | "config_patch" | "rotation"
   /** Optional one-line title, e.g. "Upgrade log4j-core". */
   title?: string
+  /** Free-form description, e.g. "Patch release · no API changes". */
+  description?: string
+  /** Why this fix is recommended. */
+  rationale?: string
+  /** How sure the source is about the fix. */
+  confidence?: "high" | "medium" | "low"
+  /** Whether the fix has been validated (e.g. build/tests pass). */
+  validated?: boolean
+  /** Where the fix came from. */
+  source?: "synthesized" | "deterministic" | "llm"
+
+  // upgrade (dependencies)
   packageName?: string
   fromVersion?: string
   toVersion?: string
-  /** Free-form description, e.g. "Patch release · no API changes". */
-  description?: string
   /** Snippet payload copied to clipboard by the drawer's Copy button. */
   snippet?: string
   /** Optional URL to a diff view. */
   diffUrl?: string
+
+  // code_patch (SAST) — filePath/diff are shared with config_patch
+  filePath?: string
+  diff?: string
+  startLine?: number
+  endLine?: number
+
+  // config_patch (IaC)
+  resource?: string
+  before?: string
+  after?: string
+
+  // rotation (secrets)
+  provider?: string
+  verifiedActive?: boolean
+  steps?: FindingRecommendedFixStep[]
+}
+
+/** Where a piece of verification evidence sits in the taint path. */
+export type VerificationEvidenceKind = "source" | "sink" | "gate"
+
+/** One cited line the verifier relied on to reach its verdict. */
+export interface VerificationEvidence {
+  file: string
+  line: number
+  snippet: string
+  kind: VerificationEvidenceKind
+}
+
+/** The upstream mitigation a `ruled_out` verdict points to. */
+export interface VerificationRuledOutReason {
+  file?: string | null
+  line?: number | null
+  snippet?: string | null
+  reasoning?: string | null
+}
+
+/**
+ * Verifier run metadata — model + token spend, plus the ruled-out mitigation
+ * when one was found, or a `skipped` reason when verification didn't run. The
+ * backend passes its JSONB column through untouched, so keys stay snake_case.
+ */
+export interface VerificationMetadata {
+  model?: string
+  tokens_in?: number
+  tokens_out?: number
+  ruled_out_reason?: VerificationRuledOutReason
+  skipped?: string
+  [k: string]: unknown
+}
+
+/** Runner-derived reachability of a vulnerable dependency symbol. */
+export type Reachability = "reachable" | "no_path" | "unknown"
+
+/** Image context for a container finding. */
+export interface FindingContainerImage {
+  name: string
+  tag?: string
+  digest?: string
+  baseOs?: string
+  layerCount?: number
 }
 
 export interface FindingRow {
@@ -33,6 +127,8 @@ export interface FindingRow {
   filePath?: string
   age: string
   riskScore?: number
+  /** SSVC-style triage band derived from KEV + reachability + severity. */
+  actionBand?: FindingActionBand
   /** EPSS percentile in [0.0, 1.0] from the FIRST.org feed (Phase 50). */
   epssPercentile?: number
   /** Lifecycle state from the aggregated endpoint — null when the server omits it. */
@@ -53,6 +149,47 @@ export interface FindingRow {
   recommendedFix?: FindingRecommendedFix
   /** Assigned reviewer's user id, or undefined when unassigned. */
   assigneeUserId?: string
+  /** Argus-verification verdict, when the org runs the verification pass. */
+  verdict?: Verdict
+  /** Short, client-safe code/context preview (redacted for secrets). */
+  codeSnippet?: string
+  /** 1-indexed file line of the snippet's first line, for gutter anchoring. */
+  codeSnippetStartLine?: number
+  /** Offending line range to highlight within the snippet. */
+  highlightStart?: number
+  highlightEnd?: number
+  /** Scanner's explanation of the issue (what's wrong). */
+  description?: string
+  /** Rule that fired (name or id). */
+  rule?: string
+  /** Remediation guidance (how to fix). */
+  remediation?: string
+  /** Scanner confidence (e.g. "high"). */
+  confidence?: string
+  /** Secret detector that fired (e.g. "AWS secret"). Secret findings only. */
+  secretDetector?: string
+  /** Whether the secret was confirmed live; undefined when not validated. */
+  secretVerified?: boolean
+  /** Blast radius: other in-scope repos sharing this CVE/package (detail fetch only). */
+  alsoAffectsRepos?: number
+  /** Image context for container findings (detail fetch only). */
+  containerImage?: FindingContainerImage
+  /** Ordered taint path (source → sink) for SAST flow findings. */
+  codeFlows?: CodeFlowStep[]
+  /** Cited source/sink/gate lines behind the Argus verdict (detail fetch only). */
+  evidence?: VerificationEvidence[]
+  /** Verifier's exploit-chain narrative (detail fetch only). */
+  exploitChain?: string
+  /** Verifier model/token footer + ruled-out mitigation (detail fetch only). */
+  verificationMetadata?: VerificationMetadata
+  /** Runner-derived reachability for deps findings (detail fetch only). */
+  reachability?: Reachability
+}
+
+export interface CodeFlowStep {
+  file: string
+  line: number
+  snippet?: string
 }
 
 // Canonical scanner names use the `<thing>_scanning` suffix. Unknown
@@ -75,6 +212,46 @@ export function normaliseSeverity(raw: string | null): FindingSeverity {
     return raw
   }
   return "low"
+}
+
+export function normaliseActionBand(raw: string | null | undefined): FindingActionBand | undefined {
+  if (raw === "act" || raw === "attend" || raw === "track") {
+    return raw
+  }
+  return undefined
+}
+
+export function normaliseReachability(
+  raw: string | null | undefined,
+): Reachability | undefined {
+  if (raw === "reachable" || raw === "no_path" || raw === "unknown") {
+    return raw
+  }
+  return undefined
+}
+
+/**
+ * Coerce the server's JSONB evidence array into typed citations. Unknown
+ * `kind` values fall back to `gate` so a malformed item still renders rather
+ * than breaking the list; items missing a snippet are dropped (nothing to show).
+ */
+function normaliseEvidence(
+  raw: ApiFinding["evidence"],
+): VerificationEvidence[] | undefined {
+  if (!raw || raw.length === 0) return undefined
+  const out: VerificationEvidence[] = []
+  for (const e of raw) {
+    if (!e || !e.snippet) continue
+    const kind: VerificationEvidenceKind =
+      e.kind === "source" || e.kind === "sink" || e.kind === "gate" ? e.kind : "gate"
+    out.push({
+      file: cleanWorkspacePath(e.file || ""),
+      line: e.line ?? 0,
+      snippet: e.snippet,
+      kind,
+    })
+  }
+  return out.length > 0 ? out : undefined
 }
 
 function buildRepoLabel(api: ApiFinding): string {
@@ -145,6 +322,41 @@ export function mapApiFinding(api: ApiFinding): FindingRow {
     kev: api.kev ?? undefined,
     cwe: api.cwe ?? undefined,
     riskScore: api.risk_score ?? undefined,
+    actionBand: normaliseActionBand(api.action_band),
     assigneeUserId: api.assignee_user_id ?? undefined,
+    verdict: api.verdict ?? undefined,
+    codeSnippet: api.code_snippet ?? undefined,
+    codeSnippetStartLine: api.code_snippet_start_line ?? undefined,
+    highlightStart: api.code_highlight_start ?? undefined,
+    highlightEnd: api.code_highlight_end ?? undefined,
+    description: api.description ?? undefined,
+    rule: api.rule ?? undefined,
+    remediation: api.remediation ?? undefined,
+    confidence: api.confidence ?? undefined,
+    secretDetector: api.secret_detector ?? undefined,
+    secretVerified: api.secret_verified ?? undefined,
+    alsoAffectsRepos: api.also_affects_repos ?? undefined,
+    containerImage: api.container_image
+      ? {
+          name: api.container_image.name,
+          tag: api.container_image.tag ?? undefined,
+          digest: api.container_image.digest ?? undefined,
+          baseOs: api.container_image.base_os ?? undefined,
+          layerCount: api.container_image.layer_count ?? undefined,
+        }
+      : undefined,
+    introducedByCommit: api.introduced_by_commit ?? undefined,
+    codeFlows: api.code_flows
+      ? api.code_flows.map((s) => ({
+          file: cleanWorkspacePath(s.file || ""),
+          line: s.line ?? 0,
+          snippet: s.snippet || undefined,
+        }))
+      : undefined,
+    recommendedFix: api.recommended_fix ?? undefined,
+    evidence: normaliseEvidence(api.evidence),
+    exploitChain: api.exploit_chain ?? undefined,
+    verificationMetadata: api.verification_metadata ?? undefined,
+    reachability: normaliseReachability(api.reachability),
   }
 }

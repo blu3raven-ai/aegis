@@ -49,6 +49,7 @@ def _patch_dispatch_sinks(monkeypatch):
         "create_code_scanning_run",
         "create_container_scanning_run",
         "create_secret_run",
+        "create_iac_run",
     ):
         monkeypatch.setattr(storage, name, lambda org, run_id: None)
 
@@ -75,6 +76,7 @@ def test_dispatch_empty_selection_runs_all_applicable(monkeypatch):
         "dependencies_scanning",
         "secret_scanning",
         "code_scanning",
+        "iac_scanning",
     }
 
 

@@ -11,7 +11,9 @@ from typing import Any, Protocol
 from sqlalchemy import and_, false as sa_false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Asset, Finding, KevEntry, User
+from src.db.models import Asset, EpssScore, Finding, KevEntry, User
+from src.findings.action_band import ACT, ATTEND, TRACK, action_band, band_ordinal
+from src.shared.finding_detail_blob import hydrate_detail
 from src.shared.archived_filter import exclude_archived, only_archived
 
 # Internal tool name (DB) -> public scanner shorthand (API surface).
@@ -22,6 +24,7 @@ _TOOL_TO_PUBLIC = {
     "container_scanning": "container",
     "code_scanning": "sast",
     "secret_scanning": "secrets",
+    "iac_scanning": "iac",
 }
 _PUBLIC_TO_TOOL = {v: k for k, v in _TOOL_TO_PUBLIC.items()}
 
@@ -33,7 +36,7 @@ _SCANNER_INPUT_TO_TOOL = {**_PUBLIC_TO_TOOL, **{t: t for t in _TOOL_TO_PUBLIC}}
 
 VALID_SCANNERS = frozenset(_SCANNER_INPUT_TO_TOOL.keys())
 VALID_SEVERITIES = frozenset({"critical", "high", "medium", "low"})
-VALID_STATES = frozenset({"open", "closed", "dismissed", "fixed"})
+VALID_STATES = frozenset({"open", "closed", "dismissed", "fixed", "deferred"})
 
 # Concrete verdict values stored in Finding.verdict.
 VALID_VERDICTS = frozenset({"confirmed", "needs_verify", "possible", "ruled_out"})
@@ -42,7 +45,14 @@ VALID_VERDICTS = frozenset({"confirmed", "needs_verify", "possible", "ruled_out"
 # (findings ingested before LLM verification ran); "all" disables the filter.
 _VALID_VERDICT_FILTERS = VALID_VERDICTS | frozenset({"legacy", "all"})
 VALID_SORTS = frozenset(
-    {"severity", "severity_age", "epss", "risk_score", "newest", "oldest", "created_at", "updated_at"}
+    {"severity", "severity_age", "epss", "risk_score", "action_band", "newest", "oldest", "created_at", "updated_at"}
+)
+
+# Sorts paginated by page number (offset), not keyset cursor. They never emit a
+# next_cursor, and _cursor_predicate must not build a keyset clause for them — a
+# stray/stale cursor under one of these would otherwise key on the wrong column.
+_DEFERRED_CURSOR_SORTS = frozenset(
+    {"severity_age", "epss", "risk_score", "action_band", "newest", "oldest"}
 )
 
 # Ordering value used to sort severities — higher = more severe.
@@ -83,6 +93,9 @@ class FindingsListFilters:
     kev: bool | None = None
     epss_min: float | None = None
     risk_score_min: int | None = None
+    # Additive categorical filter: subset of {"act","attend","track"}. Composes
+    # with risk_score_min; both stay on the dataclass during the Phase C overlap.
+    bands: list[str] | None = None
     assignee_user_id: str | None = None
     page: int = 1
     # None defaults to hiding ruled_out; "all" disables the filter entirely.
@@ -149,6 +162,13 @@ def _normalize_filters(filters: FindingsListFilters) -> FindingsListFilters:
         min(max(int(filters.risk_score_min), 0), 100) if filters.risk_score_min is not None else None
     )
 
+    bands: list[str] | None = None
+    if filters.bands:
+        bands = [b.lower() for b in filters.bands if b]
+        bad = [b for b in bands if b not in (ACT, ATTEND, TRACK)]
+        if bad:
+            raise ValueError(f"invalid band: {bad}")
+
     assignee_user_id: str | None = None
     if filters.assignee_user_id:
         assignee_user_id = filters.assignee_user_id.strip()[:255] or None
@@ -181,6 +201,7 @@ def _normalize_filters(filters: FindingsListFilters) -> FindingsListFilters:
         kev=kev,
         epss_min=epss_min,
         risk_score_min=risk_score_min,
+        bands=bands,
         assignee_user_id=assignee_user_id,
         page=page,
         verdict=verdict,
@@ -199,6 +220,21 @@ def _decode_cursor(cursor: str) -> dict[str, Any]:
         return json.loads(raw)
     except (binascii.Error, ValueError, json.JSONDecodeError) as exc:
         raise ValueError("invalid cursor") from exc
+
+
+def _band_ordinal_sql():
+    """SQL CASE mirroring action_band() -> band ordinal (act=3/attend=2/track=1).
+    Kept in sync with findings.action_band (parity-tested)."""
+    from sqlalchemy import case
+    is_kev = Finding.cve_id.in_(select(KevEntry.cve_id))
+    is_high = func.lower(Finding.severity).in_(("critical", "high"))
+    is_reachable = Finding.detail["reachability"].astext == "reachable"
+    return case(
+        (and_(is_kev, is_high), 3),
+        (is_kev, 2),
+        (and_(is_reachable, is_high), 2),
+        else_=1,
+    )
 
 
 def _sort_columns(sort: str, direction: str):
@@ -235,6 +271,22 @@ def _sort_columns(sort: str, direction: str):
             else Finding.risk_score.asc().nullslast()
         )
         return [primary, Finding.id.desc() if desc else Finding.id.asc()]
+    if sort == "action_band":
+        from sqlalchemy import case
+        band = _band_ordinal_sql()
+        sev_rank = case(
+            (func.lower(Finding.severity) == "critical", 4),
+            (func.lower(Finding.severity) == "high", 3),
+            (func.lower(Finding.severity) == "medium", 2),
+            (func.lower(Finding.severity) == "low", 1),
+            else_=0,
+        )
+        primary = band.desc() if desc else band.asc()
+        secondary = sev_rank.desc() if desc else sev_rank.asc()
+        # Transparent tiebreak: band, then severity rank, then id. EPSS is
+        # intentionally NOT a tiebreak here — it would force a join and EPSS is
+        # never an input to the band decision.
+        return [primary, secondary, Finding.id.desc() if desc else Finding.id.asc()]
     if sort == "severity":
         # Sort by severity rank — Postgres CASE expression so we can use the
         # ordinal rather than the lexicographic order of the severity string.
@@ -268,6 +320,11 @@ def _cursor_predicate(cursor_payload: dict[str, Any], sort: str, direction: str)
     """
     last_id = cursor_payload.get("id")
     if last_id is None:
+        return None
+
+    # Page-number sorts never mint a cursor; a stray/stale one must not inject a
+    # keyset clause keyed on the wrong column. Fail closed to no predicate.
+    if sort in _DEFERRED_CURSOR_SORTS:
         return None
 
     if sort == "severity":
@@ -373,6 +430,9 @@ def _build_where_clauses(filters: FindingsListFilters) -> list:
     if filters.risk_score_min is not None:
         clauses.append(Finding.risk_score >= filters.risk_score_min)
 
+    if filters.bands:
+        clauses.append(_band_ordinal_sql().in_([band_ordinal(b) for b in filters.bands]))
+
     if filters.assignee_user_id:
         clauses.append(Finding.assignee_user_id == filters.assignee_user_id)
 
@@ -392,17 +452,211 @@ class _NoKev:
         return None
 
 
+def _secret_type_label(detail: dict) -> str | None:
+    """Human-facing secret type from the scanner's detector name, or None.
+
+    Secret findings hash the matched value into the identity key, so without
+    a real title the public response would leak that hash. The detector
+    (e.g. "AWS", "github-pat") is the useful triage signal instead.
+    """
+    detector = (detail.get("detector") or "").strip()
+    if not detector:
+        return None
+    label = detector.replace("-", " ").replace("_", " ").strip()
+    lowered = label.lower()
+    if any(word in lowered for word in ("secret", "token", "key", "credential", "password")):
+        return label
+    return f"{label} secret"
+
+
+def _secret_verified(detail: dict) -> bool | None:
+    """Whether the scanner confirmed the secret is a *live* credential.
+
+    The scanner classification is the source of truth — a live credential is
+    recorded as a ``verified_secret`` (vs ``uncertain``) classification entry at
+    ingest; fall back to the raw ``Verified`` flag. Returns None when the
+    detector can't validate (so the UI shows "unverified", not "inactive").
+    """
+    for entry in detail.get("classificationHistory") or []:
+        if isinstance(entry, dict) and entry.get("source") == "scanner":
+            value = entry.get("value")
+            if value == "verified_secret":
+                return True
+            if value == "uncertain":
+                return False
+    raw = detail.get("raw") or {}
+    if isinstance(raw, dict) and "Verified" in raw:
+        return bool(raw["Verified"])
+    return None
+
+
+# Mirrors runner extract_context.CONTEXT_RADIUS. Used only as a backwards-compat
+# fallback to anchor windows stored before the runner emitted a start line; new
+# scans carry code_window_start_line directly.
+_CONTEXT_RADIUS = 40
+
+
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _container_image(detail: dict) -> dict[str, Any] | None:
+    """Image context for a container finding: which image carries the vuln, its
+    base OS, digest (for pinning), and layer count. None when no image is known."""
+    name = (detail.get("imageName") or "").strip()
+    if not name:
+        return None
+    return {
+        "name": name,
+        "tag": (detail.get("imageTag") or "").strip() or None,
+        "digest": (detail.get("imageDigest") or "").strip() or None,
+        "base_os": (detail.get("baseOs") or "").strip() or None,
+        "layer_count": _as_int(detail.get("layerCount")),
+    }
+
+
+def _code_preview(tool: str, detail: dict) -> dict[str, Any] | None:
+    """Client-safe code preview with line anchoring and a highlight range.
+
+    Secrets return only the *redacted* match (never `secretSnippet`, the raw
+    value) and no line context. Code findings prefer the surrounding window —
+    anchored to its real first line — so the offending line(s) can be shown
+    highlighted in context, falling back to the bare matched snippet.
+    """
+    if tool == "secret_scanning":
+        raw = detail.get("raw") or {}
+        # Prefer the runner-extracted code window (already redacted of every
+        # detected secret) so the secret shows in its file context. Defense in
+        # depth: re-mask this finding's own value here before it leaves the API.
+        window = (detail.get("code_window") or "").strip("\n")
+        if window:
+            for value in (raw.get("Raw"), raw.get("RawV2")):
+                if value:
+                    window = window.replace(value, "•••redacted-secret•••")
+            win_start = _as_int(detail.get("code_window_start_line"))
+            line = _as_int(detail.get("line"))
+            if win_start is not None:
+                return {"text": window, "start_line": win_start, "highlight_start": line, "highlight_end": line}
+        redacted = (raw.get("Redacted") or raw.get("Match") or "").strip()
+        if not redacted:
+            return None
+        return {"text": redacted, "start_line": None, "highlight_start": None, "highlight_end": None}
+
+    # Dependencies anchor to the line in the manifest where the vulnerable
+    # package is declared.
+    if tool == "dependencies_scanning":
+        snippet = (detail.get("manifestSnippet") or "").strip("\n")
+        if not snippet:
+            return None
+        line = _as_int(detail.get("manifestMatchLine"))
+        return {"text": snippet, "start_line": line, "highlight_start": line, "highlight_end": line}
+
+    # Code, IaC, and container findings are all file+line+snippet: prefer the
+    # surrounding window (anchored to its real first line) so the offending
+    # line(s) show highlighted in context, else the bare matched snippet.
+    hl_start = _as_int(detail.get("startLine") or detail.get("start_line"))
+    hl_end = _as_int(detail.get("endLine") or detail.get("end_line")) or hl_start
+
+    window = (detail.get("code_window") or "").strip("\n")
+    win_start = _as_int(detail.get("code_window_start_line"))
+    if window and win_start is None and hl_start is not None:
+        win_start = max(1, hl_start - _CONTEXT_RADIUS)
+    if window and win_start is not None:
+        return {"text": window, "start_line": win_start, "highlight_start": hl_start, "highlight_end": hl_end}
+
+    snippet = (detail.get("snippet") or "").strip("\n")
+    if snippet:
+        return {"text": snippet, "start_line": hl_start, "highlight_start": hl_start, "highlight_end": hl_end}
+    return None
+
+
+def _first_line(text: str, cap: int = 120) -> str:
+    """First line of a message, trimmed and length-capped for use as a title."""
+    line = text.strip().split("\n", 1)[0].strip()
+    return line[:cap].rstrip()
+
+
+def _sast_title(finding: Finding, detail: dict) -> str:
+    """Readable title for a code-scanning finding.
+
+    The stored Finding.title leaks the clone path + rule id, so prefer the
+    scanner's human-written message (the headline a code-scanning alert
+    shows), then the rule name, before falling back to the raw title (which the
+    frontend trims to a basename).
+    """
+    message = (detail.get("message") or "").strip()
+    if message:
+        return _first_line(message)
+    rule = (detail.get("ruleName") or detail.get("ruleId") or "").strip()
+    if rule and "/workspace/" not in rule:
+        return rule
+    return finding.title or finding.identity_key
+
+
+def _detail_cwe(detail: dict) -> str | None:
+    """First CWE id carried on the finding detail (SAST/IaC), or None."""
+    cwe = detail.get("cwe")
+    if isinstance(cwe, list) and cwe:
+        return str(cwe[0]).strip() or None
+    if isinstance(cwe, str) and cwe.strip():
+        return cwe.strip()
+    return None
+
+
+def _patched_version_str(value: object) -> str | None:
+    """Extract a plain version string from a patchedVersion value.
+
+    Handles both the plain-string form stored by the normalizers and the dict
+    form {"identifier": "..."} present in raw findings before normalization.
+    """
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, dict):
+        id_ = value.get("identifier")
+        if isinstance(id_, str) and id_:
+            return id_
+    return None
+
+
+def _deps_upgrade_fix(finding: Finding, detail: dict) -> dict | None:
+    """Synthesize the deterministic upgrade fix for a dependency/container
+    finding from the OSV-derived patched version already stored on the finding.
+    Returns None when there's no patched version to upgrade to."""
+    if finding.tool not in ("dependencies_scanning", "container_scanning"):
+        return None
+    to_version = _patched_version_str(detail.get("patchedVersion"))
+    if not to_version:
+        return None
+    fix: dict[str, str] = {"toVersion": to_version}
+    if finding.package_name:
+        fix["packageName"] = finding.package_name
+    from_version = detail.get("currentVersion")
+    if isinstance(from_version, str) and from_version:
+        fix["fromVersion"] = from_version
+    return fix
+
+
 def _finding_to_dict(
     finding: Finding,
     kev_lookup: _KevLookup | None = None,
     epss_lookup: dict[str, float] | None = None,
     repo: str | None = None,
+    *,
+    hydrate: bool = False,
 ) -> dict[str, Any]:
-    """Serialise a Finding to the public response shape (now including kev + cwe)."""
-    lookup = kev_lookup or _NoKev()
-    detail: dict = finding.detail or {}
+    """Serialise a Finding to the public response shape (now including kev + cwe).
 
-    title = finding.title or finding.identity_key
+    ``hydrate`` merges the fat detail blob from MinIO before serialising — the
+    code window, snippet, code flows, and manifest snippet all live there, not
+    in the lean JSONB column. The single-finding detail view passes
+    ``hydrate=True``; the list path stays lean (one MinIO GET per row would
+    defeat the lean/fat split), so it omits those heavy fields by design.
+    """
+    lookup = kev_lookup or _NoKev()
+    detail: dict = (hydrate_detail(finding) if hydrate else finding.detail) or {}
 
     package = None
     pkg_name = finding.package_name
@@ -410,11 +664,33 @@ def _finding_to_dict(
     if pkg_name:
         package = f"{pkg_name}@{pkg_version}" if pkg_version else pkg_name
 
-    line_raw = detail.get("start_line") or detail.get("line")
+    if finding.tool == "code_scanning":
+        title = _sast_title(finding, detail)
+    elif finding.tool == "secret_scanning":
+        title = finding.title or _secret_type_label(detail) or "Detected secret"
+    elif pkg_name:
+        # Dependencies/container: the stored title and identity_key are an
+        # opaque coordinate (pkg::name::ecosystem::advisory). Show the readable
+        # "<package> <version>" slug instead; the CVE rides along as the
+        # identifier below.
+        title = f"{pkg_name} {pkg_version}" if pkg_version else pkg_name
+    else:
+        title = finding.title or finding.cve_id or finding.identity_key
+
+    line_raw = detail.get("start_line") or detail.get("startLine") or detail.get("line")
     try:
         line = int(line_raw) if line_raw is not None else None
     except (ValueError, TypeError):
         line = None
+
+    # What an analyst needs to triage, beyond the metadata: the scanner's
+    # explanation, the rule that fired, the weakness class, and the fix.
+    description = (detail.get("message") or "").strip() or None
+    rule = (detail.get("ruleName") or detail.get("ruleId") or "").strip() or None
+    remediation = (detail.get("fixSuggestion") or "").strip() or None
+    confidence = (detail.get("confidence") or "").strip().lower() or None
+    cwe = lookup.first_cwe(finding.cve_id) or _detail_cwe(detail)
+    preview = _code_preview(finding.tool, detail)
 
     return {
         "id": str(finding.id),
@@ -433,12 +709,211 @@ def _finding_to_dict(
         "created_at": finding.created_at.isoformat() if finding.created_at else None,
         "updated_at": finding.updated_at.isoformat() if finding.updated_at else None,
         "kev": lookup.is_kev(finding.cve_id),
-        "cwe": lookup.first_cwe(finding.cve_id),
+        "cwe": cwe,
+        "description": description,
+        "rule": rule,
+        "remediation": remediation,
+        "confidence": confidence,
+        # Secret triage signals: the detector that fired and whether the
+        # credential was confirmed live. Both None for non-secret findings.
+        "secret_detector": _secret_type_label(detail) if finding.tool == "secret_scanning" else None,
+        "secret_verified": _secret_verified(detail) if finding.tool == "secret_scanning" else None,
+        # Provenance: the commit that introduced the finding, when the scanner
+        # captured it (secrets carry the blame commit). None when unknown.
+        "introduced_by_commit": (detail.get("commit") or "").strip() or None,
+        # Image context for container findings; None for every other scanner.
+        "container_image": (
+            _container_image(detail) if finding.tool == "container_scanning" else None
+        ),
         "epss_percentile": (epss_lookup or {}).get(finding.cve_id) if finding.cve_id else None,
         "risk_score": finding.risk_score,
+        "action_band": action_band(
+            finding.severity,
+            kev_listed=lookup.is_kev(finding.cve_id),
+            reachability=detail.get("reachability"),
+        ),
         "assignee_user_id": finding.assignee_user_id,
         "verdict": finding.verdict,
+        # LLM-verification reasoning behind the verdict: cited source/sink/gate
+        # evidence, the exploit-chain narrative, the runner-derived reachability,
+        # and the model/token footer. Promoted typed columns win; reachability
+        # lives in the lean detail blob.
+        "evidence": finding.evidence,
+        "exploit_chain": finding.exploit_chain,
+        "verification_metadata": finding.verification_metadata,
+        "reachability": detail.get("reachability"),
+        "code_snippet": preview["text"] if preview else None,
+        "code_snippet_start_line": preview["start_line"] if preview else None,
+        "code_highlight_start": preview["highlight_start"] if preview else None,
+        "code_highlight_end": preview["highlight_end"] if preview else None,
+        # Ordered taint path (source -> sink) for SAST flow findings, when present.
+        "code_flows": detail.get("code_flows") or None,
+        # Structured fix payload. The promoted typed column wins (runner-emitted
+        # fix for secrets/IaC/SAST), then any lean-detail value, then a synthesized
+        # upgrade fix from the OSV patched version for deps/container findings.
+        "recommended_fix": (
+            finding.recommended_fix
+            or detail.get("recommended_fix")
+            or _deps_upgrade_fix(finding, detail)
+        ),
     }
+
+
+def _advisory_references(raw: Any) -> list[str]:
+    """Normalise the stored references (list of {"url": …} dicts or bare
+    strings) to a flat list of URLs."""
+    out: list[str] = []
+    for ref in raw or []:
+        if isinstance(ref, dict) and ref.get("url"):
+            out.append(ref["url"])
+        elif isinstance(ref, str) and ref:
+            out.append(ref)
+    return out
+
+
+def finding_advisory(finding: Finding) -> dict[str, Any] | None:
+    """Advisory enrichment for a finding's vulnerability, for the drawer's
+    Security Brief: the summary/description, severity + CVSS vector, the
+    affected → patched version range, references, and dates.
+
+    The deps/container lifecycle flattens the advisory into top-level detail
+    keys (``summary``, ``cvssVector``, ``vulnerableVersionRange``, …) and stores
+    the heavy ones in the fat blob, so this hydrates from MinIO and reads the
+    flat keys. Returns None for findings with no advisory (SAST / secrets / IaC).
+    """
+    detail = hydrate_detail(finding)
+    advisory_id = detail.get("advisoryId") or None
+    summary = (detail.get("summary") or "").strip() or None
+    cvss_vector = detail.get("cvssVector") or None
+    affected = (detail.get("vulnerableVersionRange") or "").strip() or None
+    fixed = detail.get("patchedVersion") or None
+
+    # Nothing advisory-shaped → not a vuln finding (or no advisory data).
+    if not (advisory_id or summary or cvss_vector or affected):
+        return None
+
+    return {
+        "advisory_id": advisory_id,
+        "cve_id": detail.get("cveId") or finding.cve_id,
+        "severity": (finding.severity or "").strip().lower() or None,
+        "cvss_vector": cvss_vector,
+        "summary": summary,
+        "description": (detail.get("description") or "").strip() or None,
+        "published_at": detail.get("publishedAt") or None,
+        "affected_range": affected,
+        "fixed_version": fixed,
+        "references": _advisory_references(detail.get("references")),
+    }
+
+
+async def advisory_intel(cve_id: str | None, session: AsyncSession) -> dict[str, Any]:
+    """EPSS percentile + KEV status for a CVE, to round out the advisory brief.
+
+    When the CVE is in CISA KEV, ``kev_detail`` carries the regulatory remediation
+    deadline (``due_date``), the catalog-add date, and the known-ransomware flag —
+    the deadline analysts triage against. None when the CVE isn't listed.
+    """
+    if not cve_id:
+        return {"epss_percentile": None, "kev": False, "kev_detail": None}
+    epss = await session.execute(
+        select(EpssScore.percentile).where(EpssScore.cve == cve_id)
+    )
+    kev = await session.execute(
+        select(KevEntry.due_date, KevEntry.date_added, KevEntry.known_ransomware_use).where(
+            KevEntry.cve_id == cve_id
+        )
+    )
+    percentile = epss.scalar_one_or_none()
+    kev_row = kev.first()
+    kev_detail = None
+    if kev_row is not None:
+        due, added, ransomware = kev_row
+        kev_detail = {
+            "due_date": due.isoformat() if due else None,
+            "date_added": added.isoformat() if added else None,
+            "known_ransomware": bool(ransomware),
+        }
+    return {
+        "epss_percentile": float(percentile) if percentile is not None else None,
+        "kev": kev_detail is not None,
+        "kev_detail": kev_detail,
+    }
+
+
+def _related_match(finding: Finding):
+    """The 'same vulnerability' predicate for blast-radius queries: prefer the
+    CVE, else the package. None when the finding has neither."""
+    if finding.cve_id:
+        return Finding.cve_id == finding.cve_id
+    if finding.package_name:
+        return Finding.package_name == finding.package_name
+    return None
+
+
+# Findings in these states no longer "affect" an asset, so they don't count
+# toward the blast radius.
+_BLAST_INACTIVE_STATES = ("fixed", "dismissed", "closed")
+
+
+async def count_related_repos(
+    finding: Finding, asset_ids: list[str], session: AsyncSession
+) -> int:
+    """The vuln's blast radius: how many *other* in-scope assets carry an active
+    finding that shares this finding's CVE (preferred) or package. Scoped to the
+    caller's assets and bounded to non-archived, still-affecting findings."""
+    match = _related_match(finding)
+    if not asset_ids or match is None:
+        return 0
+
+    stmt = (
+        select(func.count(func.distinct(Finding.asset_id)))
+        .where(Finding.asset_id.in_(asset_ids))
+        .where(match)
+        .where(Finding.state.notin_(_BLAST_INACTIVE_STATES))
+    )
+    stmt = exclude_archived(stmt, Finding)
+    if finding.asset_id is not None:
+        stmt = stmt.where(Finding.asset_id != finding.asset_id)
+    result = await session.execute(stmt)
+    return int(result.scalar() or 0)
+
+
+async def list_related_findings(
+    finding: Finding, asset_ids: list[str], session: AsyncSession, *, limit: int = 25
+) -> list[dict[str, Any]]:
+    """Blast-radius drill-down: one representative finding per *other* in-scope
+    repo that shares this finding's CVE/package, worst-severity first. Each row
+    is enough for the UI to deep-link to that finding."""
+    match = _related_match(finding)
+    if not asset_ids or match is None:
+        return []
+
+    stmt = (
+        select(Finding.id, Finding.severity, Finding.state, Asset.display_name)
+        .join(Asset, Asset.id == Finding.asset_id)
+        .where(Finding.asset_id.in_(asset_ids))
+        .where(match)
+        .where(Finding.state.notin_(_BLAST_INACTIVE_STATES))
+    )
+    stmt = exclude_archived(stmt, Finding)
+    if finding.asset_id is not None:
+        stmt = stmt.where(Finding.asset_id != finding.asset_id)
+
+    # Keep the worst-severity finding per repo so the list reads one-per-repo.
+    by_repo: dict[str, tuple[Any, int, str | None, str | None]] = {}
+    for fid, severity, state, repo in (await session.execute(stmt)).all():
+        if not repo:
+            continue
+        rank = _SEVERITY_RANK.get((severity or "").lower(), 0)
+        if repo not in by_repo or rank > by_repo[repo][1]:
+            by_repo[repo] = (fid, rank, (severity or "").lower() or None, state)
+
+    rows = [
+        {"finding_id": str(fid), "repo": repo, "severity": sev, "state": state}
+        for repo, (fid, _rank, sev, state) in by_repo.items()
+    ]
+    rows.sort(key=lambda r: -_SEVERITY_RANK.get(r["severity"] or "", 0))
+    return rows[:limit]
 
 
 async def list_findings(
@@ -528,7 +1003,7 @@ async def list_findings(
     has_more = len(rows) > filters.limit
     page = rows[: filters.limit]
     next_cursor = _build_next_cursor(page[-1], filters.sort) if has_more and page else None
-    if filters.sort in ("severity_age", "epss", "risk_score", "newest", "oldest"):
+    if filters.sort in _DEFERRED_CURSOR_SORTS:
         next_cursor = None  # cursor pagination for these sorts is deferred to PR 5 (page-number pagination)
     if not filters.cursor:
         next_cursor = None

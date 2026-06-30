@@ -376,34 +376,60 @@ def test_login_timing_is_consistent_unknown_vs_wrong_password(app_client, seed_u
     where one branch skips scrypt entirely.
     """
     import time
+
+    from src.db.helpers import run_db
+
     email, _, _ = seed_user_with_password
-    # Use a unique email so this test never collides with shared user rate-limit state
-    ghost_email = f"ghost-timing-{uuid4()}@example.com"
 
-    # Warm the scrypt path before measuring — the very first call after
-    # process start absorbs interpreter/import overhead that has nothing
-    # to do with the constant-time-equality property under test.
-    app_client.post("/api/v1/auth/login", json={"identifier": email, "password": "warmup"})
+    def _clear_login_ip_buckets() -> None:
+        # Reset the per-IP login limiter (5/60s) so repeated samples below don't
+        # trip it — a 429 would short-circuit the handler and ruin the timing.
+        async def _c(session):
+            await session.execute(
+                delete(RateLimitBucket).where(
+                    RateLimitBucket.key.like("/api/v1/auth/login:ip:%")
+                )
+            )
+        run_db(_c)
 
-    t0 = time.perf_counter()
-    app_client.post("/api/v1/auth/login", json={"identifier": email, "password": "wrong"})
-    wrong_pw_elapsed = time.perf_counter() - t0
+    def _timed(identifier: str, password: str) -> float:
+        _clear_login_ip_buckets()
+        t0 = time.perf_counter()
+        resp = app_client.post(
+            "/api/v1/auth/login", json={"identifier": identifier, "password": password}
+        )
+        elapsed = time.perf_counter() - t0
+        assert resp.status_code != 429, "timing sample hit the rate limiter"
+        return elapsed
 
-    t0 = time.perf_counter()
-    app_client.post("/api/v1/auth/login", json={"identifier": ghost_email, "password": "wrong"})
-    unknown_user_elapsed = time.perf_counter() - t0
+    # Warm the scrypt path before measuring — the first call after process start
+    # absorbs interpreter/import overhead unrelated to the property under test.
+    _timed(email, "warmup")
 
-    # Both should take at least 50% of scrypt's typical ~60ms — if unknown-user
-    # path took <20ms, scrypt was definitely skipped.
-    assert unknown_user_elapsed > 0.020, (
-        f"unknown-user took {unknown_user_elapsed * 1000:.1f}ms; scrypt was likely skipped"
+    # Take several interleaved samples and compare the MINIMUMS. The fastest
+    # observed run reflects scrypt's true cost; GC/scheduler jitter only ever
+    # inflates a sample, so a single slow shot (which made the old single-sample
+    # ratio flake on a busy CI box) is discarded by min().
+    samples = 5
+    wrong_pw = [_timed(email, "wrong") for _ in range(samples)]
+    unknown_user = [_timed(f"ghost-timing-{uuid4()}@example.com", "wrong") for _ in range(samples)]
+
+    fastest_wrong = min(wrong_pw)
+    fastest_unknown = min(unknown_user)
+
+    # Each branch must actually run scrypt (~60ms); a skipped branch returns in
+    # well under 20ms, so a sub-20ms minimum means scrypt was bypassed.
+    assert fastest_unknown > 0.020, (
+        f"unknown-user min {fastest_unknown * 1000:.1f}ms; scrypt was likely skipped"
     )
-    # And the ratio shouldn't be too far off. Single-sample timing on a busy
-    # CI box drifts ~2x; >3x is a real signal of an enumeration leak.
-    ratio = max(wrong_pw_elapsed, unknown_user_elapsed) / min(wrong_pw_elapsed, unknown_user_elapsed)
+    assert fastest_wrong > 0.020, (
+        f"wrong-password min {fastest_wrong * 1000:.1f}ms; scrypt was likely skipped"
+    )
+    # Comparing minima removes jitter, so a >3x gap is a genuine timing-oracle signal.
+    ratio = max(fastest_wrong, fastest_unknown) / min(fastest_wrong, fastest_unknown)
     assert ratio < 3.0, (
         f"timing ratio {ratio:.2f} suggests enumeration leak; "
-        f"wrong_pw={wrong_pw_elapsed * 1000:.1f}ms, unknown={unknown_user_elapsed * 1000:.1f}ms"
+        f"wrong_pw_min={fastest_wrong * 1000:.1f}ms, unknown_min={fastest_unknown * 1000:.1f}ms"
     )
 
 

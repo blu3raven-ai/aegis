@@ -42,7 +42,7 @@ class SecretsHooks(LifecycleHooks):
         return raw.get("severity") or "high"
 
     def extract_detail(self, raw: dict[str, Any]) -> dict:
-        return {
+        detail: dict[str, Any] = {
             "organization": raw.get("organization", ""),
             "secretIdentity": raw.get("secretIdentity", ""),
             "fingerprint": raw.get("fingerprint", ""),
@@ -59,6 +59,16 @@ class SecretsHooks(LifecycleHooks):
             "aiReasoning": raw.get("aiReasoning"),
             "raw": raw.get("raw") or {},
         }
+        # Verification fields are present only when the runner verifier ran;
+        # upsert_finding promotes them from detail onto the typed columns.
+        for key in (
+            "verdict", "evidence", "exploit_chain", "verification_metadata",
+            "recommended_fix", "code_window", "code_window_start_line",
+        ):
+            val = raw.get(key)
+            if val is not None:
+                detail[key] = val
+        return detail
 
 
     def canonical_external_ref(self, ctx: "ScanContext", raw: dict[str, Any]) -> tuple[str, str] | None:

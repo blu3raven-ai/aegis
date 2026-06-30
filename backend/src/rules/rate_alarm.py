@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import Finding, FindingEvent, Rule
+from src.rules.action_schemas import AutoDismissAction
 from src.shared.event_bus import Event, get_event_bus
 
 
@@ -58,9 +59,16 @@ async def should_rate_alarm_block(session: AsyncSession, rule: Rule) -> bool:
     Returns False if no new findings landed in the window — a zero
     denominator means the rule cannot possibly have crossed the threshold.
     """
+    # `rate_alarm_pct` / `rate_alarm_window_minutes` are optional-with-defaults in
+    # AutoDismissAction. The rule-create path stores the caller's raw action, so a
+    # rule authored without them is a valid stored shape — fall back to the schema
+    # defaults rather than KeyError-ing mid-evaluation.
     action = rule.action or {}
-    pct = action["rate_alarm_pct"]
-    window_minutes = action["rate_alarm_window_minutes"]
+    fields = AutoDismissAction.model_fields
+    pct = action.get("rate_alarm_pct", fields["rate_alarm_pct"].default)
+    window_minutes = action.get(
+        "rate_alarm_window_minutes", fields["rate_alarm_window_minutes"].default
+    )
 
     window_start = _utcnow() - timedelta(minutes=window_minutes)
     rule_actor = auto_dismiss_event_actor(rule.id)
@@ -104,7 +112,6 @@ def dispatch_rate_alarm(rule: Rule) -> None:
     action = rule.action or {}
     get_event_bus().publish_sync(Event(
         event_type="rule.auto_dismiss.rate_alarm",
-        org="",
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,
@@ -126,7 +133,6 @@ def auto_disable_rule(session: AsyncSession, rule: Rule, *, reason: str) -> None
 
     get_event_bus().publish_sync(Event(
         event_type="rule.auto_dismiss.auto_disabled",
-        org="",
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,

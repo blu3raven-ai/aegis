@@ -26,11 +26,30 @@ function formatFirstSeen(iso: string | undefined): string | null {
   return `${year}-${month}-${day}`
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+// Matches the Details grid cell so the two adjacent metadata bands read as one
+// designed surface. `wide` spans both columns for long values (file paths).
+function Cell({
+  label,
+  value,
+  wide,
+  mono,
+  title,
+}: {
+  label: string
+  value: React.ReactNode
+  wide?: boolean
+  mono?: boolean
+  title?: string
+}) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-1">
-      <dt className="text-sm text-[var(--color-text-secondary)]">{label}</dt>
-      <dd className="text-sm font-medium text-[var(--color-text-primary)] text-right truncate font-[family-name:var(--font-jetbrains-mono)]">
+    <div className={wide ? "col-span-2 min-w-0" : "min-w-0"}>
+      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">{label}</dt>
+      <dd
+        className={`mt-1 truncate text-[var(--color-text-primary)] ${
+          mono ? "font-[family-name:var(--font-jetbrains-mono)] text-[11px]" : "text-sm"
+        }`}
+        title={title}
+      >
         {value}
       </dd>
     </div>
@@ -59,14 +78,13 @@ export function FindingOriginSection({ finding, scannerLabel }: FindingOriginSec
       >
         Origin
       </h3>
-      <dl className="mt-3 divide-y divide-[var(--color-border)]">
-        {firstSeen && <Row label="First seen" value={firstSeen} />}
-        {finding.scanner && (
-          <Row label="Scanner" value={scannerLabel ?? finding.scanner} />
-        )}
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+        {firstSeen && <Cell label="First seen" value={firstSeen} mono title={firstSeen} />}
+        {finding.scanner && <Cell label="Scanner" value={scannerLabel ?? finding.scanner} />}
         {commit && (
-          <Row
+          <Cell
             label="Introduced by commit"
+            mono
             value={
               finding.introducedByPrUrl ? (
                 <a
@@ -84,9 +102,11 @@ export function FindingOriginSection({ finding, scannerLabel }: FindingOriginSec
           />
         )}
         {finding.introducedByAuthor && (
-          <Row label="Introduced by" value={finding.introducedByAuthor} />
+          <Cell label="Introduced by" value={finding.introducedByAuthor} />
         )}
-        {finding.filePath && <Row label="File path" value={finding.filePath} />}
+        {finding.filePath && (
+          <Cell label="File path" wide mono value={finding.filePath} title={finding.filePath} />
+        )}
       </dl>
     </section>
   )

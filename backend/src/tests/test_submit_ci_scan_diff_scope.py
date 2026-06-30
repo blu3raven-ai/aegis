@@ -14,15 +14,23 @@ os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
 def _fake_get_session():
     """Return an asynccontextmanager that yields a stub session.
 
-    The stub records add() calls but commit() is a no-op; submit_ci_scan only
-    needs the row to be added and committed without raising.
+    The stub records add() calls, commit() is a no-op, and execute() returns an
+    empty result so submit_ci_scan's asset lookup resolves to None (dispatch then
+    falls back without a provider-resolved source type / clone URL).
     """
+    class _Result:
+        def scalar_one_or_none(self):
+            return None
+
     class _Session:
         def add(self, _row):
             pass
 
         async def commit(self):
             pass
+
+        async def execute(self, _stmt):
+            return _Result()
 
     @asynccontextmanager
     async def _ctx():
@@ -38,7 +46,7 @@ async def test_pr_triggered_scan_resolves_base_sha_and_marks_diff_scoped():
 
     captured: dict = {}
 
-    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope):
+    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None):
         captured["base_sha"] = base_sha
         captured["scan_scope"] = scan_scope
 
@@ -67,7 +75,7 @@ async def test_non_pr_scan_uses_full_tree():
 
     captured: dict = {}
 
-    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope):
+    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None):
         captured["base_sha"] = base_sha
         captured["scan_scope"] = scan_scope
 
@@ -94,7 +102,7 @@ async def test_pr_scan_falls_back_to_full_tree_when_base_sha_unresolvable():
 
     captured: dict = {}
 
-    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope):
+    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None):
         captured["base_sha"] = base_sha
         captured["scan_scope"] = scan_scope
 

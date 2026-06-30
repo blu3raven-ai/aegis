@@ -23,8 +23,9 @@ The REST surface lives at `/api/v1/sboms/*` (plural, matching REST
 resource-collection convention). All four endpoints share the single
 tag `sboms`.
 
-- `GET /api/v1/sboms/download?org=&repo=` — query-param download for the
-  frontend Export button
+- `GET /api/v1/sboms/download?org=&repo=` — query-param download by
+  org/repo (direct API consumers; the frontend Export buttons use
+  `/repo/{repo_id}`)
 - `GET /api/v1/sboms/export?repo=…&format=…` — flexible-params export
 - `GET /api/v1/sboms/repo/{repo_id:path}` — export by repo path-segment
 - `GET /api/v1/sboms/image/{image_digest:path}` — export by image digest
@@ -41,7 +42,7 @@ shape and the writer belong in the same package.
 ## Dependency direction
 
 ```
-sbom/ ──→ containers/, dependencies/, db/, shared/, license/, authz/   ✓ allowed
+sbom/ ──→ containers/, dependencies/, db/, shared/, authz/             ✓ allowed
 containers/    ──→ sbom/                                                ✗ forbidden
 dependencies/  ──→ sbom/                                                ✗ forbidden
 db/            ──→ sbom/                                                ✗ forbidden

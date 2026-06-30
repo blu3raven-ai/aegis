@@ -79,7 +79,7 @@ export function UsageMeter({ used, budget }: UsageMeterProps) {
         aria-valuenow={used}
         aria-valuemin={0}
         aria-valuemax={budget}
-        aria-label="Daily LLM token usage"
+        aria-label="Daily Argus token usage"
         className="h-2 overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]"
       >
         <div

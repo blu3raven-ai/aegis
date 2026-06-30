@@ -5,6 +5,7 @@ export const SCANNER_COUNTS_QUERY = `
       codeScanning { counts { total critical high medium low } }
       containerScanning { counts { total critical high medium low } }
       secretScanning { counts { total critical high medium low } }
+      iacScanning { counts { total critical high medium low } }
     }
   }
 `
@@ -16,6 +17,7 @@ export const HOME_DASHBOARD_QUERY = `
       codeScanning { counts { total critical high medium low } }
       containerScanning { counts { total critical high medium low } }
       secretScanning { counts { total critical high medium low } }
+      iacScanning { counts { total critical high medium low } }
     }
     posture {
       trend(days: $trendDays) { date total critical high medium low }

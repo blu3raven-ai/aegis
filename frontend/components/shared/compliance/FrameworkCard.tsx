@@ -36,8 +36,10 @@ export function FrameworkCard({
         })()
       : null
 
+  // An empty framework (no controls) stays neutral — never red — so it doesn't
+  // read as a critical 0% coverage gap.
   const barColor =
-    derived === null
+    derived === null || derived.total === 0
       ? "bg-[var(--color-border)]"
       : derived.pct >= 0.95
         ? "bg-[var(--color-status-ok)]"
@@ -54,7 +56,7 @@ export function FrameworkCard({
 
   const pctValue = derived !== null ? Math.round(derived.pct * 100) : null
   const pctClass =
-    derived === null
+    derived === null || derived.total === 0
       ? "text-[var(--color-text-secondary)]"
       : derived.pct >= 0.95
         ? "text-[var(--color-status-ok)]"
@@ -67,7 +69,7 @@ export function FrameworkCard({
       {/* Head — framework name. Mock's right-side tag (Due Xd / N gaps / Audit YYYY) is deferred
           until the API exposes attestation due dates + scope metadata. */}
       <div>
-        <h3 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h3 className="text-base font-semibold break-words text-[var(--color-text-primary)]">
           {framework.label}
         </h3>
       </div>
@@ -88,7 +90,7 @@ export function FrameworkCard({
       {summary === null && !error ? (
         <div className="flex items-baseline gap-2">
           <span className="text-xl font-semibold leading-none text-[var(--color-text-secondary)]">—</span>
-          <span className="text-xs text-[var(--color-text-secondary)]">loading…</span>
+          <span className="text-xs text-[var(--color-text-secondary)]">Loading…</span>
         </div>
       ) : error ? (
         <p className="text-xs text-[var(--color-text-secondary)]">
@@ -113,20 +115,28 @@ export function FrameworkCard({
       ) : derived !== null ? (
         <>
           <div className="flex items-baseline gap-2">
-            <span className={`text-xl font-semibold leading-none tabular-nums ${pctClass}`}>
-              {pctValue}%
-            </span>
-            <span className="text-xs text-[var(--color-text-secondary)]">
-              {derived.met} of {derived.total} controls
-            </span>
+            {derived.total === 0 ? (
+              <span className="text-sm text-[var(--color-text-secondary)]">No controls yet</span>
+            ) : (
+              <>
+                <span className={`text-xl font-semibold leading-none tabular-nums ${pctClass}`}>
+                  {pctValue}%
+                </span>
+                <span className="text-xs text-[var(--color-text-secondary)]">
+                  {derived.met} of {derived.total} controls
+                </span>
+              </>
+            )}
           </div>
 
           {/* Foot — gaps on left, action on right (mock fw-card-foot) */}
           <div className="mt-auto flex items-center justify-between gap-2 text-xs">
             <span className="text-[var(--color-text-secondary)]">
-              {derived.gaps === 0
-                ? "no gaps"
-                : `${derived.gaps} ${derived.gaps === 1 ? "gap" : "gaps"} · ${derived.critical} critical`}
+              {derived.total === 0
+                ? null
+                : derived.gaps === 0
+                  ? "No gaps"
+                  : `${derived.gaps} ${derived.gaps === 1 ? "gap" : "gaps"} · ${derived.critical} critical`}
             </span>
             <span className="text-[var(--color-accent)]">{selected ? "Viewing →" : "View controls →"}</span>
           </div>

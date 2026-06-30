@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import threading
-from pathlib import Path
 
 import pytest
 
@@ -80,8 +79,13 @@ def test_normalize_secrets_output_uses_compact_separators(tmp_path):
     repo.mkdir()
     (repo / "trufflehog.json").write_text('{"k":"v"}\n')
     normalize_secrets_output("acme", tmp_path, "run-1")
-    line = (tmp_path / "findings.jsonl").read_text().strip()
-    assert ", " not in line and ": " not in line
+    content = (tmp_path / "findings.jsonl").read_text().strip()
+    # Verify compact separators (no whitespace between JSON tokens) robustly:
+    # re-dumping the parsed line with separators=(",", ":") must reproduce it
+    # exactly. A naive `", " not in line` check false-positives on legitimate
+    # whitespace inside string values (e.g. remediation-runbook prose).
+    for line in content.splitlines():
+        assert line == json.dumps(json.loads(line), separators=(",", ":"))
 
 
 # ---------------------------------------------------------------------------
@@ -466,3 +470,58 @@ def test_secrets_config_run_id_falls_back_to_job_id():
     from runner.scanners.secrets.scanner import SecretsScanConfig
     cfg = SecretsScanConfig.from_job({"jobId": "job-77", "envVars": {"GIT_REPOS": "https://x/a.git"}})
     assert cfg.run_id == "job-77"
+
+
+def test_capture_secret_windows_filesystem_mode(tmp_path):
+    from runner.scanners.secrets.normalize import capture_secret_windows
+
+    clone = tmp_path / "_checkout"
+    clone.mkdir()
+    (clone / "app.py").write_text("\n".join(f"l{i}" for i in range(1, 21)))
+    out = tmp_path / "out.json"
+    out.write_text(
+        json.dumps(
+            {
+                "DetectorName": "aws",
+                "Raw": "AKIA",
+                "SourceMetadata": {"Data": {"Filesystem": {"file": "app.py", "line": 10}}},
+            }
+        )
+        + "\n"
+    )
+    capture_secret_windows(out, clone)
+    finding = json.loads(out.read_text().strip())
+    assert finding["code_window_start_line"] is not None
+    assert "l10" in finding["code_window"]
+
+
+def test_capture_secret_windows_git_mode_and_redaction(tmp_path):
+    from runner.scanners.secrets.normalize import capture_secret_windows
+
+    clone = tmp_path / "_checkout"
+    clone.mkdir()
+    (clone / "cfg.py").write_text("a\nb\nSECRET=AKIAEXAMPLE\nd\ne")
+    out = tmp_path / "out.json"
+    out.write_text(
+        json.dumps(
+            {
+                "Raw": "AKIAEXAMPLE",
+                "SourceMetadata": {"Data": {"Git": {"file": "cfg.py", "line": 3}}},
+            }
+        )
+        + "\n"
+    )
+    capture_secret_windows(out, clone)
+    finding = json.loads(out.read_text().strip())
+    assert "code_window" in finding
+    assert "AKIAEXAMPLE" not in finding["code_window"]  # masked in the window
+
+
+def test_capture_secret_windows_tolerates_missing_clone(tmp_path):
+    from runner.scanners.secrets.normalize import capture_secret_windows
+
+    out = tmp_path / "out.json"
+    out.write_text(json.dumps({"Raw": "x", "SourceMetadata": {"Data": {}}}) + "\n")
+    capture_secret_windows(out, tmp_path / "gone")  # no clone -> no crash, no window
+    finding = json.loads(out.read_text().strip())
+    assert "code_window" not in finding

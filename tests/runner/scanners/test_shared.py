@@ -279,9 +279,6 @@ def test_timeout_constants_are_positive_floats():
     constants = [
         _shared.TIMEOUT_CLONE,
         _shared.TIMEOUT_GIT_QUERY,
-        _shared.TIMEOUT_GRYPE_DB_CHECK,
-        _shared.TIMEOUT_GRYPE_DB_UPDATE,
-        _shared.TIMEOUT_GRYPE_MATCH,
         _shared.TIMEOUT_SYFT_REPO,
         _shared.TIMEOUT_SYFT_IMAGE,
         _shared.TIMEOUT_CDXGEN,

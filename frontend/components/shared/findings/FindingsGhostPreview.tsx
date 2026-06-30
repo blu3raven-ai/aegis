@@ -9,6 +9,8 @@
  *     mirroring the email-inbox affordance the page advertises.
  */
 
+import { FindingAge } from "@/components/shared/findings/FindingAge"
+
 const SEV_STYLES = {
   critical: "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical)]",
   high: "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high)]",
@@ -83,7 +85,7 @@ function Row({ row }: { row: MockRow }) {
           <span>{row.scanner}</span>
         </div>
       </div>
-      <span className="shrink-0 text-2xs text-[var(--color-text-tertiary)] tabular-nums">{row.age}</span>
+      <FindingAge age={row.age} className="shrink-0 text-2xs text-[var(--color-text-tertiary)]" />
     </div>
   )
 }

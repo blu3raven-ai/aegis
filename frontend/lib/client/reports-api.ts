@@ -10,8 +10,8 @@ export interface FindingsReportFilters {
 }
 
 export interface GenerateReportPayload {
-  report_type: "findings" | "posture"
-  format: "json" | "csv" | "pdf"
+  report_type: "findings" | "posture" | "executive" | "risk_register" | "soc2_evidence"
+  format: "json" | "csv" | "pdf" | "zip"
   title?: string
   filters?: FindingsReportFilters
   include_archived?: boolean
@@ -28,12 +28,12 @@ export interface ReportSummary {
   created_by: string
   created_at: string
   expires_at: string
+  error: string | null
   download_url: string | null
 }
 
 export interface ReportDetail extends ReportSummary {
   filters: Record<string, unknown> | null
-  error: string | null
 }
 
 export interface ReportsListResponse {

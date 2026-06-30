@@ -66,11 +66,11 @@ export function ControlDetailHero({
       {/* Metric chips */}
       <div className="mt-5 flex flex-wrap gap-3">
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
-          <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Open Findings
           </div>
           <div
-            className={`mt-0.5 text-[22px] font-bold ${findingCount > 0 ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-primary)]"}`}
+            className={`mt-0.5 text-2xl font-semibold leading-none tabular-nums ${findingCount > 0 ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-primary)]"}`}
           >
             {findingCount}
           </div>
@@ -78,11 +78,11 @@ export function ControlDetailHero({
 
         {highestSeverity && (
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
-            <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               Highest Severity
             </div>
             <div
-              className={`mt-0.5 text-[22px] font-bold capitalize ${SEVERITY_COLORS[highestSeverity] ?? "text-[var(--color-text-primary)]"}`}
+              className={`mt-0.5 text-2xl font-semibold leading-none tabular-nums capitalize ${SEVERITY_COLORS[highestSeverity] ?? "text-[var(--color-text-primary)]"}`}
             >
               {highestSeverity}
             </div>

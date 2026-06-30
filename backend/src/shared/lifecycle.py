@@ -57,6 +57,19 @@ def _maybe_set_engine(prev: Any, engine: str | None) -> None:
         prev.engine = engine
 
 
+def _preserve_match_source(prev_detail: Any, detail: dict) -> dict:
+    """First-write-wins for ``matchSource`` provenance.
+
+    ``matchSource`` records how a finding was FIRST surfaced (``"overlay"`` vs
+    ``"scan"``). When re-touching an existing finding, keep the stored value so a
+    later run never rewrites provenance; legacy rows without it fall back to the
+    incoming detail (best-effort backfill on next touch).
+    """
+    if isinstance(prev_detail, dict) and prev_detail.get("matchSource"):
+        return {**detail, "matchSource": prev_detail["matchSource"]}
+    return detail
+
+
 def _apply_detail(prev: Any, tool: str, detail: dict) -> None:
     """Split detail, put fat to MinIO, set lean JSONB + blob key on the row.
 
@@ -70,6 +83,9 @@ def _apply_detail(prev: Any, tool: str, detail: dict) -> None:
     )
     from src.shared.finding_queryable_fields import extract_queryable_fields
 
+    # Preserve first-surfaced provenance across re-touches (overlay vs scan).
+    detail = _preserve_match_source(getattr(prev, "detail", None), detail)
+
     # Extract typed-column values from full detail BEFORE split runs.
     queryable = extract_queryable_fields(detail)
     prev.cve_id = queryable["cve_id"]
@@ -77,6 +93,7 @@ def _apply_detail(prev: Any, tool: str, detail: dict) -> None:
     prev.title = queryable["title"]
     prev.rule_name = queryable["rule_name"]
     prev.package_name = queryable["package_name"]
+    prev.package_version = queryable["package_version"]
 
     lean, fat = split_detail(tool, detail)
     prev.detail = lean
@@ -516,12 +533,57 @@ def reopen_finding(
 
         result = await session.execute(stmt)
         finding = result.scalars().first()
-        if finding and finding.state == "dismissed":
+        if finding and finding.state in ("dismissed", "deferred"):
+            prev = finding.state
             finding.state = "open"
             finding.updated_at = now
             await insert_event(
                 session, finding_id=finding.id,
-                from_state="dismissed", to_state="open",
+                from_state=prev, to_state="open",
+                triggered_by="user", actor=user_id,
+            )
+
+    run_db(_run)
+    request_home_views_refresh()
+
+
+def defer_finding(
+    tool: str,
+    identity_key: str,
+    user_id: str,
+    *,
+    asset_id: str | None = None,
+    org: str | None = None,
+) -> None:
+    """Defer (snooze) an open finding.
+
+    Moves it to the `deferred` state so it drops out of the open queue until a
+    fix is detected (auto-reopen) or it is manually reopened. Unlike dismiss,
+    no decision record is created — defer is a temporary suppression, not an
+    accepted-risk verdict.
+    """
+    if not asset_id and not org:
+        raise ValueError("defer_finding requires asset_id or org")
+
+    async def _run(session: AsyncSession) -> None:
+        now = _utcnow()
+        stmt = select(Finding).where(
+            Finding.tool == tool,
+            Finding.identity_key == identity_key,
+        )
+        if asset_id:
+            stmt = stmt.where(Finding.asset_id == asset_id)
+        else:
+            stmt = stmt.where(Finding.asset_id.is_(None))
+
+        result = await session.execute(stmt)
+        finding = result.scalars().first()
+        if finding and finding.state == "open":
+            finding.state = "deferred"
+            finding.updated_at = now
+            await insert_event(
+                session, finding_id=finding.id,
+                from_state="open", to_state="deferred",
                 triggered_by="user", actor=user_id,
             )
 

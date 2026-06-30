@@ -12,6 +12,8 @@ import logging
 import re
 from pathlib import Path
 
+from runner.scanners._context import code_window, resolve_in_root
+
 logger = logging.getLogger(__name__)
 
 _TEMP_PREFIX_RE = re.compile(r"^/tmp/tmp\.[^/]*/")
@@ -48,13 +50,6 @@ def _imports(text: str) -> str:
         elif found:
             break
     return "\n".join(result[:50])
-
-
-def _window(lines: list[str], start_line: int) -> str:
-    # start_line is 1-indexed; +/-40 lines around the finding
-    lo = max(0, start_line - 41)
-    hi = start_line + 40
-    return "\n".join(lines[lo:hi])[:8192]
 
 
 def extract_context(clone_dir: Path, repo_output_dir: Path) -> int:
@@ -96,23 +91,16 @@ def extract_context(clone_dir: Path, repo_output_dir: Path) -> int:
                 seen.add(key)
                 locs.append((uri, line))
 
-    try:
-        clone_resolved = clone_dir.resolve()
-    except OSError:
-        context_file.write_text("{}")
-        return 0
-
     file_cache: dict[str, list[str] | None] = {}
 
     context: dict[str, dict] = {}
     for rel_file, line in locs:
-        if rel_file.startswith("/") or ".." in rel_file:
-            continue
-
-        abs_path = clone_dir / rel_file
-        try:
-            abs_path.resolve().relative_to(clone_resolved)
-        except (ValueError, OSError):
+        # Resolve via the shared resolver so an absolute / "_checkout/"-prefixed
+        # SARIF path (semgrep is run against the absolute clone dir) re-anchors
+        # to the real file instead of double-prefixing — the bug that left every
+        # SAST finding without a code window.
+        abs_path = resolve_in_root(clone_dir, rel_file)
+        if abs_path is None:
             continue
 
         if rel_file not in file_cache:
@@ -125,16 +113,17 @@ def extract_context(clone_dir: Path, repo_output_dir: Path) -> int:
 
         lines = file_cache[rel_file]
         if lines is None:
-            imp, win = "", ""
+            imp, win, win_start = "", "", None
         else:
             full_text = "\n".join(lines)
             imp = _imports(full_text)
-            win = _window(lines, line)
+            win, win_start = code_window(lines, line)
 
         context[f"{rel_file}:{line}"] = {
             "file_class": _classify(rel_file),
             "imports": imp,
             "code_window": win,
+            "code_window_start_line": win_start,
         }
 
     context_file.write_text(json.dumps(context))

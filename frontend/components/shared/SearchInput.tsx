@@ -1,3 +1,4 @@
+import { forwardRef } from "react"
 import { cn } from "@/lib/shared/utils"
 
 type SearchInputSize = "sm" | "md"
@@ -27,14 +28,10 @@ const sizeClasses: Record<SearchInputSize, { input: string; iconLeft: string; cl
   },
 }
 
-export function SearchInput({
-  value,
-  onChange,
-  placeholder,
-  size = "md",
-  className,
-  ariaLabel,
-}: SearchInputProps) {
+export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput(
+  { value, onChange, placeholder, size = "md", className, ariaLabel },
+  ref,
+) {
   const cls = sizeClasses[size]
   return (
     <div className={cn("relative", className)}>
@@ -54,6 +51,7 @@ export function SearchInput({
         />
       </svg>
       <input
+        ref={ref}
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -61,6 +59,8 @@ export function SearchInput({
         aria-label={ariaLabel}
         className={cn(
           "w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]",
+          // Hide the native WebKit/Blink search clear button — we render our own.
+          "[&::-webkit-search-cancel-button]:appearance-none",
           cls.input,
         )}
       />
@@ -81,4 +81,4 @@ export function SearchInput({
       )}
     </div>
   )
-}
+})

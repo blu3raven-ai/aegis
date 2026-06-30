@@ -10,7 +10,7 @@ const WRAPS: Array<[file: string, id: string, title: string]> = [
   ["AuditLogSection.tsx", "audit", "Audit Log"],
   ["ApiKeysSection.tsx", "api-keys", "API tokens"],
   ["RunnersSection.tsx", "runners", "Runners"],
-  ["LlmSection.tsx", "llm", "LLM verification"],
+  ["ArgusSection.tsx", "argus", "Argus verification"],
   ["LicenseSection.tsx", "license", "License"],
 ]
 

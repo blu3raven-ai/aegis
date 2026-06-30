@@ -11,6 +11,7 @@ import { HelpButton } from "@/components/layout/HelpButton"
 import Link from "next/link"
 import { useConnectorCatalog, type Integration } from "@/lib/client/integrations-catalog-api"
 import { getSourceConnection } from "@/lib/client/source-connections-api"
+import { getRepo } from "@/lib/client/sources-api"
 import { sourceDisplayName } from "@/lib/shared/sources-types"
 
 /** Map of URL path segments to their display labels. */
@@ -32,8 +33,10 @@ const SEGMENT_LABELS: Record<string, string> = {
   dependencies: "Dependencies",
   secrets: "Secrets",
   "iac-security": "IaC Security",
-  sbom: "SBOM Explorer",
-  diff: "Diff",
+  sbom: "SBOM",
+  components: "Components",
+  risk: "Risky Packages",
+  diff: "Compare",
   compliance: "Compliance",
   chains: "Attack Chains",
   findings: "Findings",
@@ -57,7 +60,16 @@ const SEGMENT_LABELS: Record<string, string> = {
   rules: "Policies",
   integrations: "Integrations",
   "sla_policies": "SLA Policies",
-  llm: "LLM",
+  llm: "Argus",
+}
+
+/** Canonical labels for bundled compliance frameworks. Framework ids are dynamic
+ *  route segments, so they'd otherwise be mangled by titleCase (iso27001 →
+ *  "Iso27001"). Control ids under a framework keep their own casing (see below). */
+const FRAMEWORK_LABELS: Record<string, string> = {
+  soc2: "SOC 2",
+  iso27001: "ISO 27001",
+  "pci-dss": "PCI DSS",
 }
 
 /** Segments that should be hidden from breadcrumbs (intermediate route segments). */
@@ -73,6 +85,16 @@ function titleCase(segment: string): string {
     .join(" ")
 }
 
+/** decodeURIComponent that never throws on a malformed segment (a bad URL must
+ *  not crash the whole header). */
+function safeDecode(segment: string): string {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
+}
+
 /**
  * Build breadcrumb items from the current pathname.
  *
@@ -85,7 +107,7 @@ function titleCase(segment: string): string {
  *   "/settings/account"      → [{ label: "Settings" }, { label: "Account" }]
  *   "/settings/dependencies" → [{ label: "Settings" }, { label: "Tools" }, { label: "Dependencies" }]
  * */
-function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?: string | null): { label: string; href?: string }[] {
+function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?: string | null, repoName?: string | null): { label: string; href?: string }[] {
   if (pathname === "/") return [{ label: "Home" }]
 
   const segments = pathname.split("/").filter(Boolean)
@@ -108,7 +130,7 @@ function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?:
         members: "Members", roles: "Roles", teams: "Teams",
       }
       const INVENTORY: Record<string, string> = {
-        sources: "Sources", chains: "Chains",
+        sources: "Sources", sbom: "SBOM", chains: "Chains",
       }
       const INSIGHTS: Record<string, string> = {
         compliance: "Compliance", reports: "Reports",
@@ -192,6 +214,28 @@ function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?:
       continue
     }
 
+    // SBOM repo detail: the segment after "sbom" is an opaque owner/name id
+    // (the static "components"/"diff" tabs are caught by SEGMENT_LABELS above).
+    if (i > 0 && segments[i - 1] === "sbom" && !(segment in SEGMENT_LABELS)) {
+      // Prefer the resolved repo name; fall back to the raw id while it loads.
+      crumbs.push({ label: repoName || safeDecode(segment), href: prefix })
+      continue
+    }
+
+    // Compliance framework + control segments are domain identifiers — preserve
+    // their canonical casing rather than mangling them through titleCase
+    // (iso27001 → "Iso27001", CC6.1 → "Cc6.1"). There is no standalone framework
+    // route (only /compliance and /compliance/<fw>/<control> exist), so the
+    // framework crumb is label-only — no href, to avoid a 404 on click.
+    if (i > 0 && segments[i - 1] === "compliance") {
+      crumbs.push({ label: FRAMEWORK_LABELS[segment] ?? titleCase(segment) })
+      continue
+    }
+    if (i > 1 && segments[i - 2] === "compliance") {
+      crumbs.push({ label: safeDecode(segment), href: prefix })
+      continue
+    }
+
     const label = SEGMENT_LABELS[segment] ?? titleCase(segment)
     crumbs.push({ label, href: prefix })
   }
@@ -217,6 +261,7 @@ export function AppHeader({
   const { setOpen } = useMobileSidebar()
   const { catalog } = useConnectorCatalog()
   const [sourceName, setSourceName] = useState<string | null>(null)
+  const [repoName, setRepoName] = useState<string | null>(null)
 
   // Resolve the opaque source ID segment to a human name for the breadcrumb.
   // Runs only when the path contains /sources/<id>.
@@ -237,7 +282,25 @@ export function AppHeader({
     return () => { cancelled = true }
   }, [pathname])
 
-  const crumbs = buildBreadcrumbs(pathname, catalog, sourceName)
+  // Same, for the SBOM repo detail route /sbom/<asset-id>.
+  useEffect(() => {
+    const segments = pathname.split("/").filter(Boolean)
+    const idx = segments.indexOf("sbom")
+    const repoId = idx >= 0 && idx + 1 < segments.length && !(segments[idx + 1] in SEGMENT_LABELS)
+      ? segments[idx + 1]
+      : null
+    if (!repoId) {
+      setRepoName(null)
+      return
+    }
+    let cancelled = false
+    getRepo(repoId)
+      .then((r) => { if (!cancelled && r) setRepoName(r.display_name || [r.org, r.repo].filter(Boolean).join("/") || null) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [pathname])
+
+  const crumbs = buildBreadcrumbs(pathname, catalog, sourceName, repoName)
 
   // Global ⌘K listener to open/close search modal
   useEffect(() => {
@@ -292,6 +355,7 @@ export function AppHeader({
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeLinejoin="round"
+                  aria-hidden="true"
                 >
                   <path d="M9 18l6-6-6-6" />
                 </svg>

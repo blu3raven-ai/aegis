@@ -4,28 +4,37 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 const ROOT = join(import.meta.dirname, "../..")
-const src = readFileSync(
-  join(ROOT, "frontend/app/(app)/posture/PostureBreakdownTab.tsx"),
+// The Summary/Breakdown tab split was collapsed into one single-scroll view
+// (#986): the old PostureBreakdownTab became a panels module, and the summary
+// view is now the one place that assembles those panels.
+const panels = readFileSync(
+  join(ROOT, "frontend/app/(app)/posture/PostureBreakdownPanels.tsx"),
+  "utf8",
+)
+const summary = readFileSync(
+  join(ROOT, "frontend/app/(app)/posture/PostureSummaryTab.tsx"),
   "utf8",
 )
 
-describe("PostureBreakdownTab structure", () => {
+describe("PostureBreakdownPanels structure", () => {
   it("defines SeverityDonut", () => {
-    assert.match(src, /function SeverityDonut\(/)
+    assert.match(panels, /function SeverityDonut\(/)
   })
   it("defines TopReposPanel", () => {
-    assert.match(src, /function TopReposPanel\(/)
+    assert.match(panels, /function TopReposPanel\(/)
   })
-  it("defines CoverageAndRemediation", () => {
-    assert.match(src, /function CoverageAndRemediation\(/)
+  // Renamed from CoverageAndRemediation: the remediation block was dropped in
+  // #986 (the MTTR + Resolved KPIs already cover it), leaving coverage only.
+  it("defines RepositoryCoveragePanel", () => {
+    assert.match(panels, /function RepositoryCoveragePanel\(/)
   })
   it("defines AgeBucketsPanel", () => {
-    assert.match(src, /function AgeBucketsPanel\(/)
+    assert.match(panels, /function AgeBucketsPanel\(/)
   })
-  it("renders the four panels", () => {
-    assert.match(src, /<SeverityDonut/)
-    assert.match(src, /<TopReposPanel/)
-    assert.match(src, /<CoverageAndRemediation/)
-    assert.match(src, /<AgeBucketsPanel/)
+  it("the summary view renders all four panels", () => {
+    assert.match(summary, /<SeverityDonut/)
+    assert.match(summary, /<TopReposPanel/)
+    assert.match(summary, /<RepositoryCoveragePanel/)
+    assert.match(summary, /<AgeBucketsPanel/)
   })
 })

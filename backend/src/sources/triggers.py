@@ -16,7 +16,7 @@ _SCHEDULE_HOURS = {"1h": 1, "3h": 3, "6h": 6, "12h": 12, "24h": 24}
 
 # Which scanner job types run for each source category.
 SCANNERS_BY_CATEGORY: dict[str, list[str]] = {
-    "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning"],
+    "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning", "iac_scanning"],
     "container-registry": ["container_scanning"],
     "container-images": ["container_scanning"],
 }
@@ -61,6 +61,7 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
         create_dependencies_run,
         create_code_scanning_run,
         create_container_scanning_run,
+        create_iac_run,
         create_secret_run,
     )
 
@@ -69,6 +70,7 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
         "secret_scanning": create_secret_run,
         "code_scanning": create_code_scanning_run,
         "container_scanning": create_container_scanning_run,
+        "iac_scanning": create_iac_run,
     }
 
     auth = connection.get("auth") or {}

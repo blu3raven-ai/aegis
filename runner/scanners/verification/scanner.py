@@ -12,6 +12,7 @@ import threading
 from pathlib import Path
 from typing import Callable
 
+from runner.scanners._argus import argus_configured, correlate_via_argus
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import JobEnv, ProgressEmitter
 from runner.scanners.base import ExecutionResult
@@ -67,18 +68,32 @@ class VerificationScanner:
 
         emitter.starting()
 
-        llm = _build_llm_client(env)
-        if llm is None:
-            log_tail.append(
-                "[*] LLM_API_KEY not set — running orchestrator + dedupe only "
-                "(correlation step skipped)"
-            )
+        # Correlation's LLM step routes to the remote Argus service when
+        # configured; the deterministic orchestrator + dedupe stay local either way.
+        if argus_configured(env):
+            llm = None
+
+            def correlate_fn(fs, b):
+                return correlate_via_argus(
+                    findings=fs, repo_root_for=repo_root_for, env=env, budget=b
+                )
+
+            log_tail.append("[+] routing correlation to Argus")
+        else:
+            llm = _build_llm_client(env)
+            correlate_fn = None
+            if llm is None:
+                log_tail.append(
+                    "[*] LLM_API_KEY not set — running orchestrator + dedupe only "
+                    "(correlation step skipped)"
+                )
 
         try:
             result = run_aggregate_verification(
                 findings,
                 repo_root_for=repo_root_for,
                 llm=llm,
+                correlate_fn=correlate_fn,
                 total_budget=total_budget,
             )
         except Exception as exc:  # noqa: BLE001

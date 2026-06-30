@@ -104,7 +104,7 @@ describe("FindingsBoardView component", () => {
   it("declares VALID_VIEW_KEYS with the 14 URL-synced keys", () => {
     const src = read("components/shared/findings/FindingsBoardView.tsx")
     assert.match(src, /const VALID_VIEW_KEYS = new Set<string>/)
-    for (const k of ["severity", "scanner", "state", "repo", "q", "collapsed", "sort", "age", "cwe", "kev", "epss_min", "risk_score_min", "assignee", "page"]) {
+    for (const k of ["severity", "scanner", "state", "repo", "q", "collapsed", "sort", "age", "cwe", "kev", "epss_min", "bands", "assignee", "page"]) {
       assert.ok(src.includes(`"${k}"`), `VALID_VIEW_KEYS must include "${k}"`)
     }
   })

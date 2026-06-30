@@ -128,6 +128,7 @@ async def reconcile_sbom_matches(
             for asset_id, external_ref, kind in groups[key]:
                 out.extend(await build_backend_match_findings(
                     session, asset_id=asset_id, external_ref=external_ref, kind=kind,
+                    match_source="overlay",
                 ))
             built[key] = out
         return built

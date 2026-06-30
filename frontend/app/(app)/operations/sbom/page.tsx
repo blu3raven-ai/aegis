@@ -1,20 +1,17 @@
 "use client"
 
-import { PageHeader } from "@/components/layout/PageHeader"
-import { SbomIcon } from "@/lib/shared/ui/page-icons"
-import { SbomExplorer } from "../SbomExplorer"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 
-export default function SbomPage() {
-  return (
-    <>
-      <PageHeader
-        icon={<SbomIcon />}
-        title="SBOM Explorer"
-        description="Search and query your software bill of materials"
-      />
-      <main className="px-6 py-8">
-        <SbomExplorer />
-      </main>
-    </>
-  )
+/**
+ * The SBOM explorer moved into the SBOM section (Inventory › SBOM › Components).
+ * Keep this path as a redirect so old links resolve. Client-side because the
+ * production build is a static export with no server redirects.
+ */
+export default function OperationsSbomRedirect() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace("/sbom/components")
+  }, [router])
+  return null
 }

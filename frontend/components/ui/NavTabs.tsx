@@ -1,5 +1,6 @@
-import type { ReactNode } from "react"
+import { useRef, type ReactNode } from "react"
 import { cn } from "@/lib/shared/utils"
+import { handleRovingKeyDown } from "./roving"
 
 export interface NavTab<T extends string> {
   id: T
@@ -25,6 +26,7 @@ export function NavTabs<T extends string>({
   containerClassName,
   ariaLabel,
 }: NavTabsProps<T>) {
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([])
   return (
     <div
       role="tablist"
@@ -34,15 +36,30 @@ export function NavTabs<T extends string>({
         containerClassName,
       )}
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, i) => {
         const active = tab.id === activeTab
         return (
           <button
             key={tab.id}
+            ref={(el) => { btnRefs.current[i] = el }}
             type="button"
             role="tab"
             aria-selected={active}
+            // Roving tabindex: only the selected tab is a tab stop; arrows move
+            // between the rest (WAI-ARIA tablist keyboard pattern).
+            tabIndex={active ? 0 : -1}
             onClick={() => onChange(tab.id)}
+            onKeyDown={(e) =>
+              handleRovingKeyDown(e, {
+                index: i,
+                count: tabs.length,
+                orientation: "horizontal",
+                onMove: (n) => {
+                  onChange(tabs[n].id)
+                  btnRefs.current[n]?.focus()
+                },
+              })
+            }
             className={cn(
               "-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:rounded-sm",

@@ -26,7 +26,7 @@ test("SettingsInPageNav uses anchor links to every section id", () => {
   // No #tokens anchor anymore — the Personal API tokens row consolidated into
   // the org-level Security & audit > API tokens row. Members / Roles / Teams
   // were promoted out of /settings to top-level routes.
-  for (const id of ["profile", "notifications", "security", "general", "sso", "audit", "api-keys", "runners", "llm", "license"]) {
+  for (const id of ["profile", "notifications", "security", "general", "sso", "audit", "api-keys", "runners", "argus", "license"]) {
     assert.match(nav, new RegExp(`#${id}\\b`), `expected nav to link to #${id}`)
   }
 })

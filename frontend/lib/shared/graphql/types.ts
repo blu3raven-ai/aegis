@@ -12,6 +12,7 @@ export interface GqlScannerCounts {
     codeScanning: { counts: GqlSeverityCounts }
     containerScanning: { counts: GqlSeverityCounts }
     secretScanning: { counts: GqlSeverityCounts }
+    iacScanning: { counts: GqlSeverityCounts }
   }
 }
 
@@ -72,6 +73,7 @@ export interface GqlHomeDashboard {
     codeScanning: { counts: GqlSeverityCounts }
     containerScanning: { counts: GqlSeverityCounts }
     secretScanning: { counts: GqlSeverityCounts }
+    iacScanning: { counts: GqlSeverityCounts }
   }
   posture: {
     trend: GqlPostureTrendPoint[]

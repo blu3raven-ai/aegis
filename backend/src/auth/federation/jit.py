@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timezone
 from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import AuditEvent, SsoConfig, User
+from src.audit_log.recorder import ActorInfo, get_recorder
+from src.db.models import SsoConfig, User
 
 
 class AccountConflict(RuntimeError):
@@ -18,23 +18,22 @@ class AccountConflict(RuntimeError):
 def _record_reactivation(session: AsyncSession, user: User) -> None:
     """Write a `user.reactivated` audit event via the current session.
 
-    Using session.add() rather than AuditRecorder.record() because the
-    recorder spawns its own run_db() call which would deadlock when invoked
-    from inside an already-running run_db() coroutine.
+    Uses record_in_session() rather than record() — we're already inside a
+    run_db() coroutine, and record() would deadlock by nesting another.
     """
-    now = datetime.now(timezone.utc)
-    session.add(AuditEvent(
+    get_recorder().record_in_session(
+        session,
         action="user.reactivated",
         resource_type="user",
         resource_id=user.id,
-        actor_user_id="system:sso_jit",
-        actor_username=user.username,
-        actor_email=user.email,
-        actor_role="system",
-        metadata_json={"trigger": "jit_sign_in"},
-        created_at=now,
-        occurred_at=now,
-    ))
+        actor=ActorInfo(
+            user_id="system:sso_jit",
+            username=user.username,
+            email=user.email,
+            role="system",
+        ),
+        metadata={"trigger": "jit_sign_in"},
+    )
 
 
 async def _maybe_reactivate(session: AsyncSession, user: User) -> None:

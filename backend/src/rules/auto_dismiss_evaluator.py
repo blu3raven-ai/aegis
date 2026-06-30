@@ -21,7 +21,6 @@ async def write_auto_dismiss_decision(
     session: AsyncSession,
     *,
     tool: str,
-    org: str,
     identity_key: str,
     rule_id: str,
     rule_name: str,

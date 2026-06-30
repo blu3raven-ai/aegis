@@ -81,6 +81,12 @@ EXEMPT_FILES: tuple[tuple[str, str], ...] = (
     # Canonical-schema engine label defaulting (no tool-output parsing)
     ("code_scanning/ingest.py", "defaults canonical `engine` label to 'semgrep'"),
     ("containers/scanner.py", "module docstring names runner-side pipeline"),
+    # IaC ingest: docstrings name the runner-side tool; lifecycle defaults the
+    # canonical `engine` label (no tool execution or tool-output parsing).
+    ("iac/__init__.py", "package docstring names runner-side IaC tool"),
+    ("iac/ingest.py", "docstring names runner-side IaC tool; ingests canonical findings"),
+    ("iac/lifecycle.py", "docstring + canonical `engine` label default"),
+    ("iac/scanner.py", "module docstring names runner-side IaC tool"),
     # SBOM components carry a `source_tool` label (canonical schema field)
     ("containers/sbom_store.py", "label-only `source_tool` field on SBOM components"),
     ("graphql/sbom_resolvers.py", "filter on canonical `source_tool` label"),

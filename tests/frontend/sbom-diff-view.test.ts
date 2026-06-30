@@ -9,11 +9,19 @@ import type { SbomDiffResponse } from "../../frontend/lib/client/sbom-diff-api.t
 // ---------------------------------------------------------------------------
 
 function makeDiff(overrides: Partial<SbomDiffResponse> = {}): SbomDiffResponse {
+  const added = overrides.added ?? []
+  const removed = overrides.removed ?? []
+  const version_changed = overrides.version_changed ?? []
   return {
-    added: [],
-    removed: [],
-    version_changed: [],
+    added,
+    removed,
+    version_changed,
     unchanged_count: 0,
+    remediation_signal_available: true,
+    added_count: added.length,
+    removed_count: removed.length,
+    version_changed_count: version_changed.length,
+    truncated: false,
     ...overrides,
   }
 }
@@ -97,6 +105,50 @@ test("version_changed tolerates null versions", () => {
   const change = diff.version_changed[0]
   assert.equal(change.from_version, null)
   assert.equal(change.to_version, "2.0.0")
+})
+
+test("version bump surfaces a license change as a compliance event (#1084)", () => {
+  const diff = makeDiff({
+    version_changed: [
+      {
+        name: "lib", purl: "pkg:npm/lib", from_version: "1.0.0", to_version: "2.0.0",
+        from_license: "MIT", to_license: "GPL-3.0-only",
+        from_license_category: "permissive", to_license_category: "copyleft",
+      },
+    ],
+  })
+  const change = diff.version_changed[0]
+  assert.equal(change.from_license, "MIT")
+  assert.equal(change.to_license, "GPL-3.0-only")
+  // The risk tier worsened permissive -> copyleft.
+  assert.equal(change.from_license_category, "permissive")
+  assert.equal(change.to_license_category, "copyleft")
+})
+
+test("version_changed carries the OSV resolved/introduced advisory delta", () => {
+  const diff = makeDiff({
+    version_changed: [
+      {
+        name: "openssl", purl: "pkg:npm/openssl", from_version: "1.0", to_version: "3.0",
+        resolved: { critical: 1, high: 2, medium: 0, low: 0, total: 3 },
+        introduced: { critical: 0, high: 0, medium: 1, low: 0, total: 1 },
+        still_vulnerable: { critical: 0, high: 0, medium: 0, low: 0, total: 0 },
+      },
+    ],
+  })
+  const change = diff.version_changed[0]
+  assert.equal(change.resolved?.total, 3)      // the bump fixed 3 advisories
+  assert.equal(change.introduced?.total, 1)    // but pulled in 1 new one
+  assert.equal(change.still_vulnerable?.total, 0)
+})
+
+test("added component carries introduced known_vulns; removed carries dropped", () => {
+  const diff = makeDiff({
+    added: [{ name: "new", version: "1.0", known_vulns: { critical: 1, high: 0, medium: 0, low: 0, total: 1 } }],
+    removed: [{ name: "old", version: "1.0", known_vulns: { critical: 0, high: 1, medium: 0, low: 0, total: 1 } }],
+  })
+  assert.equal(diff.added[0].known_vulns?.critical, 1)
+  assert.equal(diff.removed[0].known_vulns?.high, 1)
 })
 
 test("removed components are distinguishable from added by array membership", () => {

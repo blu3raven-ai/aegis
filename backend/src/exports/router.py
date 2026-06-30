@@ -13,11 +13,12 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.db.engine import get_session
 from src.exports.findings_export import (
     FindingFilters,
+    build_findings_sarif,
     count_findings,
     stream_findings_csv,
     stream_findings_json,
@@ -36,15 +37,18 @@ def _parse_csv_list(value: str | None) -> list[str] | None:
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
+_EXTENSIONS = {"csv": "csv", "json": "jsonl", "sarif": "sarif"}
+
+
 def _filename(fmt: str, ts: datetime) -> str:
     stamp = ts.strftime("%Y-%m-%dT%H%M")
-    return f"aegis-findings-{stamp}.{fmt if fmt == 'csv' else 'jsonl'}"
+    return f"aegis-findings-{stamp}.{_EXTENSIONS.get(fmt, 'txt')}"
 
 
 @router.get("/export")
 async def export_findings(
     request: Request,
-    format: Literal["csv", "json"] = Query(default="csv", description="Output format: csv or json (JSONL)"),
+    format: Literal["csv", "json", "sarif"] = Query(default="csv", description="Output format: csv, json (JSONL), or sarif (SARIF 2.1.0)"),
     severity: str | None = Query(default=None, description="Comma-separated severities (critical,high,medium,low)"),
     scanner: str | None = Query(default=None, description="Comma-separated scanner types (e.g. dependencies,secrets)"),
     status: str | None = Query(default=None, description="Comma-separated finding states (open,fixed,dismissed)"),
@@ -76,6 +80,23 @@ async def export_findings(
 
     async with get_session() as session:
         total = await count_findings(filters, asset_ids, session, include_archived_rows=include_archived)
+
+    if format == "sarif":
+        # SARIF is a single JSON document (not streamable line-by-line), so it is
+        # assembled and returned whole. It is the format CI/code-scanning
+        # dashboards (GitHub, GitLab) ingest.
+        async with get_session() as session:
+            document = await build_findings_sarif(
+                filters, asset_ids, session, include_archived_rows=include_archived
+            )
+        return JSONResponse(
+            document,
+            media_type="application/sarif+json",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "X-Total-Count": str(total),
+            },
+        )
 
     if format == "csv":
         content_type = "text/csv"

@@ -96,63 +96,75 @@ class SbomExporter:
         bom_el = ET.Element(f"{{{ns}}}bom")
         serial = sbom.get("serialNumber", "")
         if serial:
-            bom_el.set("serialNumber", serial)
+            bom_el.set("serialNumber", str(serial))
         bom_el.set("version", str(sbom.get("version", 1)))
 
         # metadata
         meta = sbom.get("metadata", {})
-        if meta:
+        if isinstance(meta, dict) and meta:
             meta_el = ET.SubElement(bom_el, f"{{{ns}}}metadata")
             if ts := meta.get("timestamp"):
                 ts_el = ET.SubElement(meta_el, f"{{{ns}}}timestamp")
-                ts_el.text = ts
+                ts_el.text = str(ts)
 
             for tool in meta.get("tools", []):
+                if not isinstance(tool, dict):
+                    continue
                 tools_el = meta_el.find(f"{{{ns}}}tools")
                 if tools_el is None:
                     tools_el = ET.SubElement(meta_el, f"{{{ns}}}tools")
                 tool_el = ET.SubElement(tools_el, f"{{{ns}}}tool")
                 if name := tool.get("name"):
                     n_el = ET.SubElement(tool_el, f"{{{ns}}}name")
-                    n_el.text = name
+                    n_el.text = str(name)
                 if version := tool.get("version"):
                     v_el = ET.SubElement(tool_el, f"{{{ns}}}version")
-                    v_el.text = version
+                    v_el.text = str(version)
 
         # components
         comps = sbom.get("components", [])
         if comps:
             comps_el = ET.SubElement(bom_el, f"{{{ns}}}components")
             for comp in comps:
+                if not isinstance(comp, dict):
+                    continue
                 c_el = ET.SubElement(comps_el, f"{{{ns}}}component")
-                c_el.set("type", comp.get("type", "library"))
+                # ElementTree refuses non-string text/attrs; SBOM values derive
+                # from scanned artifacts and can be malformed (e.g. a numeric
+                # version), so coerce defensively rather than 500 the export.
+                c_el.set("type", str(comp.get("type", "library")))
                 if bom_ref := comp.get("bom-ref"):
-                    c_el.set("bom-ref", bom_ref)
+                    c_el.set("bom-ref", str(bom_ref))
                 for field in ("name", "version", "purl", "description"):
                     if val := comp.get(field):
                         f_el = ET.SubElement(c_el, f"{{{ns}}}{field}")
-                        f_el.text = val
+                        f_el.text = str(val)
                 # licenses
                 for lic in comp.get("licenses", []):
+                    if not isinstance(lic, dict):
+                        continue
                     lics_el = c_el.find(f"{{{ns}}}licenses")
                     if lics_el is None:
                         lics_el = ET.SubElement(c_el, f"{{{ns}}}licenses")
                     lic_el = ET.SubElement(lics_el, f"{{{ns}}}license")
-                    lic_id = lic.get("license", {}).get("id") or lic.get("expression")
+                    lic_obj = lic.get("license")
+                    lic_id = (lic_obj.get("id") if isinstance(lic_obj, dict) else None) or lic.get("expression")
                     if lic_id:
                         id_el = ET.SubElement(lic_el, f"{{{ns}}}id")
-                        id_el.text = lic_id
+                        id_el.text = str(lic_id)
 
         # dependencies
         deps = sbom.get("dependencies", [])
         if deps:
             deps_el = ET.SubElement(bom_el, f"{{{ns}}}dependencies")
             for dep in deps:
+                if not isinstance(dep, dict):
+                    continue
                 dep_el = ET.SubElement(deps_el, f"{{{ns}}}dependency")
-                dep_el.set("ref", dep.get("ref", ""))
+                dep_el.set("ref", str(dep.get("ref", "")))
                 for sub in dep.get("dependsOn", []):
                     sub_el = ET.SubElement(dep_el, f"{{{ns}}}dependency")
-                    sub_el.set("ref", sub)
+                    sub_el.set("ref", str(sub))
 
         ET.indent(bom_el, space="  ")
         xml_str = ET.tostring(bom_el, encoding="unicode", xml_declaration=False)
@@ -170,20 +182,25 @@ class SbomExporter:
         assigned sensible defaults so the output validates against SPDX tools.
         """
         meta = sbom.get("metadata", {})
+        if not isinstance(meta, dict):
+            meta = {}
         now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         created = meta.get("timestamp", now_iso)
 
         # creators — map CycloneDX tools array to SPDX Tool: entries
         creators: list[str] = []
         for tool in meta.get("tools", []):
+            if not isinstance(tool, dict):
+                continue
             name = tool.get("name", "unknown")
             version = tool.get("version", "")
             creators.append(f"Tool: {name}-{version}" if version else f"Tool: {name}")
         if not creators:
             creators = ["Tool: aegis-sbom-exporter"]
 
-        doc_name = (
-            meta.get("component", {}).get("name")
+        meta_component = meta.get("component")
+        doc_name = str(
+            (meta_component.get("name") if isinstance(meta_component, dict) else None)
             or sbom.get("serialNumber", "")
             or "unnamed-sbom"
         )
@@ -218,16 +235,19 @@ class SbomExporter:
         bom_ref_to_spdx: dict[str, str] = {}
 
         for idx, comp in enumerate(sbom.get("components", [])):
+            if not isinstance(comp, dict):
+                continue
             spdx_id = f"SPDXRef-Package-{idx}"
             bom_ref = comp.get("bom-ref", f"comp-{idx}")
             bom_ref_to_spdx[bom_ref] = spdx_id
 
             # License — prefer the first license id; fall back to NOASSERTION
             licenses = comp.get("licenses", [])
-            if licenses:
-                first = licenses[0]
+            first = licenses[0] if licenses else None
+            if isinstance(first, dict):
+                lic_obj = first.get("license")
                 lic_id = (
-                    first.get("license", {}).get("id")
+                    (lic_obj.get("id") if isinstance(lic_obj, dict) else None)
                     or first.get("expression")
                     or "NOASSERTION"
                 )
@@ -259,6 +279,8 @@ class SbomExporter:
         # Map CycloneDX dependency graph → SPDX DEPENDS_ON relationships
         relationships: list[dict[str, Any]] = spdx_doc["relationships"]
         for dep in sbom.get("dependencies", []):
+            if not isinstance(dep, dict):
+                continue
             src_ref = dep.get("ref", "")
             src_spdx = bom_ref_to_spdx.get(src_ref)
             if src_spdx is None:

@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
@@ -50,11 +52,12 @@ def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
 
 
 def test_export_repo_returns_sbom_when_in_scope():
+    # Latest snapshot resolved from the scoped Sbom index, then served.
     with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
          patch("src.sbom.router.resolve_asset_ids_from_request",
                new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.sbom.router._repo_in_scope", return_value=True), \
-         patch("src.sbom.router._latest_repo_sbom_key", return_value="dependencies_scanning/acme/auto-1/api/sbom.cdx.json"), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value="auto-1"), \
          patch("src.sbom.router.download_json", return_value=_FAKE_SBOM):
         client = TestClient(_make_app())
         resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}")
@@ -63,22 +66,170 @@ def test_export_repo_returns_sbom_when_in_scope():
     assert resp.headers["content-type"].startswith("application/vnd.cyclonedx+json")
 
 
+@pytest.mark.parametrize(
+    "fmt,content_type",
+    [
+        ("cyclonedx-json", "application/vnd.cyclonedx+json"),
+        ("cyclonedx-xml", "application/xml"),
+        ("spdx-json", "application/spdx+json"),
+        ("spdx-tag-value", "text/plain"),
+    ],
+)
+def test_export_repo_sets_content_type_per_format(fmt, content_type):
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value="auto-1"), \
+         patch("src.sbom.router.download_json", return_value=_FAKE_SBOM):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}&format={fmt}")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith(content_type)
+    assert "attachment" in resp.headers["content-disposition"]
+
+
+def test_export_unknown_format_is_400():
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}&format=bogus")
+    assert resp.status_code == 400
+
+
+def test_export_repo_404_when_asset_has_no_indexed_run():
+    # No scoped run in the index → 404. There is no unscoped MinIO-prefix
+    # fallback that could otherwise serve a display_name-colliding asset's blob.
+    downloaded = {"v": False}
+
+    def fake_download(key):
+        downloaded["v"] = True
+        return _FAKE_SBOM
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value=None), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}")
+
+    assert resp.status_code == 404
+    assert downloaded["v"] is False
+
+
+def test_export_repo_latest_uses_sbom_index():
+    captured = {"key": None}
+
+    def fake_download(key):
+        captured["key"] = key
+        return _FAKE_SBOM
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value="auto-7"), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}")
+
+    assert resp.status_code == 200
+    # Latest key built from the scoped index run id.
+    assert captured["key"] == "dependencies_scanning/acme/auto-7/api/sbom.cdx.json"
+
+
+def test_export_repo_with_run_id_fetches_that_snapshot():
+    captured = {"key": None}
+    latest_called = {"v": False}
+
+    def fake_download(key):
+        captured["key"] = key
+        return _FAKE_SBOM
+
+    def fake_latest(*args, **kwargs):
+        latest_called["v"] = True
+        return "auto-LATEST"
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._asset_owns_run", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", side_effect=fake_latest), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}?run_id=auto-2")
+
+    assert resp.status_code == 200
+    # The caller-supplied snapshot is served only after being bound to the
+    # asset's own runs; the latest-run resolver is not consulted.
+    assert captured["key"] == "dependencies_scanning/acme/auto-2/api/sbom.cdx.json"
+    assert latest_called["v"] is False
+
+
+def test_export_repo_run_id_not_owned_by_asset_is_404():
+    # BOLA regression: a run id that is valid-looking and passes the
+    # display_name scope check but is NOT one of this asset's runs (e.g. a
+    # display_name-colliding sibling's snapshot) must 404 without a fetch.
+    downloaded = {"v": False}
+
+    def fake_download(key):
+        downloaded["v"] = True
+        return _FAKE_SBOM
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._asset_owns_run", return_value=False), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}?run_id=auto-OTHER")
+
+    assert resp.status_code == 404
+    assert downloaded["v"] is False
+
+
+def test_export_repo_rejects_unsafe_run_id():
+    minio_called = {"v": False}
+
+    def fake_download(key):
+        minio_called["v"] = True
+        return _FAKE_SBOM
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}?run_id=../secret")
+
+    assert resp.status_code == 404
+    assert minio_called["v"] is False
+
+
 def test_export_repo_returns_404_when_out_of_scope():
     called = {"latest": False}
 
     def fake_latest(*args, **kwargs):
         called["latest"] = True
-        return "dependencies_scanning/acme/auto-1/api/sbom.cdx.json"
+        return "auto-1"
 
     with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
          patch("src.sbom.router.resolve_asset_ids_from_request",
                new=AsyncMock(return_value=[_OTHER_ASSET_ID])), \
          patch("src.sbom.router._repo_in_scope", return_value=False), \
-         patch("src.sbom.router._latest_repo_sbom_key", side_effect=fake_latest):
+         patch("src.sbom.router._latest_run_id_for_asset", side_effect=fake_latest):
         client = TestClient(_make_app())
         resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}")
 
     assert resp.status_code == 404
+    # Out-of-scope short-circuits before any run resolution.
     assert called["latest"] is False
 
 
@@ -146,31 +297,38 @@ def test_path_image_export_returns_404_when_out_of_scope():
 
 
 def test_download_returns_sbom_when_repo_in_scope():
-    with patch("src.sbom.router.check_feature", return_value=None), \
-         patch("src.sbom.router.resolve_asset_ids_from_request",
+    captured = {"key": None}
+
+    def fake_download(key):
+        captured["key"] = key
+        return _FAKE_SBOM
+
+    with patch("src.sbom.router.resolve_asset_ids_from_request",
                new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
-         patch("src.sbom.router._repo_in_scope", return_value=True), \
-         patch("src.sbom.router.download_from_minio", return_value=_FAKE_SBOM):
+         patch("src.sbom.router._latest_run_id_for_asset", return_value="auto-9"), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
         client = TestClient(_make_app())
         resp = client.get("/api/v1/sboms/download?org=acme&repo=api")
     assert resp.status_code == 200
     assert "attachment" in resp.headers["content-disposition"]
+    # Served from the scoped asset's own run, not the shared canonical key.
+    assert captured["key"] == "dependencies_scanning/acme/auto-9/api/sbom.cdx.json"
 
 
 def test_download_returns_404_when_repo_out_of_scope():
     """BOLA test: a viewer with VIEW_FINDINGS but no team grant on acme/api
-    must not get the SBOM, and MinIO must not even be queried."""
+    must not get the SBOM, and MinIO must not even be queried. _latest_run_id_for_asset
+    returns None for an out-of-scope repo (scope is enforced inside it)."""
     called = {"minio": False}
 
     def fake_download(*args, **kwargs):
         called["minio"] = True
         return _FAKE_SBOM
 
-    with patch("src.sbom.router.check_feature", return_value=None), \
-         patch("src.sbom.router.resolve_asset_ids_from_request",
+    with patch("src.sbom.router.resolve_asset_ids_from_request",
                new=AsyncMock(return_value=[_OTHER_ASSET_ID])), \
-         patch("src.sbom.router._repo_in_scope", return_value=False), \
-         patch("src.sbom.router.download_from_minio", side_effect=fake_download):
+         patch("src.sbom.router._latest_run_id_for_asset", return_value=None), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
         client = TestClient(_make_app())
         resp = client.get("/api/v1/sboms/download?org=acme&repo=api")
     assert resp.status_code == 404
@@ -190,9 +348,8 @@ def test_download_returns_403_without_view_findings():
         return _FAKE_SBOM
 
     with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False), \
-         patch("src.sbom.router.check_feature", return_value=None), \
          patch("src.sbom.router.resolve_asset_ids_from_request", side_effect=fake_scope), \
-         patch("src.sbom.router.download_from_minio", side_effect=fake_minio):
+         patch("src.sbom.router.download_json", side_effect=fake_minio):
         client = TestClient(_make_app(allow_view_findings=False))
         resp = client.get("/api/v1/sboms/download?org=acme&repo=api")
     assert resp.status_code == 403

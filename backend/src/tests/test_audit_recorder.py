@@ -107,3 +107,42 @@ def test_record_resource_id_coerced_to_str(recorder):
         recorder.record(action="test.action", resource_type="t", resource_id=99)
 
     assert captured[0].resource_id == "99"
+
+
+def test_record_in_session_adds_event_without_run_db(recorder):
+    """record_in_session() adds to the given session directly and must NOT
+    nest a run_db() call (the whole point — avoids the deadlock)."""
+    captured: list = []
+    session = MagicMock()
+    session.add = lambda obj: captured.append(obj)
+
+    with patch("src.audit_log.recorder.run_db", side_effect=AssertionError("must not nest run_db")):
+        recorder.record_in_session(
+            session,
+            action="user.reactivated",
+            resource_type="user",
+            resource_id="u-1",
+            actor=ActorInfo(user_id="system:sso_jit", username="alice", email="a@x.com", role="system"),
+            metadata={"trigger": "jit_sign_in"},
+        )
+
+    assert len(captured) == 1
+    evt = captured[0]
+    assert evt.action == "user.reactivated"
+    assert evt.resource_type == "user"
+    assert evt.resource_id == "u-1"
+    assert evt.actor_user_id == "system:sso_jit"
+    assert evt.actor_role == "system"
+    assert evt.metadata_json == {"trigger": "jit_sign_in"}
+    assert evt.created_at is not None and evt.occurred_at is not None
+
+
+def test_record_in_session_respects_disabled_flag(recorder, monkeypatch):
+    monkeypatch.setenv("AEGIS_AUDIT_LOG_ENABLED", "false")
+    captured: list = []
+    session = MagicMock()
+    session.add = lambda obj: captured.append(obj)
+
+    recorder.record_in_session(session, action="x", resource_type="y")
+
+    assert captured == []  # disabled -> no row added

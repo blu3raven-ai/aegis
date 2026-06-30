@@ -47,6 +47,28 @@ def _disabled_cfg() -> ScimConfig:
     return cfg
 
 
+async def _seed_enabled_scim_config(session) -> None:
+    """Atomically enable the singleton ScimConfig (id=1) for db-backed tests.
+
+    The previous read-then-add pattern was a check-then-act race on the shared
+    singleton row: two db-backed tests running concurrently (e.g. under
+    pytest-xdist against one database) could both observe no row and then both
+    insert id=1, colliding on the primary key. An upsert converges atomically
+    regardless of interleaving.
+    """
+    from sqlalchemy.dialects.postgresql import insert as _pg_insert
+
+    stmt = (
+        _pg_insert(ScimConfig)
+        .values(id=1, enabled=True, token_hash=_TOKEN_HASH, default_role_id=None)
+        .on_conflict_do_update(
+            index_elements=[ScimConfig.id],
+            set_={"enabled": True, "token_hash": _TOKEN_HASH, "default_role_id": None},
+        )
+    )
+    await session.execute(stmt)
+
+
 def _auth_headers() -> dict:
     return {"Authorization": f"Bearer {_RAW_TOKEN}"}
 
@@ -547,7 +569,8 @@ def test_put_user_refuses_to_mutate_non_scim_managed_row():
     assert resp.status_code == 409
     body = resp.json()
     assert body["scimType"] == "mutability"
-    assert "SCIM-managed" in body["detail"]
+    # Message must not disclose the per-row SCIM-managed flag (info-leak).
+    assert "SCIM-managed" not in body["detail"]
 
 
 def test_patch_user_refuses_to_mutate_non_scim_managed_row():
@@ -598,20 +621,8 @@ def test_post_user_persists_scim_managed_true_on_real_db(db_session):
     """
     from sqlalchemy import delete, select
     from src.db.helpers import run_db as real_run_db
-    from src.db.models import ScimConfig
 
-    async def _seed(session):
-        existing = (
-            await session.execute(select(ScimConfig).where(ScimConfig.id == 1))
-        ).scalar_one_or_none()
-        if existing is None:
-            session.add(_enabled_cfg())
-        else:
-            existing.enabled = True
-            existing.token_hash = _TOKEN_HASH
-            existing.default_role_id = None
-
-    real_run_db(_seed)
+    real_run_db(_seed_enabled_scim_config)
 
     created_username = f"scim-c3-{os.urandom(4).hex()}@example.com"
 
@@ -652,21 +663,13 @@ def test_patch_user_op_remove_on_active_soft_deletes_db_backed(db_session):
     """
     from sqlalchemy import delete, select
     from src.db.helpers import run_db as real_run_db
-    from src.db.models import ScimConfig
 
     uniq = os.urandom(4).hex()
     user_id = f"c5-{uniq}"
     username = f"c5-{uniq}@example.com"
 
     async def _seed(session):
-        existing = (
-            await session.execute(select(ScimConfig).where(ScimConfig.id == 1))
-        ).scalar_one_or_none()
-        if existing is None:
-            session.add(_enabled_cfg())
-        else:
-            existing.enabled = True
-            existing.token_hash = _TOKEN_HASH
+        await _seed_enabled_scim_config(session)
         session.add(User(
             id=user_id,
             username=username,
@@ -698,6 +701,61 @@ def test_patch_user_op_remove_on_active_soft_deletes_db_backed(db_session):
             return row.status
 
         assert real_run_db(_check) == "deprovisioned"
+    finally:
+        async def _cleanup(session):
+            await session.execute(delete(User).where(User.id == user_id))
+
+        real_run_db(_cleanup)
+
+
+def test_put_user_on_non_scim_managed_returns_409_db_backed(db_session):
+    """A non-SCIM-managed user (e.g. created locally) must not be replaceable via
+    SCIM — drive PUT against a real row so the mutability gate is exercised
+    end-to-end, not just through mocked run_db return paths.
+    """
+    from sqlalchemy import delete, select
+    from src.db.helpers import run_db as real_run_db
+
+    uniq = os.urandom(4).hex()
+    user_id = f"c3-put-{uniq}"
+    username = f"c3-put-{uniq}@example.com"
+
+    async def _seed(session):
+        await _seed_enabled_scim_config(session)
+        session.add(User(
+            id=user_id,
+            username=username,
+            email=username,
+            password_hash="",
+            status="active",
+            scim_managed=False,  # locally-managed; SCIM must refuse to mutate
+        ))
+
+    real_run_db(_seed)
+
+    try:
+        client = _mount()
+        resp = client.put(
+            f"/scim/v2/Users/{user_id}",
+            json={
+                "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+                "userName": username,
+                "emails": [{"value": username, "primary": True}],
+                "active": True,
+            },
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 409, resp.text
+        assert resp.json().get("scimType") == "mutability"
+
+        async def _check(session):
+            row = (
+                await session.execute(select(User).where(User.id == user_id))
+            ).scalar_one()
+            return row.scim_managed, row.status
+
+        # Gate held: the row is untouched.
+        assert real_run_db(_check) == (False, "active")
     finally:
         async def _cleanup(session):
             await session.execute(delete(User).where(User.id == user_id))

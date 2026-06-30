@@ -473,6 +473,30 @@ def get_source_type_for_org(org: str, category: str) -> str:
     return ""
 
 
+def get_instance_url_for_org(org: str, source_type: str) -> str:
+    """Return the instanceUrl of the first connected code-repository connection
+    matching (org, source_type).
+
+    Empty for SaaS providers (github.com / gitlab.com / bitbucket.org) and when
+    no matching connection exists. Callers pass it to a repo provider's
+    clone_url so self-hosted (GHE / self-managed GitLab / Gitea) clones target
+    the right host instead of the SaaS default.
+    """
+    key = org.lower()
+    for conn in _read_source_connections():
+        if conn.get("status") != "connected":
+            continue
+        if conn.get("category") != "code-repositories":
+            continue
+        if str(conn.get("source_type") or "") != source_type:
+            continue
+        auth = conn.get("auth") if isinstance(conn.get("auth"), dict) else {}
+        conn_org = (auth.get("orgOrOwner") or "").strip()
+        if conn_org and conn_org.lower() == key:
+            return str(auth.get("instanceUrl") or "")
+    return ""
+
+
 @dataclass
 class ScanSource:
     """A single source connection with resolved scan targets (shared by SCA & Secrets)."""
@@ -632,7 +656,10 @@ def get_container_scanner_config() -> dict[str, str]:
     concurrency = str(ct_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("CONTAINER_SCAN_CONCURRENCY") or "4"
     return {
         "concurrency": concurrency,
-        "nvdEnabled": "true" if ct_tool.get("nvdEnabled", False) else "false",
+        # NVD enrichment is on by default — matches the dependencies scanner and
+        # the container env fallback; the keyless NVD API still works (rate-limited)
+        # and enrichment failures are isolated at the ingest call site.
+        "nvdEnabled": "true" if ct_tool.get("nvdEnabled", True) else "false",
         "nvdApiKey": str(ct_tool.get("nvdApiKey") or ""),
         "ghsaEnabled": "true" if ct_tool.get("ghsaEnabled", False) else "false",
         "ghsaApiKey": str(ct_tool.get("ghsaApiKey") or ""),

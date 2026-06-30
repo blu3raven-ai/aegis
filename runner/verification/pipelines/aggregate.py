@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from runner.verification.budget import ScanBudget
@@ -65,14 +65,33 @@ def run_aggregate_verification(
     *,
     repo_root_for: dict[str, Path] | Path,
     llm=None,
+    correlate_fn: Callable[[list[dict], int], list[dict]] | None = None,
     total_budget: int = _DEFAULT_TOTAL_BUDGET,
     daily_remaining: int = _DEFAULT_DAILY_REMAINING,
 ) -> AggregateVerificationResult:
-    """Run orchestrator -> correlator -> dedupe. Correlation skipped when ``llm`` is None."""
+    """Run orchestrator -> correlator -> dedupe.
+
+    Correlation runs only when there are eligible cross-scanner groups. When
+    ``correlate_fn`` is supplied it owns the LLM step (the remote Argus route)
+    and takes precedence over the in-process ``llm`` client; otherwise the local
+    ``correlate_findings`` path runs when ``llm`` is set.
+    """
     plan = plan_investigation(findings, total_budget=total_budget)
 
     correlated: list[CorrelatedFinding] = []
-    if llm is not None and plan.expected_correlation_groups > 0:
+    if plan.expected_correlation_groups > 0 and correlate_fn is not None:
+        try:
+            raw = correlate_fn(list(findings), plan.budget.correlation_pool)
+        except Exception:  # noqa: BLE001
+            # Correlation is best-effort — never block dedup on its failure.
+            logger.exception("aggregate verification: correlation step failed")
+            raw = []
+        for d in raw:
+            try:
+                correlated.append(CorrelatedFinding.model_validate(d))
+            except Exception:  # noqa: BLE001 - a malformed row never aborts the run
+                continue
+    elif plan.expected_correlation_groups > 0 and llm is not None:
         correlation_budget = ScanBudget(
             scan_budget=plan.budget.correlation_pool,
             daily_remaining=daily_remaining,
@@ -88,7 +107,7 @@ def run_aggregate_verification(
             # Correlation is best-effort — never block dedup on its failure.
             logger.exception("aggregate verification: correlation step failed")
             correlated = []
-    elif llm is None:
+    elif llm is None and correlate_fn is None:
         logger.info("aggregate verification: llm not configured, skipping correlation")
 
     dedupe = deduplicate_findings(findings)

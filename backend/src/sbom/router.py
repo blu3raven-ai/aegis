@@ -45,12 +45,11 @@ from fastapi.responses import JSONResponse, Response
 from sqlalchemy import select
 
 from src.db.helpers import run_db
-from src.db.models import Asset, Sbom
+from src.db.models import Asset, Sbom, SbomRun
 from src.sbom.exporter import SbomExporter, UnsupportedFormatError, SUPPORTED_FORMATS
 from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import VIEW_FINDINGS
-from src.license.limits import check_feature
-from src.shared.object_store import list_objects, download_json
+from src.shared.object_store import download_json
 from src.sbom.storage import download_from_minio, safe_s3_segment
 from src.authz.enforcement.scope import resolve_asset_ids_from_request
 
@@ -115,6 +114,7 @@ async def export_sbom(
     repo: Annotated[str | None, Query()] = None,
     image: Annotated[str | None, Query()] = None,
     format: Annotated[str, Query()] = "cyclonedx-json",
+    run_id: Annotated[str | None, Query()] = None,
     _: None = Depends(Permission(VIEW_FINDINGS)),
 ) -> Response:
     """Export the latest SBOM.
@@ -136,7 +136,7 @@ async def export_sbom(
     asset_ids = await resolve_asset_ids_from_request(request)
 
     if repo is not None:
-        return _export_repo_sbom(repo, fmt, asset_ids)
+        return _export_repo_sbom(repo, fmt, asset_ids, run_id=run_id)
     return _export_image_sbom(image, fmt, asset_ids)  # type: ignore[arg-type]
 
 
@@ -145,12 +145,17 @@ async def export_repo_sbom_path(
     request: Request,
     repo_id: str,
     format: Annotated[str, Query(alias="format")] = "cyclonedx-json",
+    run_id: Annotated[str | None, Query()] = None,
     _: None = Depends(Permission(VIEW_FINDINGS)),
 ) -> Response:
-    """Export the latest SBOM for a repository (path-param alias)."""
+    """Export a repository's SBOM (path-param alias).
+
+    With ``?run_id=`` a specific historical snapshot is returned; otherwise
+    the latest.
+    """
     asset_ids = await resolve_asset_ids_from_request(request)
     fmt = _resolve_format(format)
-    return _export_repo_sbom(repo_id, fmt, asset_ids)
+    return _export_repo_sbom(repo_id, fmt, asset_ids, run_id=run_id)
 
 
 @router.get("/image/{image_digest:path}")
@@ -183,22 +188,26 @@ async def download_sbom(
     used to live here was replaced because it never intersected with the
     user's actual team grants.
     """
-    check_feature(request, "sbom_export")
-
     asset_ids = await resolve_asset_ids_from_request(request)
     repo_id = f"{org}/{repo}"
-    if not _repo_in_scope(repo_id, asset_ids):
+    # Resolve the latest run from the scoped Sbom index. This enforces scope AND
+    # binds the blob to this asset's own run: the legacy "{org}/{repo}/sbom.cdx.json"
+    # canonical key has no asset qualifier and is shared (last-writer-wins) across
+    # assets that collide on display_name, so reading it directly could serve a
+    # colliding asset's SBOM. A real in-scope asset is required before org/repo
+    # ever reach a key, so a traversal value short-circuits to 404 here.
+    run_id = _latest_run_id_for_asset(repo_id, asset_ids)
+    if run_id is None:
         return JSONResponse({"error": "SBOM not found for this repository"}, status_code=404)
 
-    safe_org = safe_s3_segment(org)
-    safe_repo = safe_s3_segment(repo)
-    key = f"{safe_org}/{safe_repo}/sbom.cdx.json"
-
-    data = download_from_minio(key)
-    if data is None:
+    key = f"dependencies_scanning/{org}/{run_id}/{repo}/sbom.cdx.json"
+    data = download_json(key)
+    # download_json already returns None for a corrupt/unparseable blob; a valid
+    # JSON value that isn't a CycloneDX object is likewise treated as missing.
+    if not isinstance(data, dict):
         return JSONResponse({"error": "SBOM not found for this repository"}, status_code=404)
 
-    filename = f"{safe_org}_{safe_repo}_sbom.cdx.json"
+    filename = f"{safe_s3_segment(org)}_{safe_s3_segment(repo)}_sbom.cdx.json"
     return Response(
         content=json.dumps(data, indent=2),
         media_type="application/json",
@@ -231,35 +240,83 @@ def _repo_in_scope(repo_id: str, asset_ids: list[str]) -> bool:
     return run_db(_query) is not None
 
 
-def _latest_repo_sbom_key(org: str, repo: str) -> str | None:
-    """Return the MinIO key for the latest SBOM of a repo, or None if absent.
+def _asset_owns_run(repo_id: str, asset_ids: list[str], run_id: str) -> bool:
+    """True if ``run_id`` is a recorded ``SbomRun`` of the in-scope repo asset.
 
-    Mirrors the prefix written by the runner during upload (see backend
-    src/runner/router.py::presign_uploads which keys on job["jobType"]).
-    Key pattern: dependencies_scanning/{org}/{run_id}/{repo}/sbom.cdx.json
-    run_id = auto-{epoch_ms} — lex sort is chronological.
+    The dependency-SBOM key is built from ``owner/run_id/name`` with no asset
+    qualifier, so two assets sharing an owner/name (the same repo mirrored
+    across two source connections) share a key prefix. Resolving the asset by
+    display_name alone would let a caller scoped to one pass the other's run id
+    and read its snapshot — so the supplied run id is bound back to this asset's
+    own runs before it reaches the object store.
     """
-    prefix = f"dependencies_scanning/{org}/"
-    suffix = f"/{repo}/sbom.cdx.json"
-    keys = [k for k in list_objects(prefix) if k.endswith(suffix)]
-    if not keys:
+    if not asset_ids:
+        return False
+
+    async def _query(session):
+        result = await session.execute(
+            select(SbomRun.id)
+            .join(Asset, Asset.id == SbomRun.asset_id)
+            .where(Asset.display_name == repo_id)
+            .where(Asset.type == "repo")
+            .where(Asset.id.in_(asset_ids))
+            .where(SbomRun.run_id == run_id)
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    return run_db(_query)
+
+
+def _latest_run_id_for_asset(repo_id: str, asset_ids: list[str]) -> str | None:
+    """Latest dependency-scan run id for an in-scope repo, from the Sbom index.
+
+    Lets the repo export build the snapshot key directly instead of an
+    O(org-size) MinIO prefix listing to find the newest blob. Scope is enforced
+    in the same query (display_name + type=repo intersected with the grant set).
+    """
+    if not asset_ids:
         return None
-    return sorted(keys)[-1]
+
+    async def _query(session):
+        result = await session.execute(
+            select(Sbom.run_id)
+            .join(Asset, Asset.id == Sbom.asset_id)
+            .where(Asset.display_name == repo_id)
+            .where(Asset.type == "repo")
+            .where(Asset.id.in_(asset_ids))
+            .order_by(Sbom.scanned_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    return run_db(_query)
 
 
-def _fetch_container_sbom_by_digest(image_digest: str) -> tuple[dict[str, Any] | None, str | None, str | None]:
+def _fetch_container_sbom_by_digest(
+    image_digest: str, asset_ids: list[str]
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
     """Fetch a container SBOM by image digest via the Sbom index table.
 
     Mirrors the blob uploaded by backend/src/containers/sbom_store.py during ingest.
+    Scope is enforced at the SQL layer so a digest shared across tenants resolves
+    to the caller's own row — never another tenant's, which would otherwise yield
+    a spurious 404. Empty/absent scope returns no_row (fail-closed).
 
     Returns: (sbom, reason, asset_id)
       - (sbom_dict, None, asset_id) on success
-      - (None, "no_row", None) if image_digest not in Sbom table
+      - (None, "no_row", None) if no in-scope row matches the digest
       - (None, "blob_missing", asset_id) if Sbom row exists but MinIO blob is absent
     """
+    if not asset_ids:
+        return None, "no_row", None
+
     async def _query(session):
         result = await session.execute(
-            select(Sbom).where(Sbom.commit_sha == image_digest).limit(1)
+            select(Sbom)
+            .where(Sbom.commit_sha == image_digest)
+            .where(Sbom.asset_id.in_(asset_ids))
+            .limit(1)
         )
         return result.scalars().first()
 
@@ -272,8 +329,19 @@ def _fetch_container_sbom_by_digest(image_digest: str) -> tuple[dict[str, Any] |
     return sbom, None, row.asset_id
 
 
-def _export_repo_sbom(repo_id: str, fmt: str, asset_ids: list[str]) -> Response:
-    """Fetch + export the latest SBOM for a repository."""
+_RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.\-]+$")
+
+
+def _safe_run_id(run_id: str) -> bool:
+    """Allowlist a run id before it flows into a MinIO key prefix."""
+    return ".." not in run_id and bool(_RUN_ID_PATTERN.match(run_id))
+
+
+def _export_repo_sbom(
+    repo_id: str, fmt: str, asset_ids: list[str], run_id: str | None = None
+) -> Response:
+    """Fetch + export a repository's SBOM — the ``run_id`` snapshot if given,
+    else the latest."""
     # Strip a trailing /history suffix that could arrive via the path alias
     # if FastAPI routing resolves to this handler instead of the history one.
     # (Defensive — should not happen with correct route ordering.)
@@ -287,16 +355,33 @@ def _export_repo_sbom(repo_id: str, fmt: str, asset_ids: list[str]) -> Response:
         )
 
     org, repo = _parse_repo_id(repo_id)
-    key = _latest_repo_sbom_key(org, repo)
+    if run_id is not None:
+        # Specific historical snapshot. Allowlist the run id for path safety,
+        # then bind it to this asset's own runs — the owner/run/name MinIO key
+        # is shared across display_name-colliding assets, so the scope check
+        # above is not sufficient on its own.
+        if not _safe_run_id(run_id) or not _asset_owns_run(repo_id, asset_ids, run_id):
+            raise HTTPException(
+                status_code=404,
+                detail=f"No SBOM found for repository '{repo_id}'.",
+            )
+    else:
+        # Latest snapshot — resolve the run id from the scoped Sbom index. This
+        # is also the only source of truth for "latest": there is no unscoped
+        # MinIO-prefix fallback, which could otherwise serve a colliding asset's
+        # blob.
+        run_id = _latest_run_id_for_asset(repo_id, asset_ids)
 
-    if key is None:
+    if run_id is None:
         raise HTTPException(
             status_code=404,
             detail=f"No SBOM found for repository '{repo_id}'.",
         )
 
+    key = f"dependencies_scanning/{org}/{run_id}/{repo}/sbom.cdx.json"
+
     sbom = download_json(key)
-    if sbom is None:
+    if not isinstance(sbom, dict):
         raise HTTPException(
             status_code=404,
             detail=f"SBOM blob not found for repository '{repo_id}'.",
@@ -307,17 +392,18 @@ def _export_repo_sbom(repo_id: str, fmt: str, asset_ids: list[str]) -> Response:
 
 def _export_image_sbom(image_digest: str, fmt: str, asset_ids: list[str]) -> Response:
     """Fetch + export the SBOM for a container image digest."""
-    sbom, reason, asset_id = _fetch_container_sbom_by_digest(image_digest)
+    sbom, reason, asset_id = _fetch_container_sbom_by_digest(image_digest, asset_ids)
 
     # 404 (not 403) when the caller can't see the asset — avoids leaking existence.
+    # The fetch already scopes at SQL; this stays as a defensive backstop.
     not_found_msg = f"No SBOM found for image digest '{image_digest}'."
     if asset_id is not None and asset_id not in asset_ids:
         raise HTTPException(status_code=404, detail=not_found_msg)
 
-    if sbom is None:
+    if not isinstance(sbom, dict):
         detail = (
             f"SBOM blob not found for image digest '{image_digest}'."
-            if reason == "blob_missing"
+            if reason == "blob_missing" or sbom is not None
             else not_found_msg
         )
         raise HTTPException(status_code=404, detail=detail)

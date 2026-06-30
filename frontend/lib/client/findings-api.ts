@@ -1,6 +1,10 @@
 /** Client for the findings surface (list, summary, mutations, assignees). */
 
 import { apiClient } from "./api-client.ts"
+import type {
+  FindingRecommendedFix,
+  VerificationMetadata,
+} from "../shared/findings/row-mapper.ts"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low"
 export type FindingScanner =
@@ -22,7 +26,7 @@ const SCANNER_SHORTHAND_TO_NAME: Record<string, FindingScanner> = {
 function normalizeScanner(scanner: string): string {
   return SCANNER_SHORTHAND_TO_NAME[scanner] ?? scanner
 }
-export type FindingState = "open" | "closed" | "dismissed" | "fixed"
+export type FindingState = "open" | "closed" | "dismissed" | "fixed" | "deferred"
 export type FindingVerdict = "confirmed" | "needs_verify" | "possible" | "ruled_out"
 export type FindingVerdictFilter = FindingVerdict | "legacy" | "all"
 export type FindingSort =
@@ -32,6 +36,7 @@ export type FindingSort =
   | "severity_age"
   | "epss"
   | "risk_score"
+  | "action_band"
   | "newest"
   | "oldest"
 export type FindingSortDirection = "asc" | "desc"
@@ -57,8 +62,54 @@ export interface Finding {
   /** First CWE id (e.g. "CWE-502") from KEV metadata. */
   cwe?: string | null
   risk_score?: number | null
+  /** SSVC-style triage band derived from KEV + reachability + severity. */
+  action_band?: string | null
   assignee_user_id?: string | null
   verdict?: FindingVerdict | null
+  /** Short, client-safe code/context preview (redacted for secrets). */
+  code_snippet?: string | null
+  /** 1-indexed file line of the snippet's first line, for gutter anchoring. */
+  code_snippet_start_line?: number | null
+  /** Offending line range to highlight within the snippet. */
+  code_highlight_start?: number | null
+  code_highlight_end?: number | null
+  /** Scanner's explanation of the issue (what's wrong). */
+  description?: string | null
+  /** Rule that fired (name or id). */
+  rule?: string | null
+  /** Remediation guidance (how to fix). */
+  remediation?: string | null
+  /** Scanner confidence (e.g. "high"). */
+  confidence?: string | null
+  /** Secret detector that fired (e.g. "AWS secret"). Secret findings only. */
+  secret_detector?: string | null
+  /** Whether the secret was confirmed live; null when the detector can't validate. */
+  secret_verified?: boolean | null
+  /** Commit that introduced the finding, when the scanner captured it. */
+  introduced_by_commit?: string | null
+  /** Blast radius: other in-scope repos with an active finding for this CVE/package. */
+  also_affects_repos?: number | null
+  /** Image context for container findings (name/tag/digest/base OS/layers). */
+  container_image?: {
+    name: string
+    tag: string | null
+    digest: string | null
+    base_os: string | null
+    layer_count: number | null
+  } | null
+  /** Ordered taint path (source → sink) for SAST flow findings. */
+  code_flows?: Array<{ file: string; line: number; snippet?: string }> | null
+  /** Structured remediation payload (see FindingRecommendedFix). The API passes
+   *  the object through untouched, so every fix `kind` reaches the drawer. */
+  recommended_fix?: FindingRecommendedFix | null
+  /** Argus-verification evidence citations (source/sink/gate) — detail fetch only. */
+  evidence?: Array<{ file?: string; line?: number; snippet?: string; kind?: string }> | null
+  /** Verifier's exploit-chain narrative — detail fetch only. */
+  exploit_chain?: string | null
+  /** Verifier model/token footer + ruled-out mitigation — detail fetch only. */
+  verification_metadata?: VerificationMetadata | null
+  /** Runner-derived reachability ("reachable" | "no_path" | "unknown") — detail fetch only. */
+  reachability?: string | null
 }
 
 export interface ListFindingsParams {
@@ -77,7 +128,7 @@ export interface ListFindingsParams {
   cwe?: string
   kev?: boolean
   epss_min?: number
-  risk_score_min?: number
+  bands?: ("act" | "attend" | "track")[]
   assignee?: string
   verdict?: FindingVerdictFilter
 }
@@ -116,6 +167,7 @@ interface GqlFindingRow {
   kev: boolean | null
   cwe: string | null
   riskScore: number | null
+  actionBand: string | null
   assigneeUserId: string | null
   verdict: FindingVerdict | null
 }
@@ -199,6 +251,7 @@ function fromGqlRow(row: GqlFindingRow): Finding {
     kev: row.kev,
     cwe: row.cwe,
     risk_score: row.riskScore,
+    action_band: row.actionBand,
     assignee_user_id: row.assigneeUserId,
     verdict: row.verdict,
   }
@@ -220,6 +273,91 @@ export async function listFindingsSummary(): Promise<FindingsSummary> {
   return apiClient<FindingsSummary>("/api/v1/findings/summary")
 }
 
+/**
+ * Full detail for one finding. The list comes from GraphQL with a lean row;
+ * the panel fetches this on open for the decision content the list omits
+ * (description, rule, remediation, confidence, code snippet + highlight).
+ */
+export async function getFindingDetail(findingId: number): Promise<Finding> {
+  const res = await apiClient<{ finding: Finding }>(`/api/v1/findings/${findingId}`)
+  return res.finding
+}
+
+/** Advisory enrichment for the drawer's Security Brief. */
+export interface FindingAdvisory {
+  advisory_id: string | null
+  cve_id: string | null
+  severity: string | null
+  /** Full CVSS vector string (e.g. "CVSS:3.1/AV:N/…"). */
+  cvss_vector: string | null
+  summary: string | null
+  description: string | null
+  published_at: string | null
+  /** Human-readable affected range (e.g. ">= 0, < 0.11.0"). */
+  affected_range: string | null
+  /** First patched version, when known. */
+  fixed_version: string | null
+  references: string[]
+  epss_percentile?: number | null
+  kev?: boolean
+  /** CISA KEV detail when the CVE is listed: regulatory due date + ransomware flag. */
+  kev_detail?: {
+    due_date: string | null
+    date_added: string | null
+    known_ransomware: boolean
+  } | null
+}
+
+/**
+ * Advisory brief for one finding (summary, CVSS, affected→patched range, dates),
+ * lazily fetched on drawer open. Resolves to null when the finding carries no
+ * advisory (SAST/secrets/IaC) or the enrichment read fails — the section is
+ * purely additive, so it just doesn't render.
+ */
+export async function getFindingAdvisory(findingId: number): Promise<FindingAdvisory | null> {
+  try {
+    const res = await apiClient<{ advisory: FindingAdvisory | null }>(
+      `/api/v1/findings/${findingId}/advisory`,
+    )
+    return res.advisory
+  } catch {
+    return null
+  }
+}
+
+/** One other repo affected by the same CVE/package (blast-radius drill-down). */
+export interface FindingRelated {
+  finding_id: string
+  repo: string
+  severity: string | null
+  state: string | null
+}
+
+/** Blast-radius drill-down: the other in-scope repos sharing this finding's
+ *  CVE/package, fetched on demand when the analyst expands the count. */
+export async function getFindingRelated(findingId: number): Promise<FindingRelated[]> {
+  try {
+    const res = await apiClient<{ related: FindingRelated[] }>(
+      `/api/v1/findings/${findingId}/related`,
+    )
+    return res.related
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Reveal the raw value of a secret finding. Sensitive and audited server-side
+ * — gated on review_findings and the caller's asset scope; fetched on demand
+ * so the plaintext secret never rides along in list/detail payloads.
+ */
+export async function revealSecretValue(findingId: string): Promise<string> {
+  const res = await apiClient<{ value: string }>(
+    `/api/v1/findings/${encodeURIComponent(findingId)}/secret-value`,
+  )
+  return res.value
+}
+
 /** Reasons accepted by the backend. Keep in sync with backend/src/shared/lifecycle.VALID_DISMISS_REASONS. */
 export const DISMISS_REASONS = [
   "Fix started",
@@ -239,6 +377,47 @@ export async function dismissFinding(
   return apiClient<{ ok: true }>(`/api/v1/findings/${findingId}`, {
     method: "PATCH",
     body: JSON.stringify({ state: "dismissed", dismiss_reason: reason, comment }),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+/** Reopen a previously dismissed or deferred finding. */
+export async function reopenFinding(findingId: number): Promise<{ ok: true }> {
+  return apiClient<{ ok: true }>(`/api/v1/findings/${findingId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ state: "open" }),
+    headers: { "Content-Type": "application/json" },
+  })
+}
+
+export interface FindingComment {
+  id: string
+  actor: string | null
+  body: string
+  created_at: string | null
+}
+
+/** List a finding's comments, oldest first. */
+export async function listFindingComments(findingId: number): Promise<FindingComment[]> {
+  const res = await apiClient<{ comments: FindingComment[] }>(`/api/v1/findings/${findingId}/comments`)
+  return res.comments
+}
+
+/** Add a free-text comment to a finding. */
+export async function addFindingComment(findingId: number, comment: string): Promise<FindingComment> {
+  const res = await apiClient<{ comment: FindingComment }>(`/api/v1/findings/${findingId}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ comment }),
+    headers: { "Content-Type": "application/json" },
+  })
+  return res.comment
+}
+
+/** Defer (snooze) a finding — drops it from the open queue until reopened. */
+export async function deferFinding(findingId: number): Promise<{ ok: true }> {
+  return apiClient<{ ok: true }>(`/api/v1/findings/${findingId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ state: "deferred" }),
     headers: { "Content-Type": "application/json" },
   })
 }
@@ -304,7 +483,7 @@ const FINDINGS_SEARCH_QUERY = `query FindingsSearch(
   $sort: String!, $direction: String!,
   $limit: Int!, $cursor: String, $page: Int!,
   $firstSeenAfter: String, $cwe: String, $kev: Boolean,
-  $epssMin: Float, $riskScoreMin: Int,
+  $epssMin: Float, $bands: String,
   $assignee: String, $verdict: String
 ) {
   findings {
@@ -314,13 +493,13 @@ const FINDINGS_SEARCH_QUERY = `query FindingsSearch(
       sort: $sort, direction: $direction,
       limit: $limit, cursor: $cursor, page: $page,
       firstSeenAfter: $firstSeenAfter, cwe: $cwe, kev: $kev,
-      epssMin: $epssMin, riskScoreMin: $riskScoreMin,
+      epssMin: $epssMin, bands: $bands,
       assignee: $assignee, verdict: $verdict
     ) {
       findings {
         id scanner severity state title cve package filePath line
         repo orgId createdAt updatedAt epssPercentile kev cwe
-        riskScore assigneeUserId verdict
+        riskScore actionBand assigneeUserId verdict
       }
       nextCursor
       totalCount
@@ -353,7 +532,7 @@ export async function listFindings(
     cwe: params.cwe ?? null,
     kev: params.kev ?? null,
     epssMin: params.epss_min ?? null,
-    riskScoreMin: params.risk_score_min ?? null,
+    bands: params.bands?.length ? params.bands.join(",") : null,
     assignee: params.assignee ?? null,
     verdict: params.verdict ?? null,
   }

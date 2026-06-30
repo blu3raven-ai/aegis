@@ -193,11 +193,308 @@ def _serialize_posture_pdf(*, asset_ids: list[str], title: str) -> bytes:
     return render_pdf(html)
 
 
+_SEV_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+
+async def _fetch_top_open_findings(
+    session: AsyncSession, asset_ids: list[str], *, limit: int = 10
+) -> list[dict]:
+    """The most urgent open critical/high findings — worst severity, then oldest.
+
+    Capped at 200 rows pre-sort so the executive report never scans an entire
+    finding table; for the headline list that ceiling is never the binding
+    constraint.
+    """
+    if not asset_ids:
+        return []
+    now = datetime.now(timezone.utc)
+    stmt = (
+        select(Finding)
+        .where(Finding.asset_id.in_(asset_ids))
+        .where(Finding.state == "open")
+        .where(Finding.severity.in_(["critical", "high"]))
+        .order_by(Finding.first_seen_at.asc())
+        .limit(200)
+    )
+    stmt = exclude_archived(stmt, Finding)
+    rows = (await session.execute(stmt)).scalars().all()
+    ranked = sorted(
+        rows,
+        key=lambda r: (_SEV_RANK.get((r.severity or "").lower(), 4), r.first_seen_at or now),
+    )
+    out: list[dict] = []
+    for r in ranked[:limit]:
+        age_days = (now - r.first_seen_at).days if r.first_seen_at else None
+        out.append({
+            "severity": (r.severity or "").lower() or None,
+            "title": _finding_title({"title": r.title, "tool": r.tool, "identity_key": r.identity_key}),
+            "source_label": r.tool or "—",
+            "age_days": age_days,
+        })
+    return out
+
+
+def _sparkline_points(values: list[int], *, width: int = 480, height: int = 44) -> str:
+    """Map a series to an SVG polyline `points` string for an inline sparkline."""
+    if not values:
+        return ""
+    if len(values) == 1:
+        y = height / 2
+        return f"0,{y:.1f} {width},{y:.1f}"
+    vmin, vmax = min(values), max(values)
+    span = (vmax - vmin) or 1
+    step = width / (len(values) - 1)
+    return " ".join(
+        f"{i * step:.1f},{height - ((v - vmin) / span) * height:.1f}"
+        for i, v in enumerate(values)
+    )
+
+
+def _build_executive_pdf_payload(*, title: str, asset_ids: list[str]) -> dict:
+    """Assemble the CISO-facing executive summary: KPIs, 30-day trend delta,
+    remediation/MTTR, coverage, top repositories, and the most urgent findings."""
+    from src.posture.service import get_posture_snapshot, get_posture_trend
+
+    snapshot = asdict(get_posture_snapshot(asset_ids=asset_ids))
+    trend = get_posture_trend(asset_ids=asset_ids, days=30)
+    top_findings = run_db(lambda s: _fetch_top_open_findings(s, asset_ids))
+
+    counts = snapshot["counts"]
+    # Trend is oldest-first; the delta is open findings now vs the window start.
+    open_30d_ago = trend[0]["total"] if trend else counts["total"]
+    open_delta = counts["total"] - open_30d_ago
+
+    return {
+        "title": title,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "scope_label": f"{len(asset_ids)} assets in scope",
+        "period_label": "Last 30 days",
+        "risk_score": snapshot["riskScore"],
+        "counts": counts,
+        "open_delta": open_delta,
+        "open_30d_ago": open_30d_ago,
+        "remediation": snapshot["remediation"],
+        "repository_coverage": snapshot["repositoryCoverage"],
+        "top_repositories": snapshot["topRepositories"],
+        "top_findings": top_findings,
+        "trend": trend,
+        "trend_sparkline": _sparkline_points([p["total"] for p in trend]),
+    }
+
+
+def _serialize_executive_pdf(*, asset_ids: list[str], title: str) -> bytes:
+    from src.exports.pdf import render_pdf
+
+    env = _get_jinja_env()
+    html = env.get_template("report_executive.html.j2").render(
+        **_build_executive_pdf_payload(title=title, asset_ids=asset_ids)
+    )
+    return render_pdf(html)
+
+
+_RISK_SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
+
+
+async def _fetch_risk_register(session: AsyncSession, asset_ids: list[str]) -> dict:
+    """Open findings grouped by severity plus the accepted-risk (dismissed) log.
+
+    The accepted-risk log is what compliance auditors look for: risks a human
+    explicitly chose to accept, with the rationale. It joins each dismissed
+    finding to its decision row for the reason.
+    """
+    from src.db.models import Decision
+
+    now = datetime.now(timezone.utc)
+    if not asset_ids:
+        return {"open_by_severity": {}, "accepted": [], "open_count": 0, "accepted_count": 0}
+
+    def _age(f) -> int | None:
+        return (now - f.first_seen_at).days if f.first_seen_at else None
+
+    open_stmt = exclude_archived(
+        select(Finding)
+        .where(Finding.asset_id.in_(asset_ids))
+        .where(Finding.state.in_(("open", "deferred"))),
+        Finding,
+    )
+    open_rows = (await session.execute(open_stmt)).scalars().all()
+    by_sev: dict[str, list[dict]] = {}
+    for f in open_rows:
+        sev = (f.severity or "info").lower()
+        by_sev.setdefault(sev, []).append({
+            "title": _finding_title({"title": f.title, "tool": f.tool, "identity_key": f.identity_key}),
+            "source": f.tool,
+            "age_days": _age(f),
+            "state": f.state,
+        })
+    for bucket in by_sev.values():
+        bucket.sort(key=lambda r: (r["age_days"] is None, -(r["age_days"] or 0)))
+    open_by_severity = {s: by_sev[s] for s in _RISK_SEVERITY_ORDER if s in by_sev}
+
+    # Accepted risk = dismissed findings (incl. archived — it's an audit log) with
+    # their decision rationale. One decision per finding via the unique key.
+    acc_stmt = (
+        select(Finding, Decision.reason, Decision.decided_by)
+        .outerjoin(
+            Decision,
+            (Decision.tool == Finding.tool)
+            & (Decision.asset_id == Finding.asset_id)
+            & (Decision.identity_key == Finding.identity_key),
+        )
+        .where(Finding.asset_id.in_(asset_ids))
+        .where(Finding.state == "dismissed")
+    )
+    accepted = []
+    for f, reason, decided_by in (await session.execute(acc_stmt)).all():
+        accepted.append({
+            "severity": (f.severity or "info").lower(),
+            "title": _finding_title({"title": f.title, "tool": f.tool, "identity_key": f.identity_key}),
+            "source": f.tool,
+            "reason": reason or "—",
+            "decided_by": decided_by or "—",
+            "age_days": _age(f),
+        })
+
+    return {
+        "open_by_severity": open_by_severity,
+        "accepted": accepted,
+        "open_count": len(open_rows),
+        "accepted_count": len(accepted),
+    }
+
+
+def _build_risk_register_payload(*, title: str, asset_ids: list[str]) -> dict:
+    data = run_db(lambda s: _fetch_risk_register(s, asset_ids))
+    return {
+        "title": title,
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "scope_label": f"{len(asset_ids)} assets in scope",
+        **data,
+    }
+
+
+def _serialize_risk_register_pdf(*, asset_ids: list[str], title: str) -> bytes:
+    from src.exports.pdf import render_pdf
+
+    env = _get_jinja_env()
+    html = env.get_template("report_risk_register.html.j2").render(
+        **_build_risk_register_payload(title=title, asset_ids=asset_ids)
+    )
+    return render_pdf(html)
+
+
+_RISK_CSV_FIELDS = ["severity", "state", "title", "source", "age_days", "reason"]
+
+
+def _serialize_risk_register_csv(*, asset_ids: list[str]) -> bytes:
+    payload = _build_risk_register_payload(title="", asset_ids=asset_ids)
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=_RISK_CSV_FIELDS, extrasaction="ignore")
+    writer.writeheader()
+    for sev, rows in payload["open_by_severity"].items():
+        for r in rows:
+            writer.writerow({
+                "severity": sev, "state": r["state"], "title": r["title"],
+                "source": r["source"], "age_days": r["age_days"], "reason": "",
+            })
+    for r in payload["accepted"]:
+        writer.writerow({
+            "severity": r["severity"], "state": "dismissed", "title": r["title"],
+            "source": r["source"], "age_days": r["age_days"], "reason": r["reason"],
+        })
+    return buf.getvalue().encode()
+
+
 async def _mark_failed(session: AsyncSession, report_id: int, error: str) -> None:
     row = await session.get(Report, report_id)
     if row:
         row.status = "failed"
         row.error = error
+
+
+def _serialize_soc2_evidence_zip(*, asset_ids: list[str], title: str) -> bytes:
+    """Bundle a SOC 2 audit evidence pack as a ZIP.
+
+    Auditors want a single artifact tying controls to their evidence and the
+    risk decisions behind them. Packs three CSVs + a manifest:
+      controls.csv        — each control's effective status, attestation, evidence
+      mapped_findings.csv — the open findings substantiating each control's state
+      accepted_risks.csv  — dismissed findings + the rationale (decision trail)
+    """
+    import zipfile
+
+    from src.compliance.service import (
+        _derive_control_status,
+        get_findings_for_control,
+        get_framework_summary,
+    )
+
+    async def _gather(session) -> dict:
+        summary = await get_framework_summary(session, "soc2", asset_ids=asset_ids)
+        controls: list[dict] = []
+        mapped: list[dict] = []
+        for item in summary:
+            controls.append({
+                "control_id": item.control_id,
+                "title": item.title,
+                "category": item.category or "",
+                "status": _derive_control_status(item),
+                "manual_status": item.manual_status or "",
+                "evidence_note": item.evidence_note or "",
+                "assessed_by": item.assessed_by or "",
+                "assessed_at": item.assessed_at or "",
+                "open_findings": item.finding_count,
+            })
+            if item.finding_count:
+                for b in await get_findings_for_control(
+                    session, "soc2", item.control_id, asset_ids=asset_ids
+                ):
+                    mapped.append({
+                        "control_id": item.control_id,
+                        "tool": b.tool,
+                        "severity": b.severity or "",
+                        "state": b.state,
+                        "identity_key": b.identity_key,
+                        "rationale": b.rationale or "",
+                    })
+        risk = await _fetch_risk_register(session, asset_ids)
+        return {"controls": controls, "mapped": mapped, "accepted": risk["accepted"]}
+
+    data = run_db(_gather)
+
+    def _csv(rows: list[dict], fields: list[str]) -> str:
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+        return buf.getvalue()
+
+    generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    manifest = (
+        f"{title}\n"
+        f"Generated: {generated}\n"
+        f"Scope: {len(asset_ids)} assets\n\n"
+        "Contents:\n"
+        "  controls.csv        — SOC 2 controls with effective status, attestation, evidence\n"
+        "  mapped_findings.csv — open findings substantiating each control's status\n"
+        "  accepted_risks.csv  — dismissed findings and the rationale for accepting them\n"
+    )
+
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("MANIFEST.txt", manifest)
+        zf.writestr("controls.csv", _csv(data["controls"], [
+            "control_id", "title", "category", "status", "manual_status",
+            "evidence_note", "assessed_by", "assessed_at", "open_findings",
+        ]))
+        zf.writestr("mapped_findings.csv", _csv(data["mapped"], [
+            "control_id", "tool", "severity", "state", "identity_key", "rationale",
+        ]))
+        zf.writestr("accepted_risks.csv", _csv(data["accepted"], [
+            "severity", "title", "source", "reason", "decided_by", "age_days",
+        ]))
+    return out.getvalue()
 
 
 def generate_report(
@@ -246,6 +543,30 @@ def generate_report(
         else:
             content = _serialize_posture_json(asset_ids)
             content_type = "application/json"
+        row_count = 1
+    elif report_type == "executive":
+        # The executive summary is a narrative board-level PDF; CSV/JSON would
+        # strip the framing that makes it useful, so only PDF is offered.
+        if fmt != "pdf":
+            raise ValueError("executive reports only support pdf format")
+        content = _serialize_executive_pdf(asset_ids=asset_ids, title=effective_title)
+        content_type = "application/pdf"
+        row_count = 1
+    elif report_type == "risk_register":
+        if fmt == "pdf":
+            content = _serialize_risk_register_pdf(asset_ids=asset_ids, title=effective_title)
+            content_type = "application/pdf"
+        elif fmt == "csv":
+            content = _serialize_risk_register_csv(asset_ids=asset_ids)
+            content_type = "text/csv"
+        else:
+            raise ValueError("risk register reports support pdf or csv format")
+        row_count = 1
+    elif report_type == "soc2_evidence":
+        if fmt != "zip":
+            raise ValueError("soc2 evidence reports only support zip format")
+        content = _serialize_soc2_evidence_zip(asset_ids=asset_ids, title=effective_title)
+        content_type = "application/zip"
         row_count = 1
     else:
         raise ValueError(f"Unknown report_type: {report_type!r}")

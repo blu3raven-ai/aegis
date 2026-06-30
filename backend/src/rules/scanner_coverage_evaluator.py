@@ -128,6 +128,7 @@ def evaluate_scanner_coverage(
                         if await _upsert_open_violation(
                             session=session,
                             rule_id=rule.id,
+                            asset_id=asset.id,
                             repo_id=repo_subject_id,
                             context={"missing_scanners": missing},
                             current_time=current_time,
@@ -153,6 +154,7 @@ def evaluate_scanner_coverage(
                         freshly_opened = await _upsert_open_violation(
                             session=session,
                             rule_id=rule.id,
+                            asset_id=asset.id,
                             repo_id=repo_subject_id,
                             context={"last_scan_age_days": age},
                             current_time=current_time,
@@ -199,6 +201,7 @@ async def _upsert_open_violation(
     *,
     session,
     rule_id: str,
+    asset_id: str,
     repo_id: str,
     context: dict,
     current_time: datetime,
@@ -208,6 +211,7 @@ async def _upsert_open_violation(
         pg_insert(RuleViolation)
         .values(
             rule_id=rule_id,
+            asset_id=asset_id,
             subject_type="repo",
             subject_id=repo_id,
             status="open",

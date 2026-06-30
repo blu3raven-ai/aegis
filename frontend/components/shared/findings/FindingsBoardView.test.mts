@@ -3,16 +3,14 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
 const src = readFileSync(new URL("./FindingsBoardView.tsx", import.meta.url).pathname, "utf-8")
+const mapperSrc = readFileSync(
+  new URL("../../../lib/shared/findings/row-mapper.ts", import.meta.url).pathname,
+  "utf-8",
+)
 
 describe("FindingsBoardView filter bar additions", () => {
   it("declares a ScannerFilter type that includes 'all' + every FindingScanner option", () => {
     assert.match(src, /type ScannerFilter = FindingScanner \| "all"/)
-  })
-
-  it("ships a SCANNER_FILTER_OPTIONS array with the five scanner buckets the backend supports", () => {
-    for (const value of ['"all"', '"dependencies_scanning"', '"code_scanning"', '"secret_scanning"', '"container_scanning"', '"iac_scanning"']) {
-      assert.ok(src.includes(`value: ${value}`), `SCANNER_FILTER_OPTIONS should include ${value}`)
-    }
   })
 
   it("forwards searchQuery and scannerFilter to listFindings via spread", () => {
@@ -25,17 +23,43 @@ describe("FindingsBoardView filter bar additions", () => {
     assert.match(src, /setTimeout\(\(\) => setSearchQuery\(/)
   })
 
-  it("re-runs load when severity, scanner, repo, state, sort, age, verdict, or debounced searchQuery changes", () => {
-    assert.match(src, /\[sevFilter,\s*scannerFilter,\s*searchQuery,\s*repoFilter,\s*stateFilter,\s*sortKey,\s*agePreset,\s*moreFilters,\s*verdictFilter,\s*page,\s*load\]/)
+  it("re-runs load when severity, scanner, repo, state, sort, age, verdict, debounced searchQuery, per-scanner pages, or grouping changes", () => {
+    assert.match(src, /\[sevFilter,\s*scannerFilter,\s*searchQuery,\s*repoFilter,\s*stateFilter,\s*sortKey,\s*agePreset,\s*moreFilters,\s*verdictFilter,\s*page,\s*scannerPages,\s*groupBy,\s*load\]/)
   })
 
   it("delegates the non-compact filter bar to FindingsCommandBar", () => {
     assert.match(src, /import \{ FindingsCommandBar \} from "\.\/FindingsCommandBar"/)
     assert.match(src, /<FindingsCommandBar/)
     assert.match(src, /severity=\{sevFilter\}/)
-    assert.match(src, /scanner=\{scannerFilter\}/)
     assert.match(src, /moreFilters=\{moreFilters\}/)
     assert.match(src, /repoOptions=\{repoOptions\}/)
+  })
+
+  it("drops the scanner NavTabs in favour of per-scanner-group pagination", () => {
+    // The scanner tabs (#1014) are removed everywhere; scanner scoping now comes
+    // from per-scanner-group pagination so each group paginates independently and
+    // none can be buried. The command bar never carried a scanner control either.
+    assert.doesNotMatch(src, /NavTabs/)
+    assert.doesNotMatch(src, /scannerTabs/)
+    assert.doesNotMatch(src, /scannerCounts/)
+    assert.doesNotMatch(src, /scanner=\{scannerFilter\}/)
+    assert.doesNotMatch(src, /onScannerChange/)
+  })
+
+  it("derives a perScannerMode and paginates each scanner group independently", () => {
+    assert.match(src, /const perScannerMode = groupBy === "scanner" && !flat && scannerFilter === "all"/)
+    assert.match(src, /const \[scannerPages, setScannerPages\] = useState<Record<string, number>>\(\{\}\)/)
+    assert.match(src, /const \[scannerTotals, setScannerTotals\] = useState<Record<string, number>>\(\{\}\)/)
+    // One page-sized fetch per scanner in SCANNER_ORDER, each on its own page,
+    // run with bounded concurrency so the heavy queries don't all contend for
+    // the GraphQL 5s timeout at once.
+    assert.match(src, /mapWithConcurrency\(\s*SCANNER_ORDER,\s*PER_SCANNER_FETCH_CONCURRENCY/)
+    assert.match(src, /page: scannerPages\[s\] \?\? 1/)
+    // Each group renders its own shared paginator keyed by the group's scanner.
+    assert.match(src, /page=\{scannerPages\[group\.key\] \?\? 1\}/)
+    assert.match(src, /total=\{scannerTotals\[group\.key\] \?\? 0\}/)
+    // The single global paginator is suppressed in per-scanner mode.
+    assert.match(src, /\{!perScannerMode && \(\s*<FindingsPagination/)
   })
 
   it("ships a STATE_FILTER_OPTIONS array with the four finding states + 'all'", () => {
@@ -77,15 +101,37 @@ describe("FindingsBoardView filter bar additions", () => {
     assert.match(src, /\.\.\.\(scannerFilter !== "all" \? \{ scanner: scannerFilter \} : \{\}\)/)
   })
 
-  it("syncs risk_score_min through URL state and fetch params", () => {
-    assert.match(src, /"risk_score_min"/)
-    assert.match(src, /moreFilters\.riskScoreMin != null \? \{ risk_score_min: moreFilters\.riskScoreMin \} : \{\}/)
-    assert.match(src, /params\.risk_score_min = String\(moreFilters\.riskScoreMin\)/)
-    assert.match(src, /riskScoreMin: state\.risk_score_min \? Number\(state\.risk_score_min\) : null/)
+  it("syncs bands through URL state and fetch params", () => {
+    assert.match(src, /"bands"/)
+    assert.match(src, /moreFilters\.bands\.length \? \{ bands: moreFilters\.bands \} : \{\}/)
+    assert.match(src, /params\.bands = moreFilters\.bands\.join\(","\)/)
+    assert.match(src, /bands: state\.bands/)
   })
 
-  it("registers the risk_score sort key in VALID_SORT_KEYS", () => {
-    assert.match(src, /new Set<SortKey>\(\["severity_age", "epss", "risk_score", "newest", "oldest"\]\)/)
+  it("registers the action_band sort key in VALID_SORT_KEYS without the retired risk_score key", () => {
+    assert.match(src, /new Set<SortKey>\(\["severity_age", "epss", "action_band", "newest", "oldest"\]\)/)
+  })
+
+  it("sorts the Exploitability column header by action_band", () => {
+    assert.match(src, /direction=\{sortKey === "action_band" \? "descending" : "none"\}/)
+    assert.match(src, /onClick=\{\(\) => setSortKey\("action_band"\)\}/)
+  })
+
+  it("renders the Exploitability cell as a passive action-band badge, not a risk number", () => {
+    assert.match(src, /finding\.actionBand \? \(/)
+    assert.match(src, /<ActionBandBadge band=\{finding\.actionBand\}/)
+    assert.doesNotMatch(src, /<RiskScoreCell/)
+  })
+
+  it("renders the action band in the compact triage row, not the legacy 0-100 exploit meter", () => {
+    assert.match(src, /<ActionBandBadge band=\{finding\.actionBand\}/)
+    assert.doesNotMatch(src, /Exploitability \$\{finding\.riskScore\} of 100/)
+  })
+
+  it("shows the action band in the detail signal row instead of a numeric exploit score", () => {
+    assert.match(src, /\{finding\.actionBand && \(\s*<SignalChip tone=\{bandTone\}/)
+    assert.match(src, /\{ACTION_BAND_LABEL\[finding\.actionBand\]\}/)
+    assert.doesNotMatch(src, /Exploit \{finding\.riskScore\}\/100/)
   })
 
   it("syncs assignee through URL state and fetch params", () => {
@@ -105,5 +151,163 @@ describe("FindingsBoardView filter bar additions", () => {
     assert.doesNotMatch(src, /SavedViewsDropdown/)
     assert.doesNotMatch(src, /SaveViewModal/)
     assert.doesNotMatch(src, /ManageViewsPanel/)
+  })
+})
+
+describe("mapApiFinding recommended-fix wiring", () => {
+  it("maps api.recommended_fix to FindingRow.recommendedFix", () => {
+    // Source assertions guard against silent regressions during refactors without
+    // requiring a full API mock in this test harness.
+    assert.match(mapperSrc, /recommended_fix/)
+    assert.match(mapperSrc, /recommendedFix/)
+  })
+
+  it("maps api.action_band to FindingRow.actionBand through normaliseActionBand", () => {
+    assert.match(mapperSrc, /function normaliseActionBand/)
+    assert.match(mapperSrc, /actionBand: normaliseActionBand\(api\.action_band\)/)
+  })
+
+  it("FindingsBoardView merges recommendedFix from the detail response onto selectedFinding", () => {
+    assert.match(src, /recommendedFix: d\.recommendedFix \?\? curr\.recommendedFix/)
+  })
+
+  it("FindingsBoardView passes selectedFinding.recommendedFix to RecommendedFixSection", () => {
+    assert.match(src, /RecommendedFixSection/)
+    assert.match(src, /fix=\{selectedFinding\.recommendedFix\}/)
+  })
+})
+
+describe("FindingsBoardView verification + reachability wiring", () => {
+  it("maps the detail-only verification fields in the row-mapper", () => {
+    assert.match(mapperSrc, /evidence: normaliseEvidence\(api\.evidence\)/)
+    assert.match(mapperSrc, /exploitChain: api\.exploit_chain/)
+    assert.match(mapperSrc, /verificationMetadata: api\.verification_metadata/)
+    assert.match(mapperSrc, /reachability: normaliseReachability\(api\.reachability\)/)
+  })
+
+  it("merges the detail-only verification fields onto selectedFinding on open", () => {
+    assert.match(src, /evidence: d\.evidence \?\? curr\.evidence/)
+    assert.match(src, /exploitChain: d\.exploitChain \?\? curr\.exploitChain/)
+    assert.match(src, /verificationMetadata: d\.verificationMetadata \?\? curr\.verificationMetadata/)
+    assert.match(src, /reachability: d\.reachability \?\? curr\.reachability/)
+  })
+
+  it("renders the EvidenceSection with the verification props + Argus gating", () => {
+    assert.match(src, /<EvidenceSection/)
+    assert.match(src, /verdict=\{selectedFinding\.verdict\}/)
+    assert.match(src, /evidence=\{selectedFinding\.evidence\}/)
+    assert.match(src, /exploitChain=\{selectedFinding\.exploitChain\}/)
+    assert.match(src, /metadata=\{selectedFinding\.verificationMetadata\}/)
+    assert.match(src, /argusEnabled=\{argusConnected\}/)
+    assert.match(src, /verifiable=\{ARGUS_VERIFIABLE_SCANNERS\.has\(selectedFinding\.scanner\)\}/)
+  })
+
+  it("derives the Argus-enabled signal from the Argus connection status", () => {
+    assert.match(src, /fetch\("\/api\/v1\/settings\/argus"\)/)
+    assert.match(src, /setArgusConnected\(Boolean\(data\.connected\)\)/)
+  })
+
+  it("renders the References section from the finding's cve + cwe + advisory refs", () => {
+    assert.match(src, /<FindingReferencesSection[\s\S]*?cve=\{selectedFinding\.cve\}[\s\S]*?cwe=\{selectedFinding\.cwe\}/)
+    assert.match(src, /advisoryReferences=\{advisory\?\.references\}/)
+  })
+
+  it("renders a reachability signal chip with glyph + label (not colour alone)", () => {
+    assert.match(src, /REACHABILITY_SIGNAL/)
+    assert.match(src, /reach && \(/)
+    assert.match(src, /\{reach\.glyph\}/)
+    assert.match(src, /\{reach\.label\}/)
+  })
+
+  it("gives the chip primitive a success tone for the de-risked 'not reachable' state", () => {
+    assert.match(src, /tone: "danger" \| "warn" \| "success" \| "neutral"/)
+    assert.match(src, /no_path:\s*\{\s*tone: "success"/)
+  })
+})
+
+describe("FindingsBoardView deep-link (?finding=<id>)", () => {
+  it("accepts an initialFindingId prop", () => {
+    assert.match(src, /initialFindingId\?: string/)
+    assert.match(src, /initialFindingId,/)
+  })
+
+  it("opens the drawer on mount by fetching the deep-linked finding's detail", () => {
+    assert.match(src, /if \(!initialFindingId\) return/)
+    assert.match(src, /getFindingDetail\(id\)/)
+    assert.match(src, /setSelectedFinding\(mapApiFinding\(raw\)\)/)
+    assert.match(src, /\}, \[initialFindingId\]\)/)
+  })
+
+  it("swallows an out-of-scope / missing id instead of throwing", () => {
+    assert.match(src, /out-of-scope \/ missing id: leave the list as-is/)
+  })
+})
+
+describe("FindingsBoardView row rendering", () => {
+  it("renders every age through the shared FindingAge (no inline {finding.age} spans)", () => {
+    // The no-wrap invariant lives in FindingAge — guard against age rendering
+    // drifting back into per-call-site spans (which regressed the row height).
+    assert.doesNotMatch(src, /<span[^>]*>\s*\{finding\.age\}/)
+    const uses = src.match(/age=\{finding\.age\}/g) ?? []
+    assert.ok(uses.length >= 3, `expected every age cell to use FindingAge, found ${uses.length}`)
+  })
+})
+
+describe("FindingsBoardView advisory Security Brief wiring", () => {
+  it("lazily fetches the advisory per finding and clears it on navigation", () => {
+    assert.match(src, /const \[advisory, setAdvisory\] = useState<FindingAdvisory \| null>\(null\)/)
+    assert.match(src, /setAdvisory\(null\)/)
+    assert.match(src, /getFindingAdvisory\(id\)\.then\(\(a\) => \{ if \(active\) setAdvisory\(a\) \}\)/)
+  })
+
+  it("renders the Security Brief section with the fetched advisory", () => {
+    assert.match(src, /<SecurityBriefSection advisory=\{advisory\}/)
+  })
+})
+
+describe("FindingsBoardView secret validity wiring", () => {
+  it("maps the detail-only secret fields in the row-mapper", () => {
+    assert.match(mapperSrc, /secretDetector: api\.secret_detector/)
+    assert.match(mapperSrc, /secretVerified: api\.secret_verified/)
+  })
+
+  it("merges the secret fields onto selectedFinding on open", () => {
+    assert.match(src, /secretDetector: d\.secretDetector \?\? curr\.secretDetector/)
+    assert.match(src, /secretVerified: d\.secretVerified \?\? curr\.secretVerified/)
+    assert.match(src, /introducedByCommit: d\.introducedByCommit \?\? curr\.introducedByCommit/)
+  })
+
+  it("shows a live-credential signal chip when the secret is verified", () => {
+    assert.match(src, /finding\.secretVerified != null/)
+    assert.match(src, /Live credential/)
+    assert.match(src, /Unverified/)
+  })
+
+  it("shows the detector in the Details grid", () => {
+    assert.match(src, /selectedFinding\.secretDetector && \(/)
+    assert.match(src, />Detector<\/dt>/)
+  })
+})
+
+describe("FindingsBoardView CWE context wiring", () => {
+  it("renders the CWE context section from the finding's cwe", () => {
+    assert.match(src, /<CweContextSection cwe=\{selectedFinding\.cwe\}/)
+  })
+})
+
+describe("FindingsBoardView container image wiring", () => {
+  it("merges the container image onto selectedFinding and renders the section", () => {
+    assert.match(src, /containerImage: d\.containerImage \?\? curr\.containerImage/)
+    assert.match(src, /<ContainerImageSection image=\{selectedFinding\.containerImage\}/)
+  })
+})
+
+describe("FindingsBoardView blast-radius wiring", () => {
+  it("merges the blast-radius count onto selectedFinding on open", () => {
+    assert.match(src, /alsoAffectsRepos: d\.alsoAffectsRepos \?\? curr\.alsoAffectsRepos/)
+  })
+
+  it("renders the BlastRadiusSection with the finding id and count", () => {
+    assert.match(src, /<BlastRadiusSection\s+findingId=\{Number\(selectedFinding\.id\)\}\s+count=\{selectedFinding\.alsoAffectsRepos\}/)
   })
 })

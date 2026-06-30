@@ -12,13 +12,13 @@ describe("FindingsSortDropdown", () => {
     assert.match(src, /SORT_OPTIONS:/)
     assert.match(src, /"severity_age"/)
     assert.match(src, /"epss"/)
-    assert.match(src, /"risk_score"/)
+    assert.match(src, /"action_band"/)
     assert.match(src, /"newest"/)
     assert.match(src, /"oldest"/)
   })
 
-  it("offers a Risk score option labelled high → low", () => {
-    assert.match(src, /\{\s*value:\s*"risk_score",\s*label:\s*"Risk score \(high → low\)"\s*\}/)
+  it("offers an Exploitability option mapped to the action_band sort", () => {
+    assert.match(src, /\{\s*value:\s*"action_band",\s*label:\s*"Exploitability"\s*\}/)
   })
 
   it("accepts value and onChange", () => {

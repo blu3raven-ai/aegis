@@ -1,5 +1,5 @@
 /**
- * Shared verdict labels, emoji, and ordering for the LLM-verification
+ * Shared verdict labels, emoji, and ordering for the Argus-verification
  * filter chips and the EvidenceSection. Mirrors the backend taxonomy
  * (src/findings/service.VALID_VERDICTS + the legacy/all filter aliases).
  */

@@ -99,10 +99,10 @@ const TEMPLATES: ReportTemplate[] = [
     id: "monthly-executive",
     title: "Monthly executive review",
     description:
-      "KPI summary, 30-day risk trend, top findings, and integration activity. Built for CISO board updates.",
+      "KPI summary, 30-day open-findings trend, mean-time-to-fix, top repositories, and the most urgent findings. Built for CISO board updates.",
     tag: "scheduled",
     formats: ["PDF"],
-    enabled: false,
+    enabled: true,
     iconClass:
       "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)]",
     icon: (
@@ -128,7 +128,7 @@ const TEMPLATES: ReportTemplate[] = [
       "Open findings by severity, age, owner, and repo. Accepted-risk log with rationale for compliance.",
     tag: "audit",
     formats: ["CSV", "PDF"],
-    enabled: false,
+    enabled: true,
     iconClass:
       "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)]",
     icon: (
@@ -155,7 +155,7 @@ const TEMPLATES: ReportTemplate[] = [
       "Control mapping with evidence per control (CC6.1-CC9.2), 90-day finding lifecycle, and dismissal audit trail.",
     tag: "audit",
     formats: ["ZIP"],
-    enabled: false,
+    enabled: true,
     iconClass:
       "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)]",
     icon: (
@@ -181,7 +181,7 @@ const TEMPLATES: ReportTemplate[] = [
       "CDE-scoped findings with requirement-by-requirement compliance status for QSA review.",
     tag: "audit",
     formats: ["PDF"],
-    enabled: false,
+    enabled: true,
     iconClass:
       "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
     icon: (

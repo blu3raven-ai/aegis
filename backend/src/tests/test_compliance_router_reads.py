@@ -137,6 +137,7 @@ def _brief(**overrides) -> FindingBrief:
         "identity_key": "k-1",
         "confidence": 0.9,
         "rationale": "matched",
+        "mapping_id": 1,
     }
     base.update(overrides)
     return FindingBrief(**base)
@@ -324,7 +325,7 @@ def test_get_framework_summary_forbidden_without_view_findings():
 def test_get_control_findings_returns_envelope_for_scoped_caller():
     captured: dict = {}
 
-    async def _fake_findings(_session, framework, control_id, *, asset_ids):
+    async def _fake_findings(_session, framework, control_id, *, asset_ids, include_suppressed=False):
         captured["framework"] = framework
         captured["control_id"] = control_id
         captured["asset_ids"] = asset_ids

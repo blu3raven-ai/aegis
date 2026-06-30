@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from runner.scanners._manifest import write_done_marker
+from runner.scanners.dependencies.declared_ranges import (
+    annotate_sbom_with_declared_ranges,
+    parse_declared_ranges,
+)
 from runner.scanners._shared import (
     BaseScanConfig,
     GitCloneError,
@@ -246,6 +250,25 @@ class DependenciesScanner:
             log_finished(repo_name)
             shutil.rmtree(clone_dir, ignore_errors=True)
             return
+
+        # Additive enrichment: stamp each direct dep's declared version range
+        # onto its SBOM component while the manifests are still on disk. The
+        # broad except is intentional — capture must never fail the scan.
+        try:
+            ranges = parse_declared_ranges(clone_dir)
+            if ranges:
+                n = annotate_sbom_with_declared_ranges(merged_sbom, ranges)
+                logger.debug(
+                    "[+] stamped declared ranges on %d components for %s",
+                    n,
+                    repo_name,
+                )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "[!] declared-range capture failed for %s — continuing",
+                repo_name,
+                exc_info=True,
+            )
 
         register_output(out_dir, merged_sbom, repo_name)
 

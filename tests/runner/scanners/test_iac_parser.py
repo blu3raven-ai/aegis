@@ -62,3 +62,33 @@ def test_empty_results_returns_empty_list():
 def test_passed_checks_ignored():
     raw = {"results": {"failed_checks": [], "passed_checks": [{"check_id": "ok"}]}}
     assert parse_checkov_results(raw, repo_root="/") == []
+
+
+def test_parse_attaches_code_window_from_source(tmp_path):
+    tf = tmp_path / "main.tf"
+    tf.write_text(
+        'resource "aws_s3_bucket" "b" {\n  bucket = "x"\n  acl = "public-read"\n}\n'
+    )
+    raw = {"results": {"failed_checks": [{
+        "check_id": "CKV_AWS_20", "check_name": "S3 public", "file_path": "/main.tf",
+        "file_line_range": [1, 4], "resource": "aws_s3_bucket.b", "severity": "HIGH",
+    }]}}
+    findings = parse_checkov_results(raw, repo_root=str(tmp_path))
+    assert findings[0]["code_window"] is not None
+    assert "aws_s3_bucket" in findings[0]["code_window"]
+    assert findings[0]["code_window_start_line"] == 1
+
+
+def test_parse_attaches_file_head_window_for_file_level_check(tmp_path):
+    """File-level checks report line 0 — the window anchors at the file head."""
+    df = tmp_path / "Dockerfile"
+    df.write_text("FROM alpine:3.19\nRUN apk add curl\nCMD [\"sh\"]\n")
+    raw = {"results": {"failed_checks": [{
+        "check_id": "CKV_DOCKER_3", "check_name": "No USER set", "file_path": "/Dockerfile",
+        "file_line_range": [0, 0], "resource": "Dockerfile.", "severity": "MEDIUM",
+    }]}}
+    findings = parse_checkov_results(raw, repo_root=str(tmp_path))
+    assert findings[0]["line"] == 0
+    assert findings[0]["code_window"] is not None
+    assert "FROM alpine" in findings[0]["code_window"]
+    assert findings[0]["code_window_start_line"] == 1

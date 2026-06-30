@@ -15,6 +15,8 @@ query and the version class to compare with.
 """
 from __future__ import annotations
 
+import re
+
 from univers import versions as _V
 
 # purl type -> OSV base ecosystem (the GCS bucket dir name). Distro types are
@@ -115,6 +117,44 @@ def osv_base_ecosystem(purl_type: str, namespace: str | None = None) -> str | No
     if t == "rpm":
         return _RPM_NAMESPACE_TO_OSV.get(ns, "Red Hat")
     return _PURL_TYPE_TO_OSV.get(t)
+
+
+# Distro qualifier prefix -> OSV base, but ONLY for distros whose OSV release
+# ecosystem is EXACTLY `<Base>:<release>` with the release copied verbatim from
+# the purl `distro=` qualifier. Today that is Debian alone: OSV stores Debian as
+# plain `Debian:11`/`Debian:12`, so distro=debian-11 -> Debian:11 matches exactly
+# (and codenames like debian-trixie fail the numeric regex below -> no narrowing).
+#
+# Deliberately EXCLUDED so the matcher falls back to unnarrowed base matching
+# rather than risk dropping a real advisory (a false negative):
+#   - Ubuntu — OSV suffixes LTS releases as `Ubuntu:22.04:LTS` (and `Ubuntu:Pro:…`),
+#     not the bare `Ubuntu:22.04` the purl carries, so exact-equality narrowing
+#     would skip every LTS advisory. Needs release-segment-aware matching,
+#     validated against the live mirror, before it can be enabled.
+#   - Alpine (`v` prefix: `Alpine:v3.18`) and the RPM family — same verbatim mismatch.
+_VERBATIM_RELEASE_DISTROS = {"debian": "Debian"}
+
+
+def osv_release_ecosystem(distro: str | None) -> str | None:
+    """Resolve a component's *release-specific* OSV ecosystem (e.g. ``Debian:11``)
+    from its purl ``distro=`` qualifier, or None when the release can't be mapped
+    with confidence. None means "don't narrow" — the matcher keeps testing the
+    component against all releases of the base, which over-reports but never
+    drops a real advisory.
+    """
+    if not distro:
+        return None
+    name, sep, release = distro.strip().lower().partition("-")
+    if not sep or not release:
+        return None
+    base = _VERBATIM_RELEASE_DISTROS.get(name)
+    if base is None:
+        return None
+    # Only a plain dotted-numeric release maps verbatim; anything else (codenames,
+    # suffixes) is left to fall back rather than guessed.
+    if not re.fullmatch(r"\d+(\.\d+)*", release):
+        return None
+    return f"{base}:{release}"
 
 
 def version_class_for(osv_ecosystem: str) -> type | None:

@@ -18,6 +18,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
+from runner.scanners._argus import argus_configured, verify_via_argus
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
     BaseScanConfig,
@@ -281,12 +282,20 @@ class CodeScanningScanner:
             except json.JSONDecodeError:
                 logger.warning("[!] skip non-JSON line in %s", findings_file)
 
-        verified = _maybe_verify(
-            findings=raw_findings,
-            repo_root=repo_root,
-            llm=_build_llm_client(env),
-            scan_budget=_build_scan_budget(env),
-        )
+        if argus_configured(env):
+            verified = verify_via_argus(
+                scanner="code_scanning",
+                findings=raw_findings,
+                repo_root=repo_root,
+                env=env,
+            )
+        else:
+            verified = _maybe_verify(
+                findings=raw_findings,
+                repo_root=repo_root,
+                llm=_build_llm_client(env),
+                scan_budget=_build_scan_budget(env),
+            )
 
         with open(findings_file, "w") as f:
             for finding in verified:

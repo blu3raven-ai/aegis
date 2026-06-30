@@ -17,6 +17,7 @@
   <span class="badge badge-{{ ctrl.status }}">{{ ctrl.status|upper }}</span>
 </h3>
 {% if ctrl.description %}<p>{{ ctrl.description }}</p>{% endif %}
+{% if ctrl.manual_status %}<p class="meta">Attested {{ ctrl.manual_status|replace("_", " ") }}{% if ctrl.evidence_note %} — evidence: {{ ctrl.evidence_note }}{% endif %}{% if ctrl.evidence_url %} — link: {{ ctrl.evidence_url }}{% endif %}</p>{% endif %}
 {% if ctrl.findings %}
 <table>
   <thead><tr><th>Severity</th><th>Title</th><th>Source</th></tr></thead>

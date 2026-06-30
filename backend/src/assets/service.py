@@ -42,6 +42,21 @@ def resolve_repo_asset_ids(repo_full_names: list[str]) -> dict[str, str]:
     return {name: asset_id for name, asset_id in run_db(_query)}
 
 
+def get_all_asset_ids() -> list[str]:
+    """Every asset id in the system.
+
+    System-wide nightly/hourly recomputes (e.g. SLA breach status) operate over
+    all findings, so they need every asset id — not the org names that drive the
+    per-source scan-rerun triggers. ``Finding.asset_id`` is the Asset PK, so the
+    recompute's ``asset_id IN (...)`` filter only matches when fed these ids.
+    """
+    async def _query(db: AsyncSession) -> list[str]:
+        result = await db.execute(select(Asset.id))
+        return [str(row[0]) for row in result.all()]
+
+    return run_db(_query)
+
+
 async def upsert_asset(
     db: AsyncSession,
     *,

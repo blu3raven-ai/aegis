@@ -5,8 +5,8 @@ import { FindingsEmptyState } from "@/components/shared/FindingsEmptyState"
 import { EmptyOverviewBanner, GhostPreviewWrapper } from "@/components/shared/EmptyOverviewBanner"
 import { FindingsGhostPreview } from "@/components/shared/findings/FindingsGhostPreview"
 import { DrawerHeader } from "@/components/shared/FindingDrawer/DrawerHeader"
-import { DrawerSection } from "@/components/shared/FindingDrawer/DrawerSection"
-import { RiskScoreCell } from "@/components/shared/chain/RiskScoreCell"
+import { DrawerStatusBanner } from "@/components/shared/FindingDrawer/DrawerStatusBanner"
+import { DismissPopover } from "@/components/shared/FindingDrawer/DismissPopover"
 import { IntelLiveBanner } from "@/components/shared/chain/IntelLiveBanner"
 import { useSSE } from "@/components/providers/SSEProvider"
 import type { ArgusIntelPushEvent } from "@/lib/shared/sse-types"
@@ -19,39 +19,60 @@ import { type SortKey } from "./FindingsSortDropdown"
 import { presetToFirstSeenAfter, type AgePresetKey } from "./FindingsAgeFilter"
 import { type FindingsMoreFiltersValues } from "./FindingsMoreFiltersPopover"
 import { FindingsPagination } from "./FindingsPagination"
-import { EpssScoreCell } from "@/components/shared/findings/EpssScoreCell"
 import { Button } from "@/components/ui/Button"
+import { Sheet, openSheetCount } from "@/components/ui/Sheet"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { cn } from "@/lib/shared/utils"
 import { FindingDetailActions } from "@/components/shared/findings/FindingDetailActions"
 import { FindingAssigneeEditor } from "@/components/shared/findings/FindingAssigneeEditor"
 import { FindingOriginSection } from "@/components/shared/findings/FindingOriginSection"
+import { FindingAge } from "@/components/shared/findings/FindingAge"
+import { CodePreviewSection } from "@/components/shared/findings/CodePreviewSection"
+import { FindingDataFlowSection } from "@/components/shared/findings/FindingDataFlowSection"
+import { EvidenceSection } from "@/components/shared/findings/EvidenceSection"
+import { SecurityBriefSection } from "@/components/shared/findings/SecurityBriefSection"
+import { ContainerImageSection } from "@/components/shared/findings/ContainerImageSection"
+import { CweContextSection } from "@/components/shared/findings/CweContextSection"
+import { BlastRadiusSection } from "@/components/shared/findings/BlastRadiusSection"
+import { FindingReferencesSection } from "@/components/shared/findings/FindingReferencesSection"
 import { RecommendedFixSection } from "@/components/shared/findings/RecommendedFixSection"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { KpiCard } from "@/components/shared/KpiCard"
 import {
   DISMISS_REASONS,
   bulkDismissFindings,
+  reopenFinding,
+  deferFinding,
+  listFindingComments,
+  addFindingComment,
+  type FindingComment,
+  type FindingAdvisory,
+  getFindingDetail,
+  getFindingAdvisory,
   listFindings,
   listFindingsSummary,
   type DismissReason,
   type FindingScanner,
   type FindingState,
   type FindingsSummary,
+  type ListFindingsParams,
   type VerdictCounts,
 } from "@/lib/client/findings-api"
 import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
-import { EnableLlmBanner } from "@/components/shared/findings/EnableLlmBanner"
+import { EnableArgusBanner } from "@/components/shared/findings/EnableArgusBanner"
 import { VerdictFilterChips } from "@/components/shared/findings/VerdictFilterChips"
+import { VerdictBadge } from "@/components/shared/findings/VerdictBadge"
 import type { VerdictFilter } from "@/lib/shared/findings/verdicts"
 import {
   mapApiFinding,
   type FindingRow as Finding,
   type FindingScanner as Scanner,
   type FindingSeverity as Severity,
+  type FindingActionBand,
 } from "@/lib/shared/findings/row-mapper"
+import { buildRepoFileUrl } from "@/lib/shared/findings/repo-link"
 
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
@@ -60,7 +81,7 @@ const PAGE_SIZE = 25
 const VALID_VIEW_KEYS = new Set<string>([
   "severity", "scanner", "state", "repo", "q", "collapsed",
   "sort", "age",
-  "cwe", "kev", "epss_min", "risk_score_min", "assignee",
+  "cwe", "kev", "epss_min", "bands", "assignee",
   "page",
 ])
 
@@ -79,20 +100,23 @@ const SCANNER_LABEL: Record<Scanner, string> = {
   iac_scanning: "IaC",
 }
 
+// Drive the scanner badge palette from the registered theme tokens (which carry
+// distinct light/dark values) rather than hardcoded dark-only hex, so the badges
+// theme correctly. Referenced as CSS vars since they're applied via inline style.
 const SCANNER_BG: Record<Scanner, string> = {
-  dependencies_scanning: "rgba(15,188,255,0.18)",
-  code_scanning: "rgba(192,132,252,0.18)",
-  container_scanning: "rgba(52,211,153,0.18)",
-  secret_scanning: "rgba(251,146,60,0.18)",
-  iac_scanning: "rgba(96,165,250,0.18)",
+  dependencies_scanning: "var(--color-scanner-deps-bg)",
+  code_scanning: "var(--color-scanner-sast-bg)",
+  container_scanning: "var(--color-scanner-containers-bg)",
+  secret_scanning: "var(--color-scanner-secrets-bg)",
+  iac_scanning: "var(--color-scanner-iac-bg)",
 }
 
 const SCANNER_FG: Record<Scanner, string> = {
-  dependencies_scanning: "#5fcdff",
-  code_scanning: "#d4b0fc",
-  container_scanning: "#6ee0b4",
-  secret_scanning: "#ffba7c",
-  iac_scanning: "#93c2fa",
+  dependencies_scanning: "var(--color-scanner-deps-fg)",
+  code_scanning: "var(--color-scanner-sast-fg)",
+  container_scanning: "var(--color-scanner-containers-fg)",
+  secret_scanning: "var(--color-scanner-secrets-fg)",
+  iac_scanning: "var(--color-scanner-iac-fg)",
 }
 
 const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
@@ -110,8 +134,101 @@ const SEVERITY_GROUP_LABEL: Record<Severity, string> = {
   low: "Low",
 }
 
+const ACTION_BAND_LABEL: Record<FindingActionBand, string> = {
+  act: "Act",
+  attend: "Attend",
+  track: "Track",
+}
+
+const ACTION_BAND_COLOR: Record<FindingActionBand, string> = {
+  act: "var(--color-severity-critical)",
+  attend: "var(--color-accent)",
+  track: "var(--color-text-tertiary)",
+}
+
+// Runner-derived reachability of the vulnerable symbol, shown as a triage
+// signal: a reachable path raises exploitability, no detected path lowers it,
+// unknown stays neutral. Glyph + label so the meaning never rests on colour.
+const REACH_GLYPH_PROPS = {
+  viewBox: "0 0 24 24",
+  className: "h-3.5 w-3.5",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+}
+
+const REACHABILITY_SIGNAL: Record<
+  string,
+  { tone: "danger" | "success" | "neutral"; label: string; title: string; glyph: ReactNode }
+> = {
+  reachable: {
+    tone: "danger",
+    label: "Reachable",
+    title: "A call path reaches the vulnerable symbol — exploitable in this codebase",
+    glyph: (
+      <svg {...REACH_GLYPH_PROPS}>
+        <path d="M3 12h12" />
+        <path d="M12 7l5 5-5 5" />
+      </svg>
+    ),
+  },
+  no_path: {
+    tone: "success",
+    label: "Not reachable",
+    title: "No call path reaches the vulnerable symbol — lower exploitation risk",
+    glyph: (
+      <svg {...REACH_GLYPH_PROPS}>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M7 7l10 10" />
+      </svg>
+    ),
+  },
+  unknown: {
+    tone: "neutral",
+    label: "Reachability unknown",
+    title: "Reachability could not be determined — treat as potentially reachable",
+    glyph: (
+      <svg {...REACH_GLYPH_PROPS}>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 16v-4" />
+        <path d="M12 8h.01" />
+      </svg>
+    ),
+  },
+}
+
+/**
+ * Passive triage badge for a finding's SSVC-style action band. Read-only —
+ * mirrors the VerdictBadge in the Confidence column rather than the
+ * interactive FilterChip.
+ */
+function ActionBandBadge({ band }: { band: FindingActionBand }) {
+  const color = ACTION_BAND_COLOR[band]
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+      style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}
+      title={`Action band: ${ACTION_BAND_LABEL[band]}`}
+    >
+      {ACTION_BAND_LABEL[band]}
+    </span>
+  )
+}
+
 // Stable ordering per group key keeps the visual scan rhythm consistent.
 const SCANNER_ORDER: Scanner[] = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning"]
+
+// Scanners Argus runs its exploit-verification pass on. The drawer's locked
+// preview only nudges to enable Argus for these (deps/container verdicts are
+// deterministic today).
+const ARGUS_VERIFIABLE_SCANNERS = new Set<Scanner>([
+  "code_scanning",
+  "secret_scanning",
+  "iac_scanning",
+])
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"]
 
 const INITIAL_ROWS_PER_GROUP = 5
@@ -162,6 +279,50 @@ function groupSeverityCounts(rows: Finding[]) {
   return counts
 }
 
+// Combine the verdict tallies from each per-scanner fetch so the verdict-filter
+// chips reflect the whole cross-scanner result set, not just one scanner.
+function mergeVerdictCounts(
+  a: VerdictCounts | undefined,
+  b: VerdictCounts | undefined,
+): VerdictCounts | undefined {
+  if (!a) return b
+  if (!b) return a
+  return {
+    total: a.total + b.total,
+    confirmed: a.confirmed + b.confirmed,
+    needs_verify: a.needs_verify + b.needs_verify,
+    possible: a.possible + b.possible,
+    ruled_out: a.ruled_out + b.ruled_out,
+    legacy: a.legacy + b.legacy,
+  }
+}
+
+// Run `fn` over `items` with at most `limit` in flight at once, preserving input
+// order in the result. The per-scanner findings fetch uses this so the backend
+// isn't hit with one heavy query per scanner simultaneously — under the GraphQL
+// 5s query timeout, that contention could tip a data-bearing scanner's query
+// over the limit. `fn` is expected to never reject (callers catch per item).
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const idx = next++
+      results[idx] = await fn(items[idx])
+    }
+  }
+  const workerCount = Math.min(Math.max(1, limit), items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return results
+}
+
+// Heavy per-scanner page fetches run at most this many at a time.
+const PER_SCANNER_FETCH_CONCURRENCY = 2
+
 
 export interface FindingsViewApi {
   applyView: (state: Record<string, string>) => void
@@ -183,6 +344,26 @@ export interface FindingsBoardViewProps {
    * render a pre-narrowed view without polluting the URL with ?scanner=…
    */
   initialScannerFilter?: FindingScanner
+  /**
+   * Initial severity / repo filters applied on first mount, sourced from URL
+   * query params (e.g. a posture tile linking to ?severity=critical&repo=…).
+   * Both are validated/scoped exactly like every other filter: severity is
+   * checked against the allowed set, and repo only ever narrows within the
+   * caller's server-enforced asset scope — it can never widen it.
+   */
+  initialSeverityFilter?: string
+  initialRepoFilter?: string
+  /** Initial free-text search applied on first mount (e.g. an SBOM component
+   * row linking to ?q=<package> to see that package's findings). */
+  initialSearch?: string
+  /**
+   * Finding id to open in the drawer on first mount, sourced from the
+   * `?finding=<id>` query param. Lets activity-feed, dashboard, and release
+   * links deep-link straight to a finding's detail. The detail read is still
+   * permission- and scope-enforced server-side, so an out-of-scope id resolves
+   * to nothing rather than leaking.
+   */
+  initialFindingId?: string
   /**
    * Optional queue sidebar rendered to the left of the findings list. When passed as a
    * render-function, the sidebar receives the saved-views API and the header's
@@ -216,15 +397,6 @@ export interface FindingsBoardViewProps {
 
 type ScannerFilter = FindingScanner | "all"
 
-const SCANNER_FILTER_OPTIONS: { value: ScannerFilter; label: string }[] = [
-  { value: "all",                    label: "Tool: All" },
-  { value: "dependencies_scanning",  label: "Tool: Dependencies" },
-  { value: "code_scanning",          label: "Tool: Code scanning" },
-  { value: "secret_scanning",        label: "Tool: Secrets" },
-  { value: "container_scanning",     label: "Tool: Container" },
-  { value: "iac_scanning",           label: "Tool: IaC" },
-]
-
 type StateFilter = FindingState | "all"
 
 const STATE_FILTER_OPTIONS: { value: StateFilter; label: string }[] = [
@@ -233,6 +405,7 @@ const STATE_FILTER_OPTIONS: { value: StateFilter; label: string }[] = [
   { value: "closed",    label: "State: Closed" },
   { value: "fixed",     label: "State: Fixed" },
   { value: "dismissed", label: "State: Dismissed" },
+  { value: "deferred",  label: "State: Deferred" },
 ]
 
 // Pick a single-value default from the initialStateFilter prop. The prop is
@@ -253,8 +426,8 @@ const VALID_SCANNERS = new Set<ScannerFilter>([
   "secret_scanning",
   "iac_scanning",
 ])
-const VALID_STATES = new Set<StateFilter>(["all", "open", "closed", "fixed", "dismissed"])
-const VALID_SORT_KEYS = new Set<SortKey>(["severity_age", "epss", "risk_score", "newest", "oldest"])
+const VALID_STATES = new Set<StateFilter>(["all", "open", "closed", "fixed", "dismissed", "deferred"])
+const VALID_SORT_KEYS = new Set<SortKey>(["severity_age", "epss", "action_band", "newest", "oldest"])
 const VALID_AGE_PRESETS = new Set<AgePresetKey>(["any", "24h", "7d", "30d"])
 
 const SEARCH_DEBOUNCE_MS = 250
@@ -320,26 +493,75 @@ function readFromSet<T extends string>(
   return fallback
 }
 
-export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initialStateFilter, initialScannerFilter, leftSidebar, showSummaryStrip = true, compactHeader = false, flat = false, hideHeader = false, scopeRepos }: FindingsBoardViewProps) {
+/**
+ * Translate the active filter state into `listFindings` query params (minus
+ * pagination). Shared by the main page fetch and the per-scanner tab-count
+ * fetch so the two never drift — the tab counts always reflect the same
+ * severity / state / repo / search / age / risk filters the list is showing.
+ */
+function buildListParams(args: {
+  severity: Severity | "all"
+  scanner: ScannerFilter
+  q: string
+  repo: string
+  state: StateFilter
+  sort: SortKey
+  age: AgePresetKey
+  verdict: VerdictFilter
+  moreFilters: FindingsMoreFiltersValues
+  scopeRepos?: string[]
+}): ListFindingsParams {
+  const { severity, scanner, q, repo, state, sort, age, verdict, moreFilters, scopeRepos } = args
+  const firstSeenAfter = presetToFirstSeenAfter(age)
+  return {
+    orgId: ORG_ID,
+    sort,
+    ...(severity !== "all" ? { severity: [severity] } : {}),
+    ...(scanner !== "all" ? { scanner: [scanner] } : {}),
+    ...(q ? { q } : {}),
+    // The repo dropdown narrows to one repo; otherwise fall back to the
+    // per-source scope (if any). `repo` is a comma-separated display_name
+    // list the backend matches with IN.
+    ...(repo !== "all"
+      ? { repo }
+      : scopeRepos && scopeRepos.length
+        ? { repo: scopeRepos.join(",") }
+        : {}),
+    ...(state !== "all" ? { state: [state] } : {}),
+    ...(firstSeenAfter ? { first_seen_after: firstSeenAfter } : {}),
+    ...(moreFilters.cwe ? { cwe: moreFilters.cwe } : {}),
+    ...(moreFilters.kev ? { kev: true } : {}),
+    ...(moreFilters.epssMin != null ? { epss_min: moreFilters.epssMin } : {}),
+    ...(moreFilters.bands.length ? { bands: moreFilters.bands } : {}),
+    ...(moreFilters.assigneeUserId ? { assignee: moreFilters.assigneeUserId } : {}),
+    ...(verdict ? { verdict } : {}),
+  }
+}
+
+export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initialStateFilter, initialScannerFilter, initialSeverityFilter, initialRepoFilter, initialSearch, initialFindingId, leftSidebar, showSummaryStrip = true, compactHeader = false, flat = false, hideHeader = false, scopeRepos }: FindingsBoardViewProps) {
   const sidebarOwnsSavedViews = typeof leftSidebar === "function"
-  const [sevFilter, setSevFilter] = useState<Severity | "all">("all")
+  // Severity is validated against the allowed set (invalid → "all"); repo is a
+  // free string that the backend resolves within the caller's asset scope.
+  const [sevFilter, setSevFilter] = useState<Severity | "all">(() =>
+    readFromSet<Severity | "all">({ severity: initialSeverityFilter ?? "" }, "severity", VALID_SEVERITIES, "all"),
+  )
   const [scannerFilter, setScannerFilter] = useState<ScannerFilter>(initialScannerFilter ?? "all")
   const [stateFilter, setStateFilter] = useState<StateFilter>(() => initialStateFromProp(initialStateFilter))
-  const [repoFilter, setRepoFilter] = useState<string>("all")
+  const [repoFilter, setRepoFilter] = useState<string>(initialRepoFilter || "all")
   const [sortKey, setSortKey] = useState<SortKey>("severity_age")
   const [agePreset, setAgePreset] = useState<AgePresetKey>("any")
   const [moreFilters, setMoreFilters] = useState<FindingsMoreFiltersValues>({
     cwe: null,
     kev: false,
     epssMin: null,
-    riskScoreMin: null,
+    bands: [],
     assigneeUserId: null,
   })
   const [page, setPage] = useState<number>(1)
   const [repoOptions, setRepoOptions] = useState<string[]>([])
   const [hasSourceConnections, setHasSourceConnections] = useState<boolean | null>(null)
-  const [searchInput, setSearchInput] = useState("")
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchInput, setSearchInput] = useState(initialSearch ?? "")
+  const [searchQuery, setSearchQuery] = useState(initialSearch ?? "")
   const [groupBy, setGroupBy] = useState<GroupKey>("scanner")
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set<string>())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -351,10 +573,18 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   const [totalCount, setTotalCount] = useState(0)
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>(null)
   const [verdictCounts, setVerdictCounts] = useState<VerdictCounts | undefined>(undefined)
-  const [llmConfigured, setLlmConfigured] = useState<boolean>(true)  // assume configured until known otherwise
+  // Per-scanner pagination: in the default scanner-grouped board each scanner
+  // section paginates independently so a noisy scanner can't bury a quieter one
+  // on a deep global page. `scannerPages` is scanner -> current page (default 1)
+  // and `scannerTotals` is scanner -> total count from that scanner's fetch.
+  const [scannerPages, setScannerPages] = useState<Record<string, number>>({})
+  const [scannerTotals, setScannerTotals] = useState<Record<string, number>>({})
+  const [argusConnected, setArgusConnected] = useState<boolean>(true)  // assume configured until known otherwise
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
+  const [advisory, setAdvisory] = useState<FindingAdvisory | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set())
   const [intelMessage, setIntelMessage] = useState<string | null>(null)
   const [summary, setSummary] = useState<FindingsSummary | null>(null)
@@ -384,7 +614,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     if (moreFilters.cwe)                 params.cwe = moreFilters.cwe
     if (moreFilters.kev)                 params.kev = "true"
     if (moreFilters.epssMin != null)     params.epss_min = String(moreFilters.epssMin)
-    if (moreFilters.riskScoreMin != null) params.risk_score_min = String(moreFilters.riskScoreMin)
+    if (moreFilters.bands.length)        params.bands = moreFilters.bands.join(",")
     if (moreFilters.assigneeUserId)      params.assignee = moreFilters.assigneeUserId
     if (page !== 1)                      params.page = String(page)
     return params
@@ -407,7 +637,11 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
       cwe: state.cwe || null,
       kev: state.kev === "true",
       epssMin: state.epss_min ? Number(state.epss_min) : null,
-      riskScoreMin: state.risk_score_min ? Number(state.risk_score_min) : null,
+      // Strictly whitelist band tokens: the backend raises on unknown bands, so a
+      // hand-edited ?bands=critical must never reach it.
+      bands: state.bands
+        ? (state.bands.split(",").filter((b) => b === "act" || b === "attend" || b === "track") as FindingActionBand[])
+        : [],
       assigneeUserId: state.assignee || null,
     })
     const nextPage = Number(state.page)
@@ -449,15 +683,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     return () => { cancelled = true }
   }, [])
 
-  useEffect(() => {
-    if (!selectedFinding) return
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setSelectedFinding(null)
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [selectedFinding])
-
   useSSE("argus.intel_push", (data: ArgusIntelPushEvent) => {
     if (!dismissedIntelRef.current) {
       setIntelMessage(data.message ?? "New Argus intel available — chain risk scores updated.")
@@ -468,6 +693,12 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     dismissedIntelRef.current = true
     setIntelMessage(null)
   }, [])
+
+  // The default scanner-grouped board (scanner grouping, no scanner narrowing,
+  // not the flat inbox queue) paginates each scanner group independently — one
+  // fetch per scanner, each with its own page — so a noisy scanner can't bury a
+  // quieter one. Any other shape keeps the single global paginator.
+  const perScannerMode = groupBy === "scanner" && !flat && scannerFilter === "all"
 
   const load = useCallback(async (
     severity: Severity | "all",
@@ -483,35 +714,57 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     setLoading(true)
     setError(null)
     try {
-      const firstSeenAfter = presetToFirstSeenAfter(age)
-      const resp = await listFindings({
-        orgId: ORG_ID,
-        limit: PAGE_SIZE,
-        page: pageNum,
-        sort,
-        ...(severity !== "all" ? { severity: [severity] } : {}),
-        ...(scanner !== "all" ? { scanner: [scanner] } : {}),
-        ...(q ? { q } : {}),
-        // The repo dropdown narrows to one repo; otherwise fall back to the
-        // per-source scope (if any). `repo` is a comma-separated display_name
-        // list the backend matches with IN.
-        ...(repo !== "all"
-          ? { repo }
-          : scopeRepos && scopeRepos.length
-            ? { repo: scopeRepos.join(",") }
-            : {}),
-        ...(state !== "all" ? { state: [state] } : {}),
-        ...(firstSeenAfter ? { first_seen_after: firstSeenAfter } : {}),
-        ...(moreFilters.cwe ? { cwe: moreFilters.cwe } : {}),
-        ...(moreFilters.kev ? { kev: true } : {}),
-        ...(moreFilters.epssMin != null ? { epss_min: moreFilters.epssMin } : {}),
-        ...(moreFilters.riskScoreMin != null ? { risk_score_min: moreFilters.riskScoreMin } : {}),
-        ...(moreFilters.assigneeUserId ? { assignee: moreFilters.assigneeUserId } : {}),
-        ...(verdict ? { verdict } : {}),
-      })
-      setFindings(resp.findings.map(mapApiFinding))
-      setTotalCount(resp.total_count)
-      setVerdictCounts(resp.verdict_counts)
+      if (perScannerMode) {
+        // One page-sized fetch per scanner, each on its own page. Rows are
+        // concatenated in SCANNER_ORDER; totals feed the per-group paginators
+        // and their sum drives the header count + queue length.
+        // Each scanner is fetched independently; a single scanner's query
+        // failing must degrade to "that group is empty", not blank the whole
+        // board (one rejected promise would otherwise fail the entire load).
+        const results = await mapWithConcurrency(
+          SCANNER_ORDER,
+          PER_SCANNER_FETCH_CONCURRENCY,
+          (s) =>
+            listFindings({
+              ...buildListParams({ severity, scanner: s, q, repo, state, sort, age, verdict, moreFilters, scopeRepos }),
+              page: scannerPages[s] ?? 1,
+              limit: PAGE_SIZE,
+            })
+              .then((r) => [s, r] as const)
+              .catch(() => [s, null] as const),
+        )
+        // Only a wholesale failure (every scanner errored) is a real error.
+        if (results.every(([, r]) => r === null)) {
+          throw new Error("all per-scanner findings queries failed")
+        }
+        const rows: Finding[] = []
+        const totals: Record<string, number> = {}
+        let sum = 0
+        let mergedVerdicts: VerdictCounts | undefined
+        for (const [s, r] of results) {
+          if (!r) {
+            totals[s] = 0
+            continue
+          }
+          for (const row of r.findings) rows.push(mapApiFinding(row))
+          totals[s] = r.total_count
+          sum += r.total_count
+          mergedVerdicts = mergeVerdictCounts(mergedVerdicts, r.verdict_counts)
+        }
+        setFindings(rows)
+        setScannerTotals(totals)
+        setTotalCount(sum)
+        setVerdictCounts(mergedVerdicts)
+      } else {
+        const resp = await listFindings({
+          ...buildListParams({ severity, scanner, q, repo, state, sort, age, verdict, moreFilters, scopeRepos }),
+          limit: PAGE_SIZE,
+          page: pageNum,
+        })
+        setFindings(resp.findings.map(mapApiFinding))
+        setTotalCount(resp.total_count)
+        setVerdictCounts(resp.verdict_counts)
+      }
     } catch {
       setError("Failed to load findings. Please try again.")
       setFindings([])
@@ -520,29 +773,32 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     } finally {
       setLoading(false)
     }
-  }, [moreFilters])
+  }, [moreFilters, scopeRepos, perScannerMode, scannerPages])
 
   // Reset to page 1 whenever any filter changes so users don't land on an
   // empty page-3-of-2-results when they narrow the query.
   useEffect(() => {
     setPage(1)
+    // Reset every scanner group back to its first page too, for the same reason.
+    setScannerPages({})
+    // Drop the multi-select too: ids selected under the old filter no longer map
+    // to visible rows, so the bulk bar would otherwise act on off-screen findings.
+    setSelection(new Set())
   }, [sevFilter, scannerFilter, stateFilter, repoFilter, searchQuery, sortKey, agePreset, moreFilters, verdictFilter])
 
   useEffect(() => {
     void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
-  }, [sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, moreFilters, verdictFilter, page, load])
+  }, [sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, moreFilters, verdictFilter, page, scannerPages, groupBy, load])
 
-  // 404 from /settings/llm means no key on file — banner can then prompt setup.
+  // Argus connection status drives the banner + the drawer's locked preview.
+  // `connected` is true only when an endpoint is configured AND enabled.
   useEffect(() => {
     let cancelled = false
-    fetch("/api/v1/settings/llm")
-      .then((r) => {
-        if (cancelled) return
-        if (r.status === 404) {
-          setLlmConfigured(false)
-          return
-        }
-        if (r.ok) setLlmConfigured(true)
+    fetch("/api/v1/settings/argus")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        setArgusConnected(Boolean(data.connected))
       })
       .catch(() => {
         /* network errors leave the banner hidden — fail safe */
@@ -560,6 +816,323 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
   // Server-side sort (severity_age / epss / newest / oldest) drives row order.
   const sorted = filtered
+
+  // Step through the queue from inside the detail slide-over so triage flow
+  // survives the modal scrim — no close/reopen between findings. At a page
+  // boundary, change the page and select its boundary row once it loads
+  // (pendingSelectRef), so navigation spans the whole queue, not one page.
+  const pendingSelectRef = useRef<"first" | "last" | null>(null)
+  const goToAdjacent = useCallback((delta: number) => {
+    if (pendingSelectRef.current || loading) return
+    const curr = selectedFinding
+    if (!curr) return
+    const idx = sorted.findIndex((f) => f.id === curr.id)
+    if (idx === -1) return
+    const next = idx + delta
+    if (next >= 0 && next < sorted.length) {
+      setSelectedFinding(sorted[next])
+      return
+    }
+    // Per-scanner mode has no single global page (each group paginates on its
+    // own), so the queue is just the visible union — clamp at its ends.
+    if (perScannerMode) return
+    if (delta > 0 && page * PAGE_SIZE < totalCount) {
+      pendingSelectRef.current = "first"
+      setPage((p) => p + 1)
+    } else if (delta < 0 && page > 1) {
+      pendingSelectRef.current = "last"
+      setPage((p) => p - 1)
+    }
+  }, [selectedFinding, sorted, page, totalCount, loading, perScannerMode])
+
+  // After a boundary-triggered page change finishes loading, select the row at
+  // the boundary so navigation continues seamlessly into the new page.
+  useEffect(() => {
+    if (!pendingSelectRef.current || loading) return
+    const target = pendingSelectRef.current === "first" ? sorted[0] : sorted[sorted.length - 1]
+    pendingSelectRef.current = null
+    if (target) setSelectedFinding(target)
+  }, [sorted, loading])
+
+  const selectedIndex = selectedFinding
+    ? sorted.findIndex((f) => f.id === selectedFinding.id)
+    : -1
+  // Availability spans the whole queue. In the single-paginator modes that
+  // queue stretches across pages (offset by the current page); in per-scanner
+  // mode the queue is exactly the visible union, so position is the row index.
+  const globalPos =
+    selectedIndex >= 0
+      ? perScannerMode
+        ? selectedIndex
+        : (page - 1) * PAGE_SIZE + selectedIndex
+      : -1
+  const queueTotal = perScannerMode ? sorted.length : totalCount
+  const hasPrevFinding = globalPos > 0
+  const hasNextFinding = globalPos >= 0 && globalPos < queueTotal - 1
+
+  // Disposition the open finding: dismiss with a reason, drop it from the
+  // queue, and advance to the next one so triage keeps moving.
+  const [dismissing, setDismissing] = useState(false)
+  const [deferring, setDeferring] = useState(false)
+  const [reopening, setReopening] = useState(false)
+  const [dismissError, setDismissError] = useState<string | null>(null)
+  const [lastDismissed, setLastDismissed] = useState<{ finding: Finding; index: number; verb: string } | null>(null)
+
+  // The list row (GraphQL) is lean; fetch full detail on open and merge the
+  // decision content the list omits (description, rule, remediation,
+  // confidence, code snippet + highlight) onto the selected finding. Keyed on
+  // the finding id so navigating between findings refetches, while the merge
+  // (same id) does not re-trigger.
+  const selectedId = selectedFinding?.id
+  useEffect(() => {
+    if (!selectedId) return
+    const id = Number(selectedId)
+    if (!Number.isFinite(id)) return
+    let active = true
+    setDetailLoading(true)
+    getFindingDetail(id)
+      .then((raw) => {
+        if (!active) return
+        const d = mapApiFinding(raw)
+        setSelectedFinding((curr) =>
+          curr && curr.id === selectedId
+            ? {
+                ...curr,
+                // Refresh state from the authoritative detail read so the
+                // status banner reflects a change made since the list loaded.
+                state: d.state ?? curr.state,
+                title: d.title || curr.title,
+                description: d.description ?? curr.description,
+                rule: d.rule ?? curr.rule,
+                remediation: d.remediation ?? curr.remediation,
+                confidence: d.confidence ?? curr.confidence,
+                cwe: d.cwe ?? curr.cwe,
+                codeSnippet: d.codeSnippet ?? curr.codeSnippet,
+                codeSnippetStartLine: d.codeSnippetStartLine ?? curr.codeSnippetStartLine,
+                highlightStart: d.highlightStart ?? curr.highlightStart,
+                highlightEnd: d.highlightEnd ?? curr.highlightEnd,
+                recommendedFix: d.recommendedFix ?? curr.recommendedFix,
+                codeFlows: d.codeFlows ?? curr.codeFlows,
+                // Verification reasoning + reachability are detail-only fields,
+                // absent from the lean list row — merge them in on open.
+                evidence: d.evidence ?? curr.evidence,
+                exploitChain: d.exploitChain ?? curr.exploitChain,
+                verificationMetadata: d.verificationMetadata ?? curr.verificationMetadata,
+                reachability: d.reachability ?? curr.reachability,
+                secretDetector: d.secretDetector ?? curr.secretDetector,
+                secretVerified: d.secretVerified ?? curr.secretVerified,
+                containerImage: d.containerImage ?? curr.containerImage,
+                alsoAffectsRepos: d.alsoAffectsRepos ?? curr.alsoAffectsRepos,
+                introducedByCommit: d.introducedByCommit ?? curr.introducedByCommit,
+              }
+            : curr,
+        )
+      })
+      .catch(() => { /* keep the lean list row on failure */ })
+      // Guarded by `active` so a stale resolve can't clear loading for the
+      // finding the user has since navigated to.
+      .finally(() => { if (active) setDetailLoading(false) })
+    return () => { active = false }
+  }, [selectedId])
+
+  // Advisory enrichment for the Security Brief — lazily fetched per finding and
+  // cleared on navigation so the previous finding's brief never lingers.
+  useEffect(() => {
+    setAdvisory(null)
+    if (!selectedId) return
+    const id = Number(selectedId)
+    if (!Number.isFinite(id)) return
+    let active = true
+    getFindingAdvisory(id).then((a) => { if (active) setAdvisory(a) })
+    return () => { active = false }
+  }, [selectedId])
+
+  // Deep link: open the drawer for `?finding=<id>` on first mount by fetching
+  // its detail directly (the row may not be on the current page/filter). Runs
+  // once for the initial id; the detail read above then keeps it fresh.
+  useEffect(() => {
+    if (!initialFindingId) return
+    const id = Number(initialFindingId)
+    if (!Number.isFinite(id)) return
+    let active = true
+    getFindingDetail(id)
+      .then((raw) => { if (active) setSelectedFinding(mapApiFinding(raw)) })
+      .catch(() => { /* out-of-scope / missing id: leave the list as-is */ })
+    return () => { active = false }
+  }, [initialFindingId])
+
+  useEffect(() => setDismissError(null), [selectedFinding])
+
+  // Auto-expire the undo affordance after a few seconds.
+  useEffect(() => {
+    if (!lastDismissed) return
+    const t = window.setTimeout(() => setLastDismissed(null), 7000)
+    return () => window.clearTimeout(t)
+  }, [lastDismissed])
+
+  // Drop one id from the multi-select set — used when a row leaves the list via
+  // dismiss/defer/reopen so the bulk bar count stays truthful.
+  const deselect = useCallback((id: string) => {
+    setSelection((prev) => {
+      if (!prev.has(id)) return prev
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
+  }, [])
+
+  const handleDismissCurrent = useCallback(async (reason: DismissReason) => {
+    const current = selectedFinding
+    if (!current || dismissing) return
+    const id = Number(current.id)
+    if (!Number.isFinite(id)) {
+      setDismissError("This finding can't be dismissed here.")
+      return
+    }
+    setDismissing(true)
+    setDismissError(null)
+    try {
+      await bulkDismissFindings([id], reason)
+      const idx = sorted.findIndex((f) => f.id === current.id)
+      const next = sorted[idx + 1] ?? sorted[idx - 1] ?? null
+      setFindings((rows) => rows.filter((r) => r.id !== current.id))
+      setTotalCount((c) => Math.max(0, c - 1))
+      setScannerTotals((prev) => ({ ...prev, [current.scanner]: Math.max(0, (prev[current.scanner] ?? 1) - 1) }))
+      deselect(current.id)
+      setLastDismissed({ finding: current, index: Math.max(0, idx), verb: "Dismissed" })
+      setSelectedFinding(next && next.id !== current.id ? next : null)
+    } catch (e) {
+      setDismissError(e instanceof Error ? e.message : "Dismiss failed")
+    } finally {
+      setDismissing(false)
+    }
+  }, [selectedFinding, sorted, dismissing, deselect])
+
+  // Defer (snooze) the open finding — same drop-and-advance flow as dismiss; the
+  // undo toast reopens it (reopen handles deferred too).
+  const handleDeferCurrent = useCallback(async () => {
+    const current = selectedFinding
+    if (!current || deferring) return
+    const id = Number(current.id)
+    if (!Number.isFinite(id)) {
+      setDismissError("This finding can't be deferred here.")
+      return
+    }
+    setDeferring(true)
+    setDismissError(null)
+    try {
+      await deferFinding(id)
+      const idx = sorted.findIndex((f) => f.id === current.id)
+      const next = sorted[idx + 1] ?? sorted[idx - 1] ?? null
+      setFindings((rows) => rows.filter((r) => r.id !== current.id))
+      setTotalCount((c) => Math.max(0, c - 1))
+      setScannerTotals((prev) => ({ ...prev, [current.scanner]: Math.max(0, (prev[current.scanner] ?? 1) - 1) }))
+      deselect(current.id)
+      setLastDismissed({ finding: current, index: Math.max(0, idx), verb: "Deferred" })
+      setSelectedFinding(next && next.id !== current.id ? next : null)
+    } catch (e) {
+      setDismissError(e instanceof Error ? e.message : "Defer failed")
+    } finally {
+      setDeferring(false)
+    }
+  }, [selectedFinding, sorted, deferring, deselect])
+
+  const handleReopenCurrent = useCallback(async () => {
+    const current = selectedFinding
+    if (!current || reopening) return
+    const id = Number(current.id)
+    if (!Number.isFinite(id)) {
+      setDismissError("This finding can't be reopened here.")
+      return
+    }
+    setReopening(true)
+    setDismissError(null)
+    try {
+      await reopenFinding(id)
+      if (stateFilter === "all") {
+        // The "all" view keeps the finding — flip its state in place so the
+        // banner drops and the action row returns to Defer/Dismiss.
+        setSelectedFinding((curr) =>
+          curr && curr.id === current.id ? { ...curr, state: "open" } : curr,
+        )
+        setFindings((rows) =>
+          rows.map((r) => (r.id === current.id ? { ...r, state: "open" } : r)),
+        )
+      } else {
+        // A state-scoped view (dismissed/deferred/fixed/closed) no longer
+        // matches a reopened finding — drop and advance, mirroring dismiss and
+        // defer. No undo toast: the undo path re-opens, so it can't faithfully
+        // restore the prior closed sub-state.
+        const idx = sorted.findIndex((f) => f.id === current.id)
+        const next = sorted[idx + 1] ?? sorted[idx - 1] ?? null
+        setFindings((rows) => rows.filter((r) => r.id !== current.id))
+        setTotalCount((c) => Math.max(0, c - 1))
+        setScannerTotals((prev) => ({ ...prev, [current.scanner]: Math.max(0, (prev[current.scanner] ?? 1) - 1) }))
+        deselect(current.id)
+        setSelectedFinding(next && next.id !== current.id ? next : null)
+      }
+    } catch (e) {
+      setDismissError(e instanceof Error ? e.message : "Reopen failed")
+    } finally {
+      setReopening(false)
+    }
+  }, [selectedFinding, reopening, stateFilter, sorted, deselect])
+
+  const handleUndoDismiss = useCallback(async () => {
+    const d = lastDismissed
+    if (!d) return
+    setLastDismissed(null)
+    // Optimistically restore the row at its original position and re-open it.
+    setFindings((rows) => {
+      if (rows.some((r) => r.id === d.finding.id)) return rows
+      const copy = rows.slice()
+      copy.splice(Math.min(d.index, copy.length), 0, d.finding)
+      return copy
+    })
+    setTotalCount((c) => c + 1)
+    // Restore the scanner's total too, mirroring the dismiss/defer decrement, so
+    // the per-group paginator's page count stays correct after an undo.
+    setScannerTotals((prev) => ({ ...prev, [d.finding.scanner]: (prev[d.finding.scanner] ?? 0) + 1 }))
+    setSelectedFinding(d.finding)
+    try {
+      await reopenFinding(Number(d.finding.id))
+    } catch {
+      setDismissError("Couldn't undo — the finding may remain actioned.")
+    }
+  }, [lastDismissed])
+
+  useEffect(() => {
+    if (!selectedFinding) return
+    function onNavKey(e: KeyboardEvent) {
+      // Don't navigate the queue underneath a nested sheet (e.g. the code
+      // Expand view), and don't steal arrows from form controls or menus.
+      if (openSheetCount() > 1) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName
+      const role = el?.getAttribute?.("role")
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        el?.isContentEditable ||
+        role === "menu" ||
+        role === "menuitem" ||
+        role === "combobox" ||
+        role === "listbox"
+      ) {
+        return
+      }
+      if (e.key === "j" || e.key === "ArrowDown") {
+        e.preventDefault()
+        goToAdjacent(1)
+      } else if (e.key === "k" || e.key === "ArrowUp") {
+        e.preventDefault()
+        goToAdjacent(-1)
+      }
+    }
+    window.addEventListener("keydown", onNavKey)
+    return () => window.removeEventListener("keydown", onNavKey)
+  }, [selectedFinding, goToAdjacent])
 
   const toggleSelect = useCallback((id: string) => {
     setSelection((prev) => {
@@ -591,7 +1164,10 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   }, [sorted, groupBy, flat])
 
   const showEmpty = !loading && !error && sorted.length === 0
-  const showTable = !loading && !error && sorted.length > 0
+  // Keep the table visible while a refetch is in flight (only the first load,
+  // with nothing yet to show, falls back to the skeleton). Otherwise paging one
+  // scanner group — which refetches every group — would blank the whole list.
+  const showTable = !error && sorted.length > 0
 
   // "No data at all" trigger for the ghost preview: empty result set AND every
   // filter is at its default. We honour the page-level initialStateFilter prop
@@ -607,7 +1183,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     moreFilters.cwe === null &&
     moreFilters.kev === false &&
     moreFilters.epssMin === null &&
-    moreFilters.riskScoreMin === null &&
+    moreFilters.bands.length === 0 &&
     moreFilters.assigneeUserId === null
   const showGhostPreview =
     showEmpty && hasNoFilters && totalCount === 0
@@ -661,12 +1237,10 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         <div className="border-b border-[var(--color-border-divider)] bg-[var(--color-surface)] px-5 py-2.5">
           <FindingsCommandBar
             severity={sevFilter}
-            scanner={scannerFilter}
             repo={repoFilter}
             state={stateFilter}
             moreFilters={moreFilters}
             onSeverityChange={(next) => setSevFilter(next as Severity | "all")}
-            onScannerChange={(next) => setScannerFilter(next as ScannerFilter)}
             onRepoChange={setRepoFilter}
             onStateChange={(next) => setStateFilter(next as StateFilter)}
             onMoreFiltersChange={(patch) =>
@@ -691,7 +1265,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         </div>
 
         <div className="border-b border-[var(--color-border-divider)] bg-[var(--color-surface)] px-5 py-2.5 space-y-3">
-          <EnableLlmBanner llmConfigured={llmConfigured} />
+          <EnableArgusBanner argusConnected={argusConnected} />
           <VerdictFilterChips
             active={verdictFilter}
             counts={verdictCounts}
@@ -699,7 +1273,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           />
         </div>
 
-        {loading && (
+        {loading && sorted.length === 0 && (
           <div className="divide-y divide-[var(--color-border-divider)]" aria-hidden="true">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-3">
@@ -787,6 +1361,30 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                     />
                   )}
                   {!collapsedGroups.has(group.key) && (() => {
+                    // Per-scanner mode: the page is already capped at PAGE_SIZE,
+                    // so render every row and give the group its own paginator.
+                    if (perScannerMode) {
+                      return (
+                        <>
+                          {group.rows.map((finding) => (
+                            <CompactFindingRow
+                              key={finding.id}
+                              finding={finding}
+                              selected={selection.has(finding.id)}
+                              onToggleSelect={() => toggleSelect(finding.id)}
+                              onOpen={() => setSelectedFinding(finding)}
+                              active={selectedFinding?.id === finding.id}
+                            />
+                          ))}
+                          <FindingsPagination
+                            page={scannerPages[group.key] ?? 1}
+                            pageSize={PAGE_SIZE}
+                            total={scannerTotals[group.key] ?? 0}
+                            onChange={(p) => setScannerPages((prev) => ({ ...prev, [group.key]: p }))}
+                          />
+                        </>
+                      )
+                    }
                     // Flat queue mode renders every row — no progressive
                     // disclosure since there's only one bucket.
                     const expanded = flat || expandedGroups.has(group.key)
@@ -805,25 +1403,18 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                           />
                         ))}
                         {!flat && !expanded && hiddenCount > 0 && (
-                          <div
-                            onClick={() => setExpandedGroups((prev) => {
-                              const next = new Set(prev); next.add(group.key); return next
-                            })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault()
-                                setExpandedGroups((prev) => {
-                                  const next = new Set(prev); next.add(group.key); return next
-                                })
-                              }
-                            }}
-                            tabIndex={0}
-                            role="button"
+                          <Button
+                            variant="link"
+                            className="w-full justify-center px-4 py-2 text-xs text-[var(--color-text-secondary)]"
+                            onClick={() =>
+                              setExpandedGroups((prev) => {
+                                const next = new Set(prev); next.add(group.key); return next
+                              })
+                            }
                             aria-label={`Show ${hiddenCount} more findings in ${group.label}`}
-                            className="cursor-pointer px-4 py-2 text-center text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset"
                           >
                             {`Show ${group.rows.length - INITIAL_ROWS_PER_GROUP} more ${group.label.toLowerCase()} →`}
-                          </div>
+                          </Button>
                         )}
                       </>
                     )
@@ -832,12 +1423,14 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               ))}
             </div>
 
-            <FindingsPagination
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={totalCount}
-              onChange={setPage}
-            />
+            {!perScannerMode && (
+              <FindingsPagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={totalCount}
+                onChange={setPage}
+              />
+            )}
           </>
         )}
 
@@ -849,23 +1442,17 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
             <Table className="border-collapse table-fixed w-full">
               <Thead className="sticky top-0 z-10 bg-[var(--color-surface)]">
                 <Tr>
-                  <Th className="w-8 px-4 py-2.5" />
+                  <Th className="w-[5.5rem] px-4 py-2.5">Severity</Th>
                   <Th className="px-3 py-2.5">Finding</Th>
                   <Th className="w-[14rem] px-3 py-2.5 hidden md:table-cell">Scanner</Th>
                   <Th className="w-[12rem] px-3 py-2.5 hidden lg:table-cell">Repository</Th>
-                  <Th className="w-[4.5rem] px-3 py-2.5">Chain</Th>
                   <SortableTh
-                    label="Risk"
-                    className="w-[7rem] px-3 py-2.5 text-right [&>button]:justify-end [&>button]:w-full"
-                    direction={sortKey === "risk_score" ? "descending" : "none"}
-                    onClick={() => setSortKey("risk_score")}
+                    label="Exploitability"
+                    className="w-[8rem] px-3 py-2.5 text-right [&>button]:justify-end [&>button]:w-full"
+                    direction={sortKey === "action_band" ? "descending" : "none"}
+                    onClick={() => setSortKey("action_band")}
                   />
-                  <SortableTh
-                    label="EPSS"
-                    className="w-[5.5rem] px-3 py-2.5 text-right hidden sm:table-cell [&>button]:justify-end [&>button]:w-full"
-                    direction={sortKey === "epss" ? "descending" : "none"}
-                    onClick={() => setSortKey("epss")}
-                  />
+                  <Th className="w-[7rem] px-3 py-2.5 text-right hidden sm:table-cell">Confidence</Th>
                   <SortableTh
                     label="Age"
                     className="w-[4.5rem] px-3 py-2.5 text-right hidden sm:table-cell [&>button]:justify-end [&>button]:w-full"
@@ -883,7 +1470,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               {groups.map((group) => (
                 <Tbody key={`${groupBy}:${group.key}`}>
                   <Tr className="bg-[var(--color-bg-section)]">
-                    <Td colSpan={8} className="px-0 py-0">
+                    <Td colSpan={7} className="px-0 py-0">
                       <FindingsGroupHeader
                         label={group.label}
                         severityCounts={groupSeverityCounts(group.rows)}
@@ -904,7 +1491,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                     </Td>
                   </Tr>
                   {!collapsedGroups.has(group.key) && (() => {
-                    const expanded = expandedGroups.has(group.key)
+                    // Per-scanner mode renders the whole page-capped group and
+                    // swaps the "Show N more" reveal for the group's own paginator.
+                    const expanded = perScannerMode || expandedGroups.has(group.key)
                     const visible = expanded ? group.rows : group.rows.slice(0, INITIAL_ROWS_PER_GROUP)
                     const hiddenCount = group.rows.length - INITIAL_ROWS_PER_GROUP
                     return (
@@ -927,12 +1516,21 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                               selectedFinding?.id === finding.id ? "bg-[var(--color-nav-active)]" : ""
                             }`}
                           >
-                            <Td className="py-3">
+                            <Td className="px-4 py-3">
                               <span
-                                className="inline-block h-2 w-2 rounded-full"
-                                style={{ background: SEV_COLOR[finding.severity] }}
-                                aria-label={finding.severity}
-                              />
+                                className="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide"
+                                style={{
+                                  color: SEV_COLOR[finding.severity],
+                                  background: `color-mix(in srgb, ${SEV_COLOR[finding.severity]} 14%, transparent)`,
+                                }}
+                              >
+                                <span
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{ background: SEV_COLOR[finding.severity] }}
+                                  aria-hidden="true"
+                                />
+                                {SEVERITY_GROUP_LABEL[finding.severity]}
+                              </span>
                             </Td>
 
                             <Td className="px-3 py-3">
@@ -944,7 +1542,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                                   kev={finding.kev}
                                   epssPercentile={finding.epssPercentile}
                                   firstSeen={finding.firstSeen}
-                                  cwe={finding.cwe}
                                 />
                                 {finding.cve && (
                                   <span className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-[11.5px] text-[var(--color-text-tertiary)]">
@@ -976,51 +1573,60 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                               </span>
                             </Td>
 
-                            <Td className="px-3 py-3">
-                              <span className="text-[var(--color-text-tertiary)] text-xs">—</span>
-                            </Td>
-
-                            <Td className="px-3 py-3">
-                              {finding.riskScore != null ? (
-                                <RiskScoreCell score={finding.riskScore} argus={finding.riskScore >= 70} />
+                            <Td className="px-3 py-3 text-right">
+                              {finding.actionBand ? (
+                                <span className="inline-flex justify-end">
+                                  <ActionBandBadge band={finding.actionBand} />
+                                </span>
                               ) : (
                                 <span className="text-[var(--color-text-tertiary)] text-xs text-right block">—</span>
                               )}
                             </Td>
 
                             <Td className="px-3 py-3 text-right hidden sm:table-cell">
-                              <EpssScoreCell percentile={finding.epssPercentile} />
+                              {finding.verdict ? (
+                                <span className="inline-flex justify-end">
+                                  <VerdictBadge verdict={finding.verdict} />
+                                </span>
+                              ) : (
+                                <span className="text-2xs text-[var(--color-text-tertiary)]">Unrated</span>
+                              )}
                             </Td>
 
                             <Td className="px-3 py-3 text-right hidden sm:table-cell">
-                              <span className="text-xs text-[var(--color-text-tertiary)]">{finding.age}</span>
+                              <FindingAge age={finding.age} className="text-xs text-[var(--color-text-tertiary)]" />
                             </Td>
                           </Tr>
                         ))}
-                        {!expanded && hiddenCount > 0 && (
-                          <Tr
-                            interactive
-                            onClick={() => setExpandedGroups((prev) => {
-                              const next = new Set(prev); next.add(group.key); return next
-                            })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault()
-                                setExpandedGroups((prev) => {
-                                  const next = new Set(prev); next.add(group.key); return next
-                                })
-                              }
-                            }}
-                            tabIndex={0}
-                            role="button"
-                            aria-label={`Show ${hiddenCount} more findings in ${group.label}`}
-                            className="cursor-pointer text-xs text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset"
-                          >
-                            <Td colSpan={8} className="py-2 text-center">
-                              {`Show ${group.rows.length - INITIAL_ROWS_PER_GROUP} more ${group.label.toLowerCase()} →`}
+                        {perScannerMode ? (
+                          <Tr>
+                            <Td colSpan={7} className="p-0">
+                              <FindingsPagination
+                                page={scannerPages[group.key] ?? 1}
+                                pageSize={PAGE_SIZE}
+                                total={scannerTotals[group.key] ?? 0}
+                                onChange={(p) => setScannerPages((prev) => ({ ...prev, [group.key]: p }))}
+                              />
                             </Td>
                           </Tr>
-                        )}
+                        ) : !expanded && hiddenCount > 0 ? (
+                          <Tr>
+                            <Td colSpan={7} className="p-0">
+                              <Button
+                                variant="link"
+                                className="w-full justify-center py-2 text-xs text-[var(--color-text-secondary)]"
+                                onClick={() =>
+                                  setExpandedGroups((prev) => {
+                                    const next = new Set(prev); next.add(group.key); return next
+                                  })
+                                }
+                                aria-label={`Show ${hiddenCount} more findings in ${group.label}`}
+                              >
+                                {`Show ${group.rows.length - INITIAL_ROWS_PER_GROUP} more ${group.label.toLowerCase()} →`}
+                              </Button>
+                            </Td>
+                          </Tr>
+                        ) : null}
                       </>
                     )
                   })()}
@@ -1028,98 +1634,230 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               ))}
             </Table>
 
-            <FindingsPagination
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={totalCount}
-              onChange={setPage}
-            />
+            {!perScannerMode && (
+              <FindingsPagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={totalCount}
+                onChange={setPage}
+              />
+            )}
           </>
         )}
         </div>
         </div>
 
-        {selectedFinding && (
-          <aside
-            aria-label="Finding detail"
-            className="hidden lg:flex w-[380px] shrink-0 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden"
-          >
-            <DrawerHeader
-              eyebrow={`${selectedFinding.severity.charAt(0).toUpperCase()}${selectedFinding.severity.slice(1)} · ${SCANNER_GROUP_LABEL[selectedFinding.scanner]}`}
-              eyebrowDotColor={SEV_COLOR[selectedFinding.severity]}
-              title={selectedFinding.title}
-              identifier={selectedFinding.cve ?? selectedFinding.filePath}
-              badges={<FindingDetailBadges finding={selectedFinding} />}
-              onClose={() => setSelectedFinding(null)}
-            />
+        <Sheet
+          open={!!selectedFinding}
+          onClose={() => setSelectedFinding(null)}
+          size="lg"
+          title={selectedFinding?.title ?? "Finding"}
+          header={
+            selectedFinding ? (
+              <DrawerHeader
+                eyebrow={`${selectedFinding.severity.charAt(0).toUpperCase()}${selectedFinding.severity.slice(1)} · ${SCANNER_GROUP_LABEL[selectedFinding.scanner]}`}
+                eyebrowDotColor={SEV_COLOR[selectedFinding.severity]}
+                title={selectedFinding.title}
+                identifier={selectedFinding.cve ?? selectedFinding.filePath}
+                badges={<FindingDetailBadges finding={selectedFinding} />}
+                onClose={() => setSelectedFinding(null)}
+                onPrev={() => goToAdjacent(-1)}
+                onNext={() => goToAdjacent(1)}
+                hasPrev={hasPrevFinding}
+                hasNext={hasNextFinding}
+                position={globalPos >= 0 ? globalPos + 1 : undefined}
+                total={queueTotal}
+              />
+            ) : (
+              <span />
+            )
+          }
+        >
+          {selectedFinding && (
+            <>
+              {selectedFinding.state && selectedFinding.state !== "open" && (
+                <DrawerStatusBanner state={selectedFinding.state} />
+              )}
+              <FindingDetailActions
+                assigneeControl={
+                  <div className="w-44">
+                    <FindingAssigneeEditor
+                      size="sm"
+                      findingId={selectedFinding.id}
+                      currentAssignee={selectedFinding.assigneeUserId ?? null}
+                      onUpdate={(next) => {
+                        setSelectedFinding((curr) =>
+                          curr && curr.id === selectedFinding.id
+                            ? { ...curr, assigneeUserId: next ?? undefined }
+                            : curr,
+                        )
+                        setFindings((rows) =>
+                          rows.map((r) =>
+                            r.id === selectedFinding.id
+                              ? { ...r, assigneeUserId: next ?? undefined }
+                              : r,
+                          ),
+                        )
+                      }}
+                    />
+                  </div>
+                }
+                {...(selectedFinding.state && selectedFinding.state !== "open"
+                  ? { onReopen: handleReopenCurrent, reopenBusy: reopening }
+                  : {
+                      onDefer: handleDeferCurrent,
+                      canDefer: !deferring,
+                      dismiss: {
+                        reasons: DISMISS_REASONS,
+                        onDismiss: (reason: string) =>
+                          handleDismissCurrent(reason as DismissReason),
+                        busy: dismissing,
+                        error: dismissError,
+                      },
+                    })}
+              />
 
-            <FindingDetailActions />
+              <div className="flex-1 overflow-y-auto pb-10 divide-y divide-[var(--color-border-divider)] [&>*]:px-5 [&>*]:py-4">
+              <FindingDescriptionSection
+                description={selectedFinding.description}
+                title={selectedFinding.title}
+              />
 
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
-              <DrawerSection label="Details">
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  <div>
-                    <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Severity</dt>
-                    <dd className="mt-1 font-semibold" style={{ color: SEV_COLOR[selectedFinding.severity] }}>
-                      {selectedFinding.severity.charAt(0).toUpperCase() + selectedFinding.severity.slice(1)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Scanner</dt>
-                    <dd className="mt-1 text-[var(--color-text-primary)]">{SCANNER_LABEL[selectedFinding.scanner]}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Repository</dt>
-                    <dd className="mt-1 font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]">
-                      {selectedFinding.repo}
-                    </dd>
-                  </div>
-                  {selectedFinding.riskScore != null && (
-                    <div>
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Risk Score</dt>
-                      <dd className="mt-1">
-                        <RiskScoreCell score={selectedFinding.riskScore} argus={selectedFinding.riskScore >= 70} />
+              <FindingSignalRow finding={selectedFinding} />
+
+              <BlastRadiusSection
+                findingId={Number(selectedFinding.id)}
+                count={selectedFinding.alsoAffectsRepos}
+              />
+
+              {/* Severity and scanner already lead the drawer header, so the
+                  Details grid carries the rule, weakness, and scope the analyst
+                  needs to classify the finding. */}
+              <section aria-labelledby="finding-details-title">
+                <h3 id="finding-details-title" className="text-base font-semibold text-[var(--color-text-primary)]">
+                  Details
+                </h3>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  {selectedFinding.rule && (
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Rule</dt>
+                      <dd
+                        className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
+                        title={selectedFinding.rule}
+                      >
+                        {selectedFinding.rule}
                       </dd>
                     </div>
                   )}
-                  <div className="col-span-2">
-                    <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Assignee</dt>
-                    <dd className="mt-1">
-                      <FindingAssigneeEditor
-                        findingId={selectedFinding.id}
-                        currentAssignee={selectedFinding.assigneeUserId ?? null}
-                        onUpdate={(next) => {
-                          setSelectedFinding((curr) =>
-                            curr && curr.id === selectedFinding.id
-                              ? { ...curr, assigneeUserId: next ?? undefined }
-                              : curr,
-                          )
-                          setFindings((rows) =>
-                            rows.map((r) =>
-                              r.id === selectedFinding.id
-                                ? { ...r, assigneeUserId: next ?? undefined }
-                                : r,
-                            ),
-                          )
-                        }}
-                      />
+                  {selectedFinding.cwe && (
+                    <div>
+                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">CWE</dt>
+                      <dd className="mt-1 text-sm text-[var(--color-text-primary)]">
+                        <CweValue cwe={selectedFinding.cwe} />
+                      </dd>
+                    </div>
+                  )}
+                  {selectedFinding.secretDetector && (
+                    <div>
+                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Detector</dt>
+                      <dd className="mt-1 text-sm text-[var(--color-text-primary)]">
+                        {selectedFinding.secretDetector}
+                      </dd>
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Repository</dt>
+                    <dd
+                      className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
+                      title={selectedFinding.repo}
+                    >
+                      {selectedFinding.repo}
                     </dd>
                   </div>
                 </dl>
-              </DrawerSection>
+              </section>
+
+              <CweContextSection cwe={selectedFinding.cwe} />
+
+              <ContainerImageSection image={selectedFinding.containerImage} />
+
+              <SecurityBriefSection advisory={advisory} />
 
               <FindingOriginSection
                 finding={selectedFinding}
                 scannerLabel={SCANNER_LABEL[selectedFinding.scanner]}
               />
 
+              <CodePreviewSection
+                snippet={selectedFinding.codeSnippet}
+                filePath={selectedFinding.filePath}
+                startLine={selectedFinding.codeSnippetStartLine}
+                highlightStart={selectedFinding.highlightStart}
+                highlightEnd={selectedFinding.highlightEnd}
+                secretFindingId={
+                  selectedFinding.scanner === "secret_scanning"
+                    ? selectedFinding.id
+                    : undefined
+                }
+                showEmptyWhenMissing={selectedFinding.scanner !== "secret_scanning"}
+                detailLoading={detailLoading}
+                repoUrl={buildRepoFileUrl({
+                  repo: selectedFinding.repo,
+                  filePath: selectedFinding.filePath,
+                  commit: selectedFinding.introducedByCommit,
+                })}
+              />
+
+              <FindingDataFlowSection steps={selectedFinding.codeFlows} />
+
+              <EvidenceSection
+                verdict={selectedFinding.verdict}
+                evidence={selectedFinding.evidence}
+                exploitChain={selectedFinding.exploitChain}
+                metadata={selectedFinding.verificationMetadata}
+                argusEnabled={argusConnected}
+                verifiable={ARGUS_VERIFIABLE_SCANNERS.has(selectedFinding.scanner)}
+              />
+
               <RecommendedFixSection fix={selectedFinding.recommendedFix} />
 
-              <ActivityTimelineSection finding={selectedFinding} scannerLabel={SCANNER_LABEL[selectedFinding.scanner]} />
-            </div>
-          </aside>
-        )}
+              <FindingRemediationSection remediation={selectedFinding.remediation} />
+
+              <FindingReferencesSection
+                cve={selectedFinding.cve}
+                cwe={selectedFinding.cwe}
+                advisoryReferences={advisory?.references}
+              />
+
+              <ActivityTimelineSection key={selectedFinding.id} finding={selectedFinding} scannerLabel={SCANNER_LABEL[selectedFinding.scanner]} />
+              </div>
+            </>
+          )}
+        </Sheet>
       </div>
+
+      {lastDismissed && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 z-[110] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2.5 shadow-xl"
+        >
+          <span className="text-sm text-[var(--color-text-primary)]">
+            {lastDismissed.verb}{" "}
+            <span className="inline-block max-w-[14rem] truncate align-bottom font-medium" title={lastDismissed.finding.title}>
+              {lastDismissed.finding.title}
+            </span>
+          </span>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={handleUndoDismiss}
+            className="font-semibold text-[var(--color-accent)] hover:underline"
+          >
+            Undo
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -1128,6 +1866,165 @@ const NEUTRAL = "text-[var(--color-text-primary)]"
 const CRITICAL = "text-[var(--color-severity-critical)]"
 const WARN = "text-[var(--color-severity-high)]"
 const OK = "text-[var(--color-state-fixed)]"
+
+// The scanner's plain-language explanation of the issue — the first thing an
+// analyst needs to decide whether the finding is real. Hidden when it would
+// just repeat the title.
+function FindingDescriptionSection({ description, title }: { description?: string; title: string }) {
+  if (!description || description.trim() === title.trim()) return null
+  return (
+    <section aria-labelledby="finding-description-title">
+      <h3 id="finding-description-title" className="text-base font-semibold text-[var(--color-text-primary)]">
+        What&rsquo;s wrong
+      </h3>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-secondary)]">
+        {description}
+      </p>
+    </section>
+  )
+}
+
+function FindingRemediationSection({ remediation }: { remediation?: string }) {
+  if (!remediation) return null
+  return (
+    <section aria-labelledby="finding-remediation-title">
+      <h3 id="finding-remediation-title" className="text-base font-semibold text-[var(--color-text-primary)]">
+        Recommended fix
+      </h3>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-primary)]">
+        {remediation}
+      </p>
+    </section>
+  )
+}
+
+// Consolidated "how bad / how exploitable" strip — the at-a-glance signals a
+// triager weighs before reading detail: risk, known-exploited, EPSS, scanner
+// confidence, and the AI verdict. Each chip renders only when its signal is
+// present, so the row adapts to what the scanner supplied.
+function SignalChip({
+  tone,
+  title,
+  children,
+}: {
+  tone: "danger" | "warn" | "success" | "neutral"
+  title?: string
+  children: ReactNode
+}) {
+  const tones: Record<typeof tone, string> = {
+    danger:
+      "border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-critical)_12%,transparent)] text-[var(--color-severity-critical)]",
+    warn:
+      "border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] text-[var(--color-severity-high)]",
+    success:
+      "border-[color-mix(in_srgb,var(--color-status-ok)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-status-ok)_12%,transparent)] text-[var(--color-status-ok)]",
+    neutral:
+      "border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]",
+  }
+  return (
+    <span
+      title={title}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
+        tones[tone],
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+function FindingSignalRow({ finding }: { finding: Finding }) {
+  const epssPct = finding.epssPercentile != null ? Math.round(finding.epssPercentile * 100) : null
+  const bandTone: "danger" | "warn" | "neutral" =
+    finding.actionBand === "act"
+      ? "danger"
+      : finding.actionBand === "attend"
+        ? "warn"
+        : "neutral"
+
+  const reach = REACHABILITY_SIGNAL[finding.reachability ?? ""]
+
+  const hasAny =
+    Boolean(finding.actionBand) ||
+    finding.kev ||
+    epssPct != null ||
+    Boolean(reach) ||
+    finding.secretVerified != null ||
+    Boolean(finding.confidence) ||
+    Boolean(finding.verdict)
+  if (!hasAny) return null
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" aria-label="Risk signals">
+      {finding.actionBand && (
+        <SignalChip tone={bandTone} title="SSVC action band — derived from KEV, reachability, and severity">
+          <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+          {ACTION_BAND_LABEL[finding.actionBand]}
+        </SignalChip>
+      )}
+      {finding.kev && (
+        <SignalChip tone="danger" title="Listed in CISA Known Exploited Vulnerabilities">
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+          </svg>
+          Known exploited
+        </SignalChip>
+      )}
+      {epssPct != null && (
+        <SignalChip tone={epssPct >= 50 ? "warn" : "neutral"} title="EPSS exploit-prediction percentile">
+          EPSS {epssPct}%
+        </SignalChip>
+      )}
+      {reach && (
+        <SignalChip tone={reach.tone} title={reach.title}>
+          {reach.glyph}
+          {reach.label}
+        </SignalChip>
+      )}
+      {finding.secretVerified != null && (
+        <SignalChip
+          tone={finding.secretVerified ? "danger" : "neutral"}
+          title={
+            finding.secretVerified
+              ? "The scanner authenticated this credential against the provider — it is live"
+              : "The scanner could not confirm this credential is live"
+          }
+        >
+          {finding.secretVerified ? (
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+              <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
+            </svg>
+          ) : null}
+          {finding.secretVerified ? "Live credential" : "Unverified"}
+        </SignalChip>
+      )}
+      {finding.confidence && (
+        <SignalChip tone="neutral" title="Scanner confidence">
+          <span className="capitalize">{finding.confidence}</span> confidence
+        </SignalChip>
+      )}
+      {finding.verdict && <VerdictBadge verdict={finding.verdict} />}
+    </div>
+  )
+}
+
+// CWE id linked to its MITRE definition so an analyst can read the weakness
+// class in one click; renders plain text when the id isn't well-formed.
+function CweValue({ cwe }: { cwe: string }) {
+  const m = cwe.match(/^CWE-(\d+)$/i)
+  if (!m) return <>{cwe}</>
+  return (
+    <a
+      href={`https://cwe.mitre.org/data/definitions/${m[1]}.html`}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-sm text-[var(--color-accent)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+    >
+      {cwe}
+    </a>
+  )
+}
 
 
 function statusPillLabel(state: string | undefined): string {
@@ -1173,11 +2070,15 @@ function CompactFindingRow({
   onOpen: () => void
   active: boolean
 }) {
+  const sevColor = SEV_COLOR[finding.severity]
+  const sevLabel = SEVERITY_GROUP_LABEL[finding.severity]
+  const isClosed = Boolean(finding.state && finding.state !== "open")
+
   return (
     <div
       role="button"
       tabIndex={0}
-      aria-label={`Open finding: ${finding.title}`}
+      aria-label={`Open ${finding.severity} ${SCANNER_LABEL[finding.scanner]} finding: ${finding.title}`}
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -1185,7 +2086,7 @@ function CompactFindingRow({
           onOpen()
         }
       }}
-      className={`relative grid cursor-pointer grid-cols-[18px_auto_minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-2.5 border-b border-[var(--color-border-divider)] transition-colors hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset ${
+      className={`relative grid cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 border-b border-[var(--color-border-divider)] transition-colors hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset ${
         active
           ? "bg-[var(--color-surface-raised)] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-[2px] before:bg-[var(--color-accent)]"
           : selected
@@ -1208,14 +2109,24 @@ function CompactFindingRow({
         />
       </span>
 
-      <span
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ background: SEV_COLOR[finding.severity] }}
-        aria-label={finding.severity}
-      />
-
       <div className="min-w-0">
         <div className="flex items-center gap-2 min-w-0">
+          {/* Severity as dot + label, not colour alone (a11y: color-not-only). */}
+          <span
+            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+            style={{ color: sevColor, background: `color-mix(in srgb, ${sevColor} 14%, transparent)` }}
+          >
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: sevColor }} aria-hidden="true" />
+            {sevLabel}
+          </span>
+          {/* Scanner type — which tool/finding class drives the triage approach. */}
+          <span
+            className="inline-flex h-[18px] shrink-0 items-center rounded px-1.5 text-[9px] font-bold uppercase tracking-wide"
+            style={{ background: SCANNER_BG[finding.scanner], color: SCANNER_FG[finding.scanner] }}
+            title={SCANNER_GROUP_LABEL[finding.scanner]}
+          >
+            {SCANNER_LABEL[finding.scanner]}
+          </span>
           <span className="truncate text-[13px] font-medium text-[var(--color-text-primary)]">
             {finding.title}
           </span>
@@ -1223,7 +2134,6 @@ function CompactFindingRow({
             kev={finding.kev}
             epssPercentile={finding.epssPercentile}
             firstSeen={finding.firstSeen}
-            cwe={finding.cwe}
           />
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-tertiary)]">
@@ -1233,15 +2143,29 @@ function CompactFindingRow({
         </div>
       </div>
 
-      <span
-        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusToneClass(finding.state)}`}
-      >
-        {statusPillLabel(finding.state)}
-      </span>
+      <div className="flex shrink-0 items-center gap-2.5">
+        {/* AI verdict is the core triage output; the lifecycle pill only earns
+            its place once the finding leaves the default open state. */}
+        {isClosed ? (
+          <span
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusToneClass(finding.state)}`}
+          >
+            {statusPillLabel(finding.state)}
+          </span>
+        ) : finding.verdict ? (
+          <VerdictBadge verdict={finding.verdict} />
+        ) : null}
 
-      <span className="shrink-0 min-w-[2rem] text-right tabular-nums text-[11px] text-[var(--color-text-tertiary)]">
-        {finding.age}
-      </span>
+        <span className="hidden items-center gap-1.5 sm:flex">
+          {finding.actionBand ? (
+            <ActionBandBadge band={finding.actionBand} />
+          ) : (
+            <span className="text-[var(--color-text-tertiary)] text-xs">—</span>
+          )}
+        </span>
+
+        <FindingAge age={finding.age} className="min-w-[2rem] text-right text-[11px] text-[var(--color-text-tertiary)]" />
+      </div>
     </div>
   )
 }
@@ -1292,38 +2216,13 @@ function BulkActionBar({
         </span>
       )}
       <div className="ml-auto flex items-center gap-1.5">
-        <label className="relative inline-flex">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2.5 py-1 text-[12px] font-medium text-[var(--color-text-primary)] focus-within:ring-2 focus-within:ring-[var(--color-accent)] ${
-              submitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            }`}
-          >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-            </svg>
-            {submitting ? "Dismissing…" : "Dismiss with reason"}
-          </span>
-          <select
-            value=""
-            onChange={(e) => {
-              const v = e.target.value as DismissReason | ""
-              if (v) void handleDismiss(v)
-              e.target.value = ""
-            }}
-            disabled={submitting}
-            aria-label="Dismiss reason"
-            className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-          >
-            <option value="" disabled>
-              Pick a reason
-            </option>
-            {DISMISS_REASONS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </label>
+        <DismissPopover
+          reasons={DISMISS_REASONS}
+          onDismiss={(reason) => void handleDismiss(reason as DismissReason)}
+          isLoading={submitting}
+          triggerLabel={submitting ? "Dismissing…" : "Dismiss with reason"}
+          placement="bottom"
+        />
       </div>
     </div>
   )
@@ -1380,9 +2279,37 @@ function ActivityTimelineSection({ finding, scannerLabel }: { finding: Finding; 
     },
   ].filter(Boolean) as { icon: ReactNode; body: ReactNode; time: string }[]
 
-  function postComment() {
-    // No-op stub — wired once a comments endpoint exists.
-    console.log("[finding-comment] posted")
+  const [comments, setComments] = useState<FindingComment[]>([])
+  const [commentText, setCommentText] = useState("")
+  const [posting, setPosting] = useState(false)
+  const [commentError, setCommentError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const id = Number(finding.id)
+    setComments([])
+    if (!Number.isFinite(id)) return
+    listFindingComments(id)
+      .then((rows) => { if (active) setComments(rows) })
+      .catch(() => { /* leave empty on failure */ })
+    return () => { active = false }
+  }, [finding.id])
+
+  async function postComment() {
+    const text = commentText.trim()
+    const id = Number(finding.id)
+    if (!text || !Number.isFinite(id) || posting) return
+    setPosting(true)
+    setCommentError(null)
+    try {
+      const created = await addFindingComment(id, text)
+      setComments((prev) => [...prev, created])
+      setCommentText("")
+    } catch (e) {
+      setCommentError(e instanceof Error ? e.message : "Couldn't post comment")
+    } finally {
+      setPosting(false)
+    }
   }
 
   return (
@@ -1391,9 +2318,9 @@ function ActivityTimelineSection({ finding, scannerLabel }: { finding: Finding; 
         Activity
       </h3>
 
-      <ol className="mt-3 space-y-3">
+      <ol className="relative mt-3 space-y-3 before:absolute before:left-[11px] before:top-3 before:bottom-3 before:w-px before:bg-[var(--color-border-divider)]">
         {items.map((item, idx) => (
-          <li key={idx} className="flex gap-3">
+          <li key={idx} className="relative flex gap-3">
             <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]">
               {item.icon}
             </span>
@@ -1403,22 +2330,48 @@ function ActivityTimelineSection({ finding, scannerLabel }: { finding: Finding; 
             </div>
           </li>
         ))}
-        {items.length === 0 && (
+        {comments.map((c) => (
+          <li key={c.id} className="relative flex gap-3">
+            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </span>
+            <div className="min-w-0">
+              <div className="text-[13px] text-[var(--color-text-primary)]">
+                <span className="font-medium">{c.actor ?? "Someone"}</span> commented
+              </div>
+              <div className="mt-0.5 whitespace-pre-wrap text-[13px] text-[var(--color-text-secondary)]">{c.body}</div>
+              {c.created_at && (
+                <div className="mt-0.5 text-[11px] text-[var(--color-text-tertiary)]">{formatTimelineDate(c.created_at)}</div>
+              )}
+            </div>
+          </li>
+        ))}
+        {items.length === 0 && comments.length === 0 && (
           <li className="text-[12px] text-[var(--color-text-tertiary)]">No activity yet.</li>
         )}
       </ol>
 
       <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
         <textarea
-          placeholder="Add a comment, mention @teammate…"
+          value={commentText}
+          onChange={(e) => setCommentText(e.target.value)}
+          aria-label="Add a comment"
+          placeholder="Add a comment…"
           rows={2}
           className="w-full resize-none bg-transparent text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none"
         />
+        {commentError && (
+          <p role="alert" className="px-1 text-[11px] text-[var(--color-severity-high)]">{commentError}</p>
+        )}
         <div className="mt-1 flex justify-end">
           <Button
             variant="secondary"
             size="xs"
             onClick={postComment}
+            isLoading={posting}
+            disabled={!commentText.trim()}
           >
             Add
           </Button>
@@ -1429,22 +2382,15 @@ function ActivityTimelineSection({ finding, scannerLabel }: { finding: Finding; 
 }
 
 function FindingDetailBadges({ finding }: { finding: Finding }) {
-  const epssPct = finding.epssPercentile != null ? Math.round(finding.epssPercentile * 100) : null
+  // EPSS and risk signals live in the signal strip below; the header badge
+  // just carries the finding's age for temporal context.
   const showAge = finding.age && finding.age !== "—"
-  if (epssPct === null && !showAge) return null
+  if (!showAge) return null
   return (
-    <>
-      {epssPct !== null && (
-        <span className="rounded px-2 py-0.5 text-[11px] font-medium text-[var(--color-severity-high)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)]">
-          EPSS {epssPct}%
-        </span>
-      )}
-      {showAge && (
-        <span className="rounded px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)] bg-[var(--color-surface-raised)]">
-          {finding.age} old
-        </span>
-      )}
-    </>
+    <FindingAge
+      age={finding.age}
+      className="rounded px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)] bg-[var(--color-surface-raised)]"
+    />
   )
 }
 

@@ -474,6 +474,34 @@ export async function listRepos(filters: {
   return (data.sources?.repoSources?.sources ?? []).map((s) => toRepoSummary(gqlRepoSummaryToTs(s)))
 }
 
+/** Like {@link listRepos} but also returns the backend's total count, so a
+ *  caller that caps the page (e.g. limit: 200) can show "first N of M" instead
+ *  of presenting the capped page length as the authoritative total. */
+export async function listReposWithCount(filters: {
+  since_days?: number
+  has_critical?: boolean
+  limit?: number
+} = {}): Promise<{ repos: RepoSummary[]; totalCount: number | null }> {
+  const data = await gqlFetch<{
+    sources: {
+      repoSources: {
+        sources: GqlRepoSummaryRow[]
+        nextCursor: string | null
+        totalCount: number | null
+      }
+    }
+  }>("RepoSources", REPO_SOURCES_QUERY, {
+    sinceDays: filters.since_days ?? null,
+    hasCritical: filters.has_critical ?? null,
+    limit: filters.limit ?? 100,
+  })
+  const repoSources = data.sources?.repoSources
+  return {
+    repos: (repoSources?.sources ?? []).map((s) => toRepoSummary(gqlRepoSummaryToTs(s))),
+    totalCount: repoSources?.totalCount ?? null,
+  }
+}
+
 export async function getRepo(repoId: string): Promise<RepoDetail | null> {
   const raw = await fetchSourceDetail(repoId)
   if (raw === null || raw.type !== "repo") return null

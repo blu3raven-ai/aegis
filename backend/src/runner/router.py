@@ -245,6 +245,9 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
     elif job_type == "container_scanning":
         from src.storage import update_container_scanning_run, list_container_scanning_runs
         current = next((r for r in list_container_scanning_runs(org) if str(r.get("id", "")) == run_id), None)
+    elif job_type == "iac_scanning":
+        from src.storage import update_iac_run, list_iac_runs
+        current = next((r for r in list_iac_runs(org) if str(r.get("id", "")) == run_id), None)
 
     db = (current or {}).get("progress") or {}
 
@@ -270,6 +273,8 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
         update_code_scanning_run(org, run_id, patch)
     elif job_type == "container_scanning":
         update_container_scanning_run(org, run_id, patch)
+    elif job_type == "iac_scanning":
+        update_iac_run(org, run_id, patch)
 
     # Publish SSE event
     tool_label = {
@@ -370,6 +375,9 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
         elif job_type == "container_scanning":
             from src.containers.scanner import ingest_container_from_minio
             ingest_container_from_minio(org, run_id, source_type=source_type)
+        elif job_type == "iac_scanning":
+            from src.iac.scanner import ingest_iac_from_minio
+            ingest_iac_from_minio(org, run_id, source_type=source_type)
         _logger.info("[✓] Ingestion completed for %s %s/%s", job_type, org, run_id)
         get_event_bus().publish_sync(Event(
             event_type="scan.completed",
@@ -411,6 +419,9 @@ def _read_run_record(job_type: str, org: str, run_id: str) -> dict[str, Any] | N
         elif job_type == "container_scanning":
             from src.storage import list_container_scanning_runs
             return next((r for r in list_container_scanning_runs(org) if str(r.get("id", "")) == run_id), None)
+        elif job_type == "iac_scanning":
+            from src.storage import list_iac_runs
+            return next((r for r in list_iac_runs(org) if str(r.get("id", "")) == run_id), None)
     except Exception:
         pass
     return None
@@ -431,6 +442,9 @@ def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, An
         elif job_type == "container_scanning":
             from src.storage import update_container_scanning_run
             update_container_scanning_run(org, run_id, patch)
+        elif job_type == "iac_scanning":
+            from src.storage import update_iac_run
+            update_iac_run(org, run_id, patch)
     except Exception:
         import logging
         logging.getLogger(__name__).warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)

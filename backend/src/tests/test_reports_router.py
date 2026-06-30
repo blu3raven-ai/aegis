@@ -107,6 +107,27 @@ def test_list_reports_empty():
     assert body["total"] == 0
 
 
+def test_list_reports_surfaces_download_url_and_error():
+    """The history list must carry download_url (so completed reports stay
+    downloadable after a reload) and error (so a failed report shows why)."""
+    app = _make_app()
+    completed = _fake_row(report_id=1, status="completed")
+    failed = _fake_row(report_id=2, status="failed", error="MinIO upload failed")
+    with (
+        patch("src.reports.router.resolve_asset_ids_from_request", side_effect=_fake_resolve),
+        patch("src.reports.router.list_reports", return_value=([completed, failed], 2)),
+        # Signed URL only for the completed row; failed/keyless rows return None.
+        patch("src.reports.router.get_download_url", side_effect=lambda r: "https://minio/1.json?sig=x" if r.status == "completed" else None),
+    ):
+        resp = TestClient(app).get("/api/v1/findings/reports")
+    assert resp.status_code == 200
+    rows = {r["id"]: r for r in resp.json()["reports"]}
+    assert rows[1]["download_url"] == "https://minio/1.json?sig=x"
+    assert rows[1]["error"] is None
+    assert rows[2]["download_url"] is None
+    assert rows[2]["error"] == "MinIO upload failed"
+
+
 def test_get_report_not_found():
     app = _make_app()
     with (

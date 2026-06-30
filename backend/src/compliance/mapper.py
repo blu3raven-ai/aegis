@@ -48,7 +48,7 @@ def map_finding(
     # ── Rule 1: Vulnerable components (SCA / container) ─────────────────────
     # Critical/high dependency or container image CVEs violate software
     # update controls across all three frameworks.
-    if scanner_type in ("dependencies", "containers") and high_impact:
+    if scanner_type in ("dependencies_scanning", "container_scanning") and high_impact:
         mappings += [
             _MappingDraft("soc2", "CC6.8", 0.9, "Vulnerable software component detected"),
             _MappingDraft("iso27001", "A.8.8", 0.9, "Technical vulnerability in a managed component"),
@@ -59,7 +59,7 @@ def map_finding(
 
     # ── Rule 2: All dependency/container findings → system monitoring ────────
     # Even medium/low severity implies the detection machinery must be in place.
-    if scanner_type in ("dependencies_scanning", "containers"):
+    if scanner_type in ("dependencies_scanning", "container_scanning"):
         mappings.append(_MappingDraft("soc2", "CC7.1", 0.75, "Continuous vulnerability monitoring required"))
 
     # ── Rule 3: Exposed secrets ───────────────────────────────────────────────
@@ -91,7 +91,7 @@ def map_finding(
             )
 
     # ── Rule 6: IaC / configuration drift ────────────────────────────────────
-    if scanner_type in ("iac", "cloud"):
+    if scanner_type in ("iac_scanning", "cloud"):
         mappings += [
             _MappingDraft("iso27001", "A.8.9", 0.85, "Infrastructure misconfiguration violates configuration management"),
             _MappingDraft("soc2", "CC6.6", 0.8, "Infrastructure hardening gap"),

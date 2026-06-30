@@ -20,7 +20,8 @@ import asyncio
 import hashlib
 import json
 from collections import deque
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from uuid import UUID
 
 from sqlalchemy import select
 
@@ -57,9 +58,22 @@ AUDIT_POSTER_ADVISORY_LOCK_KEY: int = int.from_bytes(
 _recent_batch_hashes: deque[str] = deque(maxlen=RECENT_BATCH_HASH_CAPACITY)
 
 
+def _json_default(value: object) -> str:
+    # Typed fallback for _batch_hash. `default=str` would hash any object via
+    # its repr (which can embed a memory address) — a new non-serialisable
+    # payload type would then hash differently every tick and silently break
+    # dedup. Handle the known temporal/UUID types and raise on anything else so
+    # the regression fails loudly in tests instead.
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    raise TypeError(f"Unhashable audit-event field type: {type(value).__name__}")
+
+
 def _batch_hash(events: list[dict]) -> str:
     return hashlib.sha256(
-        json.dumps(events, sort_keys=True, default=str).encode("utf-8")
+        json.dumps(events, sort_keys=True, default=_json_default).encode("utf-8")
     ).hexdigest()
 
 

@@ -64,6 +64,7 @@ class ContainerScanningHooks(LifecycleHooks):
             "matchedBy": raw.get("matched_by", ["grype"]),
             "fixState": raw.get("fixState"),
             "currentVersion": raw.get("current_version"),
+            "matchSource": raw.get("match_source"),
         }
 
     def has_fix(self, raw: dict) -> bool:

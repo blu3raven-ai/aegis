@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Sbom
+from src.db.models import Sbom, SbomRun
 from src.db.helpers import run_db
 from src.sbom.storage import (
     safe_s3_segment,
@@ -84,6 +84,7 @@ def upsert_sbom(
     upload_to_minio(manifests_key, manifests)
 
     async def _query(session: AsyncSession):
+        now = datetime.now(timezone.utc)
         result = await session.execute(
             select(Sbom).where(Sbom.asset_id == asset_id)
         )
@@ -92,13 +93,31 @@ def upsert_sbom(
             existing.commit_sha = commit_sha
             existing.s3_key = sbom_key
             existing.run_id = run_id
-            existing.scanned_at = datetime.now(timezone.utc)
+            existing.scanned_at = now
         else:
             session.add(Sbom(
                 asset_id=asset_id,
                 commit_sha=commit_sha,
                 s3_key=sbom_key,
                 run_id=run_id,
+                scanned_at=now,
+            ))
+
+        # Append the immutable run-history row (idempotent per (asset, run)).
+        run_row = (await session.execute(
+            select(SbomRun).where(
+                SbomRun.asset_id == asset_id, SbomRun.run_id == run_id
+            )
+        )).scalars().first()
+        if run_row:
+            run_row.commit_sha = commit_sha
+            run_row.scanned_at = now
+        else:
+            session.add(SbomRun(
+                asset_id=asset_id,
+                run_id=run_id,
+                commit_sha=commit_sha,
+                scanned_at=now,
             ))
 
     run_db(_query)
@@ -139,6 +158,12 @@ def any_sbom_for_asset_ids(asset_ids: list[str]) -> bool:
     return run_db(_query)
 
 
-def populate_sbom_components(org: str, repo: str, sbom: dict[str, Any], asset_id: str | None = None) -> int:
+def populate_sbom_components(
+    org: str, repo: str, sbom: dict[str, Any], asset_id: str | None = None,
+    scanned_at: datetime | None = None,
+) -> int:
     """Backward-compatible wrapper for populate_components."""
-    return populate_components(org, repo, sbom, source_tool_fn=_dependencies_source_tool_fn, asset_id=asset_id)
+    return populate_components(
+        org, repo, sbom, source_tool_fn=_dependencies_source_tool_fn,
+        asset_id=asset_id, scanned_at=scanned_at,
+    )

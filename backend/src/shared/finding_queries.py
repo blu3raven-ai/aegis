@@ -12,13 +12,14 @@ from typing import Any
 from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Asset, Decision, Finding, FindingEvent
+from src.db.models import Asset, Decision, Finding, FindingEvent, KevEntry
 from src.shared.finding_detail_blob import (
     split_detail,
     put_detail_blob,
     delete_detail_blob,
 )
 from src.shared.finding_queryable_fields import extract_queryable_fields
+from src.shared.verdict_heuristic import heuristic_verdict
 
 
 def _utcnow() -> datetime:
@@ -129,6 +130,34 @@ async def upsert_finding(
     v_evidence = detail.get("evidence")
     v_chain = detail.get("exploit_chain")
     v_meta = detail.get("verification_metadata")
+    v_fix = detail.get("recommended_fix")
+
+    # Provisional confidence for when Argus hasn't verified this finding. It only
+    # ever seeds a NULL verdict — a real (Argus) verdict always takes precedence.
+    seed_verdict = heuristic_verdict(
+        detail.get("confidence"), has_cve=queryable["cve_id"] is not None
+    )
+
+    # Deps with a runner reachability label get the reachability-aware verdict;
+    # everything else keeps the scanner-signal heuristic.
+    reachability = detail.get("reachability")
+    if tool == "dependencies_scanning" and reachability:
+        from src.shared.deps_verdict import deps_verdict
+        cve_id = queryable["cve_id"]
+        kev_listed = False
+        if cve_id:
+            kev_row = await session.execute(
+                select(KevEntry.cve_id).where(KevEntry.cve_id == cve_id)
+            )
+            kev_listed = kev_row.scalar() is not None
+        cwe_raw = detail.get("cwe")
+        if isinstance(cwe_raw, list):
+            cwes = [str(c).strip() for c in cwe_raw if str(c).strip()]
+        elif isinstance(cwe_raw, str) and cwe_raw.strip():
+            cwes = [cwe_raw.strip()]
+        else:
+            cwes = []
+        seed_verdict = deps_verdict(reachability, kev_listed=kev_listed, cwes=cwes)
 
     if existing:
         lean, fat = split_detail(tool, detail)
@@ -141,17 +170,22 @@ async def upsert_finding(
         existing.title = queryable["title"]
         existing.rule_name = queryable["rule_name"]
         existing.package_name = queryable["package_name"]
+        existing.package_version = queryable["package_version"]
         if engine is not None:
             existing.engine = engine
         old_verdict = existing.verdict
         if v_verdict is not None:
             existing.verdict = v_verdict
+        elif existing.verdict is None:
+            existing.verdict = seed_verdict
         if v_evidence is not None:
             existing.evidence = v_evidence
         if v_chain is not None:
             existing.exploit_chain = v_chain
         if v_meta is not None:
             existing.verification_metadata = v_meta
+        if v_fix is not None:
+            existing.recommended_fix = v_fix
         if v_verdict is not None and old_verdict != v_verdict:
             from src.audit_log.recorder import ActorInfo, get_recorder
             get_recorder().record(
@@ -187,11 +221,13 @@ async def upsert_finding(
             title=queryable["title"],
             rule_name=queryable["rule_name"],
             package_name=queryable["package_name"],
+            package_version=queryable["package_version"],
             engine=engine,
-            verdict=v_verdict,
+            verdict=v_verdict if v_verdict is not None else seed_verdict,
             evidence=v_evidence,
             exploit_chain=v_chain,
             verification_metadata=v_meta,
+            recommended_fix=v_fix,
             first_seen_at=first_seen_at or now,
             last_seen_at=now,
             created_at=now,

@@ -486,6 +486,7 @@ def _execute_via_runner(
     token: str,
     scan_depth: str = "light",
     scan_start_date: str | None = None,
+    source_type: str | None = None,
 ) -> dict[str, Any] | None:
     """Create a runner job and poll until completion."""
     from src.runner.jobs import create_job, read_job
@@ -500,6 +501,11 @@ def _execute_via_runner(
     }
     if scan_start_date:
         env_vars["SCAN_START_DATE"] = scan_start_date
+    # The ingest resolves each finding's repo asset via SOURCE_TYPE (envVars),
+    # so it must be carried through on the scheduled path too — not just on the
+    # canonical "Scan now" dispatch.
+    if source_type:
+        env_vars["SOURCE_TYPE"] = source_type
 
     job = create_job(
         job_type="secret_scanning",
@@ -654,12 +660,14 @@ def execute_secret_scan_once(
             repo_urls_str = ",".join(source.repo_urls)
 
             result = _execute_via_runner(
+                org=org,
                 run_id=run_id,
                 config=config,
                 repo_urls=repo_urls_str,
                 token=source.token,
                 scan_depth=resolved_scan_depth,
                 scan_start_date=scan_start_date,
+                source_type=source_type,
             )
 
             if runtime and runtime.is_cancelled(run_id):

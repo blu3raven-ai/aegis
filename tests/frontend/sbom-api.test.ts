@@ -205,7 +205,9 @@ test("parseCycloneDxJson extracts components correctly", async () => {
   assert.equal(express.version, "4.18.2")
   assert.equal(express.type, "library")
   assert.equal(express.purl, "pkg:npm/express@4.18.2")
-  assert.equal(express.licenses?.[0]?.license.id, "MIT")
+  // licenses are normalized to display strings (SPDX id / name / expression),
+  // not the raw CycloneDX `{ license: { id } }` shape.
+  assert.equal(express.licenses?.[0], "MIT")
   assert.equal(express.hashes?.[0]?.alg, "SHA-256")
   assert.equal(express.hashes?.[0]?.content, "abc123def456")
 })

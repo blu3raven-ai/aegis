@@ -24,21 +24,38 @@ function makeFetchMock(payload: unknown, status = 200) {
   return { mock, calls }
 }
 
+const ZERO_COUNTS = { critical: 0, high: 0, medium: 0, low: 0, total: 0 }
+
 function gqlDiffResult(overrides: Partial<{
   added: Array<{ name: string; version: string; purl: string; type: string }>
   removed: Array<{ name: string; version: string; purl: string; type: string }>
   versionChanged: Array<{ name: string; purl: string; fromVersion: string | null; toVersion: string | null }>
   unchangedCount: number
 }> = {}) {
+  // Each component/version-change carries the vuln-count subfields the SbomDiff
+  // query requests; the backend always returns them, so the fixture must too.
+  const withComponentVulns = <T,>(c: T) => ({
+    ...c,
+    currentFindings: ZERO_COUNTS,
+    knownVulns: ZERO_COUNTS,
+  })
+  const withVersionVulns = <T,>(v: T) => ({
+    ...v,
+    resolved: ZERO_COUNTS,
+    introduced: ZERO_COUNTS,
+    stillVulnerable: ZERO_COUNTS,
+    currentFindings: ZERO_COUNTS,
+  })
   return {
     data: {
       sbom: {
         diff: {
           __typename: "SbomDiffResult",
-          added: overrides.added ?? [],
-          removed: overrides.removed ?? [],
-          versionChanged: overrides.versionChanged ?? [],
+          added: (overrides.added ?? []).map(withComponentVulns),
+          removed: (overrides.removed ?? []).map(withComponentVulns),
+          versionChanged: (overrides.versionChanged ?? []).map(withVersionVulns),
           unchangedCount: overrides.unchangedCount ?? 0,
+          remediationSignalAvailable: true,
         },
       },
     },

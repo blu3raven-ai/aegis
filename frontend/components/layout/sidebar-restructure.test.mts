@@ -58,11 +58,11 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configur
     assert.ok(!block.includes('label: "Rules"'), "Rules renamed to Policies (Snyk / Apiiro / Endor vocabulary)")
   })
 
-  it("Inventory group contains Sources and Chains (Images unified into /sources, Findings lives under Overview, Releases is reached via /sources/[id])", () => {
+  it("Inventory group contains Sources, SBOM and Chains (Images unified into /sources, Findings lives under Overview, Releases is reached via /sources/[id])", () => {
     const dataRegex = /dataItems[\s\S]*?\];/m
     const block = sidebar.match(dataRegex)?.[0] ?? ""
     assert.ok(block.length > 0, "dataItems array present")
-    for (const label of ["Sources", "Chains"]) {
+    for (const label of ["Sources", "SBOM", "Chains"]) {
       assert.ok(block.includes(`label: "${label}"`), `Inventory missing item: ${label}`)
     }
     assert.ok(!block.includes('label: "Images"'), "Images should not appear in Inventory (unified into /sources)")
@@ -76,7 +76,6 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configur
     assert.ok(!sidebar.includes('label: "Code"'), "Code removed from sidebar")
     assert.ok(!sidebar.includes('label: "Secrets"'), "Secrets removed from sidebar")
     assert.ok(!sidebar.includes('label: "IaC Security"'), "IaC Security removed from sidebar")
-    assert.ok(!sidebar.includes('label: "SBOM"'), "SBOM removed from sidebar")
   })
 
   it("wires new routes to the right hrefs", () => {
@@ -88,6 +87,7 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configur
     assert.ok(sidebar.includes('href: "/integrations"'), "Integrations href present")
     assert.ok(sidebar.includes('href: "/policies"'), "Policies href present")
     assert.ok(sidebar.includes('href: "/sources"'), "Sources href present")
+    assert.ok(sidebar.includes('href: "/sbom"'), "SBOM href present")
     assert.ok(!sidebar.includes('href: "/images"'), "Images href should be absent — unified into /sources")
     assert.ok(sidebar.includes('href: "/findings"'), "Findings href present")
     assert.ok(sidebar.includes('href: "/chains"'), "Chains href present")

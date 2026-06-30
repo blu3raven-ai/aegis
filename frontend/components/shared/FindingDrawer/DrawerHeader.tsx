@@ -1,6 +1,34 @@
 // components/shared/FindingDrawer/DrawerHeader.tsx
 
 import { Button } from "@/components/ui/Button"
+import { LinkButton } from "@/components/ui/LinkButton"
+
+function NavButton({
+  direction,
+  onClick,
+  disabled,
+}: {
+  direction: "prev" | "next"
+  onClick: () => void
+  disabled: boolean
+}) {
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      iconOnly
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={direction === "prev" ? "Previous finding" : "Next finding"}
+      title={direction === "prev" ? "Previous finding (K)" : "Next finding (J)"}
+      leadingIcon={
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          {direction === "prev" ? <path d="m18 15-6-6-6 6" /> : <path d="m6 9 6 6 6-6" />}
+        </svg>
+      }
+    />
+  )
+}
 
 export function DrawerHeader({
   eyebrow,
@@ -11,6 +39,12 @@ export function DrawerHeader({
   badges,
   repoUrl,
   onClose,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
+  position,
+  total,
 }: {
   eyebrow: string
   eyebrowDotColor?: string
@@ -20,9 +54,29 @@ export function DrawerHeader({
   badges?: React.ReactNode
   repoUrl?: string
   onClose: () => void
+  /** Step to the previous/next finding in the queue without closing. */
+  onPrev?: () => void
+  onNext?: () => void
+  hasPrev?: boolean
+  hasNext?: boolean
+  /** Position of this finding within the queue, for an "N / M" indicator. */
+  position?: number
+  total?: number
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] p-5">
+    <div className="relative border-b border-[var(--color-border)]">
+      {/* Severity accent — a restrained colour wash at the top of the panel so
+          the analyst registers how bad it is before reading a word. */}
+      {eyebrowDotColor && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-16"
+          style={{
+            background: `linear-gradient(180deg, color-mix(in srgb, ${eyebrowDotColor} 14%, transparent), transparent)`,
+          }}
+        />
+      )}
+      <div className="relative flex items-start justify-between gap-4 p-5">
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           {eyebrowDotColor && (
@@ -35,7 +89,7 @@ export function DrawerHeader({
           {eyebrow}
         </p>
         <h2
-          className="mt-2 text-xl font-semibold text-[var(--color-text-primary)]"
+          className="mt-2 text-lg font-semibold tracking-tight text-[var(--color-text-primary)]"
           title={titleTooltip ?? undefined}
         >
           {title}
@@ -50,16 +104,25 @@ export function DrawerHeader({
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {(onPrev || onNext) && (
+          <div className="flex items-center gap-1">
+            <NavButton direction="prev" onClick={() => onPrev?.()} disabled={!hasPrev} />
+            {position != null && total != null && total > 0 && (
+              <span
+                className="min-w-[3rem] px-1 text-center text-xs tabular-nums text-[var(--color-text-tertiary)]"
+                aria-label={`Finding ${position} of ${total}`}
+              >
+                {position}/{total}
+              </span>
+            )}
+            <NavButton direction="next" onClick={() => onNext?.()} disabled={!hasNext} />
+          </div>
+        )}
         {repoUrl && (
-          <a
-            href={repoUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-          >
+          <LinkButton href={repoUrl} target="_blank" rel="noreferrer" variant="secondary" size="sm">
             View in repository
             <span className="sr-only"> (opens in new tab)</span>
-          </a>
+          </LinkButton>
         )}
         <Button
           variant="secondary"
@@ -67,19 +130,21 @@ export function DrawerHeader({
           onClick={onClose}
           leadingIcon={
             <svg
-              viewBox="0 0 12 12"
+              viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="1.8"
+              strokeWidth="2"
               strokeLinecap="round"
+              strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M1 1l10 10M11 1L1 11" />
+              <path d="M18 6 6 18M6 6l12 12" />
             </svg>
           }
         >
           Close
         </Button>
+      </div>
       </div>
     </div>
   )

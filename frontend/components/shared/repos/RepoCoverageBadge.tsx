@@ -28,9 +28,9 @@ interface RepoCoverageBadgeProps {
 export function RepoCoverageBadge({ status }: RepoCoverageBadgeProps) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[status]}`} />
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[status]}`} />
       {STATUS_LABEL[status]}
     </span>
   )

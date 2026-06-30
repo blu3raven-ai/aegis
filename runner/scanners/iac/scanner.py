@@ -10,6 +10,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
+from runner.scanners._argus import argus_configured, verify_via_argus
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
     GitCloneError,
@@ -29,6 +30,7 @@ from runner.scanners._subprocess import (
 )
 from runner.scanners.base import ExecutionResult
 from runner.scanners.iac.parse import parse_checkov_results
+from runner.scanners.iac.remediation import attach_iac_fixes
 from runner.verification.budget import ScanBudget, make_iac_budget
 from runner.verification.verifiers.iac import verify_iac_finding
 
@@ -184,17 +186,29 @@ class IacScanner:
                         )
 
             env = JobEnv(job)
-            findings = self._maybe_verify_iac(
-                findings=findings,
-                repo_root=str(clone_dir),
-                llm=_build_llm_client(env),
-                scan_budget=make_iac_budget(env),
-                cancel_event=cancel_event,
-            )
+            if argus_configured(env):
+                findings = verify_via_argus(
+                    scanner="iac", findings=findings, repo_root=str(clone_dir), env=env
+                )
+            else:
+                findings = self._maybe_verify_iac(
+                    findings=findings,
+                    repo_root=str(clone_dir),
+                    llm=_build_llm_client(env),
+                    scan_budget=make_iac_budget(env),
+                    cancel_event=cancel_event,
+                )
+
+            # Deterministic config-hardening patches for pattern-clear checks.
+            # Always-on and independent of the LLM verifier above.
+            findings = attach_iac_fixes(findings, str(clone_dir))
 
             findings_path = out_dir / "findings.jsonl"
             with findings_path.open("w", encoding="utf-8") as fh:
                 for f in findings:
+                    # Stamp the repo so backend ingest can attach the finding to
+                    # the right asset (mirrors the other scanners' output).
+                    f.setdefault("repo_full_name", repo_name)
                     fh.write(json.dumps(f) + "\n")
 
             register_output(out_dir, findings_path, repo_name)

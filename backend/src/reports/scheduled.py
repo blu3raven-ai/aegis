@@ -11,8 +11,16 @@ from src.db.helpers import run_db
 from src.db.models import NotificationDestination, ScheduledReport
 
 
-_ALLOWED_REPORT_TYPES = {"findings", "posture"}
-_ALLOWED_FORMATS = {"pdf", "csv", "json"}
+# Per-type valid output formats — mirrors src.reports.service.generate_report and
+# the frontend FORMATS_BY_TYPE. A scheduled report accepts the same (type, format)
+# pairs an on-demand one does.
+_FORMATS_BY_TYPE = {
+    "findings": {"csv", "json", "pdf"},
+    "posture": {"json", "pdf"},
+    "executive": {"pdf"},
+    "risk_register": {"pdf", "csv"},
+    "soc2_evidence": {"zip"},
+}
 _ALLOWED_SCHEDULE_TYPES = {"simple", "cron"}
 
 
@@ -20,13 +28,18 @@ class ScheduledReportNotFound(Exception):
     pass
 
 
+def _validate_type_format(report_type: object, fmt: object) -> None:
+    allowed = _FORMATS_BY_TYPE.get(report_type)  # type: ignore[arg-type]
+    if allowed is None:
+        raise ValueError(f"report_type must be one of {sorted(_FORMATS_BY_TYPE)}")
+    if fmt not in allowed:
+        raise ValueError(
+            f"{report_type} reports support formats: {', '.join(sorted(allowed))}"
+        )
+
+
 def _validate_create_payload(payload: dict) -> dict:
-    if payload.get("report_type") not in _ALLOWED_REPORT_TYPES:
-        raise ValueError("report_type must be 'findings' or 'posture'")
-    if payload.get("format") not in _ALLOWED_FORMATS:
-        raise ValueError("format must be one of pdf, csv, json")
-    if payload["report_type"] == "posture" and payload["format"] == "csv":
-        raise ValueError("posture reports do not support csv format")
+    _validate_type_format(payload.get("report_type"), payload.get("format"))
     if payload.get("schedule_type") not in _ALLOWED_SCHEDULE_TYPES:
         raise ValueError("schedule_type must be 'simple' or 'cron'")
     if not (payload.get("schedule_value") or "").strip():
@@ -124,6 +137,13 @@ def update_schedule(schedule_id: int, patch: dict) -> dict:
         sr = await session.get(ScheduledReport, schedule_id)
         if sr is None:
             raise ScheduledReportNotFound(str(schedule_id))
+
+        # Patching type and/or format must still land on a valid pair.
+        if "report_type" in patch or "format" in patch:
+            _validate_type_format(
+                patch.get("report_type", sr.report_type),
+                patch.get("format", sr.format),
+            )
 
         if "destination_ids" in patch:
             dest_ids = patch["destination_ids"]

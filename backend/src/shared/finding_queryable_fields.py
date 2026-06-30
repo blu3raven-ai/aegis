@@ -18,9 +18,9 @@ def _first_str(d: dict[str, Any], keys: tuple[str, ...]) -> str | None:
 
 
 def extract_queryable_fields(detail: dict[str, Any] | None) -> dict[str, str | None]:
-    """Return the 5 typed-column values for a finding's detail dict.
+    """Return the 6 typed-column values for a finding's detail dict.
 
-    Returns the 5-key shape with all values None on empty/None input.
+    Returns the 6-key shape with all values None on empty/None input.
     All output values are str | None (truthy strings only — empty strings
     are treated as missing for the column).
     """
@@ -31,6 +31,7 @@ def extract_queryable_fields(detail: dict[str, Any] | None) -> dict[str, str | N
             "title": None,
             "rule_name": None,
             "package_name": None,
+            "package_version": None,
         }
     return {
         "cve_id": _first_str(detail, ("cveId", "cve_id", "cve")),
@@ -38,4 +39,9 @@ def extract_queryable_fields(detail: dict[str, Any] | None) -> dict[str, str | N
         "title": _first_str(detail, ("title",)),
         "rule_name": _first_str(detail, ("ruleName", "rule_name")),
         "package_name": _first_str(detail, ("packageName", "package_name")),
+        # currentVersion is the SCA/container shape; packageVersion covers any
+        # adapter that promotes it directly.
+        "package_version": _first_str(
+            detail, ("packageVersion", "package_version", "currentVersion", "current_version")
+        ),
     }
