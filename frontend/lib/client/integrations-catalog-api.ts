@@ -31,6 +31,7 @@ export interface ConnectorType {
   version: string;
   status: ConnectorStatus;
   href: string | null;
+  coming_soon?: boolean;
 }
 
 export interface CatalogResponse {

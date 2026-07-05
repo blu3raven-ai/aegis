@@ -196,6 +196,26 @@ export async function saveToolSettings(input: {
   return result
 }
 
+export type ScannerPrerequisitesResult =
+  | { ok: true; runner_connected: boolean; error: string | null; scanner_status?: string | null; runner_name?: string | null; runner_platform?: string | null }
+  | { ok: false; error: string }
+
+export async function checkScannerPrerequisites(tool: ToolKey): Promise<ScannerPrerequisitesResult> {
+  try {
+    const data = await requestJson<Record<string, unknown>>(`/tools/${tool}/prerequisites`)
+    return {
+      ok: true,
+      runner_connected: data.runner_connected as boolean,
+      error: (data.error as string) ?? null,
+      scanner_status: (data.scanner_status as string) ?? null,
+      runner_name: (data.runner_name as string) ?? null,
+      runner_platform: (data.runner_platform as string) ?? null,
+    }
+  } catch (error) {
+    return { ok: false, error: extractErrorMessage(error, "Could not check prerequisites.") }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Workspace — GraphQL
 // ---------------------------------------------------------------------------

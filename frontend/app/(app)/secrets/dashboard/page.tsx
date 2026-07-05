@@ -25,7 +25,7 @@ function SecretsDashboard() {
       pageTitle="Secret Scanning"
       pageIcon={<FindingsIcon />}
       pageDescription="Exposed secrets detected across your sources."
-      initialScannerFilter="secrets"
+      initialScannerFilter="secret_scanning"
     />
   )
 }
