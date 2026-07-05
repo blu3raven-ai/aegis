@@ -4,7 +4,7 @@ This document describes the system architecture of Aegis for contributors who wa
 
 ## Overview
 
-Aegis is a monorepo with four main components:
+Aegis is a monorepo with three main runtime components:
 
 ```
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
@@ -13,252 +13,244 @@ Aegis is a monorepo with four main components:
 └──────────────┘    └──────┬───────┘    └──────┬───────┘
                            │                   │
                     ┌──────┴───────┐    ┌──────┴───────┐
-                    │  PostgreSQL  │    │   Scanners   │
-                    │  + MinIO     │    │   (Docker)   │
+                    │  PostgreSQL  │    │    MinIO     │
+                    │              │    │  (artifacts) │
                     └──────────────┘    └──────────────┘
 ```
 
 - **Frontend** — Next.js app router with React. Serves the UI and proxies API requests to the backend.
-- **Backend** — FastAPI (async Python). REST + GraphQL APIs, business logic, database access.
-- **Runner** — Standalone Python process. Builds scanner images, picks up scan jobs, executes them in Docker containers, uploads results.
-- **Scanners** — Purpose-built Docker images, one per tool. Each contains the scanning tools and a shell script that orchestrates the scan.
+- **Backend** — FastAPI (async Python). REST + GraphQL APIs, business logic, database access, scan orchestration.
+- **Runner** — Standalone Python process. Picks up scan jobs from the backend, runs all scanner modules in-process, uploads results to MinIO.
 
 ## Backend / Runner boundary
 
 The backend and runner have strict, non-overlapping responsibilities.
 
-- **Runner executes scanner tools.** All subprocess, shell, and library invocations of scanners (`trivy`, `grype`, `syft`, `semgrep`, `joern`, `trufflehog`, `bandit`, `kics`, `checkov`, `osv-scanner`, and any future scanner) live in `runner/`. The backend never spawns a scanner process.
-- **Runner parses tool output into the canonical Finding schema.** Tool-specific JSON shapes never leave the runner. The runner uploads only normalised findings.
+- **Runner executes scanner tools.** All subprocess and library invocations of scanners (`grype`, `syft`, `semgrep`, `trufflehog`, `checkov`, and the in-process agent scanner) live in `runner/`. The backend never spawns a scanner process.
+- **Runner parses tool output into the canonical Finding schema.** Tool-specific JSON shapes never leave the runner. The runner uploads only normalised findings to MinIO.
 - **Backend stores normalised findings and exposes query/triage APIs.** Its job is read-and-serve over data the runner produced.
-- **Backend never knows about tool-specific output shapes.** No fields named `trivy_vulnerability`, `semgrep_rule_id`, `grype_match`, etc., in backend models, schemas, or transforms.
-- **Backend never executes scanner tools.** Enforced by `backend/src/tests/test_no_scanner_execution.py`; future violations fail CI.
+- **Backend never knows about tool-specific output shapes.** No fields named `semgrep_rule_id`, `grype_match`, `syft_artifact`, etc., in backend models or transforms.
+- **Backend never executes scanner tools.** Enforced by `backend/src/tests/test_no_scanner_execution.py`; violations fail CI.
 
-This boundary lets the runner be replaced, sandboxed, or sharded without touching backend code, and lets the backend be queried, replicated, or migrated without re-running scans.
+This boundary lets the runner be replaced or sharded without touching backend code, and lets the backend be queried, replicated, or migrated without re-running scans.
 
 ## Backend
 
 ### Module Structure
 
-Each scanning tool is an independent module under `backend/src/`:
-
 ```
 backend/src/
-├── dependencies/       # SCA — Syft + Grype
-│   ├── router.py       # REST endpoints (/dependencies/api/*)
-│   ├── scanner.py      # Scan orchestration
-│   ├── store.py        # Finding storage and queries
-│   └── sbom_store.py   # SBOM storage (MinIO)
-├── code_scanning/      # SAST — Opengrep
-├── containers/         # Container image scanning
-├── secrets/            # Secret detection
-├── shared/             # Cross-cutting utilities
-├── graphql/            # Strawberry GraphQL schema
-├── auth/               # Authentication and authorization
-├── notifications/      # Event-driven notifications
-├── settings/           # Configuration management
-├── runner/             # Runner registration and job queue
-└── db/                 # SQLAlchemy models and helpers
+├── auth/               Authentication, sessions, SSO (SAML/OIDC), SCIM, MFA
+├── authz/              Permission catalog, declarative enforcement, scope resolution
+├── findings/           Unified findings API, lifecycle, decisions, assignments
+├── scans/              Scan orchestration, job dispatch, BYO ingest
+├── dependencies/       SCA ingest, lifecycle, OSV matching
+├── code_scanning/      SAST ingest, lifecycle
+├── containers/         Container image ingest, lifecycle, layer attribution
+├── secrets/            Secret detection ingest, lifecycle
+├── iac/                IaC ingest, lifecycle
+├── agent_scanning/     Agent-threat ingest, lifecycle
+├── osv/                OSV advisory mirror — nightly refresh, CVE matching
+├── epss/               EPSS score ingestion and enrichment
+├── kev/                CISA KEV catalog ingestion and enrichment
+├── posture/            Posture scoring, trend resolvers
+├── sla/                SLA config, violation detection, breach tracking
+├── compliance/         Framework control mapping (SOC 2, ISO 27001, PCI DSS)
+├── sbom/               SBOM export (CycloneDX/SPDX), browser, diff
+├── reports/            Report template generation
+├── rules/              Policy rule engine (SLA, scanner coverage, data retention)
+├── notifications/      Event-driven notifications, routing, delivery history
+├── history/            Event feed and release notes
+├── search/             Global search across findings, repos, audit events
+├── runner/             Runner registration, heartbeat, job queue
+├── settings/           Configuration, auth-security, SSO, SCIM, LLM, integrations
+│   ├── llm/            BYO LLM credential storage and routing
+│   ├── sso/            SSO configuration
+│   ├── notifications/  Notification destination management
+│   └── integrations/   Integration catalog
+├── connectors/         Connector wizards and SCM webhook receivers
+├── graphql/            Strawberry GraphQL schema (framework primitives only)
+├── shared/             Cross-cutting: config, encryption, rate limiting
+└── db/                 SQLAlchemy models, Alembic migrations
 ```
 
-Modules communicate through shared utilities (`backend/src/shared/`) and the database. There is no direct import between tool modules.
+Modules communicate through the database and shared utilities. There is no direct import between scanner modules.
 
 ### API Layer
 
-The backend exposes two API styles:
+The backend exposes two API styles, both under `/api/v1/`:
 
-**GraphQL** (`/graphql/api`) — Used by dashboards for:
-- Finding counts and analytics per tool
-- Filter options (severities, sources, statuses)
-- Posture trends and home dashboard data
-- 18 query fields, per-request cache, depth/alias limits
-
-**REST** — Used for mutations and tool-specific endpoints:
-- `/dependencies/api/*`, `/code-scanning/api/*`, `/secrets/api/*`, `/container-scanning/api/*`
+**REST** (`/api/v1/<resource>/*`) — used for state-changing operations and single-resource reads:
 - Scan initiation, finding dismiss/reopen, run history
 - Settings management, source connections, runner registration
+- SBOM export/download, report generation
+- Auth flows — login, logout, CSRF, session cookies
+- Swagger docs at `/docs` (gated on `ENABLE_BACKEND_DOCS=true`)
 
-GraphQL security: introspection blocked in production, alias limit (10), depth limit (5), field suggestions disabled.
+**GraphQL** (`/api/v1/graphql`) — used by dashboards for joined, multi-resource queries:
+- Finding counts and analytics across all scanners
+- Posture trends, compliance summaries, SLA posture
+- Filter options, user-controlled column selection
+- GraphiQL at the same path (gated on `ENABLE_BACKEND_DOCS=true`)
+- Security: depth limit 7, alias limit 10, introspection blocked in production
 
 ### Authentication and Authorization
 
-- JWT-based authentication with `require_permission()` decorator
-- Role-based access control with granular permissions (e.g., `view_findings`, `manage_settings`, `initiate_scans`)
-- No owner bypass — all users go through the same permission checks
-- `has_permission()` bool helper for conditional logic
-- Internal verification endpoints: `/verify-password`, `/verify-totp` (server-side only)
+Authentication uses session cookies (CSRF-protected). SSO via SAML and OIDC with JIT provisioning.
+
+Authorization has two distinct gates on every endpoint:
+
+**Permission gate** — enforced declaratively via `Depends(Permission(X))` on the route signature:
+```python
+@router.post("/manual")
+async def manual_upload(
+    _: None = Depends(Permission(MANAGE_SOURCES)),
+) -> ...:
+```
+Permission constants live in `src/authz/permissions/catalog.py`. Raw string literals at call sites are rejected by CI.
+
+**Scope gate** — BOLA prevention; enforced at the SQL layer via `resolve_asset_ids_from_request`:
+```python
+asset_ids = await resolve_asset_ids_from_request(request)
+# then: .where(Finding.asset_id.in_(asset_ids))
+```
+Scope is never derived from request body or query string.
+
+Failure responses: permission missing → 403; object out of scope → 404 (to prevent enumeration); list with empty scope → empty result set.
 
 ### Database
 
 - PostgreSQL 16 with SQLAlchemy (async)
-- Alembic for migrations
-- Key tables: users, roles, findings (per tool), runs, sources, app config, audit events
-- Role cache: 60s TTL, invalidated on mutation
+- Alembic for migrations — forward-only; `downgrade()` raises `NotImplementedError`
+- Key tables: users, roles, findings, scan_runs, assets, sources, app_config, audit_events, llm_config, sla_config, compliance_controls
 
 ### Object Storage
 
-- MinIO (S3-compatible) for scan artifacts
-- Prefixes: `dependencies/`, `code_scanning/`, `secrets/`, `container_scanning/`
-- SBOMs stored separately in `sboms/` bucket
-- Runner service account scoped to `scans/*` and `sboms/*` only
+MinIO (S3-compatible) for scan artifacts and SBOMs. Runner uploads under job-type prefixes; ingest reads the same prefix.
+
+| Bucket | Prefix | Contents |
+|---|---|---|
+| `scans` | `dependencies_scanning/` | Dependency scan SBOM + findings |
+| `scans` | `code_scanning/` | SAST findings |
+| `scans` | `secret_scanning/` | Secret findings |
+| `scans` | `container_scanning/` | Container scan SBOM + findings |
+| `scans` | `iac_scanning/` | IaC findings |
+| `scans` | `agent_scanning/` | Agent-threat findings |
+| `sboms` | (bare name) | Exported SBOMs (CycloneDX/SPDX) |
 
 ### Encryption
 
-- `shared/encryption.py` — Fernet encryption for sensitive data at rest
-- Source connection auth tokens and TOTP secrets encrypted in the database
-- Job environment variables encrypted with PBKDF2 key derivation (100k rounds)
-
-### Rate Limiting
-
-- `shared/rate_limit.py` — per-endpoint rate limits
-- Scan initiation: 5 requests per 5 minutes
-- Runner registration: 5 requests per 5 minutes
-- AI review: 10 requests per minute
+`src/security/crypto.py` — Fernet encryption for sensitive data at rest. Source connection auth tokens, TOTP secrets, and LLM API keys are encrypted in the database, keyed from `APP_SECRET`.
 
 ## Frontend
 
 ### Routing
 
-The frontend uses Next.js app router with this layout:
+The frontend uses Next.js 15 app router:
 
 ```
-app/
-├── (app)/              # Authenticated layout (sidebar + main content)
-│   ├── home/           # Home dashboard
-│   ├── dependencies/   # /dependencies
-│   ├── containers/     # /containers
-│   ├── code/           # /code
-│   ├── secrets/        # /secrets
-│   ├── sources/        # Source management
-│   ├── settings/       # Settings pages
-│   └── notifications/  # Notification center
-├── api/                # BFF proxy routes
-└── login/              # Unauthenticated login page
+frontend/app/
+├── (app)/              Authenticated layout (sidebar + AppShell)
+│   ├── overview/       Home dashboard — posture gauge, attack chains, recent activity
+│   ├── findings/       Unified findings view across all scanners
+│   ├── sources/        Source management — Git repos, container registries
+│   ├── inventory/      Asset inventory
+│   ├── posture/        Posture scoring — Overview and Triage tabs
+│   ├── compliance/     Compliance framework mapping
+│   ├── sbom/           SBOM browser and diff view
+│   ├── history/        Event feed and releases
+│   ├── settings/       Settings — auth, SSO, LLM, integrations, notifications
+│   └── workspace/      Users, roles, teams, grants
+├── api/                Next.js API routes (BFF proxy to backend)
+└── login/              Unauthenticated login page
 ```
 
 ### BFF Proxy
 
-The Next.js API routes act as a Backend-For-Frontend proxy:
-- `/api/dependencies/*` → `/dependencies/api/*`
-- `/api/code/*` → `/code-scanning/api/*`
-- `/api/containers/*` → `/container-scanning/api/*`
-- `/api/secrets/*` → `/secrets/api/*`
-
-This keeps the backend URL structure internal and handles auth token forwarding.
+The Next.js API routes act as a Backend-For-Frontend proxy. All backend traffic flows through `/api/*` → `/api/v1/*`, keeping the backend URL and session cookie handling internal.
 
 ### Real-Time Updates (SSE)
 
-- `SSEProvider` in the app shell provides real-time event streaming
-- Backend publishes events via `EventBus` (in-memory pub/sub) at `/events/api/stream`
+- Backend publishes events at `/api/v1/events/stream`
 - Events: `scan.progress`, `scan.completed`, `scan.failed`, `source.synced`, `runner.status`, `notification.new`
-- `BroadcastChannel` for leader election across browser tabs (only one SSE connection per browser)
-- Automatic fallback to polling after 3 consecutive SSE failures
-- 30-second heartbeat interval
-
-### Tool Dashboards
-
-Every tool follows the same 5-tab pattern:
-1. **Overview** — summary cards, charts, severity breakdown
-2. **Findings** — filterable table with finding details
-3. **Insights** — analytics and trends
-4. **Health** — scan run history and status
-5. **Settings** — tool configuration
-
-Dashboard prerequisites check: if no source is configured or verified, the user is directed to the Settings tab first.
-
-### Theming
-
-- CSS custom properties in `app/globals.css`
-- Severity tokens: `--color-severity-critical`, `--color-severity-high`, `--color-severity-medium`, `--color-severity-low`
-- Dark and light themes with `ThemeProvider`
-- Space Grotesk (headings), Inter (body), JetBrains Mono (code)
-
-## Scanner Pipeline
-
-### Lifecycle of a Scan
-
-```
-1. User clicks "Scan" in the UI
-       │
-2. Backend creates a run record (status: queued)
-       │
-3. Runner polls for jobs, picks up the run
-       │
-4. Runner launches scanner Docker container
-   ┌──────────────────────────────────────┐
-   │  Scanner container:                  │
-   │  1. Clone repo / pull image          │
-   │  2. Run scanning tools               │
-   │  3. Normalize output to JSON         │
-   │  4. Generate manifest                │
-   │  5. Write results to shared volume   │
-   └──────────────────────────────────────┘
-       │
-5. Runner streams progress events via SSE
-       │
-6. Runner uploads results to MinIO
-       │
-7. Backend ingests findings, applies lifecycle
-   (new findings → open, missing findings → fixed)
-       │
-8. Notifications emitted for critical findings
-```
-
-### Scanner Images
-
-Each scanner is a Docker image built from `scanners/<tool>/Dockerfile`:
-
-| Scanner | Image | Tools |
-|---|---|---|
-| Dependencies | `aegis/scanner-dependencies` | Syft, Grype, grype-db, cdxgen, CycloneDX CLI |
-| Code Scanning | `aegis/scanner-code-scanning` | Semgrep, tree-sitter, semgrep-rules |
-| Secrets | `aegis/scanner-secrets` | TruffleHog |
-| IaC | `aegis/scanner-iac` | Checkov |
-| Container | `aegis/scanner-container` | Syft, Grype |
-
-Each image has a signature label (`io.aegis.security.<tool>.signature`) validated by the runner before use.
-
-### Image Management
-
-The runner's `image_manager.py` handles:
-- **Auto-build** from `scanners/` directory if present
-- **Registry pull** from GHCR as fallback
-- **Label validation** to ensure image integrity
-- Source priority: `SCANNER_IMAGE_SOURCE` env var (`auto`, `local`, `registry`)
+- `BroadcastChannel` for leader election across browser tabs (one SSE connection per browser)
+- Automatic fallback to polling after consecutive SSE failures
 
 ## Runner
 
 The runner is a standalone Python process that:
 
 1. Registers with the backend using `RUNNER_REGISTRATION_TOKEN`
-2. Builds/pulls scanner Docker images on startup
-3. Polls for scan jobs from the backend job queue
-4. Executes scans in Docker containers with:
-   - Shared volume for results
-   - Encrypted environment variables
-   - Resource limits
-5. Streams progress via SSE (signal-driven: immediate on scan events, not just timer-based)
-6. Uploads results to MinIO
-7. Reports heartbeat with image status
+2. Long-polls for scan jobs from the backend job queue (`/api/v1/agent/jobs/next`)
+3. Executes the matching scanner module in-process (no Docker launch per scan)
+4. Uploads result files to MinIO under the canonical job-type prefix
+5. Reports progress and completion back to the backend
+6. Sends periodic heartbeat with scanner status
+
+### Scanner Modules
+
+All scanners live in `runner/scanners/`:
+
+| Module | Tools | Notes |
+|---|---|---|
+| `dependencies/` | Syft + Grype | Generates SBOM, matches against OSV mirror |
+| `container/` | Syft + Grype | Container image scanning, layer attribution |
+| `code_scanning/` | Semgrep + tree-sitter | SAST; LLM verification chains (optional) |
+| `secrets/` | TruffleHog | Git history and filesystem modes |
+| `iac/` | Checkov | IaC misconfiguration; LLM verification chains (optional) |
+| `agent/` | Pure Python | In-process AI-agent-threat detection; no external binary |
+| `_shared.py` | — | Shared LLM client builder, scan budget utilities |
+
+Scanner modules read job parameters from `JobEnv` (the encrypted `envVars` payload the backend attaches to each job) rather than from the process environment.
 
 ### Security
 
 - Git clone restricted to HTTPS only
-- Commit hashes validated (hex 7-64 chars)
+- Commit hashes validated (hex 7–64 chars)
 - File paths validated against directory traversal
 - SSRF validation on container registry hosts
 - MinIO access scoped to `scans/*` and `sboms/*`
 
+## Scan Lifecycle
+
+```
+1. User initiates scan (UI or CLI)
+       │
+2. Backend creates scan_run record (status: queued)
+   and dispatches one job per scanner type
+       │
+3. Runner polls, picks up the job
+       │
+4. Runner executes the scanner module in-process
+   ┌──────────────────────────────────────────┐
+   │  Scanner module:                          │
+   │  1. Clone repo / pull image               │
+   │  2. Run scanning tool or in-process logic │
+   │  3. Normalise output to canonical schema  │
+   │  4. (Optional) LLM verification pass      │
+   │  5. Write result files                    │
+   └──────────────────────────────────────────┘
+       │
+5. Runner uploads results to MinIO
+       │
+6. Backend ingests findings, applies lifecycle
+   (new findings → open, missing findings → fixed)
+       │
+7. Notifications emitted for critical findings
+```
+
 ## Notifications
 
-Event-driven notification system:
-- `emitter.py` provides: `notify_scan_completed`, `notify_scan_failed`, `notify_new_critical_findings`, `notify_runner_offline`, `notify_source_synced`
-- New findings trigger notifications when lifecycle detection identifies them
-- `NotificationBell` component uses SSE `notification.new` events for real-time count updates
+Event-driven notification system with per-destination routing rules:
+- Channels: Slack (beta), generic webhook (beta)
+- Routing rules match on event type, severity, and scanner
+- Delivery history tracked per notification
+- Additional channels (Teams, PagerDuty, email digest) are in the connector catalog but not yet wired for delivery
 
 ## Source Management
 
-Sources are external connections (Git repositories, container registries, cloud infrastructure):
-- Category normalization: frontend uses `container-registry`, backend normalizes to `container-images`
+Sources are external connections (Git repositories, container registries):
 - Source connections store encrypted auth tokens
 - Auto-sync discovers repositories and images from connected sources
-- Team-based scoping: teams own repositories and container images, users see findings based on team membership
+- Team-based scoping: teams own assets; users see findings based on team membership
+- Asset identity: canonical `external_ref` ties findings to their source asset

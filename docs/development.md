@@ -6,7 +6,7 @@ This guide covers setting up Aegis for local development.
 
 - **Python 3.11+** with pip or [uv](https://docs.astral.sh/uv/)
 - **Node.js 20+** with npm
-- **Docker** and **Docker Compose** (for scanners, PostgreSQL, MinIO)
+- **Docker** and **Docker Compose** (for PostgreSQL, MinIO, and the runner)
 - **Git**
 
 ## Quick Start (Docker Compose)
@@ -20,7 +20,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-This starts: PostgreSQL, MinIO (object storage), the unified aegis container (FastAPI + static Next.js export on port 3000), and runner with all scanners.
+This starts: PostgreSQL, MinIO (object storage), the unified Aegis container (FastAPI + static Next.js export on port 3000), and the runner with all scanners bundled.
 
 ## Manual Development Setup
 
@@ -53,7 +53,7 @@ Or use the npm script (from `frontend/`):
 cd frontend && npm run dev:backend
 ```
 
-The backend serves the REST API at `http://localhost:8000` and GraphQL at `http://localhost:8000/graphql/api`.
+The backend serves the REST API at `http://localhost:8000/api/v1/` and GraphQL at `http://localhost:8000/api/v1/graphql`.
 
 ### 3. Frontend
 
@@ -67,7 +67,7 @@ The frontend is available at `http://localhost:3000`. The Next.js proxy forwards
 
 ### 4. Runner (optional)
 
-The runner executes scan jobs. It requires Docker to build and run scanner images.
+The runner executes scan jobs. It requires scanner CLIs installed locally (Syft, Grype, Semgrep, TruffleHog, Checkov) or can use the bundled runner Docker image.
 
 ```bash
 cd runner
@@ -75,7 +75,7 @@ uv sync
 uv run python main.py
 ```
 
-The runner registers with the backend, builds scanner Docker images from `scanners/`, and polls for scan jobs.
+The runner registers with the backend and polls for scan jobs.
 
 ### 5. Start Everything
 
@@ -89,7 +89,7 @@ Copy `.env.example` to `.env` and configure:
 
 | Variable | Description |
 |---|---|
-| `APP_SECRET` | Root key for all at-rest encryption (LLM/Argus/SSO secrets, runner job payloads) and app-level signing. Use `openssl rand -base64 32`. Keep it stable — rotating it makes stored secrets unreadable. |
+| `APP_SECRET` | Root key for all at-rest encryption. Use `openssl rand -base64 32`. Keep stable — rotating it makes stored secrets unreadable. |
 | `SESSION_SECRET` | Signs browser session cookies. Required — startup fails if missing. |
 | `ALLOWED_HOSTS` | Comma-separated list of allowed hostnames for TrustedHostMiddleware (e.g. `localhost,127.0.0.1`). |
 | `ADMIN_PASSWORD` | Initial admin account password. |
@@ -98,20 +98,18 @@ Copy `.env.example` to `.env` and configure:
 | `RUNNER_NAME` | Runner display name. |
 | `RUNNER_REGISTRATION_TOKEN` | Runner ↔ backend authentication token. |
 
-Tool-specific variables (e.g., `SCA_ENABLED`, `SAST_DOCKER_IMAGE`) can be configured through the Settings UI or `.env`.
-
 ## Running Tests
 
 ### Backend
 
 ```bash
-cd backend && python -m pytest ../tests/backend/ -v --rootdir=.
+cd backend && python -m pytest src/tests/ -v
 ```
 
 ### Frontend
 
 ```bash
-cd frontend && npm run test:frontend
+cd frontend && npm run test
 ```
 
 ### E2E Tests
@@ -129,80 +127,92 @@ aegis/
 ├── frontend/                   Next.js application
 │   ├── app/                    Next.js app router
 │   │   ├── (app)/              Authenticated app pages
-│   │   │   ├── home/           Home dashboard
-│   │   │   ├── dependencies/   Dependencies tool
-│   │   │   ├── containers/     Container scanning tool
-│   │   │   ├── code/           Code scanning tool
-│   │   │   ├── secrets/        Secrets tool
-│   │   │   ├── sources/        Source management (Git, registries)
+│   │   │   ├── overview/       Home dashboard
+│   │   │   ├── findings/       Unified findings view
+│   │   │   ├── sources/        Source management
+│   │   │   ├── inventory/      Asset inventory
+│   │   │   ├── posture/        Posture scoring
+│   │   │   ├── compliance/     Compliance framework mapping
+│   │   │   ├── sbom/           SBOM browser and diff
+│   │   │   ├── history/        Event feed
 │   │   │   ├── settings/       Settings pages
-│   │   │   └── notifications/  Notification center
-│   │   ├── api/                Next.js API routes (BFF proxy layer)
+│   │   │   └── workspace/      Users, roles, teams
+│   │   ├── api/                Next.js API routes (BFF proxy)
 │   │   └── login/              Login page
 │   ├── components/             React components
-│   │   ├── providers/          Context providers (SSE, theme)
-│   │   └── shared/             Shared UI components
+│   │   ├── ui/                 Shared primitives (Button, NavTabs, FilterChip, etc.)
+│   │   ├── shared/             Domain-shared components (findings, sources, rules)
+│   │   └── layout/             AppShell, Sidebar, AppHeader
 │   ├── lib/                    Shared TypeScript code
-│   │   ├── server/             Server-side utilities (app config)
-│   │   └── shared/             Client/server shared utilities
 │   ├── public/                 Static assets
-│   ├── middleware.ts           Next.js middleware
+│   ├── middleware.ts            Next.js middleware
 │   ├── next.config.ts          Next.js configuration
 │   ├── package.json            Frontend dependencies + scripts
 │   └── tsconfig.json           TypeScript configuration
 │
 ├── backend/                    FastAPI backend
 │   └── src/
-│       ├── auth/               Authentication and authorization
-│       ├── code_scanning/      Code scanning module
+│       ├── auth/               Authentication, SSO, MFA, SCIM
+│       ├── authz/              Permission catalog, enforcement, scope
+│       ├── findings/           Unified findings API and lifecycle
+│       ├── scans/              Scan orchestration and job dispatch
+│       ├── code_scanning/      SAST module
 │       ├── containers/         Container scanning module
-│       ├── dependencies/       Dependencies (SCA) module
+│       ├── dependencies/       SCA module
 │       ├── secrets/            Secrets scanning module
-│       ├── graphql/            Strawberry GraphQL schema
+│       ├── iac/                IaC scanning module
+│       ├── agent_scanning/     Agent-threat scanning module
+│       ├── osv/                OSV advisory mirror
+│       ├── epss/               EPSS ingestion
+│       ├── kev/                CISA KEV ingestion
+│       ├── posture/            Posture scoring
+│       ├── sla/                SLA tracking
+│       ├── compliance/         Framework control mapping
+│       ├── sbom/               SBOM export and browser
 │       ├── notifications/      Notification system
 │       ├── runner/             Runner management
 │       ├── settings/           Settings and configuration
-│       ├── shared/             Shared utilities (config, encryption, rate limiting)
-│       ├── db/                 Database models and helpers
-│       └── license/            License verification
+│       ├── graphql/            Strawberry GraphQL schema
+│       ├── shared/             Shared utilities
+│       └── db/                 Database models and migrations
 │
 ├── runner/                     Scanner job runner
 │   ├── main.py                 Runner entry point
-│   └── image_manager.py        Scanner image build/pull/validation
+│   └── scanners/
+│       ├── code_scanning/      Semgrep + tree-sitter (with LLM verification)
+│       ├── secrets/            TruffleHog
+│       ├── iac/                Checkov (with LLM verification)
+│       ├── container/          Syft + Grype
+│       ├── dependencies/       Syft + Grype + OSV matching
+│       ├── agent/              Agent-threat detection (in-process)
+│       └── _shared.py          Shared LLM client and budget utilities
 │
-├── scanners/                   Scanner Docker images
-│   ├── dependencies/           Syft + Grype + cdxgen
-│   ├── code-scanning/          Semgrep + tree-sitter (with LLM verification)
-│   ├── secrets/                TruffleHog (with LLM verification)
-│   ├── iac/                    Checkov
-│   ├── container/              Syft + Grype (container images)
-│   └── shared/                 Shared scanner utilities (manifest, lib.sh)
+├── integrations/               CI/CD artifacts
+│   ├── github-actions/         GitHub Action
+│   ├── gitlab-ci/              GitLab CI Component
+│   ├── bitbucket/              Bitbucket Pipe
+│   ├── azure-devops/           Azure DevOps Task
+│   └── jenkins/                Jenkins Shared Library
 │
-├── tests/
-│   ├── backend/                Python backend tests (pytest)
-│   ├── frontend/               Frontend unit tests (node:test)
-│   ├── contracts/              API contract tests
-│   └── e2e/                    Playwright end-to-end tests
-│
+├── cli/                        aegis CLI (scan, findings, triage, sbom, mcp)
+├── vscode-extension/           VS Code extension
 ├── docker-compose.yml          Full-stack Docker Compose
-├── Dockerfile                  Combined aegis container (frontend + backend)
+├── Dockerfile                  Combined Aegis container (frontend + backend)
 ├── .env.example                Environment variable template
 └── docs/
-    ├── README.md               This file
-    └── architecture.md         System architecture deep dive
+    ├── architecture.md         System architecture (this file's sibling)
+    └── development.md          This file
 ```
 
 ## Common Tasks
 
-### Adding a new tool module
+### Adding a new scanner module
 
-Each scanning tool follows the same pattern:
-
-1. **Scanner** — `scanners/<tool>/` with Dockerfile, `run.sh`, and scripts
-2. **Backend module** — `backend/src/<tool>/` with router, scanner, store
-3. **Frontend pages** — `frontend/app/(app)/<tool>/` with dashboard tabs
-4. **GraphQL** — types and resolvers in `backend/src/graphql/`
-5. **Tests** — `tests/backend/test_<tool>.py` and `tests/frontend/<tool>.test.ts`
+1. **Runner scanner** — `runner/scanners/<name>/` with a `scanner.py` entry point that accepts a `JobEnv` and uploads results to MinIO
+2. **Backend ingest** — `backend/src/<name>/` with `ingest.py`, `lifecycle.py`, `scanner.py` (orchestration), and a REST router
+3. **Frontend pages** — `frontend/app/(app)/<name>/` with the findings table and scanner detail views
+4. **GraphQL** — add a resolver inside the relevant namespace type in `backend/src/graphql/schema.py` or the bounded-context resolver file
+5. **Tests** — `backend/src/tests/test_<name>*.py` and frontend tests alongside the components
 
 ### Resetting the database
 
@@ -211,12 +221,17 @@ docker compose down -v    # removes volumes including database
 docker compose up -d
 ```
 
-### Rebuilding scanner images
-
-Scanner images are built automatically by the runner on startup. To force a rebuild:
+### Running Alembic migrations
 
 ```bash
-docker rmi aegis/scanner-dependencies:latest aegis/scanner-code-scanning:latest \
-           aegis/scanner-secrets:latest aegis/scanner-container:latest
-# Restart the runner — it will rebuild
+cd backend
+alembic upgrade head
+```
+
+To generate a new migration after model changes:
+
+```bash
+alembic revision --autogenerate -m "short description"
+# Review the generated file
+# Replace downgrade() body with: raise NotImplementedError("Forward-only; no downgrade.")
 ```
