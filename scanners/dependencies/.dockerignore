@@ -1,9 +1,0 @@
-.git/
-.env
-output/
-__pycache__/
-*.pyc
-*.log
-.DS_Store
-Makefile
-scripts/test-*.sh
