@@ -188,14 +188,12 @@ aegis/
 │       └── _shared.py          Shared LLM client and budget utilities
 │
 ├── integrations/               CI/CD artifacts
-│   ├── github-actions/         GitHub Action
-│   ├── gitlab-ci/              GitLab CI Component
-│   ├── bitbucket/              Bitbucket Pipe
-│   ├── azure-devops/           Azure DevOps Task
-│   └── jenkins/                Jenkins Shared Library
+│   ├── github-action/          GitHub Action
+│   ├── gitlab-component/       GitLab CI Component
+│   ├── bitbucket-pipe/         Bitbucket Pipe
+│   ├── azure-devops-task/      Azure DevOps Task
+│   └── jenkins-shared-library/ Jenkins Shared Library
 │
-├── cli/                        aegis CLI (scan, findings, triage, sbom, mcp)
-├── vscode-extension/           VS Code extension
 ├── docker-compose.yml          Full-stack Docker Compose
 ├── Dockerfile                  Combined Aegis container (frontend + backend)
 ├── .env.example                Environment variable template
