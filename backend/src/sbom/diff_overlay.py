@@ -160,17 +160,33 @@ async def compute_diff_overlay(
         for ref in refs
         if (base := osv_base_ecosystem(ref.purl_type, ref.namespace)) is not None
     }
-    coverage_probe = select(OsvVulnerableRange.id).limit(1)
     if diff_ecosystems:
-        coverage_probe = coverage_probe.where(
-            or_(
-                OsvVulnerableRange.ecosystem.in_(diff_ecosystems),
-                *(OsvVulnerableRange.ecosystem.like(f"{base}:%") for base in diff_ecosystems),
+        # Require the mirror to cover EVERY ecosystem in the diff. A partial
+        # mirror (e.g. npm ingested but not PyPI) would render the un-ingested
+        # ecosystem's components as "0 introduced / 0 resolved" — a false
+        # all-clear — so if any diff ecosystem is missing, the signal is
+        # unavailable rather than misleadingly partial.
+        present = (
+            await session.execute(
+                select(OsvVulnerableRange.ecosystem)
+                .where(
+                    or_(
+                        OsvVulnerableRange.ecosystem.in_(diff_ecosystems),
+                        *(OsvVulnerableRange.ecosystem.like(f"{base}:%") for base in diff_ecosystems),
+                    )
+                )
+                .distinct()
             )
-        )
-    # else: no re-matchable refs (empty or fully-unmapped diff) — no ecosystem to
-    # scope to, so fall back to a global mirror-presence check.
-    mirror_loaded = (await session.execute(coverage_probe)).first() is not None
+        ).scalars().all()
+        # Release-specific rows (e.g. "debian:11") map back to their base.
+        present_bases = {e.split(":", 1)[0] for e in present}
+        mirror_loaded = diff_ecosystems.issubset(present_bases)
+    else:
+        # No re-matchable refs (empty or fully-unmapped diff) — no ecosystem to
+        # scope to, so fall back to a global mirror-presence check.
+        mirror_loaded = (
+            await session.execute(select(OsvVulnerableRange.id).limit(1))
+        ).first() is not None
     available = mirror_loaded and len(refs) <= MAX_OVERLAY_COMPONENTS
 
     ids_by_ref: dict[ComponentRef, set[str]] = {}

@@ -14,6 +14,7 @@ from src.authz.enforcement import has_permission
 from src.authz.permissions.catalog import VIEW_FINDINGS
 from src.graphql.resolver_utils import raise_permission_denied
 from src.graphql.types import (
+    CoverageSummary as CoverageSummaryGQL,
     ImageSourcesResponse,
     RepoSourcesResponse,
     SourceDetail,
@@ -27,7 +28,6 @@ from src.graphql.types import (
     SourceRepoSummary,
     SourceScanRunRow,
 )
-from src.sources import store as sources_store
 from src.sources.service import (
     ImageDetailView,
     ImageView,
@@ -80,6 +80,7 @@ def _repo_extras(v: RepoView) -> SourceRepoExtras:
         scanners_with_coverage=list(v.scanners_with_coverage or []),
         coverage_status=v.coverage_status,
         source_url=v.source_url,
+        open_finding_count=v.open_finding_count,
     )
 
 
@@ -193,10 +194,14 @@ def repo_sources(
         has_critical=has_critical,
         limit=limit,
     )
+    cov = result.coverage_summary
     return RepoSourcesResponse(
         sources=[_repo_summary(v) for v in result.sources],
         next_cursor=result.next_cursor,
         total_count=result.total_count,
+        coverage_summary=CoverageSummaryGQL(
+            total=cov.total, fresh=cov.fresh, stale=cov.stale, never=cov.never,
+        ) if cov is not None else None,
     )
 
 

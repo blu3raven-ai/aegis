@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.db.models import Asset, Finding  # noqa: E402
 from src.shared.home_views import get_remediation_stats_by_asset_ids  # noqa: E402

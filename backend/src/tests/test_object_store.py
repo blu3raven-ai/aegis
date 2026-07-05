@@ -23,8 +23,12 @@ class _Body:
     def __init__(self, data: bytes):
         self._data = data
 
-    def read(self):
-        return self._data
+    def read(self, amt: int | None = None):
+        # Mirror boto3 StreamingBody.read(amt): bounded read when amt is given.
+        if amt is None:
+            return self._data
+        chunk, self._data = self._data[:amt], self._data[amt:]
+        return chunk
 
 
 class _FakeS3:
@@ -39,6 +43,7 @@ class _FakeS3:
         self.deleted: list[str] = []
         self.raise_on_get: ClientError | None = None
         self.raise_on_tags: ClientError | None = None
+        self.post_conditions = None
 
     def get_object(self, *, Bucket, Key):
         if self.raise_on_get is not None:
@@ -62,6 +67,10 @@ class _FakeS3:
     def generate_presigned_url(self, *_a, **_kw):
         return self.presigned
 
+    def generate_presigned_post(self, *, Bucket, Key, Conditions, ExpiresIn):
+        self.post_conditions = Conditions
+        return {"url": self.presigned, "fields": {"key": Key, "policy": "b64"}}
+
     def get_object_tagging(self, *, Bucket, Key):
         if self.raise_on_tags is not None:
             raise self.raise_on_tags
@@ -77,9 +86,37 @@ def fake(monkeypatch):
 
 # ── download_bytes ───────────────────────────────────────────────────────────
 
+def test_generate_upload_post_caps_size_in_policy(fake):
+    out = object_store.generate_upload_post("scans/f.json", max_bytes=1024)
+    assert out["fields"]  # policy/signature fields the runner POSTs with the file
+    # The store enforces the cap at upload time via this condition.
+    assert ["content-length-range", 0, 1024] in fake.post_conditions
+
+
+def test_generate_upload_post_rewrites_external_host(fake, monkeypatch):
+    monkeypatch.setattr(object_store, "_S3_ENDPOINT", "http://internal:9000")
+    monkeypatch.setattr(object_store, "_S3_EXTERNAL_ENDPOINT", "https://public.example")
+    fake.presigned = "http://internal:9000/scans"
+    out = object_store.generate_upload_post("scans/f.json", max_bytes=10, external=True)
+    assert out["url"] == "https://public.example/scans"
+
+
 def test_download_bytes_returns_body(fake):
     fake.objects = {"k1": b"hello"}
     assert object_store.download_bytes("k1") == b"hello"
+
+
+def test_download_bytes_rejects_oversized(fake, monkeypatch):
+    # An oversized (e.g. malicious-runner) blob is refused, not read into memory.
+    monkeypatch.setattr(object_store, "MAX_OBJECT_BYTES", 4)
+    fake.objects = {"big": b"toolarge"}
+    assert object_store.download_bytes("big") is None
+
+
+def test_download_bytes_allows_at_cap(fake, monkeypatch):
+    monkeypatch.setattr(object_store, "MAX_OBJECT_BYTES", 8)
+    fake.objects = {"ok": b"exactly8"}
+    assert object_store.download_bytes("ok") == b"exactly8"
 
 
 @pytest.mark.parametrize("code", ["NoSuchKey", "404"])

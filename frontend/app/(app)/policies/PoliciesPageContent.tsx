@@ -391,7 +391,7 @@ export function PoliciesPageContent() {
           <div className="space-y-3">
             {autoDismissKillSwitch && (
               <div className="flex items-center gap-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-3">
-                <span className="text-[var(--color-severity-critical)]">
+                <span className="text-[var(--color-severity-critical-text)]">
                   <AlertOctagonIcon />
                 </span>
                 <div className="flex-1">
@@ -409,7 +409,7 @@ export function PoliciesPageContent() {
                     variant="secondary"
                     size="sm"
                     onClick={handleDisengageKillSwitch}
-                    className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical)]"
+                    className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical-text)]"
                   >
                     Re-enable
                   </Button>
@@ -426,7 +426,7 @@ export function PoliciesPageContent() {
                     setKillSwitchError(null)
                     setKillSwitchDialogOpen(true)
                   }}
-                  className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
+                  className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)]"
                   leadingIcon={<AlertOctagonIcon />}
                 >
                   Kill auto-dismiss

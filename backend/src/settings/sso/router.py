@@ -7,7 +7,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
@@ -18,6 +18,7 @@ from src.security.crypto import encrypt
 from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import MANAGE_SETTINGS
 from src.settings.general.schemas import SsoConfigRequest
+from src.shared.url_guard import UnsafeURLError, assert_sendable_url
 
 sso_router = APIRouter(prefix="/api/v1/settings/sso", tags=["settings"])
 
@@ -142,7 +143,11 @@ def refresh_saml_metadata(
         if not row.saml_metadata_url:
             return {"ok": False, "error": "No metadata URL configured."}
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            assert_sendable_url(row.saml_metadata_url)
+        except UnsafeURLError as exc:
+            raise HTTPException(status_code=400, detail=f"unsafe metadata URL: {exc}")
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
                 resp = await client.get(row.saml_metadata_url)
                 resp.raise_for_status()
         except Exception as e:

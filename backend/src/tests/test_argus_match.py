@@ -1,115 +1,180 @@
-"""Tests for the additive Argus premium SBOM match.
+"""Tests for the additive in-process premium SBOM match.
 
-Two layers:
-- ``match_via_argus`` unit tests with a mocked Argus ``/v1/match`` response and a
-  faked token mint — covering the happy path and every degrade-to-empty branch.
-- ``build_backend_match_findings`` integration tests proving premium hits are
-  appended additively, deduped against the free OSV set, and that an absent /
-  failing Argus leaves the free path completely unchanged.
+Three layers:
+- ``match_components`` unit tests — empty placeholder store yields nothing; an
+  injected seeded store yields the matched ``MatchItem``.
+- ``_finding_from_match`` / ``match_via_argus`` tests — proving the
+  ``MatchItem`` -> raw-finding-dict adaptation is byte-identical to the free OSV
+  shape (this is the silent-drop guard).
+- ``build_backend_match_findings`` integration tests — premium hits are appended
+  additively, deduped against the free OSV set, and gated on the connection's
+  ``enabled`` flag.
 """
 from __future__ import annotations
 
+import types
 import uuid
 
-import httpx
 import pytest
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.db.engine import DATABASE_URL
 from src.db.models import Asset, SbomComponent
-from src.osv.argus_match import match_via_argus
+from src.osv.argus_match import _finding_from_match, match_via_argus
 from src.osv.matcher import ComponentRef
-from src.settings.argus.service import ArgusAuthError, ArgusConnectionDTO
+from src.osv.premium_match import (
+    InMemoryPremiumStore,
+    MatchAdvisory,
+    MatchComponent,
+    MatchItem,
+    MatchPackage,
+    PremiumAdvisoryRecord,
+    VulnerableRange,
+    match_components,
+)
 from src.osv.store import OsvStore
 
 
-def _conn(*, enabled: bool = True) -> ArgusConnectionDTO:
-    return ArgusConnectionDTO(
-        endpoint="https://argus.test/api/",
-        token_endpoint="https://argus.test/oauth/token",
-        client_id="client-x",
-        refresh_token="refresh-x",
-        enabled=enabled,
+def _record(name="lodash", fixed="4.17.21", advisory_id="ARGUS-1") -> PremiumAdvisoryRecord:
+    """A premium advisory record whose range admits lodash 4.17.20."""
+    return PremiumAdvisoryRecord(
+        ecosystem="npm",
+        package=name,
+        advisory=MatchAdvisory(
+            id=advisory_id,
+            cve_id="CVE-2099-0001",
+            severity="high",
+            cvss_score=7.5,
+            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            summary="premium-only flaw",
+            description="only in the premium DB",
+            html_url="https://example.test/adv/ARGUS-1",
+            references=[{"url": "https://example.test/ref"}],
+            published_at="2026-06-01T00:00:00Z",
+            vulnerable_version_range=">= 0, < 4.17.21",
+            first_patched_version="4.17.21",
+        ),
+        ranges=[VulnerableRange(introduced="0", fixed=fixed)],
     )
 
 
-def _argus_match(name="lodash", version="4.17.20", advisory_id="ARGUS-1") -> dict:
-    return {
-        "purl": f"pkg:npm/{name}@{version}",
-        "package": {"name": name, "ecosystem": "npm"},
-        "version": version,
-        "manifest_path": "package.json",
-        "advisory": {
-            "id": advisory_id,
+_COMPONENTS = [
+    ComponentRef(
+        name="lodash", version="4.17.20", purl_type="npm",
+        purl="pkg:npm/lodash@4.17.20",
+    )
+]
+
+
+# --- match_components: empty store vs seeded store ----------------------------
+
+
+def test_match_components_empty_store_returns_empty():
+    comps = [MatchComponent(purl="pkg:npm/lodash@4.17.20", version="4.17.20")]
+    # No store injected -> the default placeholder store, which is empty.
+    assert match_components("dependencies", comps) == []
+
+
+def test_match_components_seeded_store_hits():
+    store = InMemoryPremiumStore([_record()])
+    comps = [MatchComponent(purl="pkg:npm/lodash@4.17.20", version="4.17.20")]
+
+    out = match_components("dependencies", comps, store=store)
+
+    assert len(out) == 1
+    assert isinstance(out[0], MatchItem)
+    assert out[0].package == MatchPackage(name="lodash", ecosystem="npm")
+    assert out[0].version == "4.17.20"
+    assert out[0].advisory.id == "ARGUS-1"
+
+
+def test_match_components_seeded_store_version_out_of_range_misses():
+    # Fixed at 4.17.20 -> the installed 4.17.20 is NOT < fixed, so no hit.
+    store = InMemoryPremiumStore([_record(fixed="4.17.20")])
+    comps = [MatchComponent(purl="pkg:npm/lodash@4.17.20", version="4.17.20")]
+
+    assert match_components("dependencies", comps, store=store) == []
+
+
+# --- MatchItem -> raw-finding-dict adaptation (silent-drop guard) -------------
+
+
+def test_finding_from_match_maps_all_fields():
+    item = MatchItem(
+        package=MatchPackage(name="lodash", ecosystem="npm"),
+        version="4.17.20",
+        manifest_path="package.json",
+        advisory=MatchAdvisory(
+            id="ARGUS-1",
+            cve_id="CVE-2099-0001",
+            severity="high",
+            cvss_score=7.5,
+            cvss_vector="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            summary="premium-only flaw",
+            description="only in the premium DB",
+            html_url="https://example.test/adv/ARGUS-1",
+            references=[{"url": "https://example.test/ref"}],
+            published_at="2026-06-01T00:00:00Z",
+            vulnerable_version_range=">= 0, < 4.17.21",
+            first_patched_version="4.17.21",
+        ),
+    )
+
+    assert _finding_from_match(item) == {
+        "repository": {"name": "", "full_name": ""},
+        "dependency": {
+            "package": {"name": "lodash", "ecosystem": "npm"},
+            "manifest_path": "package.json",
+        },
+        "security_advisory": {
+            "ghsa_id": "ARGUS-1",
             "cve_id": "CVE-2099-0001",
             "severity": "high",
-            "cvss_score": 7.5,
-            "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            "cvss": {
+                "score": 7.5,
+                "vector_string": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+            },
             "summary": "premium-only flaw",
             "description": "only in the premium DB",
-            "html_url": "https://argus.test/adv/ARGUS-1",
-            "references": [{"url": "https://argus.test/ref"}],
+            "html_url": "https://example.test/adv/ARGUS-1",
+            "references": [{"url": "https://example.test/ref"}],
             "published_at": "2026-06-01T00:00:00Z",
-            "vulnerable_version_range": ">= 0, < 4.17.21",
-            "first_patched_version": "4.17.21",
         },
+        "security_vulnerability": {
+            "vulnerable_version_range": ">= 0, < 4.17.21",
+            "first_patched_version": {"identifier": "4.17.21"},
+        },
+        "current_version": "4.17.20",
+        "source": "argus",
+        "scanner": "osv",
+        "matched_by": ["argus"],
+        "match_source": "argus",
     }
 
 
-class _FakeResponse:
-    def __init__(self, status_code: int, payload):
-        self.status_code = status_code
-        self._payload = payload
-
-    def json(self):
-        if isinstance(self._payload, Exception):
-            raise self._payload
-        return self._payload
-
-
-class _FakeAsyncClient:
-    """Stand-in for ``httpx.AsyncClient`` as an async context manager."""
-
-    def __init__(self, response=None, raise_exc=None):
-        self._response = response
-        self._raise = raise_exc
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *exc):
-        return False
-
-    async def post(self, *args, **kwargs):
-        if self._raise is not None:
-            raise self._raise
-        return self._response
-
-
-def _patch_client(monkeypatch, *, response=None, raise_exc=None):
-    monkeypatch.setattr(
-        "src.osv.argus_match.httpx.AsyncClient",
-        lambda *a, **k: _FakeAsyncClient(response=response, raise_exc=raise_exc),
+def test_finding_from_match_skips_empty_identity():
+    # Empty advisory id / package name is malformed -> dropped, not raised.
+    item = MatchItem(
+        package=MatchPackage(name="", ecosystem="npm"),
+        version="4.17.20",
+        advisory=MatchAdvisory(id=""),
     )
+    assert _finding_from_match(item) is None
 
 
-def _patch_mint(monkeypatch, token="tok-123"):
-    monkeypatch.setattr(
-        "src.osv.argus_match.mint_argus_access_token", lambda conn: token
-    )
+def test_match_via_argus_empty_store_returns_empty():
+    # The default placeholder store is empty, so no premium findings today.
+    assert match_via_argus(_COMPONENTS, asset_id="a1", surface="dependencies") == []
 
 
-_COMPONENTS = [ComponentRef(name="lodash", version="4.17.20", purl_type="npm",
-                            purl="pkg:npm/lodash@4.17.20")]
+def test_match_via_argus_seeded_store_maps_finding(monkeypatch):
+    store = InMemoryPremiumStore([_record()])
+    # match_components resolves the store lazily via load_premium_store when none
+    # is injected — swap in the seeded store for this call.
+    monkeypatch.setattr("src.osv.premium_match.load_premium_store", lambda: store)
 
-
-@pytest.mark.asyncio
-async def test_match_via_argus_maps_premium_hit(monkeypatch):
-    _patch_mint(monkeypatch)
-    _patch_client(monkeypatch, response=_FakeResponse(200, {"matches": [_argus_match()]}))
-
-    out = await match_via_argus(_conn(), _COMPONENTS, asset_id="a1", surface="dependencies")
+    out = match_via_argus(_COMPONENTS, asset_id="a1", surface="dependencies")
 
     assert len(out) == 1
     f = out[0]
@@ -118,77 +183,14 @@ async def test_match_via_argus_maps_premium_hit(monkeypatch):
     assert f["matched_by"] == ["argus"]
     assert f["scanner"] == "osv"
     assert f["dependency"]["package"] == {"name": "lodash", "ecosystem": "npm"}
-    assert f["dependency"]["manifest_path"] == "package.json"
     assert f["current_version"] == "4.17.20"
     assert f["security_advisory"]["ghsa_id"] == "ARGUS-1"
     assert f["security_advisory"]["cve_id"] == "CVE-2099-0001"
-    assert f["security_advisory"]["severity"] == "high"
-    assert f["security_advisory"]["references"] == [{"url": "https://argus.test/ref"}]
     assert f["security_vulnerability"]["first_patched_version"] == {"identifier": "4.17.21"}
 
 
-@pytest.mark.asyncio
-async def test_match_via_argus_unconfigured_returns_empty(monkeypatch):
-    _patch_mint(monkeypatch)
-    _patch_client(monkeypatch, response=_FakeResponse(200, {"matches": [_argus_match()]}))
-
-    assert await match_via_argus(None, _COMPONENTS, asset_id="a", surface="dependencies") == []
-
-
-@pytest.mark.asyncio
-async def test_match_via_argus_disabled_returns_empty(monkeypatch):
-    _patch_mint(monkeypatch)
-    _patch_client(monkeypatch, response=_FakeResponse(200, {"matches": [_argus_match()]}))
-
-    out = await match_via_argus(
-        _conn(enabled=False), _COMPONENTS, asset_id="a", surface="dependencies"
-    )
-    assert out == []
-
-
-@pytest.mark.asyncio
-async def test_match_via_argus_transport_error_returns_empty(monkeypatch):
-    _patch_mint(monkeypatch)
-    _patch_client(monkeypatch, raise_exc=httpx.ConnectError("down"))
-
-    out = await match_via_argus(_conn(), _COMPONENTS, asset_id="a", surface="dependencies")
-    assert out == []
-
-
-@pytest.mark.asyncio
-async def test_match_via_argus_non_200_returns_empty(monkeypatch):
-    _patch_mint(monkeypatch)
-    _patch_client(monkeypatch, response=_FakeResponse(503, {"matches": []}))
-
-    out = await match_via_argus(_conn(), _COMPONENTS, asset_id="a", surface="dependencies")
-    assert out == []
-
-
-@pytest.mark.asyncio
-async def test_match_via_argus_auth_error_returns_empty(monkeypatch):
-    def _boom(conn):
-        raise ArgusAuthError("nope")
-
-    monkeypatch.setattr("src.osv.argus_match.mint_argus_access_token", _boom)
-    # If mint failed, the HTTP call must never fire.
-    _patch_client(monkeypatch, raise_exc=AssertionError("should not POST"))
-
-    out = await match_via_argus(_conn(), _COMPONENTS, asset_id="a", surface="dependencies")
-    assert out == []
-
-
-@pytest.mark.asyncio
-async def test_match_via_argus_skips_malformed_entries(monkeypatch):
-    _patch_mint(monkeypatch)
-    payload = {"matches": [
-        {"package": {"name": "x"}},          # no version / advisory -> skipped
-        "garbage",                            # not a dict -> skipped
-        _argus_match(),                       # valid
-    ]}
-    _patch_client(monkeypatch, response=_FakeResponse(200, payload))
-
-    out = await match_via_argus(_conn(), _COMPONENTS, asset_id="a", surface="dependencies")
-    assert len(out) == 1
+def test_match_via_argus_no_components_returns_empty():
+    assert match_via_argus([], asset_id="a1", surface="dependencies") == []
 
 
 # --- Integration: build_backend_match_findings additive wiring ----------------
@@ -242,12 +244,17 @@ def _premium_finding(name, version, advisory_id):
     }
 
 
-async def _run_build(factory, asset_id, external_ref, monkeypatch, premium):
-    """Run the builder with match_via_argus stubbed to ``premium``."""
-    async def _fake_argus(conn, components, *, asset_id, surface):
+async def _run_build(factory, asset_id, external_ref, monkeypatch, premium, *, conn_enabled=True):
+    """Run the builder with match_via_argus stubbed to ``premium`` and the Argus
+    connection lookup stubbed to an ``enabled``/absent connection."""
+    def _fake_argus(components, *, asset_id, surface):
         return premium
 
+    async def _fake_fetch(session, key):
+        return types.SimpleNamespace(enabled=True) if conn_enabled else None
+
     monkeypatch.setattr("src.osv.sca_findings.match_via_argus", _fake_argus)
+    monkeypatch.setattr("src.osv.sca_findings.fetch_argus_connection", _fake_fetch)
     from src.osv.sca_findings import build_backend_match_findings
     async with factory() as s:
         return await build_backend_match_findings(
@@ -326,7 +333,7 @@ async def test_build_dedups_premium_duplicate_of_free(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_build_unchanged_when_argus_absent(monkeypatch):
+async def test_build_skips_premium_when_connection_disabled(monkeypatch):
     _patch_advisory_blob(monkeypatch)
     store = OsvStore()
     await store.upsert_advisories([_FREE_BODY], ecosystem="npm")
@@ -337,7 +344,12 @@ async def test_build_unchanged_when_argus_absent(monkeypatch):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         await _seed_asset_and_components(factory, asset_id, external_ref)
-        raw = await _run_build(factory, asset_id, external_ref, monkeypatch, [])  # Argus degraded
+        # Even though a premium hit is available, an absent/disabled connection
+        # gates it out — only the free finding ships.
+        premium = [_premium_finding("lodash", "4.17.20", "ARGUS-NEW")]
+        raw = await _run_build(
+            factory, asset_id, external_ref, monkeypatch, premium, conn_enabled=False
+        )
     finally:
         await _cleanup(factory, asset_id)
         await engine.dispose()

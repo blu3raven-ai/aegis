@@ -160,7 +160,7 @@ export function RoutingRulesPanel() {
       {/* Error state */}
       {loadError && (
         <div className="rounded-2xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
-          <p className="text-sm font-semibold text-[var(--color-severity-critical)]">
+          <p className="text-sm font-semibold text-[var(--color-severity-critical-text)]">
             Couldn&apos;t load rules
           </p>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{loadError}</p>
@@ -229,7 +229,7 @@ export function RoutingRulesPanel() {
                             aria-label={rule.enabled ? "disable rule" : "enable rule"}
                             className={
                               rule.enabled
-                                ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)] hover:bg-[var(--color-status-ok)]/10 hover:text-[var(--color-status-ok)]"
+                                ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)] hover:bg-[var(--color-status-ok)]/10 hover:text-[var(--color-status-ok-text)]"
                                 : "bg-[var(--color-border)] text-[var(--color-text-tertiary)] hover:bg-[var(--color-border)] hover:text-[var(--color-text-tertiary)]"
                             }
                             leadingIcon={
@@ -265,7 +265,7 @@ export function RoutingRulesPanel() {
                               variant="ghost"
                               size="xs"
                               onClick={() => handleDelete(rule)}
-                              className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+                              className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
                             >
                               Delete
                             </Button>

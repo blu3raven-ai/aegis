@@ -8,7 +8,7 @@ import uuid
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from sqlalchemy import delete, select  # noqa: E402
 
@@ -228,6 +228,68 @@ async def test_ingest_captures_declared_range(db_session):
         await _cleanup(db_session, aid)
 
 
+async def _manifest_cols(db_session, aid: str, name: str):
+    return (await db_session.execute(
+        select(
+            SbomComponent.manifest_path,
+            SbomComponent.manifest_line,
+            SbomComponent.manifest_snippet,
+            SbomComponent.manifest_snippet_start,
+        ).where(SbomComponent.asset_id == aid, SbomComponent.name == name)
+    )).first()
+
+
+@pytest.mark.asyncio
+async def test_ingest_captures_manifest_location(db_session):
+    aid = await _mk_asset(db_session)
+    sbom = {
+        "components": [
+            {"name": "lodash", "version": "4.17.21", "purl": "pkg:npm/lodash@4.17.21",
+             "bom-ref": "r-lodash",
+             "properties": [
+                 {"name": "aegis:declared_range", "value": "^4.17.0"},
+                 {"name": "aegis:declared_path", "value": "package.json"},
+                 {"name": "aegis:declared_line", "value": "12"},
+                 {"name": "aegis:declared_snippet", "value": '  "lodash": "^4.17.0"'},
+                 {"name": "aegis:declared_snippet_start", "value": "8"},
+             ]},
+            {"name": "ms", "version": "2.1.3", "purl": "pkg:npm/ms@2.1.3", "bom-ref": "r-ms"},
+        ],
+    }
+    try:
+        populate_components("acme-org", "api", sbom, asset_id=aid)
+        path, line, snippet, start = await _manifest_cols(db_session, aid, "lodash")
+        assert path == "package.json"
+        assert line == 12
+        assert '"lodash": "^4.17.0"' in snippet
+        assert start == 8
+        # No manifest properties -> all null.
+        assert await _manifest_cols(db_session, aid, "ms") == (None, None, None, None)
+    finally:
+        await _cleanup(db_session, aid)
+
+
+@pytest.mark.asyncio
+async def test_ingest_manifest_line_non_numeric_is_null(db_session):
+    aid = await _mk_asset(db_session)
+    sbom = {
+        "components": [
+            {"name": "lodash", "version": "4.17.21", "purl": "pkg:npm/lodash@4.17.21",
+             "properties": [
+                 {"name": "aegis:declared_path", "value": "package.json"},
+                 {"name": "aegis:declared_line", "value": "not-a-number"},
+             ]},
+        ],
+    }
+    try:
+        populate_components("acme-org", "api", sbom, asset_id=aid)
+        path, line, _, _ = await _manifest_cols(db_session, aid, "lodash")
+        assert path == "package.json"
+        assert line is None  # non-numeric parsed to null, no crash
+    finally:
+        await _cleanup(db_session, aid)
+
+
 @pytest.mark.asyncio
 async def test_ingest_declared_range_absent_is_null(db_session):
     aid = await _mk_asset(db_session)
@@ -320,5 +382,75 @@ async def test_filter_options_dependency_scopes(db_session):
         opts = sbom_filter_options(info_context={"asset_ids": [aid]})
         assert opts.dependency_scopes == ["direct", "transitive", "unknown"]
         assert sbom_filter_options(info_context={"asset_ids": []}).dependency_scopes == []
+    finally:
+        await _cleanup(db_session, aid)
+
+
+@pytest.mark.asyncio
+async def test_ingest_captures_declared_scope(db_session):
+    """The runner's aegis:declared_scope property lands on SbomComponent.scope."""
+    aid = await _mk_asset(db_session)
+    sbom = {
+        "metadata": {"component": {"bom-ref": "root", "type": "application"}},
+        "components": [
+            {
+                "name": "jest", "version": "29.0.0", "purl": "pkg:npm/jest@29.0.0",
+                "bom-ref": "r-jest",
+                "properties": [{"name": "aegis:declared_scope", "value": "dev"}],
+            },
+            {
+                "name": "express", "version": "4.0.0", "purl": "pkg:npm/express@4.0.0",
+                "bom-ref": "r-exp",
+                "properties": [{"name": "aegis:declared_scope", "value": "prod"}],
+            },
+            # transitive dep — no declared scope stamped
+            {"name": "ms", "version": "2.0", "purl": "pkg:npm/ms@2.0", "bom-ref": "r-ms"},
+        ],
+        "dependencies": [
+            {"ref": "root", "dependsOn": ["r-jest", "r-exp"]},
+            {"ref": "r-exp", "dependsOn": ["r-ms"]},
+        ],
+    }
+    try:
+        populate_components("acme-org", "api", sbom, asset_id=aid)
+        rows = (await db_session.execute(
+            select(SbomComponent.name, SbomComponent.scope).where(SbomComponent.asset_id == aid)
+        )).all()
+        scope = {n: s for n, s in rows}
+        assert scope["jest"] == "dev"
+        assert scope["express"] == "prod"
+        assert scope["ms"] is None
+    finally:
+        await _cleanup(db_session, aid)
+
+
+@pytest.mark.asyncio
+async def test_ingest_captures_layer_attribution(db_session):
+    """The runner's aegis:layer_digest/index properties land on SbomComponent."""
+    aid = await _mk_asset(db_session)
+    sbom = {
+        "metadata": {"component": {"bom-ref": "root", "type": "container"}},
+        "components": [
+            {
+                "name": "openssl", "version": "1.1.1", "purl": "pkg:deb/debian/openssl@1.1.1",
+                "bom-ref": "r-ssl",
+                "properties": [
+                    {"name": "aegis:layer_digest", "value": "sha256:base"},
+                    {"name": "aegis:layer_index", "value": "0"},
+                ],
+            },
+            {"name": "app", "version": "2.0", "purl": "pkg:npm/app@2.0", "bom-ref": "r-app"},
+        ],
+        "dependencies": [{"ref": "root", "dependsOn": ["r-ssl", "r-app"]}],
+    }
+    try:
+        populate_components("acme-org", "img", sbom, asset_id=aid)
+        rows = (await db_session.execute(
+            select(SbomComponent.name, SbomComponent.layer_digest, SbomComponent.layer_index)
+            .where(SbomComponent.asset_id == aid)
+        )).all()
+        by_name = {n: (d, i) for n, d, i in rows}
+        assert by_name["openssl"] == ("sha256:base", 0)
+        assert by_name["app"] == (None, None)  # unattributed component
     finally:
         await _cleanup(db_session, aid)

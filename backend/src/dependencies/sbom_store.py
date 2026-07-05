@@ -71,6 +71,7 @@ def upsert_sbom(
     manifests: dict[str, str],
     run_id: str,
     asset_id: str | None = None,
+    html_url: str | None = None,
 ) -> None:
     """Store or replace the SBOM for a given org/repo. asset_id required after Plan D."""
     if not asset_id:
@@ -91,6 +92,7 @@ def upsert_sbom(
         existing = result.scalars().first()
         if existing:
             existing.commit_sha = commit_sha
+            existing.html_url = html_url
             existing.s3_key = sbom_key
             existing.run_id = run_id
             existing.scanned_at = now
@@ -98,6 +100,7 @@ def upsert_sbom(
             session.add(Sbom(
                 asset_id=asset_id,
                 commit_sha=commit_sha,
+                html_url=html_url,
                 s3_key=sbom_key,
                 run_id=run_id,
                 scanned_at=now,

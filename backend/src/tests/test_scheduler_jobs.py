@@ -6,7 +6,7 @@ import time
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 
 def _wait_for_thread(name_prefix: str, timeout: float = 1.0) -> None:

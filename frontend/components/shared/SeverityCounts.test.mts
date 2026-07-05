@@ -25,8 +25,8 @@ describe("SeverityCounts shape", () => {
   it("uses the documented severity color tokens for all severities", () => {
     for (const sev of ["critical", "high", "medium", "low"]) {
       assert.ok(
-        src.includes(`text-[var(--color-severity-${sev})]`),
-        `should reference text-[var(--color-severity-${sev})] for ${sev}`,
+        src.includes(`text-[var(--color-severity-${sev}-text)]`),
+        `should reference text-[var(--color-severity-${sev}-text)] for ${sev}`,
       )
     }
   })

@@ -48,13 +48,13 @@ function formatExpiresIn(validUntilIso: string): string {
 function severityClasses(severity: string): string {
   switch (severity.toLowerCase()) {
     case "critical":
-      return "text-[var(--color-severity-critical)]"
+      return "text-[var(--color-severity-critical-text)]"
     case "high":
-      return "text-[var(--color-severity-high)]"
+      return "text-[var(--color-severity-high-text)]"
     case "medium":
-      return "text-[var(--color-severity-medium)]"
+      return "text-[var(--color-severity-medium-text)]"
     case "low":
-      return "text-[var(--color-severity-low)]"
+      return "text-[var(--color-severity-low-text)]"
     default:
       return "text-[var(--color-text-secondary)]"
   }
@@ -244,7 +244,7 @@ export function DryRunConfirmDialog({
           {error && (
             <div
               role="alert"
-              className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-severity-critical)]"
+              className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
             >
               {error}
             </div>

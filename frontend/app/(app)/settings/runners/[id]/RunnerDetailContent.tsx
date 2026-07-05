@@ -67,7 +67,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span className="inline-flex items-center gap-1.5 text-sm font-medium">
       <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status] ?? "bg-[var(--color-text-tertiary)]"}`} />
-      <span className={status === "online" ? "text-[var(--color-status-ok)]" : "text-[var(--color-text-secondary)]"}>
+      <span className={status === "online" ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-text-secondary)]"}>
         {STATUS_LABEL[status] ?? status}
       </span>
     </span>
@@ -76,12 +76,12 @@ function StatusBadge({ status }: { status: string }) {
 
 
 const JOB_STATUS_CLASS: Record<string, string> = {
-  completed: "text-[var(--color-status-ok)]",
-  failed: "text-[var(--color-severity-critical)]",
+  completed: "text-[var(--color-status-ok-text)]",
+  failed: "text-[var(--color-severity-critical-text)]",
   running: "text-[var(--color-accent)]",
   assigned: "text-[var(--color-accent)]",
   queued: "text-[var(--color-text-tertiary)]",
-  cancelled: "text-[var(--color-state-pending)]",
+  cancelled: "text-[var(--color-state-pending-text)]",
 }
 
 
@@ -178,7 +178,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
         <Link href="/settings/runners" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline">
           <ChevronLeft /> Back to Runners
         </Link>
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           Runner not found
         </div>
       </div>

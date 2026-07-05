@@ -35,12 +35,16 @@ class FindingRow:
     updated_at: Optional[str]
     epss_percentile: Optional[float] = None
     kev: Optional[bool] = None
+    malicious: Optional[bool] = None
     cwe: Optional[str] = None
     risk_score: Optional[int] = None
     action_band: Optional[str] = None
     assignee_user_id: Optional[str] = None
     verdict: Optional[str] = None
     has_fix: Optional[bool] = None
+    # One-line disproof for ruled-out findings, so the "considered but ruled out"
+    # list can show WHY without a per-row detail fetch. None for other verdicts.
+    ruled_out_reason: Optional[str] = None
 
 
 @strawberry.type
@@ -77,6 +81,16 @@ def _parse_iso_or_none(value: str | None) -> datetime | None:
         raise ValueError(f"invalid first_seen_after: {value}") from exc
 
 
+def _ruled_out_reason(d: dict[str, Any]) -> str | None:
+    """The verifier's grounded disproof sentence, only for ruled-out findings."""
+    if d.get("verdict") != "ruled_out":
+        return None
+    meta = d.get("verification_metadata")
+    reason = meta.get("ruled_out_reason") if isinstance(meta, dict) else None
+    text = reason.get("reasoning") if isinstance(reason, dict) else None
+    return text.strip() if isinstance(text, str) and text.strip() else None
+
+
 def _row_from_dict(d: dict[str, Any]) -> FindingRow:
     return FindingRow(
         id=str(d.get("id") or ""),
@@ -94,12 +108,14 @@ def _row_from_dict(d: dict[str, Any]) -> FindingRow:
         updated_at=d.get("updated_at"),
         epss_percentile=d.get("epss_percentile"),
         kev=d.get("kev"),
+        malicious=d.get("malicious"),
         cwe=d.get("cwe"),
         risk_score=d.get("risk_score"),
         action_band=d.get("action_band"),
         assignee_user_id=d.get("assignee_user_id"),
         verdict=d.get("verdict"),
         has_fix=bool(d.get("recommended_fix")),
+        ruled_out_reason=_ruled_out_reason(d),
     )
 
 

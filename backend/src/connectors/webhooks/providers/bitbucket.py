@@ -12,7 +12,6 @@ working.
 """
 from __future__ import annotations
 
-import json
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -21,6 +20,8 @@ from src.connectors.base import BaseIngester, TestResult
 from src.connectors.registry import register_connector
 from src.settings.webhooks.service import match_webhook_secret
 from src.connectors.webhooks.healthcheck import webhook_test_result
+from src.connectors.webhooks.dedupe import register_delivery
+from src.connectors.webhooks.ingest_guard import parse_json_object, read_guarded_body
 from src.connectors.webhooks.secret_resolver import verify_with_stored_secret
 from src.connectors.webhooks.signature import verify_hmac_sha256
 from src.db.engine import get_session
@@ -73,9 +74,10 @@ async def bitbucket_webhook(
     request: Request,
     x_event_key: str = Header(...),
     x_hub_signature: str = Header(...),
+    x_request_uuid: str | None = Header(default=None, alias="X-Request-UUID"),
 ):
     """Receive a signed webhook event from Bitbucket Cloud."""
-    body = await request.body()
+    body = await read_guarded_body(request)
 
     def _verify(secret: str) -> bool:
         return verify_hmac_sha256(body, x_hub_signature, secret)
@@ -86,11 +88,7 @@ async def bitbucket_webhook(
         logger.warning("bitbucket.webhook: signature verification failed")
         raise HTTPException(status_code=401, detail="Invalid signature")
 
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError as exc:
-        logger.error("bitbucket.webhook: malformed JSON body: %s", exc)
-        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+    payload = parse_json_object(body)
 
     if x_event_key == "repo:push":
         event = normalize_bitbucket_push(payload)
@@ -102,6 +100,15 @@ async def bitbucket_webhook(
         logger.info("bitbucket.webhook: ignoring event key=%s", x_event_key)
         return {"status": "ignored", "reason": f"event {x_event_key}"}
 
+    if x_request_uuid is not None and register_delivery("bitbucket", x_request_uuid):
+        logger.info("bitbucket.webhook: dropping replayed delivery id=%s", x_request_uuid)
+        return {"status": "duplicate", "event_id": None}
+
     get_event_publisher().publish(event)
-    logger.info("bitbucket.webhook: published event_type=%s event_id=%s", event.event_type, event.event_id)
+    logger.info(
+        "bitbucket.webhook: published event_type=%s event_id=%s authed_org=%s",
+        event.event_type,
+        event.event_id,
+        matched.org_id,
+    )
     return {"status": "accepted", "event_id": event.event_id}

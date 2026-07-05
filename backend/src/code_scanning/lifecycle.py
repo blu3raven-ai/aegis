@@ -58,8 +58,15 @@ class CodeScanningHooks(LifecycleHooks):
             "language": raw.get("language", ""),
             "fileClass": raw.get("file_class", ""),
         }
-        # Optional large fields — only store when present
-        for key in ("code_flows", "code_window", "code_window_start_line", "imports", "reachability"):
+        # Optional large fields — only store when present. The verification
+        # fields (verdict/evidence/exploit_chain/verification_metadata) drive the
+        # SAST verification panel; a `ruled_out` verdict also hides the finding,
+        # but finding_queries applies a grounding gate before letting it do so.
+        for key in (
+            "recommended_fix",
+            "verdict", "evidence", "exploit_chain", "verification_metadata",
+            "code_flows", "code_window", "code_window_start_line", "imports", "reachability",
+        ):
             val = raw.get(key)
             if val:
                 detail[key] = val

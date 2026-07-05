@@ -4,7 +4,6 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from src.audit_log.recorder import ActorInfo, get_recorder
 from src.settings.llm.service import (
     LlmConfigUpsert,
     delete_llm_config,
@@ -14,6 +13,7 @@ from src.settings.llm.service import (
 )
 from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import MANAGE_SETTINGS
+from src.shared.url_guard import UnsafeURLError, assert_sendable_url
 
 _DEFAULT_ORG_ID = "default"
 
@@ -61,13 +61,7 @@ def put_llm_config(
         daily_token_budget=body.daily_token_budget,
         enabled=body.enabled,
     ))
-    get_recorder().record(
-        action="llm_config.updated",
-        resource_type="llm_config",
-        resource_id=org_id,
-        actor=ActorInfo(user_id="system"),
-        metadata={"enabled": body.enabled, "model": body.model},
-    )
+    request.state.audit_metadata = {"enabled": body.enabled, "model": body.model}
     return fetch_public_llm_config(org_id) or {"configured": True}
 
 
@@ -82,9 +76,14 @@ def test_llm_connection(
     if cfg is None:
         raise HTTPException(status_code=404, detail="llm_config_not_set")
 
+    try:
+        assert_sendable_url(cfg.api_base_url)
+    except UnsafeURLError as exc:
+        return {"ok": False, "error": "unsafe_url", "detail": str(exc)[:200]}
+
     import httpx
     try:
-        with httpx.Client(timeout=15.0) as client:
+        with httpx.Client(timeout=15.0, follow_redirects=False) as client:
             resp = client.post(
                 f"{cfg.api_base_url.rstrip('/')}/chat/completions",
                 json={
@@ -120,10 +119,4 @@ def delete_llm_config_route(
     deleted = delete_llm_config(org_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="llm_config_not_set")
-    get_recorder().record(
-        action="llm_config.deleted",
-        resource_type="llm_config",
-        resource_id=org_id,
-        actor=ActorInfo(user_id="system"),
-    )
     return {"deleted": True}

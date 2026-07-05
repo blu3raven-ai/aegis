@@ -31,7 +31,7 @@ function MiniHealthBar({ percent }: { percent: number | null | undefined }) {
         : "bg-[var(--color-severity-critical)]"
   return (
     <div className="flex items-center gap-1.5">
-      <div className="h-1.5 w-12 overflow-hidden rounded-full bg-[var(--color-surface-raised)]">
+      <div className="h-1.5 w-12 overflow-hidden rounded-full bg-[var(--color-border-strong)]">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${clamped}%` }} />
       </div>
       <span className="text-xs tabular-nums text-[var(--color-text-secondary)]">

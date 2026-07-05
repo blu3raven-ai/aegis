@@ -1,6 +1,7 @@
 "use client"
 
 import type { HeartbeatEntry } from "./types"
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
 
 interface HeartbeatGridProps {
   heartbeats: HeartbeatEntry[]
@@ -49,7 +50,7 @@ export function HeartbeatGrid({
     const firstMissedIdx = slots.findIndex((s) => s === "missed")
     if (firstMissedIdx >= 0) {
       const missedTs = windowStart + firstMissedIdx * intervalSeconds * 1000
-      firstMissedTime = new Date(missedTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      firstMissedTime = new Date(missedTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: getActiveTimeZone() })
     }
   }
 

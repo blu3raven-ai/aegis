@@ -22,6 +22,10 @@ class ContainerScanningHooks(LifecycleHooks):
         return f"{repo}::{pkg}::{eco}::{adv}"
 
     def initial_state(self, raw: dict) -> str:
+        # Malicious packages have no fix but must never be deferred — the
+        # package is compromised and needs removal, so keep them open.
+        if raw.get("malicious"):
+            return "open"
         return "open" if self.has_fix(raw) else "deferred"
 
     def extract_repo(self, raw: dict) -> str:
@@ -49,6 +53,11 @@ class ContainerScanningHooks(LifecycleHooks):
             "imageTag": raw.get("imageTag"),
             "imageDigest": raw.get("imageDigest"),
             "layerCount": raw.get("layerCount"),
+            "layerDigest": raw.get("layerDigest"),
+            "layerIndex": raw.get("layerIndex"),
+            "release_age_days": raw.get("release_age_days"),
+            "release_recent": raw.get("release_recent"),
+            "newerTags": raw.get("newerTags"),
             "sizeBytes": raw.get("sizeBytes"),
             "baseOs": raw.get("baseOs"),
             "advisoryUrl": adv.get("html_url"),
@@ -60,11 +69,12 @@ class ContainerScanningHooks(LifecycleHooks):
             "advisoryUpdatedAt": adv.get("updated_at"),
             "references": adv.get("references"),
             "source": raw.get("source", "container"),
-            "scanner": raw.get("scanner", "grype"),
-            "matchedBy": raw.get("matched_by", ["grype"]),
+            "scanner": raw.get("scanner", "osv"),
+            "matchedBy": raw.get("matched_by", ["osv"]),
             "fixState": raw.get("fixState"),
             "currentVersion": raw.get("current_version"),
             "matchSource": raw.get("match_source"),
+            "malicious": bool(raw.get("malicious")),
         }
 
     def has_fix(self, raw: dict) -> bool:

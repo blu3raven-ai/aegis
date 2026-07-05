@@ -3,17 +3,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from runner.verification.llm_client import LlmResponse
+from runner.verification.llm_client import LlmClient, LlmResponse
 from runner.verification.verifiers.iac import verify_iac_finding
 
 
-class _FixedLlm:
+class _FixedLlm(LlmClient):
     def __init__(self, *contents: str) -> None:
+        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._contents = list(contents)
-        self._model = "stub"
 
     def chat(self, messages, *, temperature=0.0, max_tokens=1024):
-        content = self._contents.pop(0) if self._contents else "{}"
+        # Repeat the final scripted content so the chat_json repair-retry sees the
+        # same (still-invalid) response and exhausts its budget as intended.
+        content = self._contents[0]
+        if len(self._contents) > 1:
+            self._contents.pop(0)
         return LlmResponse(
             content=content, tokens_in=10, tokens_out=5, prompt_hash="h-1"
         )

@@ -33,7 +33,7 @@ function MetaPill({
     <span
       className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-none ${
         warn
-          ? "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]"
+          ? "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]"
           : "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
       }`}
     >
@@ -179,8 +179,8 @@ export function ConnectionCard({
             <div
               className={`mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${
                 testResult.success
-                  ? "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]"
-                  : "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
+                  ? "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]"
+                  : "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
               }`}
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -196,7 +196,7 @@ export function ConnectionCard({
 
           {/* Error message — only show on error status */}
           {connection.status === "error" && connection.statusMessage && !testResult && (
-            <p className="mt-1.5 text-xs text-[var(--color-severity-critical)]">
+            <p className="mt-1.5 text-xs text-[var(--color-severity-critical-text)]">
               {connection.statusMessage}
             </p>
           )}
@@ -246,7 +246,7 @@ export function ConnectionCard({
                   e.stopPropagation()
                   setShowDeleteConfirm(true)
                 }}
-                className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
+                className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)]"
               >
                 Delete
               </Button>

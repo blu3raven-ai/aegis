@@ -69,7 +69,7 @@ export function TotpSetupModal({
         </p>
       )}
       {step === "error" && (
-        <p className="py-4 text-center text-sm text-[var(--color-severity-critical)]">
+        <p className="py-4 text-center text-sm text-[var(--color-severity-critical-text)]">
           Failed to start setup. Close and try again.
         </p>
       )}

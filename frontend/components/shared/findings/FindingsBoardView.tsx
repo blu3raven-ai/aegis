@@ -31,9 +31,13 @@ import { FindingAge } from "@/components/shared/findings/FindingAge"
 import { CodePreviewSection } from "@/components/shared/findings/CodePreviewSection"
 import { FindingDataFlowSection } from "@/components/shared/findings/FindingDataFlowSection"
 import { EvidenceSection } from "@/components/shared/findings/EvidenceSection"
+import { SecretVerificationSection } from "@/components/shared/findings/SecretVerificationSection"
 import { SecurityBriefSection } from "@/components/shared/findings/SecurityBriefSection"
 import { ContainerImageSection } from "@/components/shared/findings/ContainerImageSection"
 import { CweContextSection } from "@/components/shared/findings/CweContextSection"
+import { cweInfo } from "@/lib/shared/findings/cwe-catalog"
+import { severityContext } from "@/lib/shared/findings/severity-context"
+import { triageSummary } from "@/lib/shared/findings/triage-summary"
 import { BlastRadiusSection } from "@/components/shared/findings/BlastRadiusSection"
 import { FindingReferencesSection } from "@/components/shared/findings/FindingReferencesSection"
 import { RecommendedFixSection } from "@/components/shared/findings/RecommendedFixSection"
@@ -61,10 +65,10 @@ import {
 } from "@/lib/client/findings-api"
 import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
-import { EnableArgusBanner } from "@/components/shared/findings/EnableArgusBanner"
+import { EnableVerificationBanner } from "@/components/shared/findings/EnableVerificationBanner"
 import { VerdictFilterChips } from "@/components/shared/findings/VerdictFilterChips"
 import { VerdictBadge } from "@/components/shared/findings/VerdictBadge"
-import type { VerdictFilter } from "@/lib/shared/findings/verdicts"
+import { parseVerdictFilter, type VerdictFilter } from "@/lib/shared/findings/verdicts"
 import {
   mapApiFinding,
   type FindingRow as Finding,
@@ -81,9 +85,17 @@ const PAGE_SIZE = 25
 const VALID_VIEW_KEYS = new Set<string>([
   "severity", "scanner", "state", "repo", "q", "collapsed",
   "sort", "age",
-  "cwe", "kev", "epss_min", "bands", "assignee",
+  "cwe", "kev", "epss_min", "bands", "assignee", "verdict",
   "page",
 ])
+
+// Filter keys mirrored to the URL by the standalone /findings route. Every key
+// here is re-hydrated on mount (page.tsx → initial* props), so the URL only ever
+// carries params that round-trip. `collapsed`/`page` are intentionally excluded.
+const URL_SYNC_KEYS = [
+  "severity", "scanner", "state", "repo", "q",
+  "sort", "age", "cwe", "kev", "epss_min", "bands", "assignee", "verdict",
+] as const
 
 const SEV_COLOR: Record<Severity, string> = {
   critical: "var(--color-severity-critical)",
@@ -98,6 +110,7 @@ const SCANNER_LABEL: Record<Scanner, string> = {
   container_scanning: "CONT",
   secret_scanning: "SEC",
   iac_scanning: "IaC",
+  agent_scanning: "AGT",
 }
 
 // Drive the scanner badge palette from the registered theme tokens (which carry
@@ -109,6 +122,7 @@ const SCANNER_BG: Record<Scanner, string> = {
   container_scanning: "var(--color-scanner-containers-bg)",
   secret_scanning: "var(--color-scanner-secrets-bg)",
   iac_scanning: "var(--color-scanner-iac-bg)",
+  agent_scanning: "var(--color-scanner-agent-bg)",
 }
 
 const SCANNER_FG: Record<Scanner, string> = {
@@ -117,6 +131,7 @@ const SCANNER_FG: Record<Scanner, string> = {
   container_scanning: "var(--color-scanner-containers-fg)",
   secret_scanning: "var(--color-scanner-secrets-fg)",
   iac_scanning: "var(--color-scanner-iac-fg)",
+  agent_scanning: "var(--color-scanner-agent-fg)",
 }
 
 const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
@@ -125,6 +140,7 @@ const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
   container_scanning: "Containers",
   secret_scanning: "Secrets",
   iac_scanning: "Infrastructure as Code",
+  agent_scanning: "Agent Security",
 }
 
 const SEVERITY_GROUP_LABEL: Record<Severity, string> = {
@@ -219,19 +235,30 @@ function ActionBandBadge({ band }: { band: FindingActionBand }) {
 }
 
 // Stable ordering per group key keeps the visual scan rhythm consistent.
-const SCANNER_ORDER: Scanner[] = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning"]
+const SCANNER_ORDER: Scanner[] = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning", "agent_scanning"]
 
-// Scanners Argus runs its exploit-verification pass on. The drawer's locked
-// preview only nudges to enable Argus for these (deps/container verdicts are
-// deterministic today).
-const ARGUS_VERIFIABLE_SCANNERS = new Set<Scanner>([
+// Scanners the LLM verifier runs its exploit-verification pass on. The drawer's
+// locked preview only nudges to enable verification for these (deps/container
+// verdicts are deterministic today).
+// Secrets are deliberately excluded: they're verified by TruffleHog's live
+// provider check, never sent to an LLM, so the drawer must not offer an
+// "enable LLM verification" prompt for them.
+const VERIFIABLE_SCANNERS = new Set<Scanner>([
   "code_scanning",
-  "secret_scanning",
   "iac_scanning",
+  "dependencies_scanning",
 ])
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"]
 
 const INITIAL_ROWS_PER_GROUP = 5
+
+// EPSS percentile is a 0-1 fraction server-side; clamp an inbound deep-link
+// value to that range so a hand-edited ?epss_min=90 stays sensible. Mirrors
+// the backend clamp in findings/service.py.
+function clampEpssFraction(value: number | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null
+  return Math.min(Math.max(value, 0), 1)
+}
 
 function groupKeyFor(row: Finding, key: GroupKey): string {
   switch (key) {
@@ -353,6 +380,19 @@ export interface FindingsBoardViewProps {
    */
   initialSeverityFilter?: string
   initialRepoFilter?: string
+  /**
+   * Whether to pre-filter to KEV-listed findings on first mount, sourced from
+   * the `?kev=true` query param (e.g. a KEV-affected-repo notification link).
+   * Narrows within the caller's server-enforced asset scope.
+   */
+  initialKevFilter?: boolean
+  /**
+   * Initial EPSS percentile floor on first mount, sourced from the
+   * `?epss_min=<fraction>` query param (e.g. a posture High-EPSS tile linking
+   * to ?epss_min=0.9). A 0-1 fraction; values outside that range are clamped
+   * here and again server-side. Narrows within the caller's asset scope.
+   */
+  initialEpssMinFilter?: number
   /** Initial free-text search applied on first mount (e.g. an SBOM component
    * row linking to ?q=<package> to see that package's findings). */
   initialSearch?: string
@@ -364,6 +404,20 @@ export interface FindingsBoardViewProps {
    * to nothing rather than leaking.
    */
   initialFindingId?: string
+  /**
+   * Initial "more filters" and ordering applied on first mount, sourced from URL
+   * query params so a shared/bookmarked link restores the full filter set (not
+   * just the primary chips). Each is validated exactly like the primary filters:
+   * cwe/assignee are free strings scoped server-side, bands is a CSV whitelisted
+   * against the known action-band tokens, and sort/age fall back to their
+   * defaults when absent or unrecognised.
+   */
+  initialCwe?: string
+  initialBands?: string
+  initialAssignee?: string
+  initialSort?: string
+  initialAge?: string
+  initialVerdictFilter?: VerdictFilter
   /**
    * Optional queue sidebar rendered to the left of the findings list. When passed as a
    * render-function, the sidebar receives the saved-views API and the header's
@@ -393,6 +447,13 @@ export interface FindingsBoardViewProps {
    * source's repositories. The repo dropdown still narrows within this scope.
    */
   scopeRepos?: string[]
+  /**
+   * Mirror the active filters + open drawer into the URL query string so the
+   * view is shareable/bookmarkable and survives refresh. Only the standalone
+   * /findings route opts in; embedded uses (e.g. /inbox/triage) must not, or
+   * they would clobber their own URL.
+   */
+  syncUrl?: boolean
 }
 
 type ScannerFilter = FindingScanner | "all"
@@ -428,7 +489,7 @@ const VALID_SCANNERS = new Set<ScannerFilter>([
 ])
 const VALID_STATES = new Set<StateFilter>(["all", "open", "closed", "fixed", "dismissed", "deferred"])
 const VALID_SORT_KEYS = new Set<SortKey>(["severity_age", "epss", "action_band", "newest", "oldest"])
-const VALID_AGE_PRESETS = new Set<AgePresetKey>(["any", "24h", "7d", "30d"])
+const VALID_AGE_PRESETS = new Set<AgePresetKey>(["any", "24h", "7d", "30d", "90d"])
 
 const SEARCH_DEBOUNCE_MS = 250
 
@@ -538,7 +599,7 @@ function buildListParams(args: {
   }
 }
 
-export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initialStateFilter, initialScannerFilter, initialSeverityFilter, initialRepoFilter, initialSearch, initialFindingId, leftSidebar, showSummaryStrip = true, compactHeader = false, flat = false, hideHeader = false, scopeRepos }: FindingsBoardViewProps) {
+export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initialStateFilter, initialScannerFilter, initialSeverityFilter, initialRepoFilter, initialKevFilter, initialEpssMinFilter, initialSearch, initialFindingId, initialCwe, initialBands, initialAssignee, initialSort, initialAge, initialVerdictFilter, leftSidebar, showSummaryStrip = true, compactHeader = false, flat = false, hideHeader = false, scopeRepos, syncUrl = false }: FindingsBoardViewProps) {
   const sidebarOwnsSavedViews = typeof leftSidebar === "function"
   // Severity is validated against the allowed set (invalid → "all"); repo is a
   // free string that the backend resolves within the caller's asset scope.
@@ -548,14 +609,22 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   const [scannerFilter, setScannerFilter] = useState<ScannerFilter>(initialScannerFilter ?? "all")
   const [stateFilter, setStateFilter] = useState<StateFilter>(() => initialStateFromProp(initialStateFilter))
   const [repoFilter, setRepoFilter] = useState<string>(initialRepoFilter || "all")
-  const [sortKey, setSortKey] = useState<SortKey>("severity_age")
-  const [agePreset, setAgePreset] = useState<AgePresetKey>("any")
+  const [sortKey, setSortKey] = useState<SortKey>(() =>
+    readFromSet<SortKey>({ sort: initialSort ?? "" }, "sort", VALID_SORT_KEYS, "severity_age"),
+  )
+  const [agePreset, setAgePreset] = useState<AgePresetKey>(() =>
+    readFromSet<AgePresetKey>({ age: initialAge ?? "" }, "age", VALID_AGE_PRESETS, "any"),
+  )
   const [moreFilters, setMoreFilters] = useState<FindingsMoreFiltersValues>({
-    cwe: null,
-    kev: false,
-    epssMin: null,
-    bands: [],
-    assigneeUserId: null,
+    cwe: initialCwe || null,
+    kev: Boolean(initialKevFilter),
+    epssMin: clampEpssFraction(initialEpssMinFilter),
+    // Whitelist band tokens exactly like applyView — the backend raises on
+    // unknown bands, so a hand-edited ?bands=critical must never reach it.
+    bands: initialBands
+      ? (initialBands.split(",").filter((b) => b === "act" || b === "attend" || b === "track") as FindingActionBand[])
+      : [],
+    assigneeUserId: initialAssignee || null,
   })
   const [page, setPage] = useState<number>(1)
   const [repoOptions, setRepoOptions] = useState<string[]>([])
@@ -571,7 +640,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   )
   const [findings, setFindings] = useState<Finding[]>([])
   const [totalCount, setTotalCount] = useState(0)
-  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>(null)
+  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>(initialVerdictFilter ?? null)
   const [verdictCounts, setVerdictCounts] = useState<VerdictCounts | undefined>(undefined)
   // Per-scanner pagination: in the default scanner-grouped board each scanner
   // section paginates independently so a noisy scanner can't bury a quieter one
@@ -579,12 +648,16 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   // and `scannerTotals` is scanner -> total count from that scanner's fetch.
   const [scannerPages, setScannerPages] = useState<Record<string, number>>({})
   const [scannerTotals, setScannerTotals] = useState<Record<string, number>>({})
-  const [argusConnected, setArgusConnected] = useState<boolean>(true)  // assume configured until known otherwise
+  const [verificationEnabled, setVerificationEnabled] = useState<boolean>(true)  // assume configured until known otherwise
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null)
   const [advisory, setAdvisory] = useState<FindingAdvisory | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  // Surface fetch failures in the drawer rather than silently showing a
+  // partial (lean) row — the analyst must know the detail is incomplete.
+  const [detailError, setDetailError] = useState<string | null>(null)
+  const [advisoryError, setAdvisoryError] = useState<string | null>(null)
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set())
   const [intelMessage, setIntelMessage] = useState<string | null>(null)
   const [summary, setSummary] = useState<FindingsSummary | null>(null)
@@ -616,9 +689,10 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     if (moreFilters.epssMin != null)     params.epss_min = String(moreFilters.epssMin)
     if (moreFilters.bands.length)        params.bands = moreFilters.bands.join(",")
     if (moreFilters.assigneeUserId)      params.assignee = moreFilters.assigneeUserId
+    if (verdictFilter)                   params.verdict = verdictFilter
     if (page !== 1)                      params.page = String(page)
     return params
-  }, [sevFilter, scannerFilter, stateFilter, repoFilter, searchQuery, collapsedCsv, sortKey, agePreset, moreFilters, page])
+  }, [sevFilter, scannerFilter, stateFilter, repoFilter, searchQuery, collapsedCsv, sortKey, agePreset, moreFilters, verdictFilter, page])
 
   function applyView(state: Record<string, string>) {
     const stale = Object.keys(state).filter((k) => !VALID_VIEW_KEYS.has(k))
@@ -633,6 +707,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     setCollapsedGroups(new Set((state.collapsed || "").split(",").filter(Boolean)))
     setSortKey(readFromSet<SortKey>(state, "sort", VALID_SORT_KEYS, "severity_age"))
     setAgePreset(readFromSet<AgePresetKey>(state, "age", VALID_AGE_PRESETS, "any"))
+    setVerdictFilter(parseVerdictFilter(state.verdict))
     setMoreFilters({
       cwe: state.cwe || null,
       kev: state.kev === "true",
@@ -790,15 +865,19 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
   }, [sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, moreFilters, verdictFilter, page, scannerPages, groupBy, load])
 
-  // Argus connection status drives the banner + the drawer's locked preview.
-  // `connected` is true only when an endpoint is configured AND enabled.
+  // LLM verification status drives the banner + the drawer's locked preview.
+  // A 404 means no config exists → verification off. A 403 (no manage_settings)
+  // leaves the fail-safe default (on) so viewers aren't nagged to set it up.
   useEffect(() => {
     let cancelled = false
-    fetch("/api/v1/settings/argus")
-      .then((r) => (r.ok ? r.json() : null))
+    fetch("/api/v1/settings/llm")
+      .then((r) => {
+        if (r.status === 404) return { enabled: false }
+        return r.ok ? r.json() : null
+      })
       .then((data) => {
         if (cancelled || !data) return
-        setArgusConnected(Boolean(data.connected))
+        setVerificationEnabled(Boolean(data.enabled))
       })
       .catch(() => {
         /* network errors leave the banner hidden — fail safe */
@@ -877,6 +956,8 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   const [reopening, setReopening] = useState(false)
   const [dismissError, setDismissError] = useState<string | null>(null)
   const [lastDismissed, setLastDismissed] = useState<{ finding: Finding; index: number; verb: string } | null>(null)
+  // A `?finding=<id>` deep link that resolved to nothing (deleted or out of scope).
+  const [deepLinkMissing, setDeepLinkMissing] = useState(false)
 
   // The list row (GraphQL) is lean; fetch full detail on open and merge the
   // decision content the list omits (description, rule, remediation,
@@ -890,6 +971,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     if (!Number.isFinite(id)) return
     let active = true
     setDetailLoading(true)
+    setDetailError(null)
     getFindingDetail(id)
       .then((raw) => {
         if (!active) return
@@ -898,6 +980,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           curr && curr.id === selectedId
             ? {
                 ...curr,
+                package: d.package ?? curr.package,
                 // Refresh state from the authoritative detail read so the
                 // status banner reflects a change made since the list loaded.
                 state: d.state ?? curr.state,
@@ -924,11 +1007,16 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 containerImage: d.containerImage ?? curr.containerImage,
                 alsoAffectsRepos: d.alsoAffectsRepos ?? curr.alsoAffectsRepos,
                 introducedByCommit: d.introducedByCommit ?? curr.introducedByCommit,
+                // Concrete repo URL (self-hosted hosts) is detail-only; needed
+                // for the view-in-repo deep-link.
+                repoHtmlUrl: d.repoHtmlUrl ?? curr.repoHtmlUrl,
               }
             : curr,
         )
       })
-      .catch(() => { /* keep the lean list row on failure */ })
+      .catch((e) => {
+        if (active) setDetailError(e instanceof Error ? e.message : String(e))
+      })
       // Guarded by `active` so a stale resolve can't clear loading for the
       // finding the user has since navigated to.
       .finally(() => { if (active) setDetailLoading(false) })
@@ -939,11 +1027,16 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   // cleared on navigation so the previous finding's brief never lingers.
   useEffect(() => {
     setAdvisory(null)
+    setAdvisoryError(null)
     if (!selectedId) return
     const id = Number(selectedId)
     if (!Number.isFinite(id)) return
     let active = true
-    getFindingAdvisory(id).then((a) => { if (active) setAdvisory(a) })
+    getFindingAdvisory(id)
+      .then((a) => { if (active) setAdvisory(a) })
+      .catch((e) => {
+        if (active) setAdvisoryError(e instanceof Error ? e.message : String(e))
+      })
     return () => { active = false }
   }, [selectedId])
 
@@ -955,11 +1048,37 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     const id = Number(initialFindingId)
     if (!Number.isFinite(id)) return
     let active = true
+    setDeepLinkMissing(false)
     getFindingDetail(id)
       .then((raw) => { if (active) setSelectedFinding(mapApiFinding(raw)) })
-      .catch(() => { /* out-of-scope / missing id: leave the list as-is */ })
+      .catch(() => {
+        // Missing and out-of-scope findings are indistinguishable (both 404),
+        // so one message covers both without leaking whether the id exists.
+        // Keep the list in view rather than dead-ending on a full-page 404.
+        if (active) setDeepLinkMissing(true)
+      })
     return () => { active = false }
   }, [initialFindingId])
+
+  // Mirror the active filters + open drawer into the URL so the view is
+  // shareable, bookmarkable, and survives a refresh. Opt-in (`syncUrl`) — only
+  // the standalone /findings route enables it; embedded uses share their host
+  // page's URL. Uses replaceState, not router navigation: the list already
+  // refetches on filter changes, so we only reflect state into the address bar
+  // without a server round-trip or a stack of history entries. `page` and
+  // collapsed-group state are deliberately omitted — they are view ephemera,
+  // not filters, and page resets on any filter change.
+  useEffect(() => {
+    if (!syncUrl || typeof window === "undefined") return
+    const params = new URLSearchParams()
+    for (const key of URL_SYNC_KEYS) {
+      const value = currentUrlState[key]
+      if (value) params.set(key, value)
+    }
+    if (selectedId != null) params.set("finding", String(selectedId))
+    const qs = params.toString()
+    window.history.replaceState(null, "", qs ? `${window.location.pathname}?${qs}` : window.location.pathname)
+  }, [syncUrl, currentUrlState, selectedId])
 
   useEffect(() => setDismissError(null), [selectedFinding])
 
@@ -969,6 +1088,13 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     const t = window.setTimeout(() => setLastDismissed(null), 7000)
     return () => window.clearTimeout(t)
   }, [lastDismissed])
+
+  // Auto-expire the missing-deep-link notice.
+  useEffect(() => {
+    if (!deepLinkMissing) return
+    const t = window.setTimeout(() => setDeepLinkMissing(false), 6000)
+    return () => window.clearTimeout(t)
+  }, [deepLinkMissing])
 
   // Drop one id from the multi-select set — used when a row leaves the list via
   // dismiss/defer/reopen so the bulk bar count stays truthful.
@@ -1239,10 +1365,12 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
             severity={sevFilter}
             repo={repoFilter}
             state={stateFilter}
+            scanner={scannerFilter}
             moreFilters={moreFilters}
             onSeverityChange={(next) => setSevFilter(next as Severity | "all")}
             onRepoChange={setRepoFilter}
             onStateChange={(next) => setStateFilter(next as StateFilter)}
+            onScannerChange={(next) => setScannerFilter(next as ScannerFilter)}
             onMoreFiltersChange={(patch) =>
               setMoreFilters((prev) => ({ ...prev, ...patch }))
             }
@@ -1265,7 +1393,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         </div>
 
         <div className="border-b border-[var(--color-border-divider)] bg-[var(--color-surface)] px-5 py-2.5 space-y-3">
-          <EnableArgusBanner argusConnected={argusConnected} />
+          <EnableVerificationBanner verificationEnabled={verificationEnabled} />
           <VerdictFilterChips
             active={verdictFilter}
             counts={verdictCounts}
@@ -1288,7 +1416,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         )}
 
         {error && (
-          <div className="flex items-center justify-between border-b border-[var(--color-border-divider)] px-5 py-3 text-xs text-[var(--color-severity-high)]">
+          <div className="flex items-center justify-between border-b border-[var(--color-border-divider)] px-5 py-3 text-xs text-[var(--color-severity-high-text)]">
             <span>{error}</span>
             <Button variant="secondary" size="xs" onClick={handleRetry}>
               Retry
@@ -1534,19 +1662,33 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                             </Td>
 
                             <Td className="px-3 py-3">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-medium text-[var(--color-text-primary)] truncate">
-                                  {finding.title}
-                                </span>
-                                <FindingRowTags
-                                  kev={finding.kev}
-                                  epssPercentile={finding.epssPercentile}
-                                  firstSeen={finding.firstSeen}
-                                />
-                                {finding.cve && (
-                                  <span className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-[11.5px] text-[var(--color-text-tertiary)]">
-                                    {finding.cve}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-medium text-[var(--color-text-primary)] truncate">
+                                    {finding.title}
                                   </span>
+                                  <FindingRowTags
+                                    malicious={finding.malicious}
+                                    kev={finding.kev}
+                                    epssPercentile={finding.epssPercentile}
+                                    firstSeen={finding.firstSeen}
+                                  />
+                                  {finding.cve && (
+                                    <span className="shrink-0 font-[family-name:var(--font-jetbrains-mono)] text-[11.5px] text-[var(--color-text-tertiary)]">
+                                      {finding.cve}
+                                    </span>
+                                  )}
+                                </div>
+                                {finding.verdict === "ruled_out" && finding.ruledOutReason && (
+                                  <p
+                                    className="mt-0.5 flex items-baseline gap-1.5 text-2xs text-[var(--color-text-tertiary)]"
+                                    title={finding.ruledOutReason}
+                                  >
+                                    <span className="shrink-0 font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]">
+                                      Ruled out
+                                    </span>
+                                    <span className="truncate">{finding.ruledOutReason}</span>
+                                  </p>
                                 )}
                               </div>
                             </Td>
@@ -1718,6 +1860,23 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               />
 
               <div className="flex-1 overflow-y-auto pb-10 divide-y divide-[var(--color-border-divider)] [&>*]:px-5 [&>*]:py-4">
+              {detailError && (
+                <div
+                  role="alert"
+                  className="border-l-2 border-[var(--color-severity-critical)] bg-[color-mix(in_srgb,var(--color-severity-critical)_8%,transparent)] text-sm text-[var(--color-severity-critical-text)]"
+                >
+                  <p className="font-semibold">Couldn&apos;t load the full detail for this finding.</p>
+                  <p className="mt-1 break-words text-[var(--color-text-secondary)]">
+                    Showing the summary only — code, verification, and remediation may be missing.
+                  </p>
+                  <p className="mt-1 break-words font-mono text-2xs text-[var(--color-text-tertiary)]">{detailError}</p>
+                </div>
+              )}
+              {/* Decision-first story: headline → what it is → how bad →
+                  is it real & why → what to do → the proof → reference
+                  metadata. The triage-critical read sits above the fold. */}
+              <TriageBanner finding={selectedFinding} />
+
               <FindingDescriptionSection
                 description={selectedFinding.description}
                 title={selectedFinding.title}
@@ -1725,14 +1884,86 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
               <FindingSignalRow finding={selectedFinding} />
 
+              <EvidenceSection
+                verdict={selectedFinding.verdict}
+                evidence={selectedFinding.evidence}
+                exploitChain={selectedFinding.exploitChain}
+                metadata={selectedFinding.verificationMetadata}
+                verificationEnabled={verificationEnabled}
+                verifiable={VERIFIABLE_SCANNERS.has(selectedFinding.scanner)}
+                scanner={selectedFinding.scanner}
+              />
+
+              {selectedFinding.scanner === "secret_scanning" && (
+                <SecretVerificationSection
+                  verified={selectedFinding.secretVerified}
+                  detector={selectedFinding.secretDetector}
+                />
+              )}
+
+              <RecommendedFixSection fix={selectedFinding.recommendedFix} />
+
+              {/* Fall back to the scanner's own remediation text only when there
+                  is no structured fix, so the "Recommended fix" heading never
+                  renders twice. */}
+              {!selectedFinding.recommendedFix && (
+                <FindingRemediationSection remediation={selectedFinding.remediation} />
+              )}
+
+              <CodePreviewSection
+                snippet={selectedFinding.codeSnippet}
+                filePath={selectedFinding.filePath}
+                startLine={selectedFinding.codeSnippetStartLine}
+                highlightStart={selectedFinding.highlightStart}
+                highlightEnd={selectedFinding.highlightEnd}
+                secretFindingId={
+                  selectedFinding.scanner === "secret_scanning"
+                    ? selectedFinding.id
+                    : undefined
+                }
+                showEmptyWhenMissing={selectedFinding.scanner !== "secret_scanning"}
+                detailLoading={detailLoading}
+                scanner={selectedFinding.scanner}
+                repoUrl={buildRepoFileUrl({
+                  repo: selectedFinding.repo,
+                  filePath: selectedFinding.filePath,
+                  commit: selectedFinding.introducedByCommit,
+                  repoHtmlUrl: selectedFinding.repoHtmlUrl,
+                })}
+              />
+
+              <FindingDataFlowSection steps={selectedFinding.codeFlows} />
+
+              {/* Reference & context: the weakness class, advisory brief, and
+                  cross-repo blast radius sit below the decision surface. */}
+              <CweContextSection cwe={selectedFinding.cwe} />
+
+              <SecurityBriefSection advisory={advisory} />
+
+              {advisoryError && (
+                <div role="alert" className="text-sm">
+                  <p className="font-semibold text-[var(--color-severity-high-text)]">
+                    Couldn&apos;t load the advisory brief.
+                  </p>
+                  <p className="mt-1 break-words font-mono text-2xs text-[var(--color-text-tertiary)]">{advisoryError}</p>
+                </div>
+              )}
+
               <BlastRadiusSection
                 findingId={Number(selectedFinding.id)}
                 count={selectedFinding.alsoAffectsRepos}
               />
 
-              {/* Severity and scanner already lead the drawer header, so the
-                  Details grid carries the rule, weakness, and scope the analyst
-                  needs to classify the finding. */}
+              <ContainerImageSection image={selectedFinding.containerImage} />
+
+              <FindingOriginSection
+                finding={selectedFinding}
+                scannerLabel={SCANNER_LABEL[selectedFinding.scanner]}
+              />
+
+              {/* Reference metadata sits below the decision surface: severity and
+                  scanner already lead the header, so this grid carries the rule,
+                  weakness id, and repository for classification. */}
               <section aria-labelledby="finding-details-title">
                 <h3 id="finding-details-title" className="text-base font-semibold text-[var(--color-text-primary)]">
                   Details
@@ -1757,6 +1988,17 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                       </dd>
                     </div>
                   )}
+                  {selectedFinding.package && (
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Package</dt>
+                      <dd
+                        className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
+                        title={selectedFinding.package}
+                      >
+                        {selectedFinding.package}
+                      </dd>
+                    </div>
+                  )}
                   {selectedFinding.secretDetector && (
                     <div>
                       <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Detector</dt>
@@ -1776,52 +2018,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   </div>
                 </dl>
               </section>
-
-              <CweContextSection cwe={selectedFinding.cwe} />
-
-              <ContainerImageSection image={selectedFinding.containerImage} />
-
-              <SecurityBriefSection advisory={advisory} />
-
-              <FindingOriginSection
-                finding={selectedFinding}
-                scannerLabel={SCANNER_LABEL[selectedFinding.scanner]}
-              />
-
-              <CodePreviewSection
-                snippet={selectedFinding.codeSnippet}
-                filePath={selectedFinding.filePath}
-                startLine={selectedFinding.codeSnippetStartLine}
-                highlightStart={selectedFinding.highlightStart}
-                highlightEnd={selectedFinding.highlightEnd}
-                secretFindingId={
-                  selectedFinding.scanner === "secret_scanning"
-                    ? selectedFinding.id
-                    : undefined
-                }
-                showEmptyWhenMissing={selectedFinding.scanner !== "secret_scanning"}
-                detailLoading={detailLoading}
-                repoUrl={buildRepoFileUrl({
-                  repo: selectedFinding.repo,
-                  filePath: selectedFinding.filePath,
-                  commit: selectedFinding.introducedByCommit,
-                })}
-              />
-
-              <FindingDataFlowSection steps={selectedFinding.codeFlows} />
-
-              <EvidenceSection
-                verdict={selectedFinding.verdict}
-                evidence={selectedFinding.evidence}
-                exploitChain={selectedFinding.exploitChain}
-                metadata={selectedFinding.verificationMetadata}
-                argusEnabled={argusConnected}
-                verifiable={ARGUS_VERIFIABLE_SCANNERS.has(selectedFinding.scanner)}
-              />
-
-              <RecommendedFixSection fix={selectedFinding.recommendedFix} />
-
-              <FindingRemediationSection remediation={selectedFinding.remediation} />
 
               <FindingReferencesSection
                 cve={selectedFinding.cve}
@@ -1858,14 +2054,34 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           </Button>
         </div>
       )}
+
+      {deepLinkMissing && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 z-[110] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2.5 shadow-xl"
+        >
+          <span className="text-sm text-[var(--color-text-primary)]">
+            That finding no longer exists or isn’t in your scope.
+          </span>
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setDeepLinkMissing(false)}
+            className="font-semibold"
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
 
 const NEUTRAL = "text-[var(--color-text-primary)]"
-const CRITICAL = "text-[var(--color-severity-critical)]"
-const WARN = "text-[var(--color-severity-high)]"
-const OK = "text-[var(--color-state-fixed)]"
+const CRITICAL = "text-[var(--color-severity-critical-text)]"
+const WARN = "text-[var(--color-severity-high-text)]"
+const OK = "text-[var(--color-state-fixed-text)]"
 
 // The scanner's plain-language explanation of the issue — the first thing an
 // analyst needs to decide whether the finding is real. Hidden when it would
@@ -1913,11 +2129,11 @@ function SignalChip({
 }) {
   const tones: Record<typeof tone, string> = {
     danger:
-      "border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-critical)_12%,transparent)] text-[var(--color-severity-critical)]",
+      "border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-critical)_12%,transparent)] text-[var(--color-severity-critical-text)]",
     warn:
-      "border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] text-[var(--color-severity-high)]",
+      "border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] text-[var(--color-severity-high-text)]",
     success:
-      "border-[color-mix(in_srgb,var(--color-status-ok)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-status-ok)_12%,transparent)] text-[var(--color-status-ok)]",
+      "border-[color-mix(in_srgb,var(--color-status-ok)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-status-ok)_12%,transparent)] text-[var(--color-status-ok-text)]",
     neutral:
       "border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]",
   }
@@ -1934,6 +2150,42 @@ function SignalChip({
   )
 }
 
+// One-line triage headline at the top of the drawer — the verdict + urgency +
+// severity thesis an analyst reads before scrolling into the detail below.
+function TriageBanner({ finding }: { finding: Finding }) {
+  const summary = triageSummary({
+    verdict: finding.verdict,
+    actionBand: finding.actionBand,
+    severity: finding.severity,
+    kev: finding.kev,
+  })
+  if (!summary) return null
+
+  const toneClass =
+    summary.tone === "danger"
+      ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
+      : summary.tone === "caution"
+        ? "border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)]"
+        : summary.tone === "positive"
+          ? "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]"
+          : "border-[var(--color-border)] bg-[var(--color-bg-section)] text-[var(--color-text-secondary)]"
+
+  return (
+    <p
+      className={`rounded-md border-l-[3px] px-3 py-2 text-sm font-semibold leading-snug ${toneClass}`}
+    >
+      {summary.text}
+    </p>
+  )
+}
+
+const SEVERITY_TONE: Record<Finding["severity"], "danger" | "warn" | "neutral"> = {
+  critical: "danger",
+  high: "warn",
+  medium: "neutral",
+  low: "neutral",
+}
+
 function FindingSignalRow({ finding }: { finding: Finding }) {
   const epssPct = finding.epssPercentile != null ? Math.round(finding.epssPercentile * 100) : null
   const bandTone: "danger" | "warn" | "neutral" =
@@ -1944,19 +2196,37 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
         : "neutral"
 
   const reach = REACHABILITY_SIGNAL[finding.reachability ?? ""]
+  // MITRE exploit-likelihood for the weakness class — the one "how exploitable"
+  // read available even when a finding carries no KEV/EPSS/reachability signal.
+  const likelihood = cweInfo(finding.cwe)?.likelihood
 
-  const hasAny =
-    Boolean(finding.actionBand) ||
-    finding.kev ||
-    epssPct != null ||
-    Boolean(reach) ||
-    finding.secretVerified != null ||
-    Boolean(finding.confidence) ||
-    Boolean(finding.verdict)
-  if (!hasAny) return null
+  // One-line "how severe really" read that narrates the action band via the
+  // signals that drove it (KEV / reachability / severity) — turns the chip
+  // strip into a plain-language triage call.
+  const ctx = severityContext({
+    severity: finding.severity,
+    actionBand: finding.actionBand,
+    kev: finding.kev,
+    reachability: finding.reachability,
+  })
 
+  // Severity is always present, so the strip always renders with at least the
+  // severity read — a finding never collapses to a blank "how bad" band.
   return (
+    <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-2" aria-label="Risk signals">
+      <SignalChip tone={SEVERITY_TONE[finding.severity]} title="Finding severity">
+        <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
+        <span className="capitalize">{finding.severity}</span>
+      </SignalChip>
+      {likelihood && (
+        <SignalChip
+          tone={likelihood === "High" ? "warn" : "neutral"}
+          title="MITRE likelihood of exploit for this weakness class"
+        >
+          {likelihood} exploit likelihood
+        </SignalChip>
+      )}
       {finding.actionBand && (
         <SignalChip tone={bandTone} title="SSVC action band — derived from KEV, reachability, and severity">
           <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
@@ -2006,13 +2276,27 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
       )}
       {finding.verdict && <VerdictBadge verdict={finding.verdict} />}
     </div>
+    {ctx && (
+      <p
+        className={
+          ctx.tone === "danger"
+            ? "border-l-2 border-[var(--color-severity-critical-border)] pl-3 py-0.5 text-sm leading-relaxed text-[var(--color-text-primary)]"
+            : ctx.tone === "caution"
+              ? "border-l-2 border-[var(--color-severity-medium-border)] pl-3 py-0.5 text-sm leading-relaxed text-[var(--color-text-primary)]"
+              : "border-l-2 border-[var(--color-border)] pl-3 py-0.5 text-sm leading-relaxed text-[var(--color-text-secondary)]"
+        }
+      >
+        {ctx.text}
+      </p>
+    )}
+    </div>
   )
 }
 
 // CWE id linked to its MITRE definition so an analyst can read the weakness
 // class in one click; renders plain text when the id isn't well-formed.
 function CweValue({ cwe }: { cwe: string }) {
-  const m = cwe.match(/^CWE-(\d+)$/i)
+  const m = cwe.match(/(?:CWE-)?(\d+)/i)
   if (!m) return <>{cwe}</>
   return (
     <a
@@ -2047,7 +2331,7 @@ function statusToneClass(state: string | undefined): string {
     case "open":
       return "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
     case "fixed":
-      return "bg-[color-mix(in_srgb,var(--color-state-fixed)_18%,transparent)] text-[var(--color-state-fixed)]"
+      return "bg-[color-mix(in_srgb,var(--color-state-fixed)_18%,transparent)] text-[var(--color-state-fixed-text)]"
     case "dismissed":
       return "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
     case "closed":
@@ -2131,6 +2415,7 @@ function CompactFindingRow({
             {finding.title}
           </span>
           <FindingRowTags
+            malicious={finding.malicious}
             kev={finding.kev}
             epssPercentile={finding.epssPercentile}
             firstSeen={finding.firstSeen}
@@ -2141,6 +2426,17 @@ function CompactFindingRow({
           {finding.filePath && <span className="truncate">{finding.filePath}</span>}
           {finding.cve && <span className="text-[var(--color-text-tertiary)]">{finding.cve}</span>}
         </div>
+        {finding.verdict === "ruled_out" && finding.ruledOutReason && (
+          <p
+            className="mt-0.5 flex items-baseline gap-1.5 text-[11px] text-[var(--color-text-tertiary)]"
+            title={finding.ruledOutReason}
+          >
+            <span className="shrink-0 font-semibold uppercase tracking-[0.1em] text-[var(--color-status-ok-text)]">
+              Ruled out
+            </span>
+            <span className="truncate">{finding.ruledOutReason}</span>
+          </p>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5">
@@ -2211,7 +2507,7 @@ function BulkActionBar({
         Clear
       </Button>
       {error && (
-        <span className="text-[12px] text-[var(--color-severity-high)]" role="alert">
+        <span className="text-[12px] text-[var(--color-severity-high-text)]" role="alert">
           {error}
         </span>
       )}
@@ -2363,7 +2659,7 @@ function ActivityTimelineSection({ finding, scannerLabel }: { finding: Finding; 
           className="w-full resize-none bg-transparent text-[13px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none"
         />
         {commentError && (
-          <p role="alert" className="px-1 text-[11px] text-[var(--color-severity-high)]">{commentError}</p>
+          <p role="alert" className="px-1 text-[11px] text-[var(--color-severity-high-text)]">{commentError}</p>
         )}
         <div className="mt-1 flex justify-end">
           <Button

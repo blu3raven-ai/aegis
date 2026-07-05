@@ -17,6 +17,7 @@ BUILTIN_PERMISSION_IDS = {
     "view_dashboards",
     "view_findings",
     "review_findings",
+    "reveal_secret",
     "export_findings",
     "run_scans",
     "cancel_scans",
@@ -98,6 +99,12 @@ _ROLE_ID_TO_KIND = {
     "role_viewer": "viewer",
 }
 _ROLE_KIND_TO_ID = {kind: role_id for role_id, kind in _ROLE_ID_TO_KIND.items()}
+
+# Built-in role IDs whose kind sees every asset (owner/admin). Used to resolve
+# the reverse "who can access this asset" set without threading request context.
+ADMIN_ROLE_IDS = frozenset(
+    role_id for role_id, kind in _ROLE_ID_TO_KIND.items() if kind in {"owner", "admin"}
+)
 
 
 def role_kind_from_id(role_id: str | None) -> str:

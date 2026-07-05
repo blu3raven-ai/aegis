@@ -24,16 +24,16 @@ type Tone = "accent" | "success" | "warning" | "danger"
 
 const TONE_CHIP: Record<Tone, string> = {
   accent:  "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
-  success: "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)]",
-  warning: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
-  danger:  "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
+  success: "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed-text)]",
+  warning: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]",
+  danger:  "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]",
 }
 
 const TONE_VALUE: Record<Tone, string> = {
   accent:  "text-[var(--color-text-primary)]",
-  success: "text-[var(--color-state-fixed)]",
-  warning: "text-[var(--color-state-pending)]",
-  danger:  "text-[var(--color-severity-critical)]",
+  success: "text-[var(--color-state-fixed-text)]",
+  warning: "text-[var(--color-state-pending-text)]",
+  danger:  "text-[var(--color-severity-critical-text)]",
 }
 
 /**

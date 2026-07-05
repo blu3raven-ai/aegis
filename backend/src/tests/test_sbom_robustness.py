@@ -12,7 +12,7 @@ import uuid
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from unittest.mock import MagicMock, patch  # noqa: E402
 

@@ -24,6 +24,8 @@ email_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 class EmailChangeRequest(BaseModel):
     email: str
+    # Current-password re-auth; ignored for password-less SSO accounts.
+    current_password: str = ""
 
 
 @email_router.patch("/email")
@@ -32,7 +34,9 @@ def change_email(
     ctx: dict = Depends(require_caller_identity),
 ) -> dict:
     try:
-        _change_email(email=body.email, info_context=ctx)
+        _change_email(
+            email=body.email, current_password=body.current_password, info_context=ctx
+        )
     except GraphQLError as e:
         raise_for_gql(e, logger=_logger)
     return {"ok": True}

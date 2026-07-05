@@ -7,6 +7,7 @@ import { FilterChip } from "@/components/ui/FilterChip"
 import { Input } from "@/components/ui/Input"
 import { FindingAssigneePicker } from "@/components/shared/findings/FindingAssigneePicker"
 import { useHasPermission } from "@/lib/client/use-permission"
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
 import {
   upsertControlAssessment,
   type ControlSummaryItem,
@@ -29,7 +30,7 @@ function formatAssessedAt(iso: string | null): string {
   if (!iso) return ""
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ""
-  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: getActiveTimeZone() })
 }
 
 // Only http(s) URLs are safe to render as a clickable link; anything else
@@ -125,7 +126,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Attestation</h2>
         <div className="flex items-center gap-2">
           {assessment?.overdue && (
-            <span className="rounded-full border border-[var(--color-severity-critical)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-critical)]">
+            <span className="rounded-full border border-[var(--color-severity-critical)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-critical-text)]">
               Overdue
             </span>
           )}
@@ -163,7 +164,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
                 {assessment?.owner_label ? `Owner: ${assessment.owner_label}` : ""}
                 {assessment?.owner_label && assessment?.due_date ? " · " : ""}
                 {assessment?.due_date ? (
-                  <span className={assessment.overdue ? "text-[var(--color-severity-critical)]" : undefined}>
+                  <span className={assessment.overdue ? "text-[var(--color-severity-critical-text)]" : undefined}>
                     Due {assessment.due_date}
                     {assessment.overdue ? " (overdue)" : ""}
                   </span>
@@ -267,9 +268,9 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
               >
                 Save attestation
               </Button>
-              {savedTick && <span className="text-xs text-[var(--color-state-fixed)]">Saved</span>}
+              {savedTick && <span className="text-xs text-[var(--color-state-fixed-text)]">Saved</span>}
               {error && (
-                <span role="alert" className="text-xs text-[var(--color-severity-critical)]">
+                <span role="alert" className="text-xs text-[var(--color-severity-critical-text)]">
                   {error}
                 </span>
               )}

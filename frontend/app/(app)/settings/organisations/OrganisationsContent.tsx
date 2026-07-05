@@ -104,7 +104,7 @@ export function OrganisationsContent({ canEdit = true, createTriggerRef }: Organ
         </div>
       )}
 
-      {error && <p className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2 text-sm text-[var(--color-severity-critical)]">{error}</p>}
+      {error && <p className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2 text-sm text-[var(--color-severity-critical-text)]">{error}</p>}
 
       {showLoading ? (
         <Card padding="lg" className="text-sm text-[var(--color-text-secondary)]">Loading teams...</Card>

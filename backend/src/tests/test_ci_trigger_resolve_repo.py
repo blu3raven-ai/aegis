@@ -19,7 +19,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.scans.ci_router import router as ci_router  # noqa: E402
 from src.scans.service import ScanSubmission  # noqa: E402

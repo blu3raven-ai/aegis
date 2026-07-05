@@ -4,7 +4,7 @@ import asyncio
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -58,10 +58,6 @@ def _matches_schedule(schedule_type: str, schedule_value: str, now: datetime) ->
     return False
 
 
-def _resolve_orgs(all_orgs: list[str]) -> list[str]:
-    return all_orgs
-
-
 class AutoRerunScheduler:
     def __init__(self) -> None:
         self._thread: threading.Thread | None = None
@@ -92,57 +88,10 @@ class AutoRerunScheduler:
             time.sleep(60)
 
     def _tick(self) -> None:
-        from src.shared.config import read_app_config
-
-        config = read_app_config()
         now = datetime.now()
 
-        tools = config.get("tools") if isinstance(config, dict) else {}
-        if not isinstance(tools, dict):
-            return
-
-        from src.shared.config import get_orgs_from_source_connections
-        all_orgs = get_orgs_from_source_connections()
-
-        dependencies = tools.get("dependencies_scanning") if isinstance(tools.get("dependencies_scanning"), dict) else {}
-        if dependencies and dependencies.get("autoRerunEnabled") and _matches_schedule(
-            dependencies.get("rerunScheduleType", "simple"),
-            dependencies.get("rerunScheduleValue", "02:00"),
-            now,
-        ):
-            self._trigger_dependencies(dependencies, all_orgs)
-
-        container_scanning = tools.get("container_scanning") if isinstance(tools.get("container_scanning"), dict) else {}
-        if container_scanning and container_scanning.get("autoRerunEnabled") and _matches_schedule(
-            container_scanning.get("rerunScheduleType", "simple"),
-            container_scanning.get("rerunScheduleValue", "02:00"),
-            now,
-        ):
-            self._trigger_container_scanning(container_scanning, all_orgs)
-
-        secrets = tools.get("secret_scanning") if isinstance(tools.get("secret_scanning"), dict) else {}
-        if secrets and secrets.get("autoRerunEnabled") and _matches_schedule(
-            secrets.get("rerunScheduleType", "simple"),
-            secrets.get("rerunScheduleValue", "02:00"),
-            now,
-        ):
-            self._trigger_secrets(secrets, all_orgs)
-
-        code_scanning = tools.get("code_scanning") if isinstance(tools.get("code_scanning"), dict) else {}
-        if code_scanning and code_scanning.get("autoRerunEnabled") and _matches_schedule(
-            code_scanning.get("rerunScheduleType", "simple"),
-            code_scanning.get("rerunScheduleValue", "02:00"),
-            now,
-        ):
-            self._trigger_code_scanning(code_scanning, all_orgs)
-
-        iac_scanning = tools.get("iac_scanning") if isinstance(tools.get("iac_scanning"), dict) else {}
-        if iac_scanning and iac_scanning.get("autoRerunEnabled") and _matches_schedule(
-            iac_scanning.get("rerunScheduleType", "simple"),
-            iac_scanning.get("rerunScheduleValue", "02:00"),
-            now,
-        ):
-            self._trigger_iac_scanning(iac_scanning, all_orgs)
+        # Per-scanner reruns are driven per source (scanAutoEnabled + schedule),
+        # handled below in _tick_source_schedules.
 
         # Midnight UTC: write daily posture snapshots
         if now.hour == 0 and now.minute == 0:
@@ -250,7 +199,11 @@ class AutoRerunScheduler:
     def _tick_scheduled_reports(self, now: datetime) -> None:
         try:
             from src.reports.runner import run_due_schedules
-            count = run_due_schedules(now=now)
+            # Scheduled-report times are entered and displayed in UTC (the panel
+            # labels the field "Time (UTC)"), so match against UTC regardless of
+            # the host's local zone. A naive local `now` is read as local and
+            # converted; an already-aware `now` is normalised to UTC.
+            count = run_due_schedules(now=now.astimezone(timezone.utc))
             if count:
                 logger.info("Scheduled reports: ran %d schedule(s)", count)
         except Exception:
@@ -361,173 +314,6 @@ class AutoRerunScheduler:
         threading.Thread(
             target=_run, daemon=True, name="data-retention-recompute"
         ).start()
-
-    def _trigger_dependencies(self, dependencies_config: dict[str, Any], all_orgs: list[str]) -> None:
-        import threading
-        from src.shared.config import (
-            get_token_for_org, get_dependencies_scanner_config,
-            get_source_type_for_org, org_has_source_connections,
-        )
-        from src.dependencies.scanner import execute_dependencies_scan_once
-        from src.dependencies.scanner import _dependencies_runtime
-        from src.storage import create_dependencies_run
-
-        orgs = _resolve_orgs(all_orgs)
-        if not orgs:
-            logger.warning("Dependencies auto-rerun: no orgs configured, skipping")
-            return
-
-        scanner_config = get_dependencies_scanner_config()
-        for org in orgs:
-            if not org_has_source_connections(org, categories=["code-repositories"]):
-                logger.warning("Dependencies auto-rerun: no code-repository connections for %s, skipping", org)
-                continue
-            if _dependencies_runtime.probe(org)["active"]:
-                logger.info("Dependencies auto-rerun: scan already running for %s, skipping", org)
-                continue
-            source_type = get_source_type_for_org(org, "code-repositories")
-            token = get_token_for_org(org) or ""
-            run_id = f"auto-{int(time.time() * 1000)}"
-            create_dependencies_run(org, run_id)
-            logger.info("Dependencies auto-rerun triggered for %s (run %s)", org, run_id)
-            thread = threading.Thread(
-                target=execute_dependencies_scan_once,
-                args=(org, token, run_id),
-                kwargs={"source_type": source_type, "scanner_config": scanner_config, "mode": "incremental", "runtime": _dependencies_runtime},
-                daemon=True,
-            )
-            thread.start()
-
-    def _trigger_container_scanning(self, ct_config: dict[str, Any], all_orgs: list[str]) -> None:
-        import threading
-        from src.shared.config import (
-            get_token_for_org, get_container_scanner_config,
-            get_source_type_for_org, org_has_source_connections,
-        )
-        from src.containers.scanner import execute_container_scan_once
-        from src.containers.scanner import _container_scanning_runtime
-        from src.storage import create_container_scanning_run
-
-        orgs = _resolve_orgs(all_orgs)
-        if not orgs:
-            logger.warning("Container scanning auto-rerun: no orgs configured, skipping")
-            return
-
-        scanner_config = get_container_scanner_config()
-        for org in orgs:
-            if not org_has_source_connections(org, categories=["container-images"]):
-                logger.warning("Container scanning auto-rerun: no container-image connections for %s, skipping", org)
-                continue
-            if _container_scanning_runtime.probe(org)["active"]:
-                logger.info("Container scanning auto-rerun: scan already running for %s, skipping", org)
-                continue
-            source_type = get_source_type_for_org(org, "container-images")
-            token = get_token_for_org(org) or ""
-            run_id = f"auto-{int(time.time() * 1000)}"
-            create_container_scanning_run(org, run_id)
-            logger.info("Container scanning auto-rerun triggered for %s (run %s)", org, run_id)
-            thread = threading.Thread(
-                target=execute_container_scan_once,
-                args=(org, token, run_id),
-                kwargs={"source_type": source_type, "scanner_config": scanner_config, "mode": "incremental", "runtime": _container_scanning_runtime},
-                daemon=True,
-            )
-            thread.start()
-
-    def _trigger_secrets(self, secrets_config: dict[str, Any], all_orgs: list[str]) -> None:
-        import threading
-        from src.shared.config import get_source_type_for_org
-        from src.secrets.service_runs import start_secret_runs
-        from src.secrets.scanner import execute_secret_scan_once
-
-        orgs = _resolve_orgs(all_orgs)
-        if not orgs:
-            logger.warning("Secrets auto-rerun: no orgs configured, skipping")
-            return
-
-        def _launch(org, run_id, token, runtime, scanner_config, scan_depth):
-            # Resolve the source type per org so ingest can attach findings to
-            # assets. Poll in a daemon thread so a long scan can't block the tick.
-            source_type = get_source_type_for_org(org, "code-repositories")
-            threading.Thread(
-                target=execute_secret_scan_once,
-                args=(org, token, run_id),
-                kwargs={"source_type": source_type, "scanner_config": scanner_config,
-                        "runtime": runtime, "scan_depth": scan_depth},
-                daemon=True,
-            ).start()
-
-        logger.info("Secrets auto-rerun triggered for orgs: %s", orgs)
-        start_secret_runs(orgs, run_launcher=_launch)
-
-    def _trigger_code_scanning(self, code_scanning_config: dict[str, Any], all_orgs: list[str]) -> None:
-        import threading
-        from src.shared.config import (
-            get_token_for_org, get_code_scanning_scanner_config,
-            get_source_type_for_org, org_has_source_connections,
-        )
-        from src.code_scanning.scanner import execute_code_scanning_scan_once
-        from src.code_scanning.scanner import _code_scanning_runtime
-        from src.storage import create_code_scanning_run
-
-        orgs = _resolve_orgs(all_orgs)
-        if not orgs:
-            logger.warning("Code scanning auto-rerun: no orgs configured, skipping")
-            return
-
-        scanner_config = get_code_scanning_scanner_config()
-        for org in orgs:
-            if not org_has_source_connections(org, categories=["code-repositories"]):
-                logger.warning("Code scanning auto-rerun: no source connections for %s, skipping", org)
-                continue
-            if _code_scanning_runtime.probe(org)["active"]:
-                logger.info("Code scanning auto-rerun: scan already running for %s, skipping", org)
-                continue
-            source_type = get_source_type_for_org(org, "code-repositories")
-            token = get_token_for_org(org) or ""
-            run_id = f"auto-{int(time.time() * 1000)}"
-            create_code_scanning_run(org, run_id)
-            logger.info("Code scanning auto-rerun triggered for %s (run %s)", org, run_id)
-            thread = threading.Thread(
-                target=execute_code_scanning_scan_once,
-                args=(org, token, run_id),
-                kwargs={"source_type": source_type, "scanner_config": scanner_config, "runtime": _code_scanning_runtime},
-                daemon=True,
-            )
-            thread.start()
-
-    def _trigger_iac_scanning(self, iac_config: dict[str, Any], all_orgs: list[str]) -> None:
-        import threading
-        from src.shared.config import (
-            get_token_for_org, get_source_type_for_org, org_has_source_connections,
-        )
-        from src.iac.scanner import execute_iac_scan_once, _iac_runtime
-        from src.storage import create_iac_run
-
-        orgs = _resolve_orgs(all_orgs)
-        if not orgs:
-            logger.warning("IaC scanning auto-rerun: no orgs configured, skipping")
-            return
-
-        for org in orgs:
-            if not org_has_source_connections(org, categories=["code-repositories"]):
-                logger.warning("IaC scanning auto-rerun: no source connections for %s, skipping", org)
-                continue
-            if _iac_runtime.probe(org)["active"]:
-                logger.info("IaC scanning auto-rerun: scan already running for %s, skipping", org)
-                continue
-            source_type = get_source_type_for_org(org, "code-repositories")
-            token = get_token_for_org(org) or ""
-            run_id = f"auto-{int(time.time() * 1000)}"
-            create_iac_run(org, run_id)
-            logger.info("IaC scanning auto-rerun triggered for %s (run %s)", org, run_id)
-            thread = threading.Thread(
-                target=execute_iac_scan_once,
-                args=(org, token, run_id),
-                kwargs={"source_type": source_type, "runtime": _iac_runtime},
-                daemon=True,
-            )
-            thread.start()
 
 
 _scheduler = AutoRerunScheduler()

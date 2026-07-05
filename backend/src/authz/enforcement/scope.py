@@ -11,9 +11,43 @@ import sqlalchemy as sa
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Asset, Grant, TeamMember
+from src.db.models import Asset, Grant, TeamMember, User
 
 _ADMIN_ROLES = frozenset({"admin", "owner"})
+
+
+async def users_with_asset_access(db: AsyncSession, asset_id: str) -> set[str]:
+    """Reverse of `get_user_asset_ids`: the set of user ids allowed to read a
+    given asset.
+
+    Admins/owners (who see every asset) plus holders of a direct or team grant
+    on this asset. Producers use it to avoid telling a user about a finding on
+    an asset they can't see.
+
+    Only active accounts are returned: a disabled or deprovisioned user can't
+    authenticate to read a notification, so notifying them would just accumulate
+    unread items on an account that can never open them.
+    """
+    from src.authz.roles.service import ADMIN_ROLE_IDS
+
+    admin_stmt = select(User.id).where(User.role_id.in_(ADMIN_ROLE_IDS))
+    direct_stmt = select(Grant.subject_id).where(
+        Grant.asset_id == asset_id, Grant.subject_type == "user"
+    )
+    team_stmt = (
+        select(TeamMember.user_id)
+        .join(Grant, (Grant.subject_type == "team") & (Grant.subject_id == TeamMember.team_id))
+        .where(Grant.asset_id == asset_id)
+    )
+    admins = (await db.execute(admin_stmt)).scalars().all()
+    direct = (await db.execute(direct_stmt)).scalars().all()
+    team = (await db.execute(team_stmt)).scalars().all()
+    candidates = {str(x) for x in [*admins, *direct, *team]}
+    if not candidates:
+        return set()
+    active_stmt = select(User.id).where(User.id.in_(candidates), User.status == "active")
+    active = (await db.execute(active_stmt)).scalars().all()
+    return {str(x) for x in active}
 
 
 async def get_user_asset_ids(db: AsyncSession, ctx: dict) -> list[str]:

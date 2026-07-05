@@ -46,7 +46,7 @@ from sqlalchemy import select
 
 from src.db.helpers import run_db
 from src.db.models import Asset, Sbom, SbomRun
-from src.sbom.exporter import SbomExporter, UnsupportedFormatError, SUPPORTED_FORMATS
+from src.sbom.exporter import SbomExporter, SUPPORTED_FORMATS
 from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import VIEW_FINDINGS
 from src.shared.object_store import download_json
@@ -414,10 +414,7 @@ def _export_image_sbom(image_digest: str, fmt: str, asset_ids: list[str]) -> Res
 
 def _render(sbom: dict, fmt: str, name_hint: str) -> Response:
     """Convert sbom to the requested format and return an HTTP Response."""
-    try:
-        content = _exporter.export(sbom, fmt)
-    except UnsupportedFormatError as exc:
-        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    content = _exporter.export(sbom, fmt)
 
     safe_name = _safe_filename(name_hint)
     ext = _FORMAT_EXT.get(fmt, "txt")

@@ -41,6 +41,11 @@ def normalize_file(file_path: Path, source: str, repo_name: str) -> list[dict[st
     findings: list[dict[str, Any]] = []
     text = file_path.read_text(errors="replace")
 
+    # Repo web URL sidecar written by the scanner beside this output file, so
+    # findings can deep-link back to source (empty when the scan didn't write it).
+    html_url_file = file_path.parent / "html_url.txt"
+    html_url = html_url_file.read_text().strip() if html_url_file.exists() else ""
+
     if source == "trufflehog":
         # JSONL - one object per line
         for line in text.splitlines():
@@ -53,6 +58,8 @@ def normalize_file(file_path: Path, source: str, repo_name: str) -> list[dict[st
                 continue
             finding["source"] = "trufflehog"
             finding["repository"] = repo_name
+            if html_url:
+                finding["repo_html_url"] = html_url
             # Deterministic, type-aware rotation runbook for every secret —
             # always-on and independent of the optional LLM verifier.
             finding["recommended_fix"] = build_secret_runbook(finding)

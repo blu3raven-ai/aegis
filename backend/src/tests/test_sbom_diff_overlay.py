@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from sqlalchemy import delete  # noqa: E402
 
@@ -186,5 +186,22 @@ async def test_overlay_unavailable_when_diff_ecosystem_not_mirrored(db_session):
         )
         ov_npm = run_db(lambda s: compute_diff_overlay(s, npm_diff, None))
         assert ov_npm.available is True
+    finally:
+        await _cleanup_advisories(db_session, "ADV-NPM-ONLY")
+
+
+@pytest.mark.asyncio
+async def test_overlay_unavailable_when_diff_partially_mirrored(db_session):
+    # A mixed npm+PyPI diff where the mirror covers ONLY npm must be unavailable
+    # as a whole — otherwise the un-ingested PyPI component reads as "0 resolved /
+    # 0 introduced", a false all-clear. The old any-ecosystem probe passed this.
+    await _seed_advisory(db_session, "ADV-NPM-ONLY", "high", "left-pad", "0", "0.2.0")
+    try:
+        mixed = ComponentDiff(
+            added=[_npm("left-pad", "0.1.0"), _pypi("requests", "2.0.0")],
+            removed=[], version_changed=[], unchanged_count=0,
+        )
+        ov = run_db(lambda s: compute_diff_overlay(s, mixed, None))
+        assert ov.available is False
     finally:
         await _cleanup_advisories(db_session, "ADV-NPM-ONLY")

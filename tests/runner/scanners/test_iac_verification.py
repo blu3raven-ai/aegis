@@ -6,14 +6,14 @@ import threading
 from pathlib import Path
 
 from runner.scanners.iac.scanner import IacScanner
-from runner.verification.llm_client import LlmResponse
+from runner.verification.llm_client import LlmClient, LlmResponse
 
 
-class _StubLlm:
+class _StubLlm(LlmClient):
     def __init__(self, responses):
+        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._r = list(responses)
         self.calls = []
-        self._model = "stub"
 
     def chat(self, messages, *, temperature=0.0, max_tokens=1024):
         self.calls.append(messages)
@@ -236,8 +236,9 @@ def test_skeptic_mitigation_yields_ruled_out(tmp_path):
 def test_llm_error_recorded_does_not_raise(tmp_path):
     finding = _seed_repo(tmp_path)
 
-    class _ExplodingLlm:
-        _model = "boom"
+    class _ExplodingLlm(LlmClient):
+        def __init__(self):
+            super().__init__(api_key="k", api_base_url="https://x/v1", model="boom")
 
         def chat(self, *a, **kw):
             raise RuntimeError("upstream timeout")
@@ -259,10 +260,9 @@ def test_per_finding_exception_does_not_poison_others(tmp_path):
     good = dict(bad)
     good["check_id"] = "CKV_AWS_GOOD"
 
-    class _PartiallyExplodingLlm:
-        _model = "stub"
-
+    class _PartiallyExplodingLlm(LlmClient):
         def __init__(self):
+            super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
             self.call_count = 0
 
         def chat(self, *a, **kw):
@@ -339,10 +339,9 @@ def test_cancel_event_set_before_loop_marks_all_findings_cancelled(tmp_path):
 
 
 def test_cancel_event_set_midway_short_circuits_remaining(tmp_path):
-    class _CancellingLlm:
-        _model = "stub"
-
+    class _CancellingLlm(LlmClient):
         def __init__(self, cancel):
+            super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
             self.calls = 0
             self._cancel = cancel
 

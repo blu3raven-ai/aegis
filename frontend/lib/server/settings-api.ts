@@ -4,28 +4,6 @@ import type { GetSettingsResult, RoleRecord } from "@/lib/shared/settings-types"
 
 export type { GetSettingsResult, RoleRecord }
 
-interface PrerequisitesResponse {
-  runner_connected: boolean
-  scanner_status: string
-  error?: string
-}
-
-export async function checkToolPrerequisites(
-  tool: string,
-  user: { id: string; role: string; roleId?: string | null },
-): Promise<{ ready: boolean }> {
-  try {
-    const data = await getJson<PrerequisitesResponse>(
-      `/api/v1/settings/tools/${tool}/prerequisites`, user
-    )
-    return { ready: data.runner_connected && data.scanner_status === "ready" }
-  } catch {
-    // If backend is unreachable, assume ready — don't block user on settings tab
-    // because of a transient network issue. They'll see empty data but can navigate freely.
-    return { ready: true }
-  }
-}
-
 function formatSettingsError(error: unknown, fallback = "Could not load settings.") {
   if (isNetworkFailure(error)) {
     return "Settings backend is unavailable. Start the backend and try again."

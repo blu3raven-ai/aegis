@@ -11,8 +11,8 @@ import {
 
 const FRESHNESS_TEXT = {
   fresh: "text-[var(--color-text-primary)]",
-  stale: "text-[var(--color-severity-medium)]",
-  never: "text-[var(--color-severity-critical)]",
+  stale: "text-[var(--color-severity-medium-text)]",
+  never: "text-[var(--color-severity-critical-text)]",
 } as const
 
 const FRESHNESS_DOT = {

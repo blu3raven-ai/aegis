@@ -49,4 +49,15 @@ describe("FindingReferencesSection", () => {
     assert.match(src, /MAX_REFERENCES/)
     assert.match(src, /\.slice\(0, MAX_REFERENCES\)/)
   })
+
+  it("only links http(s) reference URLs so a javascript:/data: advisory URL can't XSS", () => {
+    // describeUrl's result becomes an <a href>; advisory references are
+    // third-party (OSV/GHSA) data and must pass an http(s)-only allowlist.
+    assert.match(src, /describeUrl\(url: string\): Reference \| null/)
+    assert.match(src, /https\?:\\\/\\\//)
+  })
+
+  it("drops a reference that fails the scheme check rather than rendering it as a link", () => {
+    assert.match(src, /if \(!ref\) continue/)
+  })
 })

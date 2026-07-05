@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import type { ReportSummary } from "@/lib/client/reports-api"
 import { generateReport, listReports, deleteReport } from "@/lib/client/reports-api"
+import { listFrameworks } from "@/lib/client/compliance-api"
 import { ReportTemplateGrid, type ReportTemplateId } from "@/components/reports/ReportTemplateGrid"
 import {
   type ReportType,
@@ -32,14 +33,17 @@ const REPORT_STATUS: Record<string, { tone: Status; label: string }> = {
 // Per-type badge tint so the report kind reads at a glance in the history table.
 const TYPE_BADGE: Record<string, string> = {
   findings: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
-  posture: "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)]",
-  executive: "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)]",
-  risk_register: "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)]",
+  posture: "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low-text)]",
+  executive: "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)]",
+  risk_register: "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high-text)]",
   soc2_evidence: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
 }
 
 const SEVERITIES = ["critical", "high", "medium", "low"] as const
 type Severity = (typeof SEVERITIES)[number]
+
+// Framework slug used by the PCI attestation shortcut and its download endpoint.
+const PCI_DSS_FRAMEWORK = "pci-dss"
 
 function formatBytes(n: number | null): string {
   if (n == null) return "—"
@@ -71,12 +75,51 @@ export function ReportsPageContent() {
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
 
+  // PCI attestation shortcut — a direct compliance-attestation download,
+  // gated on the PCI DSS framework being tracked (null = not yet known).
+  const [attestationBusy, setAttestationBusy] = useState(false)
+  const [attestationError, setAttestationError] = useState<string | null>(null)
+  const [pciTracked, setPciTracked] = useState<boolean | null>(null)
+
   // Delete
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const formRef = useRef<HTMLDivElement | null>(null)
   const [formHighlighted, setFormHighlighted] = useState(false)
+
+  // The PCI attestation is the compliance attestation for the PCI DSS framework,
+  // reused directly rather than minting a second generator. Fetch it first so a
+  // missing framework (or any server error) surfaces a message instead of the
+  // browser silently saving the error body as a broken "attestation.pdf".
+  async function downloadPciAttestation() {
+    setAttestationError(null)
+    setAttestationBusy(true)
+    try {
+      const res = await fetch("/api/v1/compliance/frameworks/pci-dss/attestation.pdf", {
+        credentials: "include",
+        headers: { Accept: "application/pdf" },
+      })
+      if (!res.ok) {
+        throw new Error(
+          res.status === 404
+            ? "PCI DSS isn’t a tracked framework yet — add it under Compliance to export its attestation."
+            : "Couldn’t generate the PCI DSS attestation. Please try again.",
+        )
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "pci-dss-attestation.pdf"
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setAttestationError(err instanceof Error ? err.message : "Attestation download failed.")
+    } finally {
+      setAttestationBusy(false)
+    }
+  }
 
   function handleTemplateSelect(id: ReportTemplateId) {
     if (id === "findings-export") {
@@ -95,13 +138,7 @@ export function ReportsPageContent() {
       setReportType("soc2_evidence")
       setFormat((f) => clampFormat("soc2_evidence", f))
     } else if (id === "pci-attestation") {
-      // PCI attestation is the compliance attestation for the PCI framework —
-      // requirement-by-requirement status. Reuse it directly rather than minting
-      // a second generator.
-      const a = document.createElement("a")
-      a.href = "/api/v1/compliance/frameworks/pci-dss/attestation.pdf"
-      a.download = ""
-      a.click()
+      void downloadPciAttestation()
       return
     } else {
       return
@@ -126,6 +163,18 @@ export function ReportsPageContent() {
   useEffect(() => {
     void loadReports()
   }, [loadReports])
+
+  // Resolve whether PCI DSS is tracked so the attestation card can be gated.
+  // On failure leave it null (optimistic) — the download itself fails loudly.
+  useEffect(() => {
+    let active = true
+    listFrameworks()
+      .then((frameworks) => {
+        if (active) setPciTracked(frameworks.some((f) => f.id === PCI_DSS_FRAMEWORK))
+      })
+      .catch(() => { if (active) setPciTracked(null) })
+    return () => { active = false }
+  }, [])
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault()
@@ -192,7 +241,25 @@ export function ReportsPageContent() {
 
   return (
     <div className="px-6 py-6 space-y-5">
-      <ReportTemplateGrid onSelect={handleTemplateSelect} />
+      <ReportTemplateGrid
+        onSelect={handleTemplateSelect}
+        disabledReasons={
+          pciTracked === false
+            ? { "pci-attestation": "Track PCI DSS in Compliance to enable" }
+            : undefined
+        }
+      />
+
+      {attestationBusy && (
+        <p role="status" className="text-sm text-[var(--color-text-secondary)]">
+          Preparing PCI DSS attestation…
+        </p>
+      )}
+      {attestationError && (
+        <p role="alert" className="text-sm text-[var(--color-severity-critical-text)]">
+          {attestationError}
+        </p>
+      )}
 
       <div
         ref={formRef}
@@ -262,7 +329,7 @@ export function ReportsPageContent() {
               {generating ? "Generating…" : "Generate report"}
             </Button>
             {generateError && (
-              <p role="alert" className="text-sm text-[var(--color-severity-critical)]">{generateError}</p>
+              <p role="alert" className="text-sm text-[var(--color-severity-critical-text)]">{generateError}</p>
             )}
           </div>
         </form>
@@ -271,7 +338,7 @@ export function ReportsPageContent() {
       <ScheduledReportsPanel />
 
       {deleteError && (
-        <p className="text-sm text-[var(--color-severity-critical)]">{deleteError}</p>
+        <p className="text-sm text-[var(--color-severity-critical-text)]">{deleteError}</p>
       )}
       {reports.length === 0 ? (
         <ReportsEmptyState />

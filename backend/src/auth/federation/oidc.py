@@ -6,10 +6,17 @@ from typing import Any
 
 import httpx
 from authlib.integrations.httpx_client import AsyncOAuth2Client
-from authlib.jose import jwt
+from authlib.jose import JsonWebToken
 
 from src.db.models import SsoConfig
 from src.security.crypto import decrypt
+from src.shared.url_guard import assert_sendable_url
+
+# Restrict id_token verification to asymmetric signatures. Excluding `none`
+# and the HS* family prevents an attacker from forging a token signed with a
+# symmetric key derived from a public value (or with no signature at all).
+_ID_TOKEN_ALGS = ["RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512"]
+_jwt = JsonWebToken(_ID_TOKEN_ALGS)
 
 
 @dataclass
@@ -17,10 +24,27 @@ class OidcIdentity:
     subject: str
     email: str
     name: str
+    email_verified: bool
+
+
+def _is_email_verified(raw: Any) -> bool:
+    """Whether the IdP positively asserted the email as verified.
+
+    Per OIDC `email_verified` is a JSON boolean, but some IdPs emit the string
+    "true". Anything else (including absent) is treated as unverified so the
+    email cannot be used to link a pre-existing account.
+    """
+    if raw is True:
+        return True
+    if isinstance(raw, str):
+        return raw.strip().lower() == "true"
+    return False
 
 
 async def _discovery(discovery_url: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    # The discovery URL is admin-supplied config — block SSRF to internal hosts.
+    assert_sendable_url(discovery_url)
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
         resp = await client.get(discovery_url)
         resp.raise_for_status()
         return resp.json()
@@ -68,12 +92,30 @@ async def exchange_code(row: SsoConfig, redirect_uri: str, code: str, expected_n
     if not id_token:
         raise RuntimeError("OIDC token response missing id_token.")
 
-    async with httpx.AsyncClient(timeout=10.0) as http:
+    # jwks_uri comes from the (now guarded) discovery doc; guard it too as
+    # defense-in-depth so a compromised IdP can't redirect the fetch inward.
+    assert_sendable_url(disc["jwks_uri"])
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as http:
         jwks_resp = await http.get(disc["jwks_uri"])
         jwks_resp.raise_for_status()
         jwks = jwks_resp.json()
 
-    claims = jwt.decode(id_token, jwks)
+    issuer = disc.get("issuer")
+    if not issuer:
+        raise RuntimeError("OIDC discovery document is missing the issuer.")
+
+    # Bind the id_token to this RP: `iss` must equal the discovery issuer and
+    # `aud` must equal our client id, so a token minted for a different client
+    # at the same (multi-tenant) issuer is rejected. authlib only enforces
+    # these when the expected values are supplied via claims_options.
+    claims = _jwt.decode(
+        id_token,
+        jwks,
+        claims_options={
+            "iss": {"essential": True, "value": issuer},
+            "aud": {"essential": True, "value": row.oidc_client_id},
+        },
+    )
     claims.validate()
     if claims.get("nonce") != expected_nonce:
         raise RuntimeError("OIDC nonce mismatch.")
@@ -85,4 +127,9 @@ async def exchange_code(row: SsoConfig, redirect_uri: str, code: str, expected_n
         raise RuntimeError("OIDC id_token missing sub claim.")
     if not email:
         raise RuntimeError("OIDC id_token missing email claim.")
-    return OidcIdentity(subject=sub, email=email, name=name)
+    return OidcIdentity(
+        subject=sub,
+        email=email,
+        name=name,
+        email_verified=_is_email_verified(claims.get("email_verified")),
+    )

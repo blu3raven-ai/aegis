@@ -143,24 +143,6 @@ def test_run_scan_pre_cancel_returns_137(tmp_path):
     assert result.exit_code == CANCELLED_EXIT_CODE
 
 
-def test_run_scan_rejects_unsupported_scan_depth(tmp_path):
-    from runner.scanners.secrets.scanner import SecretsScanner
-
-    scanner = SecretsScanner()
-    job = {
-        "jobId": "test-depth",
-        "envVars": {
-                "GIT_REPOS": "https://github.com/a/b.git",
-                "SCAN_DEPTH": "extreme",
-            },}
-    job_dir = tmp_path / "test-depth"
-    result = scanner.run_scan(job, job_dir=job_dir)
-    assert result.exit_code == 2
-    assert any("SCAN_DEPTH" in m for m in result.log_tail)
-    manifest = (job_dir / "_manifest.jsonl").read_text()
-    assert '"file": "_done"' in manifest
-
-
 def test_run_scan_rejects_malformed_start_date(tmp_path):
     from runner.scanners.secrets.scanner import SecretsScanner
 
@@ -169,7 +151,6 @@ def test_run_scan_rejects_malformed_start_date(tmp_path):
         "jobId": "test-date",
         "envVars": {
                 "GIT_REPOS": "https://github.com/a/b.git",
-                "SCAN_DEPTH": "deep",
                 "SCAN_START_DATE": "2025/01/01",
             },}
     job_dir = tmp_path / "test-date"
@@ -265,6 +246,40 @@ def test_run_scan_tolerates_clone_failure(tmp_path, monkeypatch):
     assert any("simulated failure" in line for line in result.log_tail)
 
 
+def test_scan_repo_falls_back_to_filesystem_when_git_scan_fails(tmp_path, monkeypatch):
+    """A git-history scan that errors (clone present, trufflehog git fails) must
+    fall back to a filesystem scan of the same working tree, not lose the repo."""
+    from runner.scanners.secrets import scanner as secrets_mod
+    from runner.scanners.secrets.scanner import SecretsScanner, SecretGitScanError
+
+    def fake_clone(repo_url, clone_dir, **kwargs):
+        clone_dir.mkdir(parents=True, exist_ok=True)
+
+    def raising_git(self, *args, **kwargs):
+        raise SecretGitScanError("exit 1: boom")
+
+    calls = {"filesystem": 0}
+
+    def fake_filesystem(self, clone_dir, repo_out, cancel_event, **kwargs):
+        calls["filesystem"] += 1
+        return []
+
+    monkeypatch.setattr(secrets_mod, "clone_repo", fake_clone)
+    monkeypatch.setattr(SecretsScanner, "_scan_trufflehog_git", raising_git)
+    monkeypatch.setattr(SecretsScanner, "_scan_trufflehog_filesystem", fake_filesystem)
+
+    out_dir = tmp_path / "repo"
+    out_dir.mkdir()
+    SecretsScanner()._scan_repo(
+        "https://github.com/a/b.git",
+        out_dir,
+        git_token=None,
+        start_date="",
+        cancel_event=None,
+    )
+    assert calls["filesystem"] == 1
+
+
 def test_inject_head_sha_annotates_each_record():
     from runner.scanners.secrets.scanner import SecretsScanner
 
@@ -353,26 +368,6 @@ def test_run_scan_emits_progress_per_repo(tmp_path, monkeypatch):
     assert any(c.get("stage") == "normalizing" for c in captures)
 
 
-def test_run_scan_emits_progress_done_on_unsupported_depth(tmp_path):
-    """The unsupported-depth early exit must still emit stage='done'."""
-    from runner.scanners.secrets.scanner import SecretsScanner
-
-    captures: list[dict] = []
-    scanner = SecretsScanner()
-    job = {
-        "jobId": "p3",
-        "envVars": {
-                "GIT_REPOS": "https://x/a.git",
-                "SCAN_DEPTH": "bogus",
-            },}
-    scanner.run_scan(
-        job,
-        job_dir=tmp_path / "p3",
-        on_progress=lambda lt, p: captures.append(dict(p)),
-    )
-    assert captures and captures[-1]["stage"] == "done"
-
-
 def test_run_scan_emits_progress_done_on_pre_cancel(tmp_path):
     import threading as _threading
 
@@ -419,7 +414,6 @@ def test_secrets_config_parses_defaults():
     cfg = SecretsScanConfig.from_job(_secrets_job({"GIT_REPOS": "https://x/a.git"}))
     assert cfg.org_label == "default"
     assert cfg.concurrency == 4
-    assert cfg.scan_depth == "light"
     assert cfg.start_date == ""
     assert cfg.git_token is None
     assert cfg.repos == ["https://x/a.git"]
@@ -433,7 +427,6 @@ def test_secrets_config_parses_explicit_values():
         "ORG_LABEL": "acme-org",
         "RUN_ID": "run-7",
         "CONCURRENCY": "2",
-        "SCAN_DEPTH": "deep",
         "SCAN_START_DATE": "2024-01-01",
     }))
     assert cfg.repos == ["https://x/a.git", "https://x/b.git"]
@@ -441,18 +434,7 @@ def test_secrets_config_parses_explicit_values():
     assert cfg.org_label == "acme-org"
     assert cfg.run_id == "run-7"
     assert cfg.concurrency == 2
-    assert cfg.scan_depth == "deep"
     assert cfg.start_date == "2024-01-01"
-
-
-def test_secrets_config_rejects_unsupported_scan_depth():
-    from runner.scanners._shared import ScannerConfigError
-    from runner.scanners.secrets.scanner import SecretsScanConfig
-    with pytest.raises(ScannerConfigError, match="SCAN_DEPTH"):
-        SecretsScanConfig.from_job(_secrets_job({
-            "GIT_REPOS": "https://x/a.git",
-            "SCAN_DEPTH": "turbo",
-        }))
 
 
 def test_secrets_config_rejects_invalid_start_date_format():
@@ -461,7 +443,6 @@ def test_secrets_config_rejects_invalid_start_date_format():
     with pytest.raises(ScannerConfigError, match="SCAN_START_DATE"):
         SecretsScanConfig.from_job(_secrets_job({
             "GIT_REPOS": "https://x/a.git",
-            "SCAN_DEPTH": "deep",
             "SCAN_START_DATE": "01-01-2024",
         }))
 

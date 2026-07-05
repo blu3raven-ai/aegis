@@ -85,7 +85,18 @@ def _finding_event_type(from_state: str | None, to_state: str) -> str:
 
 
 def _finding_event_summary(evt_type: str, detail: dict[str, Any], repo: str | None) -> str:
-    title = detail.get("title") or detail.get("description") or detail.get("ruleId") or "finding"
+    # Scanners store the human-readable label under different keys: SAST → ruleId,
+    # IaC/agent → title, deps/containers → summary (concise advisory title) with
+    # cveId as a last resort. Fall through them all so the feed never degrades to
+    # the bare "finding" placeholder for any scanner type.
+    title = (
+        detail.get("title")
+        or detail.get("summary")
+        or detail.get("description")
+        or detail.get("ruleId")
+        or detail.get("cveId")
+        or "finding"
+    )
     repo_part = f" in {repo}" if repo else ""
     verbs = {
         "finding.created": "New finding",

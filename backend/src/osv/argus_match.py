@@ -1,31 +1,21 @@
-"""Additive premium SBOM match against the hosted Argus vulnerability DB.
+"""Additive premium SBOM match against the in-process premium advisory store.
 
 After the free OSV-mirror match, the backend optionally matches the same SBOM
-components against Argus's premium advisory DB over the org's existing Argus
-connection (the one that also routes verification). Premium hits are returned as
-raw finding dicts in the *same* nested shape the free OSV match produces, so they
+components against the premium advisory store. Premium hits are returned as raw
+finding dicts in the *same* nested shape the free OSV match produces, so they
 flow through the identical advisory-enrichment + lifecycle ingest path.
 
-This is purely additive and best-effort: when Argus is unconfigured, disabled,
-unreachable, or returns garbage, this module returns an empty list so the free
-matches always ship regardless.
+This is purely additive: the premium store is an empty placeholder today, so it
+returns nothing and the free matches always ship regardless.
 """
 from __future__ import annotations
 
 import logging
 
-import httpx
-
 from src.osv.matcher import ComponentRef
-from src.settings.argus.service import (
-    ArgusAuthError,
-    ArgusConnectionDTO,
-    mint_argus_access_token,
-)
+from src.osv.premium_match import MatchComponent, MatchItem, match_components
 
 logger = logging.getLogger(__name__)
-
-_MATCH_TIMEOUT = 30.0
 
 
 def _references(raw_refs: object) -> list[dict]:
@@ -37,22 +27,23 @@ def _references(raw_refs: object) -> list[dict]:
     return refs
 
 
-def _finding_from_match(match: dict) -> dict | None:
-    """Map one Argus premium match to the raw finding shape ``_build_raw_finding``
+def _finding_from_match(match: MatchItem) -> dict | None:
+    """Map one premium ``MatchItem`` to the raw finding shape ``_build_raw_finding``
     emits. Returns None for malformed entries so a bad row never aborts the batch.
 
+    The ``MatchItem`` is dumped to a dict first so the mapping stays identical to
+    the wire-era shape (keeping downstream ingest/dedup byte-for-byte unchanged).
     The ``repository`` / image identity is left blank here — the caller stamps it
     from the scoped asset's ``external_ref`` so lifecycle resolves the same asset.
     """
-    if not isinstance(match, dict):
-        return None
-    pkg = match.get("package") or {}
-    advisory = match.get("advisory") or {}
+    data = match.model_dump()
+    pkg = data.get("package") or {}
+    advisory = data.get("advisory") or {}
     if not isinstance(pkg, dict) or not isinstance(advisory, dict):
         return None
 
     name = pkg.get("name")
-    version = match.get("version")
+    version = data.get("version")
     advisory_id = advisory.get("id")
     if not name or not version or not advisory_id:
         return None
@@ -62,7 +53,7 @@ def _finding_from_match(match: dict) -> dict | None:
         "repository": {"name": "", "full_name": ""},
         "dependency": {
             "package": {"name": name, "ecosystem": pkg.get("ecosystem")},
-            "manifest_path": match.get("manifest_path") or "",
+            "manifest_path": data.get("manifest_path") or "",
         },
         "security_advisory": {
             "ghsa_id": advisory_id,
@@ -92,56 +83,27 @@ def _finding_from_match(match: dict) -> dict | None:
     }
 
 
-async def match_via_argus(
-    conn: ArgusConnectionDTO | None,
+def match_via_argus(
     components: list[ComponentRef],
     *,
     asset_id: str,
     surface: str,
 ) -> list[dict]:
-    """Match SBOM components against the Argus premium DB.
+    """Match SBOM components against the premium advisory store, in-process.
 
     Returns raw finding dicts (same shape as the free OSV match) for premium hits,
-    marked ``source``/``match_source`` = ``"argus"``. Returns ``[]`` when Argus is
-    unconfigured, disabled, unreachable, or errors — the free matches always ship
-    regardless.
+    marked ``source``/``match_source`` = ``"argus"``. Returns ``[]`` when there
+    are no components or no premium hits — the free matches always ship regardless.
     """
-    if conn is None or not conn.enabled or not components:
+    if not components:
         return []
 
-    # Mint a fresh short-lived bearer; the durable refresh token never leaves the
-    # backend. A mint failure degrades to free-only — it never aborts the scan.
-    try:
-        token = mint_argus_access_token(conn)
-    except ArgusAuthError as exc:
-        logger.warning("argus match: token mint failed: %s", exc)
-        return []
-
-    url = f"{conn.endpoint.rstrip('/')}/v1/match"
-    body = {
-        "surface": surface,
-        "components": [{"purl": c.purl, "version": c.version} for c in components],
-    }
-    try:
-        async with httpx.AsyncClient(timeout=_MATCH_TIMEOUT) as client:
-            resp = await client.post(
-                url, json=body, headers={"Authorization": f"Bearer {token}"}
-            )
-    except httpx.HTTPError as exc:
-        logger.warning("argus match: endpoint unreachable: %s", type(exc).__name__)
-        return []
-
-    if resp.status_code != 200:
-        logger.warning("argus match: non-200 response: HTTP %s", resp.status_code)
-        return []
-
-    try:
-        matches = resp.json().get("matches")
-    except ValueError:
-        logger.warning("argus match: response was not valid JSON")
-        return []
-    if not isinstance(matches, list):
-        return []
+    # Only purl + version are supplied, matching the previous wire body — the
+    # matcher derives the ecosystem and package name from the purl.
+    match_components_in = [
+        MatchComponent(purl=c.purl, version=c.version) for c in components
+    ]
+    matches = match_components(surface, match_components_in)
 
     findings: list[dict] = []
     for match in matches:

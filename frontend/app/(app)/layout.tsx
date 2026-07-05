@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/client/settings-api"
 import { apiClient } from "@/lib/client/api-client.ts"
 import type { RoleRecord } from "@/lib/shared/settings-types"
 import { AppShell } from "./AppShell"
+import { TimeZoneSync } from "@/components/layout/TimeZoneSync"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarProps, setSidebarProps] = useState({
@@ -60,6 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <AppShell sidebarProps={sidebarProps}>
+      <TimeZoneSync />
       {children}
     </AppShell>
   )

@@ -3,9 +3,9 @@
 import { cweInfo, type CweLikelihood } from "@/lib/shared/findings/cwe-catalog"
 
 const LIKELIHOOD_TONE: Record<CweLikelihood, string> = {
-  High: "border-[color-mix(in_srgb,var(--color-severity-critical)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-critical)_12%,transparent)] text-[var(--color-severity-critical)]",
+  High: "border-[color-mix(in_srgb,var(--color-severity-critical)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-critical)_12%,transparent)] text-[var(--color-severity-critical-text)]",
   Medium:
-    "border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] text-[var(--color-severity-high)]",
+    "border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] text-[var(--color-severity-high-text)]",
   Low: "border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]",
 }
 
@@ -23,8 +23,8 @@ export function CweContextSection({ cwe }: { cwe: string | undefined }) {
   const num = id.replace(/^CWE-/, "")
 
   return (
-    <section className="mt-6">
-      <h3 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+    <section>
+      <h3 className="mb-2 text-base font-semibold text-[var(--color-text-primary)]">
         Weakness
       </h3>
       <div className="rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-3">

@@ -111,6 +111,56 @@ export async function fetchSbomHistory(repoId: string, limit?: number): Promise<
   }))
 }
 
+/** Per-ecosystem SBOM risk + coverage KPIs over the caller's full scope. */
+export interface SbomEcosystemAnalytics {
+  ecosystem: string
+  critical: number
+  high: number
+  medium: number
+  low: number
+  totalFindings: number
+  totalComponents: number
+  assetsWithComponents: number
+  assetsWithFindings: number
+  coveragePercentage: number
+  riskScore: number
+}
+
+interface GqlEcosystemAnalyticsResponse {
+  sbom: {
+    ecosystemAnalytics: SbomEcosystemAnalytics[]
+  }
+}
+
+const SBOM_ECOSYSTEM_ANALYTICS_QUERY = `query SbomEcosystemAnalytics {
+  sbom {
+    ecosystemAnalytics {
+      ecosystem
+      critical
+      high
+      medium
+      low
+      totalFindings
+      totalComponents
+      assetsWithComponents
+      assetsWithFindings
+      coveragePercentage
+      riskScore
+    }
+  }
+}`
+
+/** Fetch per-ecosystem risk and coverage KPIs for the caller's scope. The empty
+ * ecosystem string groups findings whose package isn't in any current SBOM. */
+export async function fetchSbomEcosystemAnalytics(): Promise<SbomEcosystemAnalytics[]> {
+  const data = await gqlFetch<GqlEcosystemAnalyticsResponse>(
+    "SbomEcosystemAnalytics",
+    SBOM_ECOSYSTEM_ANALYTICS_QUERY,
+    {},
+  )
+  return data.sbom.ecosystemAnalytics
+}
+
 interface GqlComponentVulnsResponse {
   sbom: {
     componentVulns: Array<{

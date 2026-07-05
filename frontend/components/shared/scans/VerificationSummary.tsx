@@ -1,8 +1,6 @@
 import { cn } from "@/lib/shared/utils"
 import type { ScanVerificationSummary } from "@/lib/client/sources-api"
-
-// Approximate cost — exact provider rates aren't stored yet.
-const APPROX_COST_PER_1K_TOKENS = 0.01
+import { APPROX_COST_PER_1K_TOKENS } from "@/lib/client/llm-settings-api"
 
 type CellKey = "confirmed" | "needs_verify" | "possible" | "ruled_out"
 
@@ -10,12 +8,12 @@ const CELLS: { key: CellKey; label: string; valueClass: string }[] = [
   {
     key: "confirmed",
     label: "🔴 Confirmed",
-    valueClass: "text-[var(--color-severity-critical)]",
+    valueClass: "text-[var(--color-severity-critical-text)]",
   },
   {
     key: "needs_verify",
     label: "🟡 Needs verify",
-    valueClass: "text-[var(--color-severity-medium)]",
+    valueClass: "text-[var(--color-severity-medium-text)]",
   },
   {
     key: "possible",
@@ -25,7 +23,7 @@ const CELLS: { key: CellKey; label: string; valueClass: string }[] = [
   {
     key: "ruled_out",
     label: "✓ Ruled out",
-    valueClass: "text-[var(--color-status-ok)]",
+    valueClass: "text-[var(--color-status-ok-text)]",
   },
 ]
 
@@ -47,7 +45,7 @@ export function VerificationSummary({ summary }: VerificationSummaryProps) {
     return (
       <div className="rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] px-5 py-3">
         <p className="text-xs italic text-[var(--color-text-secondary)]">
-          This scan ran without Argus verification.
+          This scan ran without LLM verification.
         </p>
       </div>
     )

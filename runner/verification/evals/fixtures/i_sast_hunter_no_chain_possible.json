@@ -1,0 +1,24 @@
+{
+  "id": "i_sast_hunter_no_chain_possible",
+  "verifier": "sast",
+  "note": "Hunter cannot build a concrete exploit chain (returns empty chain). The finding falls to 'possible' — kept visible, not suppressed. Recall-safe: an uncertain hunter never hides a finding.",
+  "finding": {
+    "tool": "semgrep",
+    "rule": "python.lang.security.audit.sqli",
+    "severity": "medium",
+    "file": "app/handlers.py",
+    "line": 7
+  },
+  "repo_files": {
+    "app/handlers.py": "from db import query\n\n\ndef search(request):\n    q = request.args.get('q')\n    sql = \"SELECT * FROM users WHERE name LIKE '%\" + q + \"%'\"\n    rows = query(sql)\n    return rows\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"exploit_chain\":\"\",\"evidence\":[]}",
+      "tokens_in": 150,
+      "tokens_out": 10
+    }
+  ],
+  "expected": {"signal": "possible", "suppressed": false},
+  "label": {"truly_reachable": true}
+}

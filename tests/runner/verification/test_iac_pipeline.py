@@ -4,15 +4,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from runner.verification.llm_client import LlmResponse
+from runner.verification.llm_client import LlmClient, LlmResponse
 from runner.verification.verifiers.iac import verify_iac_finding
 
 
-class _StubLlm:
+class _StubLlm(LlmClient):
+    """Scripts ``chat`` so the inherited ``chat_json`` repair loop is exercised."""
+
     def __init__(self, responses):
+        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub-model")
         self._r = list(responses)
         self.calls = []
-        self._model = "stub-model"
 
     def chat(self, messages, *, temperature=0.0, max_tokens=1024):
         self.calls.append(messages)
@@ -159,9 +161,10 @@ def test_skeptic_finds_compensating_control_yields_ruled_out(tmp_path):
 
 def test_malformed_hunter_json_falls_back_safely(tmp_path):
     finding = _seed_module(tmp_path)
+    # Malformed on both the first turn and the repair-retry → exhaust → fall back.
     llm = _StubLlm([
         "not json at all",
-        _skeptic_json(False),
+        "still not json",
     ])
 
     result = verify_iac_finding(
@@ -171,7 +174,7 @@ def test_malformed_hunter_json_falls_back_safely(tmp_path):
     )
     assert result.verdict == "needs_verify"
     assert "hunter_schema_invalid" in result.verification_metadata.get("reason", "")
-    assert len(llm.calls) == 1
+    assert len(llm.calls) == 2  # first turn + one repair, then fall back
 
 
 def test_malformed_skeptic_json_falls_back_to_needs_verify(tmp_path):
@@ -189,6 +192,7 @@ def test_malformed_skeptic_json_falls_back_to_needs_verify(tmp_path):
             ],
         ),
         "garbage",
+        "still garbage",
     ])
 
     result = verify_iac_finding(
@@ -325,3 +329,100 @@ def test_sibling_excerpt_does_not_follow_symlinks_pointing_outside_repo(tmp_path
     excerpt = _collect_sibling_excerpt(str(repo_root), "infra/main.tf")
 
     assert "should-never-leak" not in excerpt
+
+
+# ---------------------------------------------------------------------------
+# Frontier escalation tier (dormant unless an escalation client is passed)
+# ---------------------------------------------------------------------------
+
+_GOOD_HUNTER = _hunter_chain_json(
+    "bucket holds sensitive data and lacks server-side encryption",
+    [{"kind": "resource", "file": "infra/s3.tf", "line": 1,
+      "snippet": 'resource "aws_s3_bucket" "data"'}],
+)
+_GOOD_SKEPTIC = _skeptic_json(False, reasoning="no compensating control found")
+
+
+def test_tier_default_stamped_and_no_escalation_by_default(tmp_path):
+    finding = _seed_module(tmp_path)
+    llm = _StubLlm([_GOOD_HUNTER, _GOOD_SKEPTIC])
+    result = verify_iac_finding(
+        finding=finding, repo_root=str(tmp_path), llm=llm,
+    )
+    assert result.verification_metadata["tier"] == "default"
+    assert "escalated" not in result.verification_metadata
+
+
+def test_escalates_to_frontier_when_default_hunter_schema_fails(tmp_path):
+    """Default can't produce a valid exploit chain -> the frontier tier retries."""
+    finding = _seed_module(tmp_path)
+    default = _StubLlm(["garbage", "still garbage"])  # both hunter turns fail
+    frontier = _StubLlm([_GOOD_HUNTER, _GOOD_SKEPTIC])
+
+    result = verify_iac_finding(
+        finding=finding, repo_root=str(tmp_path),
+        llm=default, escalation_llm=frontier,
+    )
+
+    assert result.verdict == "confirmed"
+    assert result.verification_metadata["escalated"] is True
+    assert result.verification_metadata["tier"] == "frontier"
+    assert len(default.calls) == 2   # exhausted default repair budget
+    assert len(frontier.calls) == 2  # frontier hunter + skeptic
+    # Tokens accumulate across BOTH tiers.
+    assert result.tokens_in == 400
+
+
+def test_no_escalation_when_default_hunter_succeeds(tmp_path):
+    finding = _seed_module(tmp_path)
+    default = _StubLlm([_GOOD_HUNTER, _GOOD_SKEPTIC])
+    frontier = _StubLlm([_GOOD_HUNTER])  # should never be touched
+
+    result = verify_iac_finding(
+        finding=finding, repo_root=str(tmp_path),
+        llm=default, escalation_llm=frontier,
+    )
+
+    assert result.verdict == "confirmed"
+    assert result.verification_metadata["tier"] == "default"
+    assert len(frontier.calls) == 0
+
+
+def test_escalation_that_also_fails_stays_needs_verify(tmp_path):
+    finding = _seed_module(tmp_path)
+    default = _StubLlm(["garbage", "still garbage"])
+    frontier = _StubLlm(["frontier garbage", "frontier garbage 2"])
+
+    result = verify_iac_finding(
+        finding=finding, repo_root=str(tmp_path),
+        llm=default, escalation_llm=frontier,
+    )
+
+    assert result.verdict == "needs_verify"
+    assert result.verification_metadata["escalated"] is True
+    assert result.verification_metadata["reason"].startswith("hunter_schema_invalid:")
+
+
+def test_escalation_runs_skeptic_on_frontier_tier(tmp_path):
+    """Once escalation fires, the skeptic also runs on the frontier tier."""
+    finding = _seed_module(tmp_path)
+    default = _StubLlm(["garbage", "still garbage"])
+    # Frontier hunter succeeds but skeptic finds a compensating control.
+    frontier = _StubLlm([
+        _GOOD_HUNTER,
+        _skeptic_json(
+            True, file="infra/policy.tf", line=3,
+            snippet='Effect = "Deny", Action = "s3:*"',
+            reasoning="bucket policy denies all access",
+        ),
+    ])
+
+    result = verify_iac_finding(
+        finding=finding, repo_root=str(tmp_path),
+        llm=default, escalation_llm=frontier,
+    )
+
+    assert result.verdict == "ruled_out"
+    assert result.verification_metadata["tier"] == "frontier"
+    assert len(frontier.calls) == 2  # hunter + skeptic, both on frontier
+

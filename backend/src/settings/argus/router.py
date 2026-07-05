@@ -1,14 +1,14 @@
-"""REST API for the per-org Argus verification connection."""
+"""REST API for the per-org Argus threat-intel enrichment connection."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.audit_log.recorder import ActorInfo, get_recorder
 from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import MANAGE_SETTINGS
 from src.db.helpers import run_db
+from src.shared.url_guard import UnsafeURLError, assert_sendable_url
 from src.settings.argus.service import (
     ArgusAuthError,
     delete_argus_connection,
@@ -73,13 +73,7 @@ def put_argus_connection(
         )
 
     conn = run_db(_q)
-    get_recorder().record(
-        action="argus_connection.updated",
-        resource_type="argus_connection",
-        resource_id=org_id,
-        actor=ActorInfo(user_id="system"),
-        metadata={"enabled": body.enabled, "endpoint": body.endpoint},
-    )
+    request.state.audit_metadata = {"enabled": body.enabled, "endpoint": body.endpoint}
     return {
         "endpoint": conn.endpoint,
         "token_endpoint": conn.token_endpoint,
@@ -106,9 +100,14 @@ def test_argus_connection(
     except ArgusAuthError as exc:
         return {"ok": False, "error": "auth_failed", "detail": str(exc)[:200]}
 
+    try:
+        assert_sendable_url(conn.endpoint)
+    except UnsafeURLError as exc:
+        return {"ok": False, "error": "unsafe_url", "detail": str(exc)[:200]}
+
     import httpx
     try:
-        with httpx.Client(timeout=15.0) as client:
+        with httpx.Client(timeout=15.0, follow_redirects=False) as client:
             resp = client.get(
                 f"{conn.endpoint.rstrip('/')}/health",
                 headers={"Authorization": f"Bearer {access_token}"},
@@ -134,10 +133,4 @@ def delete_argus_connection_route(
     deleted = run_db(lambda session: delete_argus_connection(session, org_id))
     if not deleted:
         raise HTTPException(status_code=404, detail="argus_connection_not_set")
-    get_recorder().record(
-        action="argus_connection.deleted",
-        resource_type="argus_connection",
-        resource_id=org_id,
-        actor=ActorInfo(user_id="system"),
-    )
     return {"deleted": True}

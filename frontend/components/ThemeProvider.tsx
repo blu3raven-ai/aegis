@@ -2,6 +2,8 @@
 
 import { useEffect } from "react"
 
+import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY, getStoredTheme } from "@/lib/client/theme"
+
 export function ThemeProvider() {
   useEffect(() => {
     let mediaQuery: MediaQueryList | null = null
@@ -28,23 +30,19 @@ export function ThemeProvider() {
       }
     }
 
-    let savedTheme = "system"
-    try {
-      savedTheme = localStorage.getItem("theme") || "system"
-    } catch { /* ignore */ }
-    applyTheme(savedTheme)
+    applyTheme(getStoredTheme())
 
     function handleThemeChange(e: Event) {
       const theme = (e as CustomEvent<{ theme: string }>).detail?.theme
       if (!theme) return
-      try { localStorage.setItem("theme", theme) } catch { /* ignore */ }
+      try { localStorage.setItem(THEME_STORAGE_KEY, theme) } catch { /* ignore */ }
       applyTheme(theme)
     }
 
-    window.addEventListener("theme:change", handleThemeChange)
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
 
     return () => {
-      window.removeEventListener("theme:change", handleThemeChange)
+      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
       if (systemChangeHandler && mediaQuery) {
         mediaQuery.removeEventListener("change", systemChangeHandler)
       }

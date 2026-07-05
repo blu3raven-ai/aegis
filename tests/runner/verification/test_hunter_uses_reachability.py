@@ -1,16 +1,16 @@
 """Verify that reachability data from finding.detail flows into the hunter context."""
 from __future__ import annotations
 
-from runner.verification.llm_client import LlmResponse
+from runner.verification.llm_client import LlmClient, LlmResponse
 from runner.verification.pipeline import verify_finding
 
 
-class _CapturingLlm:
+class _CapturingLlm(LlmClient):
     """Captures all chat calls and returns canned responses."""
 
     def __init__(self, responses: list[str]) -> None:
+        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._responses = list(responses)
-        self._model = "stub"
         self.calls: list[list[dict]] = []
 
     def chat(self, messages, *, temperature=0.0, max_tokens=1024):

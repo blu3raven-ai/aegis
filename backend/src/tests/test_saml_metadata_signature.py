@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from unittest.mock import patch
 
-os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
+os.environ.setdefault("APP_SECRET", Fernet.generate_key().decode())
 os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
 
 from src.auth.federation import saml as saml_helpers  # noqa: E402

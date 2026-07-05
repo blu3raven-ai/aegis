@@ -55,11 +55,11 @@ const GlyphCheck = ({ className }: { className: string }) => (
 
 const CHIPS: Chip[] = [
   { value: null, label: "All open" },
-  { value: "confirmed", label: "Confirmed", glyph: <GlyphDot className="text-[var(--color-severity-critical)]" /> },
-  { value: "needs_verify", label: "Needs verify", glyph: <GlyphDot className="text-[var(--color-severity-medium)]" /> },
+  { value: "confirmed", label: "Confirmed", glyph: <GlyphDot className="text-[var(--color-severity-critical-text)]" /> },
+  { value: "needs_verify", label: "Needs verify", glyph: <GlyphDot className="text-[var(--color-severity-medium-text)]" /> },
   { value: "possible", label: "Possible", glyph: <GlyphRing className="text-[var(--color-text-tertiary)]" /> },
   { value: "legacy", label: "Legacy", glyph: <GlyphBolt className="text-[var(--color-state-deferred)]" /> },
-  { value: "ruled_out", label: "Ruled out", glyph: <GlyphCheck className="text-[var(--color-status-ok)]" /> },
+  { value: "ruled_out", label: "Ruled out", glyph: <GlyphCheck className="text-[var(--color-status-ok-text)]" /> },
 ]
 
 function countFor(c: Counts | undefined, v: VerdictFilter): number {

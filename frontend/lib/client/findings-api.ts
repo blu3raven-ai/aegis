@@ -13,6 +13,7 @@ export type FindingScanner =
   | "container_scanning"
   | "secret_scanning"
   | "iac_scanning"
+  | "agent_scanning"
 
 // The findings API returns the public shorthand (deps/sast/secrets/container);
 // the rest of the UI keys off the internal scanner names, so normalise on read.
@@ -21,6 +22,8 @@ const SCANNER_SHORTHAND_TO_NAME: Record<string, FindingScanner> = {
   sast: "code_scanning",
   secrets: "secret_scanning",
   container: "container_scanning",
+  iac: "iac_scanning",
+  agent: "agent_scanning",
 }
 
 function normalizeScanner(scanner: string): string {
@@ -52,6 +55,7 @@ export interface Finding {
   file_path: string | null
   line: number | null
   repo: string | null
+  repo_html_url?: string | null
   org_id: string
   created_at: string | null
   updated_at: string | null
@@ -59,6 +63,8 @@ export interface Finding {
   epssPercentile?: number | null
   /** True when this finding's CVE is in CISA KEV. */
   kev?: boolean | null
+  /** True when this is a malicious-package report (remove, don't upgrade). */
+  malicious?: boolean | null
   /** First CWE id (e.g. "CWE-502") from KEV metadata. */
   cwe?: string | null
   risk_score?: number | null
@@ -66,6 +72,8 @@ export interface Finding {
   action_band?: string | null
   assignee_user_id?: string | null
   verdict?: FindingVerdict | null
+  /** One-line disproof shown on ruled-out rows; null for other verdicts. */
+  ruled_out_reason?: string | null
   /** Short, client-safe code/context preview (redacted for secrets). */
   code_snippet?: string | null
   /** 1-indexed file line of the snippet's first line, for gutter anchoring. */
@@ -96,6 +104,21 @@ export interface Finding {
     digest: string | null
     base_os: string | null
     layer_count: number | null
+    layer_digest: string | null
+    layer_index: number | null
+    newer_tags: string[] | null
+    /** Most-affected layer across this image's open findings (detail-fetch only). */
+    layer_concentration: {
+      layer_index: number
+      finding_count: number
+      total_with_layer: number
+    } | null
+    /** Newer base tag with fewer vulns, proven by rescanning (detail-fetch only). */
+    base_image_recommendation: {
+      recommended_tag: string
+      current_vuln_count: number
+      recommended_vuln_count: number
+    } | null
   } | null
   /** Ordered taint path (source → sink) for SAST flow findings. */
   code_flows?: Array<{ file: string; line: number; snippet?: string }> | null
@@ -170,6 +193,7 @@ interface GqlFindingRow {
   actionBand: string | null
   assigneeUserId: string | null
   verdict: FindingVerdict | null
+  ruledOutReason: string | null
 }
 
 interface GqlVerdictCounts {
@@ -254,6 +278,7 @@ function fromGqlRow(row: GqlFindingRow): Finding {
     action_band: row.actionBand,
     assignee_user_id: row.assigneeUserId,
     verdict: row.verdict,
+    ruled_out_reason: row.ruledOutReason ?? null,
   }
 }
 
@@ -499,7 +524,7 @@ const FINDINGS_SEARCH_QUERY = `query FindingsSearch(
       findings {
         id scanner severity state title cve package filePath line
         repo orgId createdAt updatedAt epssPercentile kev cwe
-        riskScore actionBand assigneeUserId verdict
+        riskScore actionBand assigneeUserId verdict ruledOutReason
       }
       nextCursor
       totalCount

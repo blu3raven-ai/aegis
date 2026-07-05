@@ -65,7 +65,7 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                         System
                       </span>
                     ) : (
-                      <span className="inline-flex items-center rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-state-fixed)] border border-[var(--color-state-fixed-border)] uppercase tracking-tight">
+                      <span className="inline-flex items-center rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-state-fixed-text)] border border-[var(--color-state-fixed-border)] uppercase tracking-tight">
                         Custom
                       </span>
                     )}
@@ -99,7 +99,7 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                         onDeleteRole(role.id)
                       }}
                       disabled={role.isLocked || role.id === "role_owner"}
-                      className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       title={role.isLocked || role.id === "role_owner" ? "This role is protected and cannot be deleted" : "Delete role"}
                       aria-label="Delete role"
                     >

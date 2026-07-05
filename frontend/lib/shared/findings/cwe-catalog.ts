@@ -194,10 +194,15 @@ const CATALOG: Record<string, CweInfo> = {
   },
 }
 
-/** Look up curated context for a CWE id (e.g. "CWE-79"); null when uncatalogued. */
+/**
+ * Look up curated context for a CWE id; null when uncatalogued.
+ * Accepts any label carrying a CWE number — a bare id ("CWE-79"), the
+ * scanner's fuller "CWE-79: Cross-site Scripting" form, or a plain "79" —
+ * so the weakness explainer isn't silently dropped on non-bare formats.
+ */
 export function cweInfo(cwe: string | null | undefined): CweInfo | null {
   if (!cwe) return null
-  const m = cwe.trim().match(/^CWE-(\d+)$/i)
+  const m = cwe.trim().match(/(?:CWE-)?(\d+)/i)
   if (!m) return null
   return CATALOG[`CWE-${m[1]}`] ?? null
 }

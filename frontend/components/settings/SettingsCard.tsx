@@ -3,8 +3,8 @@ import type React from "react"
 interface SettingsCardProps {
   /**
    * Optional inner sub-card heading. Renders above the rows in a smaller
-   * small-caps style than the parent SettingsSection — use it when a section
-   * splits its content into multiple thematic groupings.
+   * small-caps style — use it when a section splits its content into multiple
+   * thematic groupings.
    */
   heading?: string
   children: React.ReactNode
@@ -13,8 +13,8 @@ interface SettingsCardProps {
 }
 
 /**
- * Inner sub-card that sits inside a SettingsSection. Uses the page background
- * so it visually recedes into a "well" inside the outer card.
+ * Inner sub-card for a settings section. Uses the page background so it
+ * visually recedes into a "well" inside the surrounding surface.
  */
 export function SettingsCard({ heading, children, className }: SettingsCardProps) {
   return (

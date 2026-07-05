@@ -57,12 +57,13 @@ class IacScanningHooks(LifecycleHooks):
             "severity": raw.get("severity", ""),
             "guideline": raw.get("guideline", ""),
             "fingerprint": raw.get("fingerprint", ""),
+            "repoHtmlUrl": raw.get("repo_html_url", ""),
         }
         # Verification fields are present only when LLM verification ran;
         # the code window is always emitted by the runner when source is readable.
         for key in (
             "verdict", "evidence", "exploit_chain", "verification_metadata",
-            "code_window", "code_window_start_line",
+            "recommended_fix", "code_window", "code_window_start_line",
         ):
             val = raw.get(key)
             if val is not None:

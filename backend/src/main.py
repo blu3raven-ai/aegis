@@ -66,6 +66,7 @@ from src.auth.credentials.middleware import try_api_key_auth
 from src.auth.credentials.router import router as api_keys_router
 from src.audit_log.middleware import AuditMiddleware
 from src.audit_stream.poster import poster_loop
+from src.notifications.retry_worker import retry_worker_loop
 from src.pr_feedback.poster import poster_loop as pr_feedback_poster_loop
 
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -153,14 +154,18 @@ _audit_stream_task: asyncio.Task | None = None
 _pr_feedback_stop = asyncio.Event()
 _pr_feedback_task: asyncio.Task | None = None
 
+_notif_retry_stop = asyncio.Event()
+_notif_retry_task: asyncio.Task | None = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
-    # Warn early so misconfiguration surfaces at deploy time, not on first use
-    if not os.environ.get("AEGIS_SECRET_ENCRYPTION_KEY"):
+    # Warn early so misconfiguration surfaces at deploy time, not on first use.
+    if not os.environ.get("APP_SECRET"):
         logger.warning(
-            "AEGIS_SECRET_ENCRYPTION_KEY is not set; SSO/SCIM/audit-streaming "
-            "configuration with encrypted columns will fail at runtime until set."
+            "APP_SECRET is not set; encrypted columns (source tokens, LLM/"
+            "Argus/SSO/audit-streaming) and federation-state signing will use an "
+            "ephemeral key that is lost on restart until it is set."
         )
 
     # Run Alembic migrations
@@ -252,7 +257,19 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     _pr_feedback_stop.clear()
     _pr_feedback_task = asyncio.create_task(pr_feedback_poster_loop(_pr_feedback_stop))
 
+    global _notif_retry_task
+    _notif_retry_stop.clear()
+    _notif_retry_task = asyncio.create_task(retry_worker_loop(_notif_retry_stop))
+
     yield
+
+    # Graceful shutdown for the notification retry worker
+    _notif_retry_stop.set()
+    if _notif_retry_task:
+        try:
+            await asyncio.wait_for(_notif_retry_task, timeout=10.0)
+        except asyncio.TimeoutError:
+            _notif_retry_task.cancel()
 
     # Graceful shutdown for the PR feedback poster
     _pr_feedback_stop.set()
@@ -314,6 +331,50 @@ def _html_url_paths(rel: Path) -> list[str]:
     if posix.endswith(".html"):
         return ["/" + posix[: -len(".html")]]
     return []
+
+
+def _resolve_export_html(static_root: Path, parts: list[str]) -> Path | None:
+    """Resolve a request path to a prerendered HTML file under the static export.
+
+    Matches Next.js route precedence segment by segment: a literal child wins
+    over the "_" dynamic-route stub, with backtracking so a dynamic parent can
+    still resolve a literal child. This handles routes with several dynamic
+    segments (e.g. compliance/_/_.html for /compliance/<framework>/<controlId>),
+    not just a single one — a one-segment-at-a-time replacement would never
+    match the nested stub and would fall through to the 404 document.
+
+    Returns the resolved HTML path, or None when no page or stub matches.
+    ``static_root`` must already be resolved; every candidate is confirmed to
+    stay within it so a "_" segment can't be abused to escape the export root.
+    """
+    def _walk(node: Path, segs: list[str]) -> Path | None:
+        if not segs:
+            return None
+        seg, rest = segs[0], segs[1:]
+        if not rest:
+            # Terminal segment: prefer "<seg>.html", fall back to the stub.
+            for name in (f"{seg}.html", "_.html"):
+                try:
+                    cand = (node / name).resolve()
+                except (OSError, RuntimeError, ValueError):
+                    continue
+                if cand.is_file() and cand.is_relative_to(static_root):
+                    return cand
+            return None
+        # Intermediate segment: descend into the literal dir first, then the
+        # "_" stub dir, backtracking if the chosen branch dead-ends.
+        for name in (seg, "_"):
+            try:
+                child = (node / name).resolve()
+            except (OSError, RuntimeError, ValueError):
+                continue
+            if child.is_dir() and child.is_relative_to(static_root):
+                found = _walk(child, rest)
+                if found is not None:
+                    return found
+        return None
+
+    return _walk(static_root, parts)
 
 
 def _build_security_csp_args() -> dict[str, object]:
@@ -626,22 +687,15 @@ if _STATIC_ROOT.exists():
         if html_candidate.is_file() and html_candidate.is_relative_to(_STATIC_ROOT_RESOLVED):
             return FileResponse(html_candidate, media_type="text/html")
         # Dynamic segments: Next.js generateStaticParams stubs use "_" as the
-        # placeholder id (e.g. sources/_.html, sources/_/findings.html). Try
-        # replacing each path segment with "_" to match dynamic route shells,
-        # so /sources/abc123 serves sources/_.html instead of falling to home.
+        # placeholder id (e.g. sources/_.html, sources/_/findings.html,
+        # compliance/_/_.html). Walk the export tree to match dynamic route
+        # shells at any nesting depth, so /sources/abc123 serves sources/_.html
+        # and /compliance/iso27001/A.8.8 serves compliance/_/_.html instead of
+        # falling through to the 404 document.
         parts = [p for p in path.strip("/").split("/") if p]
-        for i in range(len(parts)):
-            stub_parts = parts[:i] + ["_"] + parts[i + 1:]
-            stub_path = "/".join(stub_parts)
-            try:
-                stub_candidate = (_STATIC_ROOT_RESOLVED / stub_path).resolve()
-            except (OSError, RuntimeError, ValueError):
-                continue
-            if not stub_candidate.is_relative_to(_STATIC_ROOT_RESOLVED):
-                continue
-            stub_html = stub_candidate.parent / f"{stub_candidate.name}.html"
-            if stub_html.is_file() and stub_html.is_relative_to(_STATIC_ROOT_RESOLVED):
-                return FileResponse(stub_html, media_type="text/html")
+        stub_html = _resolve_export_html(_STATIC_ROOT_RESOLVED, parts)
+        if stub_html is not None:
+            return FileResponse(stub_html, media_type="text/html")
         # Root path is the SPA shell; serve the app index.
         if path in ("", "index.html"):
             return FileResponse(_STATIC_ROOT_RESOLVED / "index.html", media_type="text/html")

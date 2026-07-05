@@ -1,5 +1,4 @@
-// Pattern: Snyk empty state — centered icon, title, description, single CTA.
-// Reference: Snyk projects page when no projects are connected.
+// Centered empty state — icon, title, description, and a single CTA.
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/shared/utils";
 

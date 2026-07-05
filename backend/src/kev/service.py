@@ -27,15 +27,16 @@ def _utcnow() -> datetime:
 
 
 class KevService:
-    def upsert_catalog(self, entries: list[dict[str, Any]]) -> int:
+    def upsert_catalog(self, entries: list[dict[str, Any]]) -> list[str]:
         """UPSERT all entries by cve_id PK.
 
-        Returns the number of net-new rows inserted (rows that did not exist
-        before this call).  Updates to existing rows are not counted because
-        the catalog rarely changes existing entries.
+        Returns the sorted list of net-new CVE ids inserted (rows that did not
+        exist before this call) so callers can react to newly KEV-listed CVEs.
+        Updates to existing rows are not included because the catalog rarely
+        changes existing entries.
         """
         if not entries:
-            return 0
+            return []
 
         now = _utcnow()
         rows = [{**e, "ingested_at": now} for e in entries]
@@ -67,7 +68,7 @@ class KevService:
             await session.execute(stmt)
 
             new_ids = {e["cve_id"] for e in entries} - existing_ids
-            return len(new_ids)
+            return sorted(new_ids)
 
         return run_db(_run)
 

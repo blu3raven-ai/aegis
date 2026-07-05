@@ -43,6 +43,19 @@ class ComponentRef:
     # from equality/hashing so two refs that differ only by purl still collapse
     # to one OSV-mirror match key.
     purl: str | None = field(default=None, compare=False)
+    # Where the dep is declared (manifest path + line) plus a small code window,
+    # carried from the SBOM component onto the finding for the drawer preview +
+    # repo deep-link. Excluded from equality/hashing — carried data, not identity.
+    manifest_path: str | None = field(default=None, compare=False)
+    manifest_line: int | None = field(default=None, compare=False)
+    manifest_snippet: str | None = field(default=None, compare=False)
+    manifest_snippet_start: int | None = field(default=None, compare=False)
+    # Dependency scope ("dev"/"prod") for a direct dep, else None. Carried data.
+    scope: str | None = field(default=None, compare=False)
+    # Introducing image layer (container components only): digest + 0-based
+    # ordinal. Carried data, not identity.
+    layer_digest: str | None = field(default=None, compare=False)
+    layer_index: int | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)

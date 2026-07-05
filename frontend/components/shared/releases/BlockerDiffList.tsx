@@ -95,12 +95,12 @@ export function BlockerDiffList({ blockers, emptyMessage, baselineRef }: Blocker
                       </span>
                     )}
                     {row.is_kev && (
-                      <span className={`${CHIP_BASE} bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]`}>
+                      <span className={`${CHIP_BASE} bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]`}>
                         KEV
                       </span>
                     )}
                     {row.epss_score != null && (
-                      <span className={`${CHIP_BASE} bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]`}>
+                      <span className={`${CHIP_BASE} bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]`}>
                         EPSS {Math.round(row.epss_score * 100)}%
                       </span>
                     )}

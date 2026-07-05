@@ -7,8 +7,8 @@ cyclonedx-xml      CycloneDX → XML (minimal hand-written serializer; no third-
 spdx-json          CycloneDX → SPDX 2.3 JSON (field mapping defined by the SPDX spec)
 spdx-tag-value     SPDX JSON → SPDX tag-value text (manual serialization)
 
-XML and tag-value ship as stubs returning UnsupportedFormatError until a
-follow-up adds a proper implementation or a library dependency.
+All four formats are fully implemented with hand-written serializers and no
+third-party dependency.
 """
 from __future__ import annotations
 
@@ -22,10 +22,6 @@ from typing import Any
 SUPPORTED_FORMATS = frozenset(
     {"cyclonedx-json", "cyclonedx-xml", "spdx-json", "spdx-tag-value"}
 )
-
-
-class UnsupportedFormatError(ValueError):
-    """Raised when the requested export format is not yet implemented."""
 
 
 class SbomExporter:
@@ -47,8 +43,6 @@ class SbomExporter:
 
         Raises
         ------
-        UnsupportedFormatError
-            When fmt is valid but not yet implemented (xml, tag-value stubs).
         ValueError
             When fmt is not a recognised format string.
         """

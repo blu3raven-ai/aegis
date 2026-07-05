@@ -100,7 +100,7 @@ export function DataRetentionActionEditor({
       {value.type === "delete" && (
         <div
           role="alert"
-          className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-severity-critical)]/10 px-3 py-2 text-xs text-[var(--color-severity-critical)]"
+          className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-severity-critical)]/10 px-3 py-2 text-xs text-[var(--color-severity-critical-text)]"
         >
           <span className="font-semibold">Warning:</span> deleting scan results is
           permanent. Findings remain visible but their scan history is lost. Use

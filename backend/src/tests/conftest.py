@@ -43,7 +43,7 @@ def pytest_configure(config):
     existing = os.environ.get("DATABASE_URL", "")
     if existing and existing != _PLACEHOLDER_URL:
         # Outer conftest already provided a real URL — nothing to do.
-        os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+        os.environ.setdefault("APP_SECRET", "0" * 64)
         os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
         os.environ.setdefault("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
         return
@@ -60,7 +60,7 @@ def pytest_configure(config):
         # will fail with a connection error.
         os.environ.setdefault("DATABASE_URL", _PLACEHOLDER_URL)
 
-    os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+    os.environ.setdefault("APP_SECRET", "0" * 64)
     os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
     os.environ.setdefault("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
 

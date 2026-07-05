@@ -9,10 +9,26 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
+from typing import TypeVar
 
 import httpx
+from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T", bound=BaseModel)
+
+# Re-prompt used when a structured response fails schema validation. Weaker
+# self-hostable models frequently emit prose or malformed JSON on the first
+# turn but recover when handed the validation error and asked for raw JSON.
+_REPAIR_INSTRUCTION = (
+    "Your previous response failed schema validation with this error:\n"
+    "{error}\n\n"
+    "Reply with ONLY a single valid JSON object matching the {schema_name} "
+    "schema below. Do not include any prose, explanation, or markdown code "
+    "fences — output the raw JSON object and nothing else.\n\n"
+    "Schema:\n{schema}"
+)
 
 
 class LlmError(Exception):
@@ -39,6 +55,22 @@ class LlmResponse:
     tokens_in: int
     tokens_out: int
     prompt_hash: str
+
+
+@dataclass
+class JsonChatResult:
+    """Outcome of a schema-validated chat, including any repair attempt.
+
+    ``parsed`` is the validated model on success or ``None`` when validation
+    failed after all attempts (the caller then falls back). Token counts and
+    ``prompt_hashes`` accumulate across every attempt, including repairs.
+    """
+
+    parsed: BaseModel | None
+    error: str | None
+    tokens_in: int
+    tokens_out: int
+    prompt_hashes: list[str]
 
 
 @dataclass
@@ -115,6 +147,63 @@ class LlmClient:
             tokens_in=int(usage.get("prompt_tokens", 0)),
             tokens_out=int(usage.get("completion_tokens", 0)),
             prompt_hash=prompt_hash,
+        )
+
+    def chat_json(
+        self,
+        messages: list[dict],
+        model_cls: type[_T],
+        *,
+        temperature: float = 0.0,
+        max_tokens: int = 1024,
+        max_repairs: int = 1,
+    ) -> JsonChatResult:
+        """Chat, validate against ``model_cls``, and repair-retry once on failure.
+
+        On a schema-invalid response the model is re-prompted (up to
+        ``max_repairs`` times) with the validation error and a request for raw
+        JSON. This only recovers the verdict the model already intended — it
+        never changes verdict logic. A valid first response costs exactly one
+        call; exhausting the repairs returns ``parsed=None`` so the caller can
+        apply its existing fallback. Transport-level errors
+        (``LlmRateLimitedError`` / ``LlmError``) propagate unchanged.
+        """
+        convo = list(messages)
+        tokens_in = 0
+        tokens_out = 0
+        prompt_hashes: list[str] = []
+        last_error = ""
+
+        for attempt in range(max_repairs + 1):
+            resp = self.chat(convo, temperature=temperature, max_tokens=max_tokens)
+            tokens_in += resp.tokens_in
+            tokens_out += resp.tokens_out
+            prompt_hashes.append(resp.prompt_hash)
+            try:
+                parsed = model_cls.model_validate_json(resp.content)
+            except (ValidationError, ValueError) as exc:
+                last_error = str(exc)
+                if attempt >= max_repairs:
+                    break
+                convo = convo + [
+                    {"role": "assistant", "content": resp.content},
+                    {"role": "user", "content": _REPAIR_INSTRUCTION.format(
+                        error=last_error,
+                        schema_name=model_cls.__name__,
+                        schema=json.dumps(model_cls.model_json_schema()),
+                    )},
+                ]
+                continue
+            return JsonChatResult(
+                parsed=parsed, error=None,
+                tokens_in=tokens_in, tokens_out=tokens_out,
+                prompt_hashes=prompt_hashes,
+            )
+
+        return JsonChatResult(
+            parsed=None, error=last_error,
+            tokens_in=tokens_in, tokens_out=tokens_out,
+            prompt_hashes=prompt_hashes,
         )
 
     def chat_with_tools(

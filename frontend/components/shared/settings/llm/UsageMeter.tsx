@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/shared/utils"
-
-const APPROX_COST_PER_1K_TOKENS = 0.01
+import { APPROX_COST_PER_1K_TOKENS } from "@/lib/client/llm-settings-api"
 
 interface UsageMeterProps {
   used: number
@@ -20,7 +19,7 @@ function statusFor(pct: number): {
       label: "Near cap",
       barClass: "bg-[var(--color-severity-critical)]",
       pillClass:
-        "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
+        "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]",
     }
   }
   if (pct >= 75) {
@@ -28,7 +27,7 @@ function statusFor(pct: number): {
       label: "Approaching cap",
       barClass: "bg-[var(--color-severity-medium)]",
       pillClass:
-        "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)]",
+        "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)]",
     }
   }
   return {
@@ -76,10 +75,11 @@ export function UsageMeter({ used, budget }: UsageMeterProps) {
       </div>
       <div
         role="progressbar"
-        aria-valuenow={used}
+        aria-valuenow={Math.min(used, budget)}
         aria-valuemin={0}
         aria-valuemax={budget}
-        aria-label="Daily Argus token usage"
+        aria-valuetext={`${used.toLocaleString()} of ${budget.toLocaleString()} tokens`}
+        aria-label="Daily verification token usage"
         className="h-2 overflow-hidden rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]"
       >
         <div

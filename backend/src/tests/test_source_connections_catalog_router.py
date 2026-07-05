@@ -1,7 +1,7 @@
 """Tests for the catalog-style source-connection list reads.
 
 GET /api/v1/sources/connections          — requires VIEW_SOURCES
-GET /api/v1/sources/connections/internal-orgs — any authenticated session
+GET /api/v1/sources/connections/internal-orgs — requires VIEW_SOURCES
 
 Also validates route-order: /counts and /{id} must still resolve without
 being shadowed by the new bare /connections or /internal-orgs registrations.
@@ -16,7 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.authz.enforcement.dependencies import Permission  # noqa: E402
 from src.authz.permissions.catalog import VIEW_SOURCES  # noqa: E402
@@ -153,17 +153,16 @@ def test_get_internal_orgs_returns_minimal_shape():
     assert "auth" not in entry
 
 
-def test_get_internal_orgs_no_permission_gate():
-    """internal-orgs has no permission gate beyond session — any user can call it."""
+def test_get_internal_orgs_rejects_without_view_sources():
+    """internal-orgs discloses the connected org/owner inventory → view_sources-gated."""
     with patch(
-        "src.sources.source_connections_router.sources_store.list_connections",
-        return_value=[],
+        "src.authz.enforcement.dependencies.has_role_permission",
+        return_value=False,
     ):
         client = TestClient(_make_app(allow_view_sources=False))
         resp = client.get("/api/v1/sources/connections/internal-orgs")
 
-    assert resp.status_code == 200
-    assert resp.json() == {"connections": []}
+    assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------

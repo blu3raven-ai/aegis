@@ -8,7 +8,7 @@ from typing import Annotated, Any, Optional, Union
 from urllib.parse import unquote
 
 import strawberry
-from sqlalchemy import func, select, or_, and_, exists, desc, distinct
+from sqlalchemy import func, select, or_, and_, exists, desc, distinct, case
 
 from src.db.helpers import run_db
 from src.graphql.resolver_utils import raise_bad_input
@@ -127,6 +127,11 @@ class ComponentVulnCounts:
     total: int = 0
 
 
+def _zero_vuln_counts() -> dict[str, int]:
+    """A fresh mutable severity-bucket accumulator."""
+    return {"critical": 0, "high": 0, "medium": 0, "low": 0, "total": 0}
+
+
 @strawberry.type
 class RepoComponentVulns:
     """Open-finding severity counts for one package *version* within a single
@@ -198,6 +203,29 @@ class RiskyComponentsConnection:
 
 
 @strawberry.type
+class SbomEcosystemAnalytics:
+    """SBOM analytics aggregated at the ecosystem level.
+
+    Shows for each ecosystem:
+    - Finding counts by severity
+    - Component count
+    - Coverage metrics (assets with components/total assets)
+    - Risk score
+    """
+    ecosystem: str
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    total_findings: int = 0
+    total_components: int = 0
+    assets_with_components: int = 0
+    assets_with_findings: int = 0
+    coverage_percentage: float = 0.0
+    risk_score: int = 0
+
+
+@strawberry.type
 class PackageRepo:
     """One asset (repo or container image) affected by a package's open
     vulnerabilities, with the per-asset severity breakdown — the "where used"
@@ -255,6 +283,10 @@ class SbomBulkMatch:
     # Exposure bucket: "flagged_in_use" | "other_versions" | "present" | "not_found".
     exposure: str
     occurrences: list[SbomBulkOccurrence]
+    # True occurrence count before the per-query cap, so the UI shows the real
+    # blast radius ("+N more") instead of a figure bounded by the cap.
+    occurrence_total: int = 0
+    occurrences_truncated: bool = False
     # Worst-case license across the matched occurrences (most-restrictive
     # category wins), so a copyleft copy anywhere in the estate is surfaced.
     license: Optional[str] = None
@@ -284,10 +316,22 @@ class SbomBulkResult:
     """
     matches: list[SbomBulkMatch]
     truncated: bool
+    # True when the pasted list exceeded MAX_BULK_ITEMS and only ``accepted_count``
+    # were checked — the rest appear in NO bucket, so the UI must say so rather
+    # than imply the whole manifest was scanned.
+    input_truncated: bool = False
+    accepted_count: int = 0
 
 
-def _parse_version_tuple(v: str) -> tuple[int, ...]:
-    """Parse a version string into a comparable tuple of ints."""
+def _parse_version_tuple(v: str) -> tuple[int, ...] | None:
+    """Parse a version string into a comparable tuple of ints, or None when it
+    has no numeric component. A single leading 'v' (Go module style, e.g.
+    'v1.5.0') is stripped so it compares as '1.5.0'. Returning None (rather than
+    coercing to (0,)) lets callers EXCLUDE unparseable versions from a numeric
+    filter instead of silently treating them as version 0."""
+    v = v.strip()
+    if v[:1] in ("v", "V"):
+        v = v[1:]
     parts = re.split(r"[.\-+]", v)
     result: list[int] = []
     for p in parts:
@@ -296,7 +340,7 @@ def _parse_version_tuple(v: str) -> tuple[int, ...]:
             result.append(int(digits.group(1)))
         else:
             break
-    return tuple(result) if result else (0,)
+    return tuple(result) if result else None
 
 
 def sbom_search(
@@ -400,16 +444,31 @@ def sbom_search(
             # to stay memory-safe. The unconditional count/page queries are skipped
             # here: they'd be pure wasted work, overwritten by the scan below.
             target = _parse_version_tuple(version_value)
-            target_end = _parse_version_tuple(version_value_end) if version_value_end else None
+            if target is None:
+                raise_bad_input(f"Invalid version filter value: {version_value!r}")
+            target_end = None
+            if version_value_end:
+                target_end = _parse_version_tuple(version_value_end)
+                if target_end is None:
+                    raise_bad_input(f"Invalid version filter value: {version_value_end!r}")
 
             def _version_match(comp):
                 v = _parse_version_tuple(comp.version)
+                if v is None:
+                    # A component whose version has no numeric part (e.g. a git
+                    # SHA, 'latest') can't satisfy a numeric comparison — exclude
+                    # it rather than treat it as version 0.
+                    return False
                 if version_op == "eq":
                     return v == target
                 if version_op == "gte":
                     return v >= target
+                if version_op == "gt":
+                    return v > target
                 if version_op == "lte":
                     return v <= target
+                if version_op == "lt":
+                    return v < target
                 if version_op == "range" and target_end:
                     return target <= v <= target_end
                 return False
@@ -448,12 +507,14 @@ def sbom_search(
                 )
             ).all()
 
-        # Overlay open-finding severity counts per component. One batched query
-        # for the page (≤per_page rows); grouped by the exact (asset_id,
-        # package_name) pair so the coarse IN-filter can't misattribute counts.
-        # Components are already asset-scoped, so this stays within the caller's
-        # scope without an extra .in_(asset_ids).
-        vuln_map: dict[tuple[str, str], dict[str, int]] = {}
+        # Overlay open-finding severity counts per component VERSION. Findings
+        # carry package_version (#1218), so attribute the exact (asset, name,
+        # version) counts plus a name-level bucket for findings with no resolved
+        # version (they apply to any version of the name). Without this a patched
+        # version row would show another version's vulnerabilities. Components are
+        # already asset-scoped, so this stays within the caller's scope.
+        versioned_map: dict[tuple[str, str, str], dict[str, int]] = {}
+        name_level_map: dict[tuple[str, str], dict[str, int]] = {}
         if rows:
             page_asset_ids = list({r.asset_id for r, _ in rows})
             page_names = list({r.name for r, _ in rows})
@@ -461,6 +522,7 @@ def sbom_search(
                 select(
                     Finding.asset_id,
                     Finding.package_name,
+                    Finding.package_version,
                     Finding.severity,
                     func.count(),
                 )
@@ -470,16 +532,35 @@ def sbom_search(
                     Finding.state == "open",
                     Finding.archived.is_(False),
                 )
-                .group_by(Finding.asset_id, Finding.package_name, Finding.severity)
+                .group_by(
+                    Finding.asset_id,
+                    Finding.package_name,
+                    Finding.package_version,
+                    Finding.severity,
+                )
             )
-            for aid, pkg, sev, cnt in (await session.execute(vuln_q)).all():
-                bucket = vuln_map.setdefault(
-                    (aid, pkg), {"critical": 0, "high": 0, "medium": 0, "low": 0, "total": 0}
+            for aid, pkg, ver, sev, cnt in (await session.execute(vuln_q)).all():
+                bucket = (
+                    versioned_map.setdefault((aid, pkg, ver), _zero_vuln_counts())
+                    if ver is not None
+                    else name_level_map.setdefault((aid, pkg), _zero_vuln_counts())
                 )
                 tier = (sev or "").lower()
                 if tier in bucket:
                     bucket[tier] += cnt
                 bucket["total"] += cnt
+
+        def _component_vulns(aid: str, name: str, version: str) -> ComponentVulnCounts:
+            exact = versioned_map.get((aid, name, version))
+            name_level = name_level_map.get((aid, name))
+            if exact is None and name_level is None:
+                return ComponentVulnCounts()
+            merged = _zero_vuln_counts()
+            for src in (exact, name_level):
+                if src:
+                    for key in merged:
+                        merged[key] += src[key]
+            return ComponentVulnCounts(**merged)
 
         items = [
             SbomComponentNode(
@@ -492,9 +573,7 @@ def sbom_search(
                 source_tool=r.source_tool,
                 scanned_at=r.scanned_at.isoformat() if r.scanned_at else "",
                 is_container=a.type == "image",
-                vulns=ComponentVulnCounts(**vuln_map[(r.asset_id, r.name)])
-                if (r.asset_id, r.name) in vuln_map
-                else ComponentVulnCounts(),
+                vulns=_component_vulns(r.asset_id, r.name, r.version),
                 license=r.license_expression,
                 license_category=r.license_category,
                 is_direct=r.is_direct,
@@ -639,6 +718,9 @@ def sbom_component_vulns(
                 .where(Asset.display_name == repo)
                 .where(Asset.type == "repo")
                 .where(Asset.id.in_(asset_ids))
+                # display_name isn't unique (a repo can be mirrored across a
+                # GitHub and a GitLab source), so order for a stable pick.
+                .order_by(Asset.id)
                 .limit(1)
             )
         ).scalar_one_or_none()
@@ -696,12 +778,22 @@ def sbom_risky_components(
 ) -> RiskyComponentsConnection:
     """Estate-wide vulnerable packages ranked by severity weight + blast radius.
 
-    Aggregates open, non-archived findings by ``package_name`` across every
-    asset in the caller's scope, returning severity-bucketed counts and the
-    number of distinct assets affected. Ranked by severity tier — any package
-    with a critical outranks one without, then by high/medium/low counts — with
-    blast radius (then total) breaking ties. Optional name search + ecosystem
-    filter (ecosystem resolved from matching in-scope SBOM components).
+    Aggregates open, non-archived findings by ``(package_name, ecosystem)``
+    across every asset in the caller's scope, returning severity-bucketed counts
+    and the number of distinct assets affected. Ranked by severity tier — any
+    package with a critical outranks one without, then by high/medium/low counts
+    — with blast radius (then total) breaking ties. Optional name search +
+    ecosystem filter.
+
+    Findings carry no ecosystem, so it's resolved from the SBOM (a distinct
+    (asset, name, ecosystem) mapping): a name that legitimately spans two
+    ecosystems in scope is split into one row each, with accurate per-ecosystem
+    counts and blast radius, and the ecosystem filter matches the resolved
+    ecosystem (not bare name membership). A name that resolves to a single
+    ecosystem in scope stays one row even where a finding sits on an asset whose
+    SBOM lacks the component (a single-ecosystem fallback prevents fragmenting it
+    into a spurious blank row). Only a name with NO ecosystem anywhere in scope
+    lands in a blank ("unknown") ecosystem row.
     """
     per_page = clamp_per_page(per_page)
     page = max(1, page)
@@ -724,17 +816,49 @@ def sbom_risky_components(
         ]
         if search:
             conds.append(Finding.package_name.ilike(f"%{_escape_like(search)}%"))
-        if ecosystems:
-            eco_names = select(SbomComponent.name).where(
-                SbomComponent.asset_id.in_(asset_ids),
-                SbomComponent.ecosystem.in_([e.lower() for e in ecosystems]),
+        # Findings carry no ecosystem, so resolve it from the SBOM: a distinct
+        # (asset_id, name, ecosystem) mapping. Versions of one package collapse to
+        # a single row per ecosystem; a name that legitimately spans two
+        # ecosystems in one asset contributes to both. A finding whose package is
+        # in no current SBOM LEFT-joins to nothing and falls to a blank-ecosystem
+        # ("unknown") group — never dropped.
+        eco_sub = (
+            select(
+                SbomComponent.asset_id.label("asset_id"),
+                SbomComponent.name.label("name"),
+                SbomComponent.ecosystem.label("ecosystem"),
             )
-            conds.append(Finding.package_name.in_(eco_names))
+            .where(SbomComponent.asset_id.in_(asset_ids), SbomComponent.ecosystem != "")
+            .distinct()
+            .subquery()
+        )
+        # Names that resolve to exactly ONE ecosystem across scope. Used as a
+        # fallback so a single-ecosystem package whose finding sits on an asset
+        # missing the component (SBOM not ingested there, or a blank stored
+        # ecosystem) still resolves to that one ecosystem instead of fragmenting
+        # into a separate blank ("unknown") row. Only names spanning 2+
+        # ecosystems fall through to the per-asset split.
+        name_single_sub = (
+            select(
+                SbomComponent.name.label("name"),
+                func.min(SbomComponent.ecosystem).label("sole_eco"),
+            )
+            .where(SbomComponent.asset_id.in_(asset_ids), SbomComponent.ecosystem != "")
+            .group_by(SbomComponent.name)
+            .having(func.count(distinct(SbomComponent.ecosystem)) == 1)
+            .subquery()
+        )
+        eco_col = func.coalesce(eco_sub.c.ecosystem, name_single_sub.c.sole_eco, "")
+        if ecosystems:
+            # Ecosystem-accurate filter: match the RESOLVED ecosystem, not bare
+            # name membership (which let a same-named other-ecosystem package in).
+            conds.append(eco_col.in_([e.lower() for e in ecosystems]))
 
         crit, high, med, low = _sev("critical"), _sev("high"), _sev("medium"), _sev("low")
         agg = (
             select(
                 Finding.package_name.label("pkg"),
+                eco_col.label("eco"),
                 func.count().label("total"),
                 func.count(distinct(Finding.asset_id)).label("repos"),
                 crit.label("c"),
@@ -742,8 +866,17 @@ def sbom_risky_components(
                 med.label("m"),
                 low.label("l"),
             )
+            .select_from(Finding)
+            .outerjoin(
+                eco_sub,
+                and_(
+                    Finding.asset_id == eco_sub.c.asset_id,
+                    Finding.package_name == eco_sub.c.name,
+                ),
+            )
+            .outerjoin(name_single_sub, Finding.package_name == name_single_sub.c.name)
             .where(*conds)
-            .group_by(Finding.package_name)
+            .group_by(Finding.package_name, eco_col)
         )
 
         total = (await session.execute(select(func.count()).select_from(agg.subquery()))).scalar() or 0
@@ -753,19 +886,17 @@ def sbom_risky_components(
             await session.execute(
                 agg.order_by(
                     desc("c"), desc("h"), desc("m"), desc("l"),
-                    desc("repos"), desc("total"), Finding.package_name,
+                    desc("repos"), desc("total"), Finding.package_name, eco_col,
                 )
                 .offset(offset)
                 .limit(per_page)
             )
         ).all()
 
-        # Resolve a representative ecosystem and the worst-case license per
-        # package from in-scope components. Ecosystem = first non-empty value;
-        # license = the most-restrictive category seen (any in-scope component
-        # may carry a stricter licence than another for the same name), so a
-        # package flagged here surfaces its highest licence risk, not a random one.
-        eco_map: dict[str, str] = {}
+        # Worst-case license per package name (a property of the component, not
+        # the ecosystem split): the most-restrictive category on any in-scope
+        # component for the name, so a high-blast-radius copyleft package stays
+        # visible without leaving the risk view.
         lic_map: dict[str, tuple[Optional[str], Optional[str]]] = {}
         page_names = [r.pkg for r in rows]
         if page_names:
@@ -773,7 +904,6 @@ def sbom_risky_components(
                 await session.execute(
                     select(
                         SbomComponent.name,
-                        SbomComponent.ecosystem,
                         SbomComponent.license_category,
                         SbomComponent.license_expression,
                     )
@@ -782,12 +912,9 @@ def sbom_risky_components(
                         SbomComponent.name.in_(page_names),
                     )
                     .distinct()
-                    .order_by(SbomComponent.name, SbomComponent.ecosystem)
                 )
             ).all()
-            for name, eco, lic_cat, lic_expr in comp_rows:
-                if eco and name not in eco_map:
-                    eco_map[name] = eco
+            for name, lic_cat, lic_expr in comp_rows:
                 if lic_cat:
                     prev = lic_map.get(name)
                     if prev is None or category_rank(lic_cat) > category_rank(prev[0]):
@@ -796,7 +923,7 @@ def sbom_risky_components(
         items = [
             RiskyComponent(
                 package_name=r.pkg,
-                ecosystem=eco_map.get(r.pkg, ""),
+                ecosystem=r.eco,
                 repo_count=r.repos,
                 vulns=ComponentVulnCounts(critical=r.c, high=r.h, medium=r.m, low=r.l, total=r.total),
                 license_category=lic_map.get(r.pkg, (None, None))[0],
@@ -812,30 +939,65 @@ def sbom_risky_components(
     return run_db(_query)
 
 
-def sbom_package_repos(*, package_name: str, info_context: dict) -> list[PackageRepo]:
+def sbom_package_repos(
+    *, package_name: str, ecosystem: Optional[str] = None, info_context: dict
+) -> list[PackageRepo]:
     """The repositories affected by a package's open vulnerabilities — the
     "where used" drill-down behind a Risky Packages blast-radius count.
 
     Returns one entry per in-scope asset with an open, non-archived finding on
     ``package_name``, each with its severity breakdown, worst-first. Scope is
     enforced at the SQL layer; empty/absent scope yields an empty list.
+
+    When ``ecosystem`` is given (Risky Packages rows are per (name, ecosystem)),
+    the list is restricted to assets whose finding on the name resolves to that
+    ecosystem — mirroring ``sbom_risky_components`` — so the drill-down list and
+    per-repo counts reconcile with the row's blast-radius count. ``""`` selects
+    the unknown-ecosystem assets. ``None`` keeps the legacy name-wide behaviour.
     """
     asset_ids = info_context.get("asset_ids", [])
     if not asset_ids or not package_name:
         return []
 
     async def _query(session):
-        rows = (
-            await session.execute(
-                select(Finding.asset_id, Finding.severity, func.count())
+        finding_q = select(Finding.asset_id, Finding.severity, func.count()).where(
+            Finding.asset_id.in_(asset_ids),
+            Finding.package_name == package_name,
+            Finding.state == "open",
+            Finding.archived.is_(False),
+        )
+        if ecosystem is not None:
+            eco_sub = (
+                select(SbomComponent.asset_id, SbomComponent.ecosystem)
                 .where(
-                    Finding.asset_id.in_(asset_ids),
-                    Finding.package_name == package_name,
-                    Finding.state == "open",
-                    Finding.archived.is_(False),
+                    SbomComponent.asset_id.in_(asset_ids),
+                    SbomComponent.name == package_name,
+                    SbomComponent.ecosystem != "",
                 )
-                .group_by(Finding.asset_id, Finding.severity)
+                .distinct()
+                .subquery()
             )
+            # Single-ecosystem fallback for this name (matches the risky resolver).
+            distinct_ecos = (
+                await session.execute(
+                    select(SbomComponent.ecosystem)
+                    .where(
+                        SbomComponent.asset_id.in_(asset_ids),
+                        SbomComponent.name == package_name,
+                        SbomComponent.ecosystem != "",
+                    )
+                    .distinct()
+                )
+            ).scalars().all()
+            sole_eco = distinct_ecos[0] if len(distinct_ecos) == 1 else None
+            eco_expr = func.coalesce(eco_sub.c.ecosystem, sole_eco, "")
+            finding_q = (
+                finding_q.select_from(Finding)
+                .outerjoin(eco_sub, Finding.asset_id == eco_sub.c.asset_id)
+                .where(eco_expr == ecosystem.lower())
+            )
+        rows = (
+            await session.execute(finding_q.group_by(Finding.asset_id, Finding.severity))
         ).all()
 
         agg: dict[str, dict[str, int]] = {}
@@ -887,7 +1049,11 @@ def sbom_bulk_lookup(
     if not asset_ids or not queries:
         return SbomBulkResult(matches=[], truncated=False)
 
-    clean = [q.strip() for q in queries[:MAX_BULK_ITEMS] if q.strip()]
+    # Cap the pasted list, but report when we drop the overflow so the UI doesn't
+    # imply the whole manifest was checked.
+    nonempty = [q.strip() for q in queries if q.strip()]
+    input_truncated = len(nonempty) > MAX_BULK_ITEMS
+    clean = nonempty[:MAX_BULK_ITEMS]
     if not clean:
         return SbomBulkResult(matches=[], truncated=False)
 
@@ -1020,6 +1186,7 @@ def sbom_bulk_lookup(
                 occs.sort(key=lambda o: (not o.flagged, not o.latent, o.repo, o.version))
                 any_flagged = any(o.flagged for o in occs)
                 any_latent = any(o.latent for o in occs)
+                occurrence_total = len(occs)
                 occs = occs[:_MAX_BULK_OCCURRENCES]
 
                 if flagged_version is None:
@@ -1040,6 +1207,8 @@ def sbom_bulk_lookup(
                     query=q, found=True, name=first.name, ecosystem=first.ecosystem,
                     purl=first.purl, queried_version=flagged_version,
                     exposure=exposure, occurrences=occs,
+                    occurrence_total=occurrence_total,
+                    occurrences_truncated=occurrence_total > _MAX_BULK_OCCURRENCES,
                     license=worst.license_expression,
                     license_category=worst.license_category,
                 ))
@@ -1050,7 +1219,10 @@ def sbom_bulk_lookup(
                     occurrences=[],
                 ))
 
-        return SbomBulkResult(matches=results, truncated=truncated)
+        return SbomBulkResult(
+            matches=results, truncated=truncated,
+            input_truncated=input_truncated, accepted_count=len(clean),
+        )
 
     return run_db(_query)
 
@@ -1084,6 +1256,8 @@ class SbomVersionChange:
     purl: str
     from_version: Optional[str]
     to_version: Optional[str]
+    # Component ecosystem/type (e.g. npm, pypi) — mirrors added/removed rows.
+    type: str = ""
     # OSV advisory set-delta between the two versions (re-match vs today's mirror).
     resolved: ComponentVulnCounts = strawberry.field(default_factory=ComponentVulnCounts)
     introduced: ComponentVulnCounts = strawberry.field(default_factory=ComponentVulnCounts)
@@ -1182,6 +1356,9 @@ def _resolve_repo_asset_id(repo_id: str, asset_ids: list[str]) -> str | None:
             .where(Asset.display_name == repo_id)
             .where(Asset.type == "repo")
             .where(Asset.id.in_(asset_ids))
+            # display_name isn't unique across sources — order for a stable pick
+            # so diff and history resolve the same asset.
+            .order_by(Asset.id)
             .limit(1)
         )
         return result.scalar_one_or_none()
@@ -1257,6 +1434,9 @@ def sbom_history(
                 .where(Asset.display_name == repo)
                 .where(Asset.type == "repo")
                 .where(Asset.id.in_(asset_ids))
+                # display_name isn't unique (a repo can be mirrored across a
+                # GitHub and a GitLab source), so order for a stable pick.
+                .order_by(Asset.id)
                 .limit(1)
             )
         ).scalar_one_or_none()
@@ -1425,6 +1605,7 @@ def sbom_diff(
         version_changed.append(SbomVersionChange(
             name=str(name or ""),
             purl=str(purl or ""),
+            type=str(v.get("type") or ""),
             from_version=v.get("from_version"),
             to_version=v.get("to_version"),
             resolved=ComponentVulnCounts(**resolved),
@@ -1448,3 +1629,160 @@ def sbom_diff(
         version_changed_count=version_changed_count,
         truncated=truncated,
     )
+
+
+def sbom_ecosystem_analytics(info_context: dict[str, Any]) -> list[SbomEcosystemAnalytics]:
+    """Aggregate SBOM components and findings at the ecosystem level.
+
+    Returns risk coverage KPIs over the full scope (A3) - showing for each ecosystem:
+    - Count of findings by severity
+    - Count of components
+    - Number of assets with components (coverage)
+    - Number of assets with findings
+    - Coverage percentage (assets with components / total assets)
+    """
+    asset_ids = info_context.get("asset_ids", [])
+    if not asset_ids:
+        return []
+
+    total_assets = len(asset_ids)
+
+    # SEVERITY_WEIGHTS from posture (copied here)
+    SEVERITY_WEIGHTS = {"critical": 10, "high": 5, "medium": 2, "low": 1}
+
+    # Ecosystem resolution: a per-asset (name → single ecosystem) map plus a
+    # scope-wide single-ecosystem fallback so a finding on an asset missing the
+    # component still resolves. The per-asset map yields exactly one row per
+    # (asset, name) — collapsing to min() when the same name appears in more than
+    # one ecosystem on an asset (e.g. a JS and a Python "foo") so a single finding
+    # is attributed to one ecosystem instead of fanning out and being counted
+    # once per ecosystem.
+    eco_sub = (
+        select(
+            SbomComponent.asset_id.label("asset_id"),
+            SbomComponent.name.label("name"),
+            func.min(SbomComponent.ecosystem).label("ecosystem"),
+        )
+        .where(SbomComponent.asset_id.in_(asset_ids), SbomComponent.ecosystem != "")
+        .group_by(SbomComponent.asset_id, SbomComponent.name)
+        .subquery()
+    )
+    name_single_sub = (
+        select(
+            SbomComponent.name.label("name"),
+            func.min(SbomComponent.ecosystem).label("sole_eco"),
+        )
+        .where(SbomComponent.asset_id.in_(asset_ids), SbomComponent.ecosystem != "")
+        .group_by(SbomComponent.name)
+        .having(func.count(distinct(SbomComponent.ecosystem)) == 1)
+        .subquery()
+    )
+    eco_col = func.coalesce(eco_sub.c.ecosystem, name_single_sub.c.sole_eco, "")
+
+    # Count findings by severity per ecosystem
+    finding_counts = (
+        select(
+            eco_col.label("ecosystem"),
+            func.count(Finding.id).label("total_findings"),
+            func.sum(case((Finding.severity == "critical", 1), else_=0)).label("critical"),
+            func.sum(case((Finding.severity == "high", 1), else_=0)).label("high"),
+            func.sum(case((Finding.severity == "medium", 1), else_=0)).label("medium"),
+            func.sum(case((Finding.severity == "low", 1), else_=0)).label("low"),
+            func.count(func.distinct(Finding.asset_id)).label("assets_with_findings"),
+        )
+        .select_from(Finding)
+        .outerjoin(
+            eco_sub,
+            and_(
+                Finding.asset_id == eco_sub.c.asset_id,
+                Finding.package_name == eco_sub.c.name,
+            ),
+        )
+        .outerjoin(name_single_sub, Finding.package_name == name_single_sub.c.name)
+        .where(Finding.asset_id.in_(asset_ids), Finding.state == "open")
+        .group_by(eco_col)
+    )
+
+    # Count components and assets with components per ecosystem
+    component_counts = (
+        select(
+            SbomComponent.ecosystem,
+            func.count(SbomComponent.id).label("total_components"),
+            func.count(func.distinct(SbomComponent.asset_id)).label("assets_with_components"),
+        )
+        .where(SbomComponent.asset_id.in_(asset_ids))
+        .group_by(SbomComponent.ecosystem)
+    )
+
+    # Combine findings and components data. Iterate the union of ecosystem keys so
+    # a healthy ecosystem (components but zero open findings) still shows up — a
+    # coverage view that silently drops no-finding ecosystems would read as "no
+    # coverage" when it's actually the opposite.
+    async def _query(session):
+        finding_rows = (await session.execute(finding_counts)).fetchall()
+        component_rows = (await session.execute(component_counts)).fetchall()
+
+        finding_lookup = {
+            row.ecosystem: row for row in finding_rows
+        }
+        component_lookup = {
+            row.ecosystem: row for row in component_rows
+        }
+
+        all_ecosystems = set(finding_lookup) | set(component_lookup)
+        results = []
+        for eco in all_ecosystems:
+            f = finding_lookup.get(eco)
+            c = component_lookup.get(eco)
+            results.append({
+                "ecosystem": eco,
+                "total_findings": f.total_findings if f else 0,
+                "critical": f.critical if f else 0,
+                "high": f.high if f else 0,
+                "medium": f.medium if f else 0,
+                "low": f.low if f else 0,
+                "assets_with_findings": f.assets_with_findings if f else 0,
+                "total_components": c.total_components if c else 0,
+                "assets_with_components": c.assets_with_components if c else 0,
+            })
+
+        return results
+
+    rows = run_db(_query)
+
+    # Convert to SbomEcosystemAnalytics objects
+    analytics = []
+    for row in rows:
+        ecosystem = row["ecosystem"] or ""
+        critical = int(row["critical"] or 0)
+        high = int(row["high"] or 0)
+        medium = int(row["medium"] or 0)
+        low = int(row["low"] or 0)
+
+        # Calculate risk score using weighted volume formula from posture
+        risk_score = (
+            critical * SEVERITY_WEIGHTS["critical"]
+            + high * SEVERITY_WEIGHTS["high"]
+            + medium * SEVERITY_WEIGHTS["medium"]
+            + low * SEVERITY_WEIGHTS["low"]
+        )
+
+        # Calculate coverage percentage
+        assets_with_components = int(row["assets_with_components"] or 0)
+        coverage_pct = (assets_with_components / total_assets * 100.0) if total_assets > 0 else 0.0
+
+        analytics.append(SbomEcosystemAnalytics(
+            ecosystem=ecosystem,
+            critical=critical,
+            high=high,
+            medium=medium,
+            low=low,
+            total_findings=int(row["total_findings"] or 0),
+            total_components=int(row["total_components"] or 0),
+            assets_with_components=assets_with_components,
+            assets_with_findings=int(row["assets_with_findings"] or 0),
+            coverage_percentage=coverage_pct,
+            risk_score=risk_score,
+        ))
+
+    return analytics

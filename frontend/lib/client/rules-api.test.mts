@@ -60,11 +60,13 @@ describe("rules-api type-guard exports", () => {
     )
   })
 
-  it("isStaleAlertAction checks the stale_alert discriminator and numeric fields", () => {
+  it("isStaleAlertAction narrows on the stale_alert discriminator and stale_after_days", () => {
+    // alert_channel_id is optional (its delivery leg is coming-soon), so the
+    // guard no longer requires it.
     assert.match(
       src,
-      /isStaleAlertAction[\s\S]*?type\s*===\s*"stale_alert"[\s\S]*?stale_after_days[\s\S]*?alert_channel_id/,
-      "should narrow on type === 'stale_alert' and the two numeric fields",
+      /isStaleAlertAction[\s\S]*?type\s*===\s*"stale_alert"[\s\S]*?stale_after_days/,
+      "should narrow on type === 'stale_alert' and stale_after_days",
     )
   })
 })
@@ -99,11 +101,12 @@ describe("rules-api scanner coverage action types", () => {
     )
   })
 
-  it("exports StaleAlertAction with all four fields", () => {
+  it("exports StaleAlertAction with an optional alert channel", () => {
+    // alert_channel_id is optional because delivery is a coming-soon leg.
     assert.match(
       src,
-      /export\s+interface\s+StaleAlertAction\s*\{[\s\S]*?type:\s*"stale_alert"[\s\S]*?stale_after_days:\s*number[\s\S]*?alert_channel_id:\s*number[\s\S]*?auto_retrigger:\s*boolean/,
-      "should export StaleAlertAction with type, stale_after_days, alert_channel_id, auto_retrigger",
+      /export\s+interface\s+StaleAlertAction\s*\{[\s\S]*?type:\s*"stale_alert"[\s\S]*?stale_after_days:\s*number[\s\S]*?alert_channel_id\?:\s*number\s*\|\s*null[\s\S]*?auto_retrigger:\s*boolean/,
+      "should export StaleAlertAction with type, stale_after_days, optional alert_channel_id, auto_retrigger",
     )
   })
 

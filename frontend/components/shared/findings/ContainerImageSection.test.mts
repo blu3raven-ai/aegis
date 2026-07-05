@@ -22,7 +22,13 @@ describe("ContainerImageSection", () => {
     assert.match(src, /image\.digest/)
   })
 
-  it("uses the established 2xs uppercase section heading", () => {
-    assert.match(src, /text-2xs font-semibold uppercase tracking-\[0\.14em\]/)
+  it("shows the introducing layer as a 1-based ordinal", () => {
+    assert.match(src, /image\.layerDigest/)
+    assert.match(src, /Introduced in layer/)
+    assert.match(src, /image\.layerIndex \+ 1/)
+  })
+
+  it("uses the standard section heading scale", () => {
+    assert.match(src, /text-base font-semibold text-\[var\(--color-text-primary\)\]/)
   })
 })

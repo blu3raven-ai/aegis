@@ -5,8 +5,8 @@ semantics, now behind the JobQueue Protocol. The original jobs.py
 re-exports these for backward compat (see jobs.py edit in Task 14).
 
 Encryption note: env-var encryption replicates jobs.py exactly (ENC: prefix,
-PBKDF2-derived Fernet key from RUNNER_ENCRYPTION_KEY) so job records produced here
-are wire-compatible with records produced by the original jobs.py functions.
+key derived from the APP_SECRET root) so job records produced here are
+wire-compatible with records produced by the original jobs.py functions.
 """
 from __future__ import annotations
 

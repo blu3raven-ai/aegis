@@ -8,11 +8,11 @@ import uuid
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from sqlalchemy import delete  # noqa: E402
 
-from src.db.models import Asset, Finding  # noqa: E402
+from src.db.models import Asset, Finding, SbomComponent  # noqa: E402
 from src.sbom.resolvers import sbom_package_repos  # noqa: E402
 
 
@@ -99,3 +99,38 @@ async def test_unknown_package_returns_empty(db_session):
         ) == []
     finally:
         await _cleanup(db_session, a, b, c)
+
+
+@pytest.mark.asyncio
+async def test_ecosystem_scopes_drilldown_to_matching_assets(db_session):
+    # A name spanning npm (asset a) + pypi (asset b): scoping to npm returns only
+    # asset a, so the drill-down reconciles with the per-ecosystem row's count.
+    a, b = str(uuid.uuid4()), str(uuid.uuid4())
+    for aid, d in [(a, "acme-org/npm-repo"), (b, "acme-org/pypi-repo")]:
+        db_session.add(Asset(
+            id=aid, type="repo", source="source_connection",
+            external_ref=f"github:acme-org/{uuid.uuid4().hex}", display_name=d,
+        ))
+    await db_session.flush()
+    db_session.add_all([
+        SbomComponent(asset_id=a, purl="pkg:npm/dup@1", name="dup",
+                      version="1", ecosystem="npm", source_tool="syft"),
+        SbomComponent(asset_id=b, purl="pkg:pypi/dup@2", name="dup",
+                      version="2", ecosystem="pypi", source_tool="syft"),
+    ])
+    db_session.add_all([
+        Finding(tool="dependencies_scanning", identity_key=f"k-{uuid.uuid4()}", asset_id=a,
+                state="open", severity="high", package_name="dup"),
+        Finding(tool="dependencies_scanning", identity_key=f"k-{uuid.uuid4()}", asset_id=b,
+                state="open", severity="critical", package_name="dup"),
+    ])
+    await db_session.commit()
+    try:
+        npm = sbom_package_repos(package_name="dup", ecosystem="npm", info_context={"asset_ids": [a, b]})
+        assert {r.repo for r in npm} == {"acme-org/npm-repo"}
+        # ecosystem=None keeps the legacy name-wide behaviour (both assets).
+        both = sbom_package_repos(package_name="dup", info_context={"asset_ids": [a, b]})
+        assert len({r.repo for r in both}) == 2
+    finally:
+        await db_session.execute(delete(SbomComponent).where(SbomComponent.asset_id.in_([a, b])))
+        await _cleanup(db_session, a, b)

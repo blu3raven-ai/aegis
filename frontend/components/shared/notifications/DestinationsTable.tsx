@@ -76,7 +76,7 @@ function TestStatusInline({ status }: { status: TestStatus }) {
   if (status.kind === "delivered") {
     return (
       <span
-        className="inline-flex items-center gap-1 text-xs text-[var(--color-status-ok)]"
+        className="inline-flex items-center gap-1 text-xs text-[var(--color-status-ok-text)]"
         role="status"
         aria-live="polite"
       >
@@ -88,7 +88,7 @@ function TestStatusInline({ status }: { status: TestStatus }) {
   // failed
   return (
     <span
-      className="inline-flex max-w-[16rem] items-center gap-1 truncate text-xs text-[var(--color-severity-medium)]"
+      className="inline-flex max-w-[16rem] items-center gap-1 truncate text-xs text-[var(--color-severity-medium-text)]"
       role="status"
       aria-live="polite"
       title={status.error}
@@ -155,7 +155,7 @@ export function DestinationsTable({
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold ${
                         dest.enabled
-                          ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
+                          ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]"
                           : "bg-[var(--color-border)] text-[var(--color-text-tertiary)]"
                       }`}
                     >
@@ -201,7 +201,7 @@ export function DestinationsTable({
                         size="xs"
                         onClick={() => onDelete(dest)}
                         disabled={deletingId === dest.id}
-                        className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+                        className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
                       >
                         {deletingId === dest.id ? "Deleting…" : "Delete"}
                       </Button>

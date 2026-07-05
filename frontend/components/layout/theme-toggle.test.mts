@@ -7,9 +7,9 @@ const source = readFileSync(
   "utf8"
 )
 
-test("ThemeToggleButton dispatches theme:change event on click", () => {
-  assert.match(source, /theme:change/)
-  assert.match(source, /CustomEvent/)
+test("ThemeToggleButton dispatches a theme change on click via the shared helper", () => {
+  assert.match(source, /setTheme\(/)
+  assert.match(source, /@\/lib\/client\/theme/)
 })
 
 test("ThemeToggleButton has aria-label for accessibility", () => {
@@ -17,9 +17,8 @@ test("ThemeToggleButton has aria-label for accessibility", () => {
   assert.match(source, /Switch to dark mode|Switch to light mode/)
 })
 
-test("ThemeToggleButton defaults to system theme on first load", () => {
-  assert.match(source, /system/)
-  assert.match(source, /localStorage\.getItem/)
+test("ThemeToggleButton reads the stored theme via the shared helper", () => {
+  assert.match(source, /getStoredTheme/)
 })
 
 test("ThemeToggleButton reads OS preference for system theme", () => {

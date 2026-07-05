@@ -133,7 +133,7 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
         </div>
 
         {(pctInvalid || windowInvalid) && (
-          <p className="mt-2 text-xs text-[var(--color-severity-critical)]">
+          <p className="mt-2 text-xs text-[var(--color-severity-critical-text)]">
             {pctInvalid && "Percentage must be between 1 and 100. "}
             {windowInvalid && "Window must be between 5 and 10080 minutes."}
           </p>

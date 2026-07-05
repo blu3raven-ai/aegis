@@ -89,7 +89,7 @@ Copy `.env.example` to `.env` and configure:
 
 | Variable | Description |
 |---|---|
-| `RUNNER_ENCRYPTION_KEY` | Encrypts runner job environment payloads. Use `openssl rand -base64 32`. |
+| `APP_SECRET` | Root key for all at-rest encryption (LLM/Argus/SSO secrets, runner job payloads) and app-level signing. Use `openssl rand -base64 32`. Keep it stable — rotating it makes stored secrets unreadable. |
 | `SESSION_SECRET` | Signs browser session cookies. Required — startup fails if missing. |
 | `ALLOWED_HOSTS` | Comma-separated list of allowed hostnames for TrustedHostMiddleware (e.g. `localhost,127.0.0.1`). |
 | `ADMIN_PASSWORD` | Initial admin account password. |

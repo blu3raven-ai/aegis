@@ -138,7 +138,7 @@ function QueueButton({
         <span
           className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${
             showDanger
-              ? "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
+              ? "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
               : active
                 ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
                 : "bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]"
@@ -248,7 +248,7 @@ function SavedViewsSection({
       </div>
 
       {error && (
-        <p className="px-2.5 py-1 text-2xs text-[var(--color-severity-critical)]">{error}</p>
+        <p className="px-2.5 py-1 text-2xs text-[var(--color-severity-critical-text)]">{error}</p>
       )}
 
       {!error && views.length === 0 && (

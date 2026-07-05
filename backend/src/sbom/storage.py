@@ -117,26 +117,44 @@ def _compute_direct_refs(sbom: dict[str, Any]) -> tuple[bool, set[str], set[str]
 
 
 DECLARED_RANGE_PROPERTY = "aegis:declared_range"
+DECLARED_SCOPE_PROPERTY = "aegis:declared_scope"
+MANIFEST_PATH_PROPERTY = "aegis:declared_path"
+MANIFEST_LINE_PROPERTY = "aegis:declared_line"
+MANIFEST_SNIPPET_PROPERTY = "aegis:declared_snippet"
+MANIFEST_SNIPPET_START_PROPERTY = "aegis:declared_snippet_start"
+LAYER_DIGEST_PROPERTY = "aegis:layer_digest"
+LAYER_INDEX_PROPERTY = "aegis:layer_index"
 
 
-def _declared_range(comp: dict[str, Any]) -> str | None:
-    """Extract the runner-stamped declared semver range from a component's
-    CycloneDX ``properties`` list, or None when absent/malformed.
+def _component_properties(comp: dict[str, Any]) -> dict[str, str]:
+    """Flatten a component's CycloneDX ``properties`` into a name→value map.
 
     Guards every layer: ``properties`` may be missing or not a list, entries may
-    not be dicts, and the value may not be a string — any of these yields None
-    rather than raising mid-ingest.
+    not be dicts, and names/values may not be strings — anything malformed is
+    dropped rather than raising mid-ingest. First value per name wins.
     """
     props = comp.get("properties")
     if not isinstance(props, list):
-        return None
+        return {}
+    out: dict[str, str] = {}
     for prop in props:
         if not isinstance(prop, dict):
             continue
-        if prop.get("name") == DECLARED_RANGE_PROPERTY:
-            value = prop.get("value")
-            return value if isinstance(value, str) else None
-    return None
+        name = prop.get("name")
+        value = prop.get("value")
+        if isinstance(name, str) and isinstance(value, str):
+            out.setdefault(name, value)
+    return out
+
+
+def _as_int(value: str | None) -> int | None:
+    """Parse a stamped integer property value, or None when absent/non-numeric."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def populate_components(
@@ -211,7 +229,15 @@ def populate_components(
 
         source_tool = source_tool_fn(comp) if source_tool_fn else None
         lic = classify_licenses(comp.get("licenses") or [])
-        declared_range = _declared_range(comp)
+        props_map = _component_properties(comp)
+        declared_range = props_map.get(DECLARED_RANGE_PROPERTY)
+        scope = props_map.get(DECLARED_SCOPE_PROPERTY)
+        manifest_path = props_map.get(MANIFEST_PATH_PROPERTY)
+        manifest_line = _as_int(props_map.get(MANIFEST_LINE_PROPERTY))
+        manifest_snippet = props_map.get(MANIFEST_SNIPPET_PROPERTY)
+        manifest_snippet_start = _as_int(props_map.get(MANIFEST_SNIPPET_START_PROPERTY))
+        layer_digest = props_map.get(LAYER_DIGEST_PROPERTY)
+        layer_index = _as_int(props_map.get(LAYER_INDEX_PROPERTY))
 
         comp_ref = comp.get("bom-ref")
         if not graph_present or not comp_ref:
@@ -236,6 +262,13 @@ def populate_components(
             "license_expression": lic.expression,
             "license_category": lic.category,
             "declared_range": declared_range,
+            "scope": scope,
+            "manifest_path": manifest_path,
+            "manifest_line": manifest_line,
+            "manifest_snippet": manifest_snippet,
+            "manifest_snippet_start": manifest_snippet_start,
+            "layer_digest": layer_digest,
+            "layer_index": layer_index,
             "scanned_at": now,
         })
 
@@ -262,10 +295,20 @@ def populate_components(
         if _lic_key(row) > _lic_key(existing):
             existing["license_expression"] = row["license_expression"]
             existing["license_category"] = row["license_category"]
-        # A declared range only lives on the direct dep; keep the first non-null
-        # so a duplicate that carried the property isn't lost to one that didn't.
+        # Declared range + manifest location only live on the direct dep and are
+        # stamped together; keep the first row that carried them (as one block, so
+        # a range never pairs with another row's path) rather than lose it to a
+        # duplicate that didn't.
         if existing.get("declared_range") is None and row.get("declared_range") is not None:
-            existing["declared_range"] = row["declared_range"]
+            for k in (
+                "declared_range",
+                "scope",
+                "manifest_path",
+                "manifest_line",
+                "manifest_snippet",
+                "manifest_snippet_start",
+            ):
+                existing[k] = row[k]
     unique_rows = list(by_purl.values())
 
     duplicates = len(rows) - len(unique_rows)

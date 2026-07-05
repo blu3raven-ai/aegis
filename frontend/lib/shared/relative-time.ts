@@ -23,6 +23,8 @@ export function relativeTime(isoString: string | null | undefined): string {
   if (diffDays < 30) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`
   const diffMonths = Math.floor(diffDays / 30)
   if (diffMonths < 12) return `${diffMonths} month${diffMonths !== 1 ? "s" : ""} ago`
-  const diffYears = Math.floor(diffDays / 365)
+  // Derive years from the same 30-day month basis as the months branch; dividing
+  // diffDays by 365 here left a 360–364 day gap that rendered "0 years ago".
+  const diffYears = Math.floor(diffMonths / 12)
   return `${diffYears} year${diffYears !== 1 ? "s" : ""} ago`
 }

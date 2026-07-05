@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -37,24 +37,18 @@ class SkepticResponse(BaseModel):
     reasoning: str = ""
 
 
-class SecretHunterResponse(BaseModel):
-    """Schema for the secrets hunter LLM response."""
+class DepsReachabilityResponse(BaseModel):
+    """Schema for the dependency reachability LLM response.
+
+    ``reachability`` is a strict tri-state — an out-of-range value fails
+    validation so the caller can fail safe to ``unknown`` rather than trust a
+    guessed label.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
-    is_real_secret: bool = False
-    reasoning: str = ""
+    reachability: Literal["reachable", "no_path", "unknown"]
     evidence: list[Any] = Field(default_factory=list)
-
-
-class SecretSkepticResponse(BaseModel):
-    """Schema for the secrets skeptic LLM response."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    agree_with_hunter: bool = False
-    counter_evidence: list[Any] = Field(default_factory=list)
-    reasoning: str = ""
 
 
 class VerificationResultModel(BaseModel):

@@ -513,6 +513,12 @@ class Finding(Base):
     state: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     review_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     severity: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # True when this finding is a malicious-package report (OSV MAL-): the
+    # package itself is malware, so it is kept open with no fix and surfaced
+    # distinctly (remove, don't upgrade).
+    malicious: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, server_default=sa.text("false")
+    )
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     fixed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -595,6 +601,9 @@ class Sbom(Base):
         nullable=False, index=True,
     )
     commit_sha: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Repo web URL captured by the runner (self-hosted-aware); deep-links deps
+    # findings, which are built backend-side and carry no per-finding location.
+    html_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     s3_key: Mapped[str] = mapped_column(String(512), nullable=False, default="")
     scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     run_id: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -654,6 +663,22 @@ class SbomComponent(Base):
     # Declared semver constraint for a direct dep (e.g. "^4.17.0"), used for
     # loose-range exposure evaluation; null for transitive deps / older SBOMs.
     declared_range: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Dependency scope for a direct dep: "dev" (dev/test/build-only) or "prod".
+    # Drives dev-only-noise auto-triage. Null for transitive deps / older SBOMs.
+    scope: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Where the dep is declared in the repo (manifest path + 1-indexed line) plus
+    # a small surrounding code window, captured by the runner from the manifest.
+    # Drives the finding drawer's code preview + repo deep-link. Null for
+    # transitive deps / older SBOMs.
+    manifest_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    manifest_line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    manifest_snippet: Mapped[str | None] = mapped_column(Text, nullable=True)
+    manifest_snippet_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # For a container component: the image layer that introduced the package —
+    # its digest and 0-based ordinal (bottom-most layer = 0). Null for repo
+    # components and OS packages the SBOM can't attribute to a layer.
+    layer_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    layer_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (
@@ -765,14 +790,25 @@ class NotificationDelivery(Base):
     response_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # Retry bookkeeping: number of send attempts so far, when the next re-send is
+    # due, and the full formatted payload retained only while a delivery is in
+    # 'retry' so the worker can re-send without the original event.
+    attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="1", default=1
+    )
+    next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    payload: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     destination: Mapped["NotificationDestination"] = relationship(back_populates="deliveries")
 
     __table_args__ = (
         sa.UniqueConstraint('destination_id', 'event_id', name='uq_notif_delivery_dest_event'),
         sa.Index('ix_notif_deliveries_status', 'status', 'attempted_at'),
+        sa.Index('ix_notif_deliveries_retry', 'status', 'next_attempt_at'),
         sa.CheckConstraint(
-            "status IN ('delivered', 'failed')",
+            "status IN ('delivered', 'failed', 'retry')",
             name="ck_notif_deliveries_status",
         ),
     )
@@ -873,6 +909,27 @@ class WebhookSigningSecret(Base):
     )
 
 
+
+
+class WebhookProcessedDelivery(Base):
+    """Replay-dedup ledger of processed inbound webhook deliveries.
+
+    Each authentic delivery carries a provider-unique id header (e.g.
+    ``X-GitHub-Delivery``). Recording ``(provider, delivery_id)`` under a
+    unique constraint lets a receiver reject a re-sent, still-signed payload
+    before it is republished. Rows are pruned once they age out of any
+    realistic provider retry window.
+    """
+    __tablename__ = "webhook_processed_deliveries"
+    __table_args__ = (
+        sa.UniqueConstraint("provider", "delivery_id", name="uq_webhook_delivery_provider_id"),
+        sa.Index("ix_webhook_deliveries_received_at", "received_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    delivery_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class SlaPolicy(Base):
@@ -1032,6 +1089,45 @@ class EpssScore(Base):
     percentile: Mapped[float] = mapped_column(Float, nullable=False)
     scored_date: Mapped[date] = mapped_column(Date(), nullable=False, index=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PackageReleaseDate(Base):
+    """Cache of a package version's upstream publish date, from deps.dev.
+
+    Populated lazily during ingest when the opt-in release-age enrichment is on,
+    so a very recently published dependency version (a supply-chain freshness
+    signal) can be flagged. Keyed by the deps.dev system + package name +
+    version. ``published_at`` is null when deps.dev has no date for the version;
+    the null is still cached to avoid re-querying a known miss.
+    """
+    __tablename__ = "package_release_dates"
+
+    system: Mapped[str] = mapped_column(String(16), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512), primary_key=True)
+    version: Mapped[str] = mapped_column(String(256), primary_key=True)
+    published_at: Mapped[date | None] = mapped_column(Date(), nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BaseImageRecommendation(Base):
+    """A scanned image's best newer base tag, proven by scanning candidates.
+
+    Written by the opt-in base-image recommendation flow: after a container scan,
+    each strictly-newer candidate tag is SBOM-scanned and its vulnerabilities are
+    counted in memory (never persisted as findings), and the candidate with the
+    fewest is stored here keyed by the *current* image digest. ``recommended_tag``
+    is null when no candidate improves on the current image, so the "no upgrade
+    helps" answer is cached too.
+    """
+    __tablename__ = "base_image_recommendations"
+
+    image_digest: Mapped[str] = mapped_column(String(80), primary_key=True)
+    current_ref: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    current_vuln_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    recommended_tag: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    recommended_vuln_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    candidates_scanned: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 
@@ -1269,6 +1365,11 @@ class PostureSnapshot(Base):
     severity_medium: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     severity_low: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     risk_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Exploitability-weighted raw volume (pre-gauge) for this asset/day. The
+    # trend sums this across assets then gauges once, so the line reflects KEV/
+    # reachability weighting, not just severity counts.
+    risk_weight: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0", default=0)
+    new_findings: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     __table_args__ = (
@@ -1292,7 +1393,7 @@ class LlmConfig(Base):
 
 
 class ArgusConnection(Base):
-    """Per-org connection to the hosted Argus verification service."""
+    """Per-org connection to the hosted Argus threat-intel enrichment service."""
     __tablename__ = "argus_connection"
 
     org_id: Mapped[str] = mapped_column(String(255), primary_key=True)
@@ -1326,10 +1427,18 @@ class OsvAdvisory(Base):
     __tablename__ = "osv_advisories"
 
     advisory_id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    ecosystem: Mapped[str] = mapped_column(String(32), nullable=False)
+    # ecosystem / blob_key are OSV-controlled free-form strings with no upstream
+    # length bound (SUSE module ecosystems already run ~60 chars); use unbounded
+    # TEXT so distro data can never truncate the mirror refresh.
+    ecosystem: Mapped[str] = mapped_column(sa.Text, nullable=False)
     summary: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     severity: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    blob_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    # "vulnerability" (default) or "malicious" — malicious-package reports
+    # (OSV MAL- ids) are surfaced as remove-not-upgrade findings downstream.
+    kind: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="vulnerability"
+    )
+    blob_key: Mapped[str] = mapped_column(sa.Text, nullable=False)
     published_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
     modified_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
     refreshed_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
@@ -1355,11 +1464,12 @@ class OsvVulnerableRange(Base):
         sa.ForeignKey("osv_advisories.advisory_id", ondelete="CASCADE"),
         nullable=False,
     )
-    package_name: Mapped[str] = mapped_column(String(256), nullable=False)
-    ecosystem: Mapped[str] = mapped_column(String(32), nullable=False)
-    range_introduced: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    range_fixed: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    range_last_affected: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # All OSV-controlled free-form strings — unbounded upstream, so TEXT (see OsvAdvisory).
+    package_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    ecosystem: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    range_introduced: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    range_fixed: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    range_last_affected: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
 
     __table_args__ = (
         sa.Index("ix_osv_ranges_pkg_eco", "ecosystem", "package_name"),

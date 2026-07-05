@@ -507,7 +507,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
   return (
     <div className="space-y-6">
       {error && (
-        <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}
@@ -566,7 +566,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
           {dialogError && (
             <div
               role="alert"
-              className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical)]"
+              className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]"
             >
               {dialogError}
             </div>
@@ -628,7 +628,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
               Enter a new password for <strong>{showResetPassword?.username}</strong>.
             </p>
             {dialogError && (
-              <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
+              <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
                 {dialogError}
               </div>
             )}
@@ -673,12 +673,12 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                       <span className="font-medium text-[var(--color-text-primary)]">{user.username}</span>
                       <span className="text-xs text-[var(--color-text-secondary)]">{user.email || "No email"}</span>
                       {user.status === "disabled" && (
-                        <span className="mt-1 inline-flex w-fit items-center rounded-full border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-critical)]">
+                        <span className="mt-1 inline-flex w-fit items-center rounded-full border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-critical-text)]">
                           Disabled
                         </span>
                       )}
                       {user.status === "pending" && (
-                        <span className="mt-1 inline-flex w-fit items-center rounded-full border border-[var(--color-severity-medium)]/30 bg-[var(--color-severity-medium)]/10 px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-medium)]">
+                        <span className="mt-1 inline-flex w-fit items-center rounded-full border border-[var(--color-severity-medium)]/30 bg-[var(--color-severity-medium)]/10 px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-medium-text)]">
                           Pending activation
                         </span>
                       )}
@@ -752,7 +752,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                             className={`text-xs font-medium transition-colors ${
                               user.id === currentUserId || (user.role === "owner" && currentUserRole !== "owner")
                                 ? "text-[var(--color-text-secondary)] opacity-30 cursor-not-allowed"
-                                : user.status === "disabled" ? "text-[var(--color-status-ok)] hover:opacity-80" : "text-[var(--color-severity-medium)] hover:opacity-80"
+                                : user.status === "disabled" ? "text-[var(--color-status-ok-text)] hover:opacity-80" : "text-[var(--color-severity-medium-text)] hover:opacity-80"
                             }`}
                           >
                             {user.status === "active" ? "Disable" : user.status === "pending" ? "Activate" : "Enable"}
@@ -761,7 +761,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                             onClick={() => void handleDeleteUser(user)}
                             disabled={user.id === currentUserId || (currentUserRole !== "owner" && user.role === "owner")}
                             aria-label={`Delete ${user.username}`}
-                            className="text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            className="text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical-text)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path d={TRASH_ICON} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
@@ -799,7 +799,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                                   disabled={isMember && member!.source === "github"}
                                   className={`ml-2 text-xs font-medium transition-colors ${
                                     isMember
-                                      ? "text-[var(--color-severity-critical)] hover:opacity-80 disabled:opacity-30"
+                                      ? "text-[var(--color-severity-critical-text)] hover:opacity-80 disabled:opacity-30"
                                       : "text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
                                   }`}
                                 >
@@ -862,7 +862,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                                 {grant.source === "manual" && (
                                   <button
                                     onClick={() => void handleRemoveDirectGrant(user.id, grant.assetId)}
-                                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical)]"
+                                    className="text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical-text)]"
                                   >
                                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

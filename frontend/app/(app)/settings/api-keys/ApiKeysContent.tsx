@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, type MutableRefObject } from "react"
+import { useEffect, useState } from "react"
 import { listApiKeys, createApiKey, revokeApiKey, type ApiKey, type CreatedApiKey } from "@/lib/client/api-keys-api"
 import { Button } from "@/components/ui/Button"
 import { ApiKeysTable } from "@/components/shared/api-keys/ApiKeysTable"
@@ -9,15 +9,7 @@ import { CreatedKeyDialog } from "@/components/shared/api-keys/CreatedKeyDialog"
 import { RevokeKeyConfirmDialog } from "@/components/shared/api-keys/RevokeKeyConfirmDialog"
 import { EmptyApiKeysState } from "@/components/shared/api-keys/EmptyApiKeysState"
 
-interface ApiKeysContentProps {
-  /**
-   * When provided, the section's "Create token" button lives in the parent
-   * SettingsSection header instead of in its own row.
-   */
-  createTriggerRef?: MutableRefObject<(() => void) | null>
-}
-
-export function ApiKeysContent({ createTriggerRef }: ApiKeysContentProps = {}) {
+export function ApiKeysContent() {
   const [keys, setKeys] = useState<ApiKey[] | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [createdToken, setCreatedToken] = useState<string | null>(null)
@@ -31,14 +23,6 @@ export function ApiKeysContent({ createTriggerRef }: ApiKeysContentProps = {}) {
   useEffect(() => {
     void load()
   }, [])
-
-  useEffect(() => {
-    if (!createTriggerRef) return
-    createTriggerRef.current = () => setShowCreate(true)
-    return () => {
-      createTriggerRef.current = null
-    }
-  }, [createTriggerRef])
 
   async function handleCreate(payload: {
     name: string
@@ -60,13 +44,11 @@ export function ApiKeysContent({ createTriggerRef }: ApiKeysContentProps = {}) {
 
   return (
     <div className="flex flex-col gap-6">
-      {!createTriggerRef && (
-        <div className="flex items-center justify-between">
-          <Button variant="primary" size="sm" className="ml-auto" onClick={() => setShowCreate(true)}>
-            Create Token
-          </Button>
-        </div>
-      )}
+      <div className="flex items-center justify-between">
+        <Button variant="primary" size="sm" className="ml-auto" onClick={() => setShowCreate(true)}>
+          Create Token
+        </Button>
+      </div>
 
       {keys !== null && keys.length === 0 ? (
         <EmptyApiKeysState />

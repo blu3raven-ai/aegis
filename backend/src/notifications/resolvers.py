@@ -16,6 +16,7 @@ from src.notifications.destination import (
     get_destination,
     list_deliveries_for_destination,
     list_destinations,
+    redact_config,
 )
 from src.notifications.rules_model import list_rules
 from src.notifications.store import get_notifications, get_unread_count
@@ -39,7 +40,9 @@ def _dest_to_gql(d: dict) -> NotificationDestination:
         id=int(d.get("id", 0)),
         destination_type=str(d.get("destination_type", "")),
         name=str(d.get("name", "")),
-        config=d.get("config") or {},
+        # Defence-in-depth: _dest_to_dict already redacts, but re-apply so a
+        # dict reaching this serializer by another path can't leak secrets.
+        config=redact_config(d.get("config") or {}),
         enabled=bool(d.get("enabled", False)),
         event_filter=d.get("event_filter") or {},
         created_at=d.get("created_at"),

@@ -38,7 +38,7 @@ export function DrawerStatusBanner({
   if (state === "fixed" || state === "closed") {
     return (
       <div className="border-b border-[var(--color-border)] bg-[var(--color-state-fixed-subtle)] px-5 py-3">
-        <p className="text-sm font-medium text-[var(--color-state-fixed)]">
+        <p className="text-sm font-medium text-[var(--color-state-fixed-text)]">
           {state === "fixed" ? "Fixed" : "Closed"}
         </p>
         {fixedAt && (

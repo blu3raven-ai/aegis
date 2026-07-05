@@ -23,10 +23,10 @@ export const DIFF_PILL_BASE =
   "inline-flex items-center justify-center rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em]"
 
 export const DIFF_PILL_VARIANT: Record<BlockerDiffRow["diff_status"], string> = {
-  new:       "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
-  persisted: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
+  new:       "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]",
+  persisted: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]",
   gone:      "bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]",
-  fixed:     "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]",
+  fixed:     "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]",
 }
 
 export const SEVERITY_LETTER: Record<string, string> = {
@@ -38,10 +38,10 @@ export const SEVERITY_LETTER: Record<string, string> = {
 }
 
 export const SEVERITY_TONE: Record<string, string> = {
-  critical: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
-  high:     "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)]",
-  medium:   "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)]",
-  low:      "bg-[var(--color-surface-raised)] text-[var(--color-severity-low)]",
+  critical: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]",
+  high:     "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high-text)]",
+  medium:   "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)]",
+  low:      "bg-[var(--color-surface-raised)] text-[var(--color-severity-low-text)]",
   info:     "bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]",
 }
 

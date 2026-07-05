@@ -85,8 +85,9 @@ def enqueue_full_history_scan(repo_id: str) -> None:
     to fetch source connections, and one runner job is dispatched per
     source connection that has discoverable repos.
 
-    A full sweep always uses SCAN_DEPTH=deep and omits SCAN_START_DATE so the
-    runner scans the entire git history rather than a rolling window.
+    A full sweep omits SCAN_START_DATE so the runner scans the entire git
+    history rather than a rolling window. (Secret scans always run full git
+    history now, so no depth flag is needed.)
     """
     if not repo_id or "/" not in repo_id:
         logger.warning("enqueue_full_history_scan: invalid repo_id=%r — expected 'org/...' format", repo_id)
@@ -121,8 +122,6 @@ def enqueue_full_history_scan(repo_id: str) -> None:
             "ORG_LABEL": org,
             "RUN_ID": run_id,
             "CONCURRENCY": concurrency,
-            # Full history — deep scan, no date window
-            "SCAN_DEPTH": "deep",
         }
 
         create_job(

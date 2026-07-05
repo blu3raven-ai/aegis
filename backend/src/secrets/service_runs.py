@@ -32,10 +32,9 @@ def latest_run_for_org(org: str) -> dict[str, Any] | None:
 
 def start_secret_runs(
     orgs: list[str],
-    scan_depth: str | None = None,
     runtime_getter: Callable[[], InMemoryScanRuntime] = get_runtime,
     run_launcher: Callable[
-        [str, str, str, InMemoryScanRuntime, dict[str, str], str | None],
+        [str, str, str, InMemoryScanRuntime, dict[str, str]],
         None,
     ] | None = None,
     get_token_for_org: Callable[[str], str | None] = get_token_for_org,
@@ -71,7 +70,7 @@ def start_secret_runs(
         started_runs.append({"org": org_name, "runId": run_id})
         fallback_token = get_token_for_org(org_name) or ""
         if run_launcher:
-            run_launcher(org_name, run_id, fallback_token, runtime, scanner_config, scan_depth)
+            run_launcher(org_name, run_id, fallback_token, runtime, scanner_config)
 
     return {
         "runs": started_runs,

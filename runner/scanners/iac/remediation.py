@@ -167,16 +167,48 @@ def _extract_tf_block(lines: Sequence[str], start_line: int) -> str | None:
     depth = 0
     started = False
     out: list[str] = []
+    in_str: str | None = None  # active quote char inside a string literal
+    in_block_comment = False
     for j in range(i, n):
         line = lines[j]
         out.append(line)
-        for ch in line:
-            if ch == "{":
+        k = 0
+        length = len(line)
+        while k < length:
+            ch = line[k]
+            nxt = line[k + 1] if k + 1 < length else ""
+            if in_block_comment:
+                if ch == "*" and nxt == "/":
+                    in_block_comment = False
+                    k += 2
+                    continue
+                k += 1
+                continue
+            if in_str is not None:
+                if ch == "\\":  # skip an escaped char (e.g. \")
+                    k += 2
+                    continue
+                if ch == in_str:
+                    in_str = None
+                k += 1
+                continue
+            # Braces inside strings/comments are not structural — ignore them so a
+            # value like "a{b}" or a `# {` comment can't unbalance the count.
+            if ch in ('"', "'"):
+                in_str = ch
+            elif ch == "#" or (ch == "/" and nxt == "/"):
+                break  # rest of the line is a comment
+            elif ch == "/" and nxt == "*":
+                in_block_comment = True
+                k += 2
+                continue
+            elif ch == "{":
                 depth += 1
                 started = True
             elif ch == "}":
                 depth -= 1
-        if started and depth <= 0:
+            k += 1
+        if started and depth <= 0 and in_str is None and not in_block_comment:
             return "\n".join(out)
     return None  # unbalanced — fail closed rather than emit a partial block
 

@@ -23,7 +23,17 @@ export function IntegrationSetup({ integration }: { integration: Integration }) 
   const StepsComponent = STEPS_BY_SLUG[integration.slug];
 
   if (!StepsComponent) {
-    return <p className="text-sm text-[var(--color-text-secondary)]">Setup is not available for this integration.</p>;
+    // Integrations that connect elsewhere carry an `href` and never open this
+    // drawer, so a stepless integration here is one that isn't available yet.
+    const label = integration.status === "preview" ? "Coming soon" : "Not yet available";
+    return (
+      <div className="rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center">
+        <p className="text-sm font-medium text-[var(--color-text-primary)]">{label}</p>
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+          Setup for {integration.name} isn’t available yet — it’s on the roadmap.
+        </p>
+      </div>
+    );
   }
 
   const aegisUrl = typeof window !== "undefined" ? window.location.origin : "";
@@ -40,7 +50,7 @@ export function IntegrationSetup({ integration }: { integration: Integration }) 
             Settings → API keys
           </Link>
           , create a key with{" "}
-          <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 text-2xs">trigger:scans</code>{" "}
+          <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 text-2xs">scan:trigger</code>{" "}
           scope, and add it to your CI as a secret named{" "}
           <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 text-2xs">AEGIS_API_KEY</code>.
         </p>

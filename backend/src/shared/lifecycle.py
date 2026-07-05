@@ -207,6 +207,8 @@ def _build_subject_for_new_finding(
         epss_score=None,
         file_path=detail_dict.get("file_path"),
         age_days=0,
+        dependency_scope=detail_dict.get("dependencyScope"),
+        release_age_days=detail_dict.get("release_age_days"),
     )
 
 

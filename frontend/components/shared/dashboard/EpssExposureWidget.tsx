@@ -10,8 +10,8 @@ interface EpssExposureWidgetProps {
 }
 
 const BUCKET_TEXT = {
-  high: "text-[var(--color-severity-critical)]",
-  medium: "text-[var(--color-severity-high)]",
+  high: "text-[var(--color-severity-critical-text)]",
+  medium: "text-[var(--color-severity-high-text)]",
   none: "text-[var(--color-text-secondary)]",
 } as const
 

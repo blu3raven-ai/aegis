@@ -2,16 +2,10 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/Button"
-import { apiClient } from "@/lib/client/api-client"
 import { ApiClientError } from "@/lib/client/api-client.types"
+import { testLlmConnection, type LlmTestResult } from "@/lib/client/llm-settings-api"
 
 type State = "idle" | "testing" | "ok" | "failed"
-
-interface TestResult {
-  ok: boolean
-  detail?: string
-  error?: string
-}
 
 export function TestConnectionButton() {
   const [state, setState] = useState<State>("idle")
@@ -33,7 +27,7 @@ export function TestConnectionButton() {
     setState("testing")
     setError("")
     try {
-      const body = await apiClient<TestResult>("/api/v1/settings/llm/test", { method: "POST" })
+      const body = await testLlmConnection()
       if (body.ok) {
         setState("ok")
         return
@@ -44,10 +38,10 @@ export function TestConnectionButton() {
       setState("failed")
       if (e instanceof ApiClientError) {
         if (e.status === 404) {
-          setError("Argus is not configured. Save your config first.")
+          setError("No model configured yet. Save your settings first.")
           return
         }
-        const body = e.body as TestResult | null
+        const body = e.body as LlmTestResult | null
         setError(body?.detail || body?.error || `Request failed (${e.status})`)
         return
       }
@@ -72,7 +66,7 @@ export function TestConnectionButton() {
         <span
           role="status"
           aria-live="polite"
-          className="inline-flex items-center text-xs font-medium text-[var(--color-status-ok)]"
+          className="inline-flex items-center text-xs font-medium text-[var(--color-status-ok-text)]"
         >
           ✓ Connected
         </span>
@@ -82,7 +76,7 @@ export function TestConnectionButton() {
         <span
           role="alert"
           title={error}
-          className="inline-flex max-w-xs items-center truncate text-xs font-medium text-[var(--color-severity-critical)]"
+          className="inline-flex max-w-xs items-center truncate text-xs font-medium text-[var(--color-severity-critical-text)]"
         >
           ✕ {error}
         </span>

@@ -11,11 +11,13 @@ import {
 // (backend/src/sources/triggers.py). Keep these in sync — a drift here means
 // the settings UI offers scanners the backend won't run, or hides ones it will.
 describe("CATEGORY_SCANNERS mirrors the backend mapping", () => {
-  it("code repositories run dependencies, secret, and code scanning", () => {
+  it("code repositories run dependencies, secret, code, IaC, and agent scanning", () => {
     assert.deepEqual(CATEGORY_SCANNERS["code-repositories"], [
       "dependencies_scanning",
       "secret_scanning",
       "code_scanning",
+      "iac_scanning",
+      "agent_scanning",
     ])
   })
 

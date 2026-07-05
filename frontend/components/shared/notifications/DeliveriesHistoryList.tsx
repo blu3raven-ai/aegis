@@ -4,10 +4,10 @@ import type { NotificationDelivery } from "@/lib/client/destinations-api"
 import { Skeleton } from "@/components/ui/Skeleton"
 
 const STATUS_STYLES: Record<string, { dot: string; label: string }> = {
-  delivered: { dot: "bg-[var(--color-status-ok)]", label: "text-[var(--color-status-ok)]" },
-  failed: { dot: "bg-[var(--color-severity-critical)]", label: "text-[var(--color-severity-critical)]" },
+  delivered: { dot: "bg-[var(--color-status-ok)]", label: "text-[var(--color-status-ok-text)]" },
+  failed: { dot: "bg-[var(--color-severity-critical)]", label: "text-[var(--color-severity-critical-text)]" },
   pending: { dot: "bg-[var(--color-text-tertiary)]", label: "text-[var(--color-text-tertiary)]" },
-  retry: { dot: "bg-[var(--color-severity-medium)]", label: "text-[var(--color-severity-medium)]" },
+  retry: { dot: "bg-[var(--color-severity-medium)]", label: "text-[var(--color-severity-medium-text)]" },
 }
 
 function relativeTime(iso: string): string {
@@ -43,7 +43,7 @@ export function DeliveriesHistoryList({ deliveries, loading, error }: Deliveries
 
   if (error) {
     return (
-      <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+      <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
     )
   }
 
@@ -75,7 +75,7 @@ export function DeliveriesHistoryList({ deliveries, loading, error }: Deliveries
                 </p>
               )}
               {d.error && (
-                <p className="mt-0.5 truncate text-[11px] text-[var(--color-severity-critical)]">
+                <p className="mt-0.5 truncate text-[11px] text-[var(--color-severity-critical-text)]">
                   {d.error}
                 </p>
               )}

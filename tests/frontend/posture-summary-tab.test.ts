@@ -5,7 +5,7 @@ import { join } from "node:path"
 
 const ROOT = join(import.meta.dirname, "../..")
 const src = readFileSync(
-  join(ROOT, "frontend/app/(app)/posture/PostureSummaryTab.tsx"),
+  join(ROOT, "frontend/app/(app)/insights/PostureSummaryTab.tsx"),
   "utf8",
 )
 
@@ -130,14 +130,5 @@ describe("PostureSummaryTab — Beat 5: Compliance", () => {
   })
   it("body renders ComplianceSnapshot", () => {
     assert.match(src, /<ComplianceSnapshot/)
-  })
-})
-
-describe("PostureSummaryTab — Beat 6: Scope disclaimer", () => {
-  // The VerdictAssurance component was inlined to a footer paragraph (#983);
-  // the assurance intent survives as the scan-scope disclaimer at the foot.
-  it("renders the scan-scope disclaimer at the foot of the view", () => {
-    assert.match(src, /Covers scanned source code only/)
-    assert.match(src, /runtime is not directly observed/)
   })
 })

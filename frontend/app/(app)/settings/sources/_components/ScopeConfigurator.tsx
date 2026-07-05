@@ -157,7 +157,7 @@ export function ScopeConfigurator({
                         htmlFor={`exclude-${item}`}
                         className={`flex-1 cursor-pointer select-none truncate text-sm ${
                           isExcluded
-                            ? "text-[var(--color-severity-critical)] line-through"
+                            ? "text-[var(--color-severity-critical-text)] line-through"
                             : "text-[var(--color-text-primary)]"
                         }`}
                       >
@@ -168,7 +168,7 @@ export function ScopeConfigurator({
                           variant="link"
                           size="xs"
                           onClick={() => removeExcluded(item)}
-                          className="shrink-0 text-xs text-[var(--color-severity-critical)] hover:text-[var(--color-severity-critical)]"
+                          className="shrink-0 text-xs text-[var(--color-severity-critical-text)] hover:text-[var(--color-severity-critical-text)]"
                           aria-label={`Remove ${item} from exclusions`}
                         >
                           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

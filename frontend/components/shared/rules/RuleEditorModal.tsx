@@ -73,13 +73,10 @@ interface FieldErrors {
   priority?: string
   // SLA action errors
   deadline?: string
-  escalations?: Record<number, { at_hours?: string; channel_id?: string }>
-  escalationsCount?: string
   // Scanner coverage action errors
   scannerCoverage?: {
     required_scanners?: string
     stale_after_days?: string
-    alert_channel_id?: string
   }
   // Auto-dismiss action errors
   autoDismiss?: {
@@ -236,29 +233,9 @@ export function RuleEditorModal({
       next.deadline = "Deadline must be a positive integer"
     }
 
-    if (act.escalations.length > 4) {
-      next.escalationsCount = "At most 4 escalation steps allowed"
-    }
-
-    const deadlineHours = act.deadline_days * 24
-    const escalationErrors: Record<number, { at_hours?: string; channel_id?: string }> = {}
-    act.escalations.forEach((esc, i) => {
-      const rowErr: { at_hours?: string; channel_id?: string } = {}
-      if (!Number.isInteger(esc.at_hours) || esc.at_hours < 1) {
-        rowErr.at_hours = "Must be a positive integer"
-      } else if (esc.at_hours >= deadlineHours) {
-        rowErr.at_hours = `Must be less than ${deadlineHours} hours`
-      }
-      if (
-        !Number.isInteger(esc.channel_id) ||
-        esc.channel_id <= 0 ||
-        !destinations.some((d) => d.id === esc.channel_id)
-      ) {
-        rowErr.channel_id = "Select a valid destination"
-      }
-      if (rowErr.at_hours || rowErr.channel_id) escalationErrors[i] = rowErr
-    })
-    if (Object.keys(escalationErrors).length > 0) next.escalations = escalationErrors
+    // Escalations are a coming-soon action leg — they persist but never
+    // deliver a notification, so the editor no longer lets users add or edit
+    // them. Don't block save on the contents of any grandfathered escalations.
   }
 
   function validateAutoDismissAction(act: AutoDismissAction, next: FieldErrors): void {
@@ -304,13 +281,9 @@ export function RuleEditorModal({
       ) {
         coverageErr.stale_after_days = "Must be a whole number between 1 and 365"
       }
-      const channelOk =
-        Number.isInteger(act.alert_channel_id) &&
-        act.alert_channel_id > 0 &&
-        destinations.some((d) => d.id === act.alert_channel_id && d.enabled)
-      if (!channelOk) {
-        coverageErr.alert_channel_id = "Select an enabled notification destination"
-      }
+      // Notify-channel delivery and auto-retrigger are coming-soon legs — a
+      // stale alert opens a visible violation without them — so a channel is
+      // no longer required to save the rule.
     }
     if (Object.keys(coverageErr).length > 0) next.scannerCoverage = coverageErr
   }
@@ -638,7 +611,6 @@ export function RuleEditorModal({
                 (isRequireScannersAction(action) || isStaleAlertAction(action)) && (
                   <ScannerCoverageActionEditor
                     value={action as ScannerCoverageAction}
-                    destinations={destinations}
                     onChange={(next) => setAction(next)}
                   />
                 )}
@@ -654,37 +626,19 @@ export function RuleEditorModal({
                   onChange={(next) => setAction(next)}
                 />
               )}
-              {category === "sla" && (
-                <>
-                  {errors.deadline && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">{errors.deadline}</p>
-                  )}
-                  {errors.escalationsCount && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">{errors.escalationsCount}</p>
-                  )}
-                  {errors.escalations &&
-                    Object.entries(errors.escalations).map(([i, err]) => (
-                      <p key={i} className="mt-1 text-xs text-[var(--color-severity-critical)]">
-                        Escalation {Number(i) + 1}: {[err.at_hours, err.channel_id].filter(Boolean).join(" · ")}
-                      </p>
-                    ))}
-                </>
+              {category === "sla" && errors.deadline && (
+                <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">{errors.deadline}</p>
               )}
               {category === "scanner_coverage" && errors.scannerCoverage && (
                 <>
                   {errors.scannerCoverage.required_scanners && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
+                    <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">
                       {errors.scannerCoverage.required_scanners}
                     </p>
                   )}
                   {errors.scannerCoverage.stale_after_days && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
+                    <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">
                       {errors.scannerCoverage.stale_after_days}
-                    </p>
-                  )}
-                  {errors.scannerCoverage.alert_channel_id && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
-                      {errors.scannerCoverage.alert_channel_id}
                     </p>
                   )}
                 </>
@@ -692,29 +646,29 @@ export function RuleEditorModal({
               {category === "auto_dismiss" && errors.autoDismiss && (
                 <>
                   {errors.autoDismiss.reason && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
+                    <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">
                       {errors.autoDismiss.reason}
                     </p>
                   )}
                   {errors.autoDismiss.audit_note && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
+                    <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">
                       {errors.autoDismiss.audit_note}
                     </p>
                   )}
                   {errors.autoDismiss.rate_alarm_pct && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
+                    <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">
                       {errors.autoDismiss.rate_alarm_pct}
                     </p>
                   )}
                   {errors.autoDismiss.rate_alarm_window_minutes && (
-                    <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
+                    <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">
                       {errors.autoDismiss.rate_alarm_window_minutes}
                     </p>
                   )}
                 </>
               )}
               {category === "data_retention" && errors.dataRetention?.after_days && (
-                <p className="mt-1 text-xs text-[var(--color-severity-critical)]">
+                <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">
                   {errors.dataRetention.after_days}
                 </p>
               )}
@@ -785,7 +739,7 @@ export function RuleEditorModal({
           {/* Footer */}
           <div className="flex flex-col gap-3 border-t border-[var(--color-border)] px-6 py-4">
             {saveError && (
-              <p className="text-sm text-[var(--color-severity-critical)]">{saveError}</p>
+              <p className="text-sm text-[var(--color-severity-critical-text)]">{saveError}</p>
             )}
             <div className="flex justify-end gap-3">
               <Button variant="secondary" size="md" onClick={() => { if (!saving) onClose() }}>
@@ -824,7 +778,7 @@ export function RuleEditorModal({
             className="fixed left-1/2 top-1/2 z-[70] flex w-full max-w-md -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl border border-[var(--color-severity-critical)] bg-[var(--color-surface)] shadow-2xl"
           >
             <div className="border-b border-[var(--color-severity-critical)] bg-[var(--color-severity-critical)]/10 px-6 py-4">
-              <h2 className="text-sm font-semibold text-[var(--color-severity-critical)]">
+              <h2 className="text-sm font-semibold text-[var(--color-severity-critical-text)]">
                 Confirm delete action
               </h2>
             </div>
@@ -832,7 +786,7 @@ export function RuleEditorModal({
               <p className="text-sm text-[var(--color-text-primary)]">
                 This rule will permanently delete scan results after the
                 configured period. Type{" "}
-                <span className="font-mono font-semibold text-[var(--color-severity-critical)]">
+                <span className="font-mono font-semibold text-[var(--color-severity-critical-text)]">
                   delete data retention
                 </span>{" "}
                 to confirm.

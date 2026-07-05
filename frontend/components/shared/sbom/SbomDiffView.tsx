@@ -5,6 +5,7 @@ import type { SbomDiffResponse, SbomComponent, SbomVersionChange, VulnCounts } f
 import { Card } from "@/components/ui/Card"
 import { ComponentVulnBadge } from "@/components/shared/sbom/ComponentVulnBadge"
 import { CATEGORY_META, CATEGORY_RANK } from "@/lib/sbom/license-category"
+import { breakdown, composition, aggregateCounts, compareSeverity } from "@/lib/sbom/diff-severity"
 
 /** A bump that changes a component's license risk category is a compliance
  * event — red when it gets more restrictive (e.g. MIT → GPL), green when less. */
@@ -14,8 +15,8 @@ function LicenseChangeBadge({ change }: { change: SbomVersionChange }) {
   if (!from || !to || from === to) return null
   const worse = CATEGORY_RANK[to] > CATEGORY_RANK[from]
   const cls = worse
-    ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
-    : "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]"
+    ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
+    : "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]"
   const fromLabel = change.from_license || CATEGORY_META[from].label
   const toLabel = change.to_license || CATEGORY_META[to].label
   return (
@@ -26,15 +27,6 @@ function LicenseChangeBadge({ change }: { change: SbomVersionChange }) {
       <span aria-hidden="true">{worse ? "▴" : "▾"}</span>
       {fromLabel} → {toLabel}
     </span>
-  )
-}
-
-const SEV_TIERS = ["critical", "high", "medium", "low"] as const
-
-function _breakdown(counts: VulnCounts): string {
-  return (
-    SEV_TIERS.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${s}`).join(" · ") ||
-    `${counts.total}`
   )
 }
 
@@ -62,11 +54,11 @@ function AdvisoryBadge({
   const glyph = tone === "good" ? "▾" : tone === "bad" ? "▴" : "•"
   return (
     <span
-      title={`${label}: ${_breakdown(counts)} (OSV advisories)`}
+      title={`${label}: ${breakdown(counts)} (OSV advisories)`}
       className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs font-semibold tabular-nums ${cls}`}
     >
       <span aria-hidden="true">{glyph}</span>
-      {label} {counts.total}
+      {label} {composition(counts)}
     </span>
   )
 }
@@ -167,10 +159,6 @@ function VersionChangeRow({ change }: { change: SbomVersionChange }) {
   )
 }
 
-function _sum(counts: (VulnCounts | undefined)[]): number {
-  return counts.reduce((acc, c) => acc + (c?.total ?? 0), 0)
-}
-
 function EmptyCategory({ message }: { message: string }) {
   return (
     <p className="py-2 pl-4 text-xs text-[var(--color-text-tertiary)]">{message}</p>
@@ -201,13 +189,13 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
   const totalChanges =
     diff.added_count + diff.removed_count + diff.version_changed_count
 
-  // Float rows carrying a vuln signal to the top of each section, then by name.
+  // Float rows carrying the worst vuln signal to the top of each section (a
+  // single critical outranks any number of lows), then by name.
   const added = useMemo(
     () =>
       [...diff.added].sort(
         (a, b) =>
-          (b.known_vulns?.total ?? 0) - (a.known_vulns?.total ?? 0) ||
-          a.name.localeCompare(b.name),
+          compareSeverity(a.known_vulns, b.known_vulns) || a.name.localeCompare(b.name),
       ),
     [diff.added],
   )
@@ -215,8 +203,7 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
     () =>
       [...diff.removed].sort(
         (a, b) =>
-          (b.known_vulns?.total ?? 0) - (a.known_vulns?.total ?? 0) ||
-          a.name.localeCompare(b.name),
+          compareSeverity(a.known_vulns, b.known_vulns) || a.name.localeCompare(b.name),
       ),
     [diff.removed],
   )
@@ -224,18 +211,31 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
     () =>
       [...diff.version_changed].sort(
         (a, b) =>
-          (b.resolved?.total ?? 0) + (b.introduced?.total ?? 0) -
-            ((a.resolved?.total ?? 0) + (a.introduced?.total ?? 0)) ||
-          a.name.localeCompare(b.name),
+          compareSeverity(
+            aggregateCounts([a.resolved, a.introduced]),
+            aggregateCounts([b.resolved, b.introduced]),
+          ) || a.name.localeCompare(b.name),
       ),
     [diff.version_changed],
   )
 
   // Remediation = advisories cleared by dropping a package or bumping past a fix.
-  const resolvedTotal =
-    _sum(diff.version_changed.map((v) => v.resolved)) + _sum(diff.removed.map((c) => c.known_vulns))
-  const introducedTotal =
-    _sum(diff.added.map((c) => c.known_vulns)) + _sum(diff.version_changed.map((v) => v.introduced))
+  const resolvedAgg = aggregateCounts([
+    ...diff.version_changed.map((v) => v.resolved),
+    ...diff.removed.map((c) => c.known_vulns),
+  ])
+  const introducedAgg = aggregateCounts([
+    ...diff.added.map((c) => c.known_vulns),
+    ...diff.version_changed.map((v) => v.introduced),
+  ])
+
+  // Signal A: open triaged findings already landing on the packages this diff
+  // adds or bumps into. Distinct from the advisory delta (Signal B) above —
+  // these are real findings, not version-matched advisories.
+  const introducedFindings = aggregateCounts([
+    ...diff.added.map((c) => c.current_findings),
+    ...diff.version_changed.map((v) => v.current_findings),
+  ])
 
   return (
     <Card padding="none" className="flex flex-col gap-0 divide-y divide-[var(--color-border)] rounded-xl overflow-hidden">
@@ -248,13 +248,13 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
           package change{totalChanges !== 1 ? "s" : ""}
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">
-          <span className="font-semibold tabular-nums text-[var(--color-status-ok)]">
+          <span className="font-semibold tabular-nums text-[var(--color-status-ok-text)]">
             +{diff.added_count}
           </span>{" "}
           added
         </span>
         <span className="text-xs text-[var(--color-text-secondary)]">
-          <span className="font-semibold tabular-nums text-[var(--color-severity-critical)]">
+          <span className="font-semibold tabular-nums text-[var(--color-severity-critical-text)]">
             -{diff.removed_count}
           </span>{" "}
           removed
@@ -272,34 +272,53 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
           unchanged
         </span>
 
-        {/* OSV advisory delta (Signal B) — labelled "advisories", never "findings". */}
-        {diff.remediation_signal_available ? (
-          (resolvedTotal > 0 || introducedTotal > 0) && (
-            <span className="ml-auto flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-              <span className="text-[var(--color-text-tertiary)]">Advisories</span>
-              {resolvedTotal > 0 && (
-                <span title="Advisories cleared by removing a package or bumping past a fix">
-                  <span className="font-semibold tabular-nums text-[var(--color-status-ok)]">
-                    <span aria-hidden="true">▾</span> {resolvedTotal}
-                  </span>{" "}
-                  resolved
-                </span>
-              )}
-              {introducedTotal > 0 && (
-                <span title="Advisories on newly-added or bumped-into versions">
-                  <span className="font-semibold tabular-nums text-[var(--color-severity-critical)]">
-                    <span aria-hidden="true">▴</span> {introducedTotal}
-                  </span>{" "}
-                  introduced
-                </span>
-              )}
+        {/* Right-aligned signal group: open findings (Signal A) + OSV advisory
+            delta (Signal B). Wrapped so the group stays right-aligned even when
+            one signal is absent. */}
+        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+          {/* Signal A — real triaged findings landing on newly-added/bumped packages. */}
+          {introducedFindings.total > 0 && (
+            <span
+              className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]"
+              title={`Open findings on newly-added or bumped packages: ${breakdown(introducedFindings)}`}
+            >
+              <span className="text-[var(--color-text-tertiary)]">Open findings</span>
+              <span className="font-semibold tabular-nums text-[var(--color-severity-critical-text)]">
+                <span aria-hidden="true">▴</span> {composition(introducedFindings)}
+              </span>{" "}
+              introduced
             </span>
-          )
-        ) : (
-          <span className="ml-auto text-2xs text-[var(--color-text-tertiary)]" title="The OSV advisory mirror is empty or the diff was too large to re-match">
-            Remediation signal unavailable
-          </span>
-        )}
+          )}
+
+          {/* OSV advisory delta (Signal B) — labelled "advisories", never "findings". */}
+          {diff.remediation_signal_available ? (
+            (resolvedAgg.total > 0 || introducedAgg.total > 0) && (
+              <span className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+                <span className="text-[var(--color-text-tertiary)]">Advisories</span>
+                {resolvedAgg.total > 0 && (
+                  <span title={`Advisories cleared by removing a package or bumping past a fix: ${breakdown(resolvedAgg)}`}>
+                    <span className="font-semibold tabular-nums text-[var(--color-status-ok-text)]">
+                      <span aria-hidden="true">▾</span> {composition(resolvedAgg)}
+                    </span>{" "}
+                    resolved
+                  </span>
+                )}
+                {introducedAgg.total > 0 && (
+                  <span title={`Advisories on newly-added or bumped-into versions: ${breakdown(introducedAgg)}`}>
+                    <span className="font-semibold tabular-nums text-[var(--color-severity-critical-text)]">
+                      <span aria-hidden="true">▴</span> {composition(introducedAgg)}
+                    </span>{" "}
+                    introduced
+                  </span>
+                )}
+              </span>
+            )
+          ) : (
+            <span className="text-2xs text-[var(--color-text-tertiary)]" title="The OSV advisory mirror is empty or the diff was too large to re-match">
+              Remediation signal unavailable
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Change sections — flat top-level Added / Removed / Version bumps */}
@@ -308,7 +327,7 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
         <SectionHeader
           label="Added"
           count={diff.added_count}
-          color="bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
+          color="bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]"
           expanded={addedOpen}
           onToggle={() => setAddedOpen((v) => !v)}
         />
@@ -331,7 +350,7 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
         <SectionHeader
           label="Removed"
           count={diff.removed_count}
-          color="bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
+          color="bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
           expanded={removedOpen}
           onToggle={() => setRemovedOpen((v) => !v)}
         />

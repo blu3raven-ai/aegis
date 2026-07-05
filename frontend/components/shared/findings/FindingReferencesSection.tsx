@@ -46,8 +46,13 @@ function buildIdReferences(cve: string | undefined, cwe: string | undefined): Re
   return refs
 }
 
-/** Friendly "host/path" label + a source tag for an arbitrary advisory URL. */
-function describeUrl(url: string): Reference {
+/** Friendly "host/path" label + a source tag for an advisory URL, or null when
+ *  the URL isn't a safe http(s) link. The result becomes an `<a href>`, and the
+ *  advisory references are third-party (OSV/GHSA) data — a `javascript:`/`data:`
+ *  value must never slip through and execute in the dashboard origin. Mirrors
+ *  the http(s)-only allowlist in lib/shared/findings/repo-link.ts. */
+function describeUrl(url: string): Reference | null {
+  if (!/^https?:\/\//i.test(url.trim())) return null
   try {
     const u = new URL(url)
     const host = u.hostname.replace(/^www\./, "")
@@ -60,7 +65,7 @@ function describeUrl(url: string): Reference {
     const label = raw.length > 52 ? `${raw.slice(0, 51)}…` : raw
     return { label, href: url, sub }
   } catch {
-    return { label: url.slice(0, 52), href: url, sub: "Link" }
+    return null
   }
 }
 
@@ -78,8 +83,10 @@ function buildReferences(
     if (!url) continue
     const key = normaliseHref(url)
     if (seen.has(key)) continue
+    const ref = describeUrl(url)
+    if (!ref) continue // drop non-http(s) URLs rather than render them as links
     seen.add(key)
-    refs.push(describeUrl(url))
+    refs.push(ref)
   }
 
   return refs.slice(0, MAX_REFERENCES)
@@ -101,8 +108,8 @@ export function FindingReferencesSection({
   if (refs.length === 0) return null
 
   return (
-    <section className="mt-6">
-      <h3 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+    <section>
+      <h3 className="mb-2 text-base font-semibold text-[var(--color-text-primary)]">
         References
       </h3>
       <ul className="space-y-1.5">

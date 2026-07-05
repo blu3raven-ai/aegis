@@ -20,11 +20,18 @@ def repo_ref(source_type: str, owner: str, name: str) -> str:
     identity for a Jenkins-backed asset so it can be looked up by
     ``external_ref``. The accepted shape is
     ``jenkins:<controller_host>/<job_name>`` — ``owner`` is the controller
-    host and ``name`` is the (possibly folder-pathed) job name."""
+    host and ``name`` is the (possibly folder-pathed) job name.
+
+    The owner segment is lower-cased: provider owners/orgs are
+    case-insensitive, and ingestion already stores assets with a lower-cased
+    owner, so callers that pass a display-cased owner (e.g. a source
+    connection's discovered items) must resolve to the same canonical ref.
+    The repo/job name keeps its original case (repository and Jenkins job
+    names are case-sensitive)."""
     st = source_type.strip().lower()
     if st not in _REPO_SOURCE_TYPES:
         raise ValueError(f"unknown source_type: {source_type!r}")
-    o = owner.strip()
+    o = owner.strip().lower()
     if not o:
         raise ValueError("owner is required")
     n = name.strip()

@@ -1,17 +1,17 @@
-// Pattern: Snyk projects list — coverage indicator showing which scanner types are active.
-// Reference: Snyk projects table → "Test Type" column.
+// Coverage indicator showing which scanner types are active for a source.
 import { cn } from "@/lib/shared/utils";
 
-export type ScannerType = "sca" | "sast" | "secrets" | "iac";
+export type ScannerType = "sca" | "sast" | "secrets" | "iac" | "agent";
 
 const LABELS: Record<ScannerType, string> = {
   sca: "SCA",
   sast: "SAST",
   secrets: "SEC",
   iac: "IaC",
+  agent: "AGT",
 };
 
-const ORDER: ScannerType[] = ["sca", "sast", "secrets", "iac"];
+const ORDER: ScannerType[] = ["sca", "sast", "secrets", "iac", "agent"];
 
 type Props = {
   scanners: ScannerType[];

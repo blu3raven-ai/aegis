@@ -27,7 +27,6 @@ def _execute_via_runner(
     config: dict[str, str],
     repo_urls: str,
     token: str,
-    rulesets: str,
     source_type: str | None = None,
 ) -> dict[str, Any] | None:
     """Create a runner job and poll until completion."""
@@ -39,7 +38,6 @@ def _execute_via_runner(
         "ORG_LABEL": org,
         "CONCURRENCY": config.get("concurrency") or "4",
         "RUN_ID": run_id,
-        "RULESETS": rulesets,
     }
     # The ingest resolves each finding's repo asset via SOURCE_TYPE (envVars),
     # so it must be carried through on the scheduled path too — not just on the
@@ -262,12 +260,6 @@ def execute_code_scanning_scan_once(
                 source_token = source.token
 
         repo_urls_str = ",".join(all_repo_urls)
-        rulesets = config.get("rulesets") or (
-            "p/owasp-top-ten,p/cwe-top-25,p/default,p/r2c-security-audit,"
-            "p/python,p/java,p/javascript,p/typescript,p/golang,"
-            "p/ruby,p/php,p/c,p/cpp,p/kotlin,p/swift,p/rust,"
-            "p/django,p/flask,p/express,p/react,p/spring"
-        )
 
         result = _execute_via_runner(
             org=org,
@@ -275,7 +267,6 @@ def execute_code_scanning_scan_once(
             config=config,
             repo_urls=repo_urls_str,
             token=source_token,
-            rulesets=rulesets,
             source_type=source_type,
         )
 

@@ -30,22 +30,22 @@ interface VerdictStyle {
 const VERDICT_STYLES: Record<Verdict, VerdictStyle> = {
   no_go: {
     container: "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)]",
-    icon:      "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
+    icon:      "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]",
     iconGlyph: "×",
   },
   warn: {
     container: "border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)]",
-    icon:      "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
+    icon:      "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]",
     iconGlyph: "!",
   },
   go: {
     container: "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)]",
-    icon:      "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]",
+    icon:      "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]",
     iconGlyph: "✓",
   },
   pending: {
     container: "border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)]",
-    icon:      "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
+    icon:      "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]",
     iconGlyph: "⋯",
   },
   unknown: {
@@ -144,7 +144,7 @@ export function ReleaseVerdictCard({
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--color-text-secondary)]">
             <span>Scanned {relativeTime(scannedAt)}</span>
             <span>{release.scanner_count} scanners ran</span>
-            <span className="text-[var(--color-severity-critical)]">{release.blocker_count} blockers</span>
+            <span className="text-[var(--color-severity-critical-text)]">{release.blocker_count} blockers</span>
             {showDiffLine && (
               <span>
                 Diff vs {release.baseline_ref}: {newCount} new, {persistedCount} persisted

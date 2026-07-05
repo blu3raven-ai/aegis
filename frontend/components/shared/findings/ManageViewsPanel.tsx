@@ -117,7 +117,7 @@ export function ManageViewsPanel({ open, onClose, variant = "popover" }: ManageV
         </Button>
       </div>
 
-      {error && <p className="mb-2 text-2xs text-[var(--color-severity-critical)]">{error}</p>}
+      {error && <p className="mb-2 text-2xs text-[var(--color-severity-critical-text)]">{error}</p>}
 
       {views.length === 0 && (
         <p className="px-1 py-2 text-xs text-[var(--color-text-tertiary)]">No saved views yet.</p>
@@ -181,7 +181,7 @@ export function ManageViewsPanel({ open, onClose, variant = "popover" }: ManageV
                     variant="link"
                     size="xs"
                     onClick={() => handleDelete(v)}
-                    className="text-[var(--color-severity-critical)] hover:opacity-80 hover:text-[var(--color-severity-critical)]"
+                    className="text-[var(--color-severity-critical-text)] hover:opacity-80 hover:text-[var(--color-severity-critical-text)]"
                   >
                     Delete
                   </Button>

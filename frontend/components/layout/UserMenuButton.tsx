@@ -94,7 +94,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
+                className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
               >
                 Sign out
               </button>
@@ -168,7 +168,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
           <button
             type="button"
             onClick={handleSignOut}
-            className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
+            className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
           >
             Sign out
           </button>

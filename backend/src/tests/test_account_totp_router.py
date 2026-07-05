@@ -96,9 +96,15 @@ def test_verify_invalid_code_maps_to_400():
 
 # ── disable ──────────────────────────────────────────────────────────────────
 
-def test_disable_returns_ok():
+def test_disable_forwards_code_and_returns_ok():
     with patch("src.auth.account.totp_router._disable_totp") as svc:
-        resp = _client().post(_DISABLE)
+        resp = _client().post(_DISABLE, json={"code": "123456"})
     assert resp.status_code == 200
     assert resp.json() == {"ok": True}
-    assert svc.called
+    assert svc.call_args.kwargs["code"] == "123456"
+
+
+def test_disable_requires_a_code_body():
+    # Re-auth guard: the endpoint no longer accepts a bodyless disable.
+    resp = _client().post(_DISABLE)
+    assert resp.status_code == 422

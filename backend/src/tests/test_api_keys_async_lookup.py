@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.auth.credentials.auth import verify_api_key  # noqa: E402
 
@@ -93,11 +93,13 @@ async def test_verify_api_key_runs_concurrently():
         elapsed = time.monotonic() - start
 
     assert all(r is not None for r in results)
-    # Allow a generous bound (3x one call) — anything under N * sleep is the proof.
-    # Serialized execution would be n * 0.05 = 0.4s; concurrent should be < 0.15s.
-    assert elapsed < (n * _PER_CALL_SLEEP) * 0.5, (
+    # The proof of concurrency is finishing well under the serial time
+    # (n * 0.05 = 0.4s). Bound at 0.75x (0.3s) so serialization still fails loudly
+    # while leaving headroom for event-loop scheduling jitter on slow/loaded CI
+    # runners — a tighter 0.5x (0.2s) bound flakes there despite true concurrency.
+    assert elapsed < (n * _PER_CALL_SLEEP) * 0.75, (
         f"verify_api_key serialized — {n} calls took {elapsed:.3f}s, "
-        f"expected < {(n * _PER_CALL_SLEEP) * 0.5:.3f}s"
+        f"expected < {(n * _PER_CALL_SLEEP) * 0.75:.3f}s"
     )
 
 

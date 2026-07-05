@@ -8,14 +8,21 @@ from typing import Any
 from botocore.exceptions import ClientError
 from prometheus_client import Counter
 
+from src.shared.encryption import decrypt, encrypt, is_encrypted
 from src.shared.object_store import (
     _S3_BUCKET,
-    download_json,
+    download_bytes,
     get_s3_client,
     upload_bytes,
 )
 
 logger = logging.getLogger(__name__)
+
+# Fat detail blobs hold the raw scanned-secret value (secretSnippet, raw.Secret)
+# and the surrounding code window, so they are encrypted at rest under their own
+# context. Legacy plaintext-JSON blobs are still read transparently (see below)
+# until the encrypt backfill rewrites them.
+_BLOB_CONTEXT = "finding_detail_blob"
 
 # Prometheus counters for finding detail blob operations
 finding_detail_blob_writes_total = Counter(
@@ -59,12 +66,22 @@ LEAN_KEYS: dict[str, set[str]] = {
         "guideline",
         "fingerprint",
     },
+    "agent_scanning": {
+        "checkId",
+        "ruleName",
+        "startLine",
+        "resource",
+        "severity",
+        "guideline",
+        "fingerprint",
+    },
     "dependencies_scanning": {
         "ecosystem",
         "advisoryId",
         "vulnerableVersionRange",
         "patchedVersion",
         "manifestPath",
+        "startLine",
         "currentVersion",
         "source",
         "scanner",
@@ -94,6 +111,9 @@ LEAN_KEYS: dict[str, set[str]] = {
         "imageTag",
         "imageDigest",
         "layerCount",
+        # layerIndex is lean so per-image "findings by layer" can aggregate in SQL.
+        "layerIndex",
+        "layerDigest",
         "sizeBytes",
         "baseOs",
         "currentVersion",
@@ -135,14 +155,35 @@ def build_blob_key(finding_id: int) -> str:
 
 
 def put_detail_blob(finding_id: int, fat: dict) -> str | None:
-    """Upload the fat dict to MinIO and return the key, or None if fat is empty."""
+    """Encrypt the fat dict and upload to MinIO; return the key, or None if empty."""
     if not fat:
         return None
     key = build_blob_key(finding_id)
-    data = json.dumps(fat, sort_keys=True).encode()
-    upload_bytes(key, data, content_type="application/json")
+    token = encrypt(json.dumps(fat, sort_keys=True), context=_BLOB_CONTEXT)
+    upload_bytes(key, token.encode(), content_type="application/octet-stream")
     finding_detail_blob_writes_total.inc()
     return key
+
+
+def _load_fat_blob(blob_key: str) -> dict | None:
+    """Download + decode a fat blob. Handles both encrypted blobs and legacy
+    plaintext-JSON blobs (written before at-rest encryption); returns None when
+    the object is missing or can't be read."""
+    raw = download_bytes(blob_key)
+    if raw is None:
+        return None
+    try:
+        text = raw.decode()
+        if is_encrypted(text):
+            # Lenient: an undecryptable blob degrades to lean detail rather than
+            # 500-ing the finding view. The multi-root fallback means this only
+            # trips if the encrypting root is truly gone.
+            text = decrypt(text, context=_BLOB_CONTEXT)
+            if not text:
+                return None
+        return json.loads(text)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
 
 
 def delete_detail_blob(key: str) -> None:
@@ -171,7 +212,7 @@ def hydrate_detail(row: Any) -> dict:
 
     logger.debug("hydrate_detail issued MinIO GET for finding id=%s key=%s — should not happen on list-shaped paths", getattr(row, "id", "?"), blob_key)
     finding_detail_blob_reads_total.inc()
-    fat = download_json(blob_key)
+    fat = _load_fat_blob(blob_key)
     if fat is None:
         logger.warning("hydrate_detail: blob missing for key %r (finding id=%s)", blob_key, getattr(row, "id", "?"))
         finding_detail_blob_read_misses_total.inc()

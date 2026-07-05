@@ -94,4 +94,11 @@ describe("RuleRow view-violations link", () => {
       "should gate the link on a > 0 check",
     )
   })
+
+  it("marks the unwired link as coming soon rather than a silent dead-end", () => {
+    // The action isn't wired yet; it must read as an intentional disabled
+    // preview (title/aria "coming soon"), not a broken link.
+    assert.match(src, /title="Coming soon"/)
+    assert.doesNotMatch(src, /TODO/)
+  })
 })

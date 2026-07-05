@@ -88,6 +88,8 @@ CATALOG: list[ConnectorType] = [
         icon_slug="slack",
         version="v0.1.0",
         status="beta",
+        # Delivered as a Slack notification destination — configured under Notifications.
+        href="/notifications/channels",
         config_fields=[
             ConfigField("webhook_url", "Webhook URL", "url", placeholder="https://hooks.slack.com/…", secret=True),
             ConfigField("channel", "Default channel", "text", required=False, placeholder="#security-alerts"),
@@ -100,7 +102,7 @@ CATALOG: list[ConnectorType] = [
         category="notifications",
         icon_slug="microsoft_teams",
         version="v0.1.0",
-        status="beta",
+        status="preview",
         enterprise_only=True,
         config_fields=[
             ConfigField("webhook_url", "Incoming webhook URL", "url", secret=True),
@@ -113,7 +115,7 @@ CATALOG: list[ConnectorType] = [
         category="notifications",
         icon_slug="pagerduty",
         version="v0.1.0",
-        status="beta",
+        status="preview",
         enterprise_only=True,
         config_fields=[
             ConfigField("integration_key", "Integration key", "password", secret=True),
@@ -127,7 +129,7 @@ CATALOG: list[ConnectorType] = [
         category="notifications",
         icon_slug="email",
         version="v0.1.0",
-        status="beta",
+        status="preview",
         config_fields=[
             ConfigField("to", "Recipients", "text", placeholder="alice@example.com, bob@example.com"),
         ],
@@ -140,7 +142,7 @@ CATALOG: list[ConnectorType] = [
         category="ticketing",
         icon_slug="jira",
         version="v0.1.0",
-        status="beta",
+        status="preview",
         enterprise_only=True,
         config_fields=[
             ConfigField("base_url", "Jira base URL", "url", placeholder="https://acme.atlassian.net"),
@@ -157,7 +159,7 @@ CATALOG: list[ConnectorType] = [
         category="ticketing",
         icon_slug="linear",
         version="v0.1.0",
-        status="beta",
+        status="preview",
         enterprise_only=True,
         config_fields=[
             ConfigField("api_key", "API key", "password", secret=True),
@@ -171,7 +173,7 @@ CATALOG: list[ConnectorType] = [
         category="ticketing",
         icon_slug="github",
         version="v0.1.0",
-        status="beta",
+        status="preview",
         enterprise_only=True,
         config_fields=[
             ConfigField("token", "Personal access token", "password", secret=True),
@@ -187,6 +189,8 @@ CATALOG: list[ConnectorType] = [
         icon_slug="webhook",
         version="v0.1.0",
         status="beta",
+        # Delivered as a webhook notification destination — configured under Notifications.
+        href="/notifications/channels",
         config_fields=[
             ConfigField("url", "Endpoint URL", "url", secret=False),
             ConfigField("secret", "Signing secret", "password", required=False, secret=True),
@@ -200,6 +204,7 @@ CATALOG: list[ConnectorType] = [
         icon_slug="key",
         version="v0.1.0",
         status="beta",
+        href="/settings/api-keys",
     ),
     # ── Runner ───────────────────────────────────────────────────────────────
     ConnectorType(

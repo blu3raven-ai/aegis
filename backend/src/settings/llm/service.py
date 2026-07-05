@@ -53,13 +53,13 @@ def upsert_llm_config(upsert: LlmConfigUpsert) -> None:
                     enabled=upsert.enabled,
                 )
             )
-            return
-        row.api_key_enc = api_key_enc
-        row.api_base_url = upsert.api_base_url
-        row.model = upsert.model
-        row.scan_token_budget = upsert.scan_token_budget
-        row.daily_token_budget = upsert.daily_token_budget
-        row.enabled = upsert.enabled
+        else:
+            row.api_key_enc = api_key_enc
+            row.api_base_url = upsert.api_base_url
+            row.model = upsert.model
+            row.scan_token_budget = upsert.scan_token_budget
+            row.daily_token_budget = upsert.daily_token_budget
+            row.enabled = upsert.enabled
 
     run_db(_q)
 

@@ -42,6 +42,23 @@ def repo_name_from_url(url: str) -> str:
     return path.rsplit("/", 1)[-1]
 
 
+def derive_html_url(repo_url: str) -> str:
+    """Derive a repo's web URL from its clone URL.
+
+    Strips any embedded ``user:pass@`` credentials (only for ``https://`` URLs)
+    and a trailing ``.git`` suffix, so the result is safe to expose and links to
+    the browsable repo. Host-agnostic: works for cloud and self-hosted SCM hosts.
+    """
+    url = repo_url
+    if url.startswith("https://") and "@" in url[len("https://"):].split("/", 1)[0]:
+        scheme, rest = url.split("://", 1)
+        host_path = rest.split("@", 1)[1]
+        url = f"{scheme}://{host_path}"
+    if url.endswith(".git"):
+        url = url[:-4]
+    return url
+
+
 def parse_repos(input_str: str) -> list[str]:
     """Accept comma- or newline-separated repos, or a path to a file with one per line."""
     if not input_str:
@@ -255,6 +272,49 @@ class JobEnv:
             return int(raw) if raw else default
         except ValueError:
             return default
+
+
+def build_llm_client(env: JobEnv):
+    """Construct an LLM client from job env, or None when no BYO key is configured.
+
+    The backend ships ``LLM_API_KEY`` (and friends) inside ``job['envVars']``,
+    not the runner process environment, so ``JobEnv.get`` is the only correct
+    read path.
+    """
+    from runner.verification.llm_client import LlmClient
+
+    api_key = env.get("LLM_API_KEY")
+    if not api_key:
+        return None
+    return LlmClient(
+        api_key=api_key,
+        api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
+        model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
+    )
+
+
+def build_escalation_llm_client(env: JobEnv):
+    """Optional frontier escalation client — ``None`` unless ``LLM_ESCALATION_MODEL``
+    is configured, so the tier is dormant by default.
+
+    Defaults to the same key/endpoint as the primary client (a stronger model on
+    the same provider), but ``LLM_ESCALATION_{API_KEY,BASE_URL}`` can point it at a
+    different provider (e.g. a local small default + a hosted frontier tier).
+    """
+    from runner.verification.llm_client import LlmClient
+
+    model = env.get("LLM_ESCALATION_MODEL")
+    api_key = env.get("LLM_ESCALATION_API_KEY") or env.get("LLM_API_KEY")
+    if not model or not api_key:
+        return None
+    return LlmClient(
+        api_key=api_key,
+        api_base_url=(
+            env.get("LLM_ESCALATION_BASE_URL")
+            or env.get("LLM_API_BASE_URL", "https://api.openai.com/v1")
+        ),
+        model=model,
+    )
 
 
 # ---------------------------------------------------------------------------

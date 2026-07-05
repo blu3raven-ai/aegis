@@ -168,6 +168,10 @@ export function SbomDependencyTree({
     }
     const componentMap = new Map<string, CycloneDxComponent>()
     for (const c of components) {
+      // The graph references components by bom-ref (dependsOn / metadata.component
+      // bom-ref), which often differs from the purl — index it first so tree
+      // nodes resolve their real name/version instead of falling back to the ref.
+      if (c.bomRef) componentMap.set(c.bomRef, c)
       if (c.purl) componentMap.set(c.purl, c)
       componentMap.set(c.name, c)
     }

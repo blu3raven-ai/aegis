@@ -6,13 +6,13 @@ import { IntegrationLogoMark } from "./IntegrationLogo";
 
 const STATUS_BADGE: Record<Integration["status"], string> = {
   stable:
-    "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]",
+    "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]",
   beta:
-    "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
+    "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]",
   preview:
     "bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]",
   deprecated:
-    "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
+    "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]",
 };
 
 const CATEGORY_LABEL: Record<string, string> = {

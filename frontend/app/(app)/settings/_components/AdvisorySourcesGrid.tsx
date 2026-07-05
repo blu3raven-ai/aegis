@@ -25,19 +25,23 @@ export interface AdvisorySourceHandlers {
 export interface AdvisorySourcesGridValues {
   nvd: AdvisorySourceState
   ghsa: AdvisorySourceState
-  argus: AdvisorySourceState
+  /** Only supplied when the Argus source card is rendered (see includeArgus). */
+  argus?: AdvisorySourceState
 }
 
 export interface AdvisorySourcesGridHandlers {
   nvd: AdvisorySourceHandlers
   ghsa: AdvisorySourceHandlers
-  argus: AdvisorySourceHandlers
+  argus?: AdvisorySourceHandlers
 }
 
 export interface AdvisorySourcesGridProps {
   values: AdvisorySourcesGridValues
   onChange: AdvisorySourcesGridHandlers
   canEdit: boolean
+  /** Render the Argus advisory-source card. Off where Argus is surfaced as its
+   *  own hosted-connection add-on instead of a per-scanner key. Default true. */
+  includeArgus?: boolean
 }
 
 function maskKey(key: string, hint?: string): string {
@@ -170,7 +174,7 @@ function NvdCard({ state, handlers, canEdit }: { state: AdvisorySourceState; han
           </div>
         </label>
         {enabled && (
-          <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-state-fixed)]">
+          <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-state-fixed-text)]">
             <StatusDot />
             Active
           </span>
@@ -216,7 +220,7 @@ function NvdCard({ state, handlers, canEdit }: { state: AdvisorySourceState; han
                 Without key: 5 req/30s
               </span>
               <span className="flex items-center gap-1">
-                <svg aria-hidden="true" className="h-3 w-3 text-[var(--color-state-fixed)]" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm11.28-1.72a.75.75 0 010 1.06l-4 4a.75.75 0 01-1.06 0l-2-2a.75.75 0 111.06-1.06L6.75 9.69l3.47-3.47a.75.75 0 011.06 0z" clipRule="evenodd" /></svg>
+                <svg aria-hidden="true" className="h-3 w-3 text-[var(--color-state-fixed-text)]" viewBox="0 0 16 16" fill="currentColor"><path fillRule="evenodd" d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm11.28-1.72a.75.75 0 010 1.06l-4 4a.75.75 0 01-1.06 0l-2-2a.75.75 0 111.06-1.06L6.75 9.69l3.47-3.47a.75.75 0 011.06 0z" clipRule="evenodd" /></svg>
                 With key: 50 req/30s
               </span>
             </div>
@@ -256,8 +260,8 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
         {enabled && (
           <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-medium ${
             hasKey
-              ? "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)]"
-              : "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]"
+              ? "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed-text)]"
+              : "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]"
           }`}>
             <StatusDot />
             {hasKey ? "Active" : "Needs key"}
@@ -266,7 +270,7 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
       </div>
       <div className={`space-y-3 transition-opacity ${enabled ? "" : "opacity-40 pointer-events-none"}`}>
         <FormField
-          label={<>GitHub PAT <span className="font-normal text-[var(--color-state-pending)]">(required)</span></>}
+          label={<>GitHub PAT <span className="font-normal text-[var(--color-state-pending-text)]">(required)</span></>}
           htmlFor="advisory-ghsa-key"
         >
           {!editingKey ? (
@@ -289,7 +293,7 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
                 errorState={enabled && !apiKey.trim()}
               />
               {missingKey && (
-                <p className="mt-1.5 flex items-center gap-1 text-xs text-[var(--color-state-pending)]">
+                <p className="mt-1.5 flex items-center gap-1 text-xs text-[var(--color-state-pending-text)]">
                   <WarningIcon />
                   A GitHub PAT is required to query the advisory database.
                 </p>
@@ -370,8 +374,8 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
         {enabled && (
           <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-medium ${
             hasKey
-              ? "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)]"
-              : "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]"
+              ? "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed-text)]"
+              : "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]"
           }`}>
             <StatusDot />
             {hasKey ? "Active" : "Needs key"}
@@ -380,7 +384,7 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
       </div>
       <div className={`space-y-3 transition-opacity ${enabled ? "" : "opacity-40 pointer-events-none"}`}>
         <FormField
-          label={<>API Key <span className="font-normal text-[var(--color-state-pending)]">(required)</span></>}
+          label={<>API Key <span className="font-normal text-[var(--color-state-pending-text)]">(required)</span></>}
           htmlFor="advisory-argus-key"
         >
           {!editingKey ? (
@@ -403,7 +407,7 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
                 errorState={enabled && !apiKey.trim()}
               />
               {missingKey && (
-                <p className="mt-1.5 flex items-center gap-1 text-xs text-[var(--color-state-pending)]">
+                <p className="mt-1.5 flex items-center gap-1 text-xs text-[var(--color-state-pending-text)]">
                   <WarningIcon />
                   An API key is required to use Argus enrichment.
                 </p>
@@ -426,19 +430,21 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
   )
 }
 
-export function AdvisorySourcesGrid({ values, onChange, canEdit }: AdvisorySourcesGridProps) {
+export function AdvisorySourcesGrid({ values, onChange, canEdit, includeArgus = true }: AdvisorySourcesGridProps) {
   const { addons } = useLicense()
   const hasArgusLicense = addons?.includes("argus") ?? false
+  const showArgus = includeArgus && values.argus && onChange.argus
 
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+    <div className={`grid grid-cols-1 gap-6 md:grid-cols-2 ${showArgus ? "lg:grid-cols-3" : ""}`}>
       <NvdCard state={values.nvd} handlers={onChange.nvd} canEdit={canEdit} />
       <GhsaCard state={values.ghsa} handlers={onChange.ghsa} canEdit={canEdit} />
-      {hasArgusLicense ? (
-        <ArgusCard state={values.argus} handlers={onChange.argus} canEdit={canEdit} />
-      ) : (
-        <ArgusUnlicensedCard />
-      )}
+      {showArgus &&
+        (hasArgusLicense ? (
+          <ArgusCard state={values.argus!} handlers={onChange.argus!} canEdit={canEdit} />
+        ) : (
+          <ArgusUnlicensedCard />
+        ))}
     </div>
   )
 }

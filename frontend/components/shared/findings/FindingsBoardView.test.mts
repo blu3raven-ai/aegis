@@ -35,15 +35,15 @@ describe("FindingsBoardView filter bar additions", () => {
     assert.match(src, /repoOptions=\{repoOptions\}/)
   })
 
-  it("drops the scanner NavTabs in favour of per-scanner-group pagination", () => {
+  it("scopes scanner via the command-bar filter, not scanner NavTabs", () => {
     // The scanner tabs (#1014) are removed everywhere; scanner scoping now comes
-    // from per-scanner-group pagination so each group paginates independently and
-    // none can be buried. The command bar never carried a scanner control either.
+    // from a command-bar filter (scanner={scannerFilter}) plus per-scanner-group
+    // pagination for the unfiltered "all" view so each group paginates independently.
     assert.doesNotMatch(src, /NavTabs/)
     assert.doesNotMatch(src, /scannerTabs/)
     assert.doesNotMatch(src, /scannerCounts/)
-    assert.doesNotMatch(src, /scanner=\{scannerFilter\}/)
-    assert.doesNotMatch(src, /onScannerChange/)
+    assert.match(src, /scanner=\{scannerFilter\}/)
+    assert.match(src, /onScannerChange=\{/)
   })
 
   it("derives a perScannerMode and paginates each scanner group independently", () => {
@@ -192,19 +192,19 @@ describe("FindingsBoardView verification + reachability wiring", () => {
     assert.match(src, /reachability: d\.reachability \?\? curr\.reachability/)
   })
 
-  it("renders the EvidenceSection with the verification props + Argus gating", () => {
+  it("renders the EvidenceSection with the verification props + gating", () => {
     assert.match(src, /<EvidenceSection/)
     assert.match(src, /verdict=\{selectedFinding\.verdict\}/)
     assert.match(src, /evidence=\{selectedFinding\.evidence\}/)
     assert.match(src, /exploitChain=\{selectedFinding\.exploitChain\}/)
     assert.match(src, /metadata=\{selectedFinding\.verificationMetadata\}/)
-    assert.match(src, /argusEnabled=\{argusConnected\}/)
-    assert.match(src, /verifiable=\{ARGUS_VERIFIABLE_SCANNERS\.has\(selectedFinding\.scanner\)\}/)
+    assert.match(src, /verificationEnabled=\{verificationEnabled\}/)
+    assert.match(src, /verifiable=\{VERIFIABLE_SCANNERS\.has\(selectedFinding\.scanner\)\}/)
   })
 
-  it("derives the Argus-enabled signal from the Argus connection status", () => {
-    assert.match(src, /fetch\("\/api\/v1\/settings\/argus"\)/)
-    assert.match(src, /setArgusConnected\(Boolean\(data\.connected\)\)/)
+  it("derives the verification-enabled signal from the LLM config status", () => {
+    assert.match(src, /fetch\("\/api\/v1\/settings\/llm"\)/)
+    assert.match(src, /setVerificationEnabled\(Boolean\(data\.enabled\)\)/)
   })
 
   it("renders the References section from the finding's cve + cwe + advisory refs", () => {
@@ -238,8 +238,12 @@ describe("FindingsBoardView deep-link (?finding=<id>)", () => {
     assert.match(src, /\}, \[initialFindingId\]\)/)
   })
 
-  it("swallows an out-of-scope / missing id instead of throwing", () => {
-    assert.match(src, /out-of-scope \/ missing id: leave the list as-is/)
+  it("surfaces a missing/out-of-scope id via a notice instead of throwing or a 404", () => {
+    // The catch sets the notice flag rather than dead-ending; one message
+    // covers missing and out-of-scope so the id's existence isn't leaked.
+    assert.match(src, /setDeepLinkMissing\(true\)/)
+    assert.match(src, /deepLinkMissing &&/)
+    assert.match(src, /no longer exists or isn’t in your scope/)
   })
 })
 
@@ -257,11 +261,27 @@ describe("FindingsBoardView advisory Security Brief wiring", () => {
   it("lazily fetches the advisory per finding and clears it on navigation", () => {
     assert.match(src, /const \[advisory, setAdvisory\] = useState<FindingAdvisory \| null>\(null\)/)
     assert.match(src, /setAdvisory\(null\)/)
-    assert.match(src, /getFindingAdvisory\(id\)\.then\(\(a\) => \{ if \(active\) setAdvisory\(a\) \}\)/)
+    assert.match(src, /getFindingAdvisory\(id\)\s*\.then\(\(a\) => \{ if \(active\) setAdvisory\(a\) \}\)/)
+  })
+
+  it("surfaces a detail-fetch failure instead of silently showing the lean row", () => {
+    assert.match(src, /setDetailError\(e instanceof Error \? e\.message : String\(e\)\)/)
+    assert.match(src, /detailError && \(/)
+    assert.match(src, /Couldn&apos;t load the full detail/)
+  })
+
+  it("surfaces an advisory-fetch failure visibly", () => {
+    assert.match(src, /setAdvisoryError\(e instanceof Error \? e\.message : String\(e\)\)/)
+    assert.match(src, /advisoryError && \(/)
   })
 
   it("renders the Security Brief section with the fetched advisory", () => {
     assert.match(src, /<SecurityBriefSection advisory=\{advisory\}/)
+  })
+
+  it("shows the affected package as its own field", () => {
+    assert.match(src, /selectedFinding\.package && \(/)
+    assert.match(src, /Package<\/dt>/)
   })
 })
 
@@ -309,5 +329,33 @@ describe("FindingsBoardView blast-radius wiring", () => {
 
   it("renders the BlastRadiusSection with the finding id and count", () => {
     assert.match(src, /<BlastRadiusSection\s+findingId=\{Number\(selectedFinding\.id\)\}\s+count=\{selectedFinding\.alsoAffectsRepos\}/)
+  })
+})
+
+describe("FindingsBoardView URL sync", () => {
+  it("mirrors filters into the URL via replaceState, gated on the opt-in syncUrl prop", () => {
+    assert.match(src, /if \(!syncUrl \|\| typeof window === "undefined"\) return/)
+    assert.match(src, /window\.history\.replaceState\(null, ""/)
+  })
+
+  it("only syncs keys that round-trip — collapsed and page are excluded", () => {
+    const block = src.match(/const URL_SYNC_KEYS = \[([\s\S]*?)\] as const/)
+    assert.ok(block, "URL_SYNC_KEYS must be defined")
+    for (const key of ["severity", "scanner", "state", "repo", "q", "sort", "age", "cwe", "kev", "epss_min", "bands", "assignee"]) {
+      assert.ok(block![1].includes(`"${key}"`), `URL_SYNC_KEYS must include ${key}`)
+    }
+    assert.doesNotMatch(block![1], /"collapsed"|"page"/)
+  })
+
+  it("hydrates the full filter set on mount from initial props (not just the primary chips)", () => {
+    assert.match(src, /readFromSet<SortKey>\(\{ sort: initialSort \?\? "" \}/)
+    assert.match(src, /readFromSet<AgePresetKey>\(\{ age: initialAge \?\? "" \}/)
+    assert.match(src, /cwe: initialCwe \|\| null/)
+    assert.match(src, /assigneeUserId: initialAssignee \|\| null/)
+    assert.match(src, /initialBands/)
+  })
+
+  it("preserves the open drawer in the URL as ?finding=<id>", () => {
+    assert.match(src, /if \(selectedId != null\) params\.set\("finding", String\(selectedId\)\)/)
   })
 })

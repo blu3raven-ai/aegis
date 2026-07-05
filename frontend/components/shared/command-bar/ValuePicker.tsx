@@ -273,7 +273,7 @@ function NumericInput({
         placeholder={placeholder}
       />
       {error && (
-        <div role="alert" className="mt-1 text-2xs text-[var(--color-severity-critical)]">
+        <div role="alert" className="mt-1 text-2xs text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}

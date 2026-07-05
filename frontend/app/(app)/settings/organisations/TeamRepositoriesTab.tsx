@@ -70,7 +70,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
               <div className="flex flex-1 items-center gap-2 min-w-0">
                 <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{asset.displayName}</span>
                 {sharedTeamCount > 1 && (
-                  <span className="rounded bg-[var(--color-state-pending-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-state-pending)] whitespace-nowrap">
+                  <span className="rounded bg-[var(--color-state-pending-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-state-pending-text)] whitespace-nowrap">
                     shared with {sharedTeamCount} teams
                   </span>
                 )}
@@ -85,7 +85,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
                 variant="secondary"
                 size="sm"
                 onClick={() => void removeRepository(asset.assetId)}
-                className="border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+                className="border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical-text)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
                 title={isGitHubSourced ? "This repository is synced from a source connection and cannot be manually removed" : undefined}
               >
                 Remove

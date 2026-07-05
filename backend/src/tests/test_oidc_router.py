@@ -16,7 +16,6 @@ os.environ.setdefault(
     "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test"
 )
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -52,7 +51,7 @@ def test_redirect_uri_built_from_request_origin():
     # The redirect_uri must match what was registered at the IdP, derived from
     # the request's scheme+host.
     with patch(_MOD + ".run_db", _run_db(cfg=None)):
-        resp = _client().get(_LOGIN, follow_redirects=False, headers={"host": "aegis.example"})
+        _client().get(_LOGIN, follow_redirects=False, headers={"host": "aegis.example"})
     # cfg=None short-circuits, but the helper itself is exercised below directly.
     req = SimpleNamespace(url=SimpleNamespace(scheme="https", netloc="aegis.example"), headers={"host": "aegis.example"})
     assert _redirect_uri(req) == "https://aegis.example/auth/sso/oidc/callback"
@@ -144,7 +143,7 @@ def test_callback_token_exchange_failure_is_rejected():
 def test_callback_account_conflict_redirects_to_conflict():
     client = _client()
     client.cookies.set(_COOKIE, "tok")
-    identity = SimpleNamespace(subject="sub-1", email="a@acme.test")
+    identity = SimpleNamespace(subject="sub-1", email="a@acme.test", email_verified=True)
     with patch(_MOD + ".run_db", _run_db(do_ok=False)), \
             patch(_MOD + ".decode_state", return_value={"state": "s", "nonce": "n"}), \
             patch(_MOD + ".exchange_code", AsyncMock(return_value=identity)):
@@ -155,7 +154,7 @@ def test_callback_account_conflict_redirects_to_conflict():
 def test_callback_success_redirects_home_and_clears_cookie():
     client = _client()
     client.cookies.set(_COOKIE, "tok")
-    identity = SimpleNamespace(subject="sub-1", email="a@acme.test")
+    identity = SimpleNamespace(subject="sub-1", email="a@acme.test", email_verified=True)
     with patch(_MOD + ".run_db", _run_db(do_ok=True)), \
             patch(_MOD + ".decode_state", return_value={"state": "s", "nonce": "n"}), \
             patch(_MOD + ".exchange_code", AsyncMock(return_value=identity)):

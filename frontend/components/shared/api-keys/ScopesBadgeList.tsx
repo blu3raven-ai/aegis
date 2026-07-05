@@ -2,7 +2,7 @@ export const AVAILABLE_SCOPES = [
   { value: "read:findings", label: "Read findings" },
   { value: "write:findings", label: "Write findings" },
   { value: "read:runs", label: "Read scan runs" },
-  { value: "trigger:scans", label: "Trigger scans" },
+  { value: "scan:trigger", label: "Trigger scans" },
 ] as const
 
 export function ScopesBadgeList({ scopes }: { scopes: string[] }) {

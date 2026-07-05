@@ -25,9 +25,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.audit_log.recorder import ActorInfo, AuditRecorder, RequestContext
 from src.auth.authentication.cookies import (
+    MFA_PENDING_COOKIE_NAME,
     SESSION_COOKIE_NAME,
     clear_auth_cookies,
+    clear_mfa_pending_cookie,
     set_csrf_cookie,
+    set_mfa_pending_cookie,
     set_session_cookie,
 )
 from src.auth.authentication.csrf import compute_csrf_token
@@ -37,11 +40,17 @@ from src.db.models import User
 from src.authz.roles.service import role_kind_from_id
 from src.shared.config import get_session_secret
 from src.shared.passwords import hash_password, verify_password
+from src.shared.encryption import DecryptionError
 from src.shared.totp import verify_totp
 
 _logger = logging.getLogger(__name__)
 
 PENDING_MFA_TTL_SECONDS = 5 * 60
+
+# A pending-MFA token is burned after this many wrong codes so a stolen
+# password can't be paired with an unbounded second-factor guessing spree
+# against a single long-lived token.
+MAX_MFA_ATTEMPTS = 5
 
 # In-memory pending-MFA store. PR 1 — for prod, swap to Postgres or a signed
 # stateless token in PR 3 if multi-worker survival becomes a requirement.
@@ -112,7 +121,7 @@ class LoginRequest(BaseModel):
 
 
 class LoginVerifyRequest(BaseModel):
-    pending_token: str = Field(min_length=1)
+    # The pending-MFA token now rides in an HttpOnly cookie, not the body.
     code: str = Field(min_length=6, max_length=6)
 
 
@@ -162,8 +171,12 @@ async def login(
         _pending_mfa[pending_token] = {
             "user_id": user.id,
             "expires_at": datetime.now(timezone.utc) + timedelta(seconds=PENDING_MFA_TTL_SECONDS),
+            "attempts": 0,
         }
-        return {"mfa_required": True, "pending_token": pending_token}
+        # Hand the token back as an HttpOnly cookie, never in the body — page JS
+        # (and any XSS) must not be able to read or exfiltrate it.
+        set_mfa_pending_cookie(response, token=pending_token, max_age=PENDING_MFA_TTL_SECONDS)
+        return {"mfa_required": True}
 
     return await _issue_session(user=user, response=response, request=request, db=db)
 
@@ -175,21 +188,51 @@ async def login_verify(
     response: Response,
     db: AsyncSession = Depends(_get_db),
 ):
-    pending = _pending_mfa.get(payload.pending_token)
+    # IP rate-limit runs first so a cookie-less brute force of this endpoint is
+    # still throttled, then the token check.
+    await _rate_limit_ip(request, db)
+    pending_token = request.cookies.get(MFA_PENDING_COOKIE_NAME)
+    if not pending_token:
+        await db.commit()
+        raise HTTPException(status_code=401, detail="invalid credentials")
+    await _rate_limit_user(pending_token, db)
+    await db.commit()
+
+    pending = _pending_mfa.get(pending_token)
     if pending is None or pending["expires_at"] < datetime.now(timezone.utc):
-        _pending_mfa.pop(payload.pending_token, None)
+        _pending_mfa.pop(pending_token, None)
+        clear_mfa_pending_cookie(response)
         raise HTTPException(status_code=401, detail="invalid credentials")
 
     result = await db.execute(select(User).where(User.id == pending["user_id"]))
     user = result.scalar_one_or_none()
     if user is None:
-        _pending_mfa.pop(payload.pending_token, None)
+        _pending_mfa.pop(pending_token, None)
+        clear_mfa_pending_cookie(response)
         raise HTTPException(status_code=401, detail="invalid credentials")
 
-    if not verify_totp(user.totp_secret or "", payload.code):
+    try:
+        totp_ok = verify_totp(user.totp_secret or "", payload.code)
+    except DecryptionError:
+        # The stored 2FA secret can't be decrypted (encryption key changed) — do
+        # NOT treat this as a wrong code (which would lock the user out with a
+        # misleading message). Surface a clear, distinct server error instead.
+        _logger.error("verify_totp: stored TOTP secret could not be decrypted for user %s", user.id)
+        raise HTTPException(
+            status_code=503,
+            detail="Two-factor verification is temporarily unavailable. Contact your administrator.",
+        ) from None
+    if not totp_ok:
+        # Burn the token after too many wrong codes so the attacker must
+        # re-authenticate with the password to obtain a fresh one.
+        pending["attempts"] = pending.get("attempts", 0) + 1
+        if pending["attempts"] >= MAX_MFA_ATTEMPTS:
+            _pending_mfa.pop(pending_token, None)
+            clear_mfa_pending_cookie(response)
         raise HTTPException(status_code=401, detail="invalid credentials")
 
-    _pending_mfa.pop(payload.pending_token, None)
+    _pending_mfa.pop(pending_token, None)
+    clear_mfa_pending_cookie(response)
 
     return await _issue_session(user=user, response=response, request=request, db=db)
 

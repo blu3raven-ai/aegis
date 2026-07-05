@@ -10,7 +10,10 @@ All endpoints are gated on MANAGE_SETTINGS.
 """
 from __future__ import annotations
 
+import contextlib
 import os
+from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -18,7 +21,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.authz.enforcement.dependencies import Permission  # noqa: E402
 from src.authz.permissions.catalog import MANAGE_SETTINGS  # noqa: E402
@@ -69,6 +72,86 @@ def test_osv_refresh_endpoint_403_without_permission(forbidden_client):
     with patch("src.authz.enforcement.dependencies.has_role_permission",
                return_value=False):
         resp = forbidden_client.post("/api/v1/enrichment/osv/refresh")
+
+    assert resp.status_code == 403
+
+
+# ---- status ----
+
+class _FakeResult:
+    def __init__(self, scalar_one):
+        self._scalar_one = scalar_one
+
+    def scalar_one_or_none(self):
+        return self._scalar_one
+
+
+class _FakeSession:
+    """Minimal async session: one execute() for the last-run row, then scalar()
+    calls in the endpoint's order (osv count, epss count, epss fetched, kev
+    count, kev ingested)."""
+
+    def __init__(self, run, scalars):
+        self._run = run
+        self._scalars = list(scalars)
+
+    async def execute(self, _stmt):
+        return _FakeResult(self._run)
+
+    async def scalar(self, _stmt):
+        return self._scalars.pop(0)
+
+
+def _fake_session_cm(run, scalars):
+    @contextlib.asynccontextmanager
+    async def _cm():
+        yield _FakeSession(run, scalars)
+
+    return _cm
+
+
+def test_status_reports_feed_freshness_and_counts(client):
+    run = SimpleNamespace(
+        finished_at=datetime(2026, 7, 1, 2, 5, tzinfo=timezone.utc),
+        started_at=datetime(2026, 7, 1, 2, 0, tzinfo=timezone.utc),
+        error=None,
+    )
+    epss_fetched = datetime(2026, 7, 1, 3, 15, tzinfo=timezone.utc)
+    kev_ingested = datetime(2026, 7, 1, 3, 0, tzinfo=timezone.utc)
+    scalars = [84120, 250000, epss_fetched, 1300, kev_ingested]
+    with patch("src.authz.enforcement._resolve_effective_permissions",
+               return_value=_ADMIN_PERMS), \
+         patch("src.enrichment.router.get_session", _fake_session_cm(run, scalars)):
+        resp = client.get("/api/v1/enrichment/status")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["osv"]["advisories"] == 84120
+    assert body["osv"]["lastRefreshedAt"] == "2026-07-01T02:05:00+00:00"
+    assert body["osv"]["error"] is None
+    assert body["epss"]["scores"] == 250000
+    assert body["epss"]["lastRefreshedAt"] == "2026-07-01T03:15:00+00:00"
+    assert body["kev"]["entries"] == 1300
+
+
+def test_status_handles_never_refreshed_mirror(client):
+    scalars = [0, 0, None, 0, None]
+    with patch("src.authz.enforcement._resolve_effective_permissions",
+               return_value=_ADMIN_PERMS), \
+         patch("src.enrichment.router.get_session", _fake_session_cm(None, scalars)):
+        resp = client.get("/api/v1/enrichment/status")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["osv"] == {"advisories": 0, "lastRefreshedAt": None, "startedAt": None, "error": None}
+    assert body["epss"]["lastRefreshedAt"] is None
+    assert body["kev"]["entries"] == 0
+
+
+def test_status_403_without_permission(forbidden_client):
+    with patch("src.authz.enforcement.dependencies.has_role_permission",
+               return_value=False):
+        resp = forbidden_client.get("/api/v1/enrichment/status")
 
     assert resp.status_code == 403
 

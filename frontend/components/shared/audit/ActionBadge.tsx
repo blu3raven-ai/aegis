@@ -35,18 +35,18 @@ function categorise(action: string): ActionCategory {
     case "notification":
       return { label: "Notification", icon: ICON_BELL, bg: "bg-[var(--color-accent)]/10", text: "text-[var(--color-accent)]" }
     case "correlation":
-      return { label: "Correlation", icon: ICON_GRAPH, bg: "bg-[var(--color-severity-medium)]/10", text: "text-[var(--color-severity-medium)]" }
+      return { label: "Correlation", icon: ICON_GRAPH, bg: "bg-[var(--color-severity-medium)]/10", text: "text-[var(--color-severity-medium-text)]" }
     case "integration":
       return { label: "Integration", icon: ICON_PUZZLE, bg: "bg-[var(--color-state-dismissed)]/10", text: "text-[var(--color-state-dismissed)]" }
     case "auth":
     case "sso":
-      return { label: "Auth", icon: ICON_KEY, bg: "bg-[var(--color-severity-high)]/10", text: "text-[var(--color-severity-high)]" }
+      return { label: "Auth", icon: ICON_KEY, bg: "bg-[var(--color-severity-high)]/10", text: "text-[var(--color-severity-high-text)]" }
     case "user":
     case "member":
-      return { label: "User", icon: ICON_USER, bg: "bg-[var(--color-status-ok)]/10", text: "text-[var(--color-status-ok)]" }
+      return { label: "User", icon: ICON_USER, bg: "bg-[var(--color-status-ok)]/10", text: "text-[var(--color-status-ok-text)]" }
     case "role":
     case "permission":
-      return { label: "Role", icon: ICON_SHIELD, bg: "bg-[var(--color-severity-critical)]/10", text: "text-[var(--color-severity-critical)]" }
+      return { label: "Role", icon: ICON_SHIELD, bg: "bg-[var(--color-severity-critical)]/10", text: "text-[var(--color-severity-critical-text)]" }
     default:
       return { label: "System", icon: ICON_WRENCH, bg: "bg-[var(--color-border-strong)]", text: "text-[var(--color-text-secondary)]" }
   }

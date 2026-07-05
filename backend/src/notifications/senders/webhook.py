@@ -22,6 +22,7 @@ from typing import Any
 from src.connectors.base import BaseSender, SendResult, TestResult
 from src.connectors.http import default_client
 from src.connectors.registry import register_connector
+from src.notifications.url_guard import UnsafeURLError, assert_sendable_url
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,11 @@ class GenericWebhookSender(BaseSender):
             return SendResult(success=False, error="webhook config missing url")
 
         try:
+            assert_sendable_url(url)
+        except UnsafeURLError:
+            return SendResult(success=False, error="blocked: destination URL is not permitted")
+
+        try:
             body = json.dumps(payload, default=str).encode()
             headers: dict[str, str] = {"Content-Type": "application/json"}
 
@@ -66,7 +72,7 @@ class GenericWebhookSender(BaseSender):
             ]
 
             if active_raws:
-                # Phase 44: Stripe-style versioned HMAC headers
+                # Phase 44: versioned HMAC signature headers
                 from src.notifications.webhook_signing import build_signing_headers
                 signing_hdrs = build_signing_headers(payload, active_raws)
                 headers.update(signing_hdrs)
@@ -84,10 +90,12 @@ class GenericWebhookSender(BaseSender):
                 resp = client.post(url, content=body, headers=headers)
             if 200 <= resp.status_code < 300:
                 return SendResult(success=True, response_code=resp.status_code)
+            # Record only the status code — never the response body, which an
+            # attacker-controlled internal endpoint could use as an exfil oracle.
             return SendResult(
                 success=False,
                 response_code=resp.status_code,
-                error=f"webhook returned {resp.status_code}: {resp.text[:200]}",
+                error=f"webhook returned status {resp.status_code}",
             )
         except Exception as exc:
             logger.warning("GenericWebhookSender.send error: %s", exc)

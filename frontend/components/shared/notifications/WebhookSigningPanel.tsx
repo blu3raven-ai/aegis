@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import type { SigningSecretMeta, RotateSecretResponse } from "@/lib/client/webhook-signing-api"
 import { listSigningSecrets, rotateSigningSecret, revokeSigningSecret } from "@/lib/client/webhook-signing-api"
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
 import { Button } from "@/components/ui/Button"
 import { Sheet } from "@/components/ui/Sheet"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
@@ -66,8 +67,8 @@ function CopyButton({ text }: { text: string }) {
 
 function StatusBadge({ status }: { status: SigningSecretMeta["status"] }) {
   const styles: Record<SigningSecretMeta["status"], string> = {
-    active: "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]",
-    rotating: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
+    active: "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]",
+    rotating: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]",
     revoked: "bg-[var(--color-border)] text-[var(--color-text-tertiary)]",
   }
   return (
@@ -157,7 +158,7 @@ function RotateModal({ open, destId, onClose, onRotated }: RotateModalProps) {
     >
       {!result ? (
         error && (
-          <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+          <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
         )
       ) : (
         <>
@@ -252,11 +253,11 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
       )}
 
       {error && (
-        <p className="text-xs text-[var(--color-severity-critical)]">{error}</p>
+        <p className="text-xs text-[var(--color-severity-critical-text)]">{error}</p>
       )}
 
       {revokeError && (
-        <p className="text-xs text-[var(--color-severity-critical)]">{revokeError}</p>
+        <p className="text-xs text-[var(--color-severity-critical-text)]">{revokeError}</p>
       )}
 
       {!loading && secrets.length === 0 && (
@@ -276,11 +277,11 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
                 </span>
                 <StatusBadge status={s.status} />
                 <span className="text-[11px] text-[var(--color-text-tertiary)]">
-                  Created {new Date(s.created_at).toLocaleDateString()}
+                  Created {new Date(s.created_at).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })}
                 </span>
                 {s.revoked_at && (
                   <span className="text-[11px] text-[var(--color-text-tertiary)]">
-                    · Revoked {new Date(s.revoked_at).toLocaleDateString()}
+                    · Revoked {new Date(s.revoked_at).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })}
                   </span>
                 )}
               </div>
@@ -291,7 +292,7 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
                   onClick={() => { void handleRevoke(s.version) }}
                   disabled={revoking === s.version}
                   aria-label={`Revoke version ${s.version}`}
-                  className="text-[var(--color-severity-critical)] hover:underline hover:text-[var(--color-severity-critical)]"
+                  className="text-[var(--color-severity-critical-text)] hover:underline hover:text-[var(--color-severity-critical-text)]"
                 >
                   {revoking === s.version ? "Revoking…" : "Revoke"}
                 </Button>

@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
+os.environ.setdefault("APP_SECRET", Fernet.generate_key().decode())
 
 from src.authz.enforcement.dependencies import Permission  # noqa: E402
 from src.authz.permissions.catalog import MANAGE_SETTINGS  # noqa: E402

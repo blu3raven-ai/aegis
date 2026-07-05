@@ -28,3 +28,17 @@ export const VERDICT_ORDER: Record<Verdict, number> = {
   possible: 2,
   ruled_out: 3,
 }
+
+/**
+ * Valid `?verdict=` URL / saved-view tokens. `null` (absent) is the default
+ * "all open" view, which excludes `ruled_out`; `"all"` disables the filter.
+ * Mirrors the backend `_VALID_VERDICT_FILTERS`.
+ */
+export const VALID_VERDICT_FILTERS = new Set<string>([
+  "confirmed", "needs_verify", "possible", "ruled_out", "legacy", "all",
+])
+
+/** Parse a raw URL/state token into a VerdictFilter, or null if absent/invalid. */
+export function parseVerdictFilter(raw: string | null | undefined): VerdictFilter {
+  return raw && VALID_VERDICT_FILTERS.has(raw) ? (raw as VerdictFilter) : null
+}

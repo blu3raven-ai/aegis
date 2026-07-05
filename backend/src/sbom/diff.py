@@ -13,7 +13,7 @@ from dataclasses import dataclass
 class ComponentDiff:
     added: list[dict]           # components present in `to` but not `from`
     removed: list[dict]         # components present in `from` but not `to`
-    version_changed: list[dict] # {"name", "from_version", "to_version", "purl"}
+    version_changed: list[dict] # {"name", "type", "from_version", "to_version", "purl"}
     unchanged_count: int
 
 
@@ -93,6 +93,9 @@ def diff_sboms(from_sbom: dict, to_sbom: dict) -> ComponentDiff:
                         {
                             "name": key[0],
                             "purl": key[1],
+                            # Ecosystem/type of the bumped package (same on both
+                            # sides); mirrors what added/removed rows carry.
+                            "type": t.get("type") or f.get("type"),
                             "from_version": f.get("version"),
                             "to_version": t.get("version"),
                             # Raw CycloneDX licenses[] from each side, classified

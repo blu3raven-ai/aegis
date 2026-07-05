@@ -190,3 +190,139 @@ async def test_posture_trend_clamps_days_to_safe_range(scoped_ctx):
 
     assert svc.call_args_list[0].kwargs["days"] == 365
     assert svc.call_args_list[1].kwargs["days"] == 7
+
+
+# ── scannerBreakdown ───────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_scanner_breakdown_empty_scope_returns_empty(empty_scope_ctx):
+    with patch("src.posture.resolvers.get_scanner_breakdown", return_value=[]) as svc:
+        result = await PostureQuery().scanner_breakdown(_info())
+    assert result == []
+    assert svc.call_args.kwargs["asset_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_scanner_breakdown_returns_shape(scoped_ctx):
+    rows = [
+        {
+            "scanner": "code_scanning", "critical": 1, "high": 0, "medium": 2,
+            "low": 3, "total": 6, "risk_score": 18, "sla_breached": 1,
+        },
+    ]
+    with patch("src.posture.resolvers.get_scanner_breakdown", return_value=rows) as svc:
+        result = await PostureQuery().scanner_breakdown(_info())
+
+    assert svc.call_args.kwargs["asset_ids"] == ["asset-1", "asset-2"]
+    assert len(result) == 1
+    assert result[0].scanner == "code_scanning"
+    assert result[0].risk_score == 18
+    assert result[0].sla_breached == 1
+
+
+# ── riskContributions ──────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_risk_contributions_empty_scope_returns_empty(empty_scope_ctx):
+    with patch("src.posture.resolvers.get_risk_contributions", return_value=[]) as svc:
+        result = await PostureQuery().risk_contributions(_info(), dimension="scanner")
+    assert result == []
+    assert svc.call_args.kwargs["asset_ids"] == []
+
+
+@pytest.mark.asyncio
+async def test_risk_contributions_bad_dimension_raises(scoped_ctx):
+    from graphql import GraphQLError
+    with pytest.raises(GraphQLError):
+        await PostureQuery().risk_contributions(_info(), dimension="bogus")
+
+
+@pytest.mark.asyncio
+async def test_risk_contributions_returns_shape(scoped_ctx):
+    rows = [
+        {
+            "dimension": "scanner", "label": "deps", "risk_score": 50,
+            "count": 10, "percentage": 60,
+        },
+    ]
+    with patch("src.posture.resolvers.get_risk_contributions", return_value=rows) as svc:
+        result = await PostureQuery().risk_contributions(_info(), dimension="scanner")
+
+    assert svc.call_args.kwargs["asset_ids"] == ["asset-1", "asset-2"]
+    assert svc.call_args.kwargs["dimension"] == "scanner"
+    assert result[0].label == "deps"
+    assert result[0].risk_score == 50
+    assert result[0].percentage == 60
+
+
+# ── exploitabilitySummary ──────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_exploitability_summary_empty_scope_returns_zeros(empty_scope_ctx):
+    data = {"kev_count": 0, "high_epss_count": 0, "epss_top": []}
+    with patch("src.posture.resolvers.get_exploitability_summary", return_value=data) as svc:
+        result = await PostureQuery().exploitability_summary(_info())
+    assert svc.call_args.kwargs["asset_ids"] == []
+    assert result.kev_count == 0
+    assert result.high_epss_count == 0
+    assert result.epss_top == []
+
+
+@pytest.mark.asyncio
+async def test_exploitability_summary_returns_shape(scoped_ctx):
+    data = {
+        "kev_count": 3,
+        "high_epss_count": 7,
+        "epss_top": [
+            {
+                "finding_id": 42, "tool": "deps", "repo": "acme/api",
+                "severity": "critical", "identity_key": "CVE-2024-1234",
+                "cve": "CVE-2024-1234", "epss_score": 0.92,
+                "epss_percentile": 0.97, "scored_date": "2026-06-01",
+            },
+        ],
+    }
+    with patch("src.posture.resolvers.get_exploitability_summary", return_value=data) as svc:
+        result = await PostureQuery().exploitability_summary(_info())
+
+    assert svc.call_args.kwargs["asset_ids"] == ["asset-1", "asset-2"]
+    assert result.kev_count == 3
+    assert result.high_epss_count == 7
+    assert len(result.epss_top) == 1
+    assert result.epss_top[0].cve == "CVE-2024-1234"
+    assert result.epss_top[0].epss_percentile == pytest.approx(0.97)
+
+
+# ── slaPosture ─────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_sla_posture_empty_scope_returns_zeros(empty_scope_ctx):
+    data = {
+        "total_breached": 0, "critical_breached": 0, "high_breached": 0,
+        "medium_breached": 0, "low_breached": 0, "max_breach_age_days": 0,
+        "by_scanner": [],
+    }
+    with patch("src.posture.resolvers.get_sla_posture", return_value=data) as svc:
+        result = await PostureQuery().sla_posture(_info())
+    assert svc.call_args.kwargs["asset_ids"] == []
+    assert result.total_breached == 0
+    assert result.by_scanner == []
+
+
+@pytest.mark.asyncio
+async def test_sla_posture_returns_shape(scoped_ctx):
+    data = {
+        "total_breached": 5, "critical_breached": 2, "high_breached": 3,
+        "medium_breached": 0, "low_breached": 0, "max_breach_age_days": 45,
+        "by_scanner": [{"scanner": "code_scanning", "breached": 3}],
+    }
+    with patch("src.posture.resolvers.get_sla_posture", return_value=data) as svc:
+        result = await PostureQuery().sla_posture(_info())
+
+    assert svc.call_args.kwargs["asset_ids"] == ["asset-1", "asset-2"]
+    assert result.total_breached == 5
+    assert result.critical_breached == 2
+    assert result.max_breach_age_days == 45
+    assert len(result.by_scanner) == 1
+    assert result.by_scanner[0].scanner == "code_scanning"
+    assert result.by_scanner[0].breached == 3

@@ -4,8 +4,8 @@
  */
 
 const STATUS_STYLES = {
-  fresh:  "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]",
-  stale:  "border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
+  fresh:  "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]",
+  stale:  "border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]",
   never:  "border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]",
 } as const
 

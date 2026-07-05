@@ -23,9 +23,14 @@ const NEUTRAL_PILL =
 export function ComponentVulnBadge({
   vulns,
   packageName,
+  repo,
 }: {
   vulns: ComponentVulns | undefined
   packageName: string
+  /** When rendered inside a single repo's SBOM, carry that repo (its
+   *  display_name) into the Findings filter so the destination list matches the
+   *  count on the badge. Omitted in estate-wide contexts, which stay unscoped. */
+  repo?: string
 }) {
   if (!vulns || vulns.total === 0) {
     return <span className="text-2xs text-[var(--color-text-tertiary)]">—</span>
@@ -34,9 +39,12 @@ export function ComponentVulnBadge({
   const breakdown =
     SEV_TIERS.filter((s) => vulns[s] > 0).map((s) => `${vulns[s]} ${s}`).join(" · ") ||
     `${vulns.total} open`
+  const href =
+    `/findings?q=${encodeURIComponent(packageName)}` +
+    (repo ? `&repo=${encodeURIComponent(repo)}` : "")
   return (
     <Link
-      href={`/findings?q=${encodeURIComponent(packageName)}`}
+      href={href}
       title={`${breakdown} — view findings`}
       // The visible pill shows only the worst tier; give SR/keyboard users the
       // full per-tier breakdown that's otherwise trapped in the title.

@@ -21,12 +21,12 @@ const VARIANT_CLASS = {
 
 const VALUE_CLASS = {
   default: "text-[var(--color-text-primary)]",
-  danger: "text-[var(--color-severity-critical)]",
+  danger: "text-[var(--color-severity-critical-text)]",
 } as const
 
 const FIELD_CLASS = {
   default: "text-[var(--color-text-secondary)]",
-  danger: "text-[var(--color-severity-critical)] opacity-80",
+  danger: "text-[var(--color-severity-critical-text)] opacity-80",
 } as const
 
 const X_BORDER_CLASS = {

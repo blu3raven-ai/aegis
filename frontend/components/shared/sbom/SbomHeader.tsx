@@ -17,6 +17,7 @@ export function SbomHeader({
   onHistoryOpen,
   exportLoading = false,
   showActions = true,
+  isHistoricalSnapshot = false,
 }: {
   repoName: string
   latestEntry?: SbomHistoryEntry
@@ -35,6 +36,9 @@ export function SbomHeader({
   /** Hide History/Export when there's no SBOM to act on (never-scanned repo),
    *  so the empty state isn't undercut by actions that would only fail. */
   showActions?: boolean
+  /** True when `latestEntry` is an older snapshot the user selected (not the
+   *  latest), so the hash label reads "Viewing snapshot" rather than "Current". */
+  isHistoricalSnapshot?: boolean
 }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
@@ -46,7 +50,9 @@ export function SbomHeader({
         {latestEntry ? (
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-text-secondary)]">
             <span className="flex items-center gap-1">
-              <span className="text-[var(--color-text-tertiary)]">Current hash</span>
+              <span className={isHistoricalSnapshot ? "text-[var(--color-severity-medium-text)]" : "text-[var(--color-text-tertiary)]"}>
+                {isHistoricalSnapshot ? "Viewing snapshot" : "Current hash"}
+              </span>
               <code className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]">
                 {latestEntry.run_id.slice(0, 12)}…
               </code>

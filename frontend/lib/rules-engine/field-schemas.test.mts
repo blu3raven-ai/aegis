@@ -8,28 +8,29 @@ const src = readFileSync(
 )
 
 describe("NOTIFICATION_ROUTING_FIELDS", () => {
+  // Scope assertions to the routing-fields array; the removed values still exist
+  // in other rule schemas (SLA / auto-dismiss / retention), which evaluate real
+  // Finding objects that carry them.
+  const block = src.slice(
+    src.indexOf("NOTIFICATION_ROUTING_FIELDS"),
+    src.indexOf("SLA_RULE_FIELDS"),
+  )
+
   it("includes severity", () => {
-    assert.ok(src.includes('value: "severity"'), "should include severity field")
+    assert.ok(block.includes('value: "severity"'), "should include severity field")
   })
 
   it("includes scanner", () => {
-    assert.ok(src.includes('value: "scanner"'), "should include scanner field")
+    assert.ok(block.includes('value: "scanner"'), "should include scanner field")
   })
 
-  it("includes repo_id", () => {
-    assert.ok(src.includes('value: "repo_id"'), "should include repo_id field")
-  })
-
-  it("includes repo_labels", () => {
-    assert.ok(src.includes('value: "repo_labels"'), "should include repo_labels field")
-  })
-
-  it("includes cve_id", () => {
-    assert.ok(src.includes('value: "cve_id"'), "should include cve_id field")
-  })
-
-  it("includes chain_role", () => {
-    assert.ok(src.includes('value: "chain_role"'), "should include chain_role field")
+  it("omits fields the event payload does not carry", () => {
+    for (const field of ["repo_id", "repo_labels", "cve_id", "chain_role"]) {
+      assert.ok(
+        !block.includes(`value: "${field}"`),
+        `${field} is not carried by the finding.created payload and should not be offered as a routing condition`,
+      )
+    }
   })
 })
 
@@ -125,6 +126,24 @@ describe("DATA_RETENTION_RULE_FIELDS", () => {
       assert.ok(line.includes('"container_scanning"'), "tool field should include 'container_scanning'")
       assert.ok(line.includes('"secret_scanning"'), "tool field should include 'secrets'")
     })
+  })
+})
+
+describe("AUTO_DISMISS_RULE_FIELDS", () => {
+  it("includes dependency_scope with dev/prod suggestions", () => {
+    const line = src
+      .split("\n")
+      .find((l) => l.includes('value: "dependency_scope"'))
+    assert.ok(line, "auto-dismiss rules should offer dependency_scope")
+    assert.ok(line!.includes('"dev"') && line!.includes('"prod"'), "should suggest dev/prod")
+  })
+
+  it("includes release_age_days as a numeric field", () => {
+    const line = src
+      .split("\n")
+      .find((l) => l.includes('value: "release_age_days"'))
+    assert.ok(line, "auto-dismiss rules should offer release_age_days")
+    assert.ok(line!.includes('inputType: "number"'), "release_age_days should be numeric")
   })
 })
 

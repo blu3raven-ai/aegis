@@ -26,6 +26,8 @@ const SCANNER_TO_COVERAGE: Record<ScannerType, CoverageScanner> = {
   code_scanning: "sast",
   secret_scanning: "secrets",
   container_scanning: "sca",
+  iac_scanning: "iac",
+  agent_scanning: "agent",
 };
 
 // An empty `scanners` array means "all applicable to the category", so expand
@@ -57,7 +59,12 @@ export default function SourcesPage() {
             name: sourceDisplayName(conn),
             type: CATEGORY_TO_UI[conn.category],
             scanners: coverageFor(conn.category, conn.scanners ?? []),
-            findings: { high: 0, medium: 0, low: 0 }, // populated by SCM plan companion
+            findings: {
+              critical: conn.findingCounts?.critical ?? 0,
+              high: conn.findingCounts?.high ?? 0,
+              medium: conn.findingCounts?.medium ?? 0,
+              low: conn.findingCounts?.low ?? 0,
+            },
             last_synced_at: conn.lastSyncedAt ?? null,
             last_scan_at: conn.lastScanAt ?? null,
             status: STATUS_MAP[conn.status],
@@ -92,7 +99,7 @@ export default function SourcesPage() {
         }
       />
       <div className="px-6 py-6">
-        <SourcesList sources={sources} />
+        <SourcesList sources={sources} onDeleted={() => setReloadKey(k => k + 1)} />
       </div>
       {showAdd && (
         <AddConnectionModal

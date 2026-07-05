@@ -53,9 +53,8 @@ export function openSheetCount(): number {
 }
 
 // Right-side slide-over drawer. Used for create/edit flows where the user
-// benefits from keeping the underlying list/table visible — Linear / Stripe /
-// Notion all follow this pattern for non-blocking forms. Dialogs stay reserved
-// for confirmation prompts.
+// benefits from keeping the underlying list/table visible for non-blocking
+// forms. Dialogs stay reserved for confirmation prompts.
 export function Sheet({
   open,
   onClose,

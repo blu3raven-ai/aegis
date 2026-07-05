@@ -14,10 +14,10 @@ const SUPPRESS_REASONS = [
 ] as const
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)] border-[var(--color-severity-critical-border)]",
-  high: "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)] border-[var(--color-severity-high-border)]",
-  medium: "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)] border-[var(--color-severity-medium-border)]",
-  low: "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)] border-[var(--color-severity-low-border)]",
+  critical: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)] border-[var(--color-severity-critical-border)]",
+  high: "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high-text)] border-[var(--color-severity-high-border)]",
+  medium: "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)] border-[var(--color-severity-medium-border)]",
+  low: "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low-text)] border-[var(--color-severity-low-border)]",
 }
 
 function SeverityBadge({ severity }: { severity: string }) {

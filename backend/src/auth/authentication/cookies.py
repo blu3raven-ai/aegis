@@ -17,6 +17,10 @@ from fastapi import Response
 
 SESSION_COOKIE_NAME = "__Host-session"
 CSRF_COOKIE_NAME = "__Host-csrf"
+# Short-lived, HttpOnly carrier for the pending-MFA token between /login and
+# /login/verify. HttpOnly so page JS (and any XSS) can never read it — the token
+# was previously handed to the client and parked in sessionStorage.
+MFA_PENDING_COOKIE_NAME = "__Host-mfa-pending"
 
 # RFC 6265 cookie-octet allows token-urlsafe chars; we explicitly enforce the
 # subset that `secrets.token_urlsafe` produces. Anything else is a programmer
@@ -52,6 +56,31 @@ def set_csrf_cookie(response: Response, *, csrf_token: str, max_age: int) -> Non
         max_age=max_age,
         path="/",
         httponly=False,
+        secure=True,
+        samesite="lax",
+    )
+
+
+def set_mfa_pending_cookie(response: Response, *, token: str, max_age: int) -> None:
+    _validate_cookie_value(token, field="mfa_pending_token")
+    response.set_cookie(
+        key=MFA_PENDING_COOKIE_NAME,
+        value=token,
+        max_age=max_age,
+        path="/",
+        httponly=True,
+        secure=True,
+        samesite="lax",
+    )
+
+
+def clear_mfa_pending_cookie(response: Response) -> None:
+    response.set_cookie(
+        key=MFA_PENDING_COOKIE_NAME,
+        value="",
+        max_age=0,
+        path="/",
+        httponly=True,
         secure=True,
         samesite="lax",
     )

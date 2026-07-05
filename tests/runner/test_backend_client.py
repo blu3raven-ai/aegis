@@ -23,13 +23,16 @@ def _mock_resp(status: int, body: dict | None = None) -> MagicMock:
 
 def test_presign_uploads_returns_file_to_url_map(client):
     body = {"urls": [
-        {"file": "a.json", "url": "https://minio/a"},
-        {"file": "b.json", "url": "https://minio/b"},
+        {"file": "a.json", "url": "https://minio/a", "fields": {"key": "a", "policy": "p"}},
+        {"file": "b.json", "url": "https://minio/b", "fields": {"key": "b", "policy": "p"}},
     ], "expiresIn": 300}
     with patch("httpx.Client") as mock_ctor:
         mock_ctor.return_value.__enter__.return_value.post.return_value = _mock_resp(200, body)
         result = client.presign_uploads("job-1", ["a.json", "b.json"])
-    assert result == {"a.json": "https://minio/a", "b.json": "https://minio/b"}
+    assert result == {
+        "a.json": {"url": "https://minio/a", "fields": {"key": "a", "policy": "p"}},
+        "b.json": {"url": "https://minio/b", "fields": {"key": "b", "policy": "p"}},
+    }
 
 
 def test_presign_uploads_raises_on_4xx(client):
@@ -41,12 +44,12 @@ def test_presign_uploads_raises_on_4xx(client):
 
 
 def test_presign_uploads_retries_on_5xx_then_succeeds(client):
-    body = {"urls": [{"file": "a.json", "url": "https://minio/a"}], "expiresIn": 300}
+    body = {"urls": [{"file": "a.json", "url": "https://minio/a", "fields": {"key": "a"}}], "expiresIn": 300}
     with patch("httpx.Client") as mock_ctor:
         post = mock_ctor.return_value.__enter__.return_value.post
         post.side_effect = [_mock_resp(503), _mock_resp(200, body)]
         result = client.presign_uploads("job-1", ["a.json"])
-    assert result == {"a.json": "https://minio/a"}
+    assert result == {"a.json": {"url": "https://minio/a", "fields": {"key": "a"}}}
     assert post.call_count == 2
 
 

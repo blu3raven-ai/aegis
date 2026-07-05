@@ -65,6 +65,33 @@ def generate_upload_url(key: str, expires_in: int = 300, external: bool = False)
     return url
 
 
+def generate_upload_post(
+    key: str,
+    *,
+    max_bytes: int,
+    expires_in: int = 300,
+    external: bool = False,
+) -> dict:
+    """Generate a pre-signed POST whose policy caps the upload size.
+
+    A pre-signed PUT URL cannot bound the request body, so a client can upload an
+    arbitrarily large object and exhaust storage before ingest ever reads it. The
+    POST policy carries a ``content-length-range`` condition, so the object store
+    rejects an oversized upload at upload time. Returns ``{"url", "fields"}``; the
+    caller POSTs a multipart form of ``fields`` plus the file. ``external`` rewrites
+    the URL host to ``S3_EXTERNAL_ENDPOINT`` for off-cluster runners.
+    """
+    post = get_s3_client().generate_presigned_post(
+        Bucket=_S3_BUCKET,
+        Key=key,
+        Conditions=[["content-length-range", 0, max_bytes]],
+        ExpiresIn=expires_in,
+    )
+    if external and _S3_EXTERNAL_ENDPOINT and _S3_ENDPOINT:
+        post["url"] = post["url"].replace(_S3_ENDPOINT, _S3_EXTERNAL_ENDPOINT, 1)
+    return post
+
+
 def generate_download_url(key: str, expires_in: int = 300, bucket: str = _S3_BUCKET) -> str:
     """Generate a pre-signed GET URL."""
     return get_s3_client().generate_presigned_url(
@@ -83,10 +110,22 @@ def upload_bytes(key: str, data: bytes, content_type: str = "application/octet-s
     )
 
 
+# Cap in-memory object reads so an oversized (e.g. runner-supplied) blob can't
+# OOM the ingest worker. read(N+1) bounds the read regardless of a possibly
+# understated ContentLength.
+MAX_OBJECT_BYTES = 512 * 1024 * 1024
+
+
 def download_bytes(key: str, bucket: str = _S3_BUCKET) -> bytes | None:
     try:
         response = get_s3_client().get_object(Bucket=bucket, Key=key)
-        return response["Body"].read()
+        data = response["Body"].read(MAX_OBJECT_BYTES + 1)
+        if len(data) > MAX_OBJECT_BYTES:
+            logger.warning(
+                "Object %s exceeds the %d-byte cap — refusing to load", key, MAX_OBJECT_BYTES
+            )
+            return None
+        return data
     except ClientError as e:
         if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
             return None

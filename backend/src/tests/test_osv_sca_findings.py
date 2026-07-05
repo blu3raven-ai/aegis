@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.db.engine import DATABASE_URL
-from src.db.models import Asset, Finding, SbomComponent
+from src.db.models import Asset, Sbom, SbomComponent
 from src.osv.store import OsvStore
 
 
@@ -71,13 +71,20 @@ async def test_build_and_roundtrip_to_existing_asset(monkeypatch):
                 id=asset_id, type="repo", source="source_connection",
                 external_ref="github:acme/app", display_name="acme/app", asset_metadata={},
             ))
-            for purl, name, ver, eco in [
-                ("pkg:npm/lodash@4.17.20", "lodash", "4.17.20", "npm"),
-                ("pkg:pypi/requests@2.30.0", "requests", "2.30.0", "pypi"),
-                ("pkg:npm/leftpad@1.0.0", "leftpad", "1.0.0", "npm"),  # no advisory
+            s.add(Sbom(
+                asset_id=asset_id, commit_sha="HEAD", s3_key="k", run_id="r1",
+                html_url="https://ghe.acme-corp.internal/acme/app",
+            ))
+            for purl, name, ver, eco, mpath, mline, msnip, mstart in [
+                ("pkg:npm/lodash@4.17.20", "lodash", "4.17.20", "npm",
+                 "package.json", 12, '  "lodash": "^4.17.0"', 8),
+                ("pkg:pypi/requests@2.30.0", "requests", "2.30.0", "pypi", None, None, None, None),
+                ("pkg:npm/leftpad@1.0.0", "leftpad", "1.0.0", "npm", None, None, None, None),  # no advisory
             ]:
                 s.add(SbomComponent(
                     asset_id=asset_id, purl=purl, name=name, version=ver, ecosystem=eco,
+                    manifest_path=mpath, manifest_line=mline,
+                    manifest_snippet=msnip, manifest_snippet_start=mstart,
                 ))
             await s.commit()
 
@@ -87,6 +94,12 @@ async def test_build_and_roundtrip_to_existing_asset(monkeypatch):
                 s, asset_id=asset_id, external_ref="github:acme/app", kind="dependencies",
             )
     finally:
+        from sqlalchemy import delete
+        async with factory() as s:
+            await s.execute(delete(SbomComponent).where(SbomComponent.asset_id == asset_id))
+            await s.execute(delete(Sbom).where(Sbom.asset_id == asset_id))
+            await s.execute(delete(Asset).where(Asset.id == asset_id))
+            await s.commit()
         await engine.dispose()
 
     by_pkg = {f["dependency"]["package"]["name"]: f for f in raw}
@@ -109,8 +122,95 @@ async def test_build_and_roundtrip_to_existing_asset(monkeypatch):
 
     ctx = ScanContext(tool="dependencies_scanning", org="acme", run_id="osv-1", source_type="github")
     assert dependencies_hooks.canonical_external_ref(ctx, lod) == ("github:acme/app", "repo")
-    # identity key is stable + advisory-specific
-    assert dependencies_hooks.compute_identity_key(lod) == "app::lodash::npm::GHSA-lodash::"
+    # identity key is stable + advisory-specific, and includes the manifest path
+    assert dependencies_hooks.compute_identity_key(lod) == "app::lodash::npm::GHSA-lodash::package.json"
+
+    # Manifest declaration site flows from the SBOM component onto the finding
+    # and surfaces as the generic code-window preview + git-blame location.
+    assert lod["dependency"]["manifest_path"] == "package.json"
+    assert lod["manifest_line"] == 12
+    assert lod["manifest_snippet"] == '  "lodash": "^4.17.0"'
+    assert lod["manifest_snippet_start"] == 8
+    lod_detail = dependencies_hooks.extract_detail(lod)
+    assert lod_detail["manifestPath"] == "package.json"
+    assert lod_detail["startLine"] == 12
+    assert lod_detail["code_window"] == '  "lodash": "^4.17.0"'
+    assert lod_detail["code_window_start_line"] == 8
+    assert dependencies_hooks.extract_file_location(lod) == ("package.json", 12)
+    # requests has no manifest data -> git-blame location hook returns None
+    assert dependencies_hooks.extract_file_location(by_pkg["requests"]) is None
+
+    # Repo web URL (from the asset's Sbom row) flows onto every deps finding and
+    # surfaces via extract_detail -> repoHtmlUrl for the view-in-repo deep-link.
+    assert lod["repo_html_url"] == "https://ghe.acme-corp.internal/acme/app"
+    assert lod_detail["repoHtmlUrl"] == "https://ghe.acme-corp.internal/acme/app"
+    assert by_pkg["requests"]["repo_html_url"] == "https://ghe.acme-corp.internal/acme/app"
+
+
+_MAL_BODY = {
+    # A malicious-package report shaped like the OSV malicious-packages dataset:
+    # names the package, carries no ranges/versions and no CVSS.
+    "id": "MAL-2026-0001",
+    "summary": "",
+    "details": "npm package evil-pkg exfiltrates environment variables on install.",
+    "aliases": [],
+    "references": [{"type": "WEB", "url": "https://example.test/MAL-2026-0001"}],
+    "published": "2026-06-01T00:00:00Z",
+    "modified": "2026-06-01T00:00:00Z",
+    "affected": [{"package": {"name": "evil-pkg", "ecosystem": "npm"}}],
+}
+
+
+@pytest.mark.asyncio
+async def test_malicious_advisory_matches_and_builds_critical_finding(monkeypatch):
+    """A MAL- advisory with no version range is ingested with an affects-all
+    row, matches any installed version, and yields an open critical finding."""
+    store = OsvStore()
+    monkeypatch.setattr("src.osv.store._upload_blob", lambda *a, **k: None)
+    monkeypatch.setattr("src.shared.finding_detail_blob.put_detail_blob", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "src.osv.sca_findings._download_blob",
+        lambda key, bucket=None: __import__("json").dumps(_MAL_BODY).encode(),
+    )
+    await store.upsert_advisories([_MAL_BODY], ecosystem="npm")
+
+    asset_id = str(uuid.uuid4())
+    engine, factory = await _new_session()
+    try:
+        async with factory() as s:
+            s.add(Asset(
+                id=asset_id, type="repo", source="source_connection",
+                external_ref="github:acme/app", display_name="acme/app", asset_metadata={},
+            ))
+            s.add(Sbom(asset_id=asset_id, commit_sha="HEAD", s3_key="k", run_id="r1"))
+            s.add(SbomComponent(
+                asset_id=asset_id, purl="pkg:npm/evil-pkg@9.9.9",
+                name="evil-pkg", version="9.9.9", ecosystem="npm", manifest_path="package.json",
+            ))
+            await s.commit()
+
+        from src.osv.sca_findings import build_backend_match_findings
+        async with factory() as s:
+            raw = await build_backend_match_findings(
+                s, asset_id=asset_id, external_ref="github:acme/app", kind="dependencies",
+            )
+    finally:
+        from sqlalchemy import delete
+        async with factory() as s:
+            await s.execute(delete(SbomComponent).where(SbomComponent.asset_id == asset_id))
+            await s.execute(delete(Sbom).where(Sbom.asset_id == asset_id))
+            await s.execute(delete(Asset).where(Asset.id == asset_id))
+            await s.commit()
+        await engine.dispose()
+
+    assert len(raw) == 1
+    finding = raw[0]
+    assert finding["malicious"] is True
+    assert finding["security_advisory"]["severity"] == "critical"
+    assert finding["security_advisory"]["summary"] == "Malicious package: evil-pkg"
+
+    from src.dependencies.lifecycle import dependencies_hooks
+    assert dependencies_hooks.initial_state(finding) == "open"
 
 
 @pytest.mark.asyncio
@@ -193,6 +293,46 @@ def test_match_source_flows_into_lean_queryable_detail():
     assert cdetail["matchSource"] == "overlay"
     clean, _ = split_detail("container_scanning", cdetail)
     assert clean["matchSource"] == "overlay"
+
+
+def test_malicious_flag_keeps_finding_open_with_no_fix():
+    """A malicious package has no fix but must never be deferred — deferral would
+    hide a compromised dependency."""
+    from src.dependencies.lifecycle import dependencies_hooks
+    from src.containers.lifecycle import container_scanning_hooks
+
+    benign = _raw_dep_finding("scan")
+    assert dependencies_hooks.initial_state(benign) == "deferred"  # no fix → deferred
+
+    malicious = dict(benign, malicious=True)
+    assert dependencies_hooks.initial_state(malicious) == "open"
+    assert dependencies_hooks.extract_detail(malicious)["malicious"] is True
+
+    cmal = dict(malicious, imageName="acme/app", imageTag="1.0.0")
+    assert container_scanning_hooks.initial_state(cmal) == "open"
+    assert container_scanning_hooks.extract_detail(cmal)["malicious"] is True
+
+
+def test_build_raw_finding_marks_malicious_advisory_critical():
+    """MAL- advisories are forced critical, flagged malicious, and given a
+    package-named summary when the advisory body carries none."""
+    from src.osv.matcher import ComponentRef, VulnMatch
+    from src.osv.sca_findings import _build_raw_finding
+
+    comp = ComponentRef(name="evil-pkg", version="1.2.3", purl_type="npm",
+                        manifest_path="package.json")
+    match = VulnMatch(
+        advisory_id="MAL-2024-9999", package_name="evil-pkg", ecosystem="npm",
+        version="1.2.3", introduced="0", fixed=None, last_affected=None,
+    )
+    raw = _build_raw_finding(
+        kind="dependencies", repo_name="app", repo_full_name="acme/app",
+        image_name=None, image_tag=None, comp=comp, match=match,
+        adv_body={"id": "MAL-2024-9999", "summary": ""}, match_source="scan",
+    )
+    assert raw["malicious"] is True
+    assert raw["security_advisory"]["severity"] == "critical"
+    assert raw["security_advisory"]["summary"] == "Malicious package: evil-pkg"
 
 
 def test_preserve_match_source_is_first_write_wins():

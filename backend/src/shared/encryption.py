@@ -1,8 +1,9 @@
 """Single source of truth for application-level field encryption.
 
-Derives a per-context Fernet key from RUNNER_ENCRYPTION_KEY via HKDF-SHA256.
+Derives a per-context Fernet key from the APP_SECRET root via HKDF-SHA256.
 Callers name their use site with a `context` label; mismatched contexts cannot
-decrypt one another's ciphertext because the underlying keys differ.
+decrypt one another's ciphertext because the underlying keys differ. This is the
+one root all at-rest encryption and app-level signing keys derive from.
 
 Wire format:
 
@@ -34,48 +35,83 @@ _logger = logging.getLogger(__name__)
 # actually selects the decoder.
 _V2_PREFIX = "v2:"
 
+# FASTAPI_ENV values (plus unset, "") for which an ephemeral encryption key is
+# acceptable when no root is configured — local dev / CI / tests only.
+_EPHEMERAL_KEY_ENVS = frozenset({"", "dev", "development", "test", "testing", "local", "ci"})
 
-_base_secret: bytes | None = None
+
+_candidate_cache: list[bytes] | None = None
+
+
+def _resolve_candidate_secrets() -> list[bytes]:
+    """The encryption root secret (APP_SECRET), as a one-element list.
+
+    Returned as a list because decryption still iterates candidates — if a
+    future migration needs a transitional second root, this is the one seam to
+    extend. Legacy fallback roots were dropped after the one-time re-encrypt
+    migration; all data is now under APP_SECRET.
+
+    Falls back to an ephemeral key outside production so dev/test work without
+    provisioning; production refuses to start without a real secret.
+    """
+    val = os.environ.get("APP_SECRET")
+    if val:
+        # The root feeds HKDF for every derived key; a low-entropy value weakens
+        # all of them. 32 bytes matches the recommended `openssl rand -base64 32`.
+        # Warn (don't refuse) so existing deployments aren't broken.
+        if len(val.encode()) < 32:
+            _logger.warning(
+                "[security] the encryption root secret is short (%d bytes); use a "
+                "high-entropy value such as `openssl rand -base64 32`",
+                len(val.encode()),
+            )
+        return [val.encode()]
+    # No root configured. An ephemeral key is regenerated every process start, so
+    # any data written under it is lost on restart — acceptable ONLY for local
+    # dev/test. Allow it for an explicit dev/test env (or unset, = local dev), but
+    # refuse for anything else (staging, a mis-typed "prod", etc.) so a real
+    # deployment that forgot the key fails loudly instead of silently churning
+    # keys and orphaning every secret on each restart.
+    env = os.environ.get("FASTAPI_ENV", "").strip().lower()
+    if env in _EPHEMERAL_KEY_ENVS:
+        _logger.warning(
+            "[security] APP_SECRET not set (FASTAPI_ENV=%r) — using an ephemeral "
+            "key for field encryption; stored secrets will not survive a restart",
+            env or "<unset>",
+        )
+        return [secrets.token_hex(32).encode()]
+    raise RuntimeError(
+        f"APP_SECRET not set and FASTAPI_ENV={env!r} is not a recognised "
+        f"dev/test environment — refusing to run with an ephemeral encryption key"
+    )
+
+
+def candidate_secrets() -> list[bytes]:
+    """Candidate root secrets to try on decrypt (the current root).
+
+    Public so the sibling ``security.crypto`` module derives keys from the same
+    root, and so a future transitional-root migration has one seam to extend.
+    """
+    global _candidate_cache
+    if _candidate_cache is None:
+        _candidate_cache = _resolve_candidate_secrets()
+    return _candidate_cache
 
 
 def _get_base_secret() -> bytes:
-    """Read RUNNER_ENCRYPTION_KEY once and cache.
-
-    Falls back to an ephemeral random key outside production so dev/test work
-    without provisioning. Production refuses to start without a real secret.
-
-    JWT_SHARED_SECRET is accepted for one transitional release.
-    """
-    global _base_secret
-    if _base_secret is not None:
-        return _base_secret
-
-    secret = os.environ.get("RUNNER_ENCRYPTION_KEY") or os.environ.get("JWT_SHARED_SECRET", "")
-    if not secret:
-        if os.environ.get("FASTAPI_ENV") != "production":
-            secret = secrets.token_hex(32)
-            _logger.warning(
-                "[security] RUNNER_ENCRYPTION_KEY not set — using ephemeral key for field encryption"
-            )
-        else:
-            raise RuntimeError(
-                "RUNNER_ENCRYPTION_KEY not set — cannot encrypt sensitive fields"
-            )
-
-    _base_secret = secret.encode()
-    return _base_secret
+    """The current (primary) root — used for all new encryption."""
+    return candidate_secrets()[0]
 
 
 
 _cipher_cache: dict[str, Fernet] = {}
 
 
-def _derive_v2_key(context: str) -> bytes:
-    """HKDF-SHA256 over the base secret with the context as the info field.
+def _derive_v2_key(context: str, root: bytes) -> bytes:
+    """HKDF-SHA256 over ``root`` with the context as the info field.
 
-    A fixed salt is fine here — the base secret is high-entropy and HKDF's
-    info parameter gives us per-context domain separation, which is what
-    matters for this consolidation.
+    A fixed salt is fine here — the root is high-entropy and HKDF's info
+    parameter gives per-context domain separation, which is what matters.
     """
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
@@ -83,33 +119,42 @@ def _derive_v2_key(context: str) -> bytes:
         salt=b"aegis-encryption-v2",
         info=context.encode(),
     )
-    raw = hkdf.derive(_get_base_secret())
-    return base64.urlsafe_b64encode(raw)
+    return base64.urlsafe_b64encode(hkdf.derive(root))
 
 
 def _get_cipher(context: str) -> Fernet:
     if context in _cipher_cache:
         return _cipher_cache[context]
-    cipher = Fernet(_derive_v2_key(context))
+    cipher = Fernet(_derive_v2_key(context, _get_base_secret()))
     _cipher_cache[context] = cipher
     return cipher
+
+
+def derive_key(context: str) -> bytes:
+    """Derive a stable urlsafe-b64 32-byte key from the CURRENT root for callers
+    that manage their own cipher/signer (a Fernet key, or an itsdangerous secret).
+    Distinct contexts yield independent keys, so leaking one does not compromise
+    the others."""
+    if not context:
+        raise ValueError("derive_key requires a non-empty context label")
+    return _derive_v2_key(context, _get_base_secret())
 
 
 # Legacy KDFs — preserved only to read pre-v2 ciphertext on disk. New writes
 # always go through the v2 path. Contexts not listed here cannot decrypt legacy
 # data and will raise, which is intentional (no silent guessing across domains).
 
-def _legacy_shared_sha256_key() -> bytes:
-    return base64.urlsafe_b64encode(hashlib.sha256(_get_base_secret()).digest())
+def _legacy_shared_sha256_key(root: bytes) -> bytes:
+    return base64.urlsafe_b64encode(hashlib.sha256(root).digest())
 
 
-def _legacy_runner_pbkdf2_key() -> bytes:
+def _legacy_runner_pbkdf2_key(root: bytes) -> bytes:
     return base64.urlsafe_b64encode(
-        hashlib.pbkdf2_hmac("sha256", _get_base_secret(), b"runner-job-env-vars", 100_000)
+        hashlib.pbkdf2_hmac("sha256", root, b"runner-job-env-vars", 100_000)
     )
 
 
-_LEGACY_KDFS: dict[str, Callable[[], bytes]] = {
+_LEGACY_KDFS: dict[str, Callable[[bytes], bytes]] = {
     # Shared-domain contexts read pre-v2 entries written by the old
     # shared.encryption module (SHA256(secret) → Fernet).
     "source_connection_auth": _legacy_shared_sha256_key,
@@ -120,11 +165,17 @@ _LEGACY_KDFS: dict[str, Callable[[], bytes]] = {
 }
 
 
-def _legacy_cipher(context: str) -> Fernet | None:
+def _candidate_v2_ciphers(context: str) -> list[Fernet]:
+    """A Fernet for ``context`` under each candidate root (current first)."""
+    return [Fernet(_derive_v2_key(context, root)) for root in candidate_secrets()]
+
+
+def _candidate_legacy_ciphers(context: str) -> list[Fernet]:
+    """Legacy (pre-v2) Fernets for ``context`` under each candidate root."""
     kdf = _LEGACY_KDFS.get(context)
     if kdf is None:
-        return None
-    return Fernet(kdf())
+        return []
+    return [Fernet(kdf(root)) for root in candidate_secrets()]
 
 
 
@@ -139,43 +190,67 @@ def encrypt(plaintext: str, *, context: str) -> str:
     return f"{_V2_PREFIX}{token}"
 
 
-def decrypt(ciphertext: str, *, context: str) -> str:
+class DecryptionError(RuntimeError):
+    """A ciphertext could not be decrypted under any configured root/scheme.
+
+    Distinct from a genuinely absent value: callers that must not confuse
+    "can't read the secret" with "no secret stored" decrypt in ``strict`` mode
+    and handle this explicitly. Only raised once the multi-root fallback has
+    exhausted every candidate, so it means the encrypting root is truly gone —
+    not merely that the preferred root changed.
+    """
+
+
+def decrypt(ciphertext: str, *, context: str, strict: bool = False) -> str:
     """Decrypt ciphertext under the named context.
 
-    Routes v2-prefixed tokens through the HKDF-derived key. Legacy tokens
-    (no prefix) fall back to the context's declared legacy KDF; a context
-    without one cannot decrypt legacy data and raises.
+    v2-prefixed tokens are tried against the HKDF-derived key of every candidate
+    root (current first, then legacy roots); unversioned tokens are tried against
+    the context's legacy KDF under every candidate root. Trying all candidate
+    roots is what lets a root switch (e.g. #1368's move to APP_SECRET) read
+    data written under a previously-preferred root instead of orphaning it.
 
-    Returns an empty string on cryptographic failure (corrupt data, key
-    rotation) rather than crashing the caller — matches the prior behaviour
-    of decrypt_string / decrypt_env_vars.
+    When no candidate matches: the default returns an empty string (display /
+    tolerant paths rely on this). Pass ``strict=True`` to raise
+    :class:`DecryptionError` instead, so a use path (sync, clone, 2FA verify)
+    surfaces a wrong-key problem clearly rather than reading the secret as absent.
     """
     if not ciphertext:
         return ciphertext
     if not context:
         raise ValueError("decrypt requires a non-empty context label")
 
-    try:
-        if ciphertext.startswith(_V2_PREFIX):
-            payload = ciphertext[len(_V2_PREFIX):]
-            return _get_cipher(context).decrypt(payload.encode()).decode()
-        legacy = _legacy_cipher(context)
-        if legacy is None:
+    if ciphertext.startswith(_V2_PREFIX):
+        payload = ciphertext[len(_V2_PREFIX):].encode()
+        ciphers = _candidate_v2_ciphers(context)
+    else:
+        ciphers = _candidate_legacy_ciphers(context)
+        if not ciphers:
+            # A context with no legacy KDF cannot decode unversioned data — this
+            # is a misconfiguration, not a key-rotation miss, so surface it.
             raise RuntimeError(
                 f"no legacy KDF declared for context {context!r}; "
                 f"cannot decrypt unversioned ciphertext"
             )
-        return legacy.decrypt(ciphertext.encode()).decode()
-    except RuntimeError:
-        # Misconfiguration — surface loudly. Distinct from a Fernet decryption
-        # error, which is data corruption / key rotation territory.
-        raise
-    except Exception:
-        _logger.warning(
-            "[security] decryption failed under context %r — returning empty string",
-            context,
+        payload = ciphertext.encode()
+
+    for cipher in ciphers:
+        try:
+            return cipher.decrypt(payload).decode()
+        except Exception:
+            continue
+
+    if strict:
+        raise DecryptionError(
+            f"could not decrypt {context!r} value under any configured root — "
+            f"the encryption key may have changed"
         )
-        return ""
+    _logger.warning(
+        "[security] decryption failed under context %r (no candidate root/scheme "
+        "matched) — returning empty string",
+        context,
+    )
+    return ""
 
 
 #
@@ -205,9 +280,14 @@ def encrypt_string(plaintext: str) -> str:
     return encrypt(plaintext, context=_SOURCE_CONTEXT)
 
 
-def decrypt_string(ciphertext: str) -> str:
-    """Decrypt a value written by encrypt_string()."""
-    return decrypt(ciphertext, context=_SOURCE_CONTEXT)
+def decrypt_string(ciphertext: str, *, strict: bool = False) -> str:
+    """Decrypt a value written by encrypt_string().
+
+    ``strict=True`` raises :class:`DecryptionError` when no configured root can
+    decrypt it, instead of returning an empty string — for use paths that must
+    not treat an undecryptable secret as an absent one.
+    """
+    return decrypt(ciphertext, context=_SOURCE_CONTEXT, strict=strict)
 
 
 def encrypt_dict(data: dict[str, Any]) -> str:
@@ -232,6 +312,6 @@ def decrypt_dict(ciphertext: str) -> dict[str, Any]:
 
 # Test-only reset hook — production callers never touch this.
 def _reset_cache_for_tests() -> None:
-    global _base_secret
-    _base_secret = None
+    global _candidate_cache
+    _candidate_cache = None
     _cipher_cache.clear()

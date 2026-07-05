@@ -187,7 +187,7 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
       )}
 
       {error && (
-        <div className="mb-6 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
+        <div className="mb-6 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}
@@ -216,7 +216,7 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
                 variant="secondary"
                 size="sm"
                 onClick={() => handleDeleteTrigger(selectedRole.id)}
-                className="mr-auto border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+                className="mr-auto border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
               >
                 Delete role
               </Button>

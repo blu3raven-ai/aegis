@@ -1,0 +1,30 @@
+{
+  "id": "j_iac_confirmed",
+  "verifier": "iac",
+  "note": "S3 bucket with no server-side encryption and no compensating control. Hunter builds the misconfig chain, skeptic finds no mitigation -> confirmed. Finding stays visible.",
+  "finding": {
+    "check_id": "CKV_AWS_18",
+    "title": "Ensure S3 bucket has access logging enabled",
+    "severity": "high",
+    "resource": "aws_s3_bucket.data",
+    "file": "infra/s3.tf",
+    "line": 1
+  },
+  "repo_files": {
+    "infra/s3.tf": "resource \"aws_s3_bucket\" \"data\" {\n  bucket = \"acme-data\"\n}\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"exploit_chain\":\"the S3 bucket holds sensitive data and lacks server-side encryption and access logging, so objects are stored unencrypted and access is unaudited\",\"evidence\":[{\"kind\":\"resource\",\"file\":\"infra/s3.tf\",\"line\":1,\"snippet\":\"resource \\\"aws_s3_bucket\\\" \\\"data\\\"\"}]}",
+      "tokens_in": 160,
+      "tokens_out": 60
+    },
+    {
+      "content": "{\"mitigation_found\":false,\"reasoning\":\"no logging block or encryption rule on the bucket\"}",
+      "tokens_in": 120,
+      "tokens_out": 20
+    }
+  ],
+  "expected": {"signal": "confirmed", "suppressed": false},
+  "label": {"truly_reachable": true}
+}

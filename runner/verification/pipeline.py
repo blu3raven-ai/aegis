@@ -1,4 +1,20 @@
-"""Per-finding verification: hunter -> skeptic -> mechanical critic."""
+"""Per-finding verification: two prompt chains + a mechanical critic.
+
+The verifier splits into two independently-invokable prompt chains with distinct
+objectives (a classifier-vs-reasoner separation):
+
+- **TP-reasoning** (`run_tp_reasoning`, the hunter) — recall-oriented: try to build
+  a concrete exploit chain from the finding to a sink. Answers "can this be
+  exploited?".
+- **FP-detection** (`run_fp_detection`, the skeptic) — precision-oriented: look for
+  a grounded upstream mitigation that neutralises the exploit chain. Answers "is
+  this a false positive?".
+
+`verify_finding` orchestrates them (TP-reasoning -> FP-detection -> mechanical
+critic grounding -> verdict) exactly as the previous single linear pass did. The
+split is structural — each chain is a named unit that can be tested and, later,
+model-tiered independently — and the produced verdicts are unchanged.
+"""
 from __future__ import annotations
 
 import logging
@@ -6,26 +22,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from pydantic import ValidationError
-
 from runner.verification.critic import verify_citations
-from runner.verification.llm_client import LlmResponse
 from runner.verification.prompts import (
     HUNTER_SYSTEM,
     SKEPTIC_SYSTEM,
     hunter_user_message,
     skeptic_user_message,
 )
-from runner.verification.prompts import (
-    HUNTER_SYSTEM_SECRET,
-    SKEPTIC_SYSTEM_SECRET,
-    hunter_secret_user_message,
-    skeptic_secret_user_message,
-)
 from runner.verification.schemas.verdict import (
     HunterResponse,
-    SecretHunterResponse,
-    SecretSkepticResponse,
     SkepticResponse,
 )
 
@@ -56,16 +61,64 @@ def _read_code_context(file_path: str, line: int, repo_root: str, *, window: int
     return "\n".join(f"{i+1}: {lines[i]}" for i in range(start, end))
 
 
+def run_tp_reasoning(finding: dict, code_context: str, reachability, *, llm):
+    """TP-reasoning chain (hunter): try to build a concrete exploit chain.
+
+    Returns the raw ``llm.chat_json`` result (parsed ``HunterResponse`` or ``None``
+    on schema failure, plus token counts and prompt hashes). Kept as a standalone
+    unit so the reasoning chain can be tested — and later model-tiered — on its own.
+    """
+    return llm.chat_json(
+        [
+            {"role": "system", "content": HUNTER_SYSTEM},
+            {"role": "user", "content": hunter_user_message(finding, code_context, reachability)},
+        ],
+        HunterResponse,
+        temperature=0.0, max_tokens=800,
+    )
+
+
+def run_fp_detection(finding: dict, chain: str, code_context: str, *, llm):
+    """FP-detection chain (skeptic): look for a grounded upstream mitigation.
+
+    Returns the raw ``llm.chat_json`` result (parsed ``SkepticResponse`` or ``None``
+    on schema failure, plus token counts and prompt hashes). Standalone so the
+    false-positive check can be tested — and later model-tiered — independently of
+    the reasoning chain.
+    """
+    return llm.chat_json(
+        [
+            {"role": "system", "content": SKEPTIC_SYSTEM},
+            {"role": "user", "content": skeptic_user_message(finding, chain, code_context)},
+        ],
+        SkepticResponse,
+        temperature=0.0, max_tokens=400,
+    )
+
+
 def verify_finding(
     *,
     finding: dict,
     repo_root: str,
     llm,
+    escalation_llm=None,
     critic: Callable[[list[dict], str], tuple[list[str], list[str]]] = verify_citations,
 ) -> VerificationResult:
+    """Verify one finding on the default model, escalating to a frontier model
+    only when the default tier can't produce a usable exploit-chain schema.
+
+    ``escalation_llm`` is the optional frontier tier. When it is ``None`` (no
+    escalation model configured) the flow is identical to the single-tier path.
+    ``verification_metadata["tier"]`` records which tier produced the verdict and
+    ``["escalated"]`` marks that escalation fired.
+    """
     tokens_in_total = 0
     tokens_out_total = 0
-    metadata: dict = {"model": getattr(llm, "_model", "unknown"), "prompt_hashes": []}
+    metadata: dict = {
+        "model": getattr(llm, "_model", "unknown"),
+        "prompt_hashes": [],
+        "tier": "default",
+    }
 
     code_context = _read_code_context(
         finding.get("file", ""), int(finding.get("line", 1)), repo_root,
@@ -73,28 +126,42 @@ def verify_finding(
 
     reachability = (finding.get("detail") or {}).get("reachability") or None
 
-    hunter_resp: LlmResponse = llm.chat(
-        [
-            {"role": "system", "content": HUNTER_SYSTEM},
-            {"role": "user", "content": hunter_user_message(finding, code_context, reachability)},
-        ],
-        temperature=0.0, max_tokens=800,
-    )
-    tokens_in_total += hunter_resp.tokens_in
-    tokens_out_total += hunter_resp.tokens_out
-    metadata["prompt_hashes"].append(hunter_resp.prompt_hash)
+    # The tier the rest of the verification runs on; escalation promotes it.
+    active_llm = llm
 
-    try:
-        hunter_model = HunterResponse.model_validate_json(hunter_resp.content)
-        chain = hunter_model.exploit_chain.strip()
-        evidence = hunter_model.evidence
-    except (ValidationError, ValueError) as exc:
-        logger.warning("hunter response failed schema validation: %s — falling back to needs_verify", exc)
+    # TP-reasoning chain: can this finding be exploited?
+    hunter_result = run_tp_reasoning(finding, code_context, reachability, llm=active_llm)
+    tokens_in_total += hunter_result.tokens_in
+    tokens_out_total += hunter_result.tokens_out
+    metadata["prompt_hashes"].extend(hunter_result.prompt_hashes)
+
+    # Escalate a schema failure — not a substantive verdict — to the frontier
+    # tier: the default model couldn't emit a valid exploit chain, so a stronger
+    # model gets one retry and drives the rest of the verification. Pure recall
+    # upside; it can only add a verdict the default tier failed to produce.
+    if hunter_result.parsed is None and escalation_llm is not None:
+        metadata["escalated"] = True
+        metadata["tier"] = "frontier"
+        metadata["model"] = getattr(escalation_llm, "_model", "unknown")
+        active_llm = escalation_llm
+        hunter_result = run_tp_reasoning(finding, code_context, reachability, llm=active_llm)
+        tokens_in_total += hunter_result.tokens_in
+        tokens_out_total += hunter_result.tokens_out
+        metadata["prompt_hashes"].extend(hunter_result.prompt_hashes)
+
+    if hunter_result.parsed is None:
+        logger.warning(
+            "hunter response failed schema validation: %s — falling back to needs_verify",
+            hunter_result.error,
+        )
         return VerificationResult(
             verdict="needs_verify", exploit_chain="", evidence=[],
             tokens_in=tokens_in_total, tokens_out=tokens_out_total,
-            verification_metadata={**metadata, "reason": f"hunter_schema_invalid: {exc}"},
+            verification_metadata={**metadata, "reason": f"hunter_schema_invalid: {hunter_result.error}"},
         )
+    hunter_model = hunter_result.parsed
+    chain = hunter_model.exploit_chain.strip()
+    evidence = hunter_model.evidence
 
     if not chain:
         return VerificationResult(
@@ -103,25 +170,20 @@ def verify_finding(
             verification_metadata={**metadata, "reason": "hunter_no_chain"},
         )
 
-    skeptic_resp = llm.chat(
-        [
-            {"role": "system", "content": SKEPTIC_SYSTEM},
-            {"role": "user", "content": skeptic_user_message(finding, chain, code_context)},
-        ],
-        temperature=0.0, max_tokens=400,
-    )
-    tokens_in_total += skeptic_resp.tokens_in
-    tokens_out_total += skeptic_resp.tokens_out
-    metadata["prompt_hashes"].append(skeptic_resp.prompt_hash)
+    # FP-detection chain: is there a grounded mitigation that neutralises it?
+    skeptic_result = run_fp_detection(finding, chain, code_context, llm=active_llm)
+    tokens_in_total += skeptic_result.tokens_in
+    tokens_out_total += skeptic_result.tokens_out
+    metadata["prompt_hashes"].extend(skeptic_result.prompt_hashes)
 
-    try:
-        skeptic = SkepticResponse.model_validate_json(skeptic_resp.content)
-    except (ValidationError, ValueError) as exc:
+    if skeptic_result.parsed is None:
         logger.warning(
             "sast skeptic response failed schema validation: %s — falling back",
-            exc,
+            skeptic_result.error,
         )
         skeptic = SkepticResponse()  # all-default: mitigation_found=False
+    else:
+        skeptic = skeptic_result.parsed
 
     if skeptic.mitigation_found:
         metadata["ruled_out_reason"] = {
@@ -159,109 +221,6 @@ def verify_finding(
 
     return VerificationResult(
         verdict=verdict, exploit_chain=chain, evidence=evidence,
-        tokens_in=tokens_in_total, tokens_out=tokens_out_total,
-        verification_metadata=metadata,
-    )
-
-
-def verify_secret_finding(
-    *,
-    finding: dict,
-    repo_root: str,
-    llm,
-    critic: Callable[[list[dict], str], tuple[list[str], list[str]]] = verify_citations,
-) -> VerificationResult:
-    """Verify a candidate secret. Provider-verified secrets are auto-confirmed."""
-    metadata: dict = {"model": getattr(llm, "_model", "unknown"), "prompt_hashes": []}
-
-    if finding.get("verified"):
-        metadata["auto_confirmed"] = "provider_verified"
-        return VerificationResult(
-            verdict="confirmed", exploit_chain="", evidence=[],
-            tokens_in=0, tokens_out=0,
-            verification_metadata=metadata,
-        )
-
-    code_context = _read_code_context(
-        finding.get("file", ""), int(finding.get("line", 1)), repo_root,
-    )
-
-    tokens_in_total = 0
-    tokens_out_total = 0
-
-    hunter_resp = llm.chat(
-        [
-            {"role": "system", "content": HUNTER_SYSTEM_SECRET},
-            {"role": "user", "content": hunter_secret_user_message(finding, code_context)},
-        ],
-        temperature=0.0, max_tokens=400,
-    )
-    tokens_in_total += hunter_resp.tokens_in
-    tokens_out_total += hunter_resp.tokens_out
-    metadata["prompt_hashes"].append(hunter_resp.prompt_hash)
-
-    try:
-        hunter_model = SecretHunterResponse.model_validate_json(hunter_resp.content)
-        is_real = hunter_model.is_real_secret
-        evidence = hunter_model.evidence
-        hunter_reasoning = hunter_model.reasoning
-    except (ValidationError, ValueError) as exc:
-        logger.warning(
-            "secret hunter response failed schema validation: %s — falling back",
-            exc,
-        )
-        return VerificationResult(
-            verdict="needs_verify", exploit_chain="", evidence=[],
-            tokens_in=tokens_in_total, tokens_out=tokens_out_total,
-            verification_metadata={**metadata, "reason": f"hunter_schema_invalid: {exc}"},
-        )
-
-    skeptic_resp = llm.chat(
-        [
-            {"role": "system", "content": SKEPTIC_SYSTEM_SECRET},
-            {"role": "user", "content": skeptic_secret_user_message(
-                finding,
-                {"is_real_secret": is_real, "reasoning": hunter_reasoning},
-                code_context,
-            )},
-        ],
-        temperature=0.0, max_tokens=300,
-    )
-    tokens_in_total += skeptic_resp.tokens_in
-    tokens_out_total += skeptic_resp.tokens_out
-    metadata["prompt_hashes"].append(skeptic_resp.prompt_hash)
-
-    try:
-        skeptic_model = SecretSkepticResponse.model_validate_json(skeptic_resp.content)
-        agrees = skeptic_model.agree_with_hunter
-    except (ValidationError, ValueError) as exc:
-        logger.warning(
-            "secret skeptic response failed schema validation: %s — falling back",
-            exc,
-        )
-        return VerificationResult(
-            verdict="needs_verify", exploit_chain=hunter_reasoning, evidence=evidence,
-            tokens_in=tokens_in_total, tokens_out=tokens_out_total,
-            verification_metadata={**metadata, "reason": f"skeptic_schema_invalid: {exc}"},
-        )
-
-    if agrees:
-        verdict = "confirmed" if is_real else "ruled_out"
-    else:
-        verdict = "needs_verify"
-        metadata["skeptic_counter_evidence"] = skeptic_model.counter_evidence
-
-    unverified, _ = critic(evidence, repo_root)
-    if unverified and verdict == "confirmed":
-        metadata["unverified_citations"] = unverified
-        verdict = "needs_verify"
-
-    metadata["hunter_reasoning"] = hunter_reasoning
-    metadata["skeptic_reasoning"] = skeptic_model.reasoning
-
-    return VerificationResult(
-        verdict=verdict, exploit_chain=hunter_reasoning,
-        evidence=evidence,
         tokens_in=tokens_in_total, tokens_out=tokens_out_total,
         verification_metadata=metadata,
     )

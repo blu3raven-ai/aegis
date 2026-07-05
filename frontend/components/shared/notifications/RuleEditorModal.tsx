@@ -192,7 +192,7 @@ export function RuleEditorModal({
 
             {/* Error */}
             {saveError && (
-              <p className="text-sm text-[var(--color-severity-critical)]">{saveError}</p>
+              <p className="text-sm text-[var(--color-severity-critical-text)]">{saveError}</p>
             )}
           </div>
 

@@ -86,7 +86,9 @@ interface RestSourceConnection {
   scanScheduleCron: string | null
   statusMessage: string | null
   lastSyncedAt: string | null
+  lastScanAt: string | null
   nextSyncAt: string | null
+  findingCounts: { critical: number; high: number; medium: number; low: number } | null
   discoveredItemCount: number | null
   discoveredItems: string[]
   scopeRefs?: string[]
@@ -121,6 +123,8 @@ function restConnectionToTs(c: RestSourceConnection): SourceConnection {
     status: c.status as SourceConnection["status"],
     ...(c.statusMessage ? { statusMessage: c.statusMessage } : {}),
     ...(c.lastSyncedAt ? { lastSyncedAt: c.lastSyncedAt } : {}),
+    ...(c.lastScanAt ? { lastScanAt: c.lastScanAt } : {}),
+    ...(c.findingCounts ? { findingCounts: c.findingCounts } : {}),
     ...(c.nextSyncAt ? { nextSyncAt: c.nextSyncAt } : {}),
     ...(c.discoveredItemCount != null ? { discoveredItemCount: c.discoveredItemCount } : {}),
     ...(c.discoveredItems.length ? { discoveredItems: c.discoveredItems } : {}),

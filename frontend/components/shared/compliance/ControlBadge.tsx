@@ -7,7 +7,7 @@ interface ControlBadgeProps {
 const FRAMEWORK_COLORS: Record<string, string> = {
   soc2: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)] border-[var(--color-accent-border)]",
   iso27001: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)] border-[var(--color-argus-border)]",
-  "pci-dss": "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)] border-[var(--color-state-fixed-border)]",
+  "pci-dss": "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed-text)] border-[var(--color-state-fixed-border)]",
 }
 
 export function ControlBadge({ framework, controlId, className = "" }: ControlBadgeProps) {

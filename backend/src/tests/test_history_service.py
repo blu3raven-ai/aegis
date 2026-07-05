@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.history.service import (  # noqa: E402
     HistoryService,
@@ -19,6 +19,7 @@ from src.history.service import (  # noqa: E402
     SUPPORTED_TYPES,
     _encode_cursor,
     _decode_cursor,
+    _finding_event_summary,
     _finding_event_type,
     _scan_summary,
     _wants,
@@ -58,6 +59,26 @@ def test_finding_event_type_reopened():
 def test_finding_event_type_created():
     assert _finding_event_type(None, "open") == "finding.created"
 
+
+def test_finding_event_summary_uses_deps_summary_field():
+    # Dependency/container findings carry no title/ruleId — their concise label
+    # lives under "summary". Regression: the feed must not degrade to "finding".
+    detail = {"summary": "Prototype pollution in lodash", "description": ""}
+    assert _finding_event_summary("finding.created", detail, None) == (
+        "New finding: Prototype pollution in lodash"
+    )
+
+
+def test_finding_event_summary_falls_back_to_cve_id():
+    # Sparse advisory with only a CVE id still beats the bare placeholder.
+    detail = {"cveId": "CVE-2024-1234"}
+    assert _finding_event_summary("finding.created", detail, None) == (
+        "New finding: CVE-2024-1234"
+    )
+
+
+def test_finding_event_summary_placeholder_when_detail_empty():
+    assert _finding_event_summary("finding.created", {}, None) == "New finding: finding"
 
 
 def test_scan_summary_completed_with_findings():

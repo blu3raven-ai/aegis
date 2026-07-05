@@ -19,7 +19,7 @@ def _container_cvss(f: dict[str, Any]) -> float:
 
 def _container_merge_extra(existing: dict[str, Any], new: dict[str, Any]) -> None:
     # Merge matched_by
-    src = new.get("scanner", "grype")
+    src = new.get("scanner", "osv")
     if src not in existing.get("matched_by", []):
         existing.setdefault("matched_by", []).append(src)
 
@@ -39,5 +39,5 @@ def _container_merge_extra(existing: dict[str, Any], new: dict[str, Any]) -> Non
 def merge_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Deduplicate container findings by advisory+package+ecosystem."""
     for f in findings:
-        f.setdefault("matched_by", [f.get("scanner", "grype")])
+        f.setdefault("matched_by", [f.get("scanner", "osv")])
     return _generic_merge(findings, _container_dedup_key, _container_cvss, _container_merge_extra)

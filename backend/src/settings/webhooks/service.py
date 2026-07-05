@@ -8,8 +8,12 @@ cannot be decrypted as if it belonged to another.
 Receivers don't know the ``org_id`` of an inbound request before the body
 is authenticated — they call :func:`match_webhook_secret` with the
 provider, body and header, which walks every row for that provider and
-returns the first secret whose ``verify`` callable accepts the request.
-A trailing env-var fallback keeps existing bootstrap deployments working.
+returns the :class:`WebhookSecretMatch` for the first row whose ``verify``
+callable accepts the request. The match carries the ``org_id`` that owns
+the accepting secret so callers can attribute the request to the tenant
+that actually authenticated rather than to attacker-controlled payload
+fields. A trailing env-var fallback keeps existing bootstrap deployments
+working; that path is single-tenant so its match carries ``org_id=None``.
 
 Adding a per-provider header-scoped index would let us avoid the linear
 walk, but webhook endpoints are typically small (one per org per
@@ -21,6 +25,7 @@ from __future__ import annotations
 import logging
 import os
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable, Iterable
 
@@ -182,24 +187,47 @@ class WebhookEndpointConflict(Exception):
         self.provider = provider
 
 
-async def _iter_db_secrets(session: AsyncSession, provider: str) -> Iterable[str]:
-    stmt = select(WebhookEndpoint.secret_enc).where(
-        WebhookEndpoint.provider == provider
-    )
+@dataclass(frozen=True)
+class WebhookSecretMatch:
+    """A verified inbound webhook secret and the tenant that owns it.
+
+    ``org_id`` / ``endpoint_id`` are ``None`` for the env-var fallback,
+    which is a single-tenant bootstrap credential with no tenant binding.
+    The plaintext ``secret`` lets callers short-circuit duplicate
+    verification work; it MUST NOT be logged.
+    """
+
+    org_id: str | None
+    endpoint_id: str | None
+    secret: str
+
+
+async def _iter_db_secrets(
+    session: AsyncSession, provider: str
+) -> Iterable[tuple[str, str, str]]:
+    """Yield ``(org_id, endpoint_id, plaintext)`` for each decryptable row."""
+    stmt = select(
+        WebhookEndpoint.org_id, WebhookEndpoint.id, WebhookEndpoint.secret_enc
+    ).where(WebhookEndpoint.provider == provider)
     result = await session.execute(stmt)
-    secrets_out: list[str] = []
-    for (enc,) in result.all():
+    rows_out: list[tuple[str, str, str]] = []
+    for org_id, endpoint_id, enc in result.all():
         try:
-            plaintext = decrypt(enc, context=_context(provider))
+            # strict: an undecryptable secret raises (logged below) instead of
+            # returning "" — otherwise a rotated key makes a configured endpoint
+            # silently read as unconfigured and inbound webhook auth fails blind.
+            plaintext = decrypt(enc, context=_context(provider), strict=True)
         except Exception:
             logger.warning(
-                "webhook_endpoints: decrypt failed for provider=%s — skipping row",
+                "webhook_endpoints: decrypt failed for provider=%s endpoint=%s — "
+                "skipping row (encryption key may have changed)",
                 provider,
+                endpoint_id,
             )
             continue
         if plaintext:
-            secrets_out.append(plaintext)
-    return secrets_out
+            rows_out.append((org_id, endpoint_id, plaintext))
+    return rows_out
 
 
 async def match_webhook_secret(
@@ -207,18 +235,19 @@ async def match_webhook_secret(
     *,
     provider: str,
     verify: Callable[[str], bool],
-) -> str | None:
+) -> WebhookSecretMatch | None:
     """Find a stored secret for ``provider`` that satisfies ``verify``.
 
     ``verify`` is the provider-specific signature/auth check curried with
     the request body and header — see the call sites in
-    ``src.connectors.webhooks.providers``. The first matching secret wins;
+    ``src.connectors.webhooks.providers``. The first matching row wins;
     on no match we fall back to the env-var so existing bootstrap
     deployments continue to work.
 
-    Returns the plaintext secret on success so callers can short-circuit
-    duplicate verification work; ``None`` if nothing matched (caller MUST
-    treat as authentication failure).
+    Returns a :class:`WebhookSecretMatch` carrying the owning ``org_id`` so
+    the caller can attribute the request to the tenant that authenticated;
+    ``None`` if nothing matched (caller MUST treat as authentication
+    failure). The env-var fallback yields ``org_id=None`` (unbound).
 
     A DB-side error degrades to the env-var fallback rather than failing
     closed — losing the inbound webhook because the DB is unreachable
@@ -237,11 +266,13 @@ async def match_webhook_secret(
         )
         candidates = []
 
-    for plaintext in candidates:
+    for org_id, endpoint_id, plaintext in candidates:
         if verify(plaintext):
-            return plaintext
+            return WebhookSecretMatch(
+                org_id=org_id, endpoint_id=endpoint_id, secret=plaintext
+            )
 
     env_secret = os.getenv(_ENV_VAR_BY_PROVIDER[provider], "")
     if env_secret and verify(env_secret):
-        return env_secret
+        return WebhookSecretMatch(org_id=None, endpoint_id=None, secret=env_secret)
     return None

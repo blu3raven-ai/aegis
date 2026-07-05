@@ -32,6 +32,7 @@ from runner.scanners._shared import (
     TIMEOUT_CLONE,
     TIMEOUT_SYFT_REPO,
     clone_repo,
+    derive_html_url,
     log_finished,
     log_scanning,
     parse_repos,
@@ -228,6 +229,9 @@ class DependenciesScanner:
 
         head_sha = self._read_head_sha(clone_dir, cancel_event)
         (repo_out / "head-sha.txt").write_text(head_sha + "\n")
+        # Repo web URL sidecar: deps findings are built backend-side from the
+        # SBOM, so the backend reads this to deep-link them to their source.
+        (repo_out / "html_url.txt").write_text(derive_html_url(repo_url) + "\n")
 
         syft_sbom = repo_out / "syft-sbom.cdx.json"
         cdxgen_sbom = repo_out / "cdxgen-sbom.cdx.json"
@@ -251,13 +255,14 @@ class DependenciesScanner:
             shutil.rmtree(clone_dir, ignore_errors=True)
             return
 
-        # Additive enrichment: stamp each direct dep's declared version range
-        # onto its SBOM component while the manifests are still on disk. The
-        # broad except is intentional — capture must never fail the scan.
+        # Additive enrichment: stamp each direct dep's declared range and
+        # manifest location onto its SBOM component while the manifests are
+        # still on disk. The broad except is intentional — capture must never
+        # fail the scan.
         try:
-            ranges = parse_declared_ranges(clone_dir)
-            if ranges:
-                n = annotate_sbom_with_declared_ranges(merged_sbom, ranges)
+            decls = parse_declared_ranges(clone_dir)
+            if decls:
+                n = annotate_sbom_with_declared_ranges(merged_sbom, decls, clone_dir)
                 logger.debug(
                     "[+] stamped declared ranges on %d components for %s",
                     n,

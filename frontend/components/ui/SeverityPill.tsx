@@ -1,5 +1,4 @@
-// Pattern: Snyk severity chip — colored text + icon pill.
-// Reference: Snyk projects list → issues column → severity badge.
+// Severity chip — colored text + icon pill.
 import { AlertCircle, AlertTriangle, ChevronDown, Info } from "lucide-react";
 import { cn } from "@/lib/shared/utils";
 

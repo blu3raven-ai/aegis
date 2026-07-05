@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 
+import { Button } from "@/components/ui/Button"
+import { StatusBadge } from "@/components/ui/StatusBadge"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { SettingsRow } from "@/components/settings/SettingsRow"
 
@@ -51,20 +53,17 @@ export function ActiveSessionsCard() {
         label={agent ? `${agent.platform} · ${agent.browser}` : "This device"}
         description="Active right now · this device"
       >
-        <span className="rounded-sm bg-[var(--color-success-bg)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--color-success)]">
+        <StatusBadge tone="ok" caps>
           Current
-        </span>
+        </StatusBadge>
       </SettingsRow>
       <SettingsRow
         label="Sign out all other devices"
         description="Useful if you lost a device or suspect a compromise. Other devices will appear here once multi-session tracking is enabled for your org."
       >
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-critical)] bg-[var(--color-critical)] px-3 py-1 text-xs font-semibold text-white hover:opacity-90"
-        >
+        <Button variant="destructive" size="xs">
           Sign out everywhere
-        </button>
+        </Button>
       </SettingsRow>
     </SettingsCard>
   )

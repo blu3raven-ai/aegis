@@ -153,7 +153,7 @@ export function KillSwitchDialog({
           {error && (
             <div
               role="alert"
-              className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-severity-critical)]"
+              className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
             >
               {error}
             </div>

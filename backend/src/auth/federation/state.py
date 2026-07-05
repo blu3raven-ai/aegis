@@ -1,17 +1,15 @@
 """Signed state+nonce cookie helper for the OIDC + SAML SLO flows."""
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
+from src.shared.encryption import derive_key
+
 
 def _serializer(salt: str = "aegis-oidc-state") -> URLSafeTimedSerializer:
-    key = os.environ.get("AEGIS_SECRET_ENCRYPTION_KEY")
-    if not key:
-        raise RuntimeError("AEGIS_SECRET_ENCRYPTION_KEY must be set to sign federation state.")
-    return URLSafeTimedSerializer(key, salt=salt)
+    return URLSafeTimedSerializer(derive_key("federation_state"), salt=salt)
 
 
 def encode_state(*, state: str, nonce: str) -> str:

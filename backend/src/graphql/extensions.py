@@ -13,7 +13,7 @@ import os
 import traceback
 from collections.abc import Iterator
 
-from graphql import GraphQLError
+from graphql import GraphQLError, parse
 from graphql.error import GraphQLError as GqlCoreError
 from graphql.execution.execute import ExecutionResult as GraphQLExecutionResult
 from strawberry.extensions import SchemaExtension
@@ -74,30 +74,73 @@ class AliasLimitExtension(SchemaExtension):
     """
 
     MAX_ALIASES = 10
+    # Bounds total resolver fan-out even when aliases stay under the cap — a
+    # single operation can't request an unbounded number of field nodes.
+    MAX_TOTAL_FIELDS = 500
 
     def on_operation(self) -> Iterator[None]:
         if not _is_dev():
-            doc = self.execution_context.graphql_document
-            if doc:
-                alias_count = self._count_aliases(doc)
-                if alias_count > self.MAX_ALIASES:
-                    raise GraphQLError(
-                        f"Too many aliases ({alias_count}). Max {self.MAX_ALIASES}.",
-                        extensions={"code": "ALIAS_LIMIT_EXCEEDED"},
-                    )
+            # Parse the raw query here rather than reading graphql_document —
+            # the document isn't populated yet when on_operation runs before
+            # the yield, so reading it would skip the check entirely.
+            query = self.execution_context.query
+            if query:
+                try:
+                    doc = parse(query)
+                except Exception:
+                    doc = None  # malformed query — let normal validation report it
+                if doc is not None:
+                    alias_count, field_count = self._walk_document(doc)
+                    if alias_count > self.MAX_ALIASES:
+                        raise GraphQLError(
+                            f"Too many aliases ({alias_count}). Max {self.MAX_ALIASES}.",
+                            extensions={"code": "ALIAS_LIMIT_EXCEEDED"},
+                        )
+                    if field_count > self.MAX_TOTAL_FIELDS:
+                        raise GraphQLError(
+                            f"Query too complex ({field_count} fields). Max {self.MAX_TOTAL_FIELDS}.",
+                            extensions={"code": "COMPLEXITY_LIMIT_EXCEEDED"},
+                        )
         yield
 
-    def _count_aliases(self, doc) -> int:
-        count = 0
+    def _walk_document(self, doc) -> tuple[int, int]:
+        """Count aliased field nodes and total field nodes across the whole doc.
+
+        The schema puts every real resolver under a namespace field (depth >= 2),
+        so counting only the operation's top-level selections misses every
+        aliased fan-out — the walk must descend nested selection sets and resolve
+        fragment spreads (with a cycle guard) for the caps to mean anything.
+        """
+        fragments = {
+            d.name.value: d
+            for d in doc.definitions
+            if getattr(d, "kind", None) == "fragment_definition"
+        }
+        alias_count = 0
+        field_count = 0
+
+        def visit(selection_set, seen_fragments) -> None:
+            nonlocal alias_count, field_count
+            if selection_set is None:
+                return
+            for sel in getattr(selection_set, "selections", None) or []:
+                kind = getattr(sel, "kind", None)
+                if kind == "field":
+                    field_count += 1
+                    if getattr(sel, "alias", None):
+                        alias_count += 1
+                    visit(getattr(sel, "selection_set", None), seen_fragments)
+                elif kind == "inline_fragment":
+                    visit(getattr(sel, "selection_set", None), seen_fragments)
+                elif kind == "fragment_spread":
+                    name = getattr(getattr(sel, "name", None), "value", None)
+                    if name and name not in seen_fragments and name in fragments:
+                        visit(fragments[name].selection_set, seen_fragments | {name})
+
         for definition in doc.definitions:
-            selections = (
-                getattr(getattr(definition, "selection_set", None), "selections", None)
-                or []
-            )
-            for selection in selections:
-                if getattr(selection, "alias", None):
-                    count += 1
-        return count
+            if getattr(definition, "kind", None) == "operation_definition":
+                visit(getattr(definition, "selection_set", None), frozenset())
+        return alias_count, field_count
 
 
 class IntrospectionBlocker(SchemaExtension):

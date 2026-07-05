@@ -1,11 +1,11 @@
-"""Heuristic confidence verdict for findings, used until Argus verifies them.
+"""Heuristic confidence verdict for findings, used until the LLM Service verifies them.
 
-A finding's ``verdict`` (confidence) is normally written by the Argus
-verification pass. When Argus is not configured, every verdict is NULL and the
-UI's Confidence column reads "Unrated". This module derives a *provisional*
-verdict from signals already present at ingest so the column carries a usable
-signal before Argus runs. Argus always wins — the heuristic only ever seeds a
-NULL verdict and is overwritten the moment a real verdict arrives.
+A finding's ``verdict`` (confidence) is normally written by the LLM verification
+pass. When no verifier is configured, every verdict is NULL and the UI's
+Confidence column reads "Unrated". This module derives a *provisional* verdict
+from signals already present at ingest so the column carries a usable signal
+before verification runs. The verifier always wins — the heuristic only ever
+seeds a NULL verdict and is overwritten the moment a real verdict arrives.
 
 Mapping (orthogonal to severity — confidence is "how sure", not "how bad"):
   - scanner reports "high" confidence, OR the finding carries a CVE

@@ -10,10 +10,16 @@ test("ToggleSwitch renders a WAI-ARIA switch with checked state", () => {
   assert.match(SRC, /aria-label=\{label\}/)
 })
 
-test("ToggleSwitch fires onChange with the inverted value", () => {
+test("ToggleSwitch fires onChange with the inverted value when enabled", () => {
   // onClick handler must call onChange with the negated current checked state
-  // so consumers can stay controlled.
-  assert.match(SRC, /onClick=\{\(\)\s*=>\s*onChange\(!checked\)\}/)
+  // so consumers can stay controlled — but only when not disabled.
+  assert.match(SRC, /if \(!disabled\)/)
+  assert.match(SRC, /onChange\(!checked\)/)
+})
+
+test("ToggleSwitch supports an optional disabled state", () => {
+  assert.match(SRC, /disabled\?:\s*boolean/)
+  assert.match(SRC, /disabled=\{disabled\}/)
 })
 
 test("ToggleSwitch slides the knob when checked", () => {

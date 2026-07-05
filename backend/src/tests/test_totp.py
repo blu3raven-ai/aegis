@@ -77,6 +77,6 @@ def test_empty_secret_is_false(fixed_clock):
 
 def test_encrypted_secret_is_decrypted(monkeypatch, fixed_clock):
     monkeypatch.setattr(totp_mod, "is_encrypted", lambda s: True)
-    monkeypatch.setattr(totp_mod, "decrypt_string", lambda s: _SECRET)
+    monkeypatch.setattr(totp_mod, "decrypt_string", lambda s, *, strict=False: _SECRET)
     code = _totp_code_at(_SECRET, _counter(fixed_clock))
     assert verify_totp("enc:ciphertext-placeholder", code) is True

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from runner.clients.backend import BackendClient, BackendError
-from runner.clients.uploader import URL_EXPIRED_MARKER, put_to_url
+from runner.clients.uploader import URL_EXPIRED_MARKER, post_to_url
 from runner.observability.metrics import presign_url_expired_total
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def _sha256_chunked(file_path: Path) -> str:
     return h.hexdigest()
 
 
-PutFn = Callable[[Path, str], str]
+PostFn = Callable[[Path, str, dict], str]
 
 
 class ManifestStreamer:
@@ -44,13 +44,13 @@ class ManifestStreamer:
         job_dir: Path,
         backend_client: BackendClient,
         job_id: str,
-        put_fn: PutFn = put_to_url,
+        post_fn: PostFn = post_to_url,
     ) -> None:
         self.job_dir = job_dir
         self.manifest_path = job_dir / "_manifest.jsonl"
         self.backend = backend_client
         self.job_id = job_id
-        self.put_fn = put_fn
+        self.post_fn = post_fn
 
         self.last_line = 0
         self.scanner_done = False
@@ -152,14 +152,14 @@ class ManifestStreamer:
 
         for entry in entries:
             name = entry["file"]
-            url = urls.get(name)
-            if not url:
+            spec = urls.get(name)
+            if not spec:
                 logger.warning("[!] [streamer] backend did not return URL for %s", name)
                 self._failed_entries.append(entry)
                 self.failed_count += 1
                 continue
 
-            result = self.put_fn(self.job_dir / name, url)
+            result = self.post_fn(self.job_dir / name, spec["url"], spec["fields"])
             if result == "ok":
                 self.uploaded_count += 1
                 self._uploaded_files.add(name)
@@ -182,10 +182,10 @@ class ManifestStreamer:
         except BackendError as exc:
             logger.warning("[!] [streamer] re-presign failed for %s: %s", name, exc)
             return False
-        url = urls.get(name)
-        if not url:
+        spec = urls.get(name)
+        if not spec:
             return False
-        return self.put_fn(self.job_dir / name, url) == "ok"
+        return self.post_fn(self.job_dir / name, spec["url"], spec["fields"]) == "ok"
 
     def _retry_failed(self) -> None:
         still_failed: list[dict[str, Any]] = []
@@ -214,11 +214,11 @@ class ManifestStreamer:
 
         for entry in candidates:
             name = entry["file"]
-            url = urls.get(name)
-            if not url:
+            spec = urls.get(name)
+            if not spec:
                 still_failed.append(entry)
                 continue
-            result = self.put_fn(self.job_dir / name, url)
+            result = self.post_fn(self.job_dir / name, spec["url"], spec["fields"])
             if result == "ok":
                 self.uploaded_count += 1
                 self.failed_count -= 1
@@ -262,9 +262,9 @@ class ManifestStreamer:
             except BackendError as exc:
                 logger.warning("[!] [streamer] manifest presign failed: %s", exc)
                 return
-            url = urls.get("_manifest.jsonl")
-            if url:
-                self.put_fn(self.manifest_path, url)
+            spec = urls.get("_manifest.jsonl")
+            if spec:
+                self.post_fn(self.manifest_path, spec["url"], spec["fields"])
 
     def _bulk_put(self, items: list[tuple[Path, str]]) -> None:
         names = [rel for _, rel in items]
@@ -277,10 +277,10 @@ class ManifestStreamer:
 
         def _one(item: tuple[Path, str]) -> bool:
             path, relative = item
-            url = urls.get(relative)
-            if not url:
+            spec = urls.get(relative)
+            if not spec:
                 return False
-            return self.put_fn(path, url) == "ok"
+            return self.post_fn(path, spec["url"], spec["fields"]) == "ok"
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             for ok in pool.map(_one, items):

@@ -27,8 +27,8 @@ function StatusPill({ code }: { code?: number }) {
     <span
       className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums ${
         ok
-          ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
-          : "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical)]"
+          ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]"
+          : "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical-text)]"
       }`}
     >
       {code}

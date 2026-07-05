@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useId, useState } from "react"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { fetchSbomHistory, type SbomHistoryEntry } from "@/lib/client/sbom-api"
 import { relativeTime } from "@/lib/shared/relative-time"
 import { Button } from "@/components/ui/Button"
@@ -48,13 +48,18 @@ export function SbomScanSelector({
   // label/control associations unique and stable across both instances.
   const repoSelectId = useId()
   const snapshotSelectId = useId()
+  // Monotonic token: changing the repo quickly fires overlapping loads, and a
+  // slow earlier response must not overwrite a newer repo's history/selection.
+  const loadSeqRef = useRef(0)
 
   const loadHistory = useCallback(async (repoId: string) => {
+    const seq = ++loadSeqRef.current
     setHistoryState("loading")
     setHistory([])
     onHashChange(null)
     try {
       const entries = await fetchSbomHistory(repoId, 20)
+      if (loadSeqRef.current !== seq) return // a newer load superseded this one
       setHistory(entries)
       setHistoryState("ok")
       // Auto-select the most recent snapshot
@@ -62,7 +67,7 @@ export function SbomScanSelector({
         onHashChange(entries[0].run_id)
       }
     } catch {
-      setHistoryState("error")
+      if (loadSeqRef.current === seq) setHistoryState("error")
     }
   }, [onHashChange])
 

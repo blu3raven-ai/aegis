@@ -365,6 +365,25 @@ def test_webhook_returns_400_for_invalid_json(monkeypatch):
     assert resp.status_code == 400
 
 
+@pytest.mark.parametrize("body", [b"[]", b"5", b"null"])
+def test_webhook_returns_400_for_valid_json_non_object(monkeypatch, body):
+    # A signature-valid but non-object body must be a clean 400, not a 500
+    # from payload.get(...) on a list/int/None.
+    monkeypatch.setenv("JENKINS_WEBHOOK_SECRET", _SECRET)
+    app = _build_app()
+    client = TestClient(app)
+
+    resp = client.post(
+        "/integrations/jenkins/webhook",
+        content=body,
+        headers={
+            "Authorization": _bearer_header(),
+            "Content-Type": "application/json",
+        },
+    )
+    assert resp.status_code == 400
+
+
 # ── End-to-end: signed POST -> bus -> dispatch ─────────────────────────────────
 
 

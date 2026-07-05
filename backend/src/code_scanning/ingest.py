@@ -11,11 +11,30 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _TEMP_PREFIX_RE = re.compile(r"^/tmp/tmp\.[^/]+/")
+_CHECKOUT_MARKER = "_checkout/"
 
 
 def _strip_temp_prefix(path: str) -> str:
     """Strip Docker container temp-dir prefix from scanner file paths."""
     return _TEMP_PREFIX_RE.sub("", path) or path
+
+
+def repo_relative_path(path: str) -> str:
+    """Reduce a scanner-emitted path to its repo-relative form.
+
+    semgrep runs against the absolute clone directory, so its reported paths
+    carry the container temp-dir prefix *and* the clone's own ``<repo>/_checkout/``
+    prefix (e.g. ``/tmp/tmp.x/acme-repo/_checkout/app/db.py``). Both are runner
+    scaffolding, not part of the source tree. Stripping them here — at the single
+    ingest choke point — keeps the stored ``file_path``, the identity key (which
+    embeds it), the detail blob, and view-in-repo links all agreed on the same
+    repo-relative path, and matches the runner's own ``resolve_in_root``
+    re-anchoring. Re-anchor on the *last* ``_checkout/`` so a repo that legitimately
+    contains the segment deeper in its tree still resolves correctly.
+    """
+    stripped = _strip_temp_prefix(path)
+    idx = stripped.rfind(_CHECKOUT_MARKER)
+    return stripped[idx + len(_CHECKOUT_MARKER):] if idx != -1 else stripped
 
 
 MAX_JSONL_SIZE_MB = 200
@@ -165,9 +184,10 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                             raw.get("file_path", raw.get("path", "")),
                         )
                         engine = "semgrep"
+                    file_path = repo_relative_path(raw.get("file_path", raw.get("path", "")))
                     finding = {
                         "repo_full_name": raw.get("repo_full_name", raw.get("repository", "")),
-                        "file_path": _strip_temp_prefix(raw.get("file_path", raw.get("path", ""))),
+                        "file_path": file_path,
                         "start_line": raw.get("start_line", raw.get("startLine", 0)),
                         "end_line": raw.get("end_line", raw.get("endLine", 0)),
                         "rule_id": raw.get("rule_id", raw.get("ruleId", "")),
@@ -184,7 +204,7 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                         "code_window_start_line": raw.get("code_window_start_line"),
                         "imports": raw.get("imports") or "",
                         "file_class": raw.get("file_class") or "source",
-                        "language": _derive_language(raw.get("file_path", raw.get("path", ""))),
+                        "language": _derive_language(file_path),
                         "reachability": raw.get("reachability"),
                         "repo_html_url": raw.get("repo_html_url", ""),
                         "engine": engine,

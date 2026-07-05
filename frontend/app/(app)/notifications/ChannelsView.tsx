@@ -130,7 +130,7 @@ export function ChannelsView({
 
           {destsState === "loading" && <DestinationsLoadingSkeleton />}
           {destsState === "error" && (
-            <div className="flex items-center gap-3 text-sm text-[var(--color-severity-high)]">
+            <div className="flex items-center gap-3 text-sm text-[var(--color-severity-high-text)]">
               <span>Failed to load destinations.</span>
               <Button variant="ghost" size="xs" onClick={onReload}>
                 Retry
@@ -165,7 +165,7 @@ export function ChannelsView({
           {createError && (
             <p
               role="alert"
-              className="mb-3 text-sm text-[var(--color-severity-critical)]"
+              className="mb-3 text-sm text-[var(--color-severity-critical-text)]"
             >
               {createError}
             </p>

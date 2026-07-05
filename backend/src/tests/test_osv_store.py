@@ -110,3 +110,25 @@ async def test_get_advisory_detail_returns_none_when_missing():
     store = OsvStore()
     detail = await store.get_advisory_detail("GHSA-does-not-exist")
     assert detail is None
+
+
+@pytest.mark.asyncio
+async def test_upsert_advisories_stores_long_distro_ecosystem(monkeypatch):
+    """Linux-distro OSV ecosystems are unbounded upstream and must persist without
+    truncation. SUSE module names are the worst case seen in the wild — this one is
+    59 chars and used to abort the nightly refresh with a right-truncation error.
+    Guards against regressing `ecosystem` back to any bounded VARCHAR type."""
+    long_ecosystem = "SUSE:Linux Enterprise Module for Server Applications 15 SP3"
+    assert len(long_ecosystem) > 32
+
+    store = OsvStore()
+    monkeypatch.setattr("src.osv.store._upload_blob", lambda *a, **k: None)
+
+    written = await store.upsert_advisories(
+        [_adv("SUSE-SU-0001-1", ecosystem=long_ecosystem)], ecosystem=long_ecosystem
+    )
+
+    assert written == 1
+    ranges = await store.list_ranges_for_advisory("SUSE-SU-0001-1")
+    assert ranges
+    assert all(r.ecosystem == long_ecosystem for r in ranges)

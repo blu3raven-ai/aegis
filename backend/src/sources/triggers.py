@@ -16,7 +16,7 @@ _SCHEDULE_HOURS = {"1h": 1, "3h": 3, "6h": 6, "12h": 12, "24h": 24}
 
 # Which scanner job types run for each source category.
 SCANNERS_BY_CATEGORY: dict[str, list[str]] = {
-    "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning", "iac_scanning"],
+    "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning", "iac_scanning", "agent_scanning"],
     "container-registry": ["container_scanning"],
     "container-images": ["container_scanning"],
 }
@@ -58,6 +58,7 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
     """
     from src.runner.jobs import create_job
     from src.storage import (
+        create_agent_run,
         create_dependencies_run,
         create_code_scanning_run,
         create_container_scanning_run,
@@ -71,6 +72,7 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
         "code_scanning": create_code_scanning_run,
         "container_scanning": create_container_scanning_run,
         "iac_scanning": create_iac_run,
+        "agent_scanning": create_agent_run,
     }
 
     auth = connection.get("auth") or {}
@@ -123,8 +125,6 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
             "CONCURRENCY": "4",
             "SCAN_SCOPE":  "full_tree",
         }
-        if scanner_type == "secret_scanning":
-            env["SCAN_DEPTH"] = "deep"
 
         create_job(job_type=scanner_type, org=org, run_id=run_id, env_vars=env)
         queued.append(run_id)
@@ -137,9 +137,25 @@ async def run_source_sync(connection_id: str, *, emit_events: bool = True) -> di
 
     Returns the updated connection dict. Raises SourceNotFoundError if missing.
     """
+    from src.shared.encryption import DecryptionError
     from src.shared.event_bus import Event, get_event_bus
 
-    connection = sources_store.get_connection_with_secrets(connection_id)
+    try:
+        connection = sources_store.get_connection_with_secrets(connection_id)
+    except DecryptionError:
+        # The stored credential can't be decrypted under any configured root
+        # (the encryption key changed). Report that accurately instead of the
+        # misleading "missing token" that an empty decrypt used to produce.
+        return sources_store.update_connection_status(
+            connection_id,
+            status="disconnected",
+            status_message=(
+                "Stored credentials could not be decrypted — the encryption key "
+                "may have changed. Re-enter the token to reconnect."
+            ),
+            last_synced_at=_now_iso(),
+            next_sync_at=_next_sync_iso("6h"),
+        )
     sources_store.update_connection_status(connection_id, status="syncing")
 
     result = await test_connection(connection["sourceType"], connection["auth"])

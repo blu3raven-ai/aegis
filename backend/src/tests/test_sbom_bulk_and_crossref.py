@@ -9,7 +9,7 @@ import uuid
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from sqlalchemy import delete  # noqa: E402
 
@@ -283,6 +283,53 @@ async def test_bulk_lookup_flags_row_cap_truncation(db_session, monkeypatch):
             queries=["lodash", "axios", "zod"], info_context={"asset_ids": [a]}
         )
         assert exact.truncated is False
+    finally:
+        await _cleanup(db_session, a)
+
+
+@pytest.mark.asyncio
+async def test_bulk_lookup_reports_true_occurrence_total(db_session, monkeypatch):
+    # lodash present in 3 repos; cap the per-query occurrence LIST at 2. The
+    # occurrence_total must still report the true blast radius (3), not the cap.
+    ids = []
+    for i in range(3):
+        ids.append(await _add_asset(db_session, f"acme-org/r{i}", [
+            {"purl": "pkg:npm/lodash@4.0.0", "name": "lodash"},
+        ]))
+    try:
+        monkeypatch.setattr(resolvers_mod, "_MAX_BULK_OCCURRENCES", 2)
+        res = sbom_bulk_lookup(queries=["lodash"], info_context={"asset_ids": ids})
+        m = res.matches[0]
+        assert m.occurrence_total == 3
+        assert m.occurrences_truncated is True
+        assert len(m.occurrences) == 2
+    finally:
+        for a in ids:
+            await _cleanup(db_session, a)
+
+
+@pytest.mark.asyncio
+async def test_bulk_lookup_flags_input_truncation(db_session, monkeypatch):
+    # More pasted packages than the input cap: only the first N are checked and
+    # the overflow must be flagged (it appears in no bucket).
+    a = await _add_asset(db_session, "acme-org/api", [
+        {"purl": "pkg:npm/lodash@4.0.0", "name": "lodash"},
+    ])
+    try:
+        monkeypatch.setattr(resolvers_mod, "MAX_BULK_ITEMS", 2)
+        res = sbom_bulk_lookup(
+            queries=["lodash", "axios", "zod"], info_context={"asset_ids": [a]}
+        )
+        assert res.input_truncated is True
+        assert res.accepted_count == 2
+        assert len(res.matches) == 2  # only the first two were checked
+
+        monkeypatch.setattr(resolvers_mod, "MAX_BULK_ITEMS", 3)
+        exact = sbom_bulk_lookup(
+            queries=["lodash", "axios", "zod"], info_context={"asset_ids": [a]}
+        )
+        assert exact.input_truncated is False
+        assert exact.accepted_count == 3
     finally:
         await _cleanup(db_session, a)
 

@@ -1,7 +1,4 @@
-"""Locks in the API path convention from
-.claude/tmp/specs/2026-06-15-backend-api-path-standardization-design.md.
-
-Every application-API route must live under /api/v1/. Endpoints with an external
+"""Locks in the API path convention: every application-API route must live under /api/v1/. Endpoints with an external
 contract (webhooks, OAuth callbacks, SCIM, health, FastAPI built-ins) are
 allow-listed by exact path or by prefix.
 """

@@ -8,11 +8,11 @@ const ROOT = join(import.meta.dirname, "../..")
 // (#986): the old PostureBreakdownTab became a panels module, and the summary
 // view is now the one place that assembles those panels.
 const panels = readFileSync(
-  join(ROOT, "frontend/app/(app)/posture/PostureBreakdownPanels.tsx"),
+  join(ROOT, "frontend/app/(app)/insights/PostureBreakdownPanels.tsx"),
   "utf8",
 )
 const summary = readFileSync(
-  join(ROOT, "frontend/app/(app)/posture/PostureSummaryTab.tsx"),
+  join(ROOT, "frontend/app/(app)/insights/PostureSummaryTab.tsx"),
   "utf8",
 )
 

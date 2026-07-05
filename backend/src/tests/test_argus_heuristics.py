@@ -11,7 +11,6 @@ import pytest
 from src.argus.heuristics import (
     empty_rule_pack,
     heuristic_explain,
-    heuristic_go_no_go,
     heuristic_score,
 )
 
@@ -63,51 +62,6 @@ def test_score_is_capped_at_100():
 def test_score_rounds_to_two_decimals():
     # high(70) + 0.333*10 = 73.33
     assert heuristic_score("high", epss=0.333) == 73.33
-
-
-def test_go_no_go_blocks_on_critical_and_lists_blocker_ids():
-    findings = [
-        {"id": "F-1", "severity": "critical"},
-        {"id": "F-2", "severity": "low"},
-    ]
-    out = heuristic_go_no_go(findings)
-    assert out["decision"] == "block"
-    assert out["blockers"] == ["F-1"]
-    assert "critical" in out["rationale"].lower()
-
-
-def test_go_no_go_critical_without_id_still_blocks_with_empty_blocker():
-    out = heuristic_go_no_go([{"severity": "critical"}])
-    assert out["decision"] == "block"
-    assert out["blockers"] == []
-
-
-def test_go_no_go_warns_on_high_without_blockers():
-    out = heuristic_go_no_go([{"id": "F-9", "severity": "high"}])
-    assert out["decision"] == "warn"
-    # warn never carries blocker ids — only critical does.
-    assert out["blockers"] == []
-
-
-def test_go_no_go_allows_when_nothing_high_or_above():
-    out = heuristic_go_no_go(
-        [{"severity": "medium"}, {"severity": "low"}, {"severity": "info"}]
-    )
-    assert out["decision"] == "allow"
-    assert out["blockers"] == []
-
-
-def test_go_no_go_critical_wins_over_high():
-    out = heuristic_go_no_go(
-        [{"id": "H", "severity": "high"}, {"id": "C", "severity": "critical"}]
-    )
-    assert out["decision"] == "block"
-    assert out["blockers"] == ["C"]
-
-
-def test_go_no_go_empty_findings_allows():
-    out = heuristic_go_no_go([])
-    assert out["decision"] == "allow"
 
 
 def test_explain_renders_counts_and_chain_type():

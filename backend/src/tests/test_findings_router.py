@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.findings.router import router as findings_router  # noqa: E402
 
@@ -191,6 +191,7 @@ def test_patch_finding_assigns_when_in_scope():
                new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
          patch("src.findings.router.get_session", return_value=_Session([finding])), \
          patch("src.findings.router.assign_finding", new=fake_assign), \
+         patch("src.findings.router.notify_finding_assigned", new=AsyncMock()), \
          patch("src.findings.router._finding_to_dict",
                return_value={"id": 42, "assignee_user_id": "alice"}), \
          patch("src.findings.router.record_event"):
@@ -281,7 +282,7 @@ def test_reveal_secret_checks_permission():
          patch("src.findings.router.record_event"):
         client = TestClient(_make_app())
         client.get("/api/v1/findings/7/secret-value")
-    assert captured["perm"] == "review_findings"
+    assert captured["perm"] == "reveal_secret"
 
 
 def test_reveal_secret_404_when_out_of_scope():

@@ -2,10 +2,10 @@ import { ControlBadge } from "./ControlBadge"
 import { Card } from "@/components/ui/Card"
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: "text-[var(--color-severity-critical)]",
-  high: "text-[var(--color-severity-high)]",
-  medium: "text-[var(--color-severity-medium)]",
-  low: "text-[var(--color-severity-low)]",
+  critical: "text-[var(--color-severity-critical-text)]",
+  high: "text-[var(--color-severity-high-text)]",
+  medium: "text-[var(--color-severity-medium-text)]",
+  low: "text-[var(--color-severity-low-text)]",
 }
 
 interface ControlDetailHeroProps {
@@ -50,12 +50,12 @@ export function ControlDetailHero({
         {/* Status badge */}
         <div className="shrink-0">
           {atRisk ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-1 text-xs font-semibold text-[var(--color-severity-critical)]">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-1 text-xs font-semibold text-[var(--color-severity-critical-text)]">
               <span className="h-2 w-2 rounded-full bg-[var(--color-severity-critical)]" />
               At Risk
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-3 py-1 text-xs font-semibold text-[var(--color-status-ok)]">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-3 py-1 text-xs font-semibold text-[var(--color-status-ok-text)]">
               <span className="h-2 w-2 rounded-full bg-[var(--color-status-ok)]" />
               Compliant
             </span>
@@ -70,7 +70,7 @@ export function ControlDetailHero({
             Open Findings
           </div>
           <div
-            className={`mt-0.5 text-2xl font-semibold leading-none tabular-nums ${findingCount > 0 ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-primary)]"}`}
+            className={`mt-0.5 text-2xl font-semibold leading-none tabular-nums ${findingCount > 0 ? "text-[var(--color-severity-critical-text)]" : "text-[var(--color-text-primary)]"}`}
           >
             {findingCount}
           </div>

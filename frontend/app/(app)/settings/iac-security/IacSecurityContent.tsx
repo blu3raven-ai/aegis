@@ -64,13 +64,13 @@ export function IacSecurityContent() {
 
   if (!settings) {
     return (
-      <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-3 text-sm text-[var(--color-severity-critical)]">
+      <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-3 text-sm text-[var(--color-severity-critical-text)]">
         <p>{error ?? "Could not load settings."}</p>
         <Button
           variant="secondary"
           size="sm"
           onClick={() => void loadSettings()}
-          className="mt-3 border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+          className="mt-3 border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical-text)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
         >
           Retry
         </Button>

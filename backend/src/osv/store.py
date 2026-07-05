@@ -21,6 +21,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.db.models import OsvAdvisory, OsvVulnerableRange
+from src.osv.malicious import is_malicious_advisory
+from src.osv.severity import severity_word_from_osv_body
 from src.shared.object_store import get_s3_client
 
 logger = logging.getLogger(__name__)
@@ -87,28 +89,18 @@ def _parse_iso(value: Any) -> datetime | None:
         return None
 
 
-_SEVERITY_WORDS = {
-    "CRITICAL": "critical",
-    "HIGH": "high",
-    "MODERATE": "medium",
-    "MEDIUM": "medium",
-    "LOW": "low",
-}
-
-
 def _derive_severity(adv: dict) -> str | None:
     """Short severity level for the header row (fits VARCHAR(16)).
 
-    OSV's ``severity[].score`` is a CVSS *vector* string, not a number — far too
-    long for the header column and not a human level. The level word lives in
-    ``database_specific.severity`` for GHSA-sourced advisories; the full CVSS
-    vector is preserved in the MinIO blob body. Returns None when unknown.
+    Reads ``database_specific.severity`` when present, otherwise maps the CVSS
+    vector's base score to a band (see ``osv.severity``); the full CVSS vector
+    stays in the MinIO blob body. Returns None when neither is available.
     """
-    ds = adv.get("database_specific") or {}
-    word = ds.get("severity")
-    if isinstance(word, str) and word.strip().upper() in _SEVERITY_WORDS:
-        return _SEVERITY_WORDS[word.strip().upper()]
-    return None
+    # Malicious-package reports carry no CVSS; the package itself is
+    # compromised, so they are always treated as critical.
+    if is_malicious_advisory(adv.get("id")):
+        return "critical"
+    return severity_word_from_osv_body(adv)
 
 
 def _flatten_ranges(adv: dict, fallback_ecosystem: str) -> list[dict]:
@@ -166,8 +158,14 @@ def _flatten_ranges(adv: dict, fallback_ecosystem: str) -> list[dict]:
 
         if produced == 0:
             # No usable ranges — fall back to the explicit affected-version list.
-            for ver in affected.get("versions") or []:
+            versions = affected.get("versions") or []
+            for ver in versions:
                 rows.append(_row(pkg_name, ecosystem, str(ver), None, str(ver)))
+            if not versions and is_malicious_advisory(adv.get("id")):
+                # Malicious-package reports frequently name the package with no
+                # ranges or versions — the whole package is compromised. Emit an
+                # open-ended interval so every installed version matches.
+                rows.append(_row(pkg_name, ecosystem, "0", None, None))
 
     return rows
 
@@ -205,6 +203,7 @@ class OsvStore:
                     ecosystem=ecosystem,
                     summary=adv.get("summary"),
                     severity=_derive_severity(adv),
+                    kind="malicious" if is_malicious_advisory(adv_id) else "vulnerability",
                     blob_key=blob_key,
                     published_at=_parse_iso(adv.get("published")),
                     modified_at=_parse_iso(adv.get("modified")) or now,
@@ -214,6 +213,7 @@ class OsvStore:
                     set_={
                         "summary": pg_insert(OsvAdvisory).excluded.summary,
                         "severity": pg_insert(OsvAdvisory).excluded.severity,
+                        "kind": pg_insert(OsvAdvisory).excluded.kind,
                         "blob_key": pg_insert(OsvAdvisory).excluded.blob_key,
                         "published_at": pg_insert(OsvAdvisory).excluded.published_at,
                         "modified_at": pg_insert(OsvAdvisory).excluded.modified_at,

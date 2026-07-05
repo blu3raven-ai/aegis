@@ -54,11 +54,11 @@ function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void 
   return (
     <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 shadow-[var(--shadow-nav)] text-sm text-[var(--color-text-primary)]">
       {tone === "ok" ? (
-        <svg className="h-4 w-4 shrink-0 text-[var(--color-status-ok)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg className="h-4 w-4 shrink-0 text-[var(--color-status-ok-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M5 13l4 4L19 7" />
         </svg>
       ) : (
-        <svg className="h-4 w-4 shrink-0 text-[var(--color-severity-critical)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg className="h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
         </svg>
       )}
@@ -100,7 +100,7 @@ function ToastLiveRegion({ toast }: { toast: ToastState | null }) {
 function ErrorState({ repoName, onRetry }: { repoName: string; onRetry: () => void }) {
   return (
     <div role="alert" className="flex flex-col items-center justify-center gap-4 py-20 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical)]">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical-text)]">
         <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
         </svg>
@@ -126,12 +126,17 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
   // header/empty/error states don't show a raw UUID. Falls back to the id only
   // while the lookup is in flight or if the asset can't be resolved.
   const [resolvedName, setResolvedName] = useState<string | null>(null)
+  // The Findings repo filter matches on display_name; keep it separate from the
+  // header label (which may fall back to org/repo) so the vuln-badge deep-links
+  // only scope when we have the exact key — otherwise they stay estate-wide.
+  const [repoDisplayName, setRepoDisplayName] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
     getRepo(repoId)
       .then((r) => {
         if (cancelled || !r) return
         setResolvedName(r.display_name || [r.org, r.repo].filter(Boolean).join("/") || null)
+        setRepoDisplayName(r.display_name || null)
       })
       .catch(() => {})
     return () => {
@@ -212,14 +217,18 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
       const entries = await fetchSbomHistory(repoId, HISTORY_LIMIT)
       setHistory(entries)
       setHistoryState("ok")
-      if (entries.length > 0 && !selectedHash) {
-        setSelectedHash(entries[0].run_id)
+      // Default the selection to the latest snapshot via a functional updater so
+      // selectedHash stays OUT of this callback's deps — otherwise selecting it
+      // here would recreate loadHistory and re-fire the mount effect (a redundant
+      // second history+sbom+vulns fetch).
+      if (entries.length > 0) {
+        setSelectedHash((prev) => prev ?? entries[0].run_id)
       }
     } catch {
       setHistoryState("error")
       setHistory([])
     }
-  }, [repoId, selectedHash])
+  }, [repoId])
 
   useEffect(() => {
     void loadSbom()
@@ -252,6 +261,12 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
   }
 
   const latestEntry = history[0]
+  // The snapshot actually on screen: the one matching selectedHash, else latest.
+  // Drives the header hash/timestamp so it reflects what the body shows.
+  const viewedEntry =
+    (selectedHash ? history.find((e) => e.run_id === selectedHash) : undefined) ?? latestEntry
+  const isHistoricalSnapshot =
+    latestEntry != null && viewedEntry != null && viewedEntry.run_id !== latestEntry.run_id
 
   // Nothing to export or browse when the repo has no SBOM and no prior
   // snapshots — drop the header actions so they don't dangle over the empty
@@ -263,7 +278,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
     <div className="flex h-full flex-col overflow-hidden bg-[var(--color-bg)]">
       <SbomHeader
         repoName={repoName}
-        latestEntry={latestEntry}
+        latestEntry={viewedEntry}
         historyCount={history.length}
         historyAtCap={history.length >= HISTORY_LIMIT}
         historyError={historyState === "error"}
@@ -272,6 +287,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
         onHistoryOpen={() => setHistoryDrawerOpen(true)}
         exportLoading={exportLoading}
         showActions={!hasNoSbom}
+        isHistoricalSnapshot={isHistoricalSnapshot}
       />
 
       {/* Body */}
@@ -307,6 +323,17 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
                   Vulnerability overlay unavailable
                 </span>
               )}
+              {viewMode === "components" && isHistoricalSnapshot && !vulnsError && (
+                <span
+                  className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-tertiary)]"
+                  title="You're viewing an older snapshot, but the vulnerability counts reflect the current open findings from the latest scan — not this snapshot's state at the time."
+                >
+                  <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                  </svg>
+                  Vuln counts reflect the latest scan
+                </span>
+              )}
             </div>
 
             {viewMode === "components" ? (
@@ -316,6 +343,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
                 vulns={vulns}
                 vulnsLoading={vulnsLoading}
                 directness={directness}
+                repo={repoDisplayName ?? undefined}
               />
             ) : (
               <div className="flex-1 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">

@@ -12,10 +12,10 @@
 import { FindingAge } from "@/components/shared/findings/FindingAge"
 
 const SEV_STYLES = {
-  critical: "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical)]",
-  high: "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high)]",
-  medium: "bg-[var(--color-severity-medium)]/10 text-[var(--color-severity-medium)]",
-  low: "bg-[var(--color-severity-low)]/10 text-[var(--color-severity-low)]",
+  critical: "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical-text)]",
+  high: "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high-text)]",
+  medium: "bg-[var(--color-severity-medium)]/10 text-[var(--color-severity-medium-text)]",
+  low: "bg-[var(--color-severity-low)]/10 text-[var(--color-severity-low-text)]",
 } as const
 
 type Severity = keyof typeof SEV_STYLES

@@ -40,7 +40,7 @@ def refresh_kev_catalog() -> dict:
     logger.info("kev_refresh: fetched %d entries, upserting", len(entries))
 
     service = KevService()
-    new_count = service.upsert_catalog(entries)
+    new_cve_ids = service.upsert_catalog(entries)
 
     # KEV state changes bump risk_score for every finding whose CVE was
     # added or removed — recompute across orgs so the UI reflects the feed.
@@ -52,11 +52,26 @@ def refresh_kev_catalog() -> dict:
 
     rescored = run_db(_rescore)
 
+    # Notify users whose repositories are affected by the newly KEV-listed CVEs.
+    notified = 0
+    if new_cve_ids:
+        from src.notifications.producers import notify_kev_affected_users
+
+        async def _notify(session):
+            return await notify_kev_affected_users(session, new_cve_ids)
+
+        notified = run_db(_notify)
+
     logger.info(
-        "kev_refresh: done — %d new entries added, %d findings rescored",
-        new_count, rescored,
+        "kev_refresh: done — %d new entries added, %d findings rescored, %d users notified",
+        len(new_cve_ids), rescored, notified,
     )
-    return {"fetched": len(entries), "new": new_count, "rescored": rescored}
+    return {
+        "fetched": len(entries),
+        "new": len(new_cve_ids),
+        "rescored": rescored,
+        "notified": notified,
+    }
 
 
 if __name__ == "__main__":

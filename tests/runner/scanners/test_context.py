@@ -64,7 +64,7 @@ def test_resolve_in_root_reanchors_checkout_prefix(tmp_path):
     # emits the absolute target, so after the temp-prefix strip the path still
     # carries the "<repo>/_checkout/" prefix and double-counts when joined.
     (tmp_path / "server.py").write_text("x")
-    got = resolve_in_root(tmp_path, "ilmu-asr-poc/_checkout/server.py")
+    got = resolve_in_root(tmp_path, "example-repo/_checkout/server.py")
     assert got == (tmp_path / "server.py").resolve()
 
 
@@ -87,6 +87,6 @@ def test_resolve_in_root_jails_escape_and_missing(tmp_path):
 def test_read_code_window_resolves_through_checkout_prefix(tmp_path):
     # Before the fix this returned (None, None) — the SAST "No code captured" bug.
     (tmp_path / "server.py").write_text("\n".join(f"l{i}" for i in range(1, 21)))
-    text, start = read_code_window(tmp_path, "ilmu-asr-poc/_checkout/server.py", 10, radius=2)
+    text, start = read_code_window(tmp_path, "example-repo/_checkout/server.py", 10, radius=2)
     assert start == 8
     assert "l10" in text

@@ -231,16 +231,16 @@ interface NavGroupSpec {
   items: NavItem[]
 }
 
-// Two top-level buckets: everything scoped to the signed-in user under
-// "Personal", everything that is org-admin under "Organization". API tokens are
-// personal access tokens, so they live in Personal — not the org cluster.
+// Three top-level buckets: user-scoped settings under "Personal", org-admin
+// under "Organization", and licensed capability add-ons (LLM verification,
+// Argus threat intel, License) under "Add-ons". API tokens are personal access
+// tokens, so they live in Personal — not the org cluster.
 const NAV_GROUPS: NavGroupSpec[] = [
   {
     label: "Personal",
     items: [
-      { id: "profile", href: "#profile", label: "Profile", icon: ICONS.user },
+      { id: "account", href: "#account", label: "Account", icon: ICONS.user },
       { id: "notifications", href: "#notifications", label: "Notifications", icon: ICONS.bell },
-      { id: "security", href: "#security", label: "Security & Sessions", icon: ICONS.shield },
       { id: "api-keys", href: "#api-keys", label: "API Tokens", icon: ICONS.key },
     ],
   },
@@ -251,7 +251,13 @@ const NAV_GROUPS: NavGroupSpec[] = [
       { id: "sso", href: "#sso", label: "SSO / SAML", icon: ICONS.lock },
       { id: "audit", href: "#audit", label: "Audit Log", icon: ICONS.scroll },
       { id: "runners", href: "#runners", label: "Runners", icon: ICONS.runner },
-      { id: "argus", href: "#argus", label: "Argus", icon: ICONS.sparkles },
+    ],
+  },
+  {
+    label: "Add-ons",
+    items: [
+      { id: "llm", href: "#llm", label: "LLM verification", icon: ICONS.sparkles },
+      { id: "advisory-data", href: "#advisory-data", label: "Advisory Data", icon: ICONS.shield },
       { id: "license", href: "#license", label: "License", icon: ICONS.badge },
     ],
   },
@@ -316,8 +322,10 @@ function NavGroup({
               href={item.href}
               aria-current={active ? "page" : undefined}
               onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                // Scroll-only: the URL hash is reserved for opening a section
+                // modal (deep links like /settings#argus), so nav clicks must
+                // not set it — they just bring the card into view.
                 e.preventDefault()
-                window.history.pushState(null, "", item.href)
                 scrollMainTo(item.id, "smooth")
               }}
               className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors ${

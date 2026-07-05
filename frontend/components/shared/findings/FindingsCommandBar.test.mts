@@ -14,10 +14,8 @@ describe("FindingsCommandBar (findings-specific wrapper)", () => {
   })
 
   it("declares every supported attribute in the static catalogue", () => {
-    // Scanner ("tool") moved to the top-level scanner tabs in FindingsBoardView,
-    // so it's intentionally absent here.
     for (const key of [
-      '"severity"', '"state"', '"assignee"', '"cwe"',
+      '"severity"', '"state"', '"scanner"', '"assignee"', '"cwe"',
       '"kev"', '"epss"', '"bands"',
     ]) {
       assert.ok(src.includes(`key: ${key}`), `STATIC_ATTRIBUTES must include ${key}`)
@@ -31,9 +29,9 @@ describe("FindingsCommandBar (findings-specific wrapper)", () => {
     assert.match(src, /customPickers=\{\{ bands: BandMultiPicker \}\}/)
   })
 
-  it("no longer carries a scanner ('tool') control — that lives in the scanner tabs", () => {
-    assert.doesNotMatch(src, /key: "tool"/)
-    assert.doesNotMatch(src, /onScannerChange/)
+  it("carries scanner as an enum attribute wired to onScannerChange", () => {
+    assert.match(src, /key: "scanner"[\s\S]*?type: "enum"/)
+    assert.match(src, /onScannerChange/)
   })
 
   it("flags KEV as a danger-variant boolean attribute", () => {
@@ -49,10 +47,11 @@ describe("FindingsCommandBar (findings-specific wrapper)", () => {
     assert.match(src, /displayValue:\s*\(raw\)\s*=>\s*`≥ \$\{raw\}`/)
   })
 
-  it("translates a removed filter (null) back to 'all' for severity, repo, state", () => {
+  it("translates a removed filter (null) back to 'all' for severity, repo, state, scanner", () => {
     assert.match(src, /onSeverityChange\(value \?\? "all"\)/)
     assert.match(src, /onRepoChange\(value \?\? "all"\)/)
     assert.match(src, /onStateChange\(value \?\? "all"\)/)
+    assert.match(src, /onScannerChange\(value \?\? "all"\)/)
   })
 
   it("slots FindingsDisplayOverflow as the page-specific overflow", () => {

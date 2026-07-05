@@ -138,7 +138,7 @@ export function ActivityView() {
           {error && (
             <div
               role="alert"
-              className="mb-4 rounded-lg border border-[var(--color-severity-high-border)] bg-[var(--color-severity-high-subtle)] px-4 py-3 text-sm text-[var(--color-severity-high)]"
+              className="mb-4 rounded-lg border border-[var(--color-severity-high-border)] bg-[var(--color-severity-high-subtle)] px-4 py-3 text-sm text-[var(--color-severity-high-text)]"
             >
               {error}
             </div>
