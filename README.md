@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/logo-brand.png" alt="Aegis" width="80" />
+  <img src="frontend/public/logo-brand.png" alt="Aegis" width="80" />
 </p>
 
 <h1 align="center">Aegis</h1>
@@ -169,8 +169,6 @@ See [docs/architecture.md](docs/architecture.md) for a deep dive into the system
 │       ├── agent/            Agent-threat detection (in-process)
 │       └── _shared.py        Shared LLM client and scan budget utilities
 ├── integrations/     CI/CD artifacts (GitHub Action, GitLab CI Component, etc.)
-├── cli/              aegis CLI for CI/CD pipelines
-├── vscode-extension/ VS Code extension wrapping the CLI
 └── tests/            E2E tests (Playwright)
 ```
 

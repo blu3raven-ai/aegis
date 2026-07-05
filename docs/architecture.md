@@ -40,7 +40,7 @@ This boundary lets the runner be replaced or sharded without touching backend co
 
 ```
 backend/src/
-├── auth/               Authentication, sessions, SSO (SAML/OIDC), SCIM, MFA
+├── auth/               Authentication, sessions, SSO (SAML/OIDC), MFA
 ├── authz/              Permission catalog, declarative enforcement, scope resolution
 ├── findings/           Unified findings API, lifecycle, decisions, assignments
 ├── scans/              Scan orchestration, job dispatch, BYO ingest
@@ -214,7 +214,7 @@ Scanner modules read job parameters from `JobEnv` (the encrypted `envVars` paylo
 ## Scan Lifecycle
 
 ```
-1. User initiates scan (UI or CLI)
+1. User initiates scan (UI or API)
        │
 2. Backend creates scan_run record (status: queued)
    and dispatches one job per scanner type
