@@ -133,19 +133,14 @@ def test_backend_llm_env_keys_match_runner_read_keys():
     # follow the same path. Dependency + container scans no longer verify on the
     # runner (the backend matches SBOMs against the OSV mirror), and secrets rely
     # on TruffleHog verification rather than the LLM, so only the scanners that
-    # still run agentic verification build an LLM client. Code scanning uses the
-    # shared _shared.build_llm_client; iac still carries its own local copy.
+    # still run agentic verification build an LLM client. All verifying scanners
+    # share build_llm_client from runner.scanners._shared.
     from runner.scanners._shared import build_llm_client as shared_builder
-    from runner.scanners.iac.scanner import _build_llm_client as iac_builder
 
-    for label, fn in (
-        ("shared",  shared_builder),
-        ("iac",     iac_builder),
-    ):
-        src = inspect.getsource(fn)
-        assert 'env.get("LLM_API_KEY")' in src, (
-            f"{label} scanner's _build_llm_client does not read LLM_API_KEY "
-            f"from JobEnv. The backend ships the key in job['envVars'], not "
-            f"in the process environment, so reading from os.environ here "
-            f"silently disables agentic verification for this scanner."
-        )
+    src = inspect.getsource(shared_builder)
+    assert 'env.get("LLM_API_KEY")' in src, (
+        "shared build_llm_client does not read LLM_API_KEY from JobEnv. "
+        "The backend ships the key in job['envVars'], not in the process "
+        "environment, so reading from os.environ here silently disables "
+        "agentic verification for all scanners."
+    )
