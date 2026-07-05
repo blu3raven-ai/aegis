@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import type { SourceCategory, SourceType, SourceConnectionAuth } from "@/lib/shared/sources-types"
+import type { SourceCategory, SourceType, SourceConnectionAuth, ConnectionMethod } from "@/lib/shared/sources-types"
 import {
   SOURCE_TYPE_FIELDS,
   CATEGORY_SOURCE_TYPES,
@@ -13,7 +13,7 @@ import {
   createSourceConnection,
   testNewSourceConnection,
   syncSourceConnection,
-} from "@/lib/client/sources-api"
+} from "@/lib/client/source-connections-api"
 
 // ─── Provider Logo (small, for type selection) ────────────────────────────────
 
@@ -158,6 +158,7 @@ export function AddConnectionModal({
       auth,
       scanScope: "all" as const,
       excludedItems: [],
+      connectionMethods: ["pat"] as ConnectionMethod[],
       syncSchedule: "6h" as const,
       status: "not-synced" as const,
     }

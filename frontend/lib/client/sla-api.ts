@@ -2,6 +2,29 @@
 
 import { apiClient } from "./api-client.ts"
 
+export interface SlaPolicy {
+  severity: "critical" | "high" | "medium" | "low"
+  deadline_days: number
+  enabled: boolean
+}
+
+export interface UpdateSlaPolicyPayload {
+  deadline_days: number
+  enabled: boolean
+}
+
+export async function listSlaPolicies(): Promise<SlaPolicy[]> {
+  const data = await apiClient<{ policies: SlaPolicy[] }>("/api/v1/sla/policies")
+  return data.policies
+}
+
+export async function updateSlaPolicy(severity: string, payload: UpdateSlaPolicyPayload): Promise<SlaPolicy> {
+  return apiClient<SlaPolicy>(`/api/v1/sla/policies/${encodeURIComponent(severity)}`, {
+    method: "PATCH",
+    body: payload,
+  })
+}
+
 export interface SlaSeverityBreach {
   open: number
   breached: number

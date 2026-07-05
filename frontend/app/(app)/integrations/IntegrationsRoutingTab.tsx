@@ -3,12 +3,11 @@
 import { RoutingRulesPanel } from "@/components/shared/notifications/RoutingRulesPanel"
 
 interface IntegrationsRoutingTabProps {
-  orgId: string
   // keyHint re-mounts the panel so it re-fetches its own destination list when one is added or removed
   keyHint: number
 }
 
-export function IntegrationsRoutingTab({ orgId, keyHint }: IntegrationsRoutingTabProps) {
+export function IntegrationsRoutingTab({ keyHint }: IntegrationsRoutingTabProps) {
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 space-y-8">
       <section>
@@ -19,7 +18,7 @@ export function IntegrationsRoutingTab({ orgId, keyHint }: IntegrationsRoutingTa
             Evaluated top-down · first match wins per channel
           </p>
         </div>
-        <RoutingRulesPanel key={keyHint} orgId={orgId} />
+        <RoutingRulesPanel key={keyHint} />
       </section>
     </div>
   )

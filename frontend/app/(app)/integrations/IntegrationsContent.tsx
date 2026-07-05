@@ -66,7 +66,7 @@ export function IntegrationsContent() {
 
   const loadDestinations = useCallback(() => {
     setDestsState("loading")
-    listDestinations(ORG_ID)
+    listDestinations()
       .then((rows) => { setDestinations(rows); setDestsState("ok") })
       .catch(() => setDestsState("error"))
   }, [])
@@ -106,7 +106,7 @@ export function IntegrationsContent() {
   const handleTest = useCallback(async (dest: NotificationDestination) => {
     setTestStatuses((prev) => ({ ...prev, [dest.id]: { kind: "sending" } }))
     try {
-      const result: TestSendResult = await testDestination(dest.id, ORG_ID)
+      const result: TestSendResult = await testDestination(dest.id)
       setTestStatuses((prev) => ({
         ...prev,
         [dest.id]:
@@ -251,7 +251,7 @@ export function IntegrationsContent() {
       )}
 
       {activeTab === "routing" && (
-        <IntegrationsRoutingTab orgId={ORG_ID} keyHint={destinations.length} />
+        <IntegrationsRoutingTab keyHint={destinations.length} />
       )}
 
       {/* Destination detail drawer — shared across tabs so deep-linking works */}
@@ -264,7 +264,6 @@ export function IntegrationsContent() {
       )}
       <DestinationDrawer
         destination={selectedDest}
-        orgId={ORG_ID}
         open={drawerOpen}
         onClose={() => { setDrawerOpen(false); setSelectedDest(null) }}
         onUpdated={handleUpdated}

@@ -25,7 +25,7 @@ function CodeDashboard() {
       pageTitle="Code Scanning"
       pageIcon={<FindingsIcon />}
       pageDescription="Findings from static code analysis."
-      initialScannerFilter="sast"
+      initialScannerFilter="code_scanning"
     />
   )
 }

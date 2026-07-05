@@ -35,7 +35,7 @@ export function ApiKeysSection() {
         </SettingsHeaderButton>
       }
     >
-      <ApiKeysContent createTriggerRef={createTriggerRef} />
+      <ApiKeysContent />
     </SettingsSection>
   )
 }

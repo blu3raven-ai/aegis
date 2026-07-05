@@ -151,7 +151,7 @@ export function RulesPageContent() {
 
   useEffect(() => {
     let cancelled = false
-    listDestinations(ORG_ID)
+    listDestinations()
       .then((ds) => {
         if (!cancelled) setDestinations(ds)
       })
@@ -170,12 +170,12 @@ export function RulesPageContent() {
       setLoading(true)
       try {
         const [s, slaList, coverageList, autoList, retentionList, ks] = await Promise.all([
-          getRulesSummary(ORG_ID),
-          listRules(ORG_ID, { category: "sla" }),
-          listRules(ORG_ID, { category: "scanner_coverage" }),
-          listRules(ORG_ID, { category: "auto_dismiss" }),
-          listRules(ORG_ID, { category: "data_retention" }),
-          listKillSwitches(ORG_ID),
+          getRulesSummary(),
+          listRules({ category: "sla" }),
+          listRules({ category: "scanner_coverage" }),
+          listRules({ category: "auto_dismiss" }),
+          listRules({ category: "data_retention" }),
+          listKillSwitches(),
         ])
         if (cancelled) return
         setStats(s)
@@ -208,12 +208,12 @@ export function RulesPageContent() {
     setLoading(true)
     try {
       const [s, slaList, coverageList, autoList, retentionList, ks] = await Promise.all([
-        getRulesSummary(ORG_ID),
-        listRules(ORG_ID, { category: "sla" }),
-        listRules(ORG_ID, { category: "scanner_coverage" }),
-        listRules(ORG_ID, { category: "auto_dismiss" }),
-        listRules(ORG_ID, { category: "data_retention" }),
-        listKillSwitches(ORG_ID),
+        getRulesSummary(),
+        listRules({ category: "sla" }),
+        listRules({ category: "scanner_coverage" }),
+        listRules({ category: "auto_dismiss" }),
+        listRules({ category: "data_retention" }),
+        listKillSwitches(),
       ])
       if (cancelledRef.current) return
       setStats(s)
@@ -236,7 +236,7 @@ export function RulesPageContent() {
 
   async function handleToggle(rule: RuleSummary) {
     try {
-      await toggleRule(ORG_ID, rule.id)
+      await toggleRule(rule.id)
       await reload()
     } catch (err) {
       console.error("Failed to toggle rule", err)
@@ -245,7 +245,7 @@ export function RulesPageContent() {
 
   async function handleDelete(rule: RuleSummary) {
     try {
-      await deleteRule(ORG_ID, rule.id)
+      await deleteRule(rule.id)
       await reload()
     } catch (err) {
       console.error("Failed to delete rule", err)
@@ -286,7 +286,7 @@ export function RulesPageContent() {
     setKillSwitchSaving(true)
     setKillSwitchError(null)
     try {
-      await engageKillSwitch(ORG_ID, "auto_dismiss", reason || undefined)
+      await engageKillSwitch("auto_dismiss", reason || undefined)
       setKillSwitchDialogOpen(false)
       await reload()
     } catch (err) {
@@ -302,7 +302,7 @@ export function RulesPageContent() {
   async function handleDisengageKillSwitch() {
     setKillSwitchError(null)
     try {
-      await disengageKillSwitch(ORG_ID, "auto_dismiss")
+      await disengageKillSwitch("auto_dismiss")
       await reload()
     } catch (err) {
       console.error("Failed to disengage kill switch", err)
@@ -319,7 +319,7 @@ export function RulesPageContent() {
       if (payload.create) {
         await createRule(payload.create)
       } else if (payload.update && editorRule) {
-        await updateRule(ORG_ID, editorRule.id, payload.update)
+        await updateRule(editorRule.id, payload.update)
       }
       setEditorOpen(false)
       await reload()
@@ -481,7 +481,6 @@ export function RulesPageContent() {
         category={editorCategory}
         initialRule={editorRule}
         destinations={destinations}
-        orgId={ORG_ID}
         onClose={() => setEditorOpen(false)}
         onSave={handleSave}
         saving={editorSaving}
