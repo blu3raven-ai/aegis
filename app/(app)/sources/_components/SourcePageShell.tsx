@@ -27,7 +27,7 @@ function EmptyState({
   const itemLabel = CATEGORY_ITEM_LABELS[category]
   return (
     <div className="py-8">
-      <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
         <div className="mx-auto max-w-md text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)]/10">
             {icon}
@@ -62,7 +62,7 @@ function LoadingSkeleton() {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-28 motion-safe:animate-pulse rounded-3xl bg-[var(--color-surface-raised)]" />
+          <div key={i} className="h-28 motion-safe:animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />
         ))}
       </div>
       <div className="h-20 motion-safe:animate-pulse rounded-2xl bg-[var(--color-surface-raised)]" />
@@ -76,16 +76,34 @@ interface SourcePageShellProps {
   category: SourceCategory
   canEdit: boolean
   icon: React.ReactNode
+  /** When false, the internal PageHeader is omitted (caller provides chrome). */
+  showHeader?: boolean
+  /** Caller-controlled modal open state — used when the trigger button lives in the parent header. */
+  controlledShowAdd?: boolean
+  onControlledShowAddChange?: (open: boolean) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SourcePageShell({ category, canEdit, icon }: SourcePageShellProps) {
+export function SourcePageShell({
+  category,
+  canEdit,
+  icon,
+  showHeader = true,
+  controlledShowAdd,
+  onControlledShowAddChange,
+}: SourcePageShellProps) {
   const router = useRouter()
   const [connections, setConnections] = useState<SourceConnection[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [showAddModal, setShowAddModal] = useState(false)
+  const [internalShowAdd, setInternalShowAdd] = useState(false)
+
+  // When the caller controls the modal (header button pattern), use its state; otherwise use internal.
+  const showAddModal = controlledShowAdd !== undefined ? controlledShowAdd : internalShowAdd
+  const setShowAddModal = controlledShowAdd !== undefined
+    ? (open: boolean) => onControlledShowAddChange?.(open)
+    : setInternalShowAdd
 
   const categorySlug = CATEGORY_API_SLUGS[category]
   const title = CATEGORY_LABELS[category]
@@ -123,23 +141,25 @@ export function SourcePageShell({ category, canEdit, icon }: SourcePageShellProp
 
   return (
     <>
-      {/* Shared PageHeader — matches tool dashboards */}
-      <PageHeader
-        icon={icon}
-        title={title}
-        org={description}
-        controls={
-          canEdit ? (
-            <button
-              type="button"
-              onClick={() => setShowAddModal(true)}
-              className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
-            >
-              Add Connection
-            </button>
-          ) : undefined
-        }
-      />
+      {/* Shared PageHeader — matches tool dashboards. Suppressed when the caller renders its own chrome (e.g. /sources tabs). */}
+      {showHeader && (
+        <PageHeader
+          icon={icon}
+          title={title}
+          org={description}
+          controls={
+            canEdit ? (
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+              >
+                Add Connection
+              </button>
+            ) : undefined
+          }
+        />
+      )}
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl space-y-5 px-6 py-8">

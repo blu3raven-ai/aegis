@@ -8,7 +8,7 @@ test.describe("Scan lifecycle", () => {
 
     if (await scanButton.isVisible({ timeout: 5000 })) {
       const responsePromise = page.waitForResponse(
-        (res) => res.url().includes("/secrets/api/runs") && res.request().method() === "POST",
+        (res) => res.url().includes("/api/v1/secrets/runs") && res.request().method() === "POST",
         { timeout: 10_000 }
       )
       await scanButton.click()

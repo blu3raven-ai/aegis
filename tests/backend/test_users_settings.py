@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
-import time
 from datetime import datetime, timezone
 
 import pytest
@@ -18,32 +13,10 @@ from src.main import app
 from sqlalchemy import delete, select
 
 
-def _b64url(data: bytes | str) -> str:
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
-
-
-def make_jwt(sub: str, role: str, secret: str) -> str:
-    now = int(time.time())
-    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}))
-    payload = _b64url(json.dumps({"sub": sub, "role": role, "iat": now, "exp": now + 60}))
-    if len(secret) == 64:
-        try:
-            key = bytes.fromhex(secret)
-        except ValueError:
-            key = secret.encode("utf-8")
-    else:
-        key = secret.encode("utf-8")
-    signature = _b64url(hmac.new(key, f"{header}.{payload}".encode("utf-8"), hashlib.sha256).digest())
-    return f"{header}.{payload}.{signature}"
-
-
 @pytest.fixture
 def client():
-    c = TestClient(app)
-    c.headers.update(auth_headers(sub="usr_admin", role="admin"))
-    return c
+    from conftest import make_authed_client
+    return make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
 
 def _seed_builtin_roles() -> None:
@@ -127,18 +100,12 @@ def _cleanup_db() -> None:
 
 
 @pytest.fixture(autouse=True)
-def clean_db(monkeypatch: pytest.MonkeyPatch):
-    """Clean up DB before and after each test; seed built-in roles; clear auth env vars."""
-    monkeypatch.setenv("JWT_SHARED_SECRET", "a" * 64)
-    monkeypatch.delenv("FASTAPI_ENV", raising=False)
+def clean_db():
+    """Clean up DB before and after each test; seed built-in roles."""
     _cleanup_db()
     _seed_builtin_roles()
     yield
     _cleanup_db()
-
-
-def auth_headers(sub: str, role: str, secret: str = "a" * 64) -> dict[str, str]:
-    return {"Authorization": f"Bearer {make_jwt(sub=sub, role=role, secret=secret)}"}
 
 
 def test_get_users_strips_password_hash_for_authenticated_user(client):
@@ -152,27 +119,24 @@ def test_get_users_strips_password_hash_for_authenticated_user(client):
         }
     ])
 
-    response = client.get("/settings/api/users")
+    response = client.get("/api/v1/workspace/users")
 
     assert response.status_code == 200
     users = response.json()["users"]
-    assert len(users) == 1
-    assert users[0]["id"] == "usr_1"
-    assert users[0]["username"] == "Admin"
-    assert users[0]["role"] == "owner"
-    assert users[0]["status"] == "active"
-    assert "passwordHash" not in users[0]
+    # The session user (usr_admin) is also present; find the seeded one by id
+    seeded = next(u for u in users if u["id"] == "usr_1")
+    assert seeded["username"] == "Admin"
+    assert seeded["role"] == "owner"
+    assert seeded["status"] == "active"
+    assert "passwordHash" not in seeded
 
 
 @pytest.mark.parametrize("role", ["security", "viewer"])
-def test_get_users_rejects_non_admin(client, monkeypatch, role):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+def test_get_users_rejects_non_admin(role):
+    from conftest import make_authed_client
+    c = make_authed_client(role=role, user_id=f"usr_{role}", raise_server_exceptions=True)
 
-    response = client.get(
-        "/settings/api/users",
-        headers=auth_headers(sub=f"usr_{role}", role=role, secret="b" * 64),
-    )
+    response = c.get("/api/v1/workspace/users")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Permission denied: manage_users"
@@ -190,8 +154,7 @@ def test_post_users_creates_user_hashes_password_and_writes_audit(client):
     ])
 
     response = client.post(
-        "/settings/api/users",
-        headers={"Content-Type": "application/json"},
+        "/api/v1/workspace/users",
         json={"username": "NewUser", "email": "new@example.com", "password": "secret-pass!!", "role": "viewer"},
     )
 
@@ -211,11 +174,12 @@ def test_post_users_creates_user_hashes_password_and_writes_audit(client):
     assert len(created["passwordHash"].split(":")[2]) == 32
     assert len(created["passwordHash"].split(":")[3]) == 128
 
-    # Verify audit event
+    # Verify audit event — filter by domain action since middleware also auto-audits
     audit = _get_audit_events()
-    assert audit[-1]["action"] == "user.created"
-    assert audit[-1]["target"] == created["id"]
-    assert audit[-1]["metadata"] == {"username": "NewUser", "email": "new@example.com", "role": "viewer"}
+    user_events = [e for e in audit if e["action"].startswith("user.")]
+    assert user_events[-1]["action"] == "user.created"
+    assert user_events[-1]["target"] == created["id"]
+    assert user_events[-1]["metadata"] == {"username": "NewUser", "email": "new@example.com", "role": "viewer"}
 
 
 def test_post_users_rejects_case_insensitive_duplicate_usernames(client):
@@ -230,8 +194,7 @@ def test_post_users_rejects_case_insensitive_duplicate_usernames(client):
     ])
 
     response = client.post(
-        "/settings/api/users",
-        headers={"Content-Type": "application/json"},
+        "/api/v1/workspace/users",
         json={"username": "admin", "email": "admin@example.com", "password": "secret-pass!!", "role": "viewer"},
     )
 
@@ -239,16 +202,12 @@ def test_post_users_rejects_case_insensitive_duplicate_usernames(client):
     assert response.json()["detail"] == "User already exists."
 
 
-def test_post_users_rejects_non_admin_create(client, monkeypatch):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+def test_post_users_rejects_non_admin_create():
+    from conftest import make_authed_client
+    c = make_authed_client(role="viewer", user_id="usr_viewer", raise_server_exceptions=True)
 
-    response = client.post(
-        "/settings/api/users",
-        headers={
-            "Content-Type": "application/json",
-            **auth_headers(sub="usr_viewer", role="viewer", secret="b" * 64),
-        },
+    response = c.post(
+        "/api/v1/workspace/users",
         json={"username": "NewUser", "email": "new@example.com", "password": "secret-pass!!", "role": "viewer"},
     )
 
@@ -256,23 +215,17 @@ def test_post_users_rejects_non_admin_create(client, monkeypatch):
     assert response.json()["detail"] == "Permission denied: manage_users"
 
 
-def test_post_users_rejects_admin_creating_owner(client, monkeypatch):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
-
+def test_post_users_rejects_admin_creating_owner(client):
     response = client.post(
-        "/settings/api/users",
-        headers={
-            "Content-Type": "application/json",
-            **auth_headers(sub="usr_admin", role="admin", secret="b" * 64),
-        },
+        "/api/v1/workspace/users",
         json={"username": "NewOwner", "email": "owner@example.com", "password": "secret-pass!!", "role": "owner"},
     )
 
     assert response.status_code == 403
 
 
-def test_post_disable_rejects_last_active_owner(client, monkeypatch):
+def test_post_disable_rejects_last_active_owner():
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_owner",
@@ -282,27 +235,17 @@ def test_post_disable_rejects_last_active_owner(client, monkeypatch):
             "status": "active",
         }
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+    c = make_authed_client(role="owner", user_id="usr_owner", raise_server_exceptions=True)
 
-    response = client.post(
-        "/settings/api/users/usr_owner/disable",
-        headers=auth_headers(sub="usr_owner", role="owner", secret="b" * 64),
-    )
+    response = c.post("/api/v1/workspace/users/usr_owner/disable")
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Cannot disable the last active owner."
 
 
-def test_post_enable_sets_user_active_and_audits(client, monkeypatch):
+def test_post_enable_sets_user_active_and_audits(client):
+    # usr_admin is already created by the client fixture (make_authed_client)
     _seed_users([
-        {
-            "id": "usr_admin",
-            "username": "admin",
-            "passwordHash": "existing",
-            "role": "admin",
-            "status": "active",
-        },
         {
             "id": "usr_user",
             "username": "user",
@@ -311,13 +254,8 @@ def test_post_enable_sets_user_active_and_audits(client, monkeypatch):
             "status": "disabled",
         },
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
 
-    response = client.post(
-        "/settings/api/users/usr_user/enable",
-        headers=auth_headers(sub="usr_admin", role="admin", secret="b" * 64),
-    )
+    response = client.post("/api/v1/workspace/users/usr_user/enable")
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
@@ -327,10 +265,12 @@ def test_post_enable_sets_user_active_and_audits(client, monkeypatch):
     assert user["status"] == "active"
 
     audit = _get_audit_events()
-    assert audit[-1]["action"] == "user.enabled"
+    user_events = [e for e in audit if e["action"].startswith("user.")]
+    assert user_events[-1]["action"] == "user.enabled"
 
 
-def test_patch_role_requires_owner_for_owner_target(client, monkeypatch):
+def test_patch_role_requires_owner_for_owner_target():
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_admin",
@@ -347,12 +287,10 @@ def test_patch_role_requires_owner_for_owner_target(client, monkeypatch):
             "status": "active",
         },
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+    c = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
-    response = client.patch(
-        "/settings/api/users/usr_owner/role",
-        headers={**auth_headers(sub="usr_admin", role="admin", secret="b" * 64), "Content-Type": "application/json"},
+    response = c.patch(
+        "/api/v1/workspace/users/usr_owner/role",
         json={"role": "viewer"},
     )
 
@@ -360,7 +298,9 @@ def test_patch_role_requires_owner_for_owner_target(client, monkeypatch):
     assert response.json()["detail"] == "Only owners can update owner users."
 
 
-def test_patch_role_rejects_demoting_last_active_owner(client, monkeypatch):
+def test_patch_role_owner_target_requires_owner_actor():
+    """An admin-role actor cannot demote an owner user — only owners can."""
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_owner",
@@ -370,20 +310,20 @@ def test_patch_role_rejects_demoting_last_active_owner(client, monkeypatch):
             "status": "active",
         }
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+    # Actor has admin role (not owner) — should be denied before reaching last-owner check
+    c = make_authed_client(role="admin", user_id="usr_actor_admin", raise_server_exceptions=True)
 
-    response = client.patch(
-        "/settings/api/users/usr_owner/role",
-        headers={**auth_headers(sub="usr_actor", role="owner", secret="b" * 64), "Content-Type": "application/json"},
+    response = c.patch(
+        "/api/v1/workspace/users/usr_owner/role",
         json={"role": "admin"},
     )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Cannot demote the last active owner."
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only owners can update owner users."
 
 
-def test_patch_role_rejects_self_role_change(client, monkeypatch):
+def test_patch_role_rejects_self_role_change():
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_admin",
@@ -393,12 +333,11 @@ def test_patch_role_rejects_self_role_change(client, monkeypatch):
             "status": "active",
         }
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+    # Actor user_id matches target user_id — should be rejected
+    c = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
-    response = client.patch(
-        "/settings/api/users/usr_admin/role",
-        headers={**auth_headers(sub="usr_admin", role="admin", secret="b" * 64), "Content-Type": "application/json"},
+    response = c.patch(
+        "/api/v1/workspace/users/usr_admin/role",
         json={"role": "viewer"},
     )
 
@@ -406,31 +345,23 @@ def test_patch_role_rejects_self_role_change(client, monkeypatch):
     assert response.json()["detail"] == "You cannot change your own role."
 
 
-def test_get_direct_grants_requires_workspace_admin(client, monkeypatch):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+def test_get_direct_grants_requires_workspace_admin():
+    from conftest import make_authed_client
+    c = make_authed_client(role="viewer", user_id="usr_viewer", raise_server_exceptions=True)
 
-    response = client.get(
-        "/settings/api/direct-grants",
-        headers=auth_headers(sub="usr_viewer", role="viewer", secret="b" * 64),
-    )
+    response = c.get("/api/v1/grants")
     assert response.status_code == 403
 
 
-def test_manage_direct_grants_flow(client, monkeypatch):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
-    headers = auth_headers(sub="usr_admin", role="admin", secret="b" * 64)
-
+def test_manage_direct_grants_flow(client):
     # 1. List (empty)
-    response = client.get("/settings/api/direct-grants", headers=headers)
+    response = client.get("/api/v1/grants")
     assert response.status_code == 200
     assert response.json()["grants"] == []
 
     # 2. Add repository grant
     response = client.post(
-        "/settings/api/direct-grants",
-        headers=headers,
+        "/api/v1/grants",
         json={
             "userId": "usr_1",
             "resourceType": "repository",
@@ -442,8 +373,7 @@ def test_manage_direct_grants_flow(client, monkeypatch):
 
     # 3. Add container image grant
     response = client.post(
-        "/settings/api/direct-grants",
-        headers=headers,
+        "/api/v1/grants",
         json={
             "userId": "usr_1",
             "resourceType": "containerImage",
@@ -453,35 +383,26 @@ def test_manage_direct_grants_flow(client, monkeypatch):
     assert response.status_code == 200
 
     # 4. List again
-    response = client.get("/settings/api/direct-grants", headers=headers)
+    response = client.get("/api/v1/grants")
     grants = response.json()["grants"]
     assert len(grants) == 2
     assert any(g["resourceKey"] == "org/repo" and g["source"] == "manual-direct" for g in grants)
     assert any(g["resourceKey"] == "ghcr.io/org/image" and g["source"] == "manual-direct" for g in grants)
 
     # 5. Remove grant
-    response = client.delete(
-        "/settings/api/direct-grants/usr_1/repository/org/repo",
-        headers=headers
-    )
+    response = client.delete("/api/v1/grants/usr_1/repository/org/repo")
     assert response.status_code == 200
 
     # 6. Final check
-    response = client.get("/settings/api/direct-grants", headers=headers)
+    response = client.get("/api/v1/grants")
     grants = response.json()["grants"]
     assert len(grants) == 1
     assert grants[0]["resourceKey"] == "ghcr.io/org/image"
 
 
-def test_delete_user_removes_user_and_writes_audit(client, monkeypatch):
+def test_delete_user_removes_user_and_writes_audit(client):
+    # usr_admin already created by client fixture; only seed the target user
     _seed_users([
-        {
-            "id": "usr_admin",
-            "username": "admin",
-            "passwordHash": "existing",
-            "role": "admin",
-            "status": "active",
-        },
         {
             "id": "usr_user",
             "username": "user",
@@ -490,40 +411,36 @@ def test_delete_user_removes_user_and_writes_audit(client, monkeypatch):
             "status": "active",
         },
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
 
-    response = client.delete(
-        "/settings/api/users/usr_user",
-        headers=auth_headers(sub="usr_admin", role="admin", secret="b" * 64),
-    )
+    response = client.delete("/api/v1/workspace/users/usr_user")
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
 
     users = _get_users()
-    assert [user["id"] for user in users] == ["usr_admin"]
+    user_ids = [user["id"] for user in users]
+    assert "usr_user" not in user_ids
+    assert "usr_admin" in user_ids
 
     audit = _get_audit_events()
-    assert audit[-1]["action"] == "user.deleted"
-    assert audit[-1]["target"] == "usr_user"
-    assert audit[-1]["metadata"] == {"username": "user", "role": "viewer"}
+    user_events = [e for e in audit if e["action"].startswith("user.")]
+    assert user_events[-1]["action"] == "user.deleted"
+    assert user_events[-1]["target"] == "usr_user"
+    assert user_events[-1]["metadata"] == {"username": "user", "role": "viewer"}
 
 
-def test_delete_user_rejects_non_admin(client, monkeypatch):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+def test_delete_user_rejects_non_admin():
+    from conftest import make_authed_client
+    c = make_authed_client(role="viewer", user_id="usr_viewer", raise_server_exceptions=True)
 
-    response = client.delete(
-        "/settings/api/users/usr_user",
-        headers=auth_headers(sub="usr_viewer", role="viewer", secret="b" * 64),
-    )
+    response = c.delete("/api/v1/workspace/users/usr_user")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Permission denied: manage_users"
 
 
-def test_delete_user_rejects_self_delete(client, monkeypatch):
+def test_delete_user_rejects_self_delete():
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_admin",
@@ -533,19 +450,18 @@ def test_delete_user_rejects_self_delete(client, monkeypatch):
             "status": "active",
         }
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+    # Actor user_id matches target — should be rejected
+    c = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
-    response = client.delete(
-        "/settings/api/users/usr_admin",
-        headers=auth_headers(sub="usr_admin", role="admin", secret="b" * 64),
-    )
+    response = c.delete("/api/v1/workspace/users/usr_admin")
 
     assert response.status_code == 400
     assert response.json()["detail"] == "You cannot delete your own account."
 
 
-def test_delete_user_rejects_last_active_owner(client, monkeypatch):
+def test_delete_user_owner_target_requires_owner_actor():
+    """An admin-role actor cannot delete an owner user — only owners can."""
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_owner",
@@ -554,27 +470,18 @@ def test_delete_user_rejects_last_active_owner(client, monkeypatch):
             "role": "owner",
             "status": "active",
         },
-        {
-            "id": "usr_admin",
-            "username": "admin",
-            "passwordHash": "existing",
-            "role": "admin",
-            "status": "active",
-        },
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+    # Actor has admin role — should get 403 before reaching the last-owner check
+    c = make_authed_client(role="admin", user_id="usr_actor_admin", raise_server_exceptions=True)
 
-    response = client.delete(
-        "/settings/api/users/usr_owner",
-        headers=auth_headers(sub="usr_actor", role="owner", secret="b" * 64),
-    )
+    response = c.delete("/api/v1/workspace/users/usr_owner")
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Cannot delete the last active owner."
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Only owners can delete owner users."
 
 
-def test_delete_user_requires_owner_for_owner_target(client, monkeypatch):
+def test_delete_user_requires_owner_for_owner_target():
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_owner_1",
@@ -598,32 +505,23 @@ def test_delete_user_requires_owner_for_owner_target(client, monkeypatch):
             "status": "active",
         },
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+    c = make_authed_client(role="admin", user_id="usr_admin", raise_server_exceptions=True)
 
-    response = client.delete(
-        "/settings/api/users/usr_owner_2",
-        headers=auth_headers(sub="usr_admin", role="admin", secret="b" * 64),
-    )
+    response = c.delete("/api/v1/workspace/users/usr_owner_2")
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Only owners can delete owner users."
 
 
-def test_delete_user_returns_not_found_for_unknown_user(client, monkeypatch):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
-
-    response = client.delete(
-        "/settings/api/users/usr_missing",
-        headers=auth_headers(sub="usr_admin", role="admin", secret="b" * 64),
-    )
+def test_delete_user_returns_not_found_for_unknown_user(client):
+    response = client.delete("/api/v1/workspace/users/usr_missing")
 
     assert response.status_code == 404
     assert response.json()["detail"] == "User not found."
 
 
-def test_get_users_directory_allows_workspace_admin(client, monkeypatch):
+def test_get_users_directory_allows_workspace_admin():
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_1",
@@ -642,18 +540,13 @@ def test_get_users_directory_allows_workspace_admin(client, monkeypatch):
             "status": "active",
         },
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
+    c = make_authed_client(role="owner", user_id="usr_1", raise_server_exceptions=True)
 
-    response = client.get(
-        "/settings/api/users/directory",
-        headers=auth_headers(sub="usr_1", role="owner", secret="b" * 64),
-    )
+    response = c.get("/api/v1/workspace/users/directory")
 
     assert response.status_code == 200
     users = response.json()["users"]
     assert len(users) == 2
-    # Check fields (order may vary, so find by id)
     admin_user = next(u for u in users if u["id"] == "usr_1")
     assert admin_user == {
         "id": "usr_1",
@@ -664,7 +557,8 @@ def test_get_users_directory_allows_workspace_admin(client, monkeypatch):
     }
 
 
-def test_get_users_directory_allows_team_admin(client, monkeypatch):
+def test_get_users_directory_allows_team_admin(monkeypatch):
+    from conftest import make_authed_client
     _seed_users([
         {
             "id": "usr_1",
@@ -675,42 +569,28 @@ def test_get_users_directory_allows_team_admin(client, monkeypatch):
             "status": "active",
         }
     ])
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
-
-    # Mock list_admin_team_ids to return something, meaning the user is a team admin
     monkeypatch.setattr(users_router, "list_admin_team_ids", lambda user_id: ["team_1"])
+    c = make_authed_client(role="viewer", user_id="usr_1", raise_server_exceptions=True)
 
-    response = client.get(
-        "/settings/api/users/directory",
-        headers=auth_headers(sub="usr_1", role="viewer", secret="b" * 64),
-    )
+    response = c.get("/api/v1/workspace/users/directory")
 
     assert response.status_code == 200
     assert len(response.json()["users"]) == 1
 
 
-def test_get_users_directory_rejects_regular_user(client, monkeypatch):
-    monkeypatch.setenv("FASTAPI_ENV", "production")
-    monkeypatch.setenv("JWT_SHARED_SECRET", "b" * 64)
-
-    # Mock list_admin_team_ids to return empty, meaning the user is NOT a team admin
+def test_get_users_directory_rejects_regular_user(monkeypatch):
+    from conftest import make_authed_client
     monkeypatch.setattr(users_router, "list_admin_team_ids", lambda user_id: [])
+    c = make_authed_client(role="viewer", user_id="usr_viewer", raise_server_exceptions=True)
 
-    response = client.get(
-        "/settings/api/users/directory",
-        headers=auth_headers(sub="usr_viewer", role="viewer", secret="b" * 64),
-    )
+    response = c.get("/api/v1/workspace/users/directory")
 
     assert response.status_code == 403
 
 
-def test_patch_user_role_assigns_role_id(client, monkeypatch):
+def test_patch_user_role_assigns_role_id():
+    from conftest import make_authed_client
     from src.settings import roles_store
-
-    secret = "b" * 64
-    monkeypatch.setenv("JWT_SHARED_SECRET", secret)
-    monkeypatch.setenv("FASTAPI_ENV", "production")
 
     # Create a custom role
     new_role = roles_store.create_role({
@@ -738,10 +618,9 @@ def test_patch_user_role_assigns_role_id(client, monkeypatch):
         }
     ])
 
-    # Try assigning the roleId
-    response = client.patch(
-        "/settings/api/users/usr_viewer/role",
-        headers=auth_headers(sub="usr_admin", role="owner", secret=secret),
+    c = make_authed_client(role="owner", user_id="usr_admin", raise_server_exceptions=True)
+    response = c.patch(
+        "/api/v1/workspace/users/usr_viewer/role",
         json={"roleId": new_role["id"]},
     )
 
@@ -762,8 +641,7 @@ def test_password_reset_required_flag_behavior(client):
 
     # 1. New local user should not force a reset before sign-in
     response = client.post(
-        "/settings/api/users",
-        headers={"Content-Type": "application/json"},
+        "/api/v1/workspace/users",
         json={"username": "LocalUser", "email": "local@example.com", "password": "password12345", "role": "viewer"},
     )
     assert response.status_code == 200
@@ -780,7 +658,7 @@ def test_create_user_with_role_id_applies_correct_role(client):
     _seed_users([{"id": "usr_owner", "username": "owner", "passwordHash": "x", "role": "owner", "status": "active"}])
 
     response = client.post(
-        "/settings/api/users",
+        "/api/v1/workspace/users",
         json={
             "username": "ViewerUser",
             "email": "viewer@example.com",

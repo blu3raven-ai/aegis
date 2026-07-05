@@ -1,8 +1,8 @@
 
 const COLOR_MAP = {
-  accent:  "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]",
-  emerald: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
-  orange:  "border-orange-500/40 bg-orange-500/10 text-orange-400",
+  accent:  "border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
+  emerald: "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]",
+  orange:  "border-[var(--color-severity-high-border)] bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)]",
 } as const
 
 interface FilterTagProps {

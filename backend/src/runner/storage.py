@@ -31,8 +31,6 @@ def _runner_to_dict(runner: Runner) -> dict[str, Any]:
         "diskUsedGb": runner.disk_used_gb,
         "diskTotalGb": runner.disk_total_gb,
         "cores": runner.cores,
-        "activeContainers": runner.active_containers,
-        "scannerImages": runner.scanner_images,
         "jobsCompleted": runner.jobs_completed or 0,
     }
 
@@ -45,7 +43,6 @@ def _job_to_dict(job: RunnerJob) -> dict[str, Any]:
         "org": job.org or "",
         "runId": job.run_id or "",
         "status": job.status or "pending",
-        "dockerImage": job.docker_image or "",
         "envVars": job.env_vars or {},
         "createdAt": _dt_to_iso(job.created_at) or _now_iso(),
         "startedAt": _dt_to_iso(job.started_at),
@@ -53,9 +50,7 @@ def _job_to_dict(job: RunnerJob) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
 # Runner records
-# ---------------------------------------------------------------------------
 
 def read_runner(runner_id: str) -> dict[str, Any] | None:
     async def _query(session):
@@ -114,9 +109,7 @@ def list_runners() -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # Job records
-# ---------------------------------------------------------------------------
 
 def read_job(job_id: str) -> dict[str, Any] | None:
     async def _query(session):
@@ -132,7 +125,7 @@ def write_job(job: dict[str, Any]) -> None:
         if existing:
             for key, attr in [
                 ("runnerId", "runner_id"), ("jobType", "job_type"), ("org", "org"),
-                ("runId", "run_id"), ("status", "status"), ("dockerImage", "docker_image"),
+                ("runId", "run_id"), ("status", "status"),
                 ("envVars", "env_vars"),
             ]:
                 if key in job:
@@ -149,7 +142,6 @@ def write_job(job: dict[str, Any]) -> None:
                 org=job.get("org", ""),
                 run_id=job.get("runId", ""),
                 status=job.get("status", "pending"),
-                docker_image=job.get("dockerImage", ""),
                 env_vars=job.get("envVars", {}),
                 created_at=datetime.now(timezone.utc),
             ))
@@ -169,9 +161,7 @@ def list_jobs(status: str | None = None) -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # Registration tokens
-# ---------------------------------------------------------------------------
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
@@ -233,9 +223,7 @@ def generate_auth_token() -> tuple[str, str]:
     return raw, hash_token(raw)
 
 
-# ---------------------------------------------------------------------------
 # Heartbeat history
-# ---------------------------------------------------------------------------
 
 def record_heartbeat(runner_id: str, cpu: float | None, memory: float | None) -> None:
     """Record a heartbeat entry for history."""
@@ -306,9 +294,7 @@ def prune_old_heartbeats(keep_minutes: int = 120) -> int:
     return run_db(_query)
 
 
-# ---------------------------------------------------------------------------
 # Runner metrics & settings
-# ---------------------------------------------------------------------------
 
 def update_runner_metrics(runner_id: str, metrics: dict[str, Any]) -> None:
     """Update runner's live metric columns."""
@@ -328,10 +314,6 @@ def update_runner_metrics(runner_id: str, metrics: dict[str, Any]) -> None:
             runner.disk_total_gb = metrics["diskTotalGb"]
         if metrics.get("cores") is not None:
             runner.cores = metrics["cores"]
-        if "activeContainers" in metrics:
-            runner.active_containers = metrics["activeContainers"]
-        if "scannerImages" in metrics:
-            runner.scanner_images = metrics["scannerImages"]
         if metrics.get("os") and not runner.os:
             runner.os = metrics["os"]
         if metrics.get("arch") and not runner.arch:

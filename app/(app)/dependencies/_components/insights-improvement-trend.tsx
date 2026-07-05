@@ -40,9 +40,9 @@ function BacklogAreaChart({ trend }: { trend: { month: string; openAtEnd: number
   const latestDelta = latestValue - (previousEntry?.openAtEnd ?? latestValue)
   const latestDeltaTone =
     latestDelta < 0
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+      ? "border-[var(--color-state-fixed-border)] bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)]"
       : latestDelta > 0
-        ? "border-red-500/30 bg-red-500/10 text-red-400"
+        ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
         : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]"
 
   const points = trend.map((entry, index) => {
@@ -69,7 +69,7 @@ function BacklogAreaChart({ trend }: { trend: { month: string; openAtEnd: number
             Latest backlog
           </p>
           <div className="mt-2 flex flex-wrap items-baseline gap-3">
-            <span className="text-4xl font-semibold tracking-tight text-[var(--color-text-primary)]">
+            <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
               {latestValue}
             </span>
             <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${latestDeltaTone}`}>
@@ -88,7 +88,7 @@ function BacklogAreaChart({ trend }: { trend: { month: string; openAtEnd: number
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-text-secondary)]">
               Direction
             </p>
-            <p className={`mt-2 text-2xl font-semibold ${latestDelta < 0 ? "text-emerald-400" : latestDelta > 0 ? "text-red-400" : "text-[var(--color-text-primary)]"}`}>
+            <p className={`mt-2 text-2xl font-semibold ${latestDelta < 0 ? "text-[var(--color-state-fixed)]" : latestDelta > 0 ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-primary)]"}`}>
               {latestDelta < 0 ? "Down" : latestDelta > 0 ? "Up" : "Flat"}
             </p>
           </div>
@@ -96,7 +96,7 @@ function BacklogAreaChart({ trend }: { trend: { month: string; openAtEnd: number
       </div>
 
       {/* SVG area chart with legend */}
-      <div className="flex gap-4 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <div className="flex gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
         <div className="min-w-0 flex-1 overflow-x-auto" style={{ direction: "rtl" }}>
           <svg
             width={chartWidth}
@@ -238,9 +238,9 @@ function BacklogAreaChart({ trend }: { trend: { month: string; openAtEnd: number
             </p>
           </div>
           <div className="rounded-xl border border-[var(--color-accent)]/30 bg-[var(--color-accent-subtle)] px-3 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-accent)]">Latest</p>
+            <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-[var(--color-accent)]">Latest</p>
             <p className="mt-1 text-lg font-semibold text-[var(--color-accent)]">{latestValue}</p>
-            <p className="text-[10px] text-[var(--color-text-secondary)]">{latestEntry?.month ?? ""}</p>
+            <p className="text-2xs text-[var(--color-text-secondary)]">{latestEntry?.month ?? ""}</p>
           </div>
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-[#fb923c]" />
@@ -255,10 +255,10 @@ function BacklogAreaChart({ trend }: { trend: { month: string; openAtEnd: number
 // ── MTTR severity colours ───────────────────────────────────────────────────────
 
 const MTTR_COLOUR: Record<string, string> = {
-  critical: "text-red-400",
-  high:     "text-orange-400",
-  medium:   "text-amber-400",
-  low:      "text-blue-400",
+  critical: "text-[var(--color-severity-critical)]",
+  high:     "text-[var(--color-severity-high)]",
+  medium:   "text-[var(--color-severity-medium)]",
+  low:      "text-[var(--color-severity-low)]",
 }
 
 // ── InsightsImprovementTrend ────────────────────────────────────────────────────
@@ -290,13 +290,13 @@ export function InsightsImprovementTrend({
       </div>
 
       {/* Backlog area chart */}
-      <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
         <p className="mb-4 text-sm font-semibold text-[var(--color-text-primary)]">Open backlog over time</p>
         <BacklogAreaChart trend={trend} />
       </div>
 
       {/* Monthly net-change bars */}
-      <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
         <p className="mb-4 text-sm font-semibold text-[var(--color-text-primary)]">
           Monthly net change (last 6 months)
         </p>
@@ -313,8 +313,8 @@ export function InsightsImprovementTrend({
               const barClass = isFlat
                 ? "bg-[var(--color-border)]"
                 : isUp
-                  ? "bg-orange-500"
-                  : "bg-emerald-500"
+                  ? "bg-[var(--color-severity-high)]"
+                  : "bg-[var(--color-state-fixed)]"
               const label = isFlat
                 ? "→ flat"
                 : isUp
@@ -323,8 +323,8 @@ export function InsightsImprovementTrend({
               const labelClass = isFlat
                 ? "text-[var(--color-text-secondary)]"
                 : isUp
-                  ? "text-orange-400"
-                  : "text-emerald-400"
+                  ? "text-[var(--color-severity-high)]"
+                  : "text-[var(--color-state-fixed)]"
 
               return (
                 <div key={m.month}>
@@ -358,7 +358,7 @@ export function InsightsImprovementTrend({
         {(["critical", "high", "medium", "low"] as const).map((sev) => (
           <div
             key={sev}
-            className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
               Avg fix time — {sev}

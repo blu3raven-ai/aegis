@@ -1,0 +1,60 @@
+// Declarative pipeline — Aegis scan + merge-gate.
+//
+// Prerequisites:
+//   - "aegis-api-token" and "aegis-base-url" stored as Secret Text
+//     credentials in Jenkins (Manage Jenkins > Credentials).
+//   - Python 3 available on the agent (or use the Docker agent variant below).
+
+pipeline {
+  agent any
+
+  environment {
+    AEGIS_API_TOKEN = credentials('aegis-api-token')
+    AEGIS_BASE_URL  = credentials('aegis-base-url')
+    SCANNER_TYPE    = 'dependencies'
+    BLOCK_ON        = 'critical'
+  }
+
+  stages {
+    stage('Install') {
+      steps {
+        sh 'pip install --quiet aegis-cli'
+        sh 'aegis --version'
+      }
+    }
+
+    stage('Scan') {
+      steps {
+        sh 'aegis scan --scanner "$SCANNER_TYPE" --wait --json > aegis-findings.json'
+        archiveArtifacts artifacts: 'aegis-findings.json', allowEmptyArchive: false
+      }
+    }
+
+    stage('Decide') {
+      // Non-zero exit code from `aegis decide` marks the build FAILED and
+      // prevents an automatic merge in multi-branch pipelines.
+      steps {
+        sh 'aegis decide --block-on "$BLOCK_ON" --exit-code'
+      }
+    }
+  }
+
+  post {
+    always {
+      // Preserve the raw findings even on failure.
+      archiveArtifacts artifacts: 'aegis-findings.json', allowEmptyArchive: true
+    }
+    failure {
+      script {
+        // Notify the PR author when Aegis blocks the build.
+        if (env.CHANGE_AUTHOR_EMAIL) {
+          emailext(
+            to: "${env.CHANGE_AUTHOR_EMAIL}",
+            subject: "Aegis blocked PR #${env.CHANGE_ID} — critical findings detected",
+            body: 'Aegis flagged critical security findings. See the build logs for details.',
+          )
+        }
+      }
+    }
+  }
+}

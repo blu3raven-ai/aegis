@@ -44,10 +44,11 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
+        <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
           Email or username
         </label>
         <input
+          id="email"
           type="text"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -60,11 +61,12 @@ export function LoginForm() {
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
+        <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
           Password
         </label>
         <div className="relative">
           <input
+            id="password"
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -85,7 +87,7 @@ export function LoginForm() {
       </div>
 
       {error && (
-        <div className="rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 px-3 py-2.5 text-sm text-red-700 dark:text-red-400">
+        <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}
@@ -93,7 +95,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isPending || !email.trim() || !password}
-        className="w-full py-3 px-4 cursor-pointer bg-[var(--color-accent)] text-white text-sm font-semibold rounded-lg hover:bg-[var(--color-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="w-full py-3 px-4 cursor-pointer bg-[var(--color-accent)] text-[var(--color-accent-on)] text-sm font-semibold rounded-lg hover:bg-[var(--color-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {isPending ? "Signing in…" : "Sign in"}
       </button>

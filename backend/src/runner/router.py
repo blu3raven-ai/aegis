@@ -6,6 +6,8 @@ post progress, and report failures.
 """
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -27,10 +29,19 @@ from src.runner.registry import (
     rotate_auth_token,
 )
 from src.shared.event_bus import Event, get_event_bus
-from src.shared.paths import now_iso
-from src.shared.rate_limit import rate_limit_by_ip
+from src.shared.object_store import (
+    MAX_OBJECT_BYTES,
+    generate_download_url,
+    generate_upload_post,
+    list_objects,
+)
+from src.shared.paths import now_iso, SAFE_RELATIVE_PATH
+from src.shared.rate_limit import rate_limit_by_ip, rate_limit_by_runner
 
-router = APIRouter(prefix="/runner/api", tags=["runner"])
+router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
+
+# Upper bound on presigned upload URLs a single request may mint.
+_MAX_PRESIGN_FILES = 256
 
 
 def _runner_from_request(request: Request) -> dict[str, Any] | None:
@@ -50,9 +61,7 @@ def _require_runner(request: Request) -> tuple[dict[str, Any] | None, JSONRespon
     return runner, None
 
 
-# ---------------------------------------------------------------------------
 # Registration
-# ---------------------------------------------------------------------------
 
 
 class RegisterRequest(BaseModel):
@@ -83,9 +92,7 @@ def register(request: Request, body: RegisterRequest) -> JSONResponse:
     })
 
 
-# ---------------------------------------------------------------------------
 # Heartbeat
-# ---------------------------------------------------------------------------
 
 
 class HeartbeatRequest(BaseModel):
@@ -95,8 +102,6 @@ class HeartbeatRequest(BaseModel):
     diskUsedGb: float | None = None
     diskTotalGb: float | None = None
     cores: int | None = None
-    activeContainers: list[dict[str, Any]] | None = None
-    scannerImages: dict[str, Any] | None = None
     os: str | None = None
     arch: str | None = None
 
@@ -133,13 +138,11 @@ def post_heartbeat(request: Request, body: HeartbeatRequest | None = None) -> JS
     return JSONResponse(response)
 
 
-# ---------------------------------------------------------------------------
 # Job polling
-# ---------------------------------------------------------------------------
 
 
 @router.get("/jobs/next")
-def poll_next_job(request: Request) -> JSONResponse:
+async def poll_next_job(request: Request, wait: int = 0) -> JSONResponse:
     runner, err = _require_runner(request)
     if err:
         return err
@@ -150,29 +153,38 @@ def poll_next_job(request: Request) -> JSONResponse:
     # Re-queue any stale jobs before assigning
     requeue_stale_jobs()
 
-    job = assign_next_job(runner["id"])
-    if not job:
-        from starlette.responses import Response
-        return Response(status_code=204)
+    # Bound wait to a reasonable maximum so a malicious client can't pin a worker forever.
+    wait = max(0, min(wait, 60))
+    poll_interval = 0.25
+    deadline = time.monotonic() + wait
 
-    # Transition scan run from "queued" to "running" now that runner claimed the job
-    _transition_run_to_running(job)
+    while True:
+        job = assign_next_job(runner["id"])
+        if job:
+            # Transition scan run from "queued" to "running" now that runner claimed the job
+            _transition_run_to_running(job)
 
-    # Return job payload (includes decrypted env vars)
-    return JSONResponse({
-        "jobId": job["id"],
-        "type": job.get("jobType", ""),
-        "org": job["org"],
-        "runId": job["runId"],
-        "dockerImage": job["dockerImage"],
-        "dockerArgs": {"envVars": job.get("envVars", {})},
-        "expectedRepoCount": int(job.get("envVars", {}).get("EXPECTED_REPO_COUNT", 0)) or None,
-    })
+            # Return job payload (includes decrypted env vars)
+            return JSONResponse({
+                "jobId": job["id"],
+                "type": job.get("jobType", ""),
+                "org": job["org"],
+                "runId": job["runId"],
+                "envVars": job.get("envVars", {}),
+                "expectedRepoCount": int(job.get("envVars", {}).get("EXPECTED_REPO_COUNT", 0)) or None,
+                # The runner observes pickup latency (creation → claim) as a
+                # Prometheus metric. Without this, the metric stays at zero.
+                "createdAt": job.get("createdAt"),
+            })
+
+        if wait <= 0 or time.monotonic() >= deadline:
+            from starlette.responses import Response
+            return Response(status_code=204)
+
+        await asyncio.sleep(poll_interval)
 
 
-# ---------------------------------------------------------------------------
 # Progress
-# ---------------------------------------------------------------------------
 
 
 class ProgressRequest(BaseModel):
@@ -229,10 +241,10 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
 
     # Read current run to get expectedRepos and existing counters
     current = None
-    if job_type == "dependencies":
+    if job_type == "dependencies_scanning":
         from src.storage import update_dependencies_run, list_dependencies_runs
         current = next((r for r in list_dependencies_runs(org) if str(r.get("id", "")) == run_id), None)
-    elif job_type == "secrets":
+    elif job_type == "secret_scanning":
         from src.storage import update_secret_run, read_secret_run
         current = read_secret_run(org, run_id)
     elif job_type == "code_scanning":
@@ -241,6 +253,12 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
     elif job_type == "container_scanning":
         from src.storage import update_container_scanning_run, list_container_scanning_runs
         current = next((r for r in list_container_scanning_runs(org) if str(r.get("id", "")) == run_id), None)
+    elif job_type == "iac_scanning":
+        from src.storage import update_iac_run, list_iac_runs
+        current = next((r for r in list_iac_runs(org) if str(r.get("id", "")) == run_id), None)
+    elif job_type == "agent_scanning":
+        from src.storage import update_agent_run, list_agent_runs
+        current = next((r for r in list_agent_runs(org) if str(r.get("id", "")) == run_id), None)
 
     db = (current or {}).get("progress") or {}
 
@@ -258,17 +276,26 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
     }
     patch: dict[str, Any] = {"logTail": log_tail, "progress": merged}
 
-    if job_type == "dependencies":
+    if job_type == "dependencies_scanning":
         update_dependencies_run(org, run_id, patch)
-    elif job_type == "secrets":
+    elif job_type == "secret_scanning":
         update_secret_run(org, run_id, patch)
     elif job_type == "code_scanning":
         update_code_scanning_run(org, run_id, patch)
     elif job_type == "container_scanning":
         update_container_scanning_run(org, run_id, patch)
+    elif job_type == "iac_scanning":
+        update_iac_run(org, run_id, patch)
+    elif job_type == "agent_scanning":
+        update_agent_run(org, run_id, patch)
 
     # Publish SSE event
-    tool_label = {"dependencies": "dependencies", "code_scanning": "code_scanning", "secrets": "secrets", "container_scanning": "container_scanning"}.get(job_type)
+    tool_label = {
+        "dependencies_scanning": "dependencies_scanning",
+        "code_scanning": "code_scanning",
+        "secret_scanning": "secret_scanning",
+        "container_scanning": "container_scanning",
+    }.get(job_type)
     if tool_label:
         log_tail_trimmed = (log_tail or [])[-8:]
         get_event_bus().publish_sync(Event(
@@ -280,13 +307,10 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
                 "progress": merged,
                 "logTail": log_tail_trimmed,
             },
-            org=org,
         ))
 
 
-# ---------------------------------------------------------------------------
 # Job completion (MinIO-based upload flow)
-# ---------------------------------------------------------------------------
 
 
 class CompleteRequest(BaseModel):
@@ -336,7 +360,11 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
 
     org = job.get("org", "")
     run_id = job.get("runId", "")
-    job_type = job.get("jobType", "dependencies")
+    job_type = job.get("jobType", "dependencies_scanning")
+    # Required by the per-scanner hooks to resolve each finding's repo asset.
+    # Carried in env_vars (persisted + decrypted on read); the job dict's own
+    # fields are limited to mapped DB columns.
+    source_type = (job.get("envVars") or {}).get("SOURCE_TYPE") or None
 
     # If the run was already cancelled, don't overwrite with ingestion
     run_record = _read_run_record(job_type, org, run_id)
@@ -348,23 +376,41 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
     _update_run_status(job_type, org, run_id, {"status": "ingesting", "progress": {"stage": "ingesting"}})
 
     try:
-        if job_type == "dependencies":
+        if job_type == "dependencies_scanning":
             from src.dependencies.scanner import ingest_dependencies_from_minio
-            ingest_dependencies_from_minio(org, run_id)
-        elif job_type == "secrets":
+            ingest_dependencies_from_minio(org, run_id, source_type=source_type)
+        elif job_type == "secret_scanning":
             from src.secrets.scanner import ingest_secrets_from_minio
-            ingest_secrets_from_minio(org, run_id)
+            ingest_secrets_from_minio(org, run_id, source_type=source_type)
         elif job_type == "code_scanning":
             from src.code_scanning.scanner import ingest_code_scanning_from_minio
-            ingest_code_scanning_from_minio(org, run_id)
+            ingest_code_scanning_from_minio(org, run_id, source_type=source_type)
         elif job_type == "container_scanning":
-            from src.containers.scanner import ingest_container_from_minio
-            ingest_container_from_minio(org, run_id)
+            # reco- runs are internal candidate SBOM scans for the base-image
+            # recommendation; their SBOM is consumed by the reco flow directly,
+            # never ingested as findings (would pollute inventory + recurse).
+            if not run_id.startswith("reco-"):
+                from src.containers.scanner import ingest_container_from_minio
+                ingest_container_from_minio(org, run_id, source_type=source_type)
+        elif job_type == "iac_scanning":
+            from src.iac.scanner import ingest_iac_from_minio
+            ingest_iac_from_minio(org, run_id, source_type=source_type)
+        elif job_type == "agent_scanning":
+            from src.agent_scanning.scanner import ingest_agent_from_minio
+            ingest_agent_from_minio(org, run_id, source_type=source_type)
+        elif job_type == "dependencies_reachability":
+            import asyncio
+
+            from src.dependencies.reachability_ingest import ingest_reachability_results
+            # ingest_reachability_results is async and opens its own session.
+            # _ingest_from_minio runs as a bare background-thread target (no
+            # running loop), so asyncio.run owns a fresh loop here and never
+            # nests — matching the established background-ingest bridge.
+            asyncio.run(ingest_reachability_results(org, run_id))
         _logger.info("[✓] Ingestion completed for %s %s/%s", job_type, org, run_id)
         get_event_bus().publish_sync(Event(
             event_type="scan.completed",
             data={"tool": job_type, "org": org, "runId": run_id},
-            org=org,
         ))
         # Emit notifications
         from src.notifications.emitter import notify_scan_completed
@@ -382,7 +428,6 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
         get_event_bus().publish_sync(Event(
             event_type="scan.failed",
             data={"tool": job_type, "org": org, "runId": run_id, "error": str(e)},
-            org=org,
         ))
         from src.notifications.emitter import notify_scan_failed
         notify_scan_failed(job_type, org, run_id, str(e))
@@ -391,18 +436,24 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
 def _read_run_record(job_type: str, org: str, run_id: str) -> dict[str, Any] | None:
     """Read a scan run record by tool type. Returns None if not found."""
     try:
-        if job_type == "dependencies":
+        if job_type == "dependencies_scanning":
             from src.storage import list_dependencies_runs
             return next((r for r in list_dependencies_runs(org) if str(r.get("id", "")) == run_id), None)
         elif job_type == "code_scanning":
             from src.storage import list_code_scanning_runs
             return next((r for r in list_code_scanning_runs(org) if str(r.get("id", "")) == run_id), None)
-        elif job_type == "secrets":
+        elif job_type == "secret_scanning":
             from src.storage import read_secret_run
             return read_secret_run(org, run_id)
         elif job_type == "container_scanning":
             from src.storage import list_container_scanning_runs
             return next((r for r in list_container_scanning_runs(org) if str(r.get("id", "")) == run_id), None)
+        elif job_type == "iac_scanning":
+            from src.storage import list_iac_runs
+            return next((r for r in list_iac_runs(org) if str(r.get("id", "")) == run_id), None)
+        elif job_type == "agent_scanning":
+            from src.storage import list_agent_runs
+            return next((r for r in list_agent_runs(org) if str(r.get("id", "")) == run_id), None)
     except Exception:
         pass
     return None
@@ -411,10 +462,10 @@ def _read_run_record(job_type: str, org: str, run_id: str) -> dict[str, Any] | N
 def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, Any]) -> None:
     """Update a scan run record by tool type."""
     try:
-        if job_type == "dependencies":
+        if job_type == "dependencies_scanning":
             from src.storage import update_dependencies_run
             update_dependencies_run(org, run_id, patch)
-        elif job_type == "secrets":
+        elif job_type == "secret_scanning":
             from src.storage import update_secret_run
             update_secret_run(org, run_id, patch)
         elif job_type == "code_scanning":
@@ -423,14 +474,93 @@ def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, An
         elif job_type == "container_scanning":
             from src.storage import update_container_scanning_run
             update_container_scanning_run(org, run_id, patch)
+        elif job_type == "iac_scanning":
+            from src.storage import update_iac_run
+            update_iac_run(org, run_id, patch)
+        elif job_type == "agent_scanning":
+            from src.storage import update_agent_run
+            update_agent_run(org, run_id, patch)
     except Exception:
         import logging
         logging.getLogger(__name__).warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)
 
 
-# ---------------------------------------------------------------------------
+# Upload presign
+
+
+class PresignUploadsRequest(BaseModel):
+    files: list[str]
+
+
+@router.post("/jobs/{job_id}/uploads/presign")
+def presign_uploads(job_id: str, body: PresignUploadsRequest, request: Request) -> JSONResponse:
+    runner, err = _require_runner(request)
+    if err:
+        return err
+
+    rate_limit_by_runner(runner["id"], max_requests=200, window_seconds=60)
+
+    job = read_job(job_id)
+    if not job or job.get("runnerId") != runner["id"]:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    if job.get("status") != "running":
+        return JSONResponse({"error": "Job not in running state"}, status_code=409)
+
+    # Bound the batch so one request can't mint an unbounded set of upload URLs.
+    if len(body.files) > _MAX_PRESIGN_FILES:
+        return JSONResponse({"error": "Too many files requested"}, status_code=400)
+
+    for name in body.files:
+        if not SAFE_RELATIVE_PATH.match(name):
+            return JSONResponse({"error": f"Unsafe filename: {name!r}"}, status_code=400)
+
+    tool = job["jobType"]
+    org = job["org"]
+    run_id = job["runId"]
+
+    urls: list[dict[str, str]] = []
+    for name in body.files:
+        key = f"{tool}/{org}/{run_id}/{name}"
+        post = generate_upload_post(
+            key, max_bytes=MAX_OBJECT_BYTES, expires_in=300, external=True
+        )
+        urls.append({"file": name, "url": post["url"], "fields": post["fields"]})
+
+    return JSONResponse({"urls": urls, "expiresIn": 300})
+
+
+# SBOM list (presigned download URLs)
+
+
+@router.get("/jobs/{job_id}/sboms")
+def list_job_sboms(request: Request, job_id: str) -> JSONResponse:
+    runner, err = _require_runner(request)
+    if err:
+        return err
+
+    rate_limit_by_runner(runner["id"], max_requests=200, window_seconds=60)
+
+    job = read_job(job_id)
+    if not job or job.get("runnerId") != runner["id"]:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    if job.get("status") != "running":
+        return JSONResponse({"error": "Job not in running state"}, status_code=409)
+
+    org = job["org"]
+    prefix = f"sboms/{org}/"
+    keys = list_objects(prefix)
+
+    sboms: list[dict[str, str]] = []
+    for key in keys:
+        filename = key[len(prefix):].replace("/", "__")
+        sboms.append({"file": filename, "url": generate_download_url(key, expires_in=300)})
+
+    return JSONResponse({"sboms": sboms, "count": len(sboms), "expiresIn": 300})
+
+
 # Failure reporting
-# ---------------------------------------------------------------------------
 
 
 class FailRequest(BaseModel):
@@ -455,14 +585,14 @@ def report_failure(job_id: str, body: FailRequest, request: Request) -> JSONResp
     # Update the scan run record
     org = job.get("org", "")
     run_id = job.get("runId", "")
-    job_type = job.get("jobType", "dependencies")
+    job_type = job.get("jobType", "dependencies_scanning")
     status = "cancelled" if body.cancelled else "failed"
     fail_patch = {"status": status, "finishedAt": now_iso(), "error": body.error}
 
-    if job_type == "dependencies":
+    if job_type == "dependencies_scanning":
         from src.storage import update_dependencies_run
         update_dependencies_run(org, run_id, fail_patch)
-    elif job_type == "secrets":
+    elif job_type == "secret_scanning":
         from src.storage import update_secret_run
         update_secret_run(org, run_id, fail_patch)
     elif job_type == "code_scanning":

@@ -61,6 +61,7 @@ def test_extract_detail_empty_repo_html_url_when_missing():
 class _MockFinding:
     """Minimal stand-in for the Finding ORM model."""
     def __init__(self, detail, *, org: str = "acme-org", repo: str = "example-repo"):
+        from src.shared.finding_queryable_fields import extract_queryable_fields
         self.state = "open"
         self.first_seen_at = None
         self.fixed_at = None
@@ -68,6 +69,9 @@ class _MockFinding:
         self.repo = repo
         self.severity = "high"
         self.detail = detail
+        qf = extract_queryable_fields(detail or {})
+        self.rule_name = qf["rule_name"]
+        self.file_path = qf["file_path"]
 
 
 def test_storage_exposes_repo_html_url():

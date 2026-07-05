@@ -16,96 +16,12 @@ MAX_JSONL_SIZE_MB = 200
 MAX_JSONL_LINES = 1_000_000
 
 
-def map_finding_to_alert(finding: dict[str, Any]) -> dict[str, Any]:
-    """Map a single scanner finding (from findings.jsonl) to the dashboard alert schema."""
-    org = finding.get("organization", "")
-    repo = finding.get("repository", "")
-    advisory_id = finding.get("advisoryId", "")
-    severity = finding.get("severity", "unknown")
-    aliases = finding.get("advisoryAliases", [])
-
-    identifiers = []
-    if advisory_id:
-        id_type = "CVE" if advisory_id.startswith("CVE-") else "GHSA"
-        identifiers.append({"type": id_type, "value": advisory_id})
-    for alias in aliases:
-        if isinstance(alias, str) and alias:
-            alias_type = "CVE" if alias.startswith("CVE-") else "GHSA"
-            identifiers.append({"type": alias_type, "value": alias})
-
-    cve_id = next((i["value"] for i in identifiers if i["type"] == "CVE"), None)
-    references = finding.get("references", [])
-    if not isinstance(references, list):
-        references = []
-
-    return {
-        "number": None,
-        "state": finding.get("stateCandidate", "open"),
-        "source": finding.get("source", "git"),
-        "current_version": finding.get("packageVersion") or None,
-        "commit_sha": finding.get("commitSha"),
-        "dependency": {
-            "package": {
-                "ecosystem": finding.get("ecosystem", ""),
-                "name": finding.get("packageName", ""),
-            },
-            "manifest_path": finding.get("manifestPath", ""),
-            "scope": None,
-        },
-        "security_advisory": {
-            "ghsa_id": advisory_id,
-            "cve_id": cve_id,
-            "summary": finding.get("summary", ""),
-            "description": finding.get("description", ""),
-            "severity": severity,
-            "cvss": {"score": finding.get("cvssScore"), "vector_string": None},
-            "published_at": finding.get("publishedDate", ""),
-            "updated_at": finding.get("lastModifiedDate", ""),
-            "references": references,
-            "identifiers": identifiers,
-        },
-        "security_vulnerability": {
-            "package": {
-                "ecosystem": finding.get("ecosystem", ""),
-                "name": finding.get("packageName", ""),
-            },
-            "severity": severity,
-            "vulnerable_version_range": "",
-            "first_patched_version": {"identifier": finding["fixedVersion"]} if finding.get("fixedVersion") else None,
-        },
-        "url": "",
-        "html_url": "",
-        "created_at": finding.get("publishedDate", ""),
-        "updated_at": finding.get("lastModifiedDate", ""),
-        "dismissed_at": None,
-        "dismissed_by": None,
-        "dismissed_reason": None,
-        "dismissed_comment": None,
-        "fixed_at": None,
-        "repository": {
-            "id": None,
-            "name": repo,
-            "full_name": f"{org}/{repo}",
-            "html_url": finding.get("repositoryUrl", ""),
-            "private": False,
-        },
-        "scanner": finding.get("scanner", "grype"),
-        "manifest_snippet": finding.get("manifestSnippet") or None,
-        "manifest_match_line": finding.get("manifestMatchLine") or None,
-        # Container-scanning passthrough fields (None for SCA)
-        "imageName": finding.get("imageName"),
-        "imageTag": finding.get("imageTag"),
-        "imageDigest": finding.get("imageDigest"),
-        "fixState": finding.get("fixState"),
-    }
-
-
 def ingest_findings_jsonl(
     org: str,
     run_id: str,
     findings_path: Path,
 ) -> list[dict[str, Any]]:
-    """Read findings.jsonl and return mapped findings."""
+    """Read canonical findings.jsonl emitted by the runner."""
     if not findings_path.exists():
         logger.warning("[!] No findings.jsonl found at %s", findings_path)
         return []
@@ -129,7 +45,7 @@ def ingest_findings_jsonl(
         try:
             finding = json.loads(stripped)
             if isinstance(finding, dict):
-                findings.append(map_finding_to_alert(finding))
+                findings.append(finding)
         except json.JSONDecodeError:
             logger.warning("[!] Skipping malformed JSONL line in %s", findings_path)
     return findings

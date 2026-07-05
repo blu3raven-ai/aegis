@@ -8,7 +8,7 @@
     "dev:all": "npm run dev:backend & npm run dev",
     "build": "next build",
     "start": "next start",
-    "test:frontend": "node --test tests/frontend/*.test.ts",
+    "test:frontend": "node --test tests/frontend/*.test.ts 'components/**/*.test.mts' 'lib/**/*.test.mts'",
     "test:contracts": "node --test tests/contracts/*.test.mts",
     "test:e2e": "npx playwright test --config tests/e2e/playwright.config.ts",
     "test:e2e:mocked": "npx playwright test --config tests/e2e/playwright.config.ts --project=ui --project=settings",
@@ -16,6 +16,7 @@
     "test:backend": "cd backend && python -m pytest ../tests/backend/ -v --rootdir=."
   },
   "dependencies": {
+    "@xyflow/react": "^12.10.2",
     "date-fns": "^4.1.0",
     "graphql": "^16.14.0",
     "graphql-request": "^7.4.0",
@@ -36,5 +37,8 @@
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "^8.5.15"
   }
 }

@@ -141,3 +141,60 @@ def test_ingest_repo_html_url_absent_when_not_in_jsonl(tmp_path):
     findings = ingest_findings_jsonl(p)
     assert len(findings) == 1
     assert findings[0]["repo_html_url"] == ""
+
+
+def test_ingest_passes_through_engine_and_dataflow_trace(tmp_path):
+    """Engine attribution + dataflow_trace pass through ingestion."""
+    trace = [
+        {"file": "src/app.py", "line": 5, "snippet": "x = req.args['id']", "role": "source"},
+        {"file": "src/app.py", "line": 10, "snippet": "cursor.execute(x)", "role": "sink"},
+    ]
+    finding = {
+        "repo_full_name": "acme-org/example-repo",
+        "file_path": "src/app.py",
+        "start_line": 10,
+        "end_line": 10,
+        "rule_id": "semgrep-sqli",
+        "rule_name": "SQL Injection",
+        "severity": "high",
+        "confidence": "high",
+        "category": "security",
+        "cwe": ["CWE-89"],
+        "message": "Tainted flow from request to SQL exec",
+        "snippet": "cursor.execute(x)",
+        "engine": "semgrep",
+        "dataflow_trace": trace,
+    }
+    p = tmp_path / "findings.jsonl"
+    p.write_text(json.dumps(finding) + "\n")
+
+    findings = ingest_findings_jsonl(p)
+    assert len(findings) == 1
+    f = findings[0]
+    assert f["engine"] == "semgrep"
+    assert f["dataflow_trace"] == trace
+
+
+def test_ingest_engine_defaults_to_semgrep_when_absent(tmp_path):
+    """Legacy findings (no `engine` field) default to semgrep."""
+    finding = {
+        "repo_full_name": "acme-org/example-repo",
+        "file_path": "src/app.py",
+        "start_line": 1,
+        "end_line": 1,
+        "rule_id": "python.sqli",
+        "rule_name": "SQL Injection",
+        "severity": "high",
+        "confidence": "high",
+        "category": "security",
+        "cwe": ["CWE-89"],
+        "message": "msg",
+        "snippet": "exec(q)",
+    }
+    p = tmp_path / "findings.jsonl"
+    p.write_text(json.dumps(finding) + "\n")
+
+    findings = ingest_findings_jsonl(p)
+    assert len(findings) == 1
+    assert findings[0]["engine"] == "semgrep"
+    assert findings[0]["dataflow_trace"] is None

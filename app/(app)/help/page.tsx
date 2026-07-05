@@ -31,7 +31,7 @@ export default function HelpPage() {
           </div>
 
           <div>
-            <p className="mb-4 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+            <p className="mb-4 text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
               What we're looking for
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -49,7 +49,7 @@ export default function HelpPage() {
             href="https://aegis.com/support"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-5 py-2.5 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
           >
             Open Support
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

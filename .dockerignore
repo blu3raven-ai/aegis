@@ -4,7 +4,6 @@ node_modules
 .env*
 data/
 docs/
-backend/
 runner/
 .claude/
 .agents/
@@ -15,3 +14,10 @@ coverage/
 .DS_Store
 .superpowers/
 superpowers/
+
+# Backend artifacts (source is needed; these aren't)
+backend/.venv
+backend/data
+backend/**/__pycache__
+backend/**/*.pyc
+backend/**/*.egg-info

@@ -51,8 +51,9 @@ def merge_findings(
         existing_desc = (existing.get("security_advisory") or {}).get("description", "")
         new_desc = (f.get("security_advisory") or {}).get("description", "")
         if len(new_desc) > len(existing_desc):
-            existing["security_advisory"]["description"] = new_desc
-            existing["security_advisory"]["summary"] = (f.get("security_advisory") or {}).get("summary", "")
+            adv = existing.setdefault("security_advisory", {})
+            adv["description"] = new_desc
+            adv["summary"] = (f.get("security_advisory") or {}).get("summary", "")
 
         # Tool-specific merge hook
         if merge_extra:

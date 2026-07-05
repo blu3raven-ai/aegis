@@ -1,0 +1,30 @@
+name: Aegis Security Scan
+image: blu3raven-ai/aegis-pipe:v1
+description: Trigger an Aegis security scan for this commit or pull request.
+category: Security
+repository: https://bitbucket.org/blu3raven-ai/aegis
+maintainer: Aegis
+tags:
+  - security
+  - sast
+  - vulnerability-management
+
+variables:
+  AEGIS_URL:
+    description: Aegis instance URL (e.g. https://aegis.your-co.com)
+    required: true
+  AEGIS_API_KEY:
+    description: Aegis API key with scan:trigger scope. Configure as a secured workspace or repository variable.
+    required: true
+  SOURCE_ID:
+    description: Aegis source identifier for this repository
+    required: true
+  WAIT:
+    description: Wait for scan completion and surface findings (true/false)
+    default: "true"
+  FAIL_ON:
+    description: Severity threshold that fails this step (none | low | medium | high)
+    default: "none"
+  POLL_TIMEOUT_SECONDS:
+    description: Maximum seconds to wait for scan completion when WAIT=true
+    default: "1800"

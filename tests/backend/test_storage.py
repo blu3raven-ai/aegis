@@ -14,7 +14,7 @@ def isolated_config(tmp_path, monkeypatch):
     import src.settings.roles_store as roles_store
     roles_path = tmp_path / "data" / "settings" / "roles.json"
 
-    monkeypatch.setenv("JWT_SHARED_SECRET", "a" * 64)
+    monkeypatch.setenv("RUNNER_ENCRYPTION_KEY", "a" * 64)
     monkeypatch.setenv("FASTAPI_ENV", "production")
 
     return {
@@ -70,14 +70,14 @@ def test_combine_secrets_snapshots_preserves_findings_and_counts_statuses():
             {
                 "meta": {"lastUpdatedAt": "2026-04-01T00:00:00.000Z"},
                 "findings": [
-                    {"organization": "example-org", "repository": "repo-a", "source": "betterleaks", "reviewStatus": "new"},
+                    {"organization": "example-org", "repository": "repo-a", "source": "trufflehog", "reviewStatus": "new"},
                     {"organization": "example-org", "repository": "repo-a", "source": "trufflehog", "reviewStatus": "confirmed"},
                 ],
             },
             {
                 "meta": {"lastUpdatedAt": "2026-04-02T00:00:00.000Z"},
                 "findings": [
-                    {"organization": "example-labs", "repository": "repo-b", "source": "betterleaks", "reviewStatus": "action_taken"},
+                    {"organization": "example-labs", "repository": "repo-b", "source": "trufflehog", "reviewStatus": "action_taken"},
                 ],
             },
         ],
@@ -205,7 +205,7 @@ def test_ingest_normalized_jsonl_writes_findings_to_db(tmp_path, monkeypatch):
 
     source = tmp_path / "example-org_normalized.jsonl"
     source.write_text(
-        '{"source":"betterleaks","repository":"repo-a","DetectorName":"generic-api-key","Secret":"secret-value","File":"src/app.py","line":12,"Commit":"abc123","Date":"2026-04-01T00:00:00Z"}\n',
+        '{"source":"trufflehog","repository":"repo-a","DetectorName":"generic-api-key","Secret":"secret-value","File":"src/app.py","line":12,"Commit":"abc123","Date":"2026-04-01T00:00:00Z"}\n',
         encoding="utf-8",
     )
 
@@ -221,28 +221,6 @@ def test_ingest_normalized_jsonl_writes_findings_to_db(tmp_path, monkeypatch):
     assert snapshot is not None
     assert snapshot["meta"]["organization"] == "example-org"
     assert snapshot["stats"]["total"] >= 1
-
-
-def test_ingest_raw_scanner_output_reads_betterleaks_and_trufflehog_shapes(tmp_path, monkeypatch):
-    from src.secrets.scanner import ingest_raw_scanner_output
-
-
-    repo_dir = tmp_path / "raw" / "example-org" / "repo-a"
-    repo_dir.mkdir(parents=True)
-    (repo_dir / "betterleaks.json").write_text(
-        '[{"DetectorName":"generic-api-key","Secret":"secret-a","File":"a.py","line":1,"Commit":"aaa"}]',
-        encoding="utf-8",
-    )
-    (repo_dir / "trufflehog.json").write_text(
-        '{"DetectorName":"gcp-api-key","Raw":"secret-b","SourceMetadata":{"Data":{"Git":{"file":"b.py","commit":"bbb","line":2}}}}\n',
-        encoding="utf-8",
-    )
-
-    # ingest_raw_scanner_output now returns (None, repo_to_sha)
-    result, repo_to_sha = ingest_raw_scanner_output("example-org", "run-raw", tmp_path / "raw" / "example-org")
-
-    assert result is None
-    assert repo_to_sha["repo-a"] in {"aaa", "bbb"}
 
 
 def test_in_memory_scan_runtime_tracks_probe_and_cancel_metadata():

@@ -971,7 +971,7 @@ export function SecretsDashboardView({ orgs, latestRun: propsLatestRun, onLatest
         canEdit ? (
           <SecretsContent canEdit={canEdit} />
         ) : (
-          <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center">
             <p className="text-sm text-[var(--color-text-secondary)]">You need admin access to manage tool settings.</p>
           </div>
         )

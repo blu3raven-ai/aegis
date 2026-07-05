@@ -1,0 +1,19 @@
+{
+  "name": "aegis-azure-devops-task",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure DevOps task that triggers an Aegis security scan.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "azure-pipelines-task-lib": "^4.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.4"
+  }
+}

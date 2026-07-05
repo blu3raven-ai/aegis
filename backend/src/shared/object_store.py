@@ -65,28 +65,67 @@ def generate_upload_url(key: str, expires_in: int = 300, external: bool = False)
     return url
 
 
-def generate_download_url(key: str, expires_in: int = 300) -> str:
+def generate_upload_post(
+    key: str,
+    *,
+    max_bytes: int,
+    expires_in: int = 300,
+    external: bool = False,
+) -> dict:
+    """Generate a pre-signed POST whose policy caps the upload size.
+
+    A pre-signed PUT URL cannot bound the request body, so a client can upload an
+    arbitrarily large object and exhaust storage before ingest ever reads it. The
+    POST policy carries a ``content-length-range`` condition, so the object store
+    rejects an oversized upload at upload time. Returns ``{"url", "fields"}``; the
+    caller POSTs a multipart form of ``fields`` plus the file. ``external`` rewrites
+    the URL host to ``S3_EXTERNAL_ENDPOINT`` for off-cluster runners.
+    """
+    post = get_s3_client().generate_presigned_post(
+        Bucket=_S3_BUCKET,
+        Key=key,
+        Conditions=[["content-length-range", 0, max_bytes]],
+        ExpiresIn=expires_in,
+    )
+    if external and _S3_EXTERNAL_ENDPOINT and _S3_ENDPOINT:
+        post["url"] = post["url"].replace(_S3_ENDPOINT, _S3_EXTERNAL_ENDPOINT, 1)
+    return post
+
+
+def generate_download_url(key: str, expires_in: int = 300, bucket: str = _S3_BUCKET) -> str:
     """Generate a pre-signed GET URL."""
     return get_s3_client().generate_presigned_url(
         "get_object",
-        Params={"Bucket": _S3_BUCKET, "Key": key},
+        Params={"Bucket": bucket, "Key": key},
         ExpiresIn=expires_in,
     )
 
 
-def upload_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+def upload_bytes(key: str, data: bytes, content_type: str = "application/octet-stream", bucket: str = _S3_BUCKET) -> None:
     get_s3_client().put_object(
-        Bucket=_S3_BUCKET,
+        Bucket=bucket,
         Key=key,
         Body=data,
         ContentType=content_type,
     )
 
 
-def download_bytes(key: str) -> bytes | None:
+# Cap in-memory object reads so an oversized (e.g. runner-supplied) blob can't
+# OOM the ingest worker. read(N+1) bounds the read regardless of a possibly
+# understated ContentLength.
+MAX_OBJECT_BYTES = 512 * 1024 * 1024
+
+
+def download_bytes(key: str, bucket: str = _S3_BUCKET) -> bytes | None:
     try:
-        response = get_s3_client().get_object(Bucket=_S3_BUCKET, Key=key)
-        return response["Body"].read()
+        response = get_s3_client().get_object(Bucket=bucket, Key=key)
+        data = response["Body"].read(MAX_OBJECT_BYTES + 1)
+        if len(data) > MAX_OBJECT_BYTES:
+            logger.warning(
+                "Object %s exceeds the %d-byte cap — refusing to load", key, MAX_OBJECT_BYTES
+            )
+            return None
+        return data
     except ClientError as e:
         if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
             return None
@@ -97,24 +136,30 @@ def download_json(key: str) -> dict[str, Any] | None:
     data = download_bytes(key)
     if not data:
         return None
-    return json.loads(data)
+    try:
+        return json.loads(data)
+    except (json.JSONDecodeError, ValueError):
+        # A truncated/corrupt blob (e.g. an interrupted upload) is treated as
+        # unreadable rather than crashing the caller with a 500.
+        logger.warning("Unparseable JSON blob at %s — treating as missing", key)
+        return None
 
 
-def delete_prefix(prefix: str) -> int:
+def delete_prefix(prefix: str, bucket: str = _S3_BUCKET) -> int:
     client = get_s3_client()
-    objects = list_objects(prefix)
+    objects = list_objects(prefix, bucket=bucket)
     if not objects:
         return 0
     for key in objects:
-        client.delete_object(Bucket=_S3_BUCKET, Key=key)
+        client.delete_object(Bucket=bucket, Key=key)
     return len(objects)
 
 
-def list_objects(prefix: str) -> list[str]:
+def list_objects(prefix: str, bucket: str = _S3_BUCKET) -> list[str]:
     client = get_s3_client()
     keys: list[str] = []
     paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=_S3_BUCKET, Prefix=prefix):
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             keys.append(obj["Key"])
     return keys

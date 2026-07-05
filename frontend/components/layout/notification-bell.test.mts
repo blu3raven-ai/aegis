@@ -1,0 +1,62 @@
+import { describe, it } from "node:test"
+import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
+const ROOT = join(import.meta.dirname, "../..")
+const src = readFileSync(join(ROOT, "components/layout/NotificationBell.tsx"), "utf8")
+const drawer = readFileSync(join(ROOT, "components/layout/NotificationDrawer.tsx"), "utf8")
+const notifBody = readFileSync(join(ROOT, "components/layout/NotificationsTabBody.tsx"), "utf8")
+
+describe("NotificationBell", () => {
+  it("opens a drawer rather than navigating to /notifications", () => {
+    assert.ok(src.includes("NotificationDrawer"), "should render NotificationDrawer")
+    assert.ok(!src.includes('href="/notifications"'), "should not navigate to /notifications via Link")
+  })
+  it("has aria-label mentioning unread count", () => {
+    assert.ok(src.includes("aria-label"), "should have aria-label")
+    assert.ok(src.includes("unread"), "aria-label should mention unread count")
+  })
+  it("caps badge at 99+", () => {
+    assert.ok(src.includes("99+"), "should cap badge display at 99+")
+  })
+  it("badge is absolutely positioned to avoid layout shift", () => {
+    assert.ok(src.includes("absolute"), "badge should be absolute positioned")
+  })
+  it("uses useNotificationCount hook", () => {
+    assert.ok(src.includes("useNotificationCount"), "should use useNotificationCount hook")
+  })
+})
+
+describe("NotificationDrawer", () => {
+  it("is a single Notifications panel — no Activity tab", () => {
+    assert.ok(drawer.includes("NotificationsTabBody"), "renders NotificationsTabBody")
+    assert.ok(!drawer.includes("ActivityTabBody"), "no Activity tab in the drawer")
+    assert.ok(!drawer.includes('role="tablist"'), "no tab bar")
+  })
+  it("provides a 'View all' link to the Inbox history route", () => {
+    assert.ok(drawer.includes('href="/inbox/history"'), "footer links to /inbox/history")
+    assert.ok(drawer.includes("View all"), "footer label present")
+  })
+  it("does not link to /notifications (the drawer is the only notifications surface)", () => {
+    assert.ok(!drawer.includes('href="/notifications"'), "should not link to the deleted /notifications page")
+  })
+  it("supports Escape and outside-click dismiss", () => {
+    assert.ok(drawer.includes("Escape"), "should dismiss on Escape")
+    assert.ok(drawer.includes("mousedown"), "should dismiss on outside click")
+  })
+  it("delegates fetching to the notifications body — no inline fetchNotifications or listActivity in drawer", () => {
+    assert.ok(!drawer.includes("fetchNotifications"), "drawer should not call fetchNotifications directly")
+    assert.ok(!drawer.includes("listActivity"), "drawer should not call listActivity directly")
+  })
+})
+
+describe("Drawer Notifications tab body — supports browsing older notifications", () => {
+  it("renders a Load older affordance for pagination", () => {
+    assert.ok(notifBody.includes("Load older"), "Load older button present")
+  })
+  it("uses fetchNotifications with limit + offset", () => {
+    assert.ok(notifBody.includes("fetchNotifications"), "calls fetchNotifications")
+    assert.ok(notifBody.includes("offset"), "tracks offset for pagination")
+  })
+})

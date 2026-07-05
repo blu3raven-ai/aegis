@@ -1,32 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
 from src.main import app
-import time
-import base64
-import json
-import hmac
-import hashlib
-
-
-def _b64url(data: bytes | str) -> str:
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
-
-def _make_jwt(sub: str, role: str, secret: str) -> str:
-    now = int(time.time())
-    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}))
-    payload = _b64url(json.dumps({"sub": sub, "role": role, "iat": now, "exp": now + 60}))
-    if len(secret) == 64:
-        key = bytes.fromhex(secret)
-    else:
-        key = secret.encode("utf-8")
-    signature = _b64url(hmac.new(key, f"{header}.{payload}".encode("utf-8"), hashlib.sha256).digest())
-    return f"{header}.{payload}.{signature}"
-
-def _auth_headers(role: str, secret: str = "a" * 64, sub: str | None = None) -> dict[str, str]:
-    user_sub = sub if sub else f'usr_{role}'
-    return {"Authorization": f"Bearer {_make_jwt(sub=user_sub, role=role, secret=secret)}"}
 
 
 def _seed_default_roles():
@@ -55,13 +29,16 @@ def _seed_default_roles():
 
 @pytest.fixture
 def client(monkeypatch):
-    monkeypatch.setenv("JWT_SHARED_SECRET", "a" * 64)
+    monkeypatch.setenv("RUNNER_ENCRYPTION_KEY", "a" * 64)
     monkeypatch.setenv("FASTAPI_ENV", "production")
     _seed_default_roles()
-    return TestClient(app)
+    # Unused by tests below, but kept for fixture compat. Tests create
+    # role-specific clients directly via make_authed_client.
+    from conftest import make_authed_client
+    return make_authed_client(role="admin", user_id="dep-auth-admin")
 
 
-def test_dependencies_refresh_requires_appropriate_role(client, monkeypatch):
+def test_dependencies_refresh_requires_appropriate_role(monkeypatch):
     import src.dependencies.router as dependencies_api
 
     # Patch execute_dependencies_scan_once so the background thread exits immediately
@@ -73,16 +50,21 @@ def test_dependencies_refresh_requires_appropriate_role(client, monkeypatch):
     monkeypatch.setattr(scan_orch, "org_has_source_connections", lambda org, categories=None: True)
     monkeypatch.setattr(scan_orch, "get_github_token_for_org", lambda org: "token")
 
+    from conftest import make_authed_client
+    _seed_default_roles()
+
     # Viewer role should be denied
-    response = client.post("/dependencies/api/runs?org=test-org", headers=_auth_headers("viewer"))
+    viewer_client = make_authed_client(role="viewer", user_id="dep-refresh-viewer")
+    response = viewer_client.post("/api/v1/dependencies/runs?org=test-org")
     assert response.status_code == 403
 
     # Admin role should be ALLOWED (returns 202 Accepted)
-    response = client.post("/dependencies/api/runs?org=test-org", headers=_auth_headers("admin"))
+    admin_client = make_authed_client(role="admin", user_id="dep-refresh-admin")
+    response = admin_client.post("/api/v1/dependencies/runs?org=test-org")
     assert response.status_code == 202
 
 
-def test_dependencies_cancel_requires_appropriate_role(client, monkeypatch):
+def test_dependencies_cancel_requires_appropriate_role(monkeypatch):
     import src.dependencies.router as dependencies_api
 
     class FakeRuntime:
@@ -93,18 +75,25 @@ def test_dependencies_cancel_requires_appropriate_role(client, monkeypatch):
 
     monkeypatch.setattr(dependencies_api, "_dependencies_runtime", FakeRuntime())
 
+    from conftest import make_authed_client
+    _seed_default_roles()
+
     # Viewer role should be denied
-    response = client.post("/dependencies/api/runs/cancel?org=test-org", headers=_auth_headers("viewer"))
+    viewer_client = make_authed_client(role="viewer", user_id="dep-cancel-viewer")
+    response = viewer_client.post("/api/v1/dependencies/runs/cancel?org=test-org")
     assert response.status_code == 403
 
     # Admin role should be ALLOWED
-    response = client.post("/dependencies/api/runs/cancel?org=test-org", headers=_auth_headers("admin"))
+    admin_client = make_authed_client(role="admin", user_id="dep-cancel-admin")
+    response = admin_client.post("/api/v1/dependencies/runs/cancel?org=test-org")
     assert response.status_code == 200
 
 
-def test_viewer_with_repo_scope_cannot_refresh_cache(client, monkeypatch):
-    from src.settings import organisations_store as store
+def test_viewer_with_repo_scope_cannot_refresh_cache(monkeypatch):
+    from conftest import make_authed_client
+    _seed_default_roles()
 
     # Viewer WITH scope should still be denied refresh (privileged action)
-    response = client.post("/dependencies/api/runs?org=octo", headers=_auth_headers("viewer", sub="usr_viewer"))
+    viewer_client = make_authed_client(role="viewer", user_id="dep-scope-viewer")
+    response = viewer_client.post("/api/v1/dependencies/runs?org=octo")
     assert response.status_code == 403

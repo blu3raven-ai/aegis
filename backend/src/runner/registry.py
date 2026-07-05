@@ -209,8 +209,6 @@ def list_runners_with_status() -> list[dict[str, Any]]:
     for runner in runners:
         runner["computedStatus"] = compute_runner_status(runner)
 
-        # Health starts at 100%, decreases for each missed heartbeat.
-        # Only measure over the time the runner has actually been up (max 60 min).
         registered = runner.get("registeredAt", "")
         try:
             reg_time = datetime.fromisoformat(registered.replace("Z", "+00:00"))
@@ -222,7 +220,7 @@ def list_runners_with_status() -> list[dict[str, Any]]:
             runner["healthPercent"] = 100
         else:
             window = max(1, int(uptime_minutes))
-            expected = window * 2  # 1 heartbeat every 30s = 2 per minute
+            expected = window * 2
             received = count_heartbeats(runner["id"], window_minutes=window)
             missed = max(0, expected - received)
             runner["healthPercent"] = max(0, round(100 - (missed / expected) * 100))

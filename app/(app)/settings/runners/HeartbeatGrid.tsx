@@ -60,7 +60,7 @@ export function HeartbeatGrid({
           <div
             key={i}
             className={`h-2 w-2 rounded-sm ${
-              state === "received" ? "bg-emerald-500" : state === "missed" ? "bg-red-400" : "bg-gray-700"
+              state === "received" ? "bg-[var(--color-status-ok)]" : state === "missed" ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-border-medium)]"
             }`}
             title={state === "received" ? "Received" : state === "missed" ? "Missed" : "Not running"}
           />
@@ -72,10 +72,10 @@ export function HeartbeatGrid({
           {missed > 0 && ` · ${missed} missed${firstMissedTime ? ` at ${firstMissedTime}` : ""}`}
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" /> received
+          <span className="inline-block h-2 w-2 rounded-sm bg-[var(--color-status-ok)]" /> received
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-red-400" /> missed
+          <span className="inline-block h-2 w-2 rounded-sm bg-[var(--color-severity-critical)]" /> missed
         </span>
       </div>
     </div>

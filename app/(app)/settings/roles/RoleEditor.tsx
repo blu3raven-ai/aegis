@@ -75,7 +75,7 @@ export function RoleEditor({
             <button
               type="button"
               onClick={() => onDelete(role.id)}
-              className="rounded-lg bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-500 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+              className="rounded-lg bg-[var(--color-severity-critical-subtle)] px-4 py-2 text-sm font-semibold text-[var(--color-severity-critical)] border border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
             >
               Delete Role
             </button>
@@ -83,7 +83,7 @@ export function RoleEditor({
           <button
             onClick={handleSubmit}
             disabled={isLoading || isLocked}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50"
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50"
           >
             {isLoading ? "Saving..." : "Save Role"}
           </button>
@@ -91,7 +91,7 @@ export function RoleEditor({
       </div>
 
       {isLocked && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-400">
+        <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3 text-sm text-[var(--color-state-pending)]">
           This is a protected role. It cannot be modified or deleted.
         </div>
       )}
@@ -99,7 +99,7 @@ export function RoleEditor({
       <form onSubmit={handleSubmit} className="space-y-8 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-1.5">
-            <label htmlFor="role-name" className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Role Name</label>
+            <label htmlFor="role-name" className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Role Name</label>
             <input
               id="role-name"
               type="text"
@@ -108,24 +108,24 @@ export function RoleEditor({
               disabled={isLocked || isLoading}
               required
               placeholder="e.g. Security Auditor"
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:border-[var(--color-accent)] focus:outline-none"
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="role-id" className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Role ID</label>
+            <label htmlFor="role-id" className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Role ID</label>
             <input
               id="role-id"
               type="text"
               value={currentId}
               readOnly
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-mono text-[var(--color-text-secondary)] cursor-default focus:outline-none"
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-mono text-[var(--color-text-secondary)] cursor-default outline-none"
               title="Role ID is automatically generated and cannot be changed"
             />
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <label htmlFor="role-desc" className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Description</label>
+          <label htmlFor="role-desc" className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Description</label>
           <textarea
             id="role-desc"
             value={description}
@@ -133,7 +133,7 @@ export function RoleEditor({
             disabled={isLocked || isLoading}
             rows={2}
             placeholder="Describe the purpose and access level of this role."
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:border-[var(--color-accent)] focus:outline-none resize-none"
+            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30 resize-none"
           />
         </div>
 

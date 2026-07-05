@@ -3,10 +3,10 @@
 import type { Runner } from "./types"
 
 const STATUS_DOT: Record<string, string> = {
-  online: "bg-emerald-500",
-  stale: "bg-amber-400",
-  offline: "bg-gray-400",
-  pending_approval: "bg-blue-400",
+  online: "bg-[var(--color-status-ok)]",
+  stale: "bg-[var(--color-state-pending)]",
+  offline: "bg-[var(--color-text-tertiary)]",
+  pending_approval: "bg-[var(--color-accent)]",
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -19,7 +19,7 @@ const STATUS_LABEL: Record<string, string> = {
 function MiniHealthBar({ percent }: { percent: number | null | undefined }) {
   if (percent == null) return <span className="text-[var(--color-text-secondary)]">—</span>
   const clamped = Math.max(0, Math.min(100, percent))
-  const color = clamped >= 90 ? "bg-emerald-500" : clamped >= 50 ? "bg-amber-400" : "bg-red-500"
+  const color = clamped >= 90 ? "bg-[var(--color-status-ok)]" : clamped >= 50 ? "bg-[var(--color-state-pending)]" : "bg-[var(--color-severity-critical)]"
   return (
     <div className="flex items-center gap-1.5">
       <div className="h-1.5 w-12 rounded-full bg-[var(--color-surface-raised)] overflow-hidden">
@@ -50,7 +50,7 @@ export function RunnerTable({ runners, label, showAddButton, isLocalMode, onAddC
           <button
             type="button"
             onClick={onAddClick}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--color-accent-hover)]"
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]"
           >
             Add runner
           </button>
@@ -99,7 +99,7 @@ export function RunnerTable({ runners, label, showAddButton, isLocalMode, onAddC
                   <td className="px-4 py-3 font-medium text-[var(--color-text-primary)]">{r.name}</td>
                   <td className="px-4 py-3">
                     <span className="flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${STATUS_DOT[r.status] ?? "bg-gray-400"}`} />
+                      <span className={`h-2 w-2 rounded-full ${STATUS_DOT[r.status] ?? "bg-[var(--color-text-tertiary)]"}`} />
                       <span className="text-[var(--color-text-secondary)]">{STATUS_LABEL[r.status] ?? r.status}</span>
                     </span>
                   </td>

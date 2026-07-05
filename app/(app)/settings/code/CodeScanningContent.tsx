@@ -48,7 +48,7 @@ function LanguageSupport() {
             {DEEP_LANGUAGES.map((lang) => (
               <span
                 key={lang}
-                className="inline-flex items-center rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400"
+                className="inline-flex items-center rounded-full bg-[var(--color-status-ok-subtle)] px-2.5 py-0.5 text-xs font-medium text-[var(--color-status-ok)]"
               >
                 {lang}
               </span>
@@ -144,12 +144,12 @@ export function CodeScanningContent({ canEdit = true }: { canEdit?: boolean }) {
 
   if (!settings) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+      <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-3 text-sm text-[var(--color-severity-critical)]">
         <p>{error ?? "Could not load settings."}</p>
         <button
           type="button"
           onClick={() => void loadSettings()}
-          className="mt-3 rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/40"
+          className="mt-3 rounded-lg border border-[var(--color-severity-critical-border)] px-3 py-2 text-sm font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical-subtle)]"
         >
           Retry
         </button>

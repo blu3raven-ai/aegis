@@ -60,7 +60,7 @@ def test_hooks_initial_state_without_fix():
 
 
 def test_scan_context_normalizes_org():
-    ctx = ScanContext(tool="dependencies", org="ACME", run_id="run-1")
+    ctx = ScanContext(tool="dependencies_scanning", org="ACME", run_id="run-1")
     assert ctx.org == "acme"
     assert ctx.tool == "dependencies"
     assert ctx.run_id == "run-1"

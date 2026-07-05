@@ -219,7 +219,7 @@ export function RepoGroupedFindings({
         key={rowKey}
         onClick={() => onSelectFinding(finding)}
         className={`cursor-pointer border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface-raised)] ${
-          isActive ? "border-l-2 border-l-[var(--color-accent)] bg-[var(--color-accent)]/5" : ""
+          isActive ? "bg-[var(--color-accent)]/5" : ""
         }`}
       >
         <td className="w-8 px-2 py-2.5" onClick={(e) => e.stopPropagation()}>

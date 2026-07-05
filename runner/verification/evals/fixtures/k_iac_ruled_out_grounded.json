@@ -1,0 +1,31 @@
+{
+  "id": "k_iac_ruled_out_grounded",
+  "verifier": "iac",
+  "note": "Hunter flags the bucket, but the skeptic finds a real compensating control: a bucket policy in policy.tf that enforces SSL/encryption. The mitigation snippet is non-empty, so the verdict is ruled_out and the finding hides. IaC has no citation critic, so grounding rests on the skeptic emitting a non-empty snippet.",
+  "finding": {
+    "check_id": "CKV_AWS_18",
+    "title": "Ensure S3 bucket has access logging enabled",
+    "severity": "high",
+    "resource": "aws_s3_bucket.data",
+    "file": "infra/s3.tf",
+    "line": 1
+  },
+  "repo_files": {
+    "infra/s3.tf": "resource \"aws_s3_bucket\" \"data\" {\n  bucket = \"acme-data\"\n}\n",
+    "infra/policy.tf": "resource \"aws_s3_bucket_policy\" \"data\" {\n  bucket = aws_s3_bucket.data.id\n  policy = jsonencode({\n    Statement = [{\n      Effect = \"Deny\"\n      Action = \"s3:*\"\n      Principal = \"*\"\n      Condition = { Bool = { \"aws:SecureTransport\" = \"false\" } }\n    }]\n  })\n}\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"exploit_chain\":\"the bucket lacks native logging\",\"evidence\":[{\"kind\":\"resource\",\"file\":\"infra/s3.tf\",\"line\":1,\"snippet\":\"resource \\\"aws_s3_bucket\\\" \\\"data\\\"\"}]}",
+      "tokens_in": 160,
+      "tokens_out": 40
+    },
+    {
+      "content": "{\"mitigation_found\":true,\"mitigation_file\":\"infra/policy.tf\",\"mitigation_line\":5,\"mitigation_snippet\":\"Effect = \\\"Deny\\\", Action = \\\"s3:*\\\"\",\"reasoning\":\"a bucket policy denies all non-SSL access, compensating for the missing native logging\"}",
+      "tokens_in": 140,
+      "tokens_out": 45
+    }
+  ],
+  "expected": {"signal": "ruled_out", "suppressed": true},
+  "label": {"truly_reachable": false}
+}

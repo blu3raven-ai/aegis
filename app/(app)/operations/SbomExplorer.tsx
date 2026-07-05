@@ -86,11 +86,11 @@ interface BulkMatch {
 
 const ECOSYSTEM_COLORS: Record<string, string> = {
   npm: "bg-red-500/10 text-red-500",
-  pypi: "bg-blue-500/10 text-blue-500",
+  pypi: "bg-blue-500/10 text-[var(--color-accent)]",
   maven: "bg-orange-500/10 text-orange-500",
   golang: "bg-cyan-500/10 text-cyan-500",
   gem: "bg-pink-500/10 text-pink-500",
-  nuget: "bg-purple-500/10 text-purple-500",
+  nuget: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]",
   cargo: "bg-amber-500/10 text-amber-600",
   composer: "bg-indigo-500/10 text-indigo-500",
   hackage: "bg-violet-500/10 text-violet-500",
@@ -99,7 +99,7 @@ const ECOSYSTEM_COLORS: Record<string, string> = {
   cocoapods: "bg-rose-500/10 text-rose-500",
   swift: "bg-orange-500/10 text-orange-600",
   apk: "bg-teal-500/10 text-teal-500",
-  deb: "bg-emerald-500/10 text-emerald-500",
+  deb: "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)]",
   rpm: "bg-yellow-500/10 text-yellow-600",
   "github-actions": "bg-gray-500/10 text-gray-500",
 }
@@ -177,15 +177,15 @@ type ViewMode = "search" | "bulk"
 
 function EcosystemBadge({ ecosystem }: { ecosystem: string }) {
   const colors = ECOSYSTEM_COLORS[ecosystem] ?? "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
-  return <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors}`}>{ecosystem}</span>
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-2xs font-semibold ${colors}`}>{ecosystem}</span>
 }
 
 function SourceBadge({ sourceTool }: { sourceTool: string | null }) {
   const label = sourceTool ? "Dependencies" : "Container"
   const colors = sourceTool
     ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
-    : "bg-purple-500/10 text-purple-500"
-  return <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${colors}`}>{label}</span>
+    : "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]"
+  return <span className={`inline-flex rounded-full px-2 py-0.5 text-2xs font-semibold ${colors}`}>{label}</span>
 }
 
 function MultiSelect({
@@ -243,7 +243,7 @@ function MultiSelect({
             >
               <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected.includes(opt) ? "border-[var(--color-accent)] bg-[var(--color-accent)]" : "border-[var(--color-border)]"}`}>
                 {selected.includes(opt) && (
-                  <svg className="h-3 w-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="h-3 w-3 text-[var(--color-accent-on)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 13l4 4L19 7" />
                   </svg>
                 )}
@@ -399,14 +399,14 @@ export function SbomExplorer() {
           <button
             type="button"
             onClick={() => setViewMode("search")}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "search" ? "bg-[var(--color-accent)] text-white shadow-sm" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "search" ? "bg-[var(--color-accent)] text-[var(--color-accent-on)] shadow-sm" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
           >
             Search
           </button>
           <button
             type="button"
             onClick={() => setViewMode("bulk")}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "bulk" ? "bg-[var(--color-accent)] text-white shadow-sm" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "bulk" ? "bg-[var(--color-accent)] text-[var(--color-accent-on)] shadow-sm" : "text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"}`}
           >
             Bulk Lookup
           </button>
@@ -426,12 +426,12 @@ export function SbomExplorer() {
             Export SBOM
           </button>
         ) : (
-          <a href="/settings/license" className="flex items-center gap-1.5 rounded-lg border border-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-500 transition-colors hover:bg-purple-500/5 focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">
+          <a href="/settings/license" className="flex items-center gap-1.5 rounded-lg border border-[var(--color-argus-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-argus)] transition-colors hover:bg-[var(--color-argus-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">
             <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
               <path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
             </svg>
             Export SBOM
-            <span className="rounded-full bg-purple-500/10 px-1.5 py-px text-[10px] font-semibold">Enterprise</span>
+            <span className="rounded-full bg-[var(--color-argus-subtle)] px-1.5 py-px text-2xs font-semibold">Enterprise</span>
           </a>
         )}
       </div>
@@ -529,14 +529,14 @@ export function SbomExplorer() {
                   <button
                     type="button"
                     onClick={() => { setFilterLogic("and"); setPage(1) }}
-                    className={`rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none ${filterLogic === "and" ? "bg-[var(--color-surface-raised)] text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"}`}
+                    className={`rounded-md px-2 py-0.5 text-2xs font-semibold tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none ${filterLogic === "and" ? "bg-[var(--color-surface-raised)] text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"}`}
                   >
                     AND
                   </button>
                   <button
                     type="button"
                     onClick={() => { setFilterLogic("or"); setPage(1) }}
-                    className={`rounded-md px-2 py-0.5 text-[10px] font-semibold tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none ${filterLogic === "or" ? "bg-[var(--color-surface-raised)] text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"}`}
+                    className={`rounded-md px-2 py-0.5 text-2xs font-semibold tracking-wide transition-colors focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none ${filterLogic === "or" ? "bg-[var(--color-surface-raised)] text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)] hover:text-[var(--color-text-secondary)]"}`}
                   >
                     OR
                   </button>
@@ -552,9 +552,9 @@ export function SbomExplorer() {
 
           {/* Error */}
           {error && (
-            <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
-              <p className="text-sm text-red-500">{error}</p>
-              <button type="button" onClick={fetchData} className="mt-1 text-xs font-medium text-red-500 underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">Retry</button>
+            <div className="rounded-xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
+              <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+              <button type="button" onClick={fetchData} className="mt-1 text-xs font-medium text-[var(--color-severity-critical)] underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">Retry</button>
             </div>
           )}
 
@@ -670,7 +670,7 @@ function BulkLookupPanel({
             type="button"
             disabled={!parsedCount || loading}
             onClick={onRun}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:outline-none"
+            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:outline-none"
           >
             {loading ? "Checking..." : "Check Exposure"}
           </button>
@@ -678,8 +678,8 @@ function BulkLookupPanel({
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
-          <p className="text-sm text-red-500">{error}</p>
+        <div className="rounded-xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
+          <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
         </div>
       )}
 
@@ -691,13 +691,13 @@ function BulkLookupPanel({
               {results.length} checked
             </p>
             <span className="flex items-center gap-1.5 text-xs">
-              <span className="h-2 w-2 rounded-full bg-red-500" />
-              <span className="font-semibold tabular-nums text-red-500">{found}</span>
+              <span className="h-2 w-2 rounded-full bg-[var(--color-severity-critical)]" />
+              <span className="font-semibold tabular-nums text-[var(--color-severity-critical)]">{found}</span>
               <span className="text-[var(--color-text-secondary)]">found in estate</span>
             </span>
             <span className="flex items-center gap-1.5 text-xs">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              <span className="font-semibold tabular-nums text-emerald-500">{notFound}</span>
+              <span className="h-2 w-2 rounded-full bg-[var(--color-status-ok)]" />
+              <span className="font-semibold tabular-nums text-[var(--color-state-fixed)]">{notFound}</span>
               <span className="text-[var(--color-text-secondary)]">not found</span>
             </span>
           </div>
@@ -707,14 +707,14 @@ function BulkLookupPanel({
             {results.map((r, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-xs">
                 {r.found ? (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500/10" title="Found in estate">
-                    <svg className="h-3 w-3 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-severity-critical-subtle)]" title="Found in estate">
+                    <svg className="h-3 w-3 text-[var(--color-severity-critical)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                     </svg>
                   </span>
                 ) : (
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/10" title="Not found">
-                    <svg className="h-3 w-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-state-fixed-subtle)]" title="Not found">
+                    <svg className="h-3 w-3 text-[var(--color-state-fixed)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 13l4 4L19 7" />
                     </svg>
                   </span>
@@ -773,9 +773,9 @@ function ComponentRow({
         <td className="px-4 py-3"><span className="text-xs text-[var(--color-text-tertiary)]" title={item.scannedAt}>{timeAgo(item.scannedAt)}</span></td>
         <td className="px-4 py-3 text-right">
           {isEnterprise ? (
-            <button type="button" onClick={() => onExport(item.org, item.repo)} className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-[10px] font-semibold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none" title="Download CycloneDX SBOM">Export</button>
+            <button type="button" onClick={() => onExport(item.org, item.repo)} className="rounded-lg border border-[var(--color-border)] px-2.5 py-1 text-2xs font-semibold text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none" title="Download CycloneDX SBOM">Export</button>
           ) : (
-            <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-semibold text-purple-500" title="SBOM export requires an Enterprise license">Enterprise</span>
+            <span className="rounded-full bg-[var(--color-argus-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-argus)]" title="SBOM export requires an Enterprise license">Enterprise</span>
           )}
         </td>
       </tr>
@@ -802,7 +802,7 @@ function ComponentRow({
                       <SourceBadge sourceTool={r.sourceTool} />
                       <span className="ml-auto text-[var(--color-text-tertiary)]">{timeAgo(r.scannedAt)}</span>
                       {isEnterprise && (
-                        <button type="button" onClick={() => window.open(`/api/sbom/download?${new URLSearchParams({ org: r.org, repo: r.repo })}`, "_blank")} className="rounded border border-[var(--color-border)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">Export</button>
+                        <button type="button" onClick={() => window.open(`/api/sbom/download?${new URLSearchParams({ org: r.org, repo: r.repo })}`, "_blank")} className="rounded border border-[var(--color-border)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none">Export</button>
                       )}
                     </div>
                   ))}

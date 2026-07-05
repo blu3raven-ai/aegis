@@ -41,12 +41,13 @@ export function VerifyForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]">
+        <label htmlFor="code" className="mb-1.5 block text-sm font-medium text-[var(--color-text-primary)]">
           Verification code
         </label>
         <input
+          id="code"
           type="text"
           inputMode="numeric"
           pattern="[0-9]{6}"
@@ -57,12 +58,12 @@ export function VerifyForm() {
           required
           autoComplete="one-time-code"
           autoFocus
-          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-center font-mono text-sm tracking-widest text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
+          className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-3 text-center font-mono text-sm tracking-widest text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
         />
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
           {error}
           {isExpired && (
             <>
@@ -78,7 +79,7 @@ export function VerifyForm() {
       <button
         type="submit"
         disabled={isPending || code.length !== 6}
-        className="w-full rounded-lg bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full cursor-pointer rounded-lg bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isPending ? "Verifying..." : "Verify"}
       </button>

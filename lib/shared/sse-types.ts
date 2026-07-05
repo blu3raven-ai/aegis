@@ -50,6 +50,11 @@ export interface NotificationNewEvent {
   message: string
 }
 
+export interface ArgusIntelPushEvent {
+  message: string
+  chainIds?: string[]
+}
+
 export type SSEEventMap = {
   "scan.progress": ScanProgressEvent
   "scan.completed": ScanCompletedEvent
@@ -57,6 +62,7 @@ export type SSEEventMap = {
   "source.synced": SourceSyncedEvent
   "runner.status": RunnerStatusEvent
   "notification.new": NotificationNewEvent
+  "argus.intel_push": ArgusIntelPushEvent
 }
 
 export type SSEEventType = keyof SSEEventMap

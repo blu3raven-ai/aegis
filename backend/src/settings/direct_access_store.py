@@ -2,20 +2,19 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from src.db.helpers import run_db
-from src.db.models import DirectGrant
+from src.db.models import Asset, DirectGrant
 from src.shared.paths import now_iso as _now_iso
 
 
 def _grant_to_dict(grant: DirectGrant) -> dict[str, Any]:
     return {
         "userId": grant.user_id,
-        "resourceType": grant.resource_type,
-        "resourceKey": f"{grant.org}/{grant.resource_name}" if grant.org else grant.resource_name,
+        "assetId": grant.asset_id,
         "source": grant.source or "manual-direct",
         "createdAt": (
             grant.granted_at.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -24,14 +23,9 @@ def _grant_to_dict(grant: DirectGrant) -> dict[str, Any]:
     }
 
 
-def user_has_direct_repository_access(grants: list[dict[str, Any]], user_id: str, org: str, repo: str) -> bool:
-    key = f"{org}/{repo}".lower()
+def user_has_direct_asset_access(grants: list[dict[str, Any]], user_id: str, asset_id: str) -> bool:
     for grant in grants:
-        if (
-            grant.get("userId") == user_id
-            and grant.get("resourceType") == "repository"
-            and grant.get("resourceKey", "").lower() == key
-        ):
+        if grant.get("userId") == user_id and grant.get("assetId") == asset_id:
             return True
     return False
 
@@ -44,25 +38,20 @@ def list_direct_grants() -> list[dict[str, Any]]:
     return run_db(_query)
 
 
-def add_direct_grant(
-    user_id: str,
-    resource_type: Literal["repository", "containerImage"],
-    resource_key: str,
-    source: Literal["github-direct", "manual-direct"],
-) -> None:
-    # Parse org/resource from resource_key
-    parts = resource_key.split("/", 1)
-    org = parts[0] if len(parts) > 1 else ""
-    resource_name = parts[1] if len(parts) > 1 else parts[0]
-
+def add_direct_grant(user_id: str, asset_id: str, source: str = "manual-direct") -> None:
     async def _query(session):
-        # Check for existing grant (dedup)
+        # Verify the asset exists
+        asset_row = (await session.execute(
+            select(Asset).where(Asset.id == asset_id)
+        )).scalar_one_or_none()
+        if asset_row is None:
+            raise ValueError(f"Asset {asset_id!r} not found.")
+
+        # Check for existing grant (dedup by user_id + asset_id)
         result = await session.execute(
             select(DirectGrant).where(
                 DirectGrant.user_id == user_id,
-                DirectGrant.resource_type == resource_type,
-                func.lower(DirectGrant.org) == org.lower(),
-                func.lower(DirectGrant.resource_name) == resource_name.lower(),
+                DirectGrant.asset_id == asset_id,
             )
         )
         existing = result.scalars().first()
@@ -72,9 +61,11 @@ def add_direct_grant(
             session.add(DirectGrant(
                 id=f"dg_{secrets.token_hex(8)}",
                 user_id=user_id,
-                org=org,
-                resource_type=resource_type,
-                resource_name=resource_name,
+                asset_id=asset_id,
+                # Legacy columns kept nullable; set to sentinel values so DB
+                # constraints are satisfied until Task 4 drops the columns.
+                resource_type="asset",
+                resource_name="",
                 source=source,
                 granted_at=datetime.now(timezone.utc),
             ))
@@ -82,18 +73,12 @@ def add_direct_grant(
     run_db(_query)
 
 
-def remove_direct_grant(user_id: str, resource_type: str, resource_key: str) -> None:
-    parts = resource_key.split("/", 1)
-    org = parts[0] if len(parts) > 1 else ""
-    resource_name = parts[1] if len(parts) > 1 else parts[0]
-
+def remove_direct_grant(user_id: str, asset_id: str) -> None:
     async def _query(session):
         result = await session.execute(
             select(DirectGrant).where(
                 DirectGrant.user_id == user_id,
-                DirectGrant.resource_type == resource_type,
-                func.lower(DirectGrant.org) == org.lower(),
-                func.lower(DirectGrant.resource_name) == resource_name.lower(),
+                DirectGrant.asset_id == asset_id,
             )
         )
         for grant in result.scalars().all():

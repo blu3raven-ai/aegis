@@ -34,7 +34,7 @@ function MetaPill({
     <span
       className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-none ${
         warn
-          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+          ? "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]"
           : "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
       }`}
     >
@@ -187,8 +187,8 @@ export function ConnectionCard({
             <div
               className={`mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${
                 testResult.success
-                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "bg-red-500/10 text-red-600 dark:text-red-400"
+                  ? "bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]"
+                  : "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
               }`}
             >
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -204,7 +204,7 @@ export function ConnectionCard({
 
           {/* Error message — only show on error status */}
           {connection.status === "error" && connection.statusMessage && !testResult && (
-            <p className="mt-1.5 text-xs text-red-500">
+            <p className="mt-1.5 text-xs text-[var(--color-severity-critical)]">
               {connection.statusMessage}
             </p>
           )}
@@ -250,7 +250,7 @@ export function ConnectionCard({
                   e.stopPropagation()
                   setShowDeleteConfirm(true)
                 }}
-                className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-500/10 dark:border-red-800 disabled:opacity-50"
+                className="rounded-lg border border-[var(--color-severity-critical-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical-subtle)] disabled:opacity-50"
               >
                 Delete
               </button>

@@ -24,7 +24,7 @@ function VersionCell({ alert }: { alert: DependenciesFinding }) {
       <span className="flex items-center gap-1 whitespace-nowrap font-[family-name:var(--font-jetbrains-mono)] text-xs">
         <span className="text-[var(--color-text-primary)]">{current}</span>
         <span className="text-[var(--color-text-secondary)]">→</span>
-        <span className="text-emerald-400">{patch}</span>
+        <span className="text-[var(--color-state-fixed)]">{patch}</span>
       </span>
     )
   }
@@ -33,7 +33,7 @@ function VersionCell({ alert }: { alert: DependenciesFinding }) {
       <span className="flex items-center gap-1 whitespace-nowrap font-[family-name:var(--font-jetbrains-mono)] text-xs">
         <span className="text-[var(--color-text-secondary)]">Unknown</span>
         <span className="text-[var(--color-text-secondary)]">→</span>
-        <span className="text-emerald-400">{patch}</span>
+        <span className="text-[var(--color-state-fixed)]">{patch}</span>
       </span>
     )
   }
@@ -222,8 +222,17 @@ export function FindingsTable({
       <tr
         key={key}
         onClick={() => onSelectFinding(alert)}
-        className={`cursor-pointer border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface-raised)] ${
-          isSelected ? "border-l-2 border-l-[var(--color-accent)] bg-[var(--color-accent)]/5" : ""
+        tabIndex={0}
+        role="button"
+        aria-label={`Open finding: ${alert.security_advisory.severity} ${alert.dependency.package.name} in ${alert.repository.name}`}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            onSelectFinding(alert)
+          }
+        }}
+        className={`cursor-pointer border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset ${
+          isSelected ? "bg-[var(--color-accent)]/5" : ""
         }`}
       >
         {onCheckedKeysChange && (
@@ -268,7 +277,7 @@ export function FindingsTable({
         <td className="px-2.5 py-2.5 overflow-hidden">
           <span className="block truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-secondary)]">{alert.dependency.manifest_path}</span>
           {manifestCount > 1 && (
-            <span className="mt-0.5 inline-block rounded-md bg-[var(--color-surface-raised)] px-1 py-0.5 text-[10px] font-semibold text-[var(--color-text-secondary)]">+{manifestCount - 1}</span>
+            <span className="mt-0.5 inline-block rounded-md bg-[var(--color-surface-raised)] px-1 py-0.5 text-2xs font-semibold text-[var(--color-text-secondary)]">+{manifestCount - 1}</span>
           )}
         </td>
         <td className="px-2.5 py-2.5 tabular-nums text-xs text-[var(--color-text-secondary)] whitespace-nowrap">{alert.created_at ? `${age}d` : "–"}</td>
@@ -346,8 +355,18 @@ export function FindingsTable({
                 return (
                   <React.Fragment key={groupKey}>
                     <tr
-                      className="cursor-pointer border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] transition-colors hover:brightness-110"
+                      className="cursor-pointer border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset"
                       onClick={() => toggleGroup(groupKey)}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Expand/collapse group: ${groupKey}`}
+                      aria-expanded={isOpen}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault()
+                          toggleGroup(groupKey)
+                        }
+                      }}
                     >
                       {onCheckedKeysChange && (
                         <td className="w-8 px-2 py-2.5" onClick={(e) => e.stopPropagation()}>

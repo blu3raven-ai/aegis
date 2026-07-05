@@ -1,0 +1,41 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { FindingsBoardView } from "@/components/shared/findings/FindingsBoardView"
+import { FindingsIcon } from "@/lib/shared/ui/page-icons"
+import { getSourceConnection } from "@/lib/client/source-connections-api"
+import { useSourceId } from "@/lib/client/use-source-id"
+import type { SourceConnection } from "@/lib/shared/sources-types"
+
+export default function SourceFindingsBoard() {
+  const id = useSourceId()
+  const [connection, setConnection] = useState<SourceConnection | null>(null)
+
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    getSourceConnection(id).then((result) => {
+      if (!cancelled && result.ok) setConnection(result.data.connection)
+    })
+    return () => { cancelled = true }
+  }, [id])
+
+  // Scope by the canonical asset refs (the values the findings list matches on
+  // Asset.display_name); fall back to the raw discovered items only if the
+  // server hasn't supplied refs yet (older connection rows).
+  const scopeRepos = connection?.scopeRefs?.length
+    ? connection.scopeRefs
+    : connection?.discoveredItems?.length
+      ? connection.discoveredItems
+      : undefined
+
+  return (
+    <FindingsBoardView
+      hideHeader
+      compactHeader
+      pageTitle="Findings"
+      pageIcon={<FindingsIcon />}
+      scopeRepos={scopeRepos}
+    />
+  )
+}

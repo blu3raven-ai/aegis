@@ -68,6 +68,10 @@ function gqlToCodeScanningFinding(g: GqlCodeScanningFindingsConnection["items"][
           call_chain: g.reachability.callChain ?? undefined,
         }
       : undefined,
+    introduced_by_commit_sha: g.introducedByCommitSha ?? null,
+    introduced_by_author: g.introducedByAuthor ?? null,
+    introduced_at: g.introducedAt ?? null,
+    introduced_by_pr_url: g.introducedByPrUrl ?? null,
   }
 }
 
@@ -126,16 +130,16 @@ function BulkActionBar({ selectedKeys, findings, org, onComplete, onClear }: Bul
   if (selectedKeys.size === 0) return null
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-blue-500/20 bg-blue-500/8 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] px-4 py-3">
       <span className="text-sm font-medium text-[var(--color-text-primary)]">{selectedKeys.size} selected</span>
-      {error && <span className="text-xs text-red-500">{error}</span>}
+      {error && <span className="text-xs text-[var(--color-severity-critical)]">{error}</span>}
       <div className="ml-auto flex flex-wrap items-center gap-2">
         {canDismiss && (
           <>
             <select
               value={dismissReason}
               onChange={(e) => setDismissReason(e.target.value)}
-              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             >
               {DISMISS_REASONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
@@ -156,7 +160,7 @@ function BulkActionBar({ selectedKeys, findings, org, onComplete, onClear }: Bul
             type="button"
             onClick={() => void handleBulkAction("reopen")}
             disabled={isSubmitting}
-            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             Reopen Selected
           </button>
@@ -292,7 +296,7 @@ function FindingsTab({ findings, isLoading, error, primaryOrg, onActionComplete,
       {/* Backdrop — closes drawer when clicking outside on mobile */}
       {drawerFinding !== null && (
         <div
-          className="fixed inset-0 z-30 bg-black/20 xl:bg-transparent"
+          className="fixed inset-0 z-30 bg-[var(--color-overlay)] xl:bg-transparent"
           onClick={() => setDrawerFinding(null)}
           aria-hidden="true"
         />
@@ -346,7 +350,7 @@ function FindingsTab({ findings, isLoading, error, primaryOrg, onActionComplete,
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-16">
-            <p className="text-sm text-red-400">{error}</p>
+            <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
           </div>
         ) : (
           <CodeScanningRepoGroupedFindings
@@ -654,7 +658,7 @@ export function CodeScanningDashboardView({ org, initialTab, canEdit, prerequisi
         canEdit ? (
           <CodeScanningContent canEdit={canEdit} />
         ) : (
-          <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center">
             <p className="text-sm text-[var(--color-text-secondary)]">You need admin access to manage tool settings.</p>
           </div>
         )

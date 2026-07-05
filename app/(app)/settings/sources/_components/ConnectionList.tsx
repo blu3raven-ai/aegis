@@ -106,7 +106,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
               type="button"
               onClick={atLimit ? undefined : () => setShowAddModal(true)}
               disabled={atLimit}
-              className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -130,7 +130,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}
@@ -138,7 +138,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
       {/* Loading skeleton — grouped card style */}
       {isLoading ? (
         <div>
-          <p className="mb-4 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+          <p className="mb-4 text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
             Connections
           </p>
           <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
@@ -170,7 +170,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
             <button
               type="button"
               onClick={() => setShowAddModal(true)}
-              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+              className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
             >
               Add your first connection
             </button>
@@ -179,7 +179,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
       ) : (
         /* Connections grouped in a card — matches Account section pattern */
         <div>
-          <p className="mb-4 text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
+          <p className="mb-4 text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
             Connections
           </p>
           <div className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">

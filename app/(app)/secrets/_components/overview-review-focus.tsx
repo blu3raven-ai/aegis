@@ -1,10 +1,10 @@
 import type { SecretsOverviewFilterOpts } from "@/app/(app)/secrets/_components/overview-kpi-strip"
 
 const STATUSES = [
-  { key: "new", label: "New", note: "Awaiting triage", tone: "bg-orange-500", textTone: "text-orange-400" },
-  { key: "confirmed", label: "Confirmed", note: "Needs rotation", tone: "bg-red-500", textTone: "text-red-400" },
-  { key: "false_positive", label: "False Positive", note: "Reviewed as safe", tone: "bg-emerald-500", textTone: "text-emerald-400" },
-  { key: "action_taken", label: "Action Taken", note: "Rotated or revoked", tone: "bg-blue-500", textTone: "text-blue-400" },
+  { key: "new", label: "New", note: "Awaiting triage", tone: "bg-[var(--color-severity-high)]", textTone: "text-[var(--color-severity-high)]" },
+  { key: "confirmed", label: "Confirmed", note: "Needs rotation", tone: "bg-[var(--color-severity-critical)]", textTone: "text-[var(--color-severity-critical)]" },
+  { key: "false_positive", label: "False Positive", note: "Reviewed as safe", tone: "bg-[var(--color-status-ok)]", textTone: "text-[var(--color-status-ok)]" },
+  { key: "action_taken", label: "Action Taken", note: "Rotated or revoked", tone: "bg-[var(--color-accent)]", textTone: "text-[var(--color-accent)]" },
 ] as const
 
 export function OverviewReviewFocus({
@@ -89,7 +89,7 @@ export function OverviewReviewFocus({
       <button
         type="button"
         onClick={() => onOpenReviewFiltered({})}
-        className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-blue-300"
+        className="mt-5 flex w-full items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-[var(--color-accent-border)]"
       >
         <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
           View all in Review

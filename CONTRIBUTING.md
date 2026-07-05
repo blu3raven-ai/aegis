@@ -84,9 +84,6 @@ npm run test:backend
 # Frontend (node:test)
 npm run test:frontend
 
-# Contract tests
-npm run test:contracts
-
 # E2E (Playwright)
 npm run test:e2e
 ```

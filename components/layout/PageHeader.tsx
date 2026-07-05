@@ -16,7 +16,7 @@ export function PageHeader({ icon, title, description, org, controls }: PageHead
         <div className="flex items-center gap-3 min-w-0">
           {icon}
           <div className="min-w-0">
-            <h1 className="font-semibold text-[var(--color-text-primary)]">{title}</h1>
+            <h1 className="text-lg font-semibold tracking-tight text-[var(--color-text-primary)]">{title}</h1>
             {subtitle && <p className="text-xs text-[var(--color-text-secondary)] truncate">{subtitle}</p>}
           </div>
         </div>

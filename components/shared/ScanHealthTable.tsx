@@ -18,12 +18,12 @@ export interface ScanHealthRun {
 }
 
 const MODE_STYLES: Record<string, string> = {
-  light: "bg-blue-500/10 text-blue-400",
-  deep: "bg-purple-500/10 text-purple-400",
-  ai_enhanced: "bg-emerald-500/10 text-emerald-400",
-  full: "bg-blue-500/10 text-blue-400",
-  sbom_only: "bg-amber-500/10 text-amber-400",
-  advisories_only: "bg-purple-500/10 text-purple-400",
+  light: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
+  deep: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]",
+  ai_enhanced: "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed)]",
+  full: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
+  sbom_only: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
+  advisories_only: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]",
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -44,10 +44,10 @@ function durationLabel(seconds: number | null | undefined) {
 }
 
 function statusColour(status: string) {
-  if (status === "completed") return "text-emerald-400"
-  if (status === "failed") return "text-red-400"
+  if (status === "completed") return "text-[var(--color-state-fixed)]"
+  if (status === "failed") return "text-[var(--color-severity-critical)]"
   if (status === "cancelled") return "text-[var(--color-text-secondary)]"
-  return "text-amber-400"
+  return "text-[var(--color-state-pending)]"
 }
 
 function ModeBadge({ mode }: { mode?: string | null }) {
@@ -63,7 +63,7 @@ function RunRow({ label, run, showMode }: { label: string; run: ScanHealthRun; s
     : "—"
 
   return (
-    <tr className={run.status === "failed" ? "bg-red-500/5" : "transition-colors hover:bg-[var(--color-surface-raised)]"}>
+    <tr className={run.status === "failed" ? "bg-[var(--color-severity-critical-subtle)]" : "transition-colors hover:bg-[var(--color-surface-raised)]"}>
       <td className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-text-secondary)]">{label}</td>
       <td className="px-4 py-3 text-[var(--color-text-primary)]">{formatScanTimestamp(run.startedAt ?? run.createdAt)}</td>
       <td className="px-4 py-3">
@@ -80,7 +80,7 @@ function RunRow({ label, run, showMode }: { label: string; run: ScanHealthRun; s
         {run.findingsCount ?? "—"}
       </td>
       {run.error ? (
-        <td className="max-w-xs px-4 py-3 text-xs text-red-400 break-words">{run.error}</td>
+        <td className="max-w-xs px-4 py-3 text-xs text-[var(--color-severity-critical)] break-words">{run.error}</td>
       ) : (
         <td className="px-4 py-3" />
       )}

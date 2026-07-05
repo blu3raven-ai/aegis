@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { gqlQuery } from "@/lib/client/graphql-client"
+import { getBreachSummary } from "@/lib/client/sla-api"
+import type { BreachSummary } from "@/lib/client/sla-api"
+import { SlaBreachWidget } from "@/components/shared/dashboard/SlaBreachWidget"
+import { getEpssTop } from "@/lib/client/epss-api"
+import type { EpssTopFinding } from "@/lib/client/epss-api"
+import { EpssExposureWidget } from "@/components/shared/dashboard/EpssExposureWidget"
 import {
   DEPENDENCIES_COUNTS_QUERY,
   CODE_SCANNING_COUNTS_QUERY,
@@ -89,18 +95,18 @@ function PostureHero({ grade, totalFindings, totalCritical, totalHigh, totalMedi
             <div className="flex items-end gap-5 shrink-0">
               <div className="text-right">
                 <span className="text-3xl font-bold tabular-nums text-[var(--color-text-primary)] leading-none">{totalFindings.toLocaleString()}</span>
-                <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">open</p>
+                <p className="mt-0.5 text-2xs font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">open</p>
               </div>
               {totalCritical > 0 && (
                 <div className="text-right">
-                  <span className={`text-3xl font-bold tabular-nums leading-none ${SEV_CLASSES.critical.text}`}>{totalCritical.toLocaleString()}</span>
-                  <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">critical</p>
+                  <span className={`text-xl font-semibold tabular-nums leading-none ${SEV_CLASSES.critical.text}`}>{totalCritical.toLocaleString()}</span>
+                  <p className="mt-0.5 text-2xs font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">critical</p>
                 </div>
               )}
               {totalHigh > 0 && (
                 <div className="text-right">
-                  <span className={`text-3xl font-bold tabular-nums leading-none ${SEV_CLASSES.high.text}`}>{totalHigh.toLocaleString()}</span>
-                  <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">high</p>
+                  <span className={`text-xl font-semibold tabular-nums leading-none ${SEV_CLASSES.high.text}`}>{totalHigh.toLocaleString()}</span>
+                  <p className="mt-0.5 text-2xs font-medium uppercase tracking-wider text-[var(--color-text-tertiary)]">high</p>
                 </div>
               )}
             </div>
@@ -186,14 +192,14 @@ function TrendChart({ points }: { points: GqlPostureTrendPoint[] }) {
         </div>
         <div className="text-right">
           <span className="text-xl font-bold tabular-nums text-[var(--color-text-primary)] leading-none">{last.total.toLocaleString()}</span>
-          <p className="text-[10px] text-[var(--color-text-tertiary)]">today</p>
+          <p className="text-2xs text-[var(--color-text-tertiary)]">today</p>
         </div>
       </div>
       <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 w-full h-14" preserveAspectRatio="none" aria-label="Findings trend over 30 days">
         <path d={line(p => p.total, maxTotal)} fill="none" stroke="var(--color-text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         <path d={line(p => p.critical + p.high, maxCrit > 0 ? maxTotal : 1)} fill="none" stroke="var(--color-severity-critical)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity="0.7" />
       </svg>
-      <div className="mt-2 flex items-center gap-4 text-[10px] text-[var(--color-text-tertiary)]">
+      <div className="mt-2 flex items-center gap-4 text-2xs text-[var(--color-text-tertiary)]">
         <span className="flex items-center gap-1"><span className="inline-block h-px w-3 bg-[var(--color-text-tertiary)]" /> Total</span>
         <span className="flex items-center gap-1"><span className="inline-block h-px w-3 bg-[var(--color-severity-critical)]" style={{ opacity: 0.7 }} /> Critical + High</span>
       </div>
@@ -243,7 +249,7 @@ function SeverityDonut({ counts }: { counts: ToolCounts }) {
           </svg>
           <span className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-xl font-bold tabular-nums text-[var(--color-text-primary)]">{counts.total.toLocaleString()}</span>
-            <span className="text-[10px] text-[var(--color-text-tertiary)]">total</span>
+            <span className="text-2xs text-[var(--color-text-tertiary)]">total</span>
           </span>
         </div>
         <div className="flex flex-col gap-2.5">
@@ -437,7 +443,7 @@ function ArgusTeaser({ isEnterprise }: { isEnterprise: boolean }) {
             {/* Threat exploitability */}
             <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
               <div className="flex items-center gap-2">
-                <svg className="h-4 w-4 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <svg className="h-4 w-4 text-[var(--color-state-dismissed)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 9v3.75m0-10.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
                 </svg>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
@@ -452,7 +458,7 @@ function ArgusTeaser({ isEnterprise }: { isEnterprise: boolean }) {
                       <span className="text-xs tabular-nums font-semibold text-[var(--color-text-primary)]">{row.value}</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-[var(--color-surface-raised)]">
-                      <div className="h-full rounded-full bg-purple-500" style={{ width: `${row.pct}%`, opacity: 0.7 }} />
+                      <div className="h-full rounded-full bg-[var(--color-state-dismissed-muted)]" style={{ width: `${row.pct}%` }} />
                     </div>
                   </div>
                 ))}
@@ -462,7 +468,7 @@ function ArgusTeaser({ isEnterprise }: { isEnterprise: boolean }) {
             {/* EPSS score distribution */}
             <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
               <div className="flex items-center gap-2">
-                <svg className="h-4 w-4 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <svg className="h-4 w-4 text-[var(--color-state-dismissed)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
                 </svg>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
@@ -476,14 +482,14 @@ function ArgusTeaser({ isEnterprise }: { isEnterprise: boolean }) {
                     <div key={bar.label} className="flex items-center gap-3">
                       <span className="min-w-[48px] text-right text-[11px] tabular-nums text-[var(--color-text-tertiary)]">{bar.label}</span>
                       <div className="h-5 flex-1 overflow-hidden rounded bg-[var(--color-surface-raised)]">
-                        <div className="h-full rounded bg-purple-500/50" style={{ width: `${(bar.count / max) * 100}%` }} />
+                        <div className="h-full rounded bg-[var(--color-state-dismissed-subtle)]" style={{ width: `${(bar.count / max) * 100}%`, borderRight: "1px solid var(--color-state-dismissed-border)" }} />
                       </div>
                       <span className="min-w-[24px] text-xs tabular-nums font-medium text-[var(--color-text-primary)]">{bar.count}</span>
                     </div>
                   )
                 })}
               </div>
-              <p className="mt-3 text-[10px] text-[var(--color-text-tertiary)]">
+              <p className="mt-3 text-2xs text-[var(--color-text-tertiary)]">
                 EPSS: Exploit Prediction Scoring System. Higher score = higher likelihood of exploitation.
               </p>
             </div>
@@ -494,21 +500,21 @@ function ArgusTeaser({ isEnterprise }: { isEnterprise: boolean }) {
       {/* Upgrade overlay for community users */}
       {!isEnterprise && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="rounded-2xl border border-purple-500/20 bg-[var(--color-surface)]/95 px-8 py-6 text-center shadow-lg backdrop-blur-sm max-w-sm">
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10">
-              <svg className="h-5 w-5 text-purple-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+          <div className="rounded-2xl border border-[var(--color-state-dismissed-border)] bg-[var(--color-surface)]/95 px-8 py-6 text-center shadow-lg backdrop-blur-sm max-w-sm">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-state-dismissed-subtle)]">
+              <svg className="h-5 w-5 text-[var(--color-state-dismissed)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 9v3.75m0-10.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
               </svg>
             </div>
             <p className="mt-3 text-sm font-semibold text-[var(--color-text-primary)]">
-              Blu3Raven Argus
+              Argus Threat Intelligence
             </p>
             <p className="mt-1.5 text-xs text-[var(--color-text-secondary)] leading-relaxed">
               AI-powered threat intelligence with EPSS scores, exploit availability, and advisory enrichment for every finding.
             </p>
             <Link
               href="/settings/license"
-              className={`mt-4 inline-block rounded-lg border border-purple-500/20 bg-purple-500/10 px-4 py-2 text-sm font-semibold text-purple-400 transition-colors hover:bg-purple-500/20 ${LINK_FOCUS}`}
+              className={`mt-4 inline-block rounded-lg border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-4 py-2 text-sm font-semibold text-[var(--color-state-dismissed)] transition-colors hover:bg-[rgba(168,85,247,0.12)] ${LINK_FOCUS}`}
             >
               Activate Argus
             </Link>
@@ -555,11 +561,14 @@ export function HomeDashboard() {
   const [sourcesState, setSourcesState] = useState<LoadState>("loading")
   const [trend, setTrend] = useState<GqlPostureTrendPoint[]>([])
   const [analytics, setAnalytics] = useState<GqlHomeAnalytics | null>(null)
+  const [slaBreachSummary, setSlaBreachSummary] = useState<BreachSummary | null>(null)
+  const [epssTop, setEpssTop] = useState<EpssTopFinding[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [retrying, setRetrying] = useState(false)
 
   const loadAll = useCallback(async () => {
-    const [d, cs, co, s, src, tr, ha] = await Promise.all([
+    const orgId = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
+    const [d, cs, co, s, src, tr, ha, sla, epss] = await Promise.all([
       gqlQuery<{ dependenciesCounts: GqlSeverityCounts }>(DEPENDENCIES_COUNTS_QUERY, {}).then(r => ({ ok: true as const, data: r })).catch(() => ({ ok: false as const })),
       gqlQuery<{ codeScanningCounts: GqlSeverityCounts }>(CODE_SCANNING_COUNTS_QUERY, {}).then(r => ({ ok: true as const, data: r })).catch(() => ({ ok: false as const })),
       gqlQuery<{ containerCounts: GqlSeverityCounts }>(CONTAINER_COUNTS_QUERY, {}).then(r => ({ ok: true as const, data: r })).catch(() => ({ ok: false as const })),
@@ -567,6 +576,8 @@ export function HomeDashboard() {
       listSourceConnections().catch(() => null),
       gqlQuery<{ postureTrend: GqlPostureTrendPoint[] }>(POSTURE_TREND_QUERY, { days: 30 }).catch(() => null),
       gqlQuery<{ homeAnalytics: GqlHomeAnalytics }>(HOME_ANALYTICS_QUERY, {}).catch(() => null),
+      getBreachSummary(orgId).catch(() => null),
+      getEpssTop(orgId, 5).catch(() => null),
     ])
     if (d.ok) { setDeps(d.data.dependenciesCounts); setDepsState("ok") } else { setDepsState("error") }
     if (cs.ok) { setCode(cs.data.codeScanningCounts); setCodeState("ok") } else { setCodeState("error") }
@@ -575,6 +586,8 @@ export function HomeDashboard() {
     if (src && src.ok) { setSources(src.data.connections); setSourcesState("ok") } else { setSourcesState("error") }
     if (tr) { setTrend(tr.postureTrend) }
     if (ha) { setAnalytics(ha.homeAnalytics) }
+    if (sla) { setSlaBreachSummary(sla) }
+    setEpssTop(epss?.findings ?? [])
     setLoading(false)
   }, [])
 
@@ -661,6 +674,14 @@ export function HomeDashboard() {
           <TopReposChart repos={analytics.topRepositories} />
           <AgeBucketsChart buckets={analytics.ageBuckets} />
           <RemediationCard stats={analytics.remediation} />
+        </div>
+      )}
+
+      {/* SLA breach + EPSS exposure */}
+      {totalFindings > 0 && (slaBreachSummary || epssTop) && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {slaBreachSummary && <SlaBreachWidget summary={slaBreachSummary} />}
+          {epssTop && <EpssExposureWidget findings={epssTop} />}
         </div>
       )}
 

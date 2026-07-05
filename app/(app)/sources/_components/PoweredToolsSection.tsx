@@ -67,7 +67,7 @@ export function PoweredToolsSection({ category, hasConnections }: PoweredToolsSe
   if (tools.length === 0) return null
 
   return (
-    <div className="rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Tools powered by this source
       </p>

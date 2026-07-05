@@ -8,9 +8,10 @@ type OmitCollapsed<T> = Omit<T, "collapsed">
 export interface AppSidebarProps extends OmitCollapsed<SidebarContentProps> {
   open: boolean
   setSearchOpen: (open: boolean) => void
+  onboardingComplete?: boolean
 }
 
-export function AppSidebar({ open, setSearchOpen, ...props }: AppSidebarProps) {
+export function AppSidebar({ open, setSearchOpen, onboardingComplete, ...props }: AppSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
 
@@ -50,6 +51,7 @@ export function AppSidebar({ open, setSearchOpen, ...props }: AppSidebarProps) {
         collapsed={collapsed}
         searchOpen={open}
         onSearchOpen={setSearchOpen}
+        onboardingComplete={onboardingComplete}
       />
     </nav>
   )

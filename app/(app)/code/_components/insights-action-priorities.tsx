@@ -18,7 +18,7 @@ export function InsightsActionPriorities({
   return (
     <section className="space-y-6">
       <div className="border-t border-[var(--color-border)] pt-12">
-        <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">Action Priorities</h2>
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Action Priorities</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Which rules and repositories should be addressed first?
         </p>
@@ -52,7 +52,7 @@ export function InsightsActionPriorities({
                         <p className="truncate text-right text-xs font-medium text-[var(--color-text-primary)]" title={rule.ruleName}>{shortName}</p>
                       </div>
                       <div className="flex flex-1 overflow-hidden rounded-full bg-[var(--color-border)]" style={{ height: 10 }}>
-                        <div className="h-full rounded-full bg-orange-500" style={{ width: `${pct}%` }} />
+                        <div className="h-full rounded-full bg-[var(--color-severity-high)]" style={{ width: `${pct}%` }} />
                       </div>
                       <span className="w-8 text-right text-xs font-semibold text-[var(--color-text-primary)]">{rule.count}</span>
                     </button>
@@ -77,7 +77,7 @@ export function InsightsActionPriorities({
                     key={repo.name}
                     type="button"
                     onClick={() => onGoToFindings({ repo: repo.name })}
-                    className="flex flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition-all hover:border-blue-300 hover:shadow-lg"
+                    className="flex flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-left transition-all hover:border-[var(--color-accent-border)] hover:shadow-lg"
                   >
                     <p className="truncate font-semibold text-[var(--color-text-primary)]" title={repo.name}>
                       {repo.name.split("/").pop()}
@@ -85,19 +85,19 @@ export function InsightsActionPriorities({
                     <p className="mt-0.5 truncate text-xs text-[var(--color-text-secondary)]">{repo.name}</p>
                     <div className="mt-3 flex items-center gap-2">
                       {repo.critical > 0 && (
-                        <span className="rounded-full bg-red-500/10 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
+                        <span className="rounded-full bg-[var(--color-severity-critical-subtle)] px-1.5 py-0.5 text-2xs font-bold text-[var(--color-severity-critical)]">
                           {repo.critical} Critical
                         </span>
                       )}
                       {repo.high > 0 && (
-                        <span className="rounded-full bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-bold text-orange-400">
+                        <span className="rounded-full bg-[var(--color-severity-high-subtle)] px-1.5 py-0.5 text-2xs font-bold text-[var(--color-severity-high)]">
                           {repo.high} High
                         </span>
                       )}
                     </div>
                     <div className="mt-3 flex items-center justify-between border-t border-[var(--color-border)] pt-3 text-[11px]">
                       <span className="text-[var(--color-text-secondary)]">{repo.open} open findings</span>
-                      <span className="font-medium text-blue-400">View findings →</span>
+                      <span className="font-medium text-[var(--color-accent)]">View findings →</span>
                     </div>
                   </button>
                 ))

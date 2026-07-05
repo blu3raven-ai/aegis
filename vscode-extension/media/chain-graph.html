@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!--
+    CSP: nonce is injected server-side per-panel instance.
+    unsafe-inline is allowed for styles only so VSCode theme CSS vars work
+    without a full style nonce mechanism on the body element.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none';
+             style-src 'nonce-{{NONCE}}' 'unsafe-inline';
+             script-src 'nonce-{{NONCE}}';
+             img-src {{CSP_SOURCE}} data:" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="{{CSS_URI}}" />
+  <title>Attack Chain</title>
+</head>
+<body>
+  <header>
+    <h1>Attack Chain</h1>
+    <span class="badge">—</span>
+  </header>
+
+  <div id="graph-container">
+    <div id="empty-state">No chain data loaded.</div>
+    <svg id="graph" style="display:none"></svg>
+  </div>
+
+  <div id="error-banner"></div>
+
+  <script nonce="{{NONCE}}" src="{{JS_URI}}"></script>
+</body>
+</html>

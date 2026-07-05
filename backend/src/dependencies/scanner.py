@@ -1,37 +1,26 @@
 """Dependency scanning orchestration via runner service."""
 from __future__ import annotations
 
-import json
 import logging
-import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Literal
 
-from src.shared.checkpoints import write_checkpoint
 from src.shared.config import get_dependencies_scanner_config, get_scan_sources_for_org, read_app_config
-from src.shared.object_store import (
-    download_json,
-    download_bytes,
-    delete_prefix,
-    list_objects,
-    tag_object,
-)
-from src.shared.enrichment import ingest_findings_jsonl, enrich_findings_with_advisory_data
+from src.shared.enrichment import enrich_findings_with_advisory_data
+from src.releases.enrichment import maybe_enrich_release_age
 from src.shared.paths import DATA_DIR
 from src.dependencies.lifecycle import dependencies_hooks
 from src.dependencies.sbom_store import upsert_sbom
-from src.dependencies.matcher import enrich_with_manifest_snippets
-from src.dependencies.normalizer import normalize_grype_output
 from src.shared.lifecycle import ScanContext
 from src.shared.lifecycle import apply_lifecycle as _apply_lifecycle
 from src.storage import update_dependencies_run
 
 logger = logging.getLogger(__name__)
 
-DEPENDENCIES_SCANNER_IMAGE = "aegis/scanner-dependencies:latest"
+
 DEPENDENCIES_DATA_DIR = DATA_DIR / "dependencies"
 MAX_SCAN_DURATION_SECONDS = 12 * 60 * 60
 
@@ -110,148 +99,88 @@ class InMemoryScanRuntime:
             return {"active": True, "runId": job.run_id}
 
 
-def _download_scan_output_from_minio(org: str, run_id: str) -> dict[str, dict[str, Any]]:
-    """Download dependency scan output and return parsed data by repo (fallback path)."""
-    prefix = f"dependencies/{org}/{run_id}/"
-    keys = list_objects(prefix)
-    if not keys:
-        logger.warning("No scan output found for %s/%s", org, run_id)
-        return {}
+def _ingest_sboms_from_minio(org: str, run_id: str, source_type: str, prefix: str) -> dict[str, str]:
+    """Index per-repo SBOMs into SbomComponent, resolving the repo asset first.
 
-    # Prefer sbom.cdx.json (CycloneDX), fall back to syft.json (legacy)
-    SBOM_FILENAMES = {"sbom.cdx.json", "syft.json"}
-    repo_sboms: dict[str, dict[str, Any]] = {}
-    sbom_keys: dict[str, str] = {}  # repo_name -> key
-
-    for key in keys:
-        relative = key[len(prefix):]
-        parts = relative.split("/")
-        filename = parts[-1]
-
-        if filename in SBOM_FILENAMES and len(parts) >= 2:
-            repo_name = parts[-2]
-            if repo_name in sbom_keys and filename == "syft.json":
-                continue
-            sbom_keys[repo_name] = key
-            if repo_name not in repo_sboms:
-                repo_sboms[repo_name] = {"sbom": None, "head_sha": "HEAD", "manifests": {}}
-            repo_sboms[repo_name]["sbom"] = download_json(key)
-
-    for repo_path, sbom_key in sbom_keys.items():
-        repo_prefix = sbom_key.rsplit("/", 1)[0] + "/"
-
-        for key in keys:
-            if not key.startswith(repo_prefix):
-                continue
-            filename = key[len(repo_prefix):]
-
-            if filename == "head-sha.txt":
-                data = download_bytes(key)
-                if data:
-                    repo_sboms[repo_path]["head_sha"] = data.decode().strip()
-            elif filename == "findings.json":
-                repo_sboms[repo_path]["findings_key"] = key
-            elif filename.startswith("manifests/"):
-                data = download_bytes(key)
-                if data:
-                    manifest_name = filename.replace("manifests/", "")
-                    repo_sboms[repo_path]["manifests"][manifest_name] = data.decode(errors="replace")
-
-    return repo_sboms
-
-
-def _load_manifests_from_minio(prefix: str) -> dict[str, dict[str, str]]:
-    """Download all manifest files from MinIO, grouped by repo name.
-
-    MinIO layout: {prefix}{repo}/manifests/{manifest_path}
-    Returns: {repo_name: {manifest_filename: content}}
-
-    Called at ingestion time (before any retention wipe) so snippets can be
-    stored permanently in the DB alongside the finding detail.
+    Returns {asset_id: external_ref} for the repos indexed this run so the
+    caller can match their components against the OSV mirror.
     """
-    keys = list_objects(prefix)
-    repo_manifests: dict[str, dict[str, str]] = {}
-    for key in keys:
-        relative = key[len(prefix):]
-        parts = relative.split("/")
-        # Expect at least: {repo}/manifests/{filename}
-        if len(parts) >= 3 and parts[1] == "manifests":
-            repo = parts[0]
-            manifest_name = "/".join(parts[2:])
-            data = download_bytes(key)
-            if data:
-                repo_manifests.setdefault(repo, {})[manifest_name] = data.decode(errors="replace")
-    return repo_manifests
+    from src.shared.object_store import list_objects, download_json, download_bytes
+    from src.assets.refs import repo_ref
+    from src.assets.service import upsert_asset
+    from src.db.helpers import run_db
 
-
-def _ingest_sboms_from_minio(org: str, run_id: str, prefix: str) -> None:
-    """Find per-repo SBOMs in MinIO and populate the SbomComponent table."""
-    from src.shared.object_store import list_objects, download_json
     sbom_keys = [k for k in list_objects(prefix) if k.endswith("/sbom.cdx.json")]
+    assets: dict[str, str] = {}
     for key in sbom_keys:
-        # Key format: dependencies/{org}/{run_id}/{repo}/sbom.cdx.json
+        # Key format: dependencies_scanning/{org}/{run_id}/{repo}/sbom.cdx.json
         parts = key.split("/")
         if len(parts) < 5:
             continue
         repo_name = parts[-2]
         sbom_json = download_json(key)
-        if sbom_json:
-            try:
-                upsert_sbom(org=org, repo=repo_name, commit_sha="HEAD", sbom=sbom_json, manifests={}, run_id=run_id)
-            except Exception:
-                logger.warning("Failed to ingest SBOM for %s/%s", org, repo_name)
+        if not sbom_json:
+            continue
+        # Runner writes a repo web URL sidecar next to the SBOM; it deep-links
+        # the backend-built deps findings. Best-effort — absent on old scans.
+        html_url_bytes = download_bytes(key.rsplit("/", 1)[0] + "/html_url.txt")
+        html_url = html_url_bytes.decode("utf-8", "replace").strip() if html_url_bytes else None
+        try:
+            external_ref = repo_ref(source_type, org, repo_name)
+        except ValueError:
+            logger.warning("Skipping repo with unresolvable source_type %r for %s/%s",
+                           source_type, org, repo_name)
+            continue
+        display_name = f"{org}/{repo_name}"
+        asset_id = run_db(lambda s, e=external_ref, d=display_name: upsert_asset(
+            s, type="repo", source="source_connection", external_ref=e, display_name=d,
+        ))
+        try:
+            upsert_sbom(
+                org=org, repo=repo_name, commit_sha="HEAD", sbom=sbom_json,
+                manifests={}, run_id=run_id, asset_id=asset_id, html_url=html_url,
+            )
+            assets[asset_id] = external_ref
+        except Exception:
+            logger.warning("Failed to ingest SBOM for %s/%s", org, repo_name)
+    return assets
 
 
-def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
-    """Ingest dependency scan results from object store after runner completion."""
-    from src.shared.object_store import find_findings_jsonl
-    from src.shared.enrichment import map_finding_to_alert
+def ingest_dependencies_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
+    """Ingest a dependency scan: index the uploaded SBOMs and match their
+    components against the OSV mirror to produce findings.
 
-    prefix = f"dependencies/{org}/{run_id}/"
+    The runner uploads only SBOMs; vulnerability matching is done here against
+    the backend's OSV mirror, then findings flow through the existing advisory
+    enricher + lifecycle.
+    """
+    from src.db.helpers import run_db
+    from src.osv.sca_findings import build_backend_match_findings
 
-    findings_data = find_findings_jsonl(prefix)
-    if findings_data:
-        all_findings = [json.loads(line) for line in findings_data.decode().splitlines() if line.strip()]
-        # Map to alert schema if not already mapped
-        if all_findings and "security_advisory" not in all_findings[0]:
-            all_findings = [map_finding_to_alert(f) for f in all_findings]
-        # Enrich with manifest snippets from MinIO artifacts (stored before any retention wipe)
-        repo_manifests = _load_manifests_from_minio(prefix)
-        if repo_manifests:
-            by_repo: dict[str, list[dict]] = {}
-            for f in all_findings:
-                repo_name = (f.get("repository") or {}).get("name", "")
-                by_repo.setdefault(repo_name, []).append(f)
-            for repo_name, repo_findings in by_repo.items():
-                manifests = repo_manifests.get(repo_name, {})
-                if manifests:
-                    enrich_with_manifest_snippets(repo_findings, manifests)
-        # Also process per-repo SBOMs for the SBOM Explorer
-        _ingest_sboms_from_minio(org, run_id, prefix)
-    elif findings_data is not None:
-        all_findings = []
-    else:
-        repo_sboms = _download_scan_output_from_minio(org, run_id)
-        if not repo_sboms:
-            logger.warning("No dependency scan output for %s/%s", org, run_id)
-            update_dependencies_run(org, run_id, {"status": "failed", "finishedAt": now_iso(), "error": "No output files found"})
-            return
+    prefix = f"dependencies_scanning/{org}/{run_id}/"
 
-        all_findings = []
-        for repo_name, data in repo_sboms.items():
-            sbom_json = data.get("sbom")
-            if not sbom_json:
-                continue
-            commit_sha = data.get("head_sha", "HEAD")
-            manifests = data.get("manifests") or {}
-            upsert_sbom(org=org, repo=repo_name, commit_sha=commit_sha, sbom=sbom_json, manifests=manifests, run_id=run_id)
-            write_checkpoint("dependencies", org, repo_name, commit_sha=commit_sha)
-            findings_key = data.get("findings_key") or f"dependencies/{org}/{run_id}/{repo_name}/findings.json"
-            grype_output = download_json(findings_key)
-            if grype_output:
-                findings = normalize_grype_output(grype_output, org, repo_name, commit_sha, "grype")
-                findings = enrich_with_manifest_snippets(findings, manifests)
-                all_findings.extend(findings)
+    if not source_type:
+        logger.error(
+            "dependency ingest for %s/%s has no source_type; cannot resolve assets", org, run_id
+        )
+        update_dependencies_run(org, run_id, {
+            "status": "failed", "finishedAt": now_iso(),
+            "error": "missing source_type for OSV matching",
+        })
+        return
+
+    assets = _ingest_sboms_from_minio(org, run_id, source_type, prefix)
+
+    async def _match(session) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for asset_id, external_ref in assets.items():
+            out.extend(await build_backend_match_findings(
+                session, asset_id=asset_id, external_ref=external_ref, kind="dependencies",
+                match_source="scan",
+            ))
+        return out
+
+    all_findings: list[dict[str, Any]] = run_db(_match) if assets else []
 
     deps_config = read_app_config().get("tools", {}).get("dependencies", {})
     try:
@@ -265,10 +194,12 @@ def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
     except Exception:
         logger.warning("Advisory enrichment failed for %s", org)
 
+    maybe_enrich_release_age(all_findings, get_dependencies_scanner_config(), org)
+
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     new_findings: list[dict[str, Any]] = []
     if all_findings:
-        ctx = ScanContext(tool="dependencies", org=org, run_id=run_id)
+        ctx = ScanContext(tool="dependencies_scanning", org=org, run_id=run_id, source_type=source_type)
         new_findings = _apply_lifecycle(dependencies_hooks, ctx, all_findings)
 
     if new_findings:
@@ -277,6 +208,65 @@ def ingest_dependencies_from_minio(org: str, run_id: str) -> None:
             notify_new_critical_findings("dependencies", org, new_findings)
         except Exception:
             logger.warning("Failed to emit new finding notifications", exc_info=True)
+
+        from src.shared.event_emit_helpers import emit_finding_created
+        for finding in new_findings:
+            emit_finding_created(
+                finding=finding,
+                scanner_type="dependencies_scanning",
+                source_component="dependencies.scanner",
+            )
+
+    # Enqueue reachability jobs for the CVE-bearing deps findings just persisted.
+    # The lifecycle dicts carry no finding ids, so re-query by the asset scope we
+    # already resolved (BOLA-safe: asset_id is filtered at the SQL layer). This is
+    # best-effort — an enqueue failure must never fail or roll back the scan
+    # ingest. enqueue_reachability_jobs is a no-op when verification is disabled.
+    try:
+        from sqlalchemy import select
+
+        from src.db.models import Finding
+        from src.dependencies.reachability_dispatch import (
+            ReachabilityFinding,
+            enqueue_reachability_jobs,
+        )
+        from src.shared.finding_detail_blob import hydrate_detail
+
+        async def _load_reachability_candidates(session) -> list[ReachabilityFinding]:
+            out: list[ReachabilityFinding] = []
+            for asset_id, external_ref in assets.items():
+                rows = (
+                    await session.execute(
+                        select(Finding).where(
+                            Finding.tool == "dependencies_scanning",
+                            Finding.asset_id == asset_id,
+                            Finding.cve_id.isnot(None),
+                        )
+                    )
+                ).scalars().all()
+                for f in rows:
+                    detail = hydrate_detail(f)
+                    out.append(ReachabilityFinding(
+                        finding_id=str(f.id),
+                        asset_id=asset_id,
+                        external_ref=external_ref,
+                        package=f.package_name or "",
+                        version=f.package_version or "",
+                        ecosystem=detail.get("ecosystem", "") or "",
+                        cve=f.cve_id,
+                        malicious=bool(f.malicious),
+                    ))
+            return out
+
+        candidates = run_db(_load_reachability_candidates) if assets else []
+        job_ids = enqueue_reachability_jobs(org=org, run_id=run_id, findings=candidates)
+        if job_ids:
+            logger.info(
+                "Enqueued %d reachability job(s) for %s/%s from %d candidate finding(s)",
+                len(job_ids), org, run_id, len(candidates),
+            )
+    except Exception:
+        logger.warning("Reachability enqueue failed for %s/%s", org, run_id, exc_info=True)
 
     sev_counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
     for f in all_findings:
@@ -308,6 +298,7 @@ def _execute_via_runner(
     repo_urls: str,
     token: str,
     scan_mode: str = "full",
+    source_type: str | None = None,
 ) -> dict[str, Any] | None:
     """Create a runner job and poll until completion."""
     from src.runner.jobs import create_job, read_job
@@ -320,6 +311,11 @@ def _execute_via_runner(
         "RUN_ID": run_id,
         "SCAN_MODE": scan_mode,
     }
+    # The ingest resolves each finding's repo asset via SOURCE_TYPE (envVars),
+    # so it must be carried through on the scheduled path too — not just on the
+    # canonical "Scan now" dispatch.
+    if source_type:
+        env["SOURCE_TYPE"] = source_type
     if config.get("argusEnabled"):
         argus_endpoint = config.get("argusEndpoint", "")
         argus_api_key = config.get("argusApiKey", "")
@@ -328,18 +324,10 @@ def _execute_via_runner(
         if argus_api_key:
             env["ARGUS_API_KEY"] = argus_api_key
 
-    # advisories_only needs S3 read access to download stored SBOMs
-    if scan_mode == "advisories_only":
-        env["S3_ENDPOINT"] = os.environ.get("S3_ENDPOINT", "")
-        env["S3_ACCESS_KEY"] = "runner-svc"
-        env["S3_SECRET_KEY"] = os.environ.get("RUNNER_S3_SECRET_KEY", "")
-        env["S3_REGION"] = os.environ.get("S3_REGION", "us-east-1")
-
     job = create_job(
         job_type="dependencies",
         org=org,
         run_id=run_id,
-        docker_image=config.get("image") or DEPENDENCIES_SCANNER_IMAGE,
         env_vars=env,
         expected_repo_count=len(repo_urls.split(",")) if repo_urls else 0,
     )
@@ -362,9 +350,10 @@ def execute_dependencies_scan_once(
     token: str,
     run_id: str,
     *,
+    source_type: str | None = None,
     scanner_config: dict[str, str] | None = None,
     mode: Literal["full", "incremental"] | None = None,
-    scan_mode: str = "full",  # "full" | "sbom_only" | "advisories_only"
+    scan_mode: str = "full",  # "full" | "sbom_only"
     runtime: InMemoryScanRuntime | None = None,
 ) -> dict[str, Any] | None:
     """Run dependency scan for an org."""
@@ -404,6 +393,7 @@ def execute_dependencies_scan_once(
                 repo_urls=repo_urls_str,
                 token=source.token,
                 scan_mode=scan_mode,
+                source_type=source_type,
             )
 
             if runtime and runtime.is_cancelled(run_id):
@@ -436,3 +426,6 @@ def execute_dependencies_scan_once(
                 runtime._cancelled.discard(run_id)
             if runtime_started:
                 runtime.release(org)
+
+
+_dependencies_runtime = InMemoryScanRuntime()

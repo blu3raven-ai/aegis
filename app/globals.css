@@ -25,16 +25,31 @@
   --color-accent:         #2d7ff9;
   --color-accent-hover:   #1a6ae8;
   --color-accent-subtle:  #dbeafe;
+  --color-accent-border:  rgb(45 127 249 / 0.2);
   --color-accent-deep:    #163b68;
   --color-accent-ink:     #ffffff;
   --color-accent-on:      #ffffff;
 
   --color-on-danger:      #ffffff;
   --color-status-ok:      #10b981;
-  --color-severity-critical: #ef4444;
-  --color-severity-high:     #f97316;
-  --color-severity-medium:   #fbbf24;
-  --color-severity-low:      #60a5fa;
+  --color-status-ok-subtle: rgb(16 185 129 / 0.1);
+  --color-status-ok-border: rgb(16 185 129 / 0.3);
+
+  --color-severity-critical:        #ef4444;
+  --color-severity-critical-subtle: rgb(239 68 68 / 0.1);
+  --color-severity-critical-border: rgb(239 68 68 / 0.3);
+
+  --color-severity-high:        #f97316;
+  --color-severity-high-subtle: rgb(249 115 22 / 0.1);
+  --color-severity-high-border: rgb(249 115 22 / 0.3);
+
+  --color-severity-medium:        #fbbf24;
+  --color-severity-medium-subtle: rgb(251 191 36 / 0.12);
+  --color-severity-medium-border: rgb(251 191 36 / 0.3);
+
+  --color-severity-low:        #60a5fa;
+  --color-severity-low-subtle: rgb(96 165 250 / 0.1);
+  --color-severity-low-border: rgb(96 165 250 / 0.3);
 
   --color-state-dismissed:         #a855f7;
   --color-state-dismissed-subtle:  rgb(168 85 247 / 0.05);
@@ -44,10 +59,12 @@
   --color-state-deferred:          #f97316;
   --color-state-deferred-subtle:   rgb(249 115 22 / 0.05);
   --color-state-deferred-muted:    rgb(249 115 22 / 0.7);
+  --color-state-deferred-border:   rgb(249 115 22 / 0.3);
 
   --color-state-fixed:             #10b981;
   --color-state-fixed-subtle:      rgb(16 185 129 / 0.05);
   --color-state-fixed-muted:       rgb(16 185 129 / 0.7);
+  --color-state-fixed-border:      rgb(16 185 129 / 0.3);
 
   --color-verdict-safe:            #10b981;
   --color-verdict-safe-subtle:     rgb(16 185 129 / 0.1);
@@ -64,6 +81,34 @@
   --color-verdict-neutral:         #3b82f6;
   --color-verdict-neutral-subtle:  rgb(59 130 246 / 0.1);
   --color-verdict-neutral-border:  rgb(59 130 246 / 0.3);
+
+  --color-argus:                   #a855f7;
+  --color-argus-hover:             #9333ea;
+  --color-argus-subtle:            rgb(168 85 247 / 0.08);
+  --color-argus-border:            rgb(168 85 247 / 0.2);
+  --color-argus-ink:               #ffffff;
+
+  --color-state-pending:           #f59e0b;
+  --color-state-pending-subtle:    rgb(245 158 11 / 0.1);
+  --color-state-pending-border:    rgb(245 158 11 / 0.3);
+
+  --color-scanner-sast-bg:         rgb(168 85 247 / 0.18);
+  --color-scanner-sast-fg:         #a855f7;
+  --color-scanner-deps-bg:         rgb(45 127 249 / 0.18);
+  --color-scanner-deps-fg:         #2d7ff9;
+  --color-scanner-containers-bg:   rgb(16 185 129 / 0.18);
+  --color-scanner-containers-fg:   #10b981;
+  --color-scanner-secrets-bg:      rgb(249 115 22 / 0.18);
+  --color-scanner-secrets-fg:      #f97316;
+  --color-scanner-iac-bg:          rgb(96 165 250 / 0.18);
+  --color-scanner-iac-fg:          #60a5fa;
+  --color-scanner-entry-bg:        rgb(96 165 250 / 0.18);
+  --color-scanner-entry-fg:        #60a5fa;
+  --color-scanner-impact-bg:       rgb(239 68 68 / 0.18);
+  --color-scanner-impact-fg:       #ef4444;
+
+  --color-overlay:                 rgba(15, 39, 71, 0.40);
+  --color-overlay-strong:          rgba(15, 39, 71, 0.55);
 
   --color-stat-primary:   #163b68;
   --color-stat-secondary: #2d7ff9;
@@ -105,30 +150,91 @@
   --color-accent:         #0fbcff;
   --color-accent-hover:   #3dcbff;
   --color-accent-subtle:  #0f2a4a;
+  --color-accent-border:  rgb(15 188 255 / 0.25);
   --color-accent-deep:    #B2ECFF;
   --color-accent-ink:     #070d19;
   --color-accent-on:      #ffffff;
 
   --color-on-danger:      #F2F2F3;
-  --color-status-ok:      #34d399;
-  --color-severity-critical: #f87171;
-  --color-severity-high:     #fb923c;
-  --color-severity-medium:   #fbbf24;
-  --color-severity-low:      #60a5fa;
+
+  --color-status-ok:        #34d399;
+  --color-status-ok-subtle: rgb(52 211 153 / 0.12);
+  --color-status-ok-border: rgb(52 211 153 / 0.3);
+
+  --color-severity-critical:        #f87171;
+  --color-severity-critical-subtle: rgb(248 113 113 / 0.12);
+  --color-severity-critical-border: rgb(248 113 113 / 0.3);
+
+  --color-severity-high:        #fb923c;
+  --color-severity-high-subtle: rgb(251 146 60 / 0.12);
+  --color-severity-high-border: rgb(251 146 60 / 0.3);
+
+  --color-severity-medium:        #fbbf24;
+  --color-severity-medium-subtle: rgb(251 191 36 / 0.12);
+  --color-severity-medium-border: rgb(251 191 36 / 0.3);
+
+  --color-severity-low:        #60a5fa;
+  --color-severity-low-subtle: rgb(96 165 250 / 0.12);
+  --color-severity-low-border: rgb(96 165 250 / 0.3);
 
   --color-state-dismissed:         #c084fc;
+  --color-state-dismissed-subtle:  rgb(192 132 252 / 0.08);
   --color-state-dismissed-muted:   rgb(192 132 252 / 0.7);
+  --color-state-dismissed-border:  rgb(192 132 252 / 0.3);
 
   --color-state-deferred:          #fb923c;
+  --color-state-deferred-subtle:   rgb(251 146 60 / 0.08);
   --color-state-deferred-muted:    rgb(251 146 60 / 0.7);
+  --color-state-deferred-border:   rgb(251 146 60 / 0.3);
 
   --color-state-fixed:             #34d399;
+  --color-state-fixed-subtle:      rgb(52 211 153 / 0.08);
   --color-state-fixed-muted:       rgb(52 211 153 / 0.7);
+  --color-state-fixed-border:      rgb(52 211 153 / 0.3);
 
   --color-verdict-safe:            #34d399;
+  --color-verdict-safe-subtle:     rgb(52 211 153 / 0.12);
+  --color-verdict-safe-border:     rgb(52 211 153 / 0.3);
+
   --color-verdict-risk:            #f87171;
+  --color-verdict-risk-subtle:     rgb(248 113 113 / 0.12);
+  --color-verdict-risk-border:     rgb(248 113 113 / 0.3);
+
   --color-verdict-uncertain:       #fbbf24;
+  --color-verdict-uncertain-subtle: rgb(251 191 36 / 0.12);
+  --color-verdict-uncertain-border: rgb(251 191 36 / 0.3);
+
   --color-verdict-neutral:         #60a5fa;
+  --color-verdict-neutral-subtle:  rgb(96 165 250 / 0.12);
+  --color-verdict-neutral-border:  rgb(96 165 250 / 0.3);
+
+  --color-argus:                   #c084fc;
+  --color-argus-hover:             #d8b4fe;
+  --color-argus-subtle:            rgb(192 132 252 / 0.08);
+  --color-argus-border:            rgb(192 132 252 / 0.2);
+  --color-argus-ink:               #070d19;
+
+  --color-state-pending:           #fbbf24;
+  --color-state-pending-subtle:    rgb(251 191 36 / 0.12);
+  --color-state-pending-border:    rgb(251 191 36 / 0.3);
+
+  --color-scanner-sast-bg:         rgb(192 132 252 / 0.18);
+  --color-scanner-sast-fg:         #d4b0fc;
+  --color-scanner-deps-bg:         rgb(15 188 255 / 0.18);
+  --color-scanner-deps-fg:         #5fcdff;
+  --color-scanner-containers-bg:   rgb(52 211 153 / 0.18);
+  --color-scanner-containers-fg:   #6ee0b4;
+  --color-scanner-secrets-bg:      rgb(251 146 60 / 0.18);
+  --color-scanner-secrets-fg:      #ffba7c;
+  --color-scanner-iac-bg:          rgb(96 165 250 / 0.18);
+  --color-scanner-iac-fg:          #93c2fa;
+  --color-scanner-entry-bg:        rgb(96 165 250 / 0.18);
+  --color-scanner-entry-fg:        #93c2fa;
+  --color-scanner-impact-bg:       rgb(248 113 113 / 0.18);
+  --color-scanner-impact-fg:       #ff9b9b;
+
+  --color-overlay:                 rgba(0, 0, 0, 0.55);
+  --color-overlay-strong:          rgba(0, 0, 0, 0.70);
 
   --color-stat-primary:   #0fbcff;
   --color-stat-secondary: #3dcbff;
@@ -153,6 +259,9 @@
   --font-mono: var(--font-jetbrains-mono);
   --font-headline: var(--font-space-grotesk);
   --font-body-brand: var(--font-manrope);
+  /* Tailwind v4 requires font-size utilities to be registered here.
+     text-[var(--type-2xs)] silently falls back to 16px; use text-2xs instead. */
+  --text-2xs: 0.625rem;
 }
 
 body {
@@ -172,6 +281,7 @@ body {
 }
 
 :root {
+  --type-2xs:  0.625rem;
   --type-xs:   0.6875rem;
   --type-sm:   0.75rem;
   --type-base: 0.8125rem;
@@ -184,4 +294,14 @@ body {
 @keyframes scan-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
+}
+
+@keyframes chain-shimmer {
+  0%, 100% { background-position: 200% 0; }
+  50% { background-position: -100% 0; }
+}
+
+@keyframes row-flash {
+  0%   { background: rgba(192,132,252,0.10); }
+  100% { background: transparent; }
 }

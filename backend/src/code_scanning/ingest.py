@@ -1,6 +1,7 @@
-"""SAST finding ingestion — parse SARIF/JSONL output from Opengrep scanner."""
+"""SAST finding ingestion — read canonical findings.jsonl emitted by the runner."""
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -10,11 +11,30 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _TEMP_PREFIX_RE = re.compile(r"^/tmp/tmp\.[^/]+/")
+_CHECKOUT_MARKER = "_checkout/"
 
 
 def _strip_temp_prefix(path: str) -> str:
     """Strip Docker container temp-dir prefix from scanner file paths."""
     return _TEMP_PREFIX_RE.sub("", path) or path
+
+
+def repo_relative_path(path: str) -> str:
+    """Reduce a scanner-emitted path to its repo-relative form.
+
+    semgrep runs against the absolute clone directory, so its reported paths
+    carry the container temp-dir prefix *and* the clone's own ``<repo>/_checkout/``
+    prefix (e.g. ``/tmp/tmp.x/acme-repo/_checkout/app/db.py``). Both are runner
+    scaffolding, not part of the source tree. Stripping them here — at the single
+    ingest choke point — keeps the stored ``file_path``, the identity key (which
+    embeds it), the detail blob, and view-in-repo links all agreed on the same
+    repo-relative path, and matches the runner's own ``resolve_in_root``
+    re-anchoring. Re-anchor on the *last* ``_checkout/`` so a repo that legitimately
+    contains the segment deeper in its tree still resolves correctly.
+    """
+    stripped = _strip_temp_prefix(path)
+    idx = stripped.rfind(_CHECKOUT_MARKER)
+    return stripped[idx + len(_CHECKOUT_MARKER):] if idx != -1 else stripped
 
 
 MAX_JSONL_SIZE_MB = 200
@@ -49,134 +69,53 @@ def _derive_language(file_path: str) -> str:
     ext = Path(file_path).suffix.lower()
     return _FILE_EXTENSION_TO_LANGUAGE.get(ext, "unknown")
 
-# ---------------------------------------------------------------------------
-# Severity mapping: Opengrep → Portal
-# ---------------------------------------------------------------------------
 
-def map_severity(opengrep_severity: str, confidence: str) -> str:
-    """Map Opengrep severity + confidence to portal severity.
+def _snippet_fingerprint(snippet: str) -> str | None:
+    """Line-position-independent fingerprint of a matched code snippet.
 
-    | Opengrep | Confidence   | Portal   |
-    |----------|-------------|----------|
-    | ERROR    | high        | critical |
-    | ERROR    | medium/low  | high     |
-    | WARNING  | any         | medium   |
-    | INFO     | any         | low      |
+    Per-line whitespace is normalised so reindentation does not change identity;
+    returns None when there is nothing to fingerprint.
     """
-    sev = opengrep_severity.upper()
-    conf = confidence.lower() if confidence else "medium"
-
-    if sev == "ERROR":
-        return "critical" if conf == "high" else "high"
-    if sev == "WARNING":
-        return "medium"
-    return "low"
+    if not snippet or not snippet.strip():
+        return None
+    normalized = "\n".join(line.strip() for line in snippet.strip().splitlines())
+    return hashlib.sha1(normalized.encode("utf-8")).hexdigest()[:12]
 
 
-# ---------------------------------------------------------------------------
-# Identity key
-# ---------------------------------------------------------------------------
+def code_finding_identity(
+    repo: str, file_path: str, rule_id: str, start_line: int, snippet: str = ""
+) -> str:
+    """Identity key for a SAST finding: ``{repo}:{file_path}:{rule_id}:{loc}``.
 
-def finding_identity_key(repo: str, file_path: str, rule_id: str, start_line: int) -> str:
-    """Build a stable identity key: {repo}:{file_path}:{rule_id}:{start_line}"""
-    return f"{repo}:{file_path}:{rule_id}:{start_line}"
+    ``loc`` is a content fingerprint of the matched snippet when one is present,
+    so a finding keeps its identity — and its triage state — when an unrelated
+    edit shifts its line number. Only when there is no snippet does it fall back
+    to the raw start line. Colons in the components are escaped so they cannot be
+    confused with the separators.
+    """
+    def _esc(v: str) -> str:
+        return str(v).replace(":", "%3A")
+
+    fp = _snippet_fingerprint(snippet)
+    loc = f"h{fp}" if fp else str(start_line or 0)
+    return f"{_esc(repo)}:{_esc(file_path)}:{_esc(rule_id)}:{loc}"
+
+
+def finding_identity_key(
+    repo: str, file_path: str, rule_id: str, start_line: int, snippet: str = ""
+) -> str:
+    """Build a SAST finding identity key (see :func:`code_finding_identity`)."""
+    return code_finding_identity(repo, file_path, rule_id, start_line, snippet)
 
 
 def identity_key_from_finding(finding: dict[str, Any]) -> str:
-    return finding_identity_key(
+    return code_finding_identity(
         finding.get("repo_full_name", ""),
         finding.get("file_path", ""),
         finding.get("rule_id", ""),
         finding.get("start_line", 0),
+        finding.get("snippet", "") or "",
     )
-
-
-# ---------------------------------------------------------------------------
-# SARIF/JSONL parsing
-# ---------------------------------------------------------------------------
-
-def _parse_sarif_finding(result: dict[str, Any], rule_map: dict[str, dict], repo: str) -> dict[str, Any] | None:
-    """Parse a single SARIF result into our finding format."""
-    rule_id = result.get("ruleId", "")
-    rule_info = rule_map.get(rule_id, {})
-
-    locations = result.get("locations", [])
-    if not locations:
-        return None
-    loc = locations[0]
-    phys = loc.get("physicalLocation", {})
-    artifact = phys.get("artifactLocation", {})
-    region = phys.get("region", {})
-
-    file_path = _strip_temp_prefix(artifact.get("uri", ""))
-    start_line = region.get("startLine", 0)
-    end_line = region.get("endLine", start_line)
-
-    # Extract severity and confidence from rule metadata
-    level = result.get("level", "warning")
-    properties = rule_info.get("properties", {})
-    confidence = properties.get("confidence", "medium")
-
-    # Map SARIF level to Opengrep severity
-    sarif_to_opengrep = {"error": "ERROR", "warning": "WARNING", "note": "INFO", "none": "INFO"}
-    opengrep_severity = sarif_to_opengrep.get(level.lower(), "WARNING")
-    severity = map_severity(opengrep_severity, confidence)
-
-    # Extract CWE from rule tags
-    tags = properties.get("tags") or []
-    if not isinstance(tags, list):
-        tags = []
-    cwe_list = [t for t in tags if isinstance(t, str) and t.startswith("CWE-")]
-
-    # Extract category
-    category = properties.get("category", "security")
-
-    # Message
-    message = result.get("message", {}).get("text", "")
-    rule_name = rule_info.get("shortDescription", {}).get("text", "") or rule_info.get("name", rule_id)
-
-    # Fix suggestion (from SARIF fixes)
-    fixes = result.get("fixes", [])
-    fix_suggestion = None
-    if fixes and isinstance(fixes[0], dict):
-        fix_suggestion = fixes[0].get("description", {}).get("text", "") or None
-
-    # Snippet
-    snippet = region.get("snippet", {}).get("text", "")
-
-    return {
-        "repo_full_name": repo,
-        "file_path": file_path,
-        "start_line": start_line,
-        "end_line": end_line,
-        "rule_id": rule_id,
-        "rule_name": rule_name,
-        "severity": severity,
-        "confidence": confidence,
-        "category": category,
-        "cwe": cwe_list,
-        "message": message,
-        "snippet": snippet,
-        "fix_suggestion": fix_suggestion,
-        "state": "open",
-        "finding_data": result,
-    }
-
-
-def parse_sarif(sarif_data: dict[str, Any], repo: str) -> list[dict[str, Any]]:
-    """Parse a full SARIF document into findings."""
-    findings: list[dict[str, Any]] = []
-    runs = sarif_data.get("runs", [])
-    for run in runs:
-        # Build rule lookup
-        tool_rules = run.get("tool", {}).get("driver", {}).get("rules", [])
-        rule_map = {r.get("id", ""): r for r in tool_rules}
-
-        for result in run.get("results", []):
-            finding = _parse_sarif_finding(result, rule_map, repo)
-            if finding:
-                findings.append(finding)
-    return findings
 
 
 def load_active_rule_ids(findings_path: Path) -> set[str]:
@@ -202,8 +141,9 @@ def load_active_rule_ids(findings_path: Path) -> set[str]:
 def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
     """Read findings.jsonl and return parsed findings.
 
-    Each line is a JSON object with the finding already in our format
-    (the scanner image handles SARIF-to-JSONL conversion).
+    Each line is a JSON object emitted by the runner — either already in
+    canonical snake_case form, or in SARIF-style camelCase which this
+    function remaps inline below.
     """
     if not findings_path.exists():
         logger.warning("No findings.jsonl found at %s", findings_path)
@@ -235,9 +175,19 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                 if "ruleId" in raw or "rule_id" in raw:
                     raw_severity = str(raw.get("severity") or "").lower()
                     raw_confidence = str(raw.get("confidence") or "").lower()
+                    engine = raw.get("engine")
+                    if engine is None:
+                        logger.warning(
+                            "[code-scanning] finding has no `engine` field; defaulting to 'semgrep'. "
+                            "Runner output may be malformed: rule_id=%s file=%s",
+                            raw.get("rule_id", raw.get("ruleId", "")),
+                            raw.get("file_path", raw.get("path", "")),
+                        )
+                        engine = "semgrep"
+                    file_path = repo_relative_path(raw.get("file_path", raw.get("path", "")))
                     finding = {
                         "repo_full_name": raw.get("repo_full_name", raw.get("repository", "")),
-                        "file_path": _strip_temp_prefix(raw.get("file_path", raw.get("path", ""))),
+                        "file_path": file_path,
                         "start_line": raw.get("start_line", raw.get("startLine", 0)),
                         "end_line": raw.get("end_line", raw.get("endLine", 0)),
                         "rule_id": raw.get("rule_id", raw.get("ruleId", "")),
@@ -251,11 +201,13 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                         "fix_suggestion": raw.get("fix_suggestion", raw.get("fixSuggestion")),
                         "code_flows": raw.get("code_flows") or [],
                         "code_window": raw.get("code_window") or "",
+                        "code_window_start_line": raw.get("code_window_start_line"),
                         "imports": raw.get("imports") or "",
                         "file_class": raw.get("file_class") or "source",
-                        "language": _derive_language(raw.get("file_path", raw.get("path", ""))),
+                        "language": _derive_language(file_path),
                         "reachability": raw.get("reachability"),
                         "repo_html_url": raw.get("repo_html_url", ""),
+                        "engine": engine,
                         "state": "open",
                         "finding_data": raw,
                     }

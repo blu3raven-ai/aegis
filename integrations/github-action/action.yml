@@ -1,0 +1,47 @@
+name: Aegis Security Scan
+description: Trigger an Aegis security scan for this commit / pull request.
+author: Aegis
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  aegis-url:
+    description: Aegis instance URL (e.g. https://aegis.your-co.com)
+    required: true
+  api-key:
+    description: Aegis API key with scan:trigger scope
+    required: true
+  source-id:
+    description: Aegis source identifier for this repository
+    required: true
+  wait:
+    description: Wait for the scan to complete and surface findings as a step summary
+    required: false
+    default: "true"
+  fail-on:
+    description: Severity threshold that fails this step (none | low | medium | high)
+    required: false
+    default: "none"
+  poll-timeout-seconds:
+    description: Maximum seconds to wait for scan completion when wait=true
+    required: false
+    default: "1800"
+
+runs:
+  using: composite
+  steps:
+    - name: Trigger Aegis scan
+      shell: bash
+      run: ${{ github.action_path }}/src/run.sh
+      env:
+        INPUT_AEGIS_URL: ${{ inputs.aegis-url }}
+        INPUT_API_KEY: ${{ inputs.api-key }}
+        INPUT_SOURCE_ID: ${{ inputs.source-id }}
+        INPUT_WAIT: ${{ inputs.wait }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_POLL_TIMEOUT_SECONDS: ${{ inputs.poll-timeout-seconds }}
+        GH_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        GH_BRANCH: ${{ github.ref_name }}
+        GH_PR_NUMBER: ${{ github.event.pull_request.number }}
+        GH_RUN_ID: ${{ github.run_id }}

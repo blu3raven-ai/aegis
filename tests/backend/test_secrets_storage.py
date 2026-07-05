@@ -17,7 +17,7 @@ def _make_finding(state: str = "open", review_status: str | None = None) -> obje
         "secretIdentity": "sha-aaa",
         "fingerprint": "fp-1",
         "detector": "generic-api-key",
-        "source": "betterleaks",
+        "source": "trufflehog",
         "locations": [],
         "classificationHistory": [],
         "organization": "acme",

@@ -1,0 +1,23 @@
+{
+  "id": "c_grounded_no_path_suppressed",
+  "verifier": "deps",
+  "note": "Package imported but only a safe constant is used; the vulnerable code has no path. LLM asserts no_path and cites a real file/line that grounds the claim — this is the one case that legitimately suppresses.",
+  "finding": {
+    "packageName": "utilpkg",
+    "packageVersion": "1.4.2",
+    "cve": "CVE-0000-0003",
+    "ecosystem": "pypi"
+  },
+  "repo_files": {
+    "src/util_use.py": "import utilpkg\n\nVALUE = utilpkg.SAFE_CONSTANT\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"reachability\":\"no_path\",\"evidence\":[{\"kind\":\"reachability\",\"file\":\"src/util_use.py\",\"line\":3,\"snippet\":\"VALUE = utilpkg.SAFE_CONSTANT\"}]}",
+      "tokens_in": 140,
+      "tokens_out": 55
+    }
+  ],
+  "expected": {"reachability": "no_path", "suppressed": true},
+  "label": {"truly_reachable": false}
+}
