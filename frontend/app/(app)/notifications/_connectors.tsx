@@ -25,6 +25,9 @@ export const COMING_SOON_CONNECTORS: ConnectorType[] = [
     enterprise_only: false,
     config_fields: [],
     docs_url: "",
+    version: "",
+    status: "preview",
+    href: null,
     coming_soon: true,
   },
   {
@@ -36,6 +39,9 @@ export const COMING_SOON_CONNECTORS: ConnectorType[] = [
     enterprise_only: true,
     config_fields: [],
     docs_url: "",
+    version: "",
+    status: "preview",
+    href: null,
     coming_soon: true,
   },
   {
@@ -47,6 +53,9 @@ export const COMING_SOON_CONNECTORS: ConnectorType[] = [
     enterprise_only: true,
     config_fields: [],
     docs_url: "",
+    version: "",
+    status: "preview",
+    href: null,
     coming_soon: true,
   },
   {
@@ -58,6 +67,9 @@ export const COMING_SOON_CONNECTORS: ConnectorType[] = [
     enterprise_only: true,
     config_fields: [],
     docs_url: "",
+    version: "",
+    status: "preview",
+    href: null,
     coming_soon: true,
   },
 ]
@@ -179,7 +191,6 @@ export function CatalogConnectorModal({
     setError(null)
     try {
       const dest = await createDestination({
-        org_id: ORG_ID,
         destination_type: connector.id,
         name,
         config: fieldValues,

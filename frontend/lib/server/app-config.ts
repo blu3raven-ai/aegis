@@ -23,14 +23,26 @@ export interface AppConfig {
       ghsaApiKeyHint: string
       releaseAgeEnabled: boolean
       releaseAgeThresholdDays: string
+      autoRerunEnabled: boolean
+      rerunScheduleType: "simple" | "cron"
+      rerunScheduleValue: string
     }
     code_scanning: {
       enabled: boolean
       scanConcurrency: string
+      rulesets: string
+      autoRerunEnabled: boolean
+      rerunScheduleType: "simple" | "cron"
+      rerunScheduleValue: string
     }
     secret_scanning: {
       enabled: boolean
       scanConcurrency: string
+      scanDepth: string
+      scanHistoryWindow: string
+      autoRerunEnabled: boolean
+      rerunScheduleType: "simple" | "cron"
+      rerunScheduleValue: string
     }
     container_scanning: {
       enabled: boolean
@@ -48,6 +60,9 @@ export interface AppConfig {
       releaseAgeThresholdDays: string
       baseImageTagsEnabled: boolean
       baseImageRecommendEnabled: boolean
+      autoRerunEnabled: boolean
+      rerunScheduleType: "simple" | "cron"
+      rerunScheduleValue: string
     }
     iac_scanning: {
       enabled: boolean
@@ -89,14 +104,26 @@ function configFromEnv(env: EnvMap): AppConfig {
         ghsaApiKeyHint: "",
         releaseAgeEnabled: env.SCA_RELEASE_AGE_ENABLED === "true",
         releaseAgeThresholdDays: env.SCA_RELEASE_AGE_THRESHOLD_DAYS ?? "90",
+        autoRerunEnabled: toBoolean(env.SCA_AUTO_RERUN_ENABLED, false),
+        rerunScheduleType: (env.SCA_RERUN_SCHEDULE_TYPE as "simple" | "cron") ?? "simple",
+        rerunScheduleValue: env.SCA_RERUN_SCHEDULE_VALUE ?? "02:00",
       },
       code_scanning: {
         enabled: toBoolean(env.SAST_ENABLED, false),
         scanConcurrency: env.SAST_SCAN_CONCURRENCY ?? "2",
+        rulesets: env.SAST_RULESETS ?? "",
+        autoRerunEnabled: toBoolean(env.SAST_AUTO_RERUN_ENABLED, false),
+        rerunScheduleType: (env.SAST_RERUN_SCHEDULE_TYPE as "simple" | "cron") ?? "simple",
+        rerunScheduleValue: env.SAST_RERUN_SCHEDULE_VALUE ?? "02:00",
       },
       secret_scanning: {
         enabled: toBoolean(env.SECRETS_ENABLED, false),
         scanConcurrency: env.SECRET_SCANNER_CONCURRENCY ?? env.SECRETS_SCAN_CONCURRENCY ?? "4",
+        scanDepth: env.SECRETS_SCAN_DEPTH ?? "full",
+        scanHistoryWindow: env.SECRETS_SCAN_HISTORY_WINDOW ?? "90",
+        autoRerunEnabled: toBoolean(env.SECRETS_AUTO_RERUN_ENABLED, false),
+        rerunScheduleType: (env.SECRETS_RERUN_SCHEDULE_TYPE as "simple" | "cron") ?? "simple",
+        rerunScheduleValue: env.SECRETS_RERUN_SCHEDULE_VALUE ?? "02:00",
       },
       container_scanning: {
         enabled: toBoolean(env.CONTAINER_SCANNING_ENABLED, false),
@@ -114,6 +141,9 @@ function configFromEnv(env: EnvMap): AppConfig {
         releaseAgeThresholdDays: env.CONTAINER_SCANNING_RELEASE_AGE_THRESHOLD_DAYS ?? "90",
         baseImageTagsEnabled: toBoolean(env.CONTAINER_SCANNING_BASE_IMAGE_TAGS_ENABLED, false),
         baseImageRecommendEnabled: toBoolean(env.CONTAINER_SCANNING_BASE_IMAGE_RECOMMEND_ENABLED, false),
+        autoRerunEnabled: toBoolean(env.CONTAINER_SCANNING_AUTO_RERUN_ENABLED, false),
+        rerunScheduleType: (env.CONTAINER_SCANNING_RERUN_SCHEDULE_TYPE as "simple" | "cron") ?? "simple",
+        rerunScheduleValue: env.CONTAINER_SCANNING_RERUN_SCHEDULE_VALUE ?? "02:00",
       },
       iac_scanning: {
         enabled: toBoolean(env.IAC_SECURITY_ENABLED, false),
@@ -148,14 +178,26 @@ function normalizeConfig(value: Partial<AppConfig> | null, fallback: AppConfig):
         ghsaApiKeyHint: value?.tools?.dependencies_scanning?.ghsaApiKeyHint ?? fallback.tools.dependencies_scanning.ghsaApiKeyHint,
         releaseAgeEnabled: value?.tools?.dependencies_scanning?.releaseAgeEnabled ?? fallback.tools.dependencies_scanning.releaseAgeEnabled,
         releaseAgeThresholdDays: value?.tools?.dependencies_scanning?.releaseAgeThresholdDays ?? fallback.tools.dependencies_scanning.releaseAgeThresholdDays,
+        autoRerunEnabled: value?.tools?.dependencies_scanning?.autoRerunEnabled ?? fallback.tools.dependencies_scanning.autoRerunEnabled,
+        rerunScheduleType: value?.tools?.dependencies_scanning?.rerunScheduleType ?? fallback.tools.dependencies_scanning.rerunScheduleType,
+        rerunScheduleValue: value?.tools?.dependencies_scanning?.rerunScheduleValue ?? fallback.tools.dependencies_scanning.rerunScheduleValue,
       },
       code_scanning: {
         enabled: value?.tools?.code_scanning?.enabled ?? fallback.tools.code_scanning.enabled,
         scanConcurrency: value?.tools?.code_scanning?.scanConcurrency ?? fallback.tools.code_scanning.scanConcurrency,
+        rulesets: value?.tools?.code_scanning?.rulesets ?? fallback.tools.code_scanning.rulesets,
+        autoRerunEnabled: value?.tools?.code_scanning?.autoRerunEnabled ?? fallback.tools.code_scanning.autoRerunEnabled,
+        rerunScheduleType: value?.tools?.code_scanning?.rerunScheduleType ?? fallback.tools.code_scanning.rerunScheduleType,
+        rerunScheduleValue: value?.tools?.code_scanning?.rerunScheduleValue ?? fallback.tools.code_scanning.rerunScheduleValue,
       },
       secret_scanning: {
         enabled: value?.tools?.secret_scanning?.enabled ?? fallback.tools.secret_scanning.enabled,
         scanConcurrency: value?.tools?.secret_scanning?.scanConcurrency ?? fallback.tools.secret_scanning.scanConcurrency,
+        scanDepth: value?.tools?.secret_scanning?.scanDepth ?? fallback.tools.secret_scanning.scanDepth,
+        scanHistoryWindow: value?.tools?.secret_scanning?.scanHistoryWindow ?? fallback.tools.secret_scanning.scanHistoryWindow,
+        autoRerunEnabled: value?.tools?.secret_scanning?.autoRerunEnabled ?? fallback.tools.secret_scanning.autoRerunEnabled,
+        rerunScheduleType: value?.tools?.secret_scanning?.rerunScheduleType ?? fallback.tools.secret_scanning.rerunScheduleType,
+        rerunScheduleValue: value?.tools?.secret_scanning?.rerunScheduleValue ?? fallback.tools.secret_scanning.rerunScheduleValue,
       },
       container_scanning: {
         enabled: value?.tools?.container_scanning?.enabled ?? fallback.tools.container_scanning.enabled,
@@ -173,6 +215,9 @@ function normalizeConfig(value: Partial<AppConfig> | null, fallback: AppConfig):
         releaseAgeThresholdDays: value?.tools?.container_scanning?.releaseAgeThresholdDays ?? fallback.tools.container_scanning.releaseAgeThresholdDays,
         baseImageTagsEnabled: value?.tools?.container_scanning?.baseImageTagsEnabled ?? fallback.tools.container_scanning.baseImageTagsEnabled,
         baseImageRecommendEnabled: value?.tools?.container_scanning?.baseImageRecommendEnabled ?? fallback.tools.container_scanning.baseImageRecommendEnabled,
+        autoRerunEnabled: value?.tools?.container_scanning?.autoRerunEnabled ?? fallback.tools.container_scanning.autoRerunEnabled,
+        rerunScheduleType: value?.tools?.container_scanning?.rerunScheduleType ?? fallback.tools.container_scanning.rerunScheduleType,
+        rerunScheduleValue: value?.tools?.container_scanning?.rerunScheduleValue ?? fallback.tools.container_scanning.rerunScheduleValue,
       },
       iac_scanning: {
         enabled: value?.tools?.iac_scanning?.enabled ?? fallback.tools.iac_scanning.enabled,

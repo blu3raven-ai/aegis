@@ -25,7 +25,7 @@ function DependenciesDashboard() {
       pageTitle="Dependencies"
       pageIcon={<FindingsIcon />}
       pageDescription="Vulnerabilities from dependency scanning."
-      initialScannerFilter="deps"
+      initialScannerFilter="dependencies_scanning"
     />
   )
 }

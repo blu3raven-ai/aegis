@@ -167,7 +167,6 @@ export function IntegrationsChannelsTab({
               )}
               <DestinationForm
                 initial={null}
-                orgId={orgId}
                 onSubmit={onCreate}
                 onCancel={onCancelCreate}
                 submitting={createSubmitting}
