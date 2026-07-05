@@ -13,15 +13,10 @@ from src.shared.config import build_source_repo_list, get_code_scanning_scanner_
 from src.shared.lifecycle import ScanContext, apply_lifecycle as _apply_lifecycle
 from src.shared.paths import DATA_DIR, normalize_org, normalize_path_segment
 from src.code_scanning.lifecycle import code_scanning_hooks
-from src.storage import (
-    update_code_scanning_run,
-    read_code_scanning_findings,
-    patch_finding_detail,
-)
+from src.storage import update_code_scanning_run
 
 logger = logging.getLogger(__name__)
 
-CODE_SCANNING_SCANNER_IMAGE = "aegis/scanner-code-scanning:latest"
 CODE_SCANNING_DATA_DIR = DATA_DIR / "code_scanning"
 MAX_SCAN_DURATION_SECONDS = 12 * 60 * 60
 
@@ -32,24 +27,29 @@ def _execute_via_runner(
     config: dict[str, str],
     repo_urls: str,
     token: str,
-    rulesets: str,
+    source_type: str | None = None,
 ) -> dict[str, Any] | None:
     """Create a runner job and poll until completion."""
     from src.runner.jobs import create_job, read_job
+
+    env_vars = {
+        "GIT_TOKEN": token,
+        "GIT_REPOS": repo_urls,
+        "ORG_LABEL": org,
+        "CONCURRENCY": config.get("concurrency") or "4",
+        "RUN_ID": run_id,
+    }
+    # The ingest resolves each finding's repo asset via SOURCE_TYPE (envVars),
+    # so it must be carried through on the scheduled path too — not just on the
+    # canonical "Scan now" dispatch.
+    if source_type:
+        env_vars["SOURCE_TYPE"] = source_type
 
     job = create_job(
         job_type="code_scanning",
         org=org,
         run_id=run_id,
-        docker_image=config.get("image") or CODE_SCANNING_SCANNER_IMAGE,
-        env_vars={
-            "GIT_TOKEN": token,
-            "GIT_REPOS": repo_urls,
-            "ORG_LABEL": org,
-            "CONCURRENCY": config.get("concurrency") or "4",
-            "RUN_ID": run_id,
-            "RULESETS": rulesets,
-        },
+        env_vars=env_vars,
         expected_repo_count=len(repo_urls.split(",")) if repo_urls else 0,
     )
 
@@ -139,67 +139,7 @@ def _build_run_output_dir(org: str, run_id: str) -> Path:
     return CODE_SCANNING_DATA_DIR / "raw" / normalize_org(org) / normalize_path_segment(run_id)
 
 
-async def _run_ai_classification(
-    org: str,
-    run_id: str,
-    code_scanning_config: dict[str, Any],
-    runtime: InMemoryScanRuntime | None,
-) -> None:
-    """Run AI review on open findings lacking an ai_review entry."""
-    from src.code_scanning.ai_review import review_code_scanning_finding, CodeScanningAiReviewError, _get_tier
-
-    findings = read_code_scanning_findings(org)
-    if not findings:
-        return
-
-    target_keys = [
-        code_scanning_hooks.compute_identity_key(f)
-        for f in findings
-        if f.get("state") == "open" and not f.get("ai_review") and _get_tier(f) != "skip"
-    ]
-    total = len(target_keys)
-    if total == 0:
-        return
-
-    reviewed = 0
-    for key in target_keys:
-        if runtime and runtime.is_cancelled(run_id):
-            break
-
-        # Re-read each iteration to avoid overwriting concurrent dismiss/reopen
-        current_findings = read_code_scanning_findings(org)
-        if not current_findings:
-            break
-        target_finding = next(
-            (f for f in current_findings if code_scanning_hooks.compute_identity_key(f) == key),
-            None,
-        )
-        if not target_finding or target_finding.get("ai_review"):
-            reviewed += 1
-            continue
-
-        try:
-            result = await review_code_scanning_finding(target_finding, code_scanning_config)
-            logger.info("AI review for %s: %s", target_finding.get("rule_id"), result.get("classification", "unknown"))
-            patch_finding_detail("code_scanning", org, key, {"aiReview": result})
-        except CodeScanningAiReviewError as exc:
-            logger.warning("AI review failed for finding %s: %s", target_finding.get("rule_id"), exc)
-        except Exception as exc:
-            logger.warning("Unexpected AI review error for finding %s: %s", target_finding.get("rule_id"), exc)
-
-        reviewed += 1
-        update_code_scanning_run(org, run_id, {
-            "status": "ingesting",
-            "progress": {
-                "stage": "ai_review",
-                "reviewed": reviewed,
-                "total": total,
-                "percent": min(99, int((reviewed / total) * 100)),
-            },
-        })
-
-
-def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
+def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
     """Ingest code scanning results from object store after runner completion."""
     from src.shared.object_store import find_findings_jsonl
     from src.code_scanning.ingest import ingest_findings_jsonl
@@ -225,8 +165,14 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     new_findings: list[dict[str, Any]] = []
     if all_findings:
-        ctx = ScanContext(tool="code_scanning", org=org, run_id=run_id)
+        ctx = ScanContext(tool="code_scanning", org=org, run_id=run_id, source_type=source_type)
         new_findings = _apply_lifecycle(code_scanning_hooks, ctx, all_findings)
+
+        try:
+            from src.settings.llm.usage import record_usage_from_findings
+            record_usage_from_findings(all_findings)
+        except Exception:
+            logger.warning("Failed to record LLM usage from code_scanning ingest", exc_info=True)
 
     if new_findings:
         try:
@@ -234,6 +180,14 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
             notify_new_critical_findings("code_scanning", org, new_findings)
         except Exception:
             logger.warning("Failed to emit new finding notifications", exc_info=True)
+
+        from src.shared.event_emit_helpers import emit_finding_created
+        for finding in new_findings:
+            emit_finding_created(
+                finding=finding,
+                scanner_type="sast",
+                source_component="code_scanning.scanner",
+            )
 
     # Guard against race: don't overwrite a concurrent cancellation
     from src.storage import list_code_scanning_runs
@@ -249,10 +203,13 @@ def ingest_code_scanning_from_minio(org: str, run_id: str) -> None:
         "progress": {"percent": 100, "stage": "completed"},
     })
 
-    # Write per-repo checkpoints so coverage gaps can be computed
+    # Write per-asset checkpoints so coverage gaps can be computed
+    from src.assets.service import resolve_repo_asset_ids
     from src.shared.checkpoints import write_checkpoint
-    for repo in build_source_repo_list(get_scan_sources_for_org(org)):
-        write_checkpoint("code_scanning", org, repo["full_name"])
+    repos = build_source_repo_list(get_scan_sources_for_org(org))
+    asset_ids = resolve_repo_asset_ids([r["full_name"] for r in repos])
+    for full_name, asset_id in asset_ids.items():
+        write_checkpoint("code_scanning", asset_id)
 
 
 def execute_code_scanning_scan_once(
@@ -260,6 +217,7 @@ def execute_code_scanning_scan_once(
     token: str,
     run_id: str,
     *,
+    source_type: str | None = None,
     scanner_config: dict[str, str] | None = None,
     scan_mode: str = "full",
     runtime: InMemoryScanRuntime | None = None,
@@ -272,44 +230,6 @@ def execute_code_scanning_scan_once(
     config = scanner_config or get_code_scanning_scanner_config()
 
     update_code_scanning_run(org, run_id, {"scanMode": scan_mode})
-
-    # AI Review Only: skip runner, classify existing findings directly
-    if scan_mode == "ai_review_only":
-        try:
-            update_code_scanning_run(org, run_id, {
-                "status": "ingesting",
-                "progress": {"stage": "ai_review", "percent": 0},
-            })
-            import asyncio
-            asyncio.run(_run_ai_classification(org, run_id, config, runtime))
-
-            from src.storage import list_code_scanning_runs
-            current = next((r for r in list_code_scanning_runs(org) if r.get("id") == run_id), None)
-            if current and current.get("status") == "cancelled":
-                logger.info("Skipping completion — run %s already cancelled", run_id)
-                return None
-
-            update_code_scanning_run(org, run_id, {
-                "status": "completed",
-                "finishedAt": now_iso(),
-                "progress": {"percent": 100, "stage": "completed"},
-            })
-            return {"org": org, "meta": {"lastRefreshedAt": now_iso(), "runId": run_id}}
-        except Exception:
-            logger.exception("AI review failed for %s", org)
-            update_code_scanning_run(org, run_id, {
-                "status": "failed",
-                "finishedAt": now_iso(),
-                "error": "AI review failed unexpectedly. Check server logs for details.",
-            })
-            return None
-        finally:
-            if runtime:
-                runtime.discard_cancelled(run_id)
-                if runtime_started:
-                    runtime.release(org)
-
-    run_output_dir = _build_run_output_dir(org, run_id)
 
     all_sources = [s for s in get_scan_sources_for_org(org) if s.repo_urls]
     total_repos = sum(len(s.repo_urls) for s in all_sources)
@@ -340,12 +260,6 @@ def execute_code_scanning_scan_once(
                 source_token = source.token
 
         repo_urls_str = ",".join(all_repo_urls)
-        rulesets = config.get("rulesets") or (
-            "p/owasp-top-ten,p/cwe-top-25,p/default,p/r2c-security-audit,"
-            "p/python,p/java,p/javascript,p/typescript,p/golang,"
-            "p/ruby,p/php,p/c,p/cpp,p/kotlin,p/swift,p/rust,"
-            "p/django,p/flask,p/express,p/react,p/spring"
-        )
 
         result = _execute_via_runner(
             org=org,
@@ -353,7 +267,7 @@ def execute_code_scanning_scan_once(
             config=config,
             repo_urls=repo_urls_str,
             token=source_token,
-            rulesets=rulesets,
+            source_type=source_type,
         )
 
         if runtime and runtime.is_cancelled(run_id):
@@ -382,3 +296,6 @@ def execute_code_scanning_scan_once(
             runtime.discard_cancelled(run_id)
             if runtime_started:
                 runtime.release(org)
+
+
+_code_scanning_runtime = InMemoryScanRuntime()

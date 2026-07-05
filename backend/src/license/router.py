@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from src.authz.enforcement.dependencies import Permission
+from src.authz.permissions.catalog import MANAGE_SETTINGS, VIEW_SETTINGS
 from src.license.keys import EMBEDDED_PUBLIC_KEY, LicenseError, decode_license
-from src.license.store import read_license_key, remove_license_key, write_license_key
+from src.license.store import remove_license_key, write_license_key
 from src.license.types import TIER_LIMITS, Tier
-from src.settings.router import require_permission
 
-router = APIRouter(prefix="/license/api", tags=["license"])
+router = APIRouter(prefix="/api/v1/license", tags=["license"])
 
 
 class ActivateRequest(BaseModel):
@@ -18,16 +19,26 @@ class ActivateRequest(BaseModel):
 
 
 @router.get("/status")
-async def get_license_status(request: Request):
+async def get_license_status(
+    request: Request,
+    _: None = Depends(Permission(VIEW_SETTINGS)),
+):
+    """View the license tier, addon set, usage counts, and license claims.
+
+    Gated on VIEW_SETTINGS (least-privilege — admins implicitly have it
+    via manage_settings → view_settings). The data is low-sensitivity but
+    informative (user/team/runner counts plus org name from the claim),
+    so we don't leave it open to a base viewer.
+    """
     tier = getattr(request.state, "tier", Tier.COMMUNITY)
     claims = getattr(request.state, "license_claims", None)
     limits = TIER_LIMITS[tier]
 
     # Collect current usage counts
-    from src.settings.users_router import list_users_internal
-    from src.settings.sources_store import list_connections
-    from src.settings.organisations_store import list_teams
-    from src.settings.roles_store import list_roles
+    from src.auth.workspace.users_router import list_users_internal
+    from src.sources.store import list_connections
+    from src.authz.teams.service import list_teams
+    from src.authz.roles.service import list_roles
     from src.runner.registry import list_runners_with_status
 
     users = list_users_internal()
@@ -59,9 +70,11 @@ async def get_license_status(request: Request):
 
 
 @router.post("/activate")
-async def activate_license(body: ActivateRequest, request: Request):
-    require_permission(request, "manage_settings")
-
+async def activate_license(
+    body: ActivateRequest,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+):
     try:
         claims = decode_license(body.key, EMBEDDED_PUBLIC_KEY)
     except LicenseError:
@@ -83,8 +96,10 @@ async def activate_license(body: ActivateRequest, request: Request):
 
 
 @router.delete("/remove")
-async def remove_license(request: Request):
-    require_permission(request, "manage_settings")
+async def remove_license(
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+):
     remove_license_key()
     tier = Tier.COMMUNITY
     limits = TIER_LIMITS[tier]

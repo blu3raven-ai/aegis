@@ -1,12 +1,25 @@
 """GraphQL resolvers for Code Scanning (Static Application Security Testing)."""
 from __future__ import annotations
 
+import json
 import math
 from typing import Any, Optional
 
+
+def _json_or_none(value: Any) -> Optional[str]:
+    """Serialize JSON-shaped values (dict/list) to a string for GraphQL transport."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value)
+    except (TypeError, ValueError):
+        return None
+
 import strawberry
 
-from src.graphql.auth import validate_org_access, GraphQLAuthError
+from src.graphql.auth import GraphQLAuthError
 from src.graphql.limits import clamp_per_page
 from src.graphql.types import (
     SeverityCounts, SeverityBucket, AgeBucket, RepoSummary,
@@ -16,6 +29,7 @@ from src.graphql.types import (
 from src.storage import read_code_scanning_findings
 from src.shared.analytics import build_analytics, get_counts
 from src.shared.config import get_scan_sources_for_org
+from src.shared.home_views import get_severity_counts_by_asset_ids
 from src.shared.paths import parse_iso_utc as _parse_dt
 
 
@@ -29,14 +43,6 @@ def _git_repos_only(sources: list) -> list[dict[str, Any]]:
             if full_name not in repos:
                 repos[full_name] = {"full_name": full_name, "name": parts[-1]}
     return list(repos.values())
-
-
-@strawberry.type
-class CodeScanningAiReview:
-    verdict: str
-    explanation: str
-    reasoning: Optional[str] = None
-    confidence: Optional[str] = None
 
 
 @strawberry.type
@@ -59,17 +65,6 @@ class CodeScanningReachability:
     verdict: str
     entry_point: Optional[str] = None
     call_chain: Optional[list[CodeScanningCallChainStep]] = None
-
-
-def _make_ai_review(r: dict | None) -> Optional["CodeScanningAiReview"]:
-    if not r:
-        return None
-    return CodeScanningAiReview(
-        verdict=r.get("verdict", ""),
-        explanation=r.get("explanation", ""),
-        reasoning=r.get("reasoning"),
-        confidence=r.get("confidence"),
-    )
 
 
 def _make_code_flows(flows: list | None) -> Optional[list["CodeScanningCodeFlow"]]:
@@ -130,9 +125,20 @@ class CodeScanningFinding:
     snippet: Optional[str] = None
     fix_suggestion: Optional[str] = None
     code_window: Optional[str] = None
-    ai_review: Optional[CodeScanningAiReview] = None
     code_flows: Optional[list[CodeScanningCodeFlow]] = None
     reachability: Optional[CodeScanningReachability] = None
+    engine: Optional[str] = None
+    rule_ids: Optional[list[str]] = None
+    # Commit attribution (§5.6)
+    introduced_by_commit_sha: Optional[str] = None
+    introduced_by_author: Optional[str] = None
+    introduced_at: Optional[str] = None
+    introduced_by_pr_url: Optional[str] = None
+    # evidence_json / verification_metadata are JSON-encoded strings.
+    verdict: Optional[str] = None
+    evidence_json: Optional[str] = None
+    exploit_chain: Optional[str] = None
+    verification_metadata: Optional[str] = None
 
 
 @strawberry.type
@@ -163,29 +169,21 @@ def _extract_code_scanning_full_name(f: dict) -> str:
     return f.get("repo_full_name", "")
 
 
-def _load_scoped_findings(org: str, ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Load code scanning findings with per-request caching and repo-level scope filtering."""
+def _load_scoped_findings(asset_ids: list[str], ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Load code scanning findings with per-request caching, scoped by asset_ids."""
     if not ctx:
         raise GraphQLAuthError("Unauthorized")
-    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
-    for single_org in orgs:
-        validate_org_access(ctx, single_org)
+    if not asset_ids:
+        return []
     request_cache = ctx.get("_cache")
-    request = ctx.get("request")
-    all_findings: list[dict[str, Any]] = []
-    for single_org in orgs:
-        cache_key = f"_code_scanning_findings:{single_org}"
-        if request_cache is not None and cache_key in request_cache:
-            all_findings.extend(request_cache[cache_key])
-            continue
-        findings = read_code_scanning_findings(single_org) or []
-        if request:
-            from src.shared.router_helpers import filter_findings_by_scope
-            findings = filter_findings_by_scope(request, findings, _extract_code_scanning_full_name)
-        if request_cache is not None:
-            request_cache[cache_key] = findings
-        all_findings.extend(findings)
-    return all_findings
+    cache_key = f"_code_scanning_findings:asset_ids:{','.join(sorted(asset_ids))}"
+    if request_cache is not None and cache_key in request_cache:
+        return list(request_cache[cache_key])
+    # asset_id IS the scope; no further per-repo filtering needed
+    findings = read_code_scanning_findings(asset_ids=asset_ids) or []
+    if request_cache is not None:
+        request_cache[cache_key] = findings
+    return findings
 
 
 def _get_code_scanning_counts(alerts: list[dict[str, Any]]) -> "SeverityCounts":
@@ -219,14 +217,18 @@ def _code_scanning_finding_to_advisory_shape(f: dict[str, Any]) -> dict[str, Any
     }
 
 
-def code_scanning_counts(org: str, info_context: dict[str, Any]) -> SeverityCounts:
-    findings = _load_scoped_findings(org, info_context)
-    open_findings = [f for f in findings if f.get("state") == "open"]
-    return _get_code_scanning_counts(open_findings)
+def code_scanning_counts(*, asset_ids: list[str], info_context: dict[str, Any]) -> SeverityCounts:
+    counts = get_severity_counts_by_asset_ids(asset_ids, tool="code_scanning", state="open")
+    return SeverityCounts(
+        total=counts["total"], critical=counts["critical"],
+        high=counts["high"], medium=counts["medium"], low=counts["low"],
+    )
 
 
 def code_scanning_findings(
-    org: str,
+    *,
+    asset_ids: list[str],
+    org: Optional[str] = None,
     page: int = 1,
     per_page: int = 25,
     severity: Optional[str] = None,
@@ -242,9 +244,18 @@ def code_scanning_findings(
     last_scan_date: Optional[str] = None,
     info_context: dict[str, Any] | None = None,
 ) -> CodeScanningFindingsConnection:
+    if not asset_ids:
+        return CodeScanningFindingsConnection(
+            items=[], total_count=0,
+            page_info=PageInfo(has_next_page=False, has_previous_page=False, total_pages=0),
+        )
     per_page = clamp_per_page(per_page)
     search = (search or "")[:200]
-    findings = _load_scoped_findings(org, info_context)
+    findings = _load_scoped_findings(asset_ids, info_context)
+    # org is a UI filter to narrow the asset-scoped result to specific orgs
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if f.get("repo_full_name", "").split("/")[0].lower() in wanted]
 
     if state:
         findings = [f for f in findings if f.get("state") == state]
@@ -316,9 +327,18 @@ def code_scanning_findings(
             snippet=f.get("snippet") or None,
             fix_suggestion=f.get("fix_suggestion"),
             code_window=f.get("code_window"),
-            ai_review=_make_ai_review(f.get("ai_review")),
             code_flows=_make_code_flows(f.get("code_flows")),
             reachability=_make_reachability(f.get("reachability")),
+            engine=f.get("engine"),
+            rule_ids=f.get("rule_ids"),
+            introduced_by_commit_sha=f.get("introduced_by_commit_sha"),
+            introduced_by_author=f.get("introduced_by_author"),
+            introduced_at=f.get("introduced_at"),
+            introduced_by_pr_url=f.get("introduced_by_pr_url"),
+            verdict=f.get("verdict"),
+            evidence_json=_json_or_none(f.get("evidence_json")),
+            exploit_chain=f.get("exploit_chain"),
+            verification_metadata=_json_or_none(f.get("verification_metadata")),
         )
         for f in page_items
     ]
@@ -334,8 +354,11 @@ def code_scanning_findings(
     )
 
 
-def code_scanning_analytics(org: str, info_context: dict[str, Any]) -> CodeScanningAnalytics:
-    findings = _load_scoped_findings(org, info_context)
+def code_scanning_analytics(*, asset_ids: list[str], org: Optional[str] = None, info_context: dict[str, Any]) -> CodeScanningAnalytics:
+    findings = _load_scoped_findings(asset_ids, info_context)
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if f.get("repo_full_name", "").split("/")[0].lower() in wanted]
     open_findings = [f for f in findings if f.get("state") == "open"]
     fixed_findings = [f for f in findings if f.get("state") == "fixed"]
 
@@ -343,7 +366,8 @@ def code_scanning_analytics(org: str, info_context: dict[str, Any]) -> CodeScann
     open_shaped = [_code_scanning_finding_to_advisory_shape(f) for f in open_findings]
     fixed_shaped = [_code_scanning_finding_to_advisory_shape(f) for f in fixed_findings]
 
-    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    # Derive unique orgs from findings for coverage computation
+    orgs = sorted({f.get("repo_full_name", "").split("/")[0] for f in findings if "/" in f.get("repo_full_name", "")})
     seen_repos: dict[str, dict[str, Any]] = {}
     for single_org in orgs:
         for r in _git_repos_only(get_scan_sources_for_org(single_org)):
@@ -424,9 +448,11 @@ def code_scanning_analytics(org: str, info_context: dict[str, Any]) -> CodeScann
     )
 
 
-def code_scanning_filter_options(org: str, info_context: dict[str, Any]) -> CodeScanningFilterOptions:
-    findings = _load_scoped_findings(org, info_context)
-    repos = sorted({f.get("repo_full_name", "") for f in findings if f.get("repo_full_name")})
+def code_scanning_filter_options(*, asset_ids: list[str], org: Optional[str] = None, info_context: dict[str, Any]) -> CodeScanningFilterOptions:
+    findings = _load_scoped_findings(asset_ids, info_context)
     languages = sorted({f.get("language", "") for f in findings if f.get("language")})
     rule_ids = sorted({f.get("rule_id", "") for f in findings if f.get("rule_id")})
+    # Derive repo list from Asset.external_ref (Finding.org/repo dropped in Plan D)
+    from src.graphql.dependencies_resolvers import _scoped_repos_and_orgs
+    repos, _ = _scoped_repos_and_orgs(asset_ids)
     return CodeScanningFilterOptions(repositories=repos, languages=languages, rule_ids=rule_ids)

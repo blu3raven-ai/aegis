@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import strawberry
-from typing import Optional
+from typing import Annotated, Optional, Union
 
 
 @strawberry.type
@@ -13,6 +13,8 @@ class PostureTrendPoint:
     high: int
     medium: int
     low: int
+    risk_score: int
+    new_findings: int = 0
 
 
 @strawberry.type
@@ -54,50 +56,6 @@ class SeverityCounts:
 
 
 @strawberry.type
-class PageInfo:
-    has_next_page: bool
-    has_previous_page: bool
-    total_pages: int
-
-
-@strawberry.type
-class SeverityBucket:
-    severity: str
-    count: int
-    percentage: int
-
-
-@strawberry.type
-class AgeBucket:
-    label: str
-    count: int
-
-
-@strawberry.type
-class RepoSummary:
-    name: str
-    open: int
-    critical: int
-    high: int
-
-
-@strawberry.type
-class RemediationStats:
-    total_fixed: int
-    avg_days: Optional[float]
-    median_days: Optional[float]
-    fixed_last_30d: int
-
-
-@strawberry.type
-class CoverageStats:
-    total: int
-    affected: int
-    unaffected: int
-    percentage: int
-
-
-@strawberry.type
 class RiskScore:
     score: int
     rating: str
@@ -105,140 +63,173 @@ class RiskScore:
 
 
 @strawberry.type
-class FilterOptions:
-    ecosystems: list[str]
-    repositories: list[str]
-    organizations: list[str]
-
-
-@strawberry.type
-class CodeScanningRuleCount:
-    rule_id: str
-    rule_name: str
-    count: int
-
-
-@strawberry.type
-class StateBreakdown:
+class SeverityBreachStat:
     open: int
-    dismissed: int
-    fixed: int
-    awaiting_fix: int
+    breached: int
+    breached_pct: float
 
 
 @strawberry.type
-class CategoryCount:
-    category: str
-    count: int
+class BreachSummary:
+    critical: SeverityBreachStat
+    high: SeverityBreachStat
+    medium: SeverityBreachStat
+    low: SeverityBreachStat
 
-
-@strawberry.type
-class CodeScanningFilterOptions:
-    repositories: list[str]
-    languages: list[str]
-    rule_ids: list[str]
 
 
 @strawberry.type
-class MonthlyTrendItem:
-    month: str
-    introduced: int
-    resolved: int
-    open_at_end: int
-
-
-@strawberry.type
-class EcosystemBreakdownItem:
-    ecosystem: str
-    critical: int
-    high: int
-    medium: int
-    low: int
-    total: int
-
-
-@strawberry.type
-class VulnerablePackage:
-    name: str
-    ecosystem: str
-    repo_count: int
-    critical: int
-    high: int
-    medium: int
-    low: int
-
-
-@strawberry.type
-class MTTRBySeverity:
-    critical: Optional[float]
-    high: Optional[float]
-    medium: Optional[float]
-    low: Optional[float]
-
-
-@strawberry.type
-class RemediationPriorityRow:
-    rank: int
-    package_name: str
-    ecosystem: str
-    ghsa_id: str
-    cve_id: Optional[str]
+class EpssTopFinding:
+    finding_id: int
+    tool: str
+    repo: str
     severity: str
-    repos_affected: int
-    patch_version: Optional[str]
-    advisory_url: str
+    identity_key: str
+    cve: str
+    epss_score: float
+    epss_percentile: float
+    scored_date: Optional[str] = None
 
 
 @strawberry.type
-class ClassificationEntry:
-    value: str
-    source: str
-    scan_depth: Optional[str]
-    confidence: Optional[float]
-    run_id: Optional[str]
-    scanned_at: Optional[str]
-
-
-@strawberry.type
-class ReviewFunnel:
-    new_count: int
-    confirmed_count: int
-    false_positive_count: int
-    action_taken_count: int
-
-
-@strawberry.type
-class SourceCount:
-    source: str
+class EpssTopResponse:
+    findings: list[EpssTopFinding]
     count: int
 
 
-@strawberry.type
-class SecretsRepoPriority:
-    organization: str
-    repository: str
-    unreviewed_count: int
-    confirmed_count: int
+
+# ── Sources read surface (mirror of /api/v1/sources REST shapes) ────────────
 
 
 @strawberry.type
-class SecretsOverview:
-    unique_key_count: int
-    total_findings_count: int
-    review_funnel: ReviewFunnel
-    source_breakdown: list[SourceCount]
-    remediation: RemediationStats
-    repository_coverage: CoverageStats
-    stale_findings_count: int
-    resolved_recently_count: int
-    unresolved_count: int
-    age_buckets: list[AgeBucket]
-    triage_priority: list[SecretsRepoPriority]
+class SourceFindingCounts:
+    critical: int
+    high: int
+    medium: int
+    low: int
 
 
 @strawberry.type
-class SecretsFilterOptions:
-    organizations: list[str]
-    repositories: list[str]
-    detectors: list[str]
-    sources: list[str]
+class SourceRepoExtras:
+    last_scanned_sha: Optional[str] = None
+    manifest_set_hash: Optional[str] = None
+    scanners_with_coverage: list[str] = strawberry.field(default_factory=list)
+    coverage_status: str = "never"
+    source_url: Optional[str] = None
+    # True open-finding count across all severities (finding_counts keeps only
+    # the four ranked buckets for the severity pill).
+    open_finding_count: int = 0
+
+
+@strawberry.type
+class SourceImageExtras:
+    image_digest: Optional[str] = None
+    image_name: Optional[str] = None
+    image_tag: Optional[str] = None
+    layer_count: Optional[int] = None
+    size_bytes: Optional[int] = None
+    base_os: Optional[str] = None
+    repos: list[str] = strawberry.field(default_factory=list)
+
+
+@strawberry.type
+class SourceScanRunRow:
+    scan_id: str
+    scanner_type: str
+    status: str
+    started_at: str
+    duration_ms: Optional[int] = None
+    findings_count: int = 0
+
+
+@strawberry.type
+class SourceFindingRow:
+    id: int
+    tool: str
+    severity: Optional[str]
+    state: str
+    identity_key: str
+    asset_id: Optional[str]
+    first_seen_at: str
+    last_seen_at: str
+
+
+@strawberry.type
+class SourceRepoSummary:
+    type: str
+    asset_id: str
+    display_name: Optional[str]
+    last_scanned_at: Optional[str]
+    finding_counts: SourceFindingCounts
+    repo: SourceRepoExtras
+
+
+@strawberry.type
+class SourceImageSummary:
+    type: str
+    asset_id: str
+    display_name: Optional[str]
+    last_scanned_at: Optional[str]
+    finding_counts: SourceFindingCounts
+    image: SourceImageExtras
+
+
+@strawberry.type
+class SourceRepoDetail:
+    type: str
+    asset_id: str
+    display_name: Optional[str]
+    last_scanned_at: Optional[str]
+    finding_counts: SourceFindingCounts
+    repo: SourceRepoExtras
+    scan_history: list[SourceScanRunRow]
+    active_findings: list[SourceFindingRow]
+    default_branch: Optional[str] = None
+
+
+@strawberry.type
+class SourceImageDetail:
+    type: str
+    asset_id: str
+    display_name: Optional[str]
+    last_scanned_at: Optional[str]
+    finding_counts: SourceFindingCounts
+    image: SourceImageExtras
+    scan_history: list[SourceScanRunRow]
+    active_findings: list[SourceFindingRow]
+
+
+# Polymorphic detail — repo or image. Cloud has no detail loader in the
+# service layer (and the REST endpoint never returned cloud), so it is not
+# part of the union.
+SourceDetail = Annotated[
+    Union[SourceRepoDetail, SourceImageDetail],
+    strawberry.union("SourceDetail"),
+]
+
+
+@strawberry.type
+class CoverageSummary:
+    """Fresh/Stale/Never coverage counts over the full repo scope (not the page),
+    so the KPI strip is correct even when the list is capped."""
+    total: int = 0
+    fresh: int = 0
+    stale: int = 0
+    never: int = 0
+
+
+@strawberry.type
+class RepoSourcesResponse:
+    sources: list[SourceRepoSummary]
+    next_cursor: Optional[str] = None
+    total_count: Optional[int] = None
+    coverage_summary: Optional[CoverageSummary] = None
+
+
+@strawberry.type
+class ImageSourcesResponse:
+    sources: list[SourceImageSummary]
+    next_cursor: Optional[str] = None
+    total_count: Optional[int] = None
+
+

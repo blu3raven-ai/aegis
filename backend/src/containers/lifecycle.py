@@ -2,7 +2,12 @@
 """Container scanning lifecycle hooks — finding state management."""
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from src.shared.lifecycle import LifecycleHooks
+
+if TYPE_CHECKING:
+    from src.shared.lifecycle import ScanContext
 
 
 class ContainerScanningHooks(LifecycleHooks):
@@ -17,6 +22,10 @@ class ContainerScanningHooks(LifecycleHooks):
         return f"{repo}::{pkg}::{eco}::{adv}"
 
     def initial_state(self, raw: dict) -> str:
+        # Malicious packages have no fix but must never be deferred — the
+        # package is compromised and needs removal, so keep them open.
+        if raw.get("malicious"):
+            return "open"
         return "open" if self.has_fix(raw) else "deferred"
 
     def extract_repo(self, raw: dict) -> str:
@@ -43,6 +52,14 @@ class ContainerScanningHooks(LifecycleHooks):
             "imageName": raw.get("imageName"),
             "imageTag": raw.get("imageTag"),
             "imageDigest": raw.get("imageDigest"),
+            "layerCount": raw.get("layerCount"),
+            "layerDigest": raw.get("layerDigest"),
+            "layerIndex": raw.get("layerIndex"),
+            "release_age_days": raw.get("release_age_days"),
+            "release_recent": raw.get("release_recent"),
+            "newerTags": raw.get("newerTags"),
+            "sizeBytes": raw.get("sizeBytes"),
+            "baseOs": raw.get("baseOs"),
             "advisoryUrl": adv.get("html_url"),
             "cvssScore": adv.get("cvss"),
             "cvssVector": adv.get("cvss_vector"),
@@ -52,10 +69,12 @@ class ContainerScanningHooks(LifecycleHooks):
             "advisoryUpdatedAt": adv.get("updated_at"),
             "references": adv.get("references"),
             "source": raw.get("source", "container"),
-            "scanner": raw.get("scanner", "grype"),
-            "matchedBy": raw.get("matched_by", ["grype"]),
+            "scanner": raw.get("scanner", "osv"),
+            "matchedBy": raw.get("matched_by", ["osv"]),
             "fixState": raw.get("fixState"),
             "currentVersion": raw.get("current_version"),
+            "matchSource": raw.get("match_source"),
+            "malicious": bool(raw.get("malicious")),
         }
 
     def has_fix(self, raw: dict) -> bool:
@@ -64,6 +83,25 @@ class ContainerScanningHooks(LifecycleHooks):
             .get("first_patched_version")
         )
         return bool(fpv and fpv.get("identifier"))
+
+    def canonical_external_ref(self, ctx: "ScanContext", raw: dict) -> tuple[str, str]:
+        from src.assets.refs import image_ref
+        if ctx.source_type is None:
+            raise ValueError("ScanContext.source_type is required for asset resolution")
+        # Prefer the top-level imageName/imageTag fields set by the normalizer.
+        # Fall back to repository.name (image_name without tag) for legacy shapes.
+        image_name = raw.get("imageName") or raw.get("repository", {}).get("name")
+        image_tag = raw.get("imageTag") or "latest"
+        if not image_name:
+            raise ValueError(f"container finding has no image: {raw!r}")
+        # Strip any registry hostname prefix (e.g. "ghcr.io/") — ctx.source_type
+        # already carries the registry short name.
+        if "/" in image_name:
+            parts = image_name.split("/", 1)
+            # Detect a registry hostname: contains a dot or is "localhost"
+            if "." in parts[0] or parts[0] == "localhost":
+                image_name = parts[1]
+        return image_ref(ctx.source_type, image_name, image_tag), "image"
 
 
 container_scanning_hooks = ContainerScanningHooks()

@@ -1,6 +1,6 @@
 /**
  * Seed test data into the backend for Tier 1 (critical) tests.
- * Uses the test seed endpoint (POST /test/seed).
+ * Uses the test seed endpoint (POST /api/v1/test/seed).
  */
 
 interface SeedManifest {
@@ -11,7 +11,7 @@ interface SeedManifest {
 }
 
 export async function seedTestData(cookieHeader: string): Promise<SeedManifest> {
-  const res = await fetch("http://localhost:8000/test/seed", {
+  const res = await fetch("http://localhost:8000/api/v1/test/seed", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -29,7 +29,7 @@ export async function seedTestData(cookieHeader: string): Promise<SeedManifest> 
 }
 
 export async function teardownTestData(manifest: SeedManifest): Promise<void> {
-  const res = await fetch("http://localhost:8000/test/seed", {
+  const res = await fetch("http://localhost:8000/api/v1/test/seed", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "teardown", manifest }),

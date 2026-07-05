@@ -3,10 +3,10 @@ import type { GqlEcosystemBreakdownItem, GqlVulnerablePackage } from "@/lib/shar
 
 // Used for heatmap cells (unchanged) and ecosystem stacked bar segments
 const SEV_COLOURS: Record<string, string> = {
-  critical: "bg-red-500",
-  high:     "bg-orange-500",
-  medium:   "bg-amber-400",
-  low:      "bg-blue-400",
+  critical: "bg-[var(--color-severity-critical)]",
+  high:     "bg-[var(--color-severity-high)]",
+  medium:   "bg-[var(--color-severity-medium)]",
+  low:      "bg-[var(--color-severity-low)]",
 }
 
 import { SEV_BADGE as SEV_PILL } from "@/lib/shared/ui/badge-styles"
@@ -109,7 +109,7 @@ export function InsightsRiskConcentration({
                   key={`${pkg.ecosystem}::${pkg.name}`}
                   type="button"
                   onClick={() => onOpenFindingsFiltered({ state: "open", packageSearch: pkg.name })}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-left transition-colors hover:border-blue-300"
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-left transition-colors hover:border-[var(--color-accent-border)]"
                 >
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-[var(--color-text-primary)]">

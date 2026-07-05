@@ -108,6 +108,7 @@ export const CODE_SCANNING_FINDINGS_QUERY = `
         aiReview { verdict explanation reasoning confidence }
         codeFlows { file line snippet }
         reachability { verdict entryPoint callChain { function file line snippet } }
+        introducedByCommitSha introducedByAuthor introducedAt introducedByPrUrl
       }
       totalCount
       pageInfo { hasNextPage hasPreviousPage totalPages }
@@ -326,6 +327,7 @@ export const DEPENDENCIES_FINDING_DETAIL_QUERY = `
       vulnerableVersionRange patchedVersion
       manifestSnippet manifestMatchLine
       firstSeenAt fixedAt dismissedReason repoFullName
+      introducedByCommitSha introducedByAuthor introducedAt introducedByPrUrl
     }
   }
 `

@@ -1,0 +1,23 @@
+{
+  "id": "d_ungrounded_no_path_downgraded",
+  "verifier": "deps",
+  "note": "Recall-safety guard. The vulnerable code IS reachable, but the LLM wrongly claims no_path and cites a file that does not exist. The grounding check finds the citation absent and downgrades to unknown, so the truly-reachable finding stays visible instead of being hidden on an ungrounded claim.",
+  "finding": {
+    "packageName": "parselib",
+    "packageVersion": "0.9.0",
+    "cve": "CVE-0000-0004",
+    "ecosystem": "pypi"
+  },
+  "repo_files": {
+    "src/loader.py": "import parselib\n\nparselib.load(open('x').read())\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"reachability\":\"no_path\",\"evidence\":[{\"kind\":\"reachability\",\"file\":\"src/guard_that_does_not_exist.py\",\"line\":10,\"snippet\":\"if is_safe(): return\"}]}",
+      "tokens_in": 150,
+      "tokens_out": 60
+    }
+  ],
+  "expected": {"reachability": "unknown", "suppressed": false},
+  "label": {"truly_reachable": true}
+}

@@ -2,11 +2,11 @@ import type { SecretFinding } from "@/lib/shared/secrets/types"
 import { AGE_BUCKETS, findingAgeDays } from "@/lib/shared/secrets/dashboard-utils"
 
 const BUCKET_COLORS = [
-  { color: "#34d399", gradientTop: "#6ee7b7" },
-  { color: "#fbbf24", gradientTop: "#fcd34d" },
-  { color: "#fb923c", gradientTop: "#fdba74" },
-  { color: "#f87171", gradientTop: "#fca5a5" },
-  { color: "#ef4444", gradientTop: "#f87171" },
+  { color: "var(--color-status-ok)", gradientTop: "#6ee7b7" },
+  { color: "var(--color-severity-medium)", gradientTop: "#fcd34d" },
+  { color: "var(--color-severity-high)", gradientTop: "#fdba74" },
+  { color: "var(--color-severity-critical)", gradientTop: "#fca5a5" },
+  { color: "var(--color-severity-critical)", gradientTop: "var(--color-severity-critical)" },
 ]
 
 export function OrgAgeBucketsChart({

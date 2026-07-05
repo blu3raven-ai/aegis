@@ -1,0 +1,27 @@
+name: Permission catalog lint
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/src/**/*.py'
+      - 'backend/scripts/check_permission_catalog.py'
+      - '.github/workflows/permission-catalog-lint.yml'
+  push:
+    branches: [main-v2, main]
+    paths:
+      - 'backend/src/**/*.py'
+      - 'backend/scripts/check_permission_catalog.py'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Assert no raw permission strings at call sites
+        run: |
+          cd backend
+          python scripts/check_permission_catalog.py

@@ -34,6 +34,21 @@ const SEGMENT_LABELS: Record<string, string> = {
   notifications: "Notifications",
   operations: "Operations",
   sbom: "SBOM Explorer",
+  compliance: "Compliance",
+  chains: "Attack Chains",
+  findings: "Findings",
+  repos: "Repositories",
+  fleet: "Fleet",
+  insights: "Insights",
+  activity: "Activity",
+  "api-keys": "API Keys",
+  sso: "SSO",
+  audit: "Audit Log",
+  "audit-log": "Audit Log",
+  "sla-policies": "SLA Policies",
+  rules: "Rules",
+  integrations: "Integrations",
+  "sla_policies": "SLA Policies",
 }
 
 /** Segments that should be hidden from breadcrumbs (intermediate route segments). */
@@ -85,7 +100,7 @@ function buildBreadcrumbs(pathname: string): { label: string }[] {
         secrets: "Secrets", "iac-security": "IaC Security",
       }
       const SYSTEM: Record<string, string> = {
-        runners: "Runners", license: "License",
+        runners: "Runners", fleet: "Fleet", integrations: "Integrations", license: "License",
       }
 
       if (TOOLS[segment]) {
@@ -197,7 +212,7 @@ export function AppHeader({ open, setSearchOpen }: { open: boolean; setSearchOpe
       {/* Right: community CTAs + utility icons */}
       <div className="flex items-center gap-2">
         <HeaderCTAs />
-        <div className="h-4 w-px bg-[var(--color-border)]" aria-hidden="true" />
+        <div className="mx-1 h-5 w-px bg-[var(--color-border)]" aria-hidden="true" />
         <NotificationBell />
         <Link
           href="/settings/account"

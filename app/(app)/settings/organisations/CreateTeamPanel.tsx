@@ -35,7 +35,7 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay-strong)] p-4">
       <form
         onSubmit={onSubmit}
         className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl"
@@ -47,7 +47,7 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
 
         <div className="mt-6 space-y-4">
           <label className="block space-y-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Team name</span>
+            <span className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Team name</span>
             <input
               required
               value={name}
@@ -58,7 +58,7 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
             />
           </label>
           <label className="block space-y-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Description</span>
+            <span className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">Description</span>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -67,14 +67,14 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
               className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/30"
             />
           </label>
-          {error && <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-500">{error}</p>}
+          {error && <p className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-sm text-[var(--color-severity-critical)]">{error}</p>}
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-semibold hover:bg-[var(--color-surface-raised)]">
             Cancel
           </button>
-          <button disabled={submitting} className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50">
+          <button disabled={submitting} className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50">
             {submitting ? "Creating..." : "Create team"}
           </button>
         </div>

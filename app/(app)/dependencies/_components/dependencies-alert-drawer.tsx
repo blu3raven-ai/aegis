@@ -21,6 +21,7 @@ import {
   DrawerStatusBanner,
   DrawerSection,
   DrawerDetailGrid,
+  DrawerAttribution,
   DrawerFooter,
   DismissPopover,
   DrawerCodeBlock,
@@ -43,7 +44,7 @@ function VersionLine({ alert }: { alert: DependenciesFinding }) {
       <span className="text-[var(--color-text-primary)]">{current ?? "Unknown"}</span>
       <span className="text-[var(--color-text-secondary)]">→</span>
       {patch ? (
-        <span className="text-emerald-400">{patch}</span>
+        <span className="text-[var(--color-state-fixed)]">{patch}</span>
       ) : (
         <span className="text-[var(--color-text-secondary)]">No patch available</span>
       )}
@@ -364,6 +365,16 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
 
             </DrawerSection>
 
+            {/* Attribution */}
+            <DrawerAttribution
+              fields={{
+                introduced_by_commit_sha: detail?.introducedByCommitSha,
+                introduced_by_author: detail?.introducedByAuthor,
+                introduced_at: detail?.introducedAt,
+                introduced_by_pr_url: detail?.introducedByPrUrl,
+              }}
+            />
+
             {/* Remediation */}
             <DrawerSection label="Remediation">
 
@@ -388,7 +399,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
                             setCopiedVersion(true)
                             setTimeout(() => setCopiedVersion(false), 2000)
                           }}
-                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
                         >
                           {copiedVersion ? (
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -556,7 +567,7 @@ export function DependenciesAlertDrawer({ finding, relatedFindings = [], org, on
       </div>
 
       <DrawerFooter>
-        {actionError && <p className="mb-3 text-xs text-red-500">{actionError}</p>}
+        {actionError && <p className="mb-3 text-xs text-[var(--color-severity-critical)]">{actionError}</p>}
         {(finding?.state === "open" || finding?.state === "deferred") && (
           <DismissPopover
             reasons={DISMISS_REASONS}

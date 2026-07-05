@@ -12,7 +12,7 @@ def _make_finding(*, secret_identity: str, repo: str, fingerprint: str, run_id: 
         "fingerprint": fingerprint,
         "organization": "acme",
         "repository": repo,
-        "source": "betterleaks",
+        "source": "trufflehog",
         "detector": "generic-api-key",
         "filePath": "src/config.py",
         "line": 10,
@@ -23,18 +23,32 @@ def _make_finding(*, secret_identity: str, repo: str, fingerprint: str, run_id: 
     }
 
 
-def test_merge_pool_deduplicates_by_secret_identity():
+def test_merge_pool_splits_same_secret_across_repos():
+    # Same secret in two repos → one finding per repo (each scoped to its repo
+    # asset), sharing secretIdentity so the UI can group them.
     findings = [
         _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-a1"),
         _make_finding(secret_identity="sha-aaa", repo="repo-b", fingerprint="fp-a2"),
     ]
     result = merge_pool(findings, [])
+    assert len(result) == 2
+    by_repo = {f["repository"]: f for f in result}
+    assert set(by_repo) == {"repo-a", "repo-b"}
+    assert all(f["secretIdentity"] == "sha-aaa" for f in result)
+    # Each finding's locations stay within its own repo.
+    for repo, f in by_repo.items():
+        assert {loc["repository"] for loc in f["locations"]} == {repo}
+
+
+def test_merge_pool_aggregates_same_secret_same_repo():
+    # Same secret, same repo, different files → one finding with both locations.
+    findings = [
+        _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-1"),
+        _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-2"),
+    ]
+    result = merge_pool(findings, [])
     assert len(result) == 1
-    assert result[0]["secretIdentity"] == "sha-aaa"
-    locations = result[0].get("locations", [])
-    assert len(locations) == 2
-    repos = {loc["repository"] for loc in locations}
-    assert repos == {"repo-a", "repo-b"}
+    assert len(result[0]["locations"]) == 2
 
 
 def test_merge_pool_different_secrets_stay_separate():
@@ -50,6 +64,7 @@ def test_merge_pool_carries_forward_classification_history():
     previous = [
         {
             "secretIdentity": "sha-aaa",
+            "repository": "repo-a",
             "classificationHistory": [{"runId": "run-old", "scannedAt": "2026-04-01T00:00:00Z"}],
             "locations": [{"repository": "repo-a"}],
         }
@@ -99,8 +114,9 @@ def test_secrets_hooks_initial_state():
     assert secrets_hooks.initial_state({}) == "open"
 
 
-def test_secrets_hooks_extract_repo_is_none():
-    assert secrets_hooks.extract_repo({"repository": "some-repo"}) is None
+def test_secrets_hooks_extract_repo_returns_repo():
+    assert secrets_hooks.extract_repo({"repository": "some-repo"}) == "some-repo"
+    assert secrets_hooks.extract_repo({}) is None
 
 
 def test_secrets_hooks_extract_detail_includes_locations():
@@ -108,7 +124,7 @@ def test_secrets_hooks_extract_detail_includes_locations():
         "secretIdentity": "sha-aaa",
         "fingerprint": "fp-1",
         "detector": "generic-api-key",
-        "source": "betterleaks",
+        "source": "trufflehog",
         "locations": [{"repository": "repo-a"}],
         "classificationHistory": [{"runId": "r1"}],
         "repository": "repo-a",

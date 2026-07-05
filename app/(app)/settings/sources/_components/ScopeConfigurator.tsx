@@ -144,7 +144,7 @@ export function ScopeConfigurator({
                     <li
                       key={item}
                       className={`flex items-center gap-2.5 border-b border-[var(--color-border)] px-3 py-2 transition-colors last:border-b-0 ${
-                        isExcluded ? "bg-red-500/[0.04]" : ""
+                        isExcluded ? "bg-[var(--color-severity-critical-subtle)]" : ""
                       }`}
                     >
                       <input
@@ -152,13 +152,13 @@ export function ScopeConfigurator({
                         type="checkbox"
                         checked={isExcluded}
                         onChange={() => toggleExcluded(item)}
-                        className="shrink-0 accent-red-500"
+                        className="shrink-0 accent-[var(--color-severity-critical)]"
                       />
                       <label
                         htmlFor={`exclude-${item}`}
                         className={`flex-1 cursor-pointer select-none truncate text-sm ${
                           isExcluded
-                            ? "text-red-500 line-through"
+                            ? "text-[var(--color-severity-critical)] line-through"
                             : "text-[var(--color-text-primary)]"
                         }`}
                       >
@@ -168,7 +168,7 @@ export function ScopeConfigurator({
                         <button
                           type="button"
                           onClick={() => removeExcluded(item)}
-                          className="shrink-0 text-xs text-red-400 transition-colors hover:text-red-600"
+                          className="shrink-0 text-xs text-[var(--color-severity-critical)] transition-colors hover:text-[var(--color-severity-critical)]"
                           aria-label={`Remove ${item} from exclusions`}
                         >
                           <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

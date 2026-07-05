@@ -32,6 +32,21 @@ const ICON_SSO =
 const ICON_AUDIT_LOG =
   "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
 
+const ICON_NOTIFICATIONS =
+  "M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"
+
+const ICON_API_KEYS =
+  "M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z"
+
+const ICON_SLA =
+  "M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+
+const ICON_FLEET =
+  "M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 0 0 3 3h4.5a3 3 0 0 0 3-3m-13.5 0v-9a3 3 0 0 1 3-3h7.5a3 3 0 0 1 3 3v9m-9 0h4.5M9 11.25h.008v.008H9v-.008Z"
+
+const ICON_INTEGRATIONS =
+  "M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"
+
 interface NavItem {
   href: string
   label: string
@@ -47,10 +62,10 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`flex items-center gap-2.5 rounded-lg py-[7px] pl-[10px] pr-3 text-[12.5px] transition-colors border-l-2 ${
+      className={`flex items-center gap-2.5 rounded-lg py-[7px] pl-[10px] pr-3 text-[12.5px] transition-colors ${
         active
-          ? "border-[var(--color-accent)] bg-[var(--color-nav-active)] text-[var(--color-text-primary)]"
-          : "border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+          ? "bg-[var(--color-nav-active)] text-[var(--color-accent)]"
+          : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
       }`}
     >
       <svg
@@ -66,7 +81,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       </svg>
       <span className="hidden flex-1 truncate md:inline">{item.label}</span>
       {item.meta && (
-        <span className="hidden shrink-0 font-mono text-[10px] text-[var(--color-text-secondary)] md:inline">
+        <span className="hidden shrink-0 font-mono text-2xs text-[var(--color-text-secondary)] md:inline">
           {item.meta}
         </span>
       )}
@@ -77,7 +92,7 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 function NavGroup({ label, items, pathname }: { label: string; items: NavItem[]; pathname: string }) {
   return (
     <div>
-      <div className="hidden md:block px-[10px] pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
+      <div className="hidden md:block px-[10px] pb-1.5 text-2xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
         {label}
       </div>
       <div className="flex flex-row md:flex-col gap-0.5">
@@ -115,11 +130,16 @@ export function SidebarNav({
 
   const securityNav: NavItem[] = [
     { href: "/settings/sso", label: "SSO", icon: ICON_SSO },
-    { href: "/settings/audit-log", label: "Audit Log", icon: ICON_AUDIT_LOG },
+    { href: "/settings/audit", label: "Audit Log", icon: ICON_AUDIT_LOG },
+    { href: "/settings/notifications", label: "Notifications", icon: ICON_NOTIFICATIONS },
+    { href: "/settings/api-keys", label: "API Keys", icon: ICON_API_KEYS },
+    { href: "/settings/sla-policies", label: "SLA Policies", icon: ICON_SLA },
   ]
 
   const infraNav: NavItem[] = [
     { href: "/settings/runners", label: "Runners", icon: ICON_RUNNERS },
+    { href: "/settings/fleet", label: "Fleet", icon: ICON_FLEET },
+    { href: "/settings/integrations", label: "Integrations", icon: ICON_INTEGRATIONS },
     { href: "/settings/license", label: "License", icon: ICON_LICENSE },
   ]
 

@@ -6,21 +6,14 @@ def test_dependencies_counts_resolver():
     from src.graphql.dependencies_resolvers import dependencies_counts
     from src.graphql.types import SeverityCounts
 
-    mock_findings = [
-        {"state": "open", "security_advisory": {"severity": "critical"}},
-        {"state": "open", "security_advisory": {"severity": "high"}},
-        {"state": "open", "security_advisory": {"severity": "high"}},
-        {"state": "open", "security_advisory": {"severity": "medium"}},
-        {"state": "fixed", "security_advisory": {"severity": "low"}},
-    ]
-
+    mock_counts = {"total": 4, "critical": 1, "high": 2, "medium": 1, "low": 0}
     ctx = {"user_id": "u1", "role": "admin", "orgs": ["org-a"], "tier": "pro", "request": None, "_cache": {}}
 
-    with patch("src.graphql.dependencies_resolvers.read_dependencies_findings", return_value=mock_findings):
+    with patch("src.graphql.dependencies_resolvers.get_severity_counts", return_value=mock_counts):
         result = dependencies_counts(org="org-a", info_context=ctx)
 
     assert isinstance(result, SeverityCounts)
-    assert result.total == 4  # only open
+    assert result.total == 4
     assert result.critical == 1
     assert result.high == 2
     assert result.medium == 1
@@ -62,16 +55,16 @@ def test_dependencies_findings_page_clamped():
 
 
 def test_dependencies_per_request_cache():
-    """Verify findings are cached within a single request context."""
+    """Verify get_severity_counts is called on each invocation (no in-resolver cache)."""
     from src.graphql.dependencies_resolvers import dependencies_counts
 
-    mock_findings = [{"state": "open", "security_advisory": {"severity": "high"}}]
+    mock_counts = {"total": 1, "critical": 0, "high": 1, "medium": 0, "low": 0}
     ctx = {"user_id": "u1", "role": "admin", "orgs": ["org-a"], "_cache": {}}
 
-    with patch("src.graphql.dependencies_resolvers.read_dependencies_findings", return_value=mock_findings) as mock_read:
+    with patch("src.graphql.dependencies_resolvers.get_severity_counts", return_value=mock_counts) as mock_fn:
         dependencies_counts(org="org-a", info_context=ctx)
         dependencies_counts(org="org-a", info_context=ctx)
-        assert mock_read.call_count == 1  # cached on second call
+        assert mock_fn.call_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -80,15 +73,12 @@ def test_dependencies_per_request_cache():
 
 def test_code_scanning_counts_resolver():
     from src.graphql.code_scanning_resolvers import code_scanning_counts
-    mock_findings = [
-        {"state": "open", "severity": "high"},
-        {"state": "open", "severity": "critical"},
-        {"state": "fixed", "severity": "low"},
-    ]
+
+    mock_counts = {"total": 2, "critical": 1, "high": 1, "medium": 0, "low": 0}
     ctx = {"user_id": "u1", "role": "admin", "orgs": ["org-a"], "tier": "pro", "request": None, "_cache": {}}
-    with patch("src.graphql.code_scanning_resolvers.read_code_scanning_findings", return_value=mock_findings):
+    with patch("src.graphql.code_scanning_resolvers.get_severity_counts", return_value=mock_counts):
         result = code_scanning_counts(org="org-a", info_context=ctx)
-    assert result.total == 2  # only open
+    assert result.total == 2
     assert result.critical == 1
     assert result.high == 1
     assert result.medium == 0
@@ -125,12 +115,13 @@ def test_code_scanning_findings_severity_filter():
 
 def test_code_scanning_per_request_cache():
     from src.graphql.code_scanning_resolvers import code_scanning_counts
-    mock_findings = [{"state": "open", "severity": "high"}]
+
+    mock_counts = {"total": 1, "critical": 0, "high": 1, "medium": 0, "low": 0}
     ctx = {"user_id": "u1", "role": "admin", "orgs": ["org-a"], "_cache": {}}
-    with patch("src.graphql.code_scanning_resolvers.read_code_scanning_findings", return_value=mock_findings) as mock_read:
+    with patch("src.graphql.code_scanning_resolvers.get_severity_counts", return_value=mock_counts) as mock_fn:
         code_scanning_counts(org="org-a", info_context=ctx)
         code_scanning_counts(org="org-a", info_context=ctx)
-        assert mock_read.call_count == 1
+        assert mock_fn.call_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -139,15 +130,12 @@ def test_code_scanning_per_request_cache():
 
 def test_container_counts_resolver():
     from src.graphql.containers_resolvers import container_counts
-    mock_findings = [
-        {"state": "open", "security_advisory": {"severity": "critical"}},
-        {"state": "open", "security_advisory": {"severity": "medium"}},
-        {"state": "fixed", "security_advisory": {"severity": "high"}},
-    ]
+
+    mock_counts = {"total": 2, "critical": 1, "high": 0, "medium": 1, "low": 0}
     ctx = {"user_id": "u1", "role": "admin", "orgs": ["org-a"], "tier": "pro", "request": None, "_cache": {}}
-    with patch("src.graphql.containers_resolvers.read_container_scanning_findings", return_value=mock_findings):
+    with patch("src.graphql.containers_resolvers.get_severity_counts", return_value=mock_counts):
         result = container_counts(org="org-a", info_context=ctx)
-    assert result.total == 2  # only open
+    assert result.total == 2
     assert result.critical == 1
     assert result.medium == 1
     assert result.high == 0
@@ -175,12 +163,13 @@ def test_container_findings_pagination():
 
 def test_container_per_request_cache():
     from src.graphql.containers_resolvers import container_counts
-    mock_findings = [{"state": "open", "security_advisory": {"severity": "high"}}]
+
+    mock_counts = {"total": 1, "critical": 0, "high": 1, "medium": 0, "low": 0}
     ctx = {"user_id": "u1", "role": "admin", "orgs": ["org-a"], "_cache": {}}
-    with patch("src.graphql.containers_resolvers.read_container_scanning_findings", return_value=mock_findings) as mock_read:
+    with patch("src.graphql.containers_resolvers.get_severity_counts", return_value=mock_counts) as mock_fn:
         container_counts(org="org-a", info_context=ctx)
         container_counts(org="org-a", info_context=ctx)
-        assert mock_read.call_count == 1
+        assert mock_fn.call_count == 2
 
 
 # ---------------------------------------------------------------------------
@@ -189,20 +178,14 @@ def test_container_per_request_cache():
 
 def test_secret_counts_resolver():
     from src.graphql.secrets_resolvers import secret_counts
-    mock_findings = [
-        {"state": "open", "reviewStatus": "new"},
-        {"state": "open", "reviewStatus": "new"},
-        {"state": "open", "reviewStatus": "confirmed"},
-        {"state": "dismissed", "reviewStatus": "false_positive"},
-        {"state": "fixed", "reviewStatus": "action_taken"},
-    ]
+
+    mock_counts = {"total": 3, "critical": 1, "high": 2, "medium": 0, "low": 0}
     ctx = {"user_id": "u1", "role": "admin", "orgs": ["org-a"], "tier": "pro", "request": None, "_cache": {}}
-    with patch("src.graphql.secrets_resolvers.read_latest_findings", return_value=mock_findings):
+    with patch("src.graphql.secrets_resolvers.get_severity_counts", return_value=mock_counts):
         result = secret_counts(org="org-a", info_context=ctx)
-    # Only new + confirmed are active
     assert result.total == 3
-    assert result.critical == 1   # confirmed
-    assert result.high == 2       # new
+    assert result.critical == 1
+    assert result.high == 2
     assert result.medium == 0
     assert result.low == 0
 
@@ -236,9 +219,10 @@ def test_secret_findings_dismissed_filter():
 
 def test_secret_per_request_cache():
     from src.graphql.secrets_resolvers import secret_counts
-    mock_findings = [{"state": "open", "reviewStatus": "new"}]
+
+    mock_counts = {"total": 1, "critical": 0, "high": 1, "medium": 0, "low": 0}
     ctx = {"user_id": "u1", "role": "admin", "orgs": ["org-a"], "_cache": {}}
-    with patch("src.graphql.secrets_resolvers.read_latest_findings", return_value=mock_findings) as mock_read:
+    with patch("src.graphql.secrets_resolvers.get_severity_counts", return_value=mock_counts) as mock_fn:
         secret_counts(org="org-a", info_context=ctx)
         secret_counts(org="org-a", info_context=ctx)
-        assert mock_read.call_count == 1
+        assert mock_fn.call_count == 2

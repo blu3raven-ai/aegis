@@ -1,0 +1,30 @@
+{
+  "id": "g_sast_ruled_out_grounded",
+  "verifier": "sast",
+  "note": "Hunter builds an exploit chain, but the skeptic finds a grounded upstream mitigation (an auth gate at auth.py:4 that aborts unauthenticated requests). The mitigation citation is real, so ruled_out suppresses the finding. This is the one case a sast finding legitimately hides.",
+  "finding": {
+    "tool": "semgrep",
+    "rule": "python.lang.security.audit.sqli",
+    "severity": "high",
+    "file": "app/handlers.py",
+    "line": 9
+  },
+  "repo_files": {
+    "app/handlers.py": "from db import query\nfrom auth import require_auth\n\n\ndef search(request):\n    require_auth(request)\n    q = request.args.get('q')\n    sql = \"SELECT * FROM users WHERE name LIKE '%\" + q + \"%'\"\n    rows = query(sql)\n    return rows\n",
+    "app/auth.py": "from flask import abort, session\n\n\ndef require_auth(request):\n    if 'user_id' not in session:\n        abort(401)\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"exploit_chain\":\"request.args['q'] reaches the SQL concatenation at handlers.py:9\",\"evidence\":[{\"kind\":\"sink\",\"file\":\"app/handlers.py\",\"line\":9,\"snippet\":\"sql = \\\"SELECT * FROM users WHERE name LIKE '%\\\" + q + \\\"%'\\\"\"}]}",
+      "tokens_in": 150,
+      "tokens_out": 50
+    },
+    {
+      "content": "{\"mitigation_found\":true,\"mitigation_file\":\"app/auth.py\",\"mitigation_line\":4,\"mitigation_snippet\":\"abort(401)\",\"reasoning\":\"require_auth runs before the sink and rejects unauthenticated callers\"}",
+      "tokens_in": 130,
+      "tokens_out": 40
+    }
+  ],
+  "expected": {"signal": "ruled_out", "suppressed": true},
+  "label": {"truly_reachable": false}
+}

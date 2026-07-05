@@ -4,7 +4,7 @@ import { mockCurrentUser } from "../../fixtures/mock-api"
 test.describe("User management", () => {
   test("admin can see user list", async ({ page }) => {
     await mockCurrentUser(page, "owner")
-    await page.route("**/settings/api/users**", (route) =>
+    await page.route("**/api/v1/workspace/users**", (route) =>
       route.fulfill({
         json: {
           users: [

@@ -1,8 +1,16 @@
 export function MetricCard({ label, value }: { label: string; value: string }) {
+  const isNA = value === "N/A"
   return (
     <div className="rounded-2xl bg-[var(--color-surface-raised)] p-4">
       <p className="text-xs font-medium uppercase tracking-[0.10em] text-[var(--color-text-secondary)]">{label}</p>
-      <p className="mt-2 text-2xl font-semibold leading-tight text-[var(--color-text-primary)]">{value}</p>
+      {isNA ? (
+        <>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">N/A</p>
+          <p className="mt-0.5 text-[10px] text-[var(--color-text-secondary)]">No closed findings yet</p>
+        </>
+      ) : (
+        <p className="mt-2 text-2xl font-semibold leading-tight text-[var(--color-text-primary)]">{value}</p>
+      )}
     </div>
   )
 }

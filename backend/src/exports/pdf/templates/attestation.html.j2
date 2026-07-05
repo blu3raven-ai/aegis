@@ -1,0 +1,38 @@
+{% extends "_base.html.j2" %}
+{% block title %}{{ framework.label }} Attestation{% endblock %}
+{% block body %}
+<h1>{{ framework.label }}</h1>
+<p class="meta">Attestation report · {{ summary.met_controls }} of {{ summary.total_controls }} controls met ({{ summary.pass_pct }}%)</p>
+
+<h2>Summary</h2>
+<table>
+  <tr><th>Total controls</th><td>{{ summary.total_controls }}</td><th>Met</th><td>{{ summary.met_controls }}</td></tr>
+  <tr><th>Unmet</th><td>{{ summary.unmet_controls }}</td><th>Partial</th><td>{{ summary.partial_controls }}</td></tr>
+  <tr><th>Critical gaps</th><td class="sev-critical">{{ summary.critical_gaps }}</td><th>High gaps</th><td class="sev-high">{{ summary.high_gaps }}</td></tr>
+</table>
+
+<h2>Controls</h2>
+{% for ctrl in controls %}
+<h3>{{ ctrl.control_id }} — {{ ctrl.title }}
+  <span class="badge badge-{{ ctrl.status }}">{{ ctrl.status|upper }}</span>
+</h3>
+{% if ctrl.description %}<p>{{ ctrl.description }}</p>{% endif %}
+{% if ctrl.manual_status %}<p class="meta">Attested {{ ctrl.manual_status|replace("_", " ") }}{% if ctrl.evidence_note %} — evidence: {{ ctrl.evidence_note }}{% endif %}{% if ctrl.evidence_url %} — link: {{ ctrl.evidence_url }}{% endif %}</p>{% endif %}
+{% if ctrl.findings %}
+<table>
+  <thead><tr><th>Severity</th><th>Title</th><th>Source</th></tr></thead>
+  <tbody>
+  {% for f in ctrl.findings %}
+    <tr>
+      <td class="sev-{{ f.severity }}">{{ f.severity|upper }}</td>
+      <td>{{ f.title }}</td>
+      <td>{{ f.source_label or '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="meta">No findings mapped to this control.</p>
+{% endif %}
+{% endfor %}
+{% endblock %}

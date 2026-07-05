@@ -1,0 +1,29 @@
+{
+  "id": "h_sast_ungrounded_mitigation_downgraded",
+  "verifier": "sast",
+  "note": "Hunter builds a chain; skeptic claims a mitigation but cites a file that does not exist in the repo. The citation critic flags the mitigation as unverified, so the verdict downgrades to needs_verify (NOT suppressed). A hallucinated mitigation must never hide a real finding — the recall guard.",
+  "finding": {
+    "tool": "semgrep",
+    "rule": "python.lang.security.audit.sqli",
+    "severity": "high",
+    "file": "app/handlers.py",
+    "line": 7
+  },
+  "repo_files": {
+    "app/handlers.py": "from db import query\n\n\ndef search(request):\n    q = request.args.get('q')\n    sql = \"SELECT * FROM users WHERE name LIKE '%\" + q + \"%'\"\n    rows = query(sql)\n    return rows\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"exploit_chain\":\"request.args['q'] reaches the SQL concatenation at handlers.py:7\",\"evidence\":[{\"kind\":\"sink\",\"file\":\"app/handlers.py\",\"line\":7,\"snippet\":\"sql = \\\"SELECT * FROM users WHERE name LIKE '%\\\" + q + \\\"%'\\\"\"}]}",
+      "tokens_in": 150,
+      "tokens_out": 50
+    },
+    {
+      "content": "{\"mitigation_found\":true,\"mitigation_file\":\"app/sanitizer.py\",\"mitigation_line\":3,\"mitigation_snippet\":\"return escape(q)\",\"reasoning\":\"an input sanitizer neutralises the input before the sink\"}",
+      "tokens_in": 130,
+      "tokens_out": 35
+    }
+  ],
+  "expected": {"signal": "needs_verify", "suppressed": false},
+  "label": {"truly_reachable": true}
+}

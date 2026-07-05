@@ -7,9 +7,12 @@ Container scanning.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+
+from src.findings.action_band import action_band
 
 from src.shared.paths import parse_iso_utc as _parse_dt
 
@@ -21,13 +24,21 @@ def _as_record(value: Any) -> dict[str, Any]:
 
 @dataclass
 class Counts:
-    """Severity counts for alerts."""
+    """Severity counts for alerts.
+
+    ``unknown`` holds findings whose severity didn't resolve to one of the four
+    named tiers (e.g. OSV matches with no severity). They still count toward
+    ``total`` (they're real open findings) but carry no severity weight, so the
+    severity distribution can show an explicit "unrated" slice and the risk
+    score isn't deflated by findings it can't categorize.
+    """
 
     total: int
     critical: int
     high: int
     medium: int
     low: int
+    unknown: int = 0
 
 
 @dataclass
@@ -105,10 +116,11 @@ def get_counts(alerts: list[dict[str, Any]]) -> Counts:
     high = 0
     medium = 0
     low = 0
+    unknown = 0
 
     for alert in alerts:
         advisory = _as_record(alert.get("security_advisory"))
-        severity = advisory.get("severity", "")
+        severity = (advisory.get("severity") or "").lower()
         if severity == "critical":
             critical += 1
         elif severity == "high":
@@ -117,6 +129,8 @@ def get_counts(alerts: list[dict[str, Any]]) -> Counts:
             medium += 1
         elif severity == "low":
             low += 1
+        else:
+            unknown += 1
 
     return Counts(
         total=len(alerts),
@@ -124,15 +138,20 @@ def get_counts(alerts: list[dict[str, Any]]) -> Counts:
         high=high,
         medium=medium,
         low=low,
+        unknown=unknown,
     )
 
 
 def get_severity_distribution(alerts: list[dict[str, Any]]) -> list[SeverityDistributionItem]:
-    """Get severity distribution with percentages."""
+    """Get severity distribution with percentages.
+
+    Includes an explicit ``unrated`` slice so the wedges sum to 100% of open
+    findings rather than silently omitting unknown-severity ones.
+    """
     counts = get_counts(alerts)
     total = max(counts.total, 1)
 
-    return [
+    items = [
         SeverityDistributionItem(
             severity="critical",
             count=counts.critical,
@@ -154,6 +173,15 @@ def get_severity_distribution(alerts: list[dict[str, Any]]) -> list[SeverityDist
             percentage=round((counts.low / total) * 100),
         ),
     ]
+    if counts.unknown:
+        items.append(
+            SeverityDistributionItem(
+                severity="unrated",
+                count=counts.unknown,
+                percentage=round((counts.unknown / total) * 100),
+            )
+        )
+    return items
 
 
 def get_age_buckets(alerts: list[dict[str, Any]]) -> list[AgeBucket]:
@@ -309,22 +337,116 @@ def get_repository_coverage(
     )
 
 
-def get_risk_score(open_findings: list[dict[str, Any]]) -> RiskScore:
-    """Calculate risk score based on severity mix.
+# Severity weights for the aggregate posture risk score. Volume-weighted so a
+# larger backlog of severe findings scores higher than a small one — a lone
+# critical shouldn't read "Severe" any more than 50 criticals among 500 lows
+# reads "Low" (the old proportion-only score did both). Same formula is used
+# live (analytics) and in the nightly snapshot (posture.service) so the hero
+# number and its trend line are on one scale. Unknown-severity findings carry
+# no weight: they're real exposure but their severity is unresolvable, so they
+# neither inflate nor deflate the score.
+SEVERITY_WEIGHTS = {"critical": 10, "high": 5, "medium": 2, "low": 1}
 
-    Risk score is the percentage of open findings that are critical or high severity.
+
+def posture_weighted_volume(*, critical: int, high: int, medium: int, low: int) -> int:
+    """Raw additive weighted volume ``c*10 + h*5 + m*2 + l*1``.
+
+    Additive and unbounded, so it's the right basis for *relative* comparison —
+    per-scanner / per-repo risk contribution and "share of total risk" — where
+    a concave gauge curve would distort each group's true proportion.
     """
-    counts = get_counts(open_findings)
-    total = max(counts.total, 1)
+    return (
+        critical * SEVERITY_WEIGHTS["critical"] + high * SEVERITY_WEIGHTS["high"]
+        + medium * SEVERITY_WEIGHTS["medium"] + low * SEVERITY_WEIGHTS["low"]
+    )
 
-    # Urgent share = critical + high as percentage of total
-    urgent_share = (counts.critical + counts.high) / total
-    score = max(0, min(100, round(urgent_share * 100)))
+
+# Curve constant for the headline gauge. A plain ``min(100, raw)`` pinned the
+# score at 100 for any non-trivial backlog (10 criticals already maxed it), so
+# the hero number and its trend flat-lined and couldn't show whether things
+# were improving. The weighted volume is mapped through ``100 * (1 - e^(-raw/K))``
+# instead: strictly increasing, so more findings always move the number, but
+# approaching 100 asymptotically so the scale keeps discriminating across the
+# whole realistic range. K sets where the rating bands land — with K=200,
+# raw≈90 → Moderate(35), ≈160 → High(55), ≈277 → Severe(75); e.g. 9 crit +
+# 34 high + 26 med + 8 low (raw 320) → 80.
+RISK_GAUGE_K = 200
+
+
+def posture_risk_gauge_from_raw(raw: float) -> int:
+    """Map an (exploitability-)weighted raw volume onto the 0-100 gauge curve.
+
+    ``100 * (1 - e^(-raw/K))`` (see ``RISK_GAUGE_K``): strictly increasing but
+    asymptotic to 100, so the scale keeps discriminating without pinning. This
+    is the single place the curve lives — hero, trend, and nightly snapshot all
+    feed their summed raw through it so they stay on one scale.
+    """
+    if raw <= 0:
+        return 0
+    return min(100, max(0, round(100.0 * (1.0 - math.exp(-raw / RISK_GAUGE_K)))))
+
+
+def posture_risk_gauge(*, critical: int, high: int, medium: int, low: int) -> int:
+    """Severity-only convenience over the gauge (no exploitability weighting).
+
+    Kept for callers that only have severity counts; the exploitability-aware
+    path sums ``finding_exposure_weight`` per finding and calls
+    ``posture_risk_gauge_from_raw`` directly.
+    """
+    return posture_risk_gauge_from_raw(
+        posture_weighted_volume(critical=critical, high=high, medium=medium, low=low)
+    )
+
+
+# Exploitability multipliers layered on top of severity weight, keyed by the
+# finding's SSVC action band. KEV-listed (actively exploited) and reachable
+# high-severity findings weigh more; everything else is neutral (×1.0). The
+# score is therefore *absence-neutral*: with no KEV/reachability signal every
+# finding is Track (×1.0) and the sum reduces to the plain weighted volume, so
+# the number is unchanged until enrichment data lands. EPSS is deliberately NOT
+# an input — see findings/action_band.py.
+BAND_MULTIPLIER = {"act": 2.5, "attend": 1.6, "track": 1.0}
+
+
+def finding_exposure_weight(
+    severity: str | None, *, kev_listed: bool = False, reachability: str | None = None,
+) -> float:
+    """One finding's contribution to the risk raw: ``severity_weight × band_mult``.
+
+    Reuses ``action_band`` (Act/Attend/Track) as the single exploitability model
+    so the posture score and the findings surface never diverge.
+    """
+    weight = SEVERITY_WEIGHTS.get((severity or "").lower(), 0)
+    if weight == 0:
+        return 0.0
+    band = action_band(severity, kev_listed=kev_listed, reachability=reachability)
+    return weight * BAND_MULTIPLIER.get(band, 1.0)
+
+
+def get_risk_score(open_findings: list[dict[str, Any]]) -> RiskScore:
+    """Aggregate posture risk score from the open findings.
+
+    Each finding is weighted by severity AND exploitability (its action band —
+    KEV-listed / reachable-high count more; see ``finding_exposure_weight``),
+    then the summed raw is mapped onto the non-saturating gauge. Absence-neutral:
+    with no KEV/reachability signal it reduces to pure severity volume. Matches
+    the nightly snapshot's per-asset raw so the live number and its trend line
+    stay on one scale.
+    """
+    raw = sum(
+        finding_exposure_weight(
+            (f.get("security_advisory") or {}).get("severity"),
+            kev_listed=bool(f.get("kev_listed")),
+            reachability=f.get("reachability"),
+        )
+        for f in open_findings
+    )
+    score = posture_risk_gauge_from_raw(raw)
 
     # Determine rating
     if score >= 75:
         rating = "Severe"
-        summary = "A large share of open issues are critical or high severity."
+        summary = "A large volume of critical and high-severity findings is open."
     elif score >= 55:
         rating = "High"
         summary = "High-severity work is a significant part of the open backlog."

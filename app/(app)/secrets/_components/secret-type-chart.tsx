@@ -50,7 +50,7 @@ export function SecretTypeChart({
               className="pointer-events-none absolute inset-y-1 left-8 rounded-lg opacity-[0.06]"
               style={{
                 width: `calc(${(row.total / maxTotal) * 80}%)`,
-                backgroundColor: row.confirmed > 0 ? "#ef4444" : "#fb923c",
+                backgroundColor: row.confirmed > 0 ? "var(--color-severity-critical)" : "var(--color-severity-high)",
               }}
             />
 
@@ -73,9 +73,9 @@ export function SecretTypeChart({
                   title={onSelectKeyType ? `Show ${row.confirmed} confirmed ${row.type} in Review` : undefined}
                   onClick={(e) => { e.stopPropagation(); onSelectKeyType?.(row.type, "confirmed") }}
                   disabled={!onSelectKeyType}
-                  className="flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-red-400 transition-colors hover:bg-red-500/20 disabled:cursor-default disabled:pointer-events-none"
+                  className="flex items-center gap-1 rounded-full border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-2 py-0.5 text-xs font-semibold tabular-nums text-[var(--color-severity-critical)] transition-colors hover:opacity-80 disabled:cursor-default disabled:pointer-events-none"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-severity-critical)]" />
                   {row.confirmed}
                 </button>
               )}
@@ -85,9 +85,9 @@ export function SecretTypeChart({
                   title={onSelectKeyType ? `Show ${row.new} new ${row.type} in Review` : undefined}
                   onClick={(e) => { e.stopPropagation(); onSelectKeyType?.(row.type, "new") }}
                   disabled={!onSelectKeyType}
-                  className="flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-orange-400 transition-colors hover:bg-orange-500/20 disabled:cursor-default disabled:pointer-events-none"
+                  className="flex items-center gap-1 rounded-full border border-[var(--color-severity-high-border)] bg-[var(--color-severity-high-subtle)] px-2 py-0.5 text-xs font-semibold tabular-nums text-[var(--color-severity-high)] transition-colors hover:opacity-80 disabled:cursor-default disabled:pointer-events-none"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-orange-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-severity-high)]" />
                   {row.new}
                 </button>
               )}
@@ -105,10 +105,10 @@ export function SecretTypeChart({
       <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-3 mt-2 pl-7">
         <div className="flex gap-4">
           <span className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
-            <span className="h-2 w-2 rounded-full bg-red-400" /> Confirmed
+            <span className="h-2 w-2 rounded-full bg-[var(--color-severity-critical)]" /> Confirmed
           </span>
           <span className="flex items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
-            <span className="h-2 w-2 rounded-full bg-orange-400" /> New
+            <span className="h-2 w-2 rounded-full bg-[var(--color-severity-high)]" /> New
           </span>
         </div>
         {onSelectKeyType && (

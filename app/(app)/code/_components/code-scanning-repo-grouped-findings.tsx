@@ -23,12 +23,12 @@ const severityBadgeClass = sevBadgeClass
 function aiVerdictDot(verdict: string): string {
   const v = verdict.toLowerCase()
   if (v.includes("false positive") || v.includes("not exploitable") || v.includes("benign") || v.includes("unlikely"))
-    return "bg-emerald-400"
+    return "bg-[var(--color-verdict-safe)]"
   if (v.includes("true positive") || v.includes("confirmed") || v.includes("exploitable") || v.includes("vulnerable"))
-    return "bg-red-400"
+    return "bg-[var(--color-verdict-risk)]"
   if (v.includes("likely"))
-    return "bg-amber-400"
-  return "bg-blue-400"
+    return "bg-[var(--color-verdict-uncertain)]"
+  return "bg-[var(--color-verdict-neutral)]"
 }
 
 function stateLabel(state: CodeScanningFinding["state"]): string {
@@ -155,8 +155,17 @@ export function CodeScanningRepoGroupedFindings({
       <tr
         key={finding.identity_key}
         onClick={() => onSelectFinding(finding)}
-        className={`cursor-pointer border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface-raised)] ${
-          isActive ? "border-l-2 border-l-[var(--color-accent)] bg-[var(--color-accent)]/5" : ""
+        tabIndex={0}
+        role="button"
+        aria-label={`Open finding: ${finding.rule_name}`}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            onSelectFinding(finding)
+          }
+        }}
+        className={`cursor-pointer border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset ${
+          isActive ? "bg-[var(--color-accent)]/5" : ""
         }`}
       >
         <td className="w-8 px-2 py-2.5" onClick={(e) => e.stopPropagation()}>

@@ -65,7 +65,7 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
               <div className="flex flex-1 items-center gap-2 min-w-0">
                 <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{image.image}</span>
                 {sharedTeamCount > 1 && (
-                  <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 whitespace-nowrap">
+                  <span className="rounded bg-[var(--color-state-pending-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-state-pending)] whitespace-nowrap">
                     shared with {sharedTeamCount} teams
                   </span>
                 )}
@@ -74,7 +74,7 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
                 disabled={!canEdit}
                 type="button"
                 onClick={() => void removeImage(image.image)}
-                className="rounded-lg border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+                className="rounded-lg border border-[var(--color-severity-critical-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical-subtle)] disabled:opacity-40"
               >
                 Remove
               </button>
@@ -87,7 +87,7 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
       </div>
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
-        <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)] mb-3">Add image</h4>
+        <h4 className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)] mb-3">Add image</h4>
         <div className="space-y-3">
           <ResourceAutocomplete
             value={value}
@@ -101,7 +101,7 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
             disabled={!canEdit || !value.trim() || submitting}
             type="button"
             onClick={() => void addImage()}
-            className="w-full rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            className="w-full rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             {submitting ? "Adding..." : "Add image"}
           </button>

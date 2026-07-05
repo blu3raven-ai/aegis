@@ -40,6 +40,18 @@ def _make_finding(identity_key: str = "repo::pkg::npm::GHSA-1234::package.json")
     f.fixed_at = None
     f.created_at = None
     f.updated_at = None
+    # No blob offload for this fixture — all keys are in the JSONB detail dict.
+    f.detail_blob_key = None
+    # Prevent MagicMock from returning a truthy auto-attribute for _hydrated_detail.
+    f._hydrated_detail = None
+    # Set typed columns that the shaper reads from the promoted columns.
+    from src.shared.finding_queryable_fields import extract_queryable_fields
+    qf = extract_queryable_fields(f.detail or {})
+    f.cve_id = qf["cve_id"]
+    f.file_path = qf["file_path"]
+    f.title = qf["title"]
+    f.rule_name = qf["rule_name"]
+    f.package_name = qf["package_name"]
     return f
 
 

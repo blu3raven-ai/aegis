@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -61,3 +62,6 @@ def parse_org_values(values: list[str]) -> list[str]:
                 continue
             by_key.setdefault(org.lower(), org)
     return list(by_key.values())
+
+
+SAFE_RELATIVE_PATH = re.compile(r"^_?[a-zA-Z0-9][a-zA-Z0-9._-]*(/[a-zA-Z0-9][a-zA-Z0-9._-]*)*$")

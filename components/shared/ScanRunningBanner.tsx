@@ -50,11 +50,35 @@ function elapsedSeconds(startedAt: string | null, nowMs: number): number {
 }
 
 const DEFAULT_STAGES: Record<string, string> = {
-  queued: "Queued For Execution",
+  queued: "Queued",
   scanning: "Scanning",
-  ingesting: "Ingesting Scanner Output",
-  classifying: "Classifying Findings",
-  ai_review: "Classifying Findings",
+  ingesting: "Ingesting scanner output",
+  classifying: "Classifying findings",
+  ai_review: "Classifying findings",
+}
+
+type Tone = "running" | "queued" | "failed"
+
+function toneClasses(tone: Tone): { dot: string; pulse: boolean; text: string } {
+  if (tone === "failed") {
+    return {
+      dot: "bg-[var(--color-severity-critical)]",
+      pulse: false,
+      text: "text-[var(--color-severity-critical)]",
+    }
+  }
+  if (tone === "queued") {
+    return {
+      dot: "bg-[var(--color-severity-medium)]",
+      pulse: true,
+      text: "text-[var(--color-text-primary)]",
+    }
+  }
+  return {
+    dot: "bg-[var(--color-accent)]",
+    pulse: true,
+    text: "text-[var(--color-text-primary)]",
+  }
 }
 
 export function ScanRunningBanner({
@@ -76,6 +100,7 @@ export function ScanRunningBanner({
   if (!VISIBLE_STATUSES.has(status)) return null
 
   const isFailed = status === "failed"
+  const isQueued = status === "queued"
   const isActive = ACTIVE_STATUSES.has(status)
 
   const progressValue = progress?.percent ?? 0
@@ -98,133 +123,141 @@ export function ScanRunningBanner({
     highestProgressRef.current = Math.max(highestProgressRef.current, rawDisplayProgress)
   }
   const displayProgress = highestProgressRef.current
-  const terminalRepoLabel = expectedRepos
+  const repoCountLabel = expectedRepos
     ? `${String(finishedRepos).padStart(String(expectedRepos).length, "0")}/${expectedRepos}`
     : String(finishedRepos)
 
   const allStages = { ...DEFAULT_STAGES, ...extraStages }
   const stageLabel = isFailed
-    ? "Scan Failed"
-    : status === "queued"
-    ? "Queued For Execution"
+    ? "Failed"
+    : isQueued
+    ? "Queued"
     : (allStages[progress?.stage ?? ""] ?? "Running")
+
+  const tone: Tone = isFailed ? "failed" : isQueued ? "queued" : "running"
+  const cfg = toneClasses(tone)
+
+  const headline = isFailed
+    ? `${scanLabel ?? "Scan"} failed for ${organization}`
+    : isQueued
+    ? `Waiting for runner to pick up ${scanLabel ?? "scan"} for ${organization}`
+    : isInitializing
+    ? "Preparing scanner"
+    : `${scanLabel ?? "Scan"} in progress for ${currentRepo ?? organization}`
+
   const recentLogLines = (logTail ?? []).slice(-4)
+  const progressFillWidth = isQueued ? 100 : Math.min(100, isActive ? Math.max(3, displayProgress) : displayProgress)
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
-      <div className="flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 font-mono">
-        <div className="flex gap-2" aria-hidden="true">
-          <span className="h-3 w-3 rounded-full bg-red-500" />
-          <span className="h-3 w-3 rounded-full bg-yellow-400" />
-          <span className="h-3 w-3 rounded-full bg-emerald-500" />
-        </div>
-        <p className="truncate text-sm text-[var(--color-text-primary)]">
-          {commandLabel}
-        </p>
-      </div>
-
-      <div className="space-y-4 p-5 font-mono text-xs text-[var(--color-text-primary)] sm:text-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[var(--color-text-primary)]">
-            {isFailed ? (
-              <><span className="text-red-500">[FAILED]</span> {scanLabel ?? "scan"} failed for {organization}</>
-            ) : status === "queued" ? (
-              <><span className="text-amber-400">[QUEUED]</span> waiting for runner to pick up {scanLabel ?? "scan"} for {organization}</>
-            ) : (
-              <><span className="text-[var(--color-accent)]">[RUNNING]</span>{" "}
-              {isInitializing
-                ? "preparing scanner"
-                : `${scanLabel ?? "scan"} in progress for ${currentRepo ?? organization}`}</>
-            )}
-          </p>
-          <p className="text-[var(--color-text-secondary)]">
-            <span className="text-[var(--color-accent)]">elapsed</span> {elapsed}
-          </p>
-        </div>
-
-        <div className="space-y-2 border-t border-[var(--color-border)] pt-3">
-          <div className="flex flex-wrap gap-x-5 gap-y-1">
-            <span>
-              <span className="text-[var(--color-accent)]">stage: </span>
-              {stageLabel.toLowerCase()}
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
+    >
+      <div className="space-y-4 p-4 text-[13px] text-[var(--color-text-primary)]">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${cfg.dot} ${cfg.pulse ? "motion-safe:animate-[scan-pulse_1.6s_ease-in-out_infinite]" : ""}`}
+              aria-hidden="true"
+            />
+            <span className={`text-[12px] font-medium uppercase tracking-wide ${cfg.text}`}>
+              {stageLabel}
             </span>
+            <span className="truncate text-[var(--color-text-primary)]">{headline}</span>
+          </div>
+          <span className="text-[12px] tabular-nums text-[var(--color-text-secondary)]">
+            {elapsed}
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span
+              className="relative block h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-border)]"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(displayProgress)}
+              aria-label="Scan progress"
+            >
+              <span
+                className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-700 ease-out ${
+                  isFailed
+                    ? "bg-[var(--color-severity-critical)]"
+                    : isQueued
+                    ? "bg-[var(--color-severity-medium)] motion-safe:animate-[scan-pulse_1.6s_ease-in-out_infinite]"
+                    : "bg-[var(--color-accent)]"
+                }`}
+                style={{ width: `${progressFillWidth}%` }}
+              />
+            </span>
+            <span className="w-10 text-right text-[12px] tabular-nums text-[var(--color-text-secondary)]">
+              {Math.round(displayProgress)}%
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[var(--color-text-secondary)]">
             {currentClassifying ? (
               <span>
-                <span className="text-[var(--color-accent)]">findings classified: </span>
-                {currentClassifying}
+                Classified <span className="font-mono text-[var(--color-text-primary)]">{currentClassifying}</span>
               </span>
             ) : progress?.stage === "ingesting" && progress?.expectedIngest ? (
               <span>
-                <span className="text-[var(--color-accent)]">repositories ingested: </span>
-                {String(progress.ingestedRepos ?? 0).padStart(String(progress.expectedIngest).length, "0")}/{progress.expectedIngest}
+                Ingested{" "}
+                <span className="tabular-nums text-[var(--color-text-primary)]">
+                  {String(progress.ingestedRepos ?? 0).padStart(String(progress.expectedIngest).length, "0")}/{progress.expectedIngest}
+                </span>
               </span>
             ) : (
               <span>
-                <span className="text-[var(--color-accent)]">repositories scanned: </span>
-                {terminalRepoLabel}
+                Repositories <span className="tabular-nums text-[var(--color-text-primary)]">{repoCountLabel}</span>
               </span>
             )}
-            {showSyncLabel && (
-              <span>
-                <span className="text-[var(--color-accent)]">sync: </span>
-                docker logs
+            {showSyncLabel && <span>Sync: docker logs</span>}
+            {currentRepo && !currentClassifying && (
+              <span className="truncate" title={currentRepo}>
+                Current <span className="font-mono text-[var(--color-text-primary)]">{currentRepo}</span>
               </span>
             )}
           </div>
-          <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
-            <span className="text-[var(--color-accent)]">progress</span>
-            <span
-              className="relative block h-3 min-w-0 overflow-hidden rounded-full bg-[var(--color-border)]"
-              title={`${Math.round(displayProgress)}% complete`}
-            >
-              <span
-                className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out ${
-                  isFailed
-                    ? "bg-gradient-to-r from-red-600 via-red-500 to-red-400"
-                    : status === "queued"
-                    ? "bg-amber-400/60 animate-pulse"
-                    : "bg-gradient-to-r from-[var(--color-accent)] via-blue-400 to-blue-300"
-                }`}
-                style={{ width: status === "queued" ? "100%" : `${Math.min(100, isActive ? Math.max(3, displayProgress) : displayProgress)}%` }}
-              />
-            </span>
-            <span className="text-right text-[var(--color-text-secondary)]">{Math.round(displayProgress)}%</span>
-          </div>
-          {currentClassifying ? (
-            <p className="truncate text-[var(--color-text-secondary)]" title={`classifying ${currentClassifying}`}>
-              <span className="text-[var(--color-accent)]">classifying=</span>
-              {currentClassifying}
-              <span className="ml-1 inline-block h-4 w-2 translate-y-0.5 animate-pulse bg-[var(--color-accent)]" aria-hidden="true" />
-            </p>
-          ) : currentRepo ? (
-            <p className="truncate text-[var(--color-text-secondary)]" title={currentRepo}>
-              <span className="text-[var(--color-accent)]">scanning=</span>
-              {currentRepo}
-              <span className="ml-1 inline-block h-4 w-2 translate-y-0.5 animate-pulse bg-[var(--color-accent)]" aria-hidden="true" />
-            </p>
-          ) : null}
         </div>
 
+        {commandLabel && (
+          <p
+            className="truncate border-t border-[var(--color-border)] pt-3 font-mono text-[12px] text-[var(--color-text-tertiary)]"
+            title={commandLabel}
+          >
+            {commandLabel}
+          </p>
+        )}
+
         {recentLogLines.length > 0 && (
-          <div className="space-y-1 border-t border-[var(--color-border)] pt-3 text-xs">
-            <p className="text-[var(--color-text-secondary)]">activity</p>
-            {recentLogLines.map((line, index) => (
-              <p key={`${index}-${line}`} className="truncate text-[var(--color-text-secondary)]" title={line}>
-                <span className="text-[var(--color-accent)]">&gt;</span> {line}
-              </p>
-            ))}
+          <div className="space-y-1 border-t border-[var(--color-border)] pt-3">
+            <p className="text-[12px] font-medium text-[var(--color-text-secondary)]">Activity</p>
+            <ul className="space-y-0.5">
+              {recentLogLines.map((line, index) => (
+                <li
+                  key={`${index}-${line}`}
+                  className="truncate font-mono text-[12px] text-[var(--color-text-secondary)]"
+                  title={line}
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
-        {status === "queued" && elapsedSec >= 60 && (
-          <p className="border-t border-[var(--color-border)] pt-3 text-[var(--color-text-secondary)]">
+        {isQueued && elapsedSec >= 60 && (
+          <p className="border-t border-[var(--color-border)] pt-3 text-[12px] text-[var(--color-text-secondary)]">
             Scan has been queued for over a minute. The runner may be busy with another job or still starting up.
           </p>
         )}
 
         {isInitializing && elapsedSec >= 120 && (
-          <p className="border-t border-[var(--color-border)] pt-3 text-[var(--color-text-secondary)]">
-            Still initializing after 2 minutes. Check scanner container/logs if this does not progress.
+          <p className="border-t border-[var(--color-border)] pt-3 text-[12px] text-[var(--color-text-secondary)]">
+            Still initializing after 2 minutes. Check scanner container or logs if this does not progress.
           </p>
         )}
       </div>

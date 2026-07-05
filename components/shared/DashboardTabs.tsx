@@ -20,10 +20,10 @@ export function DashboardTabs<T extends string>({
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
-            className={`rounded-2xl px-4 py-3 text-sm font-semibold transition-colors ${
+            className={`rounded-2xl px-4 py-3 text-sm transition-colors ${
               activeTab === tab.id
-                ? "bg-[var(--color-accent)] text-white shadow-[0_16px_30px_rgba(37,99,235,0.28)]"
-                : "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                ? "bg-[var(--color-accent)]/10 font-semibold text-[var(--color-accent)]"
+                : "font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
             }`}
           >
             {tab.label}

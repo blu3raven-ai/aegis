@@ -151,10 +151,10 @@ export function InsightsTab({
                 key={`${repo.organization}/${repo.repository}`}
                 type="button"
                 onClick={() => onSelectRepository(repo.repository)}
-                className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-all hover:border-blue-300"
+                className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-all hover:border-[var(--color-accent-border)]"
               >
                 <span className="min-w-0 truncate text-sm font-medium text-[var(--color-text-primary)]">{repo.repository}</span>
-                <span className="shrink-0 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white">{repo.confirmedCount}</span>
+                <span className="shrink-0 rounded-full bg-[var(--color-severity-critical)] px-2 py-0.5 text-xs font-bold text-[var(--color-on-danger)]">{repo.confirmedCount}</span>
               </button>
             ))}
           </div>

@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs"
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-const sessionSource = readFileSync(new URL("./session.ts", import.meta.url), "utf8")
+const sessionTokenSource = readFileSync(new URL("./session-token.ts", import.meta.url), "utf8")
 
-test("normal session reader rejects MFA-pending tokens", () => {
-  assert.match(sessionSource, /payload\.purpose === "mfa_pending"/)
+test("MFA-pending purpose check lives in session-token.ts", () => {
+  assert.match(sessionTokenSource, /payload\.purpose !== "mfa_pending"/)
 })
 
 test("MFA pending helper uses a separate cookie and purpose marker", () => {

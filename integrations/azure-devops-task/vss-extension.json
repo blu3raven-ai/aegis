@@ -1,0 +1,42 @@
+{
+  "manifestVersion": 1,
+  "id": "aegis-security-scan",
+  "name": "Aegis Security Scan",
+  "version": "1.0.0",
+  "publisher": "blu3raven-ai",
+  "public": false,
+  "targets": [
+    {
+      "id": "Microsoft.VisualStudio.Services"
+    }
+  ],
+  "description": "Trigger an Aegis security scan from an Azure Pipelines job.",
+  "categories": [
+    "Azure Pipelines"
+  ],
+  "tags": [
+    "security",
+    "sast",
+    "vulnerability-management"
+  ],
+  "icons": {
+    "default": "images/icon.png"
+  },
+  "files": [
+    {
+      "path": "task"
+    }
+  ],
+  "contributions": [
+    {
+      "id": "aegis-scan-task",
+      "type": "ms.vss-distributed-task.task",
+      "targets": [
+        "ms.vss-distributed-task.tasks"
+      ],
+      "properties": {
+        "name": "task"
+      }
+    }
+  ]
+}

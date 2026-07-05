@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import strawberry
 
-from src.graphql.auth import validate_org_access, GraphQLAuthError
+from src.graphql.auth import GraphQLAuthError
 from src.graphql.limits import clamp_per_page
 from src.graphql.types import (
     SeverityCounts, SeverityBucket, AgeBucket, RepoSummary,
@@ -17,6 +17,7 @@ from src.graphql.types import (
 from src.storage import read_dependencies_findings
 from src.shared.analytics import build_analytics, get_counts
 from src.shared.config import get_scan_sources_for_org
+from src.shared.home_views import get_severity_counts_by_asset_ids
 from src.shared.paths import parse_iso_utc as _parse_dt
 
 
@@ -49,6 +50,11 @@ class DependenciesFinding:
     current_version: Optional[str]
     manifest_path: Optional[str]
     ghsa_id: Optional[str]
+    # Commit attribution (§5.6)
+    introduced_by_commit_sha: Optional[str] = None
+    introduced_by_author: Optional[str] = None
+    introduced_at: Optional[str] = None
+    introduced_by_pr_url: Optional[str] = None
 
 
 @strawberry.type
@@ -79,6 +85,11 @@ class DependenciesFindingDetail:
     fixed_at: Optional[str]
     dismissed_reason: Optional[str]
     repo_full_name: str
+    # Commit attribution (§5.6)
+    introduced_by_commit_sha: Optional[str] = None
+    introduced_by_author: Optional[str] = None
+    introduced_at: Optional[str] = None
+    introduced_by_pr_url: Optional[str] = None
 
 
 @strawberry.type
@@ -106,47 +117,35 @@ class DependenciesAnalytics:
     deferred_findings_count: int
 
 
-def _load_scoped_findings(org: str, ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
-    """Load findings with per-request caching and repo-level scope filtering."""
+def _load_scoped_findings(asset_ids: list[str], ctx: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Load findings with per-request caching, scoped by asset_ids."""
     if not ctx:
         raise GraphQLAuthError("Unauthorized")
-    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
-    for single_org in orgs:
-        validate_org_access(ctx, single_org)
+    if not asset_ids:
+        return []
     request_cache = ctx.get("_cache")
-    request = ctx.get("request")
-    all_findings: list[dict[str, Any]] = []
-    for single_org in orgs:
-        cache_key = f"_dependencies_findings:{single_org}"
-        if request_cache is not None and cache_key in request_cache:
-            all_findings.extend(request_cache[cache_key])
-            continue
-        findings = read_dependencies_findings(single_org) or []
-        # Apply repo-level scope filtering (same as REST endpoints)
-        if request:
-            from src.shared.router_helpers import filter_findings_by_scope
-            findings = filter_findings_by_scope(request, findings)
-        if request_cache is not None:
-            request_cache[cache_key] = findings
-        all_findings.extend(findings)
-    return all_findings
+    cache_key = f"_dependencies_findings:asset_ids:{','.join(sorted(asset_ids))}"
+    if request_cache is not None and cache_key in request_cache:
+        return list(request_cache[cache_key])
+    # asset_id IS the scope; no further per-repo filtering needed
+    findings = read_dependencies_findings(asset_ids=asset_ids) or []
+    if request_cache is not None:
+        request_cache[cache_key] = findings
+    return findings
 
 
-def dependencies_counts(org: str, info_context: dict[str, Any]) -> SeverityCounts:
-    findings = _load_scoped_findings(org, info_context)
-    open_findings = [f for f in findings if f.get("state") == "open"]
-    counts = get_counts(open_findings)
+def dependencies_counts(*, asset_ids: list[str], info_context: dict[str, Any]) -> SeverityCounts:
+    counts = get_severity_counts_by_asset_ids(asset_ids, tool="dependencies", state="open")
     return SeverityCounts(
-        total=counts.total,
-        critical=counts.critical,
-        high=counts.high,
-        medium=counts.medium,
-        low=counts.low,
+        total=counts["total"], critical=counts["critical"],
+        high=counts["high"], medium=counts["medium"], low=counts["low"],
     )
 
 
 def dependencies_findings(
-    org: str,
+    *,
+    asset_ids: list[str],
+    org: Optional[str] = None,
     page: int = 1,
     per_page: int = 25,
     severity: Optional[str] = None,
@@ -163,8 +162,17 @@ def dependencies_findings(
     last_scan_date: Optional[str] = None,
     info_context: dict[str, Any] | None = None,
 ) -> DependenciesFindingsConnection:
+    if not asset_ids:
+        return DependenciesFindingsConnection(
+            items=[], total_count=0,
+            page_info=PageInfo(has_next_page=False, has_previous_page=False, total_pages=0),
+        )
     per_page = clamp_per_page(per_page)
-    findings = _load_scoped_findings(org, info_context)
+    findings = _load_scoped_findings(asset_ids, info_context)
+    # org is a UI filter to narrow the asset-scoped result to specific orgs
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if (f.get("repository") or {}).get("full_name", "").split("/")[0].lower() in wanted]
 
     # Input validation
     if ecosystem:
@@ -257,6 +265,10 @@ def dependencies_findings(
             current_version=f.get("current_version"),
             manifest_path=(dep.get("manifest_path") or None),
             ghsa_id=adv.get("ghsa_id") or None,
+            introduced_by_commit_sha=f.get("introduced_by_commit_sha"),
+            introduced_by_author=f.get("introduced_by_author"),
+            introduced_at=f.get("introduced_at"),
+            introduced_by_pr_url=f.get("introduced_by_pr_url"),
         ))
 
     return DependenciesFindingsConnection(
@@ -271,26 +283,32 @@ def dependencies_findings(
 
 
 def dependencies_finding_detail(
-    org: str,
+    *,
+    asset_ids: list[str],
+    org: Optional[str] = None,
     identity_key: str,
     info_context: dict[str, Any] | None,
 ) -> Optional[DependenciesFindingDetail]:
     if not info_context:
         raise GraphQLAuthError("Unauthorized")
-    validate_org_access(info_context, org)
 
     from src.db.helpers import run_db
     from src.shared.finding_queries import read_dependency_finding_detail_by_key
     from src.storage import _finding_to_dependencies_alert
 
+    if not asset_ids:
+        return None
+
     row = run_db(
-        lambda session: read_dependency_finding_detail_by_key(session, org, identity_key)
+        lambda session: read_dependency_finding_detail_by_key(
+            session, asset_ids=asset_ids, identity_key=identity_key,
+        )
     )
     if not row:
         return None
 
-    f, decision = row
-    alert = _finding_to_dependencies_alert(f, decision)
+    f, decision, asset = row
+    alert = _finding_to_dependencies_alert(f, decision, asset)
 
     advisory = alert.get("security_advisory") or {}
     vuln = alert.get("security_vulnerability") or {}
@@ -299,9 +317,14 @@ def dependencies_finding_detail(
     pv = vuln.get("first_patched_version") or {}
     patched = pv.get("identifier") if isinstance(pv, dict) else pv or None
 
+    from src.assets.refs import owner_from_external_ref
+    try:
+        org_value = owner_from_external_ref(asset.external_ref)
+    except ValueError:
+        org_value = ""
     return DependenciesFindingDetail(
         identity_key=f.identity_key,
-        org=f.org,
+        org=org_value,
         state=alert["state"],
         severity=f.severity or "",
         ecosystem=(dep.get("package") or {}).get("ecosystem", ""),
@@ -329,24 +352,52 @@ def dependencies_finding_detail(
         fixed_at=alert.get("fixed_at"),
         dismissed_reason=alert.get("dismissed_reason"),
         repo_full_name=(alert.get("repository") or {}).get("full_name", ""),
+        introduced_by_commit_sha=alert.get("introduced_by_commit_sha"),
+        introduced_by_author=alert.get("introduced_by_author"),
+        introduced_at=alert.get("introduced_at"),
+        introduced_by_pr_url=alert.get("introduced_by_pr_url"),
     )
 
 
-def dependencies_filter_options(org: str, info_context: dict[str, Any]) -> FilterOptions:
-    findings = _load_scoped_findings(org, info_context)
+def dependencies_filter_options(*, asset_ids: list[str], org: Optional[str] = None, info_context: dict[str, Any]) -> FilterOptions:
+    findings = _load_scoped_findings(asset_ids, info_context)
     ecosystems = sorted({
         (f.get("dependency") or {}).get("package", {}).get("ecosystem", "")
         for f in findings if (f.get("dependency") or {}).get("package", {}).get("ecosystem")
     })
-    repos = sorted({
-        (f.get("repository") or {}).get("full_name", "")
-        for f in findings if (f.get("repository") or {}).get("full_name")
-    })
-    orgs = sorted({
-        (f.get("repository") or {}).get("full_name", "").split("/")[0]
-        for f in findings if "/" in (f.get("repository") or {}).get("full_name", "")
-    })
+    # Derive repo/org lists from Asset.external_ref (Finding.org/repo dropped in Plan D)
+    repos, orgs = _scoped_repos_and_orgs(asset_ids)
     return FilterOptions(ecosystems=ecosystems, repositories=repos, organizations=orgs)
+
+
+def _scoped_repos_and_orgs(asset_ids: list[str]) -> tuple[list[str], list[str]]:
+    """Return (repos, orgs) lists derived from Asset.external_ref for the given assets."""
+    if not asset_ids:
+        return [], []
+    from sqlalchemy import select
+    from src.db.helpers import run_db
+    from src.db.models import Asset
+    from src.assets.refs import owner_from_external_ref
+
+    async def _query(session):
+        rows = (await session.execute(
+            select(Asset.external_ref).where(Asset.id.in_(asset_ids), Asset.type == "repo")
+        )).scalars().all()
+        return list(rows)
+
+    refs = run_db(_query)
+    repos: set[str] = set()
+    orgs: set[str] = set()
+    for ref in refs:
+        try:
+            owner = owner_from_external_ref(ref)
+        except ValueError:
+            continue
+        # ref format: "github:acme/foo" → repo full_name = "acme/foo"
+        rest = ref.split(":", 1)[1]
+        repos.add(rest)
+        orgs.add(owner)
+    return sorted(repos), sorted(orgs)
 
 
 def _compute_monthly_trend(findings: list[dict]) -> list[MonthlyTrendItem]:
@@ -501,12 +552,16 @@ def _compute_remediation_priority(findings: list[dict], limit: int = 20) -> list
     return [RemediationPriorityRow(rank=i + 1, **r) for i, r in enumerate(rows[:limit])]
 
 
-def dependencies_analytics(org: str, info_context: dict[str, Any]) -> DependenciesAnalytics:
-    findings = _load_scoped_findings(org, info_context)
+def dependencies_analytics(*, asset_ids: list[str], org: Optional[str] = None, info_context: dict[str, Any]) -> DependenciesAnalytics:
+    findings = _load_scoped_findings(asset_ids, info_context)
+    if org:
+        wanted = {o.strip().lower() for o in org.split(",") if o.strip()}
+        findings = [f for f in findings if (f.get("repository") or {}).get("full_name", "").split("/")[0].lower() in wanted]
     open_findings = [f for f in findings if f.get("state") == "open"]
     fixed_findings = [f for f in findings if f.get("state") == "fixed"]
 
-    orgs = [o.strip() for o in org.split(",") if o.strip()] or [org]
+    # Derive unique orgs from findings for coverage computation
+    orgs = sorted({(f.get("repository") or {}).get("full_name", "").split("/")[0] for f in findings if (f.get("repository") or {}).get("full_name", "").count("/") >= 1})
     seen_repos: dict[str, dict[str, Any]] = {}
     for single_org in orgs:
         for r in _git_repos_only(get_scan_sources_for_org(single_org)):

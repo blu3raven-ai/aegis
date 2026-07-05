@@ -62,7 +62,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt={user.username} className="h-6 w-6 shrink-0 rounded-full object-cover" />
           ) : (
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-[10px] font-bold text-[var(--color-accent-on)]">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-2xs font-bold text-[var(--color-accent-on)]">
               {initials}
             </div>
           )}
@@ -96,7 +96,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400 transition-colors"
+                className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
               >
                 Sign out
               </button>
@@ -133,7 +133,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
             <p className="truncate text-[12.5px] font-medium text-[var(--color-text-primary)]">
               {user.username}
             </p>
-            <p className="truncate text-[10px] text-[var(--color-text-secondary)]">
+            <p className="truncate text-2xs text-[var(--color-text-secondary)]">
               {user.email ?? roleLabel}
             </p>
           </div>
@@ -170,7 +170,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
           <button
             type="button"
             onClick={handleSignOut}
-            className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 dark:text-red-400 transition-colors"
+            className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
           >
             Sign out
           </button>

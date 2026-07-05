@@ -199,7 +199,7 @@ export function AccountContent() {
                     type="button"
                     onClick={handleRemoveAvatar}
                     disabled={avatarUploading}
-                    className="text-xs font-medium text-red-500 transition-colors hover:text-red-600"
+                    className="text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:opacity-80"
                   >
                     Remove
                   </button>
@@ -254,11 +254,11 @@ export function AccountContent() {
             description={isEnterprise ? "Add a one-time code requirement on every sign-in." : "Available on the Enterprise plan."}
             value={
               !isEnterprise ? (
-                <span className="rounded-full bg-purple-500/10 px-2.5 py-0.5 text-xs font-semibold text-purple-500">
+                <span className="rounded-full bg-[var(--color-argus-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-argus)]">
                   Enterprise
                 </span>
               ) : user.totpEnabled ? (
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
+                <span className="rounded-full bg-[var(--color-status-ok)]/10 px-2 py-0.5 text-xs font-medium text-[var(--color-status-ok)]">
                   Enabled
                 </span>
               ) : (
@@ -271,7 +271,7 @@ export function AccountContent() {
               !isEnterprise ? (
                 <Link
                   href="/settings/license"
-                  className="rounded-lg border border-purple-500/20 px-3 py-1.5 text-sm font-semibold text-purple-500 transition-colors hover:bg-purple-500/5 focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+                  className="rounded-lg border border-[var(--color-argus-border)] px-3 py-1.5 text-sm font-semibold text-[var(--color-argus)] transition-colors hover:bg-[var(--color-argus-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
                 >
                   Upgrade
                 </Link>
@@ -279,7 +279,7 @@ export function AccountContent() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmDisableTotp(true)}
-                  className="text-sm font-medium text-red-500 transition-colors hover:text-red-600"
+                  className="text-sm font-medium text-[var(--color-severity-critical)] transition-colors hover:opacity-80"
                 >
                   Remove
                 </button>
@@ -306,7 +306,7 @@ export function AccountContent() {
             await fetch("/api/logout", { method: "POST" })
             window.location.href = "/login"
           }}
-          className="rounded-lg border border-red-500/20 px-4 py-2 text-sm font-medium text-red-500 transition-colors hover:border-red-500/30 hover:bg-red-500/5"
+          className="rounded-lg border border-[var(--color-severity-critical)]/20 px-4 py-2 text-sm font-medium text-[var(--color-severity-critical)] transition-colors hover:border-[var(--color-severity-critical)]/30 hover:bg-[var(--color-severity-critical)]/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-severity-critical)]"
         >
           Sign out
         </button>

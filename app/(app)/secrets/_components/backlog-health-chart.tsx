@@ -38,9 +38,9 @@ export function BacklogHealthChart({ trend }: { trend: SecretsTrendEntry[] }) {
   const latestDelta = latestValue - (previousEntry?.endOfMonth.unresolved ?? latestValue)
   const latestDeltaTone =
     latestDelta < 0
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+      ? "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]"
       : latestDelta > 0
-        ? "border-red-500/30 bg-red-500/10 text-red-400"
+        ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
         : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]"
 
   const points = trend.map((entry, index) => {
@@ -82,14 +82,14 @@ export function BacklogHealthChart({ trend }: { trend: SecretsTrendEntry[] }) {
           </div>
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-text-secondary)]">Trend direction</p>
-            <p className={`mt-2 text-2xl font-semibold ${latestDelta < 0 ? "text-emerald-400" : latestDelta > 0 ? "text-red-400" : "text-[var(--color-text-primary)]"}`}>
+            <p className={`mt-2 text-2xl font-semibold ${latestDelta < 0 ? "text-[var(--color-status-ok)]" : latestDelta > 0 ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-primary)]"}`}>
               {latestDelta < 0 ? "Down" : latestDelta > 0 ? "Up" : "Flat"}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex gap-4 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+      <div className="flex gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
         {/* direction:rtl makes overflow-x-auto start scrolled to the right (newest month visible by default) */}
         <div className="min-w-0 flex-1 overflow-x-auto" style={{ direction: "rtl" }}>
         <svg
@@ -103,12 +103,12 @@ export function BacklogHealthChart({ trend }: { trend: SecretsTrendEntry[] }) {
         >
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f97316" stopOpacity="0.26" />
-              <stop offset="100%" stopColor="#f97316" stopOpacity="0.03" />
+              <stop offset="0%" stopColor="var(--color-severity-high)" stopOpacity="0.26" />
+              <stop offset="100%" stopColor="var(--color-severity-high)" stopOpacity="0.03" />
             </linearGradient>
             <radialGradient id="backlog-glow" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#fb923c" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#fb923c" stopOpacity="0" />
+              <stop offset="0%" stopColor="var(--color-severity-high)" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="var(--color-severity-high)" stopOpacity="0" />
             </radialGradient>
           </defs>
 
@@ -143,7 +143,7 @@ export function BacklogHealthChart({ trend }: { trend: SecretsTrendEntry[] }) {
           })}
 
           <path d={areaPath} fill={`url(#${gradientId})`} />
-          <path d={linePath} fill="none" stroke="#f97316" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+          <path d={linePath} fill="none" stroke="var(--color-severity-high)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
 
           {points.map((p, index) => {
             const isLatest = index === points.length - 1
@@ -154,7 +154,7 @@ export function BacklogHealthChart({ trend }: { trend: SecretsTrendEntry[] }) {
                   cx={p.x}
                   cy={p.y}
                   r={index === trend.length - 1 ? 6 : 4}
-                  fill={index === trend.length - 1 ? "#fb923c" : "#f97316"}
+                  fill="var(--color-severity-high)"
                 />
                 <text
                   x={p.x}
@@ -177,7 +177,7 @@ export function BacklogHealthChart({ trend }: { trend: SecretsTrendEntry[] }) {
                 y1={latestPoint.y}
                 x2={latestPoint.x}
                 y2={Math.max(PADDING.top, latestPoint.y - 34)}
-                stroke="#f97316"
+                stroke="var(--color-severity-high)"
                 strokeWidth="1.5"
                 strokeDasharray="3 3"
                 strokeOpacity="0.7"
@@ -224,13 +224,13 @@ export function BacklogHealthChart({ trend }: { trend: SecretsTrendEntry[] }) {
           </div>
           {latest ? (
             <div className="rounded-xl border border-[var(--color-accent)]/30 bg-[var(--color-accent-subtle)] px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-accent)]">Latest</p>
+              <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-[var(--color-accent)]">Latest</p>
               <p className="mt-1 text-lg font-semibold text-[var(--color-accent)]">{latest.endOfMonth.unresolved}</p>
-              <p className="text-[10px] text-[var(--color-text-secondary)]">{latest.month}</p>
+              <p className="text-2xs text-[var(--color-text-secondary)]">{latest.month}</p>
             </div>
           ) : null}
           <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#fb923c]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[var(--color-severity-high)]" />
             <span className="text-[11px] text-[var(--color-text-secondary)]">Backlog size</span>
           </div>
         </div>

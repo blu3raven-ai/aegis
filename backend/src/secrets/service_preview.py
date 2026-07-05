@@ -247,7 +247,7 @@ def build_code_preview_payload(
     file_path: str | None,
     line: int | None,
     *,
-    get_github_token_for_org: Callable[[str], str | None],
+    get_token_for_org: Callable[[str], str | None],
     read_secrets_snapshot: Callable[[str], dict[str, Any] | None],
 ) -> tuple[dict[str, Any], int]:
     org = (org or "").strip()
@@ -259,7 +259,7 @@ def build_code_preview_payload(
     if not org or not repo or not fingerprint:
         return {"error": "Missing org, repo, or fingerprint parameter"}, 400
 
-    token = get_github_token_for_org(org)
+    token = get_token_for_org(org)
     if not token:
         return {"error": f'GitHub token is not configured for "{org}".'}, 400
 

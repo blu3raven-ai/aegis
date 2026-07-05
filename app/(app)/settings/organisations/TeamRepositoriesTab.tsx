@@ -68,12 +68,12 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
               <div className="flex flex-1 items-center gap-2 min-w-0">
                 <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{key}</span>
                 {sharedTeamCount > 1 && (
-                  <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 whitespace-nowrap">
+                  <span className="rounded bg-[var(--color-state-pending-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-state-pending)] whitespace-nowrap">
                     shared with {sharedTeamCount} teams
                   </span>
                 )}
                 {isGitHubSourced && (
-                  <span className="rounded bg-blue-500/10 px-2 py-0.5 text-[11px] font-medium text-blue-500 whitespace-nowrap" title="Synced from source connection">
+                  <span className="rounded bg-[var(--color-accent-subtle)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-accent)] whitespace-nowrap" title="Synced from source connection">
                     Synced
                   </span>
                 )}
@@ -82,7 +82,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
                 disabled={!canEdit || isGitHubSourced}
                 type="button"
                 onClick={() => void removeRepository(repo.org, repo.repo)}
-                className="rounded-lg border border-red-500/20 px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+                className="rounded-lg border border-[var(--color-severity-critical-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-severity-critical)] transition-colors hover:bg-[var(--color-severity-critical-subtle)] disabled:opacity-40"
                 title={isGitHubSourced ? "This repository is synced from a source connection and cannot be manually removed" : undefined}
               >
                 Remove
@@ -96,7 +96,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
       </div>
 
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
-        <h4 className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-secondary)] mb-3">Add repository</h4>
+        <h4 className="text-2xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)] mb-3">Add repository</h4>
         <div className="space-y-3">
           <ResourceAutocomplete
             value={value}
@@ -110,7 +110,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
             disabled={!canEdit || !value.trim() || submitting}
             type="button"
             onClick={() => void addRepository()}
-            className="w-full rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
+            className="w-full rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             {submitting ? "Adding..." : "Add repository"}
           </button>

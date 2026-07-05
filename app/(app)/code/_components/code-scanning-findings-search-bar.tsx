@@ -133,10 +133,12 @@ export function CodeScanningFindingsSearchBar({
 
       {/* Severity chips + view mode toggle */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-[var(--color-text-secondary)]">Severity:</span>
-        {SEVERITIES.map((sev) => (
-          <ToggleChip key={sev} label={sev} active={filterSeverity.includes(sev)} onClick={() => toggleSeverity(sev)} />
-        ))}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by severity">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Severity:</span>
+          {SEVERITIES.map((sev) => (
+            <ToggleChip key={sev} label={sev} active={filterSeverity.includes(sev)} onClick={() => toggleSeverity(sev)} />
+          ))}
+        </div>
         <div className="ml-auto">
           <ViewModeToggle modes={CODE_SCANNING_VIEW_MODES} active={viewMode} onChange={onViewModeChange} />
         </div>

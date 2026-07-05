@@ -6,7 +6,7 @@ export function Modal({ title, onClose, children }: {
   children: React.ReactNode
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay-strong)] p-4">
       <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">{title}</h2>

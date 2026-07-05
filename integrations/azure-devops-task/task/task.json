@@ -1,0 +1,74 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
+  "id": "a4e7c1d8-2f5b-4c9a-9e1f-1b0d3a8c7e42",
+  "name": "AegisScan",
+  "friendlyName": "Aegis Security Scan",
+  "description": "Trigger an Aegis security scan for this commit or pull request.",
+  "helpMarkDown": "See https://github.com/blu3raven-ai/aegis/tree/main/integrations/azure-devops-task",
+  "category": "Test",
+  "author": "Aegis",
+  "version": {
+    "Major": 1,
+    "Minor": 0,
+    "Patch": 0
+  },
+  "instanceNameFormat": "Aegis security scan",
+  "inputs": [
+    {
+      "name": "aegis-url",
+      "type": "string",
+      "label": "Aegis URL",
+      "required": true,
+      "helpMarkDown": "Aegis instance URL (e.g. https://aegis.your-co.com)."
+    },
+    {
+      "name": "aegis-api-key",
+      "type": "string",
+      "label": "Aegis API key",
+      "required": true,
+      "helpMarkDown": "API key with scan:trigger scope. Reference a secret variable, e.g. $(AEGIS_API_KEY)."
+    },
+    {
+      "name": "source-id",
+      "type": "string",
+      "label": "Aegis source ID",
+      "required": true,
+      "helpMarkDown": "Aegis source identifier for this repository."
+    },
+    {
+      "name": "wait",
+      "type": "boolean",
+      "label": "Wait for completion",
+      "required": false,
+      "defaultValue": "true",
+      "helpMarkDown": "Wait for the scan to complete and surface findings."
+    },
+    {
+      "name": "fail-on",
+      "type": "pickList",
+      "label": "Fail on severity",
+      "required": false,
+      "defaultValue": "none",
+      "options": {
+        "none": "none",
+        "low": "low",
+        "medium": "medium",
+        "high": "high"
+      },
+      "helpMarkDown": "Severity threshold that fails this task."
+    },
+    {
+      "name": "poll-timeout-seconds",
+      "type": "int",
+      "label": "Poll timeout (seconds)",
+      "required": false,
+      "defaultValue": "1800",
+      "helpMarkDown": "Maximum seconds to wait for scan completion when wait=true."
+    }
+  ],
+  "execution": {
+    "Node20_1": {
+      "target": "dist/index.js"
+    }
+  }
+}

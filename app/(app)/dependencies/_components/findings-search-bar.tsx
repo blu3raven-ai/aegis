@@ -151,7 +151,7 @@ export function FindingsSearchBar({
 
       {/* Ecosystem chips */}
       {ecosystems.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by ecosystem">
           <span className="text-xs font-medium text-[var(--color-text-secondary)]">Ecosystem:</span>
           {ecosystems.map((eco) => (
             <ToggleChip key={eco} label={eco} active={ecosystemFilter.includes(eco)} onClick={() => toggleEcosystem(eco)} />
@@ -161,10 +161,12 @@ export function FindingsSearchBar({
 
       {/* Severity chips + view mode toggle */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-[var(--color-text-secondary)]">Severity:</span>
-        {SEVERITIES.map((sev) => (
-          <ToggleChip key={sev} label={sev} active={severityFilter.includes(sev)} onClick={() => toggleSeverity(sev)} />
-        ))}
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter by severity">
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">Severity:</span>
+          {SEVERITIES.map((sev) => (
+            <ToggleChip key={sev} label={sev} active={severityFilter.includes(sev)} onClick={() => toggleSeverity(sev)} />
+          ))}
+        </div>
         {viewModes && viewMode && onViewModeChange && (
           <div className="ml-auto">
             <ViewModeToggle modes={viewModes} active={viewMode} onChange={onViewModeChange} counts={viewModeCounts} />

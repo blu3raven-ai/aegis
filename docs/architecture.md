@@ -23,6 +23,18 @@ Aegis is a monorepo with four main components:
 - **Runner** — Standalone Python process. Builds scanner images, picks up scan jobs, executes them in Docker containers, uploads results.
 - **Scanners** — Purpose-built Docker images, one per tool. Each contains the scanning tools and a shell script that orchestrates the scan.
 
+## Backend / Runner boundary
+
+The backend and runner have strict, non-overlapping responsibilities.
+
+- **Runner executes scanner tools.** All subprocess, shell, and library invocations of scanners (`trivy`, `grype`, `syft`, `semgrep`, `joern`, `trufflehog`, `bandit`, `kics`, `checkov`, `osv-scanner`, and any future scanner) live in `runner/`. The backend never spawns a scanner process.
+- **Runner parses tool output into the canonical Finding schema.** Tool-specific JSON shapes never leave the runner. The runner uploads only normalised findings.
+- **Backend stores normalised findings and exposes query/triage APIs.** Its job is read-and-serve over data the runner produced.
+- **Backend never knows about tool-specific output shapes.** No fields named `trivy_vulnerability`, `semgrep_rule_id`, `grype_match`, etc., in backend models, schemas, or transforms.
+- **Backend never executes scanner tools.** Enforced by `backend/src/tests/test_no_scanner_execution.py`; future violations fail CI.
+
+This boundary lets the runner be replaced, sandboxed, or sharded without touching backend code, and lets the backend be queried, replicated, or migrated without re-running scans.
+
 ## Backend
 
 ### Module Structure
@@ -198,8 +210,9 @@ Each scanner is a Docker image built from `scanners/<tool>/Dockerfile`:
 | Scanner | Image | Tools |
 |---|---|---|
 | Dependencies | `aegis/scanner-dependencies` | Syft, Grype, grype-db, cdxgen, CycloneDX CLI |
-| Code Scanning | `aegis/scanner-code-scanning` | Opengrep, tree-sitter, semgrep-rules |
-| Secrets | `aegis/scanner-secrets` | TruffleHog, BetterLeaks, ONNX classifier |
+| Code Scanning | `aegis/scanner-code-scanning` | Semgrep, tree-sitter, semgrep-rules |
+| Secrets | `aegis/scanner-secrets` | TruffleHog |
+| IaC | `aegis/scanner-iac` | Checkov |
 | Container | `aegis/scanner-container` | Syft, Grype |
 
 Each image has a signature label (`io.aegis.security.<tool>.signature`) validated by the runner before use.

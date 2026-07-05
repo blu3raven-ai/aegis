@@ -1,7 +1,7 @@
 
 const ACTIVE_COLORS = {
-  accent:  "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 text-[var(--color-accent)]",
-  emerald: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+  accent:  "border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
+  emerald: "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]",
 } as const
 
 const INACTIVE = "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"

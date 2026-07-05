@@ -3,24 +3,24 @@
 import type { GqlCodeScanningAnalytics } from "@/lib/shared/graphql/types"
 
 const SEV_COLOURS: Record<string, string> = {
-  critical: "bg-red-500",
-  high: "bg-orange-500",
-  medium: "bg-amber-400",
-  low: "bg-blue-400",
+  critical: "bg-[var(--color-severity-critical)]",
+  high: "bg-[var(--color-severity-high)]",
+  medium: "bg-[var(--color-severity-medium)]",
+  low: "bg-[var(--color-severity-low)]",
 }
 
 const AGE_BUCKET_COLOUR: Record<string, string> = {
-  "< 7 days": "bg-blue-400",
-  "7–30 days": "bg-amber-400",
-  "30–90 days": "bg-orange-500",
-  "> 90 days": "bg-red-500",
+  "< 7 days": "bg-[var(--color-severity-low)]",
+  "7–30 days": "bg-[var(--color-severity-medium)]",
+  "30–90 days": "bg-[var(--color-severity-high)]",
+  "> 90 days": "bg-[var(--color-severity-critical)]",
 }
 
 const AGE_BUCKET_TEXT: Record<string, string> = {
-  "< 7 days": "text-blue-400",
-  "7–30 days": "text-amber-400",
-  "30–90 days": "text-orange-400",
-  "> 90 days": "text-red-400",
+  "< 7 days": "text-[var(--color-severity-low)]",
+  "7–30 days": "text-[var(--color-severity-medium)]",
+  "30–90 days": "text-[var(--color-severity-high)]",
+  "> 90 days": "text-[var(--color-severity-critical)]",
 }
 
 export function InsightsRiskConcentration({
@@ -40,7 +40,7 @@ export function InsightsRiskConcentration({
   return (
     <section className="space-y-6">
       <div className="border-t border-[var(--color-border)] pt-12">
-        <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">Risk Concentration</h2>
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Risk Concentration</h2>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Where is risk clustered across repositories, categories, and age?
         </p>
@@ -124,7 +124,7 @@ export function InsightsRiskConcentration({
                       <div key={cat.category} className="flex items-center gap-3">
                         <span className="w-24 shrink-0 truncate text-right text-xs capitalize text-[var(--color-text-secondary)]">{cat.category}</span>
                         <div className="flex flex-1 overflow-hidden rounded-full bg-[var(--color-border)]" style={{ height: 10 }}>
-                          <div className="h-full rounded-full bg-orange-400" style={{ width: `${pct}%` }} />
+                          <div className="h-full rounded-full bg-[var(--color-severity-high)]" style={{ width: `${pct}%` }} />
                         </div>
                         <span className="w-8 text-right text-xs font-semibold text-[var(--color-text-primary)]">{cat.count}</span>
                       </div>
@@ -149,7 +149,7 @@ export function InsightsRiskConcentration({
                   key={bucket.label}
                   type="button"
                   onClick={() => onGoToFindings({ ageBucket: bucket.label })}
-                  className="flex flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 text-left transition-all hover:border-blue-300"
+                  className="flex flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4 text-left transition-all hover:border-[var(--color-accent-border)]"
                 >
                   <span className="text-xs text-[var(--color-text-secondary)]">{bucket.label}</span>
                   <span className={`mt-2 text-2xl font-bold tabular-nums ${AGE_BUCKET_TEXT[bucket.label] ?? "text-[var(--color-text-primary)]"}`}>
@@ -157,7 +157,7 @@ export function InsightsRiskConcentration({
                   </span>
                   <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-border)]">
                     <div
-                      className={`h-full rounded-full ${AGE_BUCKET_COLOUR[bucket.label] ?? "bg-blue-400"}`}
+                      className={`h-full rounded-full ${AGE_BUCKET_COLOUR[bucket.label] ?? "bg-[var(--color-severity-low)]"}`}
                       style={{ width: openCount > 0 ? `${Math.round((bucket.count / openCount) * 100)}%` : "0%" }}
                     />
                   </div>

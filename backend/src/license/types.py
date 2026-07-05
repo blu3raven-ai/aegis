@@ -66,7 +66,6 @@ TIER_LIMITS: dict[Tier, dict[str, Any]] = {
         "sso": False,
         "audit_log": False,
         "integrations": False,
-        "sbom_export": False,
         "data_retention_days": None,
     },
     Tier.ENTERPRISE: {
@@ -83,7 +82,6 @@ TIER_LIMITS: dict[Tier, dict[str, Any]] = {
         "sso": True,
         "audit_log": True,
         "integrations": True,
-        "sbom_export": True,
         "data_retention_days": None,
     },
 }

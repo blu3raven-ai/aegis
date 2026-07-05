@@ -17,7 +17,6 @@ def test_app_config_from_env_map_round_trips_full_shape():
         "SESSION_SECRET": "session-secret",
         "SCA_ENABLED": "false",
         "SAST_ENABLED": "true",
-        "SAST_DOCKER_IMAGE": "ghcr.io/test/sast-scanner:v1",
         "SAST_SCAN_CONCURRENCY": "3",
         "SAST_RULESETS": "p/owasp-top-ten,p/cwe-top-25",
         "SAST_AI_REVIEW_ENABLED": "true",
@@ -58,12 +57,10 @@ def test_app_config_from_env_map_round_trips_full_shape():
                 "rerunScheduleType": "simple",
                 "rerunScheduleValue": "02:00",
                 "scanConcurrency": "4",
-                "dockerImage": "aegis/scanner-dependencies:latest",
                 "nvdEnabled": True,
                 "nvdApiKey": "",
                 "ghsaEnabled": False,
                 "ghsaApiKey": "",
-                "retentionDays": 7,
             },
             "containerScanning": {
                 "enabled": False,
@@ -71,34 +68,24 @@ def test_app_config_from_env_map_round_trips_full_shape():
                 "rerunScheduleType": "simple",
                 "rerunScheduleValue": "02:00",
                 "scanConcurrency": "4",
-                "dockerImage": "aegis/scanner-container:latest",
                 "nvdEnabled": True,
                 "nvdApiKey": "",
                 "ghsaEnabled": False,
                 "ghsaApiKey": "",
                 "argusEnabled": False,
                 "argusApiKey": "",
-                "retentionDays": 7,
             },
             "codeScanning": {
                 "enabled": True,
-                "dockerImage": "ghcr.io/test/sast-scanner:v1",
                 "scanConcurrency": "3",
                 "rulesets": ["p/owasp-top-ten", "p/cwe-top-25"],
-                "aiReviewEnabled": True,
-                "aiApiKey": "sk-test-sast-ai-key",
-                "aiBaseUrl": "https://custom.ai.api/v1",
-                "aiModelName": "gpt-4o-custom",
-                "aiAutoClassifyOnScan": True,
                 "autoRerunEnabled": True,
                 "rerunScheduleType": "cron",
                 "rerunScheduleValue": "0 2 * * *",
-                "retentionDays": 7,
             },
             "secrets": {
                 "enabled": False,
                 "scanConcurrency": "7",
-                "dockerImage": "aegis/scanner-secrets:latest",
                 "scanDepth": "light",
                 "scanHistoryWindow": "all",
                 "aiReviewEnabled": False,
@@ -106,7 +93,6 @@ def test_app_config_from_env_map_round_trips_full_shape():
                 "autoRerunEnabled": False,
                 "rerunScheduleType": "simple",
                 "rerunScheduleValue": "02:00",
-                "retentionDays": 7,
             },
             "iacSecurity": {
                 "enabled": False,
@@ -154,13 +140,8 @@ def test_write_app_config_persists_to_db_and_records_audit_event():
             },
             "codeScanning": {
                 "enabled": False,
-                "dockerImage": "aegis/scanner-code-scanning:latest",
                 "scanConcurrency": "2",
                 "rulesets": ["p/owasp-top-ten", "p/cwe-top-25"],
-                "aiReviewEnabled": False,
-                "aiApiKey": "",
-                "aiBaseUrl": "https://api.openai.com/v1",
-                "aiModelName": "gpt-4o-mini",
                 "autoRerunEnabled": False,
                 "rerunScheduleType": "simple",
                 "rerunScheduleValue": "02:00",
@@ -223,13 +204,8 @@ def test_sync_runtime_env_from_config_sets_values_and_removes_keys(monkeypatch):
         "tools": {
             "codeScanning": {
                 "enabled": True,
-                "dockerImage": "ghcr.io/test/sast-scanner:v1",
                 "scanConcurrency": "3",
                 "rulesets": ["p/owasp-top-ten", "p/cwe-top-25"],
-                "aiReviewEnabled": True,
-                "aiApiKey": "sk-runtime-sast-ai-key",
-                "aiBaseUrl": "https://sast.ai.api/v1",
-                "aiModelName": "gpt-4o-sast",
                 "autoRerunEnabled": True,
                 "rerunScheduleType": "cron",
                 "rerunScheduleValue": "0 3 * * *",
@@ -250,13 +226,8 @@ def test_sync_runtime_env_from_config_sets_values_and_removes_keys(monkeypatch):
     assert os.environ["ADMIN_PASSWORD"] == "secret-password"
     assert os.environ["SESSION_SECRET"] == "session-secret"
     assert os.environ["SAST_ENABLED"] == "true"
-    assert os.environ["SAST_DOCKER_IMAGE"] == "ghcr.io/test/sast-scanner:v1"
     assert os.environ["SAST_SCAN_CONCURRENCY"] == "3"
     assert os.environ["SAST_RULESETS"] == "p/owasp-top-ten,p/cwe-top-25"
-    assert os.environ["SAST_AI_REVIEW_ENABLED"] == "true"
-    assert os.environ["SAST_AI_API_KEY"] == "sk-runtime-sast-ai-key"
-    assert os.environ["SAST_AI_BASE_URL"] == "https://sast.ai.api/v1"
-    assert os.environ["SAST_AI_MODEL"] == "gpt-4o-sast"
     assert os.environ["SAST_AUTO_RERUN_ENABLED"] == "true"
     assert os.environ["SAST_RERUN_SCHEDULE_TYPE"] == "cron"
     assert os.environ["SAST_RERUN_SCHEDULE_VALUE"] == "0 3 * * *"
