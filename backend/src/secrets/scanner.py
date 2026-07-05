@@ -258,7 +258,6 @@ _AI_TO_BINARY: dict[str, tuple[str, float | None]] = {
 def build_classification_entries(
     raw: dict[str, Any],
     run_id: str,
-    scan_depth: str | None,
     scanned_at: str,
 ) -> list[dict[str, Any]]:
     """Build classification entries from raw scanner output."""
@@ -272,7 +271,9 @@ def build_classification_entries(
         entries.append({
             "value": value,
             "source": "scanner",
-            "scanDepth": scan_depth,
+            # Secret scans always run full git history (with a filesystem
+            # fallback on error); recorded for run history.
+            "scanDepth": "deep",
             "confidence": confidence,
             "runId": run_id,
             "scannedAt": scanned_at,
@@ -292,7 +293,7 @@ def build_classification_entries(
         entries.append({
             "value": stored_value,
             "source": "ai",
-            "scanDepth": scan_depth,
+            "scanDepth": "deep",
             "confidence": ai_confidence,
             "runId": run_id,
             "scannedAt": scanned_at,
@@ -364,7 +365,6 @@ def ingest_findings(
     org: str,
     run_id: str,
     raw_findings: list[dict[str, Any]],
-    scan_depth: str | None = "light",
     source_type: str | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, str | None] | None]:
     """Deduplicate and apply lifecycle on findings emitted by the runner. Returns (None, repo_to_sha)."""
@@ -376,7 +376,7 @@ def ingest_findings(
         finding.setdefault("reviewStatus", "new")
         if "classificationHistory" not in finding:
             finding["classificationHistory"] = build_classification_entries(
-                finding, run_id, scan_depth, classified_at,
+                finding, run_id, classified_at,
             )
         findings.append(finding)
 
@@ -484,7 +484,6 @@ def _execute_via_runner(
     config: dict[str, str],
     repo_urls: str,
     token: str,
-    scan_depth: str = "light",
     scan_start_date: str | None = None,
     source_type: str | None = None,
 ) -> dict[str, Any] | None:
@@ -497,7 +496,6 @@ def _execute_via_runner(
         "ORG_LABEL": org,
         "RUN_ID": run_id,
         "CONCURRENCY": config.get("concurrency") or "4",
-        "SCAN_DEPTH": scan_depth,
     }
     if scan_start_date:
         env_vars["SCAN_START_DATE"] = scan_start_date
@@ -605,7 +603,6 @@ def execute_secret_scan_once(
     expected_repos: int | None = None,
     scanner_config: dict[str, str] | None = None,
     runtime: InMemoryScanRuntime | None = None,
-    scan_depth: str | None = None,
 ) -> dict | None:
     runtime_started = runtime.start(org, run_id) if runtime else False
     if runtime and not runtime_started:
@@ -645,9 +642,10 @@ def execute_secret_scan_once(
     )
 
     config = scanner_config or get_secret_scanner_config()
-    resolved_scan_depth = scan_depth or config.get("scanDepth") or "light"
-    scan_start_date = config.get("scanStartDate") or None
-    update_secret_run(org, run_id, {"scanDepth": resolved_scan_depth})
+    scan_start_date = None  # secret scans always read full git history
+    # Secret scans always run full git history (with a filesystem fallback on
+    # error); recorded on the run for history.
+    update_secret_run(org, run_id, {"scanDepth": "deep"})
 
     try:
         succeeded_sources: list[int] = []
@@ -665,7 +663,6 @@ def execute_secret_scan_once(
                 config=config,
                 repo_urls=repo_urls_str,
                 token=source.token,
-                scan_depth=resolved_scan_depth,
                 scan_start_date=scan_start_date,
                 source_type=source_type,
             )

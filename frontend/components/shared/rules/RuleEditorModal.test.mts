@@ -81,37 +81,23 @@ describe("RuleEditorModal validation", () => {
     )
   })
 
-  it("caps the escalation list at 4 entries", () => {
-    // Regression guard: matches the backend's MAX_ESCALATIONS cap.
-    assert.match(
-      src,
-      /escalations\.length\s*>\s*4/,
-      "should reject more than 4 escalation steps",
-    )
-  })
-
-  it("rejects escalation hours below 1", () => {
-    assert.match(
-      src,
-      /esc\.at_hours\s*<\s*1/,
-      "should reject escalation hours below 1",
-    )
-  })
-})
-
-describe("escalation error rendering", () => {
-  it("renders the escalation count error block", () => {
+  it("no longer validates escalations (coming-soon leg)", () => {
+    // Escalations don't deliver, so the editor can't add them and the modal
+    // must not block save on their contents.
     assert.ok(
-      src.includes("{errors.escalationsCount &&"),
-      "should render the escalationsCount error block",
+      !/esc\.at_hours\s*<\s*1/.test(src),
+      "escalation hours validation should be removed",
+    )
+    assert.ok(
+      !src.includes("errors.escalations"),
+      "escalation error rendering should be removed",
     )
   })
 
-  it("renders the per-row escalation error block", () => {
-    assert.match(
-      src,
-      /errors\.escalations\s*&&/,
-      "should render the per-row escalation errors",
+  it("no longer requires a scanner-coverage alert channel", () => {
+    assert.ok(
+      !src.includes("alert_channel_id"),
+      "the alert_channel_id requirement should be removed from validation",
     )
   })
 })
@@ -219,8 +205,9 @@ describe("RuleEditorModal category dispatch", () => {
 
 describe("RuleEditorModal action error blocks are category-guarded", () => {
   it("only renders SLA error blocks when category is sla", () => {
-    // Regression guard for the cleanup applied in Commit 8 amend.
-    assert.match(src, /category === "sla"\s*&&\s*\(/)
+    // The SLA action now surfaces only the deadline error (escalations are a
+    // coming-soon leg with no validation), guarded by the sla category.
+    assert.match(src, /category === "sla"\s*&&\s*errors\.deadline/)
   })
 
   it("only renders scanner_coverage error blocks when category is scanner_coverage", () => {

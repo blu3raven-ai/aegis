@@ -704,3 +704,39 @@ def test_container_config_run_id_falls_back_to_job_id():
     from runner.scanners.container.scanner import ContainerScanConfig
     cfg = ContainerScanConfig.from_job({"jobId": "job-88", "envVars": {"DOCKER_IMAGES": "alpine:3.18"}})
     assert cfg.run_id == "job-88"
+
+
+def test_list_tags_parses_tag_list(monkeypatch):
+    from runner.scanners.container import registry_digest as rd
+
+    monkeypatch.setattr(rd, "_resolve_host", lambda h: ["93.184.216.34"])
+    monkeypatch.setattr(rd, "_read_docker_password", lambda *a, **kw: None)
+    calls = {}
+
+    def _fake_run(args, **kw):
+        calls["url"] = args[-1]
+        return (0, '{"name":"acme/app","tags":["1.0.0","1.1.0","latest"]}', "")
+
+    monkeypatch.setattr(rd, "run_tool", _fake_run)
+    tags = rd.list_tags("ghcr.io/acme/app:1.0.0")
+    assert tags == ["1.0.0", "1.1.0", "latest"]
+    assert calls["url"] == "https://ghcr.io/v2/acme/app/tags/list"
+
+
+def test_list_tags_returns_none_on_curl_failure(monkeypatch):
+    from runner.scanners.container import registry_digest as rd
+
+    monkeypatch.setattr(rd, "_resolve_host", lambda h: ["93.184.216.34"])
+    monkeypatch.setattr(rd, "_read_docker_password", lambda *a, **kw: None)
+    monkeypatch.setattr(rd, "run_tool", lambda args, **kw: (1, "", "boom"))
+    assert rd.list_tags("ghcr.io/acme/app:1.0.0") is None
+
+
+def test_list_tags_rejects_ssrf_hosts(monkeypatch):
+    from runner.scanners.container import registry_digest as rd
+
+    monkeypatch.setattr(
+        rd, "run_tool", lambda args, **kw: pytest.fail("run_tool must not be called")
+    )
+    assert rd.list_tags("localhost/x/y:1") is None
+    assert rd.list_tags("169.254.169.254/x/y:1") is None

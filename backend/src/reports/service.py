@@ -617,9 +617,13 @@ def generate_report(
 
 
 def _report_visible_to_viewer(report: Report, *, viewer_id: str, viewer_asset_ids: set[str]) -> bool:
-    """Report visibility: creator always sees it; others if any of the report's
-    persisted asset_ids intersects the viewer's accessible asset_ids.
+    """Report visibility: creator always sees it; others only if EVERY asset the
+    report spans is within the viewer's accessible asset_ids.
 
+    A rendered report's bytes aggregate findings across all of the creator's
+    asset_ids, so containment (not mere intersection) is the correct scope — a
+    viewer entitled to only one of the spanned assets must not download an
+    artifact that also contains findings for assets they lack a grant to.
     A report without persisted asset_ids (legacy rows) falls back to creator-only.
     """
     if report.created_by == viewer_id:
@@ -627,7 +631,7 @@ def _report_visible_to_viewer(report: Report, *, viewer_id: str, viewer_asset_id
     persisted = (report.filters or {}).get("asset_ids")
     if not persisted:
         return False
-    return bool(viewer_asset_ids.intersection(persisted))
+    return set(persisted).issubset(viewer_asset_ids)
 
 
 def list_reports(

@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.containers.scanner import _image_external_ref
+import src.containers.scanner as scanner_mod
+from src.containers.scanner import _image_external_ref, _index_container_sboms
 
 
 def test_strips_registry_hostname_and_keeps_tag():
@@ -39,3 +40,31 @@ def test_docker_hub_source_token_normalizes():
 
 def test_gitlab_registry_source_token():
     assert _image_external_ref("gitlab-registry", "registry.gitlab.com/acme/app:v1") == "gitlab-registry:acme/app:v1"
+
+
+def test_index_stamps_display_name_with_registry_prefix(monkeypatch):
+    """A clean (no-finding) image asset's display_name must be the canonical
+    registry-prefixed ref, not the bare SBOM component name — so it reads the
+    same way as a repo asset ("github:acme/repo") in the inventory."""
+    sbom = {"metadata": {"component": {"name": "acme/app:1.2.3"}}}
+    monkeypatch.setattr(
+        scanner_mod, "_download_scan_output_from_minio",
+        lambda org, run_id, prefix: {"acme_app": {"sbom": sbom, "digest": "sha256:deadbeef"}},
+    )
+
+    captured: dict = {}
+
+    def fake_upsert_asset(session, **kwargs):
+        captured.update(kwargs)
+        return "asset-1"
+
+    monkeypatch.setattr("src.assets.service.upsert_asset", fake_upsert_asset)
+    monkeypatch.setattr("src.db.helpers.run_db", lambda fn: fn(None))
+    monkeypatch.setattr(scanner_mod, "upsert_sbom", lambda *a, **k: None)
+
+    result, _newer, _meta = _index_container_sboms(org="acme", run_id="run-1", source_type="ghcr", prefix="p")
+
+    assert captured["external_ref"] == "ghcr:acme/app:1.2.3"
+    # The fix: display mirrors the external_ref, not the bare "acme/app:1.2.3".
+    assert captured["display_name"] == "ghcr:acme/app:1.2.3"
+    assert result == {"asset-1": "ghcr:acme/app:1.2.3"}

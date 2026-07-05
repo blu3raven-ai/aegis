@@ -24,7 +24,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from src.auth.authentication.cookies import CSRF_COOKIE_NAME, SESSION_COOKIE_NAME
+from src.auth.authentication.cookies import (
+    CSRF_COOKIE_NAME,
+    MFA_PENDING_COOKIE_NAME,
+    SESSION_COOKIE_NAME,
+)
 from src.auth.authentication.login_router import _get_db, login_router
 from src.db.engine import DATABASE_URL
 from src.db.models import RateLimitBucket, User, UserSession
@@ -264,7 +268,15 @@ def test_login_rate_limit_kicks_in_after_5_attempts_same_ip(app_client):
     assert r.status_code == 429
 
 
-def test_login_with_mfa_returns_pending_token_no_session_cookie(
+def _replay_mfa_cookie(app_client, login_resp):
+    """TestClient runs over http, so it won't resend the Secure ``__Host-`` MFA
+    cookie automatically; replay it from the login response as a plain cookie."""
+    app_client.cookies.set(
+        MFA_PENDING_COOKIE_NAME, login_resp.cookies[MFA_PENDING_COOKIE_NAME]
+    )
+
+
+def test_login_with_mfa_sets_pending_cookie_not_body(
     app_client, seed_mfa_user_with_password
 ):
     email, password, _, _ = seed_mfa_user_with_password
@@ -273,7 +285,9 @@ def test_login_with_mfa_returns_pending_token_no_session_cookie(
     assert SESSION_COOKIE_NAME not in r.cookies
     body = r.json()
     assert body["mfa_required"] is True
-    assert "pending_token" in body
+    # The token is delivered only as an HttpOnly cookie, never in the body.
+    assert "pending_token" not in body
+    assert MFA_PENDING_COOKIE_NAME in r.cookies
 
 
 def test_login_by_username_succeeds(app_client, seed_user_with_username_and_password):
@@ -302,9 +316,9 @@ def test_login_verify_with_correct_totp_completes_login(
 ):
     email, password, totp_code, user_id = seed_mfa_user_with_password
     r1 = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
-    pending = r1.json()["pending_token"]
+    _replay_mfa_cookie(app_client, r1)
 
-    r2 = app_client.post("/api/v1/auth/login/verify", json={"pending_token": pending, "code": totp_code})
+    r2 = app_client.post("/api/v1/auth/login/verify", json={"code": totp_code})
     assert r2.status_code == 200
     assert SESSION_COOKIE_NAME in r2.cookies
     assert CSRF_COOKIE_NAME in r2.cookies
@@ -314,17 +328,16 @@ def test_login_verify_with_correct_totp_completes_login(
 def test_login_verify_with_bad_code_returns_401(app_client, seed_mfa_user_with_password):
     email, password, _, _ = seed_mfa_user_with_password
     r1 = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
-    pending = r1.json()["pending_token"]
+    _replay_mfa_cookie(app_client, r1)
 
-    r2 = app_client.post("/api/v1/auth/login/verify", json={"pending_token": pending, "code": "000000"})
+    r2 = app_client.post("/api/v1/auth/login/verify", json={"code": "000000"})
     assert r2.status_code == 401
     assert SESSION_COOKIE_NAME not in r2.cookies
 
 
 def test_login_verify_with_expired_or_unknown_token_returns_401(app_client):
-    r = app_client.post(
-        "/api/v1/auth/login/verify", json={"pending_token": "nonexistent-ghost-token", "code": "123456"}
-    )
+    app_client.cookies.set(MFA_PENDING_COOKIE_NAME, "nonexistent-ghost-token")
+    r = app_client.post("/api/v1/auth/login/verify", json={"code": "123456"})
     assert r.status_code == 401
 
 
@@ -332,15 +345,70 @@ def test_login_verify_token_is_single_use(app_client, seed_mfa_user_with_passwor
     """A pending token consumed by a successful verify cannot be replayed."""
     email, password, totp_code, _ = seed_mfa_user_with_password
     r1 = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
-    pending = r1.json()["pending_token"]
+    _replay_mfa_cookie(app_client, r1)
 
-    r2 = app_client.post("/api/v1/auth/login/verify", json={"pending_token": pending, "code": totp_code})
+    r2 = app_client.post("/api/v1/auth/login/verify", json={"code": totp_code})
     assert r2.status_code == 200
 
-    replay = app_client.post(
-        "/api/v1/auth/login/verify", json={"pending_token": pending, "code": totp_code}
-    )
+    # The successful verify cleared the cookie; re-supply it to prove the *token*
+    # (not just the cookie) is single-use.
+    _replay_mfa_cookie(app_client, r1)
+    replay = app_client.post("/api/v1/auth/login/verify", json={"code": totp_code})
     assert replay.status_code == 401
+
+
+def test_login_verify_burns_token_after_max_wrong_codes(
+    app_client, seed_mfa_user_with_password, monkeypatch
+):
+    """After MAX_MFA_ATTEMPTS wrong codes the pending token is invalidated, so
+    even the correct code afterwards fails — forcing a fresh password login.
+
+    Rate-limit primitives are stubbed to isolate the per-token attempt counter
+    (the shared TestClient IP bucket would otherwise 429 before the counter is
+    exhausted).
+    """
+    import src.auth.authentication.login_router as lr
+
+    async def _noop_ip(request, db):
+        return None
+
+    async def _noop_user(email, db):
+        return None
+
+    monkeypatch.setattr(lr, "_rate_limit_ip", _noop_ip)
+    monkeypatch.setattr(lr, "_rate_limit_user", _noop_user)
+
+    email, password, totp_code, _ = seed_mfa_user_with_password
+    r1 = app_client.post("/api/v1/auth/login", json={"identifier": email, "password": password})
+
+    for _ in range(lr.MAX_MFA_ATTEMPTS):
+        _replay_mfa_cookie(app_client, r1)
+        bad = app_client.post("/api/v1/auth/login/verify", json={"code": "000000"})
+        assert bad.status_code == 401
+
+    # Token is now gone: the correct code no longer completes login.
+    _replay_mfa_cookie(app_client, r1)
+    good = app_client.post("/api/v1/auth/login/verify", json={"code": totp_code})
+    assert good.status_code == 401
+    assert SESSION_COOKIE_NAME not in good.cookies
+
+
+def test_login_verify_invokes_ip_rate_limit(app_client, monkeypatch):
+    """/login/verify must run the IP rate-limit primitive before the token check,
+    so a cookie-less brute force of the endpoint is still throttled."""
+    import src.auth.authentication.login_router as lr
+
+    called = {"ip": False}
+
+    async def _spy_ip(request, db):
+        called["ip"] = True
+
+    monkeypatch.setattr(lr, "_rate_limit_ip", _spy_ip)
+
+    r = app_client.post("/api/v1/auth/login/verify", json={"code": "123456"})
+    assert r.status_code == 401
+    assert called["ip"] is True
+    assert called["ip"] is True
 
 
 

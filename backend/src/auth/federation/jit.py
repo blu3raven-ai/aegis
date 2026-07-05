@@ -4,10 +4,9 @@ from __future__ import annotations
 import secrets
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.audit_log.recorder import ActorInfo, get_recorder
 from src.db.models import SsoConfig, User
 
 
@@ -15,32 +14,21 @@ class AccountConflict(RuntimeError):
     """Raised when an email matches a user already linked to a different SSO subject."""
 
 
-def _record_reactivation(session: AsyncSession, user: User) -> None:
-    """Write a `user.reactivated` audit event via the current session.
+class AccountDeprovisioned(AccountConflict):
+    """Raised when a deprovisioned user attempts to sign in via SSO.
 
-    Uses record_in_session() rather than record() — we're already inside a
-    run_db() coroutine, and record() would deadlock by nesting another.
+    Subclasses AccountConflict so the existing SSO-router handlers reject the
+    login; a deprovisioned account must be reactivated by an explicit admin
+    action, never silently by the next SSO sign-in.
     """
-    get_recorder().record_in_session(
-        session,
-        action="user.reactivated",
-        resource_type="user",
-        resource_id=user.id,
-        actor=ActorInfo(
-            user_id="system:sso_jit",
-            username=user.username,
-            email=user.email,
-            role="system",
-        ),
-        metadata={"trigger": "jit_sign_in"},
-    )
 
 
-async def _maybe_reactivate(session: AsyncSession, user: User) -> None:
-    if user.status != "deprovisioned":
-        return
-    user.status = "active"
-    _record_reactivation(session, user)
+def _reject_if_deprovisioned(user: User) -> None:
+    # An audit event is deliberately NOT written here: it would share the login
+    # transaction, which the raised exception rolls back. The SSO router logs the
+    # rejected sign-in instead.
+    if user.status == "deprovisioned":
+        raise AccountDeprovisioned("Account is deprovisioned; an administrator must reactivate it.")
 
 
 async def jit_or_lookup(
@@ -48,30 +36,50 @@ async def jit_or_lookup(
     subject: str,
     email: str,
     protocol: Literal["saml", "oidc"],
+    *,
+    email_verified: bool,
 ) -> User:
+    """Resolve the local User for an SSO login, provisioning one if needed.
+
+    A returning user is always matched by their stable `subject`. Falling back
+    to matching an existing account by `email` — which attaches this SSO
+    identity to that account — is only safe when the provider verified the
+    email; otherwise an IdP that lets a caller set an arbitrary address could
+    be used to take over a pre-existing (e.g. local admin) account.
+    """
+    normalized_email = email.strip().lower()
+
     row = (
         await session.execute(
             select(User).where(User.sso_subject == subject).where(User.sso_protocol == protocol)
         )
     ).scalar_one_or_none()
     if row is not None:
-        await _maybe_reactivate(session, row)
+        _reject_if_deprovisioned(row)
         return row
 
-    row = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
+    # Case-insensitive match: an IdP that varies the email casing must not be
+    # able to mint a second, takeover-shaped row alongside the real account.
+    row = (
+        await session.execute(
+            select(User).where(func.lower(User.email) == normalized_email)
+        )
+    ).scalar_one_or_none()
     if row is not None:
         if row.sso_subject is not None:
             raise AccountConflict("Email already linked to a different SSO identity.")
+        if not email_verified:
+            raise AccountConflict("Email is not provider-verified; cannot link to an existing account.")
         row.sso_subject = subject
         row.sso_protocol = protocol
-        await _maybe_reactivate(session, row)
+        _reject_if_deprovisioned(row)
         return row
 
     cfg = (await session.execute(select(SsoConfig).where(SsoConfig.id == 1))).scalar_one()
     user = User(
         id=f"sso-{secrets.token_urlsafe(12)}",
-        username=email,
-        email=email,
+        username=normalized_email,
+        email=normalized_email,
         password_hash="",
         role_id=cfg.default_role_id,
         status="active",

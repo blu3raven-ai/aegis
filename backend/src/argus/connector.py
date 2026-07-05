@@ -29,7 +29,6 @@ from src.argus.circuit_breaker import CircuitBreaker, CircuitOpenError
 from src.argus.heuristics import (
     empty_rule_pack,
     heuristic_explain,
-    heuristic_go_no_go,
     heuristic_score,
 )
 from src.argus.metrics import (
@@ -72,14 +71,6 @@ class RiskScore:
     score: float           # 0-100
     source: str            # "argus" | "heuristic"
     rationale_id: str | None = None
-
-
-@dataclass
-class Decision:
-    decision: str          # "allow" | "warn" | "block"
-    blockers: list[str] = field(default_factory=list)
-    rationale_id: str | None = None
-    source: str = "heuristic"
 
 
 @dataclass
@@ -162,59 +153,6 @@ class ArgusConnector:
             logger.warning("argus.score_finding.error", extra={"endpoint": endpoint_label, "reason": str(exc)})
             argus_fallbacks_total.labels(reason="http_error").inc()
             return _heuristic_score_from_metadata(finding_metadata)
-
-    def decide_go_no_go(
-        self,
-        service_id: str,
-        findings_metadata: list[dict],
-        policy_id: str | None = None,
-    ) -> Decision:
-        """Ask Argus for a gate decision (allow / warn / block) for a service.
-
-        findings_metadata is a list of safe finding metadata dicts — same
-        contract as score_finding's argument.
-        """
-        payload: dict[str, Any] = {
-            "service_id": service_id,
-            "findings": [_safe_finding_payload(f) for f in findings_metadata],
-        }
-        if policy_id:
-            payload["policy_id"] = policy_id
-        endpoint_label = "/v1/decide/go-no-go"
-        try:
-            resp = self._call_with_retry(endpoint_label, "POST", payload)
-            return Decision(
-                decision=resp["decision"],
-                blockers=resp.get("blockers", []),
-                rationale_id=resp.get("rationale_id"),
-                source="argus",
-            )
-        except CircuitOpenError:
-            logger.warning(
-                "argus.decide_go_no_go.circuit_open",
-                extra={"endpoint": endpoint_label, "circuit_state": self._circuit_breaker.state.status},
-            )
-            argus_fallbacks_total.labels(reason="circuit_open").inc()
-            return _decision_from_heuristic(findings_metadata)
-        except _ArgusTimeoutError as exc:
-            logger.warning("argus.decide_go_no_go.timeout", extra={"endpoint": endpoint_label, "reason": str(exc)})
-            argus_fallbacks_total.labels(reason="timeout").inc()
-            return _decision_from_heuristic(findings_metadata)
-        except _ArgusNetworkError as exc:
-            logger.warning("argus.decide_go_no_go.network_error", extra={"endpoint": endpoint_label, "reason": str(exc)})
-            argus_fallbacks_total.labels(reason="network_error").inc()
-            return _decision_from_heuristic(findings_metadata)
-        except _ArgusHttpError as exc:
-            logger.warning(
-                "argus.decide_go_no_go.http_error",
-                extra={"endpoint": endpoint_label, "status_code": exc.status_code, "reason": str(exc)},
-            )
-            argus_fallbacks_total.labels(reason="http_error").inc()
-            return _decision_from_heuristic(findings_metadata)
-        except _ArgusError as exc:
-            logger.warning("argus.decide_go_no_go.error", extra={"endpoint": endpoint_label, "reason": str(exc)})
-            argus_fallbacks_total.labels(reason="http_error").inc()
-            return _decision_from_heuristic(findings_metadata)
 
     def explain_chain(
         self,
@@ -482,15 +420,6 @@ class NullArgusConnector(ArgusConnector):
         argus_fallbacks_total.labels(reason="unconfigured").inc()
         return _heuristic_score_from_metadata(finding_metadata)
 
-    def decide_go_no_go(
-        self,
-        service_id: str,
-        findings_metadata: list[dict],
-        policy_id: str | None = None,
-    ) -> Decision:
-        argus_fallbacks_total.labels(reason="unconfigured").inc()
-        return _decision_from_heuristic(findings_metadata)
-
     def explain_chain(
         self,
         chain_metadata: dict,
@@ -609,19 +538,3 @@ def _heuristic_score_from_metadata(finding: dict) -> RiskScore:
     chain_bonus = 5.0 if finding.get("in_chain") else 0.0
     score = heuristic_score(severity, epss, reachability_bonus, chain_bonus)
     return RiskScore(score=score, source="heuristic", rationale_id=None)
-
-
-def _decision_from_heuristic(findings_metadata: list[dict]) -> Decision:
-    """Build a Decision dataclass from heuristic_go_no_go output.
-
-    heuristic_go_no_go returns a plain dict with a human-readable 'rationale'
-    key; Decision uses 'rationale_id' (an opaque reference). We map between
-    them here so the heuristics module stays schema-free.
-    """
-    result = heuristic_go_no_go(findings_metadata)
-    return Decision(
-        decision=result["decision"],
-        blockers=result.get("blockers", []),
-        rationale_id=None,  # heuristics produce no opaque rationale ID
-        source="heuristic",
-    )

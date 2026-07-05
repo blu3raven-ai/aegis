@@ -85,3 +85,24 @@ def test_getter_returns_actual_values():
     assert get_finding_field(f, "epss_score") == 0.42
     assert get_repo_field(_repo(), "tier") == "production"
     assert get_scan_result_field(_scan_result(), "tool") == "dependencies"
+
+
+def test_dependency_scope_flows_from_detail_into_subject():
+    """A deps finding's camelCase dependencyScope maps onto the subject field a
+    rule predicates on, and evaluates through the conditions engine."""
+    from src.shared.lifecycle import _build_subject_for_new_finding
+    from src.rules_engine.conditions import evaluate_condition
+
+    subj = _build_subject_for_new_finding(
+        tool="dependencies", severity="high", repo="acme/api",
+        detail={"dependencyScope": "dev", "cveId": "CVE-2025-9"},
+    )
+    assert subj.dependency_scope == "dev"
+    assert get_finding_field(subj, "dependency_scope") == "dev"
+
+    cond = {"field": "dependency_scope", "op": "eq", "value": "dev"}
+    assert evaluate_condition(cond, subj, get_finding_field) is True
+    prod = _build_subject_for_new_finding(
+        tool="dependencies", severity="high", repo="acme/api", detail={"dependencyScope": "prod"},
+    )
+    assert evaluate_condition(cond, prod, get_finding_field) is False

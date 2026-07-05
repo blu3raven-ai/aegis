@@ -287,3 +287,24 @@ def test_timeout_constants_are_positive_floats():
     ]
     for c in constants:
         assert isinstance(c, float) and c > 0
+
+
+def test_derive_html_url_strips_credentials_and_git_suffix():
+    assert (
+        _shared.derive_html_url("https://x-access-token:tok@github.com/acme/repo.git")
+        == "https://github.com/acme/repo"
+    )
+    assert _shared.derive_html_url("https://github.com/acme/repo.git") == "https://github.com/acme/repo"
+    assert _shared.derive_html_url("https://github.com/acme/repo") == "https://github.com/acme/repo"
+
+
+def test_derive_html_url_preserves_self_hosted_host():
+    # Host-agnostic: a self-hosted clone URL keeps its host (credentials stripped).
+    assert (
+        _shared.derive_html_url("https://gitlab.acme-corp.internal/acme/repo.git")
+        == "https://gitlab.acme-corp.internal/acme/repo"
+    )
+    assert (
+        _shared.derive_html_url("https://user:pw@ghe.acme-corp.internal/acme/repo.git")
+        == "https://ghe.acme-corp.internal/acme/repo"
+    )

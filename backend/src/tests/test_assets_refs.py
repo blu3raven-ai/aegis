@@ -25,8 +25,11 @@ def test_repo_ref_lowercases_source_type():
     assert repo_ref("GitHub", "acme", "foo") == "github:acme/foo"
 
 
-def test_repo_ref_preserves_case_on_owner_and_name():
-    assert repo_ref("github", "Acme-Org", "MyRepo") == "github:Acme-Org/MyRepo"
+def test_repo_ref_lowercases_owner_preserves_name_case():
+    # Provider owners/orgs are case-insensitive and assets are stored with a
+    # lower-cased owner, so the canonical ref lower-cases the owner. The repo
+    # name keeps its case (repository names are case-sensitive).
+    assert repo_ref("github", "Acme-Org", "MyRepo") == "github:acme-org/MyRepo"
 
 
 def test_repo_ref_strips_owner_and_name_whitespace():

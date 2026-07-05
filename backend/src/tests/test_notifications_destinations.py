@@ -86,6 +86,8 @@ def test_dest_to_dict_returns_iso_timestamps_and_full_shape():
     assert out["id"] == 42
     assert out["destination_type"] == "slack"
     assert out["name"] == "ops"
+    # _dest_to_dict is the internal (send-path) shape — config stays unredacted;
+    # redaction happens at the GraphQL read boundary (_dest_to_gql).
     assert out["config"] == {"webhook_url": "https://example.test/x"}
     assert out["enabled"] is True
     assert out["event_filter"] == {"min_severity": "high"}
@@ -295,16 +297,17 @@ def test_record_delivery_updates_existing_row_when_present():
 
 
 def test_list_pending_retries_returns_dict_shapes():
+    # The retry-worker projection carries just what a re-send needs: the stored
+    # payload, attempt count, and the (id, destination_id, event_id, event_type)
+    # identity — not the full delivery audit shape.
     row = SimpleNamespace(
         id=1,
-        destination_id=1,
+        destination_id=7,
         event_id="e1",
         event_type="finding.created",
-        status="retry",
-        payload_summary=None,
-        response_code=None,
-        error="timeout",
-        attempted_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        attempts=2,
+        payload='{"text": "hi"}',
+        next_attempt_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
     )
     scalars = MagicMock()
     scalars.all = MagicMock(return_value=[row])
@@ -323,8 +326,10 @@ def test_list_pending_retries_returns_dict_shapes():
         out = list_pending_retries(limit=10)
 
     assert len(out) == 1
-    assert out[0]["status"] == "retry"
-    assert out[0]["error"] == "timeout"
+    assert out[0]["destination_id"] == 7
+    assert out[0]["attempts"] == 2
+    assert out[0]["payload"] == '{"text": "hi"}'
+    assert out[0]["next_attempt_at"].startswith("2026-05-01")
 
 
 

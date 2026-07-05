@@ -126,20 +126,16 @@ def app_config_from_env_map(env: dict[str, str]) -> dict[str, Any]:
         "tools": {
             "dependencies_scanning": {
                 "enabled": _to_bool(env.get("SCA_ENABLED"), False),
-                "autoRerunEnabled": _to_bool(env.get("SCA_AUTO_RERUN_ENABLED"), False),
-                "rerunScheduleType": env.get("SCA_RERUN_SCHEDULE_TYPE") or "simple",
-                "rerunScheduleValue": env.get("SCA_RERUN_SCHEDULE_VALUE") or "02:00",
                 "scanConcurrency": env.get("SCA_SCAN_CONCURRENCY") or "4",
                 "nvdEnabled": env.get("SCA_NVD_ENABLED", "").lower() != "false",
                 "nvdApiKey": env.get("SCA_NVD_API_KEY") or "",
                 "ghsaEnabled": env.get("SCA_GHSA_ENABLED", "").lower() == "true",
                 "ghsaApiKey": env.get("SCA_GHSA_API_KEY") or "",
+                "releaseAgeEnabled": env.get("SCA_RELEASE_AGE_ENABLED", "").lower() == "true",
+                "releaseAgeThresholdDays": env.get("SCA_RELEASE_AGE_THRESHOLD_DAYS") or "90",
             },
             "container_scanning": {
                 "enabled": _to_bool(env.get("CONTAINER_SCANNING_ENABLED"), False),
-                "autoRerunEnabled": _to_bool(env.get("CONTAINER_SCANNING_AUTO_RERUN_ENABLED"), False),
-                "rerunScheduleType": env.get("CONTAINER_SCANNING_RERUN_SCHEDULE_TYPE") or "simple",
-                "rerunScheduleValue": env.get("CONTAINER_SCANNING_RERUN_SCHEDULE_VALUE") or "02:00",
                 "scanConcurrency": env.get("CONTAINER_SCAN_CONCURRENCY") or "4",
                 "nvdEnabled": env.get("CONTAINER_SCANNING_NVD_ENABLED", "true").lower() != "false",
                 "nvdApiKey": env.get("CONTAINER_SCANNING_NVD_API_KEY") or "",
@@ -147,25 +143,20 @@ def app_config_from_env_map(env: dict[str, str]) -> dict[str, Any]:
                 "ghsaApiKey": env.get("CONTAINER_SCANNING_GHSA_API_KEY") or "",
                 "argusEnabled": env.get("CONTAINER_SCANNING_ARGUS_ENABLED", "false").lower() == "true",
                 "argusApiKey": env.get("CONTAINER_SCANNING_ARGUS_API_KEY") or "",
+                "releaseAgeEnabled": env.get("CONTAINER_SCANNING_RELEASE_AGE_ENABLED", "").lower() == "true",
+                "releaseAgeThresholdDays": env.get("CONTAINER_SCANNING_RELEASE_AGE_THRESHOLD_DAYS") or "90",
+                "baseImageTagsEnabled": env.get("CONTAINER_SCANNING_BASE_IMAGE_TAGS_ENABLED", "").lower() == "true",
+                "baseImageRecommendEnabled": env.get("CONTAINER_SCANNING_BASE_IMAGE_RECOMMEND_ENABLED", "").lower() == "true",
             },
             "code_scanning": {
                 "enabled": _to_bool(env.get("SAST_ENABLED"), False),
                 "scanConcurrency": env.get("SAST_SCAN_CONCURRENCY") or "4",
-                "rulesets": (env.get("SAST_RULESETS") or "p/owasp-top-ten,p/cwe-top-25").split(","),
-                "autoRerunEnabled": _to_bool(env.get("SAST_AUTO_RERUN_ENABLED"), False),
-                "rerunScheduleType": env.get("SAST_RERUN_SCHEDULE_TYPE") or "simple",
-                "rerunScheduleValue": env.get("SAST_RERUN_SCHEDULE_VALUE") or "02:00",
             },
             "secret_scanning": {
                 "enabled": _to_bool(env.get("SECRETS_ENABLED"), False),
                 "scanConcurrency": env.get("SECRET_SCANNER_CONCURRENCY") or env.get("SECRETS_SCAN_CONCURRENCY") or "4",
-                "scanDepth": env.get("SECRETS_SCAN_DEPTH") or "light",
-                "scanHistoryWindow": env.get("SECRETS_SCAN_HISTORY_WINDOW") or "all",
                 "aiReviewEnabled": _to_bool(env.get("SECRETS_AI_REVIEW_ENABLED"), False),
                 "aiApiKey": env.get("SECRETS_AI_API_KEY") or "",
-                "autoRerunEnabled": _to_bool(env.get("SECRETS_AUTO_RERUN_ENABLED"), False),
-                "rerunScheduleType": env.get("SECRETS_RERUN_SCHEDULE_TYPE") or "simple",
-                "rerunScheduleValue": env.get("SECRETS_RERUN_SCHEDULE_VALUE") or "02:00",
             },
             "iac_scanning": {
                 "enabled": _to_bool(env.get("IAC_SECURITY_ENABLED"), False),
@@ -210,20 +201,16 @@ def _normalize_config(value: dict[str, Any] | None, fallback: dict[str, Any]) ->
         "tools": {
             "dependencies_scanning": {
                 "enabled": dependencies.get("enabled", fallback["tools"]["dependencies_scanning"]["enabled"]),
-                "autoRerunEnabled": dependencies.get("autoRerunEnabled", fallback["tools"]["dependencies_scanning"]["autoRerunEnabled"]),
-                "rerunScheduleType": dependencies.get("rerunScheduleType", fallback["tools"]["dependencies_scanning"]["rerunScheduleType"]),
-                "rerunScheduleValue": dependencies.get("rerunScheduleValue", fallback["tools"]["dependencies_scanning"]["rerunScheduleValue"]),
                 "scanConcurrency": dependencies.get("scanConcurrency", fallback["tools"]["dependencies_scanning"]["scanConcurrency"]),
                 "nvdEnabled": dependencies.get("nvdEnabled", fallback["tools"]["dependencies_scanning"]["nvdEnabled"]),
                 "nvdApiKey": dependencies.get("nvdApiKey", fallback["tools"]["dependencies_scanning"]["nvdApiKey"]),
                 "ghsaEnabled": dependencies.get("ghsaEnabled", fallback["tools"]["dependencies_scanning"]["ghsaEnabled"]),
                 "ghsaApiKey": dependencies.get("ghsaApiKey", fallback["tools"]["dependencies_scanning"]["ghsaApiKey"]),
+                "releaseAgeEnabled": dependencies.get("releaseAgeEnabled", fallback["tools"]["dependencies_scanning"]["releaseAgeEnabled"]),
+                "releaseAgeThresholdDays": dependencies.get("releaseAgeThresholdDays", fallback["tools"]["dependencies_scanning"]["releaseAgeThresholdDays"]),
             },
             "container_scanning": {
                 "enabled": container_scanning_cfg.get("enabled", fallback["tools"]["container_scanning"]["enabled"]),
-                "autoRerunEnabled": container_scanning_cfg.get("autoRerunEnabled", fallback["tools"]["container_scanning"]["autoRerunEnabled"]),
-                "rerunScheduleType": container_scanning_cfg.get("rerunScheduleType", fallback["tools"]["container_scanning"]["rerunScheduleType"]),
-                "rerunScheduleValue": container_scanning_cfg.get("rerunScheduleValue", fallback["tools"]["container_scanning"]["rerunScheduleValue"]),
                 "scanConcurrency": container_scanning_cfg.get("scanConcurrency", fallback["tools"]["container_scanning"]["scanConcurrency"]),
                 "nvdEnabled": container_scanning_cfg.get("nvdEnabled", fallback["tools"]["container_scanning"]["nvdEnabled"]),
                 "nvdApiKey": container_scanning_cfg.get("nvdApiKey", fallback["tools"]["container_scanning"]["nvdApiKey"]),
@@ -231,33 +218,22 @@ def _normalize_config(value: dict[str, Any] | None, fallback: dict[str, Any]) ->
                 "ghsaApiKey": container_scanning_cfg.get("ghsaApiKey", fallback["tools"]["container_scanning"]["ghsaApiKey"]),
                 "argusEnabled": container_scanning_cfg.get("argusEnabled", fallback["tools"]["container_scanning"]["argusEnabled"]),
                 "argusApiKey": container_scanning_cfg.get("argusApiKey", fallback["tools"]["container_scanning"]["argusApiKey"]),
+                "releaseAgeEnabled": container_scanning_cfg.get("releaseAgeEnabled", fallback["tools"]["container_scanning"]["releaseAgeEnabled"]),
+                "releaseAgeThresholdDays": container_scanning_cfg.get("releaseAgeThresholdDays", fallback["tools"]["container_scanning"]["releaseAgeThresholdDays"]),
+                "baseImageTagsEnabled": container_scanning_cfg.get("baseImageTagsEnabled", fallback["tools"]["container_scanning"]["baseImageTagsEnabled"]),
+                "baseImageRecommendEnabled": container_scanning_cfg.get("baseImageRecommendEnabled", fallback["tools"]["container_scanning"]["baseImageRecommendEnabled"]),
             },
             "code_scanning": {
                 "enabled": code_scanning.get("enabled", fallback["tools"]["code_scanning"]["enabled"]),
                 "scanConcurrency": code_scanning.get("scanConcurrency", fallback["tools"]["code_scanning"]["scanConcurrency"]),
-                "rulesets": code_scanning.get("rulesets", fallback["tools"]["code_scanning"]["rulesets"]),
-                "autoRerunEnabled": code_scanning.get("autoRerunEnabled", fallback["tools"]["code_scanning"]["autoRerunEnabled"]),
-                "rerunScheduleType": code_scanning.get("rerunScheduleType", fallback["tools"]["code_scanning"]["rerunScheduleType"]),
-                "rerunScheduleValue": code_scanning.get("rerunScheduleValue", fallback["tools"]["code_scanning"]["rerunScheduleValue"]),
             },
             "secret_scanning": {
                 "enabled": secrets.get("enabled", fallback["tools"]["secret_scanning"]["enabled"]),
                 "scanConcurrency": secrets.get(
                     "scanConcurrency", fallback["tools"]["secret_scanning"]["scanConcurrency"]
                 ),
-                "scanDepth": secrets.get("scanDepth", fallback["tools"]["secret_scanning"]["scanDepth"]),
-                "scanHistoryWindow": secrets.get("scanHistoryWindow", fallback["tools"]["secret_scanning"]["scanHistoryWindow"]),
                 "aiReviewEnabled": secrets.get("aiReviewEnabled", fallback["tools"]["secret_scanning"]["aiReviewEnabled"]),
                 "aiApiKey": secrets.get("aiApiKey", fallback["tools"]["secret_scanning"]["aiApiKey"]),
-                "autoRerunEnabled": secrets.get(
-                    "autoRerunEnabled", fallback["tools"]["secret_scanning"]["autoRerunEnabled"]
-                ),
-                "rerunScheduleType": secrets.get(
-                    "rerunScheduleType", fallback["tools"]["secret_scanning"]["rerunScheduleType"]
-                ),
-                "rerunScheduleValue": secrets.get(
-                    "rerunScheduleValue", fallback["tools"]["secret_scanning"]["rerunScheduleValue"]
-                ),
             },
             "iac_scanning": {
                 "enabled": iac_security.get("enabled", fallback["tools"]["iac_scanning"]["enabled"]),
@@ -304,38 +280,23 @@ def app_config_to_env(config: dict[str, Any]) -> dict[str, str]:
 
     dependencies = tools.get("dependencies_scanning") if isinstance(tools.get("dependencies_scanning"), dict) else {}
     env["SCA_ENABLED"] = "true" if dependencies.get("enabled", False) else "false"
-    env["SCA_AUTO_RERUN_ENABLED"] = "true" if dependencies.get("autoRerunEnabled", False) else "false"
-    env["SCA_RERUN_SCHEDULE_TYPE"] = str(dependencies.get("rerunScheduleType") or "simple")
-    env["SCA_RERUN_SCHEDULE_VALUE"] = str(dependencies.get("rerunScheduleValue") or "02:00")
     env["SCA_SCAN_CONCURRENCY"] = str(dependencies.get("scanConcurrency") or "4")
 
     container_scanning_cfg = tools.get("container_scanning") if isinstance(tools.get("container_scanning"), dict) else {}
     env["CONTAINER_SCANNING_ENABLED"] = "true" if container_scanning_cfg.get("enabled", False) else "false"
-    env["CONTAINER_SCANNING_AUTO_RERUN_ENABLED"] = "true" if container_scanning_cfg.get("autoRerunEnabled", False) else "false"
-    env["CONTAINER_SCANNING_RERUN_SCHEDULE_TYPE"] = str(container_scanning_cfg.get("rerunScheduleType") or "simple")
-    env["CONTAINER_SCANNING_RERUN_SCHEDULE_VALUE"] = str(container_scanning_cfg.get("rerunScheduleValue") or "02:00")
     env["CONTAINER_SCAN_CONCURRENCY"] = str(container_scanning_cfg.get("scanConcurrency") or "4")
 
     code_scanning = tools.get("code_scanning") if isinstance(tools.get("code_scanning"), dict) else {}
     env["SAST_ENABLED"] = "true" if code_scanning.get("enabled", False) else "false"
     env["SAST_SCAN_CONCURRENCY"] = str(code_scanning.get("scanConcurrency") or "4")
-    rulesets = code_scanning.get("rulesets") or ["p/owasp-top-ten", "p/cwe-top-25"]
-    env["SAST_RULESETS"] = ",".join(rulesets) if isinstance(rulesets, list) else str(rulesets)
-    env["SAST_AUTO_RERUN_ENABLED"] = "true" if code_scanning.get("autoRerunEnabled", False) else "false"
-    env["SAST_RERUN_SCHEDULE_TYPE"] = str(code_scanning.get("rerunScheduleType") or "simple")
-    env["SAST_RERUN_SCHEDULE_VALUE"] = str(code_scanning.get("rerunScheduleValue") or "02:00")
 
     secrets = tools.get("secret_scanning") if isinstance(tools.get("secret_scanning"), dict) else {}
     env["SECRETS_ENABLED"] = "true" if secrets.get("enabled", True) else "false"
     scan_concurrency = str(secrets.get("scanConcurrency") or "4")
     env["SECRET_SCANNER_CONCURRENCY"] = scan_concurrency
     env["SECRETS_SCAN_CONCURRENCY"] = scan_concurrency
-    env["SECRETS_SCAN_DEPTH"] = str(secrets.get("scanDepth") or "light")
     env["SECRETS_AI_REVIEW_ENABLED"] = "true" if secrets.get("aiReviewEnabled", False) else "false"
     env["SECRETS_AI_API_KEY"] = str(secrets.get("aiApiKey") or "")
-    env["SECRETS_AUTO_RERUN_ENABLED"] = "true" if secrets.get("autoRerunEnabled", False) else "false"
-    env["SECRETS_RERUN_SCHEDULE_TYPE"] = str(secrets.get("rerunScheduleType") or "simple")
-    env["SECRETS_RERUN_SCHEDULE_VALUE"] = str(secrets.get("rerunScheduleValue") or "02:00")
 
     iac_security = tools.get("iac_scanning") if isinstance(tools.get("iac_scanning"), dict) else {}
     env["IAC_SECURITY_ENABLED"] = "true" if iac_security.get("enabled", False) else "false"
@@ -625,21 +586,8 @@ def get_secret_scanner_config() -> dict[str, str]:
     config = read_app_config()
     secret_scanning_tool = (config.get("tools") or {}).get("secret_scanning") or {}
     concurrency = str(secret_scanning_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("SECRET_SCANNER_CONCURRENCY") or get_app_config_env_value("SECRETS_SCAN_CONCURRENCY") or "4"
-    scan_depth = str(secret_scanning_tool.get("scanDepth") or "").strip().lower() or "light"
-    # Migrate any retired legacy depth value to the closest current depth.
-    if scan_depth == "ai_enhanced":
-        scan_depth = "deep"
-    if scan_depth not in ("light", "deep"):
-        scan_depth = "light"
-    history_window = str(secret_scanning_tool.get("scanHistoryWindow") or "all").strip()
-    _window_days = {"30d": 30, "90d": 90, "180d": 180, "365d": 365}
-    scan_start_date = ""
-    if history_window in _window_days:
-        scan_start_date = (date.today() - timedelta(days=_window_days[history_window])).isoformat()
     return {
         "concurrency": concurrency,
-        "scanStartDate": scan_start_date,
-        "scanDepth": scan_depth,
     }
 
 
@@ -647,7 +595,11 @@ def get_dependencies_scanner_config() -> dict[str, str]:
     config = read_app_config()
     deps_tool = (config.get("tools") or {}).get("dependencies_scanning") or {}
     concurrency = str(deps_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("SCA_SCAN_CONCURRENCY") or "4"
-    return {"concurrency": concurrency}
+    return {
+        "concurrency": concurrency,
+        "releaseAgeEnabled": "true" if deps_tool.get("releaseAgeEnabled", False) else "false",
+        "releaseAgeThresholdDays": str(deps_tool.get("releaseAgeThresholdDays") or "90"),
+    }
 
 
 def get_container_scanner_config() -> dict[str, str]:
@@ -665,6 +617,10 @@ def get_container_scanner_config() -> dict[str, str]:
         "ghsaApiKey": str(ct_tool.get("ghsaApiKey") or ""),
         "argusEnabled": "true" if ct_tool.get("argusEnabled", False) else "false",
         "argusApiKey": str(ct_tool.get("argusApiKey") or ""),
+        "releaseAgeEnabled": "true" if ct_tool.get("releaseAgeEnabled", False) else "false",
+        "releaseAgeThresholdDays": str(ct_tool.get("releaseAgeThresholdDays") or "90"),
+        "baseImageTagsEnabled": "true" if ct_tool.get("baseImageTagsEnabled", False) else "false",
+        "baseImageRecommendEnabled": "true" if ct_tool.get("baseImageRecommendEnabled", False) else "false",
     }
 
 
@@ -672,14 +628,8 @@ def get_code_scanning_scanner_config() -> dict[str, str]:
     config = read_app_config()
     cs_tool = (config.get("tools") or {}).get("code_scanning") or {}
     concurrency = str(cs_tool.get("scanConcurrency") or "").strip() or get_app_config_env_value("SAST_SCAN_CONCURRENCY") or "4"
-    rulesets_val = cs_tool.get("rulesets")
-    if isinstance(rulesets_val, list):
-        rulesets = ",".join(rulesets_val)
-    else:
-        rulesets = str(rulesets_val or "") or env_source().get("SAST_RULESETS") or "p/owasp-top-ten,p/cwe-top-25"
     return {
         "concurrency": concurrency,
-        "rulesets": rulesets,
     }
 
 

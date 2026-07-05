@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 import pytest  # noqa: E402
 
@@ -27,12 +27,13 @@ def test_container_not_applicable_to_repo():
 
 def test_repo_default_scanners_exclude_container():
     assert "container_scanning" not in _DEFAULT_SCANNERS
-    # the three repo scanners plus IaC remain
+    # the three repo scanners plus IaC and agent scanning remain
     assert set(_DEFAULT_SCANNERS) == {
         "dependencies_scanning",
         "code_scanning",
         "secret_scanning",
         "iac_scanning",
+        "agent_scanning",
     }
 
 

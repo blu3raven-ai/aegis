@@ -4,10 +4,11 @@ import { listSourceConnections } from "./source-connections-api"
 import { listDestinations } from "./destinations-api"
 import { listFindingsSummary } from "./findings-api"
 import { listRules } from "./rules-api"
+import { getLlmConfig } from "./llm-settings-api"
 
 export interface SetupTask {
   /** Stable id used as the localStorage key and for analytics. */
-  id: "connect_source" | "run_first_scan" | "triage_finding" | "set_sla_policy" | "add_notification"
+  id: "connect_source" | "run_first_scan" | "configure_llm" | "triage_finding" | "set_sla_policy" | "add_notification"
   /** Short imperative title shown in the widget. */
   title: string
   /** One-line description shown when the task is incomplete. */
@@ -19,11 +20,12 @@ export interface SetupTask {
 }
 
 export async function getSetupChecklist(): Promise<SetupTask[]> {
-  const [sources, summary, rules, destinations] = await Promise.allSettled([
+  const [sources, summary, rules, destinations, llm] = await Promise.allSettled([
     listSourceConnections(),
     listFindingsSummary(),
     listRules(),
     listDestinations(),
+    getLlmConfig(),
   ])
 
   const sourcesOk = sources.status === "fulfilled" && sources.value.ok
@@ -42,6 +44,10 @@ export async function getSetupChecklist(): Promise<SetupTask[]> {
   const destinationsOk = destinations.status === "fulfilled"
   const destinationsCount = destinationsOk ? destinations.value.length : 0
 
+  // getLlmConfig resolves to null when unconfigured (404) and rejects on 403;
+  // either way an unconfigured/forbidden read leaves this step incomplete.
+  const llmConfigured = llm.status === "fulfilled" && Boolean(llm.value?.configured)
+
   return [
     {
       id: "connect_source",
@@ -49,6 +55,13 @@ export async function getSetupChecklist(): Promise<SetupTask[]> {
       description: "Link a Git host or container registry so Aegis can start scanning.",
       href: "/sources",
       done: sourcesCount > 0,
+    },
+    {
+      id: "configure_llm",
+      title: "Set up LLM verification",
+      description: "Add your model's API key and base URL so Aegis verifies findings and cuts false positives.",
+      href: "/settings#llm",
+      done: llmConfigured,
     },
     {
       id: "run_first_scan",

@@ -30,10 +30,17 @@ const SEV_COLOR: Record<(typeof SEV_TIERS)[number]["key"], string> = {
   low: "text-[var(--color-severity-low-text)]",
 }
 
+// A package name can appear as multiple ecosystem rows, so identify a row by
+// (name, ecosystem). NUL separator (written as an escape, never a raw byte)
+// can't occur in either value, so the key is unambiguous.
+function rowKey(c: { packageName: string; ecosystem: string }): string {
+  return `${c.packageName}\u0000${c.ecosystem}`
+}
+
 /** Per-tier open-finding counts (C/H/M/L) that make the risk ranking legible,
  * linking to the package's findings. Falls back to a neutral total when the
  * only open findings are unbucketed (e.g. informational). */
-function SeverityBreakdown({ vulns, packageName, showTotal = false }: { vulns: ComponentVulns; packageName: string; showTotal?: boolean }) {
+function SeverityBreakdown({ vulns, packageName, repo, showTotal = false }: { vulns: ComponentVulns; packageName: string; repo?: string; showTotal?: boolean }) {
   const present = SEV_TIERS.filter((t) => vulns[t.key] > 0)
   const findingWord = `open finding${vulns.total !== 1 ? "s" : ""}`
   // Spell the severities out for screen readers; the visual content is only
@@ -42,9 +49,12 @@ function SeverityBreakdown({ vulns, packageName, showTotal = false }: { vulns: C
     present.length > 0
       ? `${present.map((t) => `${vulns[t.key]} ${t.key}`).join(", ")} ${findingWord} — view in Findings`
       : `${vulns.total.toLocaleString()} ${findingWord} — view in Findings`
+  // When scoped to one repo (the per-repo drill-down), carry that repo into the
+  // Findings filter so the destination list matches the per-repo count clicked.
+  const href = `/findings?q=${encodeURIComponent(packageName)}${repo ? `&repo=${encodeURIComponent(repo)}` : ""}`
   return (
     <Link
-      href={`/findings?q=${encodeURIComponent(packageName)}`}
+      href={href}
       title={`${vulns.total.toLocaleString()} ${findingWord} — view in Findings`}
       aria-label={ariaLabel}
       className="inline-flex items-center gap-2 rounded hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
@@ -96,9 +106,9 @@ const FILTER_OPTIONS_QUERY = `
 `
 
 const PACKAGE_REPOS_QUERY = `
-  query SbomPackageRepos($packageName: String!) {
+  query SbomPackageRepos($packageName: String!, $ecosystem: String) {
     sbom {
-      packageRepos(packageName: $packageName) {
+      packageRepos(packageName: $packageName, ecosystem: $ecosystem) {
         repo
         org
         isContainer
@@ -194,27 +204,30 @@ export function RiskyComponentsView() {
     }
   }, [debouncedSearch, ecosystem, page])
 
-  async function togglePackageRepos(packageName: string) {
-    if (expandedPkg === packageName) {
+  // A package name can appear as more than one ecosystem row, so the expand
+  // state is keyed by (name, ecosystem) and the drill-down is fetched scoped to
+  // that ecosystem, so its asset list reconciles with the row's blast-radius.
+  async function togglePackageRepos(rowKey: string, packageName: string, ecosystem: string) {
+    if (expandedPkg === rowKey) {
       setExpandedPkg(null)
       pkgReqRef.current = null
       return
     }
-    setExpandedPkg(packageName)
-    pkgReqRef.current = packageName
+    setExpandedPkg(rowKey)
+    pkgReqRef.current = rowKey
     setPkgRepos([])
     setPkgReposLoading(true)
     try {
       const r = await gqlQuery<{ sbom: { packageRepos: PackageRepo[] } }>(
         PACKAGE_REPOS_QUERY,
-        { packageName },
+        { packageName, ecosystem },
       )
-      if (pkgReqRef.current !== packageName) return
+      if (pkgReqRef.current !== rowKey) return
       setPkgRepos(r.sbom.packageRepos)
     } catch {
-      if (pkgReqRef.current === packageName) setPkgRepos([])
+      if (pkgReqRef.current === rowKey) setPkgRepos([])
     } finally {
-      if (pkgReqRef.current === packageName) setPkgReposLoading(false)
+      if (pkgReqRef.current === rowKey) setPkgReposLoading(false)
     }
   }
 
@@ -247,7 +260,7 @@ export function RiskyComponentsView() {
   return (
     <div className="space-y-4">
       <p className="max-w-prose text-sm text-[var(--color-text-secondary)]">
-        One row per package across all repositories, ranked by risk.
+        One row per package across all repositories and container images, ranked by risk.
       </p>
 
       {/* Faceted command bar — same search pattern as the Findings tab */}
@@ -285,7 +298,7 @@ export function RiskyComponentsView() {
           role="alert"
           className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3"
         >
-          <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+          <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
           <Button variant="secondary" size="sm" onClick={() => void fetchData()}>
             Retry
           </Button>
@@ -305,7 +318,7 @@ export function RiskyComponentsView() {
                 <Tr>
                   <Th>Package</Th>
                   <Th className="w-64">Severity</Th>
-                  <Th className="w-40 text-right" title="How many repositories include this package — its blast radius">Repos affected</Th>
+                  <Th className="w-40 text-right" title="Repositories and container images with an open vulnerability in this package">Affected assets</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -343,7 +356,7 @@ export function RiskyComponentsView() {
                   </Tr>
                 ) : (
                   data?.items.map((c) => (
-                    <Fragment key={c.packageName}>
+                    <Fragment key={rowKey(c)}>
                       <Tr>
                         <Td>
                           <div className="flex flex-col gap-0.5">
@@ -368,21 +381,21 @@ export function RiskyComponentsView() {
                         <Td className="text-right">
                           <button
                             type="button"
-                            onClick={() => togglePackageRepos(c.packageName)}
-                            aria-expanded={expandedPkg === c.packageName}
-                            aria-label={`Show the ${c.repoCount} repositor${c.repoCount !== 1 ? "ies" : "y"} affected`}
-                            title={`Show the ${c.repoCount} repositor${c.repoCount !== 1 ? "ies" : "y"} affected`}
+                            onClick={() => togglePackageRepos(rowKey(c), c.packageName, c.ecosystem)}
+                            aria-expanded={expandedPkg === rowKey(c)}
+                            aria-label={`Show the ${c.repoCount} affected asset${c.repoCount !== 1 ? "s" : ""}`}
+                            title={`Show the ${c.repoCount} affected asset${c.repoCount !== 1 ? "s" : ""}`}
                             className="inline-flex items-center gap-1.5 tabular-nums text-sm font-medium text-[var(--color-text-primary)] transition-colors hover:text-[var(--color-accent)] focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
                           >
                             {c.repoCount.toLocaleString()}
-                            <svg className={`h-3 w-3 text-[var(--color-text-secondary)] transition-transform ${expandedPkg === c.packageName ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <svg className={`h-3 w-3 text-[var(--color-text-secondary)] transition-transform ${expandedPkg === rowKey(c) ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <path d="m6 9 6 6 6-6" />
                             </svg>
                           </button>
                         </Td>
                       </Tr>
 
-                      {expandedPkg === c.packageName && (
+                      {expandedPkg === rowKey(c) && (
                         <Tr>
                           <Td colSpan={3} className="bg-[var(--color-bg)] px-4 py-0">
                             <div className="py-3 pl-6">
@@ -408,7 +421,7 @@ export function RiskyComponentsView() {
                                       )}
                                       <SourceBadge isContainer={r.isContainer} />
                                       <span className="ml-auto">
-                                        <SeverityBreakdown vulns={r.vulns} packageName={c.packageName} />
+                                        <SeverityBreakdown vulns={r.vulns} packageName={c.packageName} repo={r.isContainer ? undefined : r.repo} />
                                       </span>
                                     </div>
                                   ))}

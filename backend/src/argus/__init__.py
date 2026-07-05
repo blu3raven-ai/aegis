@@ -9,7 +9,6 @@ are absent or when the remote is unreachable.
 """
 from src.argus.connector import (
     ArgusConnector,
-    Decision,
     Explanation,
     NullArgusConnector,
     RiskScore,
@@ -18,7 +17,6 @@ from src.argus.connector import (
 
 __all__ = [
     "ArgusConnector",
-    "Decision",
     "Explanation",
     "NullArgusConnector",
     "RiskScore",

@@ -95,7 +95,7 @@ export function SbomHistoryDrawer({
                         {entry.run_id.slice(0, 16)}…
                       </code>
                       {isLatest && (
-                        <span className="rounded-full bg-[var(--color-status-ok)]/10 px-2 py-px text-2xs font-semibold text-[var(--color-status-ok)]">
+                        <span className="rounded-full bg-[var(--color-status-ok)]/10 px-2 py-px text-2xs font-semibold text-[var(--color-status-ok-text)]">
                           latest
                         </span>
                       )}

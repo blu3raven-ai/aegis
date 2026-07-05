@@ -50,3 +50,11 @@ def iac_scanning_counts(*, asset_ids: list[str], info_context: dict[str, Any]) -
         total=counts["total"], critical=counts["critical"],
         high=counts["high"], medium=counts["medium"], low=counts["low"],
     )
+
+
+def agent_scanning_counts(*, asset_ids: list[str], info_context: dict[str, Any]) -> SeverityCounts:
+    counts = get_severity_counts_by_asset_ids(asset_ids, tool="agent_scanning", state="open")
+    return SeverityCounts(
+        total=counts["total"], critical=counts["critical"],
+        high=counts["high"], medium=counts["medium"], low=counts["low"],
+    )

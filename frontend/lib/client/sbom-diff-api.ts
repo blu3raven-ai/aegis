@@ -28,6 +28,8 @@ export interface SbomComponent {
 export interface SbomVersionChange {
   name: string
   purl?: string
+  /** Component ecosystem/type (e.g. npm, pypi) — mirrors added/removed rows. */
+  type?: string
   from_version: string | null
   to_version: string | null
   /** OSV advisory set-delta between the two versions. */
@@ -117,6 +119,7 @@ type GqlSbomDiffResult = {
   versionChanged: Array<{
     name: string
     purl: string
+    type: string
     fromVersion: string | null
     toVersion: string | null
     resolved: GqlCounts
@@ -168,7 +171,7 @@ const SBOM_DIFF_QUERY = `query SbomDiff(
         added { name version purl type currentFindings { critical high medium low total } knownVulns { critical high medium low total } }
         removed { name version purl type currentFindings { critical high medium low total } knownVulns { critical high medium low total } }
         versionChanged {
-          name purl fromVersion toVersion
+          name purl type fromVersion toVersion
           fromLicense toLicense fromLicenseCategory toLicenseCategory
           resolved { critical high medium low total }
           introduced { critical high medium low total }
@@ -228,6 +231,7 @@ export async function diffSbomsByRepo(params: RepoDiffParams): Promise<SbomDiffR
     version_changed: r.versionChanged.map((v) => ({
       name: v.name,
       purl: v.purl || undefined,
+      type: v.type || undefined,
       from_version: v.fromVersion,
       to_version: v.toVersion,
       resolved: counts(v.resolved),

@@ -193,6 +193,30 @@ def test_flatten_prefers_ranges_over_versions():
     assert rows[0]["range_fixed"] == "2.0.0"
 
 
+def test_flatten_malicious_no_ranges_emits_affects_all():
+    # Malicious-package reports often name only the package — synthesise an
+    # open-ended interval so every installed version matches.
+    adv = {
+        "id": "MAL-2024-1234",
+        "affected": [{"package": {"name": "evil-pkg", "ecosystem": "npm"}}],
+    }
+    rows = _flatten_ranges(adv, "npm")
+    assert rows == [{
+        "package_name": "evil-pkg", "ecosystem": "npm",
+        "range_introduced": "0", "range_fixed": None, "range_last_affected": None,
+    }]
+
+
+def test_flatten_non_malicious_no_ranges_emits_nothing():
+    # A non-malicious advisory with no ranges/versions must stay unmatchable —
+    # the affects-all fallback is scoped to malicious reports only.
+    adv = {
+        "id": "GHSA-noranges",
+        "affected": [{"package": {"name": "pkg", "ecosystem": "npm"}}],
+    }
+    assert _flatten_ranges(adv, "npm") == []
+
+
 # ── match_components (DB-backed) ─────────────────────────────────────────────
 
 def _adv(adv_id, ecosystem, name, introduced, fixed):

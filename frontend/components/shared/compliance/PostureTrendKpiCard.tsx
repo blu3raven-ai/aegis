@@ -5,8 +5,8 @@ import { getPostureTrend, type TrendPoint } from "@/lib/client/posture-api"
 import { Sparkline } from "@/components/shared/charts/Sparkline"
 
 const NEUTRAL = "text-[var(--color-text-primary)]"
-const OK = "text-[var(--color-state-fixed)]"
-const CRITICAL = "text-[var(--color-severity-critical)]"
+const OK = "text-[var(--color-state-fixed-text)]"
+const CRITICAL = "text-[var(--color-severity-critical-text)]"
 
 interface Props {
   days?: number

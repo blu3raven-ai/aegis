@@ -9,7 +9,7 @@ import uuid
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from sqlalchemy import delete  # noqa: E402
 
@@ -127,6 +127,45 @@ async def test_version_filter_flags_truncation_when_scan_cap_hit(db_session, mon
         # A non-version search never sets the flag (it doesn't scan-cap).
         plain = sbom_search(info_context={"asset_ids": [aid]})
         assert plain.truncated is False
+    finally:
+        await _cleanup(db_session, aid)
+
+
+def test_parse_version_tuple_handles_v_prefix_and_unparseable():
+    parse = resolvers_mod._parse_version_tuple
+    assert parse("1.2.3") == (1, 2, 3)
+    assert parse("v1.5.0") == (1, 5, 0)  # Go module style
+    assert parse("V2.0") == (2, 0)
+    assert parse("latest") is None  # no numeric part → excluded, not (0,)
+    assert parse("") is None
+
+
+@pytest.mark.asyncio
+async def test_version_filter_parses_go_prefix_and_excludes_unparseable(db_session):
+    aid = str(uuid.uuid4())
+    db_session.add(Asset(
+        id=aid, type="repo", source="source_connection",
+        external_ref=f"github:acme-org/{uuid.uuid4().hex}", display_name="acme-org/gv",
+    ))
+    await db_session.flush()
+    db_session.add(Sbom(asset_id=aid, run_id=f"auto-{uuid.uuid4().hex}", s3_key=f"k/{uuid.uuid4().hex}"))
+    db_session.add_all([
+        SbomComponent(asset_id=aid, purl="pkg:golang/example.com/mod@v1.5.0",
+                      name="mod", version="v1.5.0", ecosystem="golang", source_tool=None),
+        SbomComponent(asset_id=aid, purl="pkg:npm/rolling@latest",
+                      name="rolling", version="latest", ecosystem="npm", source_tool=None),
+    ])
+    await db_session.commit()
+    try:
+        # >=1.0.0 INCLUDES the Go v1.5.0 (v-strip) and EXCLUDES 'latest' (no
+        # numeric part) rather than treating it as version 0.
+        conn = sbom_search(version_op="gte", version_value="1.0.0", per_page=50,
+                           info_context={"asset_ids": [aid]})
+        assert {c.name for c in conn.items} == {"mod"}
+        # Strict gt excludes an exactly-equal version.
+        conn_gt = sbom_search(version_op="gt", version_value="1.5.0", per_page=50,
+                             info_context={"asset_ids": [aid]})
+        assert {c.name for c in conn_gt.items} == set()
     finally:
         await _cleanup(db_session, aid)
 

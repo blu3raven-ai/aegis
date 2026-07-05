@@ -20,42 +20,54 @@ from src.shared.event_types.code import CodePushEvent, PrOpenedEvent, PrUpdatedE
 
 
 
-def normalize_github_push(payload: dict) -> CodePushEvent:
-    repo = payload["repository"]
-    owner = repo["owner"]["login"]
-    repo_id = f"{owner}/{repo['name']}"
+def normalize_github_push(payload: dict) -> CodePushEvent | None:
+    repo = payload.get("repository") or {}
+    owner = (repo.get("owner") or {}).get("login")
+    name = repo.get("name")
+    # A push we can't attribute to an owner/repo is a malformed variant; the
+    # route drops a None-shaped event rather than crashing on the access.
+    if not owner or not name:
+        return None
     return CodePushEvent(
         org_id=owner,
         source_component="integrations.github",
         payload={
-            "repo_id": repo_id,
+            "repo_id": f"{owner}/{name}",
             "ref": payload.get("ref"),
             "before_sha": payload.get("before"),
             "after_sha": payload.get("after"),
             "commits": [
-                {"sha": c["id"], "author": c["author"]["email"]}
+                {"sha": c.get("id"), "author": (c.get("author") or {}).get("email", "")}
                 for c in payload.get("commits", [])
             ],
         },
     )
 
 
-def normalize_github_pr(payload: dict, *, opened: bool) -> PrOpenedEvent | PrUpdatedEvent:
-    repo = payload["repository"]
-    owner = repo["owner"]["login"]
-    repo_id = f"{owner}/{repo['name']}"
-    pr = payload["pull_request"]
+def normalize_github_pr(payload: dict, *, opened: bool) -> PrOpenedEvent | PrUpdatedEvent | None:
+    repo = payload.get("repository") or {}
+    owner = (repo.get("owner") or {}).get("login")
+    name = repo.get("name")
+    if not owner or not name:
+        return None
+    pr = payload.get("pull_request") or {}
+    pr_number = pr.get("number")
+    base_sha = (pr.get("base") or {}).get("sha")
+    # pr_number and base_sha anchor the scan target; without them the event
+    # is unactionable, so treat the payload as a malformed variant.
+    if pr_number is None or not base_sha:
+        return None
     EventCls = PrOpenedEvent if opened else PrUpdatedEvent
     return EventCls(
         org_id=owner,
         source_component="integrations.github",
         payload={
-            "repo_id": repo_id,
-            "pr_number": pr["number"],
-            "base_sha": pr["base"]["sha"],
-            "head_sha": pr["head"]["sha"],
-            "author": pr["user"]["login"],
-            "title": pr["title"],
+            "repo_id": f"{owner}/{name}",
+            "pr_number": pr_number,
+            "base_sha": base_sha,
+            "head_sha": (pr.get("head") or {}).get("sha"),
+            "author": (pr.get("user") or {}).get("login", ""),
+            "title": pr.get("title"),
         },
     )
 

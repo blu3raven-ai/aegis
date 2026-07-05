@@ -1,12 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Eye } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { SettingsRow } from "@/components/settings/SettingsRow"
 import { ToggleSwitch } from "@/components/settings/ToggleSwitch"
+import { useLicense } from "@/lib/client/license/client"
+import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
 import {
   disconnectArgus,
   getArgusConnection,
@@ -32,14 +35,24 @@ const INITIAL_FORM: FormState = {
   enabled: false,
 }
 
+/** Non-secret fields tracked for dirty detection (refresh_token is write-only). */
+type ArgusBaseline = Pick<FormState, "endpoint" | "token_endpoint" | "client_id" | "enabled">
+
+const INITIAL_BASELINE: ArgusBaseline = {
+  endpoint: "",
+  token_endpoint: "",
+  client_id: "",
+  enabled: false,
+}
+
 function StatusBanner({ conn }: { conn: ArgusConnection | null }) {
   if (!conn || !conn.endpoint) {
     return (
       <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3">
-        <p className="text-sm font-medium text-[var(--color-state-pending)]">Argus is not connected</p>
+        <p className="text-sm font-medium text-[var(--color-state-pending-text)]">Argus is not connected</p>
         <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-          Add your Argus endpoint and OAuth credentials below to start verifying SAST, secrets, and
-          IaC findings. Typically cuts noise by 40–60%.
+          Add your Argus endpoint and OAuth credentials below to enrich findings with exploit and
+          threat intelligence.
         </p>
       </div>
     )
@@ -49,7 +62,7 @@ function StatusBanner({ conn }: { conn: ArgusConnection | null }) {
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
         <p className="text-sm font-medium text-[var(--color-text-primary)]">Argus is paused</p>
         <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-          A connection to {conn.endpoint} is stored. Toggle on under Activation to resume verifying
+          A connection to {conn.endpoint} is stored. Toggle on under Activation to resume enriching
           findings.
         </p>
       </div>
@@ -57,22 +70,22 @@ function StatusBanner({ conn }: { conn: ArgusConnection | null }) {
   }
   return (
     <div className="rounded-lg border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
-      <p className="text-sm font-medium text-[var(--color-status-ok)]">
+      <p className="text-sm font-medium text-[var(--color-status-ok-text)]">
         Argus is connected — {conn.endpoint}
       </p>
       <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-        New SAST, secrets, and IaC findings are verified automatically before they hit the inbox.
+        New findings are enriched with exploit and threat intel automatically as they arrive.
       </p>
     </div>
   )
 }
 
 /**
- * Connect the per-org Argus verification service. Aegis no longer runs an LLM
- * itself — verification happens in Argus, reached over an OAuth2 refresh-token
- * grant (short-lived bearer tokens, never a static key). This form configures
- * that connection: the Argus endpoint, the IdP token endpoint, the client id,
- * and the refresh token.
+ * Configure the hosted Argus threat-intel connection used to enrich findings.
+ * Argus is reached over an OAuth2 refresh-token grant (short-lived bearer tokens,
+ * never a static key), so this form captures the Argus endpoint, the IdP token
+ * endpoint, the client id, and the refresh token. Finding verification is a
+ * separate concern configured under "LLM verification".
  */
 interface ArgusConnectionContentProps {
   /** Admins can edit; others get a read-only status view. Defaults to true for
@@ -80,16 +93,24 @@ interface ArgusConnectionContentProps {
   canEdit?: boolean
   /** While the session/permission is still loading, render a placeholder. */
   sessionLoading?: boolean
+  /** Notify the parent when this connection's active state changes, so the
+   *  shared "which provider is on" state stays in sync. */
+  onActiveChange?: (active: boolean) => void
 }
 
 export function ArgusConnectionContent({
   canEdit = true,
   sessionLoading = false,
+  onActiveChange,
 }: ArgusConnectionContentProps = {}) {
+  const { addons } = useLicense()
+  const hasArgus = addons?.includes("argus") ?? false
   const [conn, setConn] = useState<ArgusConnection | null>(null)
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
+  const [baseline, setBaseline] = useState<ArgusBaseline>(INITIAL_BASELINE)
   const [showToken, setShowToken] = useState(false)
-  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<ArgusTestResult | null>(null)
 
@@ -104,6 +125,12 @@ export function ArgusConnectionContent({
           client_id: data.client_id,
           enabled: data.enabled,
         }))
+        setBaseline({
+          endpoint: data.endpoint,
+          token_endpoint: data.token_endpoint,
+          client_id: data.client_id,
+          enabled: data.enabled,
+        })
       })
       .catch(() => {
         /* treat as unconfigured — leave the form on its defaults */
@@ -112,8 +139,27 @@ export function ArgusConnectionContent({
 
   const configured = Boolean(conn?.endpoint)
 
-  async function save() {
-    setStatus("saving")
+  // Every field is required to save (the refresh token must be re-entered).
+  const canSave =
+    form.endpoint.trim().length > 3 &&
+    form.token_endpoint.trim().length > 3 &&
+    form.client_id.trim().length > 0 &&
+    form.refresh_token.length > 0
+
+  const isDirty =
+    form.refresh_token.length > 0 ||
+    form.endpoint !== baseline.endpoint ||
+    form.token_endpoint !== baseline.token_endpoint ||
+    form.client_id !== baseline.client_id ||
+    form.enabled !== baseline.enabled
+
+  async function handleSave() {
+    if (!canSave) {
+      setError("Fill in every field, including the refresh token.")
+      return
+    }
+    setSaving(true)
+    setError(null)
     setTestResult(null)
     try {
       const next = await updateArgusConnection({
@@ -127,10 +173,24 @@ export function ArgusConnectionContent({
       // Clear the secret field — the stored value is masked; further edits
       // start blank rather than re-submitting what's already on file.
       setForm((f) => ({ ...f, refresh_token: "" }))
-      setStatus("saved")
+      setBaseline({
+        endpoint: next.endpoint,
+        token_endpoint: next.token_endpoint,
+        client_id: next.client_id,
+        enabled: next.enabled,
+      })
+      onActiveChange?.(next.enabled)
     } catch {
-      setStatus("error")
+      setError("Couldn't save the connection. Check the fields and try again.")
+    } finally {
+      setSaving(false)
     }
+  }
+
+  function handleDiscard() {
+    setForm({ ...baseline, refresh_token: "" })
+    setError(null)
+    setTestResult(null)
   }
 
   async function test() {
@@ -146,24 +206,33 @@ export function ArgusConnectionContent({
   }
 
   async function disconnect() {
-    setStatus("saving")
+    setSaving(true)
+    setError(null)
     try {
       await disconnectArgus()
       setConn({ endpoint: "", token_endpoint: "", client_id: "", enabled: false, connected: false })
       setForm(INITIAL_FORM)
-      setStatus("idle")
+      setBaseline(INITIAL_BASELINE)
       setTestResult(null)
+      onActiveChange?.(false)
     } catch {
-      setStatus("error")
+      setError("Couldn't disconnect. Try again.")
+    } finally {
+      setSaving(false)
     }
   }
 
-  // Every field is required to save (the refresh token must be re-entered).
-  const canSave =
-    form.endpoint.trim().length > 3 &&
-    form.token_endpoint.trim().length > 3 &&
-    form.client_id.trim().length > 0 &&
-    form.refresh_token.length > 0
+  // Register with the page-level save bar so Argus edits are saved/discarded
+  // through the same shared bar as the other settings sections.
+  useSaveBarSection({
+    id: "argus",
+    dirty: canEdit && isDirty,
+    saving,
+    count: Number(canEdit && isDirty),
+    error,
+    onSave: handleSave,
+    onDiscard: handleDiscard,
+  })
 
   // Read-only view for users without manage_settings.
   if (!canEdit && !sessionLoading) {
@@ -180,12 +249,37 @@ export function ArgusConnectionContent({
 
   return (
     <div className="space-y-6">
+      <div className={`flex items-start gap-3.5 rounded-lg border px-4 py-3.5 ${hasArgus ? "border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)]" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-argus-subtle)] text-[var(--color-argus)] ring-1 ring-inset ring-[var(--color-argus-border)]">
+          <Eye className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-[var(--color-text-primary)]">Blu3Raven Argus</span>
+            {hasArgus ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-argus-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-argus)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-argus)]" aria-hidden="true" />
+                Active
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-border-strong)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-text-tertiary)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-text-tertiary)]" aria-hidden="true" />
+                Not activated
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+            AI-powered threat intelligence — EPSS scores, exploit availability, and advisory enrichment. Works with any plan.
+          </p>
+        </div>
+      </div>
+
       <StatusBanner conn={conn} />
 
       <SettingsCard heading="Connection">
         <SettingsRow
           label="Argus endpoint"
-          description="Base URL of your hosted Argus verification service."
+          description="Base URL of your hosted Argus threat-intel service."
           layout="stack"
         >
           <Input
@@ -257,38 +351,29 @@ export function ArgusConnectionContent({
 
       <SettingsCard heading="Activation">
         <SettingsRow
-          label="Enable Argus verification"
-          description="When on, SAST, secrets, and IaC findings are verified by Argus and tagged with a verdict (confirmed / needs verify / possible / ruled out)."
+          label="Enable threat-intel enrichment"
+          description="When on, findings are enriched with Argus exploit and threat intelligence (exploit availability, chain risk) as they arrive."
         >
           <ToggleSwitch
             checked={form.enabled}
             onChange={(next) => setForm({ ...form, enabled: next })}
-            label="Enable Argus verification"
+            label="Enable threat-intel enrichment"
           />
         </SettingsRow>
       </SettingsCard>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" size="md" onClick={save} isLoading={status === "saving"} disabled={!canSave}>
-          Save connection
-        </Button>
         <Button variant="secondary" size="md" onClick={test} isLoading={testing} disabled={!configured}>
           Test connection
         </Button>
         {configured && (
-          <Button variant="ghost" size="md" onClick={disconnect} className="text-[var(--color-severity-critical)]">
+          <Button variant="ghost" size="md" onClick={disconnect} className="text-[var(--color-severity-critical-text)]">
             Disconnect
           </Button>
         )}
-        {status === "saved" && (
-          <span className="text-xs text-[var(--color-status-ok)]">Saved</span>
-        )}
-        {status === "error" && (
-          <span className="text-xs text-[var(--color-severity-critical)]">Couldn&apos;t save — check the fields and try again.</span>
-        )}
         {testResult && (
           <span
-            className={`text-xs ${testResult.ok ? "text-[var(--color-status-ok)]" : "text-[var(--color-severity-critical)]"}`}
+            className={`text-xs ${testResult.ok ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-severity-critical-text)]"}`}
           >
             {testResult.ok
               ? "Connection OK — Argus reachable."

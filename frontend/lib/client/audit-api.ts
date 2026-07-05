@@ -25,6 +25,8 @@ export interface AuditQueryFilters {
   actor_id?: string
   resource_type?: string
   resource_id?: string
+  /** Free-text search across action, actor, and resource fields. */
+  q?: string
   since?: string
   until?: string
   limit?: number
@@ -44,6 +46,7 @@ function buildQuery(filters: AuditQueryFilters): string {
   if (filters.actor_id) params.set("actor_id", filters.actor_id)
   if (filters.resource_type) params.set("resource_type", filters.resource_type)
   if (filters.resource_id) params.set("resource_id", filters.resource_id)
+  if (filters.q) params.set("q", filters.q)
   if (filters.since) params.set("since", filters.since)
   if (filters.until) params.set("until", filters.until)
   params.set("limit", String(filters.limit ?? 100))
@@ -57,4 +60,14 @@ export async function listAuditEvents(
 ): Promise<AuditEventsResponse> {
   const qs = buildQuery(filters)
   return apiClient<AuditEventsResponse>(`/api/v1/settings/audit/events?${qs}`)
+}
+
+export interface AuditFacets {
+  actions: string[]
+  resource_types: string[]
+}
+
+/** Distinct action + resource-type vocabularies for the filter pickers. */
+export async function listAuditFacets(): Promise<AuditFacets> {
+  return apiClient<AuditFacets>("/api/v1/settings/audit/facets")
 }

@@ -46,17 +46,17 @@ type LoadState = "loading" | "ok" | "error"
 interface ToolRow {
   label: string
   href: string
-  settingsHref: string
+  settingsHref?: string
   counts: ToolCounts
   state: LoadState
   icon: string
 }
 
 const SEV_CLASSES = {
-  critical: { dot: "bg-[var(--color-severity-critical)]", text: "text-[var(--color-severity-critical)]" },
-  high: { dot: "bg-[var(--color-severity-high)]", text: "text-[var(--color-severity-high)]" },
-  medium: { dot: "bg-[var(--color-severity-medium)]", text: "text-[var(--color-severity-medium)]" },
-  low: { dot: "bg-[var(--color-severity-low)]", text: "text-[var(--color-severity-low)]" },
+  critical: { dot: "bg-[var(--color-severity-critical)]", text: "text-[var(--color-severity-critical-text)]" },
+  high: { dot: "bg-[var(--color-severity-high)]", text: "text-[var(--color-severity-high-text)]" },
+  medium: { dot: "bg-[var(--color-severity-medium)]", text: "text-[var(--color-severity-medium-text)]" },
+  low: { dot: "bg-[var(--color-severity-low)]", text: "text-[var(--color-severity-low-text)]" },
 }
 
 const LINK_FOCUS = "focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none focus-visible:rounded-lg"
@@ -100,10 +100,10 @@ function buildOpenCveCards(findings: EpssTopFinding[], limit = 5): OpenCveCard[]
 }
 
 const SEVERITY_BADGE: Record<string, string> = {
-  critical: "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical)]",
-  high: "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high)]",
-  medium: "bg-[var(--color-severity-medium)]/10 text-[var(--color-severity-medium)]",
-  low: "bg-[var(--color-severity-low)]/10 text-[var(--color-severity-low)]",
+  critical: "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical-text)]",
+  high: "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high-text)]",
+  medium: "bg-[var(--color-severity-medium)]/10 text-[var(--color-severity-medium-text)]",
+  low: "bg-[var(--color-severity-low)]/10 text-[var(--color-severity-low-text)]",
 }
 
 function CveCard({ card }: { card: OpenCveCard }) {
@@ -122,7 +122,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
           {card.severity || "unknown"}
         </span>
         {percentileLabel && (
-          <span className="rounded bg-[var(--color-severity-high)]/10 px-1.5 py-0.5 text-2xs font-semibold text-[var(--color-severity-high)]">
+          <span className="rounded bg-[var(--color-severity-high)]/10 px-1.5 py-0.5 text-2xs font-semibold text-[var(--color-severity-high-text)]">
             EPSS {percentileLabel}
           </span>
         )}
@@ -333,7 +333,7 @@ function JustIntroducedSection({ findings }: { findings: ApiFinding[] | null }) 
         <Card className="flex items-center gap-4 rounded-2xl">
           <span
             aria-hidden="true"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -449,50 +449,39 @@ function buildWeekStats(points: GqlPostureTrendPoint[]): WeekStats | null {
 
 function WeekChart({ days }: { days: WeekStats["days"] }) {
   const maxValue = Math.max(...days.map(d => Math.max(d.introduced, d.fixed)), 1)
-  const w = 800
-  const h = 80
-  const padBottom = 16
-  const usable = h - padBottom
-  const slotW = w / days.length
-  const barW = 10
-  const gap = 3
+  // Bar heights are a percentage of the track and widths a percentage of each
+  // day column, so the chart fills the card at any width — full-stretch on a
+  // wide monitor without the fixed-width bars looking lost, and no aspect-ratio
+  // distortion of the rounded tops. A small floor keeps a non-zero day visible.
+  const barHeight = (value: number) => (value === 0 ? 0 : Math.max(6, (value / maxValue) * 100))
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="mt-4 h-20 w-full" preserveAspectRatio="none" aria-label="Last 7 days introduced vs fixed">
-      <g stroke="var(--color-border)" strokeWidth="1">
-        <line x1="0" y1={usable * 0.33} x2={w} y2={usable * 0.33} strokeDasharray="2 4" />
-        <line x1="0" y1={usable * 0.66} x2={w} y2={usable * 0.66} strokeDasharray="2 4" />
-      </g>
-      {days.map((d, i) => {
-        const cx = slotW * i + slotW / 2
-        const introH = (d.introduced / maxValue) * usable
-        const fixedH = (d.fixed / maxValue) * usable
-        return (
-          <g key={d.date}>
-            <rect
-              x={cx - barW - gap / 2}
-              y={usable - introH}
-              width={barW}
-              height={introH}
-              rx={2}
-              fill="var(--color-severity-high)"
-              opacity={d.introduced > 0 ? 0.85 : 0}
+    <div className="mt-4" role="img" aria-label="Findings introduced vs fixed over the last 7 days">
+      <div className="relative flex h-20 items-end gap-2">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-1/3 border-t border-dashed border-[var(--color-border)]/60" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-2/3 border-t border-dashed border-[var(--color-border)]/60" />
+        {days.map((d) => (
+          <div key={d.date} className="flex h-full flex-1 items-end justify-center gap-1">
+            <div
+              className="w-[34%] rounded-t-[3px] bg-[var(--color-severity-high)]/85"
+              style={{ height: `${barHeight(d.introduced)}%` }}
+              title={`${d.introduced.toLocaleString()} introduced`}
             />
-            <rect
-              x={cx + gap / 2}
-              y={usable - fixedH}
-              width={barW}
-              height={fixedH}
-              rx={2}
-              fill="var(--color-status-ok)"
-              opacity={d.fixed > 0 ? 0.85 : 0}
+            <div
+              className="w-[34%] rounded-t-[3px] bg-[var(--color-status-ok)]/85"
+              style={{ height: `${barHeight(d.fixed)}%` }}
+              title={`${d.fixed.toLocaleString()} fixed`}
             />
-            <text x={cx} y={h - 2} textAnchor="middle" fontSize="9" fill="var(--color-text-tertiary)">
-              {d.label}
-            </text>
-          </g>
-        )
-      })}
-    </svg>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex gap-2">
+        {days.map((d) => (
+          <span key={d.date} className="flex-1 text-center text-2xs text-[var(--color-text-tertiary)]">
+            {d.label}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -502,7 +491,7 @@ function DeltaArrow({ delta, kind }: { delta: number | null; kind: "introduced" 
   // Fixed going up is good (ok), going down is bad (high).
   const goodDir = kind === "introduced" ? "down" : "up"
   const dir = delta > 0 ? "up" : "down"
-  const cls = dir === goodDir ? "text-[var(--color-status-ok)]" : "text-[var(--color-severity-high)]"
+  const cls = dir === goodDir ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-severity-high-text)]"
   const arrow = dir === "up" ? "▲" : "▼"
   return (
     <span className={`ml-1.5 text-xs font-medium tabular-nums ${cls}`} aria-hidden="true">
@@ -515,9 +504,9 @@ function DeltaArrow({ delta, kind }: { delta: number | null; kind: "introduced" 
 function YourWeekSection({ stats }: { stats: WeekStats }) {
   const netClass =
     stats.net > 0
-      ? "text-[var(--color-severity-high)]"
+      ? "text-[var(--color-severity-high-text)]"
       : stats.net < 0
-      ? "text-[var(--color-status-ok)]"
+      ? "text-[var(--color-status-ok-text)]"
       : "text-[var(--color-text-primary)]"
   const netLabel = stats.net > 0 ? `+${stats.net}` : stats.net === 0 ? "0" : `−${Math.abs(stats.net)}`
   const rangeLabel = stats.dateRange || "Last 7 days"
@@ -535,7 +524,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
             <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Introduced
             </p>
-            <p className="mt-2 flex items-baseline text-3xl font-semibold tabular-nums leading-none text-[var(--color-severity-high)]">
+            <p className="mt-2 flex items-baseline text-3xl font-semibold tabular-nums leading-none text-[var(--color-severity-high-text)]">
               {stats.introduced.toLocaleString()}
               <DeltaArrow delta={stats.introducedDelta} kind="introduced" />
             </p>
@@ -545,7 +534,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
             <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Fixed
             </p>
-            <p className="mt-2 flex items-baseline text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok)]">
+            <p className="mt-2 flex items-baseline text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">
               {stats.fixed.toLocaleString()}
               <DeltaArrow delta={stats.fixedDelta} kind="fixed" />
             </p>
@@ -573,7 +562,7 @@ function ErrorBanner({ onRetry, retrying }: { onRetry: () => void; retrying: boo
   return (
     <div className="flex items-center justify-between rounded-2xl border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
       <div className="flex items-center gap-2 text-sm">
-        <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--color-severity-high)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--color-severity-high-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
         </svg>
         <span className="text-[var(--color-text-primary)]">Some data failed to load.</span>
@@ -625,7 +614,7 @@ function YourReposList({ repos }: { repos: GqlHomeAnalytics["topRepositories"] }
               <span className="flex-1 truncate text-sm font-medium text-[var(--color-text-primary)]" title={repo.name}>
                 {repo.name}
               </span>
-              <span className={`shrink-0 text-xs tabular-nums ${blocked ? "text-[var(--color-severity-critical)]" : healthy ? "text-[var(--color-status-ok)]" : "text-[var(--color-text-secondary)]"}`}>
+              <span className={`shrink-0 text-xs tabular-nums ${blocked ? "text-[var(--color-severity-critical-text)]" : healthy ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-text-secondary)]"}`}>
                 {detailText}
               </span>
               <svg className="h-4 w-4 shrink-0 text-[var(--color-text-tertiary)] transition-transform group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
@@ -735,11 +724,11 @@ export function HomeDashboard() {
   useSSE("source.synced", () => { void loadAll() })
 
   const tools: ToolRow[] = [
-    { label: "Dependencies", href: "/findings?scanner=deps", settingsHref: "/settings/dependencies", counts: deps, state: depsState, icon: "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" },
-    { label: "Containers", href: "/findings?scanner=container", settingsHref: "/settings/containers", counts: containers, state: containerState, icon: "M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" },
-    { label: "Code Scanning", href: "/findings?scanner=sast", settingsHref: "/settings/code", counts: code, state: codeState, icon: "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" },
-    { label: "Secrets", href: "/findings?scanner=secrets", settingsHref: "/settings/secrets", counts: secrets, state: secretState, icon: "M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" },
-    { label: "IaC Security", href: "/findings?scanner=iac", settingsHref: "/settings/iac-security", counts: iac, state: iacState, icon: "M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" },
+    { label: "Dependencies", href: "/findings?scanner=dependencies_scanning", counts: deps, state: depsState, icon: "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" },
+    { label: "Containers", href: "/findings?scanner=container_scanning", counts: containers, state: containerState, icon: "M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" },
+    { label: "Code Scanning", href: "/findings?scanner=code_scanning", counts: code, state: codeState, icon: "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" },
+    { label: "Secrets", href: "/findings?scanner=secret_scanning", counts: secrets, state: secretState, icon: "M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" },
+    { label: "IaC Security", href: "/findings?scanner=iac_scanning", settingsHref: "/settings/iac-security", counts: iac, state: iacState, icon: "M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" },
   ]
 
   const hasError = tools.some(t => t.state === "error") || sourcesState === "error"
@@ -849,7 +838,7 @@ export function HomeDashboard() {
           {fixedRecently > 0 && (
             <>
               {" · "}
-              <strong className="text-[var(--color-status-ok)]">
+              <strong className="text-[var(--color-status-ok-text)]">
                 {fixedRecently.toLocaleString()} fixed
               </strong>{" "}
               in the last 30 days

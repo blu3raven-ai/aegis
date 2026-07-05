@@ -138,12 +138,12 @@ export function ToolSettingsForm({
             Enabled
           </label>
           {!canEdit && (
-            <p className="max-w-[220px] text-right text-xs text-[var(--color-state-pending)]">
+            <p className="max-w-[220px] text-right text-xs text-[var(--color-state-pending-text)]">
               Only owners and admins can edit tool settings.
             </p>
           )}
           {computedDisableEnable && (
-            <p className="max-w-[220px] text-right text-xs text-[var(--color-state-pending)]">
+            <p className="max-w-[220px] text-right text-xs text-[var(--color-state-pending-text)]">
               {computedDisableEnable.reason}
             </p>
           )}
@@ -190,7 +190,7 @@ export function ToolSettingsForm({
       </fieldset>
 
       {error && (
-        <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}

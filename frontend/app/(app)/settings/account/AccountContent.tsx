@@ -5,7 +5,9 @@ import { fetchCurrentUser, type CurrentUser } from "@/lib/client/auth"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { Button } from "@/components/ui/Button"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { StatusBadge } from "@/components/ui/StatusBadge"
 import { EmailModal } from "./EmailModal"
+import { DisableTotpModal } from "./DisableTotpModal"
 import { PasswordModal } from "./PasswordModal"
 import { TotpSetupModal } from "./TotpSetupModal"
 import { UsernameModal } from "./UsernameModal"
@@ -16,11 +18,11 @@ import { SettingsRow } from "@/components/settings/SettingsRow"
 type OpenModal = "username" | "email" | "password" | "totp" | null
 
 /**
- * Identity + authentication editor. Rendered inside SecuritySessionsSection
+ * Identity + authentication editor. Rendered inside the Security section modal
  * as two inner sub-cards (Identity, Authentication). The component owns the
  * /me load, avatar upload, and the credential modals.
  */
-export function AccountContent() {
+export function AccountContent({ children }: { children?: React.ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [openModal, setOpenModal] = useState<OpenModal>(null)
@@ -90,16 +92,6 @@ export function AccountContent() {
     }
   }
 
-  async function handleDisableTotp() {
-    setShowConfirmDisableTotp(false)
-    try {
-      await apiClient("/api/v1/auth/totp/disable", { method: "POST" })
-      await loadUser()
-    } catch {
-      setShowErrorDialog("Failed to disable two-factor authentication.")
-    }
-  }
-
   if (loading) {
     return (
       <div className="space-y-3">
@@ -112,14 +104,13 @@ export function AccountContent() {
 
   return (
     <>
-      <Dialog
+      <DisableTotpModal
         open={showConfirmDisableTotp}
         onClose={() => setShowConfirmDisableTotp(false)}
-        onConfirm={handleDisableTotp}
-        title="Remove Two-Factor Authentication"
-        description="This will remove two-factor authentication from your account. Your account will be less secure."
-        confirmLabel="Remove 2FA"
-        variant="danger"
+        onSuccess={async () => {
+          setShowConfirmDisableTotp(false)
+          await loadUser()
+        }}
       />
       <Dialog
         open={showErrorDialog !== null}
@@ -129,7 +120,7 @@ export function AccountContent() {
         confirmLabel="OK"
       />
 
-      <SettingsCard heading="Identity">
+      <SettingsCard heading="Profile">
         <div className="flex items-center gap-4 border-b border-[var(--color-border)] px-4 py-4">
           <div className="relative">
             {user.avatarUrl ? (
@@ -180,7 +171,7 @@ export function AccountContent() {
                   size="xs"
                   onClick={handleRemoveAvatar}
                   disabled={avatarUploading}
-                  className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+                  className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
                 >
                   Remove
                 </Button>
@@ -211,6 +202,9 @@ export function AccountContent() {
             {user.email ? "Edit" : "Add"}
           </Button>
         </SettingsRow>
+        {/* Preferences (time zone / theme) are injected here so they share the
+            Profile card rather than sitting in a separate card. */}
+        {children}
       </SettingsCard>
 
       <SettingsCard heading="Authentication">
@@ -228,23 +222,19 @@ export function AccountContent() {
         >
           {user.totpEnabled ? (
             <>
-              <span className="rounded-full bg-[var(--color-success-bg)] px-2 py-0.5 text-xs font-medium text-[var(--color-success)]">
-                Enabled
-              </span>
+              <StatusBadge tone="ok">Enabled</StatusBadge>
               <Button
                 variant="ghost"
                 size="xs"
                 onClick={() => setShowConfirmDisableTotp(true)}
-                className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+                className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
               >
                 Remove
               </Button>
             </>
           ) : (
             <>
-              <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-tertiary)]">
-                Not set up
-              </span>
+              <StatusBadge tone="neutral">Not set up</StatusBadge>
               <Button variant="secondary" size="xs" onClick={() => setOpenModal("totp")}>
                 Set up
               </Button>

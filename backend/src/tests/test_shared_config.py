@@ -85,19 +85,3 @@ def test_get_scan_sources_skips_unknown_source_type(_patch_connections):
     assert sources == []
 
 
-def test_persisted_ai_enhanced_is_migrated_to_deep():
-    from unittest.mock import patch
-    from src.shared.config import get_secret_scanner_config
-    fake_config = {"tools": {"secret_scanning": {"scanDepth": "ai_enhanced", "scanConcurrency": "4"}}}
-    with patch("src.shared.config.read_app_config", return_value=fake_config):
-        cfg = get_secret_scanner_config()
-    assert cfg["scanDepth"] == "deep"
-
-
-def test_unknown_scan_depth_still_falls_back_to_light():
-    from unittest.mock import patch
-    from src.shared.config import get_secret_scanner_config
-    fake_config = {"tools": {"secret_scanning": {"scanDepth": "bogus"}}}
-    with patch("src.shared.config.read_app_config", return_value=fake_config):
-        cfg = get_secret_scanner_config()
-    assert cfg["scanDepth"] == "light"

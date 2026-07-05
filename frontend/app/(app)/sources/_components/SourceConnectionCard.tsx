@@ -12,10 +12,10 @@ const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-[var(--color-accent)
 
 
 const STATUS_CONFIG: Record<string, { dot: string; label: string; text: string }> = {
-  connected: { dot: "bg-[var(--color-status-ok)]", label: "Connected", text: "text-[var(--color-status-ok)]" },
-  syncing: { dot: "bg-[var(--color-severity-medium)] motion-safe:animate-pulse", label: "Syncing", text: "text-[var(--color-severity-medium)]" },
-  error: { dot: "bg-[var(--color-severity-critical)]", label: "Error", text: "text-[var(--color-severity-critical)]" },
-  disconnected: { dot: "bg-[var(--color-severity-critical)]", label: "Disconnected", text: "text-[var(--color-severity-critical)]" },
+  connected: { dot: "bg-[var(--color-status-ok)]", label: "Connected", text: "text-[var(--color-status-ok-text)]" },
+  syncing: { dot: "bg-[var(--color-severity-medium)] motion-safe:animate-pulse", label: "Syncing", text: "text-[var(--color-severity-medium-text)]" },
+  error: { dot: "bg-[var(--color-severity-critical)]", label: "Error", text: "text-[var(--color-severity-critical-text)]" },
+  disconnected: { dot: "bg-[var(--color-severity-critical)]", label: "Disconnected", text: "text-[var(--color-severity-critical-text)]" },
   "not-synced": { dot: "bg-[var(--color-text-tertiary)]", label: "Not Synced", text: "text-[var(--color-text-secondary)]" },
 }
 
@@ -158,7 +158,7 @@ export function SourceConnectionCard({
             {providerLabel} · {syncedAgo}
           </p>
           {connection.status === "error" && connection.statusMessage && (
-            <p className="mt-1 text-xs text-[var(--color-severity-critical)]">{connection.statusMessage}</p>
+            <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">{connection.statusMessage}</p>
           )}
         </div>
 
@@ -177,7 +177,7 @@ export function SourceConnectionCard({
             variant="secondary"
             size="sm"
             onClick={(e) => { e.stopPropagation(); setShowDeleteConfirm(true) }}
-            className="hover:border-[var(--color-severity-critical)] hover:text-[var(--color-severity-critical)]"
+            className="hover:border-[var(--color-severity-critical)] hover:text-[var(--color-severity-critical-text)]"
           >
             Delete
           </Button>

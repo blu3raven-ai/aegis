@@ -14,6 +14,8 @@ const STEP_ICON: Record<SetupTask["id"], string> = {
     "M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m9.86-2.54a4.5 4.5 0 0 0-1.242-7.244l4.5-4.5a4.5 4.5 0 1 0-6.364 6.364L10.5 8.121",
   run_first_scan:
     "M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z",
+  configure_llm:
+    "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z",
   triage_finding:
     "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
   set_sla_policy:
@@ -121,7 +123,7 @@ export function SetupChecklistCard() {
                   aria-hidden="true"
                   className={cn(
                     "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors",
-                    isDone && "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]",
+                    isDone && "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]",
                     isActive && "bg-[var(--color-accent)]/10 text-[var(--color-accent)]",
                     isUpcoming && "bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]",
                   )}

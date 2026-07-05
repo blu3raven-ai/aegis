@@ -1,3 +1,5 @@
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
+
 export function cn(...classes: (string | undefined | false | null)[]): string {
   return classes.filter(Boolean).join(" ")
 }
@@ -10,6 +12,7 @@ export function formatDate(value: string | null | undefined): string {
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: getActiveTimeZone(),
   })
 }
 
@@ -23,5 +26,6 @@ export function formatScanTimestamp(value: string | null | undefined): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: getActiveTimeZone(),
   })
 }

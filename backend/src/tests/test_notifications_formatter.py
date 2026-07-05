@@ -8,6 +8,7 @@ against.
 from __future__ import annotations
 
 from src.notifications.formatter import (
+    _escape_mrkdwn,
     _event_title,
     _payload_fields,
     _summary_line,
@@ -259,6 +260,65 @@ def test_format_for_webhook_missing_fields_default_to_empty_strings_and_dict():
     assert out["payload"] == {}
 
 
+
+
+def test_escape_mrkdwn_escapes_amp_lt_gt_in_documented_order():
+    # Slack's documented order is & first, then < and >, so an already-present
+    # entity isn't double-escaped.
+    assert _escape_mrkdwn("<script> & </b>") == "&lt;script&gt; &amp; &lt;/b&gt;"
+
+
+def test_format_for_slack_escapes_attacker_controlled_finding_title():
+    # A finding title carrying mrkdwn control chars must appear escaped in the
+    # Slack section, never as a raw injected link/format.
+    event = {
+        "event_type": "finding.created",
+        "event_id": "ev-1",
+        "org_id": "acme-org",
+        "payload": {"severity": "high", "title": "<http://evil|click> & <b>x</b>"},
+    }
+    out = format_for_slack(event)
+    summary_section = out["blocks"][1]["text"]["text"]
+    assert "&lt;http://evil|click&gt;" in summary_section
+    assert "&amp;" in summary_section
+    assert "<b>" not in summary_section
+    # Fallback text is mrkdwn-rendered too, so it must be escaped as well.
+    assert "<b>" not in out["text"]
+
+
+def test_format_for_slack_escapes_payload_field_values():
+    # Untrusted values in the fields block must be escaped; static labels aren't.
+    event = {
+        "event_type": "finding.created",
+        "event_id": "ev-1",
+        "org_id": "acme-org",
+        "payload": {"tool": "<img>&", "severity": "high"},
+    }
+    out = format_for_slack(event)
+    fields_texts = " ".join(
+        f["text"] for b in out["blocks"] if b.get("type") == "section"
+        for f in b.get("fields", [])
+    )
+    assert "&lt;img&gt;&amp;" in fields_texts
+
+
+def test_format_for_webhook_and_email_do_not_escape_mrkdwn():
+    # Escaping is Slack-mrkdwn-specific — the webhook JSON envelope and the plain
+    # email body must carry the raw finding text unchanged.
+    event = {
+        "event_type": "finding.created",
+        "event_id": "ev-1",
+        "org_id": "acme-org",
+        "timestamp_utc": "2026-06-16T00:00:00+00:00",
+        "payload": {"severity": "high", "tool": "<img>&", "title": "<b>raw</b> & <i>"},
+    }
+    webhook_out = format_for_webhook(event)
+    assert webhook_out["payload"]["title"] == "<b>raw</b> & <i>"
+    assert "<b>raw</b>" in webhook_out["summary"]
+
+    email_out = format_for_email(event)
+    assert "<b>raw</b> & <i>" in email_out["body"]
+    assert "<img>&" in email_out["body"]
 
 
 def test_format_for_email_subject_includes_event_title_and_org():

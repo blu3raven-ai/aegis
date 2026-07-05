@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import uuid
 
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 import pytest
 import pytest_asyncio

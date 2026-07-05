@@ -12,8 +12,8 @@ import asyncio
 import hashlib
 import os
 
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
-os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", "FAjK_lhsKHqBJ4uYY3oRWAa7c1pTkbHIfk7gjhFCpx8=")
+os.environ.setdefault("APP_SECRET", "0" * 64)
+os.environ.setdefault("APP_SECRET", "FAjK_lhsKHqBJ4uYY3oRWAa7c1pTkbHIfk7gjhFCpx8=")
 
 from datetime import datetime, timezone  # noqa: E402
 from unittest.mock import patch  # noqa: E402

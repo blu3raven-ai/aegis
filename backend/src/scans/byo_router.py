@@ -1,8 +1,8 @@
 """Bring-Your-Own scanner result import.
 
-Accepts a batch of targets + findings from an out-of-band scanner (Trivy, Snyk,
-etc.). Upserts each target as an asset, then ingests findings against those
-assets deduped via uq_finding_tool_asset_key.
+Accepts a batch of targets + findings from an out-of-band scanner (any
+SARIF/JSON producer). Upserts each target as an asset, then ingests findings
+against those assets deduped via uq_finding_tool_asset_key.
 """
 from __future__ import annotations
 

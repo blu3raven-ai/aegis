@@ -1,0 +1,23 @@
+{
+  "id": "e_reachable_recall_guard",
+  "verifier": "deps",
+  "note": "A true-positive reachable finding that must NOT be hidden. The vulnerable parser is invoked on request input; the LLM correctly reports a reachable path. Anchors recall_loss == 0.",
+  "finding": {
+    "packageName": "netparse",
+    "packageVersion": "3.1.0",
+    "cve": "CVE-0000-0005",
+    "ecosystem": "pypi"
+  },
+  "repo_files": {
+    "src/server.py": "import netparse\n\nnetparse.parse(request_body)\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"reachability\":\"reachable\",\"evidence\":[{\"kind\":\"sink\",\"file\":\"src/server.py\",\"line\":3,\"snippet\":\"netparse.parse(request_body)\"}]}",
+      "tokens_in": 130,
+      "tokens_out": 45
+    }
+  ],
+  "expected": {"reachability": "reachable", "suppressed": false},
+  "label": {"truly_reachable": true}
+}

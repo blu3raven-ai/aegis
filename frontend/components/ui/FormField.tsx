@@ -61,7 +61,7 @@ export function FormField({
           {required && (
             <span
               aria-hidden="true"
-              className="ml-0.5 text-[var(--color-severity-critical)]"
+              className="ml-0.5 text-[var(--color-severity-critical-text)]"
             >
               *
             </span>
@@ -77,7 +77,7 @@ export function FormField({
       {hasError ? (
         <p
           role="alert"
-          className="mt-1.5 text-xs text-[var(--color-severity-critical)]"
+          className="mt-1.5 text-xs text-[var(--color-severity-critical-text)]"
         >
           {error}
         </p>

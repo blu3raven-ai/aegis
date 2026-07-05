@@ -3,6 +3,7 @@
 import Link from "next/link"
 import type { ActivityEvent } from "@/lib/client/activity-api"
 import { relativeTime } from "@/lib/shared/relative-time"
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
 
 
 interface EventMeta {
@@ -83,6 +84,7 @@ function formatTime(isoString: string): string {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
+      timeZone: getActiveTimeZone(),
     })
   } catch {
     return ""
@@ -98,10 +100,10 @@ function severityTone(s: string): SeverityTone | undefined {
 
 // Tailwind v4 only emits literal class names; dynamic interpolation would silently no-op.
 const TONE_CLASSES: Record<SeverityTone, string> = {
-  critical: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)] border-[var(--color-severity-critical-border)]",
-  high: "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)] border-[var(--color-severity-high-border)]",
-  medium: "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)] border-[var(--color-severity-medium-border)]",
-  low: "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)] border-[var(--color-severity-low-border)]",
+  critical: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)] border-[var(--color-severity-critical-border)]",
+  high: "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high-text)] border-[var(--color-severity-high-border)]",
+  medium: "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)] border-[var(--color-severity-medium-border)]",
+  low: "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low-text)] border-[var(--color-severity-low-border)]",
 }
 
 const NEUTRAL_TONE = "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] border-[var(--color-border)]"

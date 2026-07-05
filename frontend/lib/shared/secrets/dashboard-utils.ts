@@ -1,4 +1,5 @@
 import type { ClassificationEntry, SecretFinding, SecretReviewStatus, SecretScanRun } from "@/lib/shared/secrets/types"
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
 
 // ---------------------------------------------------------------------------
 // Detector categorisation
@@ -298,6 +299,7 @@ export function formatTimestamp(value: string | null | undefined) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: getActiveTimeZone(),
   })
 }
 

@@ -16,7 +16,6 @@ import { previewOrg } from "@/lib/client/notification-rules-api"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { FormField } from "@/components/ui/FormField"
-import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
@@ -26,11 +25,8 @@ const SCANNER_OPTIONS = ["dependencies_scanning", "code_scanning", "secret_scann
 export function RulePreview() {
   const [finding, setFinding] = useState<PreviewFinding>({
     severity: "high",
-    scanner: "dependencies",
-    repo_id: "",
-    repo_labels: [],
+    scanner: "",
   })
-  const [labelsInput, setLabelsInput] = useState("")
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [breakdown, setBreakdown] = useState<PreviewBreakdownItem[] | null>(null)
@@ -42,15 +38,8 @@ export function RulePreview() {
     setBreakdown(null)
     setMatchedIds(null)
 
-    const labels = labelsInput
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-
     try {
-      const result = await previewOrg({
-        finding: { ...finding, repo_labels: labels },
-      })
+      const result = await previewOrg({ finding })
       setBreakdown(result.breakdown)
       setMatchedIds(result.matched_channel_ids)
     } catch (err: unknown) {
@@ -92,26 +81,6 @@ export function RulePreview() {
             ))}
           </Select>
         </FormField>
-
-        <FormField label="Repository ID" htmlFor="preview-repo-id">
-          <Input
-            id="preview-repo-id"
-            type="text"
-            value={finding.repo_id ?? ""}
-            onChange={(e) => setFinding((f) => ({ ...f, repo_id: e.target.value }))}
-            placeholder="e.g. repo-abc123"
-          />
-        </FormField>
-
-        <FormField label="Repo labels" htmlFor="preview-repo-labels">
-          <Input
-            id="preview-repo-labels"
-            type="text"
-            value={labelsInput}
-            onChange={(e) => setLabelsInput(e.target.value)}
-            placeholder="production, backend, …"
-          />
-        </FormField>
       </div>
 
       {/* Run button */}
@@ -127,7 +96,7 @@ export function RulePreview() {
 
       {/* Error */}
       {error && (
-        <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+        <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
       )}
 
       {/* Results */}
@@ -138,7 +107,7 @@ export function RulePreview() {
               Results
             </span>
             {matchedIds !== null && matchedIds.length > 0 ? (
-              <span className="ml-2 text-xs text-[var(--color-status-ok)] font-medium">
+              <span className="ml-2 text-xs text-[var(--color-status-ok-text)] font-medium">
                 {matchedIds.length} channel{matchedIds.length !== 1 ? "s" : ""} matched
               </span>
             ) : (
@@ -172,7 +141,7 @@ export function RulePreview() {
                     </Td>
                     <Td className="py-2">
                       {row.matched ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-status-ok)]">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-status-ok-text)]">
                           <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-status-ok)]" aria-hidden="true" />
                           Match
                         </span>

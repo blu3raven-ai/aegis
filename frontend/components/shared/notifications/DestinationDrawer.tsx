@@ -111,7 +111,7 @@ export function DestinationDrawer({
             <span
               className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-semibold ${
                 destination.enabled
-                  ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok)]"
+                  ? "bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]"
                   : "bg-[var(--color-border)] text-[var(--color-text-tertiary)]"
               }`}
             >
@@ -142,7 +142,7 @@ export function DestinationDrawer({
             {editing && isEditable ? (
               <DrawerSection label="Edit destination">
                 {submitError && (
-                  <p className="mb-3 text-sm text-[var(--color-severity-critical)]">{submitError}</p>
+                  <p className="mb-3 text-sm text-[var(--color-severity-critical-text)]">{submitError}</p>
                 )}
                 <DestinationForm
                   initial={destination}

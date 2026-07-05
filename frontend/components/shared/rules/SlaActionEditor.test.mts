@@ -7,46 +7,36 @@ const src = readFileSync(
   "utf-8",
 )
 
-describe("SlaActionEditor escalation cap", () => {
-  it("defines MAX_ESCALATIONS = 4", () => {
-    // Regression guard: matches the backend's hard cap.
-    assert.match(
-      src,
-      /MAX_ESCALATIONS\s*=\s*4/,
-      "should set MAX_ESCALATIONS to 4",
+describe("SlaActionEditor escalations", () => {
+  it("marks escalations as coming soon", () => {
+    // Escalations persist but never deliver a notification, so the editor
+    // presents them as a coming-soon leg rather than an interactive control.
+    assert.ok(
+      src.includes("Coming soon"),
+      "should badge the escalations section as coming soon",
     )
   })
 
-  it("disables the add button when at cap", () => {
-    assert.match(
-      src,
-      /disabled=\{\s*atCap\s*\}/,
-      "should disable the add escalation button when atCap is true",
+  it("does not offer an add-escalation control", () => {
+    assert.ok(
+      !src.includes("Add escalation step"),
+      "the add-escalation button should be removed",
+    )
+  })
+
+  it("still keeps the deadline as the working control", () => {
+    assert.ok(
+      src.includes("updateDeadline"),
+      "the deadline control remains functional",
     )
   })
 })
 
-describe("SlaActionEditor copy", () => {
-  it("renders the fix-deadline-first hint when the deadline is zero", () => {
+describe("SlaActionEditor grandfathered escalations", () => {
+  it("renders any existing escalations read-only", () => {
     assert.ok(
-      src.includes("Fix the deadline above first"),
-      "should render the deadline-invalid hint",
-    )
-  })
-
-  it("renders the no-destinations helper", () => {
-    assert.ok(
-      src.includes("Set up a notification destination first"),
-      "should render the no-destinations helper text",
-    )
-  })
-})
-
-describe("SlaActionEditor channel select", () => {
-  it("renders an option per destination", () => {
-    assert.ok(
-      src.includes("destinations.map("),
-      "should map destinations into <option> elements",
+      src.includes("before deadline") && src.includes("paused"),
+      "existing escalations should render as read-only, paused rows",
     )
   })
 })

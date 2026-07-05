@@ -15,11 +15,11 @@ export function SeverityCounts({
   includeLow = false,
 }: SeverityCountsProps) {
   const items = [
-    { count: counts.critical, label: "crit", color: "text-[var(--color-severity-critical)]", dot: "bg-[var(--color-severity-critical)]" },
-    { count: counts.high,     label: "high", color: "text-[var(--color-severity-high)]",     dot: "bg-[var(--color-severity-high)]"     },
-    { count: counts.medium,   label: "med",  color: "text-[var(--color-severity-medium)]",   dot: "bg-[var(--color-severity-medium)]"   },
+    { count: counts.critical, label: "crit", color: "text-[var(--color-severity-critical-text)]", dot: "bg-[var(--color-severity-critical)]" },
+    { count: counts.high,     label: "high", color: "text-[var(--color-severity-high-text)]",     dot: "bg-[var(--color-severity-high)]"     },
+    { count: counts.medium,   label: "med",  color: "text-[var(--color-severity-medium-text)]",   dot: "bg-[var(--color-severity-medium)]"   },
     ...(includeLow && counts.low != null
-      ? [{ count: counts.low, label: "low", color: "text-[var(--color-severity-low)]", dot: "bg-[var(--color-severity-low)]" }]
+      ? [{ count: counts.low, label: "low", color: "text-[var(--color-severity-low-text)]", dot: "bg-[var(--color-severity-low)]" }]
       : []),
   ]
   const visible = items.filter((i) => i.count > 0)

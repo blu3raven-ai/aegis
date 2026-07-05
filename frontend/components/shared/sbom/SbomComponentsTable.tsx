@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react"
 import { componentVulnsFor, type CycloneDxComponent, type ComponentVulnsLookup, type DependencyOrigin } from "@/lib/client/sbom-api"
 import { CATEGORY_META, CATEGORY_ORDER } from "@/lib/sbom/license-category"
+import { compareSeverity } from "@/lib/sbom/diff-severity"
 import { ComponentLicenseBadge } from "./ComponentLicenseBadge"
 import { DependencyOriginBadge } from "./DependencyOriginBadge"
 import { ComponentVulnBadge } from "./ComponentVulnBadge"
@@ -38,6 +39,7 @@ export function SbomComponentsTable({
   vulns,
   vulnsLoading = false,
   directness,
+  repo,
 }: {
   components: CycloneDxComponent[]
   loading: boolean
@@ -46,12 +48,20 @@ export function SbomComponentsTable({
   vulnsLoading?: boolean
   /** Direct/transitive/unknown per component bom-ref (from deriveDirectness). */
   directness?: Map<string, DependencyOrigin>
+  /** This repo's display_name — scopes each vuln badge's Findings link to it. */
+  repo?: string
 }) {
   const [search, setSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [licenseFilter, setLicenseFilter] = useState("all")
   const [originFilter, setOriginFilter] = useState("all")
+  const [vulnFilter, setVulnFilter] = useState("all")
+  const [vulnSort, setVulnSort] = useState(false)
   const [page, setPage] = useState(1)
+
+  // The vulnerable-only filter only means something once the overlay is loaded;
+  // without it every component would read as non-vulnerable and hide everything.
+  const vulnFilterReady = !vulnsLoading && vulns !== undefined
 
   const originOf = (c: CycloneDxComponent): DependencyOrigin =>
     (c.bomRef && directness?.get(c.bomRef)) || "unknown"
@@ -62,6 +72,8 @@ export function SbomComponentsTable({
       const matchesType = typeFilter === "all" || c.type === typeFilter
       const matchesLicense = licenseFilter === "all" || c.licenseCategory === licenseFilter
       const matchesOrigin = originFilter === "all" || originOf(c) === originFilter
+      const matchesVuln =
+        vulnFilter === "all" || (componentVulnsFor(vulns, c.name, c.version)?.total ?? 0) > 0
       const catLabel = c.licenseCategory ? CATEGORY_META[c.licenseCategory].label.toLowerCase() : ""
       const matchesSearch =
         !q ||
@@ -70,14 +82,27 @@ export function SbomComponentsTable({
         (c.purl?.toLowerCase().includes(q) ?? false) ||
         (c.licenses?.some((l) => l.toLowerCase().includes(q)) ?? false) ||
         catLabel.includes(q)
-      return matchesType && matchesLicense && matchesOrigin && matchesSearch
+      return matchesType && matchesLicense && matchesOrigin && matchesVuln && matchesSearch
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [components, search, typeFilter, licenseFilter, originFilter, directness])
+  }, [components, search, typeFilter, licenseFilter, originFilter, vulnFilter, vulns, directness])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
+  // Optional worst-severity-first ordering over the filtered set, so the
+  // riskiest components surface on page one instead of being buried in raw
+  // SBOM order. Off by default (preserves the manifest's own ordering).
+  const sorted = useMemo(() => {
+    if (!vulnSort) return filtered
+    return [...filtered].sort((a, b) =>
+      compareSeverity(
+        componentVulnsFor(vulns, a.name, a.version),
+        componentVulnsFor(vulns, b.name, b.version),
+      ),
+    )
+  }, [filtered, vulnSort, vulns])
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PER_PAGE))
   const safeePage = Math.min(page, totalPages)
-  const slice = filtered.slice((safeePage - 1) * PER_PAGE, safeePage * PER_PAGE)
+  const slice = sorted.slice((safeePage - 1) * PER_PAGE, safeePage * PER_PAGE)
 
   function handleSearch(val: string) {
     setSearch(val)
@@ -96,6 +121,16 @@ export function SbomComponentsTable({
 
   function handleOrigin(val: string) {
     setOriginFilter(val)
+    setPage(1)
+  }
+
+  function handleVuln(val: string) {
+    setVulnFilter(val)
+    setPage(1)
+  }
+
+  function handleVulnSort() {
+    setVulnSort((s) => !s)
     setPage(1)
   }
 
@@ -155,6 +190,19 @@ export function SbomComponentsTable({
           <option value="unknown">Unknown</option>
         </Select>
 
+        <Select
+          size="sm"
+          value={vulnFilterReady ? vulnFilter : "all"}
+          onChange={(e) => handleVuln(e.target.value)}
+          className="w-auto"
+          aria-label="Filter by vulnerability"
+          disabled={!vulnFilterReady}
+          title={vulnFilterReady ? undefined : "Vulnerability data is still loading"}
+        >
+          <option value="all">All components</option>
+          <option value="vulnerable">Vulnerable only</option>
+        </Select>
+
         <span className="ml-auto text-[11px] tabular-nums text-[var(--color-text-tertiary)]">
           {loading ? "Loading…" : `${filtered.length.toLocaleString()} component${filtered.length !== 1 ? "s" : ""}`}
         </span>
@@ -167,7 +215,28 @@ export function SbomComponentsTable({
             <Tr>
               <Th className="py-2.5">Name</Th>
               <Th className="py-2.5">Version</Th>
-              <Th className="py-2.5">Vulnerabilities</Th>
+              {vulnFilterReady ? (
+                <Th className="py-2.5" aria-sort={vulnSort ? "descending" : "none"}>
+                  <button
+                    type="button"
+                    onClick={handleVulnSort}
+                    className="group inline-flex items-center gap-1 text-2xs font-semibold uppercase tracking-[0.14em] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] rounded-sm"
+                    aria-label="Sort by vulnerability severity, worst first"
+                    title="Sort by severity (worst first)"
+                  >
+                    Vulnerabilities
+                    <svg
+                      viewBox="0 0 12 12"
+                      aria-hidden="true"
+                      className={`h-3 w-3 shrink-0 transition-opacity ${vulnSort ? "text-[var(--color-accent)] opacity-100" : "opacity-0 group-hover:opacity-50"}`}
+                    >
+                      <path d="M6 8.5 3 4.5h6z" fill="currentColor" />
+                    </svg>
+                  </button>
+                </Th>
+              ) : (
+                <Th className="py-2.5">Vulnerabilities</Th>
+              )}
               <Th className="py-2.5">Origin</Th>
               <Th className="py-2.5">License</Th>
             </Tr>
@@ -178,7 +247,7 @@ export function SbomComponentsTable({
             ) : slice.length === 0 ? (
               <Tr>
                 <Td colSpan={5} className="py-12 text-center text-sm text-[var(--color-text-secondary)]">
-                  {search || typeFilter !== "all" || licenseFilter !== "all" || originFilter !== "all"
+                  {search || typeFilter !== "all" || licenseFilter !== "all" || originFilter !== "all" || vulnFilter !== "all"
                     ? "No components match the current filters."
                     : "No components found in this SBOM."}
                 </Td>
@@ -207,7 +276,7 @@ export function SbomComponentsTable({
                     {vulnsLoading ? (
                       <Skeleton className="h-4 w-14" />
                     ) : (
-                      <ComponentVulnBadge vulns={componentVulnsFor(vulns, c.name, c.version)} packageName={c.name} />
+                      <ComponentVulnBadge vulns={componentVulnsFor(vulns, c.name, c.version)} packageName={c.name} repo={repo} />
                     )}
                   </Td>
                   <Td className="py-2.5">

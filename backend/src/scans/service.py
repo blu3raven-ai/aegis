@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # Default scanners for a git/repo source. Container scanning targets images, not
 # repos (a repo job supplies no image refs), so it is NOT a repo scanner — it
 # lives in _IMAGE_SCANNERS and image scans request it explicitly.
-_DEFAULT_SCANNERS = ["dependencies_scanning", "code_scanning", "secret_scanning", "iac_scanning"]
+_DEFAULT_SCANNERS = ["dependencies_scanning", "code_scanning", "secret_scanning", "iac_scanning", "agent_scanning"]
 
 _SCANNER_JOB_TYPES: dict[str, str] = {
     "dependencies_scanning": "dependencies_scanning",
@@ -26,6 +26,7 @@ _SCANNER_JOB_TYPES: dict[str, str] = {
     "container_scanning":    "container_scanning",
     "secret_scanning":       "secret_scanning",
     "iac_scanning":          "iac_scanning",
+    "agent_scanning":        "agent_scanning",
 }
 
 
@@ -49,13 +50,7 @@ def _dispatch_scanner_jobs(
     URL, so we fall back to the legacy github.com layout.
     """
     from src.audit_log.recorder import ActorInfo, get_recorder
-    from src.db.helpers import run_db
     from src.runner.jobs import create_job
-    from src.settings.argus.service import (
-        ArgusAuthError,
-        fetch_argus_connection,
-        mint_argus_access_token,
-    )
     from src.settings.llm.service import fetch_llm_config
     from src.settings.llm.usage import daily_remaining
     from src.shared.config import get_token_for_org
@@ -63,8 +58,13 @@ def _dispatch_scanner_jobs(
     token = get_token_for_org(org) or ""
     clone_url = repo_url or f"https://github.com/{repo_id}"
 
-    _LLM_CONFIG_KEY = "default"
-    llm_cfg = fetch_llm_config(_LLM_CONFIG_KEY)
+    # Argus (threat-intel enrichment) and the BYO LLM (finding verification) are
+    # independent concerns — either, both, or neither may be enabled, and neither
+    # suppresses the other. A scan can ship both: Argus enriches, the LLM verifies.
+    _CONFIG_KEY = "default"
+
+    # BYO LLM — the verification engine that tightens scanner precision (fewer FPs).
+    llm_cfg = fetch_llm_config(_CONFIG_KEY)
     llm_env: dict[str, str] = {}
     if llm_cfg and llm_cfg.enabled:
         llm_env = {
@@ -73,7 +73,7 @@ def _dispatch_scanner_jobs(
             "LLM_API_MODEL":             llm_cfg.model,
             "LLM_TOKEN_BUDGET_PER_SCAN": str(llm_cfg.scan_token_budget),
             "LLM_DAILY_REMAINING":       str(daily_remaining(
-                org_id=_LLM_CONFIG_KEY,
+                org_id=_CONFIG_KEY,
                 daily_budget=llm_cfg.daily_token_budget,
             )),
         }
@@ -85,33 +85,9 @@ def _dispatch_scanner_jobs(
             metadata={"model": llm_cfg.model, "scanners": scanners},
         )
 
-    # A configured Argus connection routes verification to the hosted service;
-    # the runner prefers ARGUS_ENDPOINT over the BYO LLM_API_* path when present.
-    _ARGUS_CONFIG_KEY = "default"
-    argus_conn = run_db(lambda session: fetch_argus_connection(session, _ARGUS_CONFIG_KEY))
-    argus_env: dict[str, str] = {}
-    if argus_conn and argus_conn.enabled:
-        # Mint a fresh, short-lived OAuth access token per scan — the durable
-        # refresh token never leaves the backend. On mint failure the scan
-        # falls back to local/Mode-A verification (no ARGUS_* env shipped).
-        try:
-            access_token = mint_argus_access_token(argus_conn)
-            argus_env = {
-                "ARGUS_ENDPOINT": argus_conn.endpoint,
-                "ARGUS_TOKEN":    access_token,
-            }
-            get_recorder().record(
-                action="scan.verification_started",
-                resource_type="scan_run",
-                resource_id=scan_id,
-                actor=ActorInfo(user_id="system:scan_dispatch"),
-                metadata={"endpoint": argus_conn.endpoint, "scanners": scanners},
-            )
-        except ArgusAuthError as exc:
-            logger.warning(
-                "argus token mint failed; scan %s falls back to local verification: %s",
-                scan_id, exc,
-            )
+    # Argus threat-intel enrichment runs backend-side (osv/argus_match.py), which
+    # holds the connection and mints its own token — the runner no longer consumes
+    # ARGUS_* env, so scan dispatch neither mints nor ships it.
 
     for scanner in scanners:
         job_type = _SCANNER_JOB_TYPES.get(scanner)
@@ -130,14 +106,11 @@ def _dispatch_scanner_jobs(
             "CONCURRENCY": "4",
             "SCAN_SCOPE":  scan_scope,
             **llm_env,
-            **argus_env,
         }
         if source_type:
             env["SOURCE_TYPE"] = source_type
         if base_sha:
             env["BASE_SHA"] = base_sha
-        if scanner == "secret_scanning":
-            env["SCAN_DEPTH"] = "deep"
 
         create_job(job_type=job_type, org=org, run_id=run_id, env_vars=env)
         logger.info("Dispatched %s runner job for scan %s (repo %s)", scanner, scan_id, repo_id)
@@ -254,7 +227,7 @@ def _parse_submitted_at(meta: dict[str, Any]) -> datetime:
     return datetime.now(timezone.utc)
 
 
-_REPO_SCANNERS = frozenset({"dependencies_scanning", "code_scanning", "secret_scanning", "iac_scanning"})
+_REPO_SCANNERS = frozenset({"dependencies_scanning", "code_scanning", "secret_scanning", "iac_scanning", "agent_scanning"})
 _IMAGE_SCANNERS = frozenset({"container_scanning"})
 _CLOUD_SCANNERS: frozenset[str] = frozenset()  # populated when cloud scanners exist
 

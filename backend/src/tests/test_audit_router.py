@@ -16,7 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.authz.enforcement.dependencies import Permission  # noqa: E402
 from src.authz.permissions.catalog import MANAGE_SETTINGS  # noqa: E402
@@ -113,6 +113,31 @@ def _session(rows, total):
     )
 
 
+class _FacetSessionCtx:
+    """Session mock scripting the two distinct-column reads the facets route makes."""
+
+    def __init__(self, actions: list[str], resource_types: list[str]):
+        self.session = MagicMock()
+        actions_result = MagicMock()
+        actions_result.scalars.return_value.all.return_value = actions
+        resources_result = MagicMock()
+        resources_result.scalars.return_value.all.return_value = resource_types
+        self.session.execute = AsyncMock(side_effect=[actions_result, resources_result])
+
+    async def __aenter__(self):
+        return self.session
+
+    async def __aexit__(self, *args):
+        return None
+
+
+def _facet_session(actions, resource_types):
+    return patch(
+        "src.audit_log.router.get_session",
+        return_value=_FacetSessionCtx(actions, resource_types),
+    )
+
+
 # ── permission + env-gate ──────────────────────────────────────────────────
 
 
@@ -135,6 +160,37 @@ def test_returns_409_when_env_disables_audit_log(monkeypatch):
 
     assert resp.status_code == 409
     assert "disabled" in resp.json()["detail"].lower()
+
+
+def test_facets_returns_distinct_actions_and_resource_types():
+    with _grant(), _facet_session(["a.created", "b.updated"], ["profile", "scim"]):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/settings/audit/facets")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["actions"] == ["a.created", "b.updated"]
+    assert body["resource_types"] == ["profile", "scim"]
+
+
+def test_facets_returns_409_when_env_disables_audit_log(monkeypatch):
+    monkeypatch.setenv("AEGIS_AUDIT_LOG_ENABLED", "false")
+    with _grant():
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/settings/audit/facets")
+
+    assert resp.status_code == 409
+
+
+def test_facets_rejects_caller_without_manage_settings_with_403():
+    with patch(
+        "src.authz.enforcement.dependencies.has_role_permission",
+        return_value=False,
+    ):
+        client = TestClient(_make_app(allow_manage_settings=False))
+        resp = client.get("/api/v1/settings/audit/facets")
+
+    assert resp.status_code == 403
 
 
 # ── filter pass-through + clamping ─────────────────────────────────────────
@@ -219,6 +275,34 @@ def test_returns_total_count_independent_of_page_size():
     assert body["limit"] == 3
     assert body["offset"] == 0
     assert len(body["events"]) == 3
+
+
+def test_q_applies_case_insensitive_substring_filter_across_fields():
+    """The `q` search scans action/actor/resource columns with a case-
+    insensitive LIKE so one search box replaces the per-facet dropdowns."""
+    with _grant(), _session(rows=[_row()], total=1) as get_session_mock:
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/settings/audit/events", params={"q": "Scim"})
+
+    assert resp.status_code == 200
+    list_stmt = get_session_mock.return_value.session.execute.call_args_list[0].args[0]
+    sql = str(list_stmt.compile(compile_kwargs={"literal_binds": True})).lower()
+    assert "like" in sql
+    for column in ("action", "actor_email", "actor_role", "resource_type", "resource_id"):
+        assert column in sql, column
+    # Escaped literal substring, matched case-insensitively.
+    assert "%scim%" in sql
+
+
+def test_q_escapes_like_wildcards_to_match_literally():
+    with _grant(), _session(rows=[], total=0) as get_session_mock:
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/settings/audit/events", params={"q": "50%_off"})
+
+    assert resp.status_code == 200
+    list_stmt = get_session_mock.return_value.session.execute.call_args_list[0].args[0]
+    sql = str(list_stmt.compile(compile_kwargs={"literal_binds": True})).lower()
+    assert "50\\%\\_off" in sql
 
 
 def test_handles_null_occurred_at():

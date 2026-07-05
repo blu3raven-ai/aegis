@@ -48,6 +48,7 @@ export interface GqlPostureTrendPoint {
   high: number
   medium: number
   low: number
+  newFindings: number
 }
 
 export interface GqlEpssTopFinding {

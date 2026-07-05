@@ -15,19 +15,13 @@ from sqlalchemy import delete
 from src.db.models import Asset, ScanRun
 
 
-def _capture_dispatch(monkeypatch, *, argus=None):
-    """Patch _dispatch_scanner_jobs' lazy imports; return list of created jobs.
-
-    `argus` stands in for a fetched ArgusConnectionDTO — run_db (which the
-    dispatch path uses only to load the Argus connection) is stubbed to return
-    it directly, keeping these tests DB-free.
-    """
+def _capture_dispatch(monkeypatch):
+    """Patch _dispatch_scanner_jobs' lazy imports; return list of created jobs."""
     jobs: list[dict] = []
     monkeypatch.setattr("src.runner.jobs.create_job",
                         lambda **kw: jobs.append(kw) or {"id": kw.get("run_id")})
     monkeypatch.setattr("src.shared.config.get_token_for_org", lambda org: "tok")
     monkeypatch.setattr("src.settings.llm.service.fetch_llm_config", lambda key: None)
-    monkeypatch.setattr("src.db.helpers.run_db", lambda q: argus)
     return jobs
 
 
@@ -46,78 +40,16 @@ def test_dispatch_sets_source_type_and_uses_provided_url(monkeypatch):
         assert j["env_vars"]["GIT_REPOS"] == "https://gl.acme.io/acme/api.git"
 
 
-def test_dispatch_ships_argus_env_when_enabled(monkeypatch):
-    """An enabled Argus connection ships ARGUS_ENDPOINT + ARGUS_TOKEN to every job."""
-    from src.scans.service import _dispatch_scanner_jobs
-    from src.settings.argus.service import ArgusConnectionDTO
+def test_dispatch_never_ships_argus_env(monkeypatch):
+    """Scan dispatch must never mint or ship ARGUS_* to a runner job.
 
-    conn = ArgusConnectionDTO(
-        endpoint="https://argus.example.ai",
-        token_endpoint="https://argus.example.ai/oauth/token",
-        client_id="aegis-client", refresh_token="rt", enabled=True,
-    )
-    # The dispatch mints a fresh short-lived access token; stub the exchange.
-    monkeypatch.setattr(
-        "src.settings.argus.service.mint_argus_access_token", lambda _conn: "minted-at-123"
-    )
-    jobs = _capture_dispatch(monkeypatch, argus=conn)
-
-    _dispatch_scanner_jobs("scan-a", "acme/api", "c" * 40, ["dependencies_scanning"], "acme")
-
-    env = jobs[0]["env_vars"]
-    assert env["ARGUS_ENDPOINT"] == "https://argus.example.ai"
-    assert env["ARGUS_TOKEN"] == "minted-at-123"
-
-
-def test_dispatch_omits_argus_env_when_disabled(monkeypatch):
-    """A disabled Argus connection ships no ARGUS_* env."""
-    from src.scans.service import _dispatch_scanner_jobs
-    from src.settings.argus.service import ArgusConnectionDTO
-
-    conn = ArgusConnectionDTO(
-        endpoint="https://argus.example.ai",
-        token_endpoint="https://argus.example.ai/oauth/token",
-        client_id="aegis-client", refresh_token="rt", enabled=False,
-    )
-    jobs = _capture_dispatch(monkeypatch, argus=conn)
-
-    _dispatch_scanner_jobs("scan-b", "acme/api", "c" * 40, ["dependencies_scanning"], "acme")
-
-    env = jobs[0]["env_vars"]
-    assert "ARGUS_ENDPOINT" not in env
-    assert "ARGUS_TOKEN" not in env
-
-
-def test_dispatch_falls_back_when_mint_fails(monkeypatch):
-    """If the OAuth token mint fails, the scan ships no ARGUS_* (local fallback)."""
-    from src.scans.service import _dispatch_scanner_jobs
-    from src.settings.argus.service import ArgusAuthError, ArgusConnectionDTO
-
-    conn = ArgusConnectionDTO(
-        endpoint="https://argus.example.ai",
-        token_endpoint="https://argus.example.ai/oauth/token",
-        client_id="aegis-client", refresh_token="rt", enabled=True,
-    )
-
-    def _boom(_conn):
-        raise ArgusAuthError("invalid_grant")
-
-    monkeypatch.setattr("src.settings.argus.service.mint_argus_access_token", _boom)
-    jobs = _capture_dispatch(monkeypatch, argus=conn)
-
-    _dispatch_scanner_jobs("scan-d", "acme/api", "c" * 40, ["dependencies_scanning"], "acme")
-
-    env = jobs[0]["env_vars"]
-    assert "ARGUS_ENDPOINT" not in env
-    assert "ARGUS_TOKEN" not in env
-
-
-def test_dispatch_omits_argus_env_when_absent(monkeypatch):
-    """No Argus connection configured -> no ARGUS_* env."""
+    Verification is the LLM Service and Argus threat-intel enrichment runs
+    backend-side (osv/argus_match.py), so the runner no longer consumes ARGUS_*.
+    """
     from src.scans.service import _dispatch_scanner_jobs
     jobs = _capture_dispatch(monkeypatch)
 
-    _dispatch_scanner_jobs("scan-c", "acme/api", "c" * 40, ["dependencies_scanning"], "acme")
+    _dispatch_scanner_jobs("scan-a", "acme/api", "c" * 40, ["dependencies_scanning"], "acme")
 
     env = jobs[0]["env_vars"]
     assert "ARGUS_ENDPOINT" not in env

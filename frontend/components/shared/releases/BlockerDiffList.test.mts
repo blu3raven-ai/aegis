@@ -58,14 +58,14 @@ describe("BlockerDiffList wiring", () => {
 describe("BlockerDiffList pill styles", () => {
   it("uses critical-subtle for NEW pill", () => {
     assert.ok(
-      helpers.includes("bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"),
+      helpers.includes("bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"),
       "NEW pill should use severity-critical tokens",
     )
   })
 
   it("uses state-pending-subtle for PERSISTED pill", () => {
     assert.ok(
-      helpers.includes("bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]"),
+      helpers.includes("bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]"),
       "PERSISTED pill should use state-pending tokens",
     )
   })
@@ -79,7 +79,7 @@ describe("BlockerDiffList pill styles", () => {
 
   it("uses status-ok-subtle for FIXED pill", () => {
     assert.ok(
-      helpers.includes("bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok)]"),
+      helpers.includes("bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]"),
       "FIXED pill should use status-ok tokens",
     )
   })

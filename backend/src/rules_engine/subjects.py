@@ -34,6 +34,8 @@ class RuleFindingSubject:
     epss_score: float | None = None
     file_path: str | None = None
     age_days: int = 0  # since first_seen_at
+    dependency_scope: str | None = None  # 'dev' | 'prod' | None (direct deps only)
+    release_age_days: int | None = None  # days since the installed version was published
 
 
 @dataclass
@@ -63,6 +65,7 @@ class RuleScanResultSubject:
 _FINDING_FIELDS: frozenset[str] = frozenset({
     "severity", "scanner", "repo_id", "repo_labels", "repo_archived",
     "cve_id", "cwe_id", "kev_matched", "epss_score", "file_path", "age_days",
+    "dependency_scope", "release_age_days",
 })
 
 _REPO_FIELDS: frozenset[str] = frozenset({

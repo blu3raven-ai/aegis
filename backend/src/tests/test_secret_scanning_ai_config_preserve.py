@@ -74,8 +74,6 @@ def test_save_without_ai_fields_preserves_existing_ai_config():
                 "enabled": True,
                 "settings": {
                     "scanConcurrency": "4",
-                    "scanDepth": "light",
-                    "scanHistoryWindow": "all",
                     "autoRerunEnabled": "false",
                     "rerunScheduleType": "simple",
                     "rerunScheduleValue": "02:00",

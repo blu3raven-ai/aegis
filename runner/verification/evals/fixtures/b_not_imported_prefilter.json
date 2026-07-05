@@ -1,0 +1,17 @@
+{
+  "id": "b_not_imported_prefilter",
+  "verifier": "deps",
+  "note": "Package never imported. Deterministic pre-filter short-circuits to no_path with no LLM spend. The no_path is context-only (no file citation) so it is NOT grounded and does not suppress on its own — a name-only import miss is unreliable.",
+  "finding": {
+    "packageName": "ghostlib",
+    "packageVersion": "2.3.0",
+    "cve": "CVE-0000-0002",
+    "ecosystem": "pypi"
+  },
+  "repo_files": {
+    "main.py": "import os\n\nprint('no vulnerable package referenced here')\n"
+  },
+  "llm_responses": [],
+  "expected": {"reachability": "no_path", "suppressed": false},
+  "label": {"truly_reachable": false}
+}

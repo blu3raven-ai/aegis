@@ -93,6 +93,7 @@ async def oidc_callback(request: Request, code: str = "", state: str = "") -> Re
                 subject=identity.subject,
                 email=identity.email,
                 protocol="oidc",
+                email_verified=identity.email_verified,
             )
         except AccountConflict:
             return False

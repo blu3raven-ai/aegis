@@ -346,22 +346,22 @@ test("mapApiFinding: severity defaults to `low` when server returns null", async
 // rebuild code-scanning titles that leak the workspace path + rule id.
 // ---------------------------------------------------------------------------
 
-test("mapApiFinding: strips the /workspace/job-<hash>/ prefix from filePath", async () => {
+test("mapApiFinding: strips the workspace/job and <repo>/_checkout/ prefixes from filePath", async () => {
   const { mapApiFinding } = await loadMapper()
   const row = mapApiFinding(makeApiFinding({
-    file_path: "/workspace/job-a1b95d663fec5bac/ilmu-asr-poc/_checkout/server.py",
+    file_path: "/workspace/job-a1b95d663fec5bac/example-repo/_checkout/server.py",
     line: 93,
   }) as any)
-  assert.equal(row.filePath, "ilmu-asr-poc/_checkout/server.py:93")
+  assert.equal(row.filePath, "server.py:93")
 })
 
 test("mapApiFinding: rebuilds a leaked code-scanning title as file:line", async () => {
   const { mapApiFinding } = await loadMapper()
   const row = mapApiFinding(makeApiFinding({
     scanner: "code_scanning",
-    title: "ilmu-asr-poc:/workspace/job-a1b95d663fec5bac/ilmu-asr-poc/_checkout/server.py:opt.semgrep.rules.python.lang.security.audit.insecure-transport.requests.request-with-http:93",
+    title: "example-repo:/workspace/job-a1b95d663fec5bac/example-repo/_checkout/server.py:opt.semgrep.rules.python.lang.security.audit.insecure-transport.requests.request-with-http:93",
     cve: null,
-    file_path: "/workspace/job-a1b95d663fec5bac/ilmu-asr-poc/_checkout/server.py",
+    file_path: "/workspace/job-a1b95d663fec5bac/example-repo/_checkout/server.py",
     line: 93,
   }) as any)
   assert.equal(row.title, "server.py:93")

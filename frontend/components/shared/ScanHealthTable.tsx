@@ -22,7 +22,7 @@ const MODE_STYLES: Record<string, string> = {
   light: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
   deep: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]",
   full: "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
-  sbom_only: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]",
+  sbom_only: "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]",
   advisories_only: "bg-[var(--color-argus-subtle)] text-[var(--color-argus)]",
 }
 
@@ -43,10 +43,10 @@ function durationLabel(seconds: number | null | undefined) {
 }
 
 function statusColour(status: string) {
-  if (status === "completed") return "text-[var(--color-state-fixed)]"
-  if (status === "failed") return "text-[var(--color-severity-critical)]"
+  if (status === "completed") return "text-[var(--color-state-fixed-text)]"
+  if (status === "failed") return "text-[var(--color-severity-critical-text)]"
   if (status === "cancelled") return "text-[var(--color-text-secondary)]"
-  return "text-[var(--color-state-pending)]"
+  return "text-[var(--color-state-pending-text)]"
 }
 
 function ModeBadge({ mode }: { mode?: string | null }) {
@@ -82,7 +82,7 @@ function RunRow({ label, run, showMode }: { label: string; run: ScanHealthRun; s
         {run.findingsCount ?? "—"}
       </Td>
       {run.error ? (
-        <Td className="max-w-xs text-xs text-[var(--color-severity-critical)] break-words">{run.error}</Td>
+        <Td className="max-w-xs text-xs text-[var(--color-severity-critical-text)] break-words">{run.error}</Td>
       ) : (
         <Td />
       )}

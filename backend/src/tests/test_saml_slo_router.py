@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
+os.environ.setdefault("APP_SECRET", Fernet.generate_key().decode())
 os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
 
 from src.auth.authentication.cookies import SESSION_COOKIE_NAME  # noqa: E402

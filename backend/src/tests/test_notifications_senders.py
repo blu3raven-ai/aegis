@@ -23,6 +23,17 @@ def _ensure_senders_registered(reset_and_reload_connectors):
     _reset_registry()
 
 
+@pytest.fixture(autouse=True)
+def _allow_test_urls(monkeypatch):
+    # The SSRF guard resolves the destination host before sending; the fake test
+    # URLs (example.test) don't resolve in CI, so pin them to a public address so
+    # the guard passes and the real sender logic (signing, response handling) runs.
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda *a, **k: [(2, 1, 0, "", ("93.184.216.34", 0))],
+    )
+
+
 
 @pytest.mark.parametrize("connector_id,cls_name,icon", [
     ("slack", "SlackSender", "slack"),

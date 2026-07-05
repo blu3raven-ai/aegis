@@ -28,7 +28,7 @@ interface RuleCategorySectionProps {
 // in lock-step even if their composition changes.
 const ICON_THEME: Record<string, { color: string; bg: string }> = {
   sla: {
-    color: "text-[var(--color-severity-critical)]",
+    color: "text-[var(--color-severity-critical-text)]",
     bg: "bg-[var(--color-severity-critical-subtle)]",
   },
   scanner_coverage: {
@@ -36,7 +36,7 @@ const ICON_THEME: Record<string, { color: string; bg: string }> = {
     bg: "bg-[var(--color-accent-subtle)]",
   },
   auto_dismiss: {
-    color: "text-[var(--color-severity-medium)]",
+    color: "text-[var(--color-severity-medium-text)]",
     bg: "bg-[var(--color-severity-medium-subtle)]",
   },
   data_retention: {

@@ -1,5 +1,4 @@
-// Pattern: Snyk metric card — large tabular number + uppercase tracking label.
-// Reference: Snyk dashboard metrics + CLAUDE.md KpiCard spec.
+// Metric card — large tabular number + uppercase tracking label (see CLAUDE.md KpiCard spec).
 import { cn } from "@/lib/shared/utils";
 
 type Props = {

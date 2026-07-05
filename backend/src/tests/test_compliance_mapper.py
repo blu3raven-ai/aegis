@@ -61,6 +61,14 @@ def test_iac_base_and_escalation():
     }
 
 
+def test_agent_scanning_maps_malicious_software_and_vuln_mgmt():
+    assert _ctrls("agent_scanning", "medium") == {("soc2", "CC6.8"), ("iso27001", "A.8.8")}
+    # High severity also pulls in incident-response readiness (Rule 7).
+    assert _ctrls("agent_scanning", "critical") == {
+        ("soc2", "CC6.8"), ("iso27001", "A.8.8"), ("soc2", "CC7.2"),
+    }
+
+
 def test_public_facing_dedup_keeps_single_cc66():
     # Rule 5 and Rule 6 both emit soc2/CC6.6 — the dedup must collapse them.
     drafts = map_finding(

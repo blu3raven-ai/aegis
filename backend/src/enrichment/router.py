@@ -17,11 +17,14 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
 from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import MANAGE_SETTINGS
+from src.db.engine import get_session
+from src.db.models import EpssScore, KevEntry, OsvAdvisory, OsvRefreshRun
 from src.shared.config import read_app_config, write_app_config
 
 logger = logging.getLogger(__name__)
@@ -66,6 +69,47 @@ def _spawn_osv_reconcile(mode: str) -> None:
             logger.exception("osv reconcile failed")
 
     threading.Thread(target=_run, daemon=True, name=f"osv-reconcile-{mode}").start()
+
+
+def _iso(value) -> str | None:
+    return value.isoformat() if value is not None else None
+
+
+@router.get("/status")
+async def get_enrichment_status(
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> JSONResponse:
+    """Freshness + size of each advisory feed the mirror serves.
+
+    Backs the settings "Advisory Data" card so an admin can see whether the
+    OSV/EPSS/KEV mirrors have ever been populated (matching produces zero
+    findings until OSV has run at least once) and when they last refreshed.
+    """
+    async with get_session() as session:
+        last_osv = (
+            await session.execute(
+                sa.select(OsvRefreshRun).order_by(OsvRefreshRun.started_at.desc()).limit(1)
+            )
+        ).scalar_one_or_none()
+        osv_count = await session.scalar(sa.select(sa.func.count()).select_from(OsvAdvisory))
+        epss_count = await session.scalar(sa.select(sa.func.count()).select_from(EpssScore))
+        epss_fetched = await session.scalar(sa.select(sa.func.max(EpssScore.fetched_at)))
+        kev_count = await session.scalar(sa.select(sa.func.count()).select_from(KevEntry))
+        kev_ingested = await session.scalar(sa.select(sa.func.max(KevEntry.ingested_at)))
+
+    return JSONResponse(
+        {
+            "osv": {
+                "advisories": osv_count or 0,
+                "lastRefreshedAt": _iso(last_osv.finished_at) if last_osv else None,
+                "startedAt": _iso(last_osv.started_at) if last_osv else None,
+                "error": last_osv.error if last_osv else None,
+            },
+            "epss": {"scores": epss_count or 0, "lastRefreshedAt": _iso(epss_fetched)},
+            "kev": {"entries": kev_count or 0, "lastRefreshedAt": _iso(kev_ingested)},
+        }
+    )
 
 
 @router.post("/osv/refresh", status_code=202)

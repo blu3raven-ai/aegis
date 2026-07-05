@@ -113,7 +113,7 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
 
           {rule.enabled && (
             <span
-              className="inline-flex items-center gap-1 rounded bg-[var(--color-state-fixed)]/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wider text-[var(--color-state-fixed)]"
+              className="inline-flex items-center gap-1 rounded bg-[var(--color-state-fixed)]/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wider text-[var(--color-state-fixed-text)]"
             >
               Active
             </span>
@@ -121,7 +121,7 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
 
           {rule.enabled && violationsOpen > 0 && (
             <span
-              className="inline-flex items-center gap-1 rounded-full bg-[var(--color-severity-critical)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--color-severity-critical)]"
+              className="inline-flex items-center gap-1 rounded-full bg-[var(--color-severity-critical)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--color-severity-critical-text)]"
             >
               {violationsOpen} violation{violationsOpen === 1 ? "" : "s"}
             </span>
@@ -151,13 +151,14 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
             Applies to all repos · created {formatCreatedAt(rule.created_at)} by {rule.created_by}
           </span>
           {showViolationsLink && (
-            // TODO: wire view-violations action in a later task
             <Button
               variant="link"
               size="xs"
               disabled
               aria-disabled="true"
-              className="cursor-not-allowed text-[var(--color-text-tertiary)] underline-offset-2 hover:underline disabled:opacity-60"
+              title="Coming soon"
+              aria-label="View violations — coming soon"
+              className="cursor-not-allowed text-[var(--color-text-tertiary)] underline-offset-2 disabled:opacity-60"
             >
               View violations →
             </Button>
@@ -197,7 +198,7 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
             variant="ghost"
             size="xs"
             onClick={handleDeleteClick}
-            className="text-[var(--color-severity-critical)] hover:text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
+            className="text-[var(--color-severity-critical-text)] hover:text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)]"
           >
             Delete
           </Button>

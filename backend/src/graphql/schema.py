@@ -25,17 +25,21 @@ from src.scans.resolvers import (
     container_scanning_counts,
     dependencies_scanning_counts,
     iac_scanning_counts,
+    agent_scanning_counts,
     secret_scanning_counts,
 )
 from src.posture.resolvers import (
-    PostureSnapshot, TeamPosture,
-    home_analytics, posture_by_team, posture_snapshot, posture_trend,
+    ExploitabilitySummary, PostureSnapshot, RiskContributionItem,
+    ScannerBreakdownItem, SlaPostureSummary, TeamPosture,
+    exploitability_summary, home_analytics, posture_by_team, posture_snapshot,
+    posture_trend, risk_contributions, scanner_breakdown, sla_posture,
 )
 from src.sbom.resolvers import (
     SbomComponentsConnection, SbomFilterOptions, SbomCrossRefResult, SbomBulkResult,
     SbomHistoryEntry, SbomDiffOrError, RepoComponentVulns, RiskyComponentsConnection, PackageRepo,
-    sbom_search, sbom_filter_options, sbom_cross_references, sbom_bulk_lookup,
+    SbomEcosystemAnalytics, sbom_search, sbom_filter_options, sbom_cross_references, sbom_bulk_lookup,
     sbom_history, sbom_diff, sbom_component_vulns, sbom_risky_components, sbom_package_repos,
+    sbom_ecosystem_analytics,
 )
 from src.sla.resolvers import sla_breach_summary
 from src.epss.resolvers import epss_top
@@ -159,6 +163,14 @@ class IacScanningQuery:
 
 
 @strawberry.type
+class AgentScanningQuery:
+    @strawberry.field
+    async def counts(self, info: strawberry.types.Info) -> SeverityCounts:
+        ctx, asset_ids = await unpack_ctx(info)
+        return agent_scanning_counts(asset_ids=asset_ids, info_context=ctx)
+
+
+@strawberry.type
 class ScansQuery:
     @strawberry.field
     def dependencies_scanning(self) -> DependenciesScanningQuery:
@@ -179,6 +191,10 @@ class ScansQuery:
     @strawberry.field
     def iac_scanning(self) -> IacScanningQuery:
         return IacScanningQuery()
+
+    @strawberry.field
+    def agent_scanning(self) -> AgentScanningQuery:
+        return AgentScanningQuery()
 
 
 @strawberry.type
@@ -296,6 +312,11 @@ class SbomQuery:
         return sbom_bulk_lookup(queries=queries, info_context=ctx)
 
     @strawberry.field
+    async def ecosystem_analytics(self, info: strawberry.types.Info) -> list[SbomEcosystemAnalytics]:
+        ctx, _ = await unpack_ctx(info)
+        return sbom_ecosystem_analytics(info_context=ctx)
+
+    @strawberry.field
     async def risky_components(
         self,
         info: strawberry.types.Info,
@@ -310,9 +331,14 @@ class SbomQuery:
         )
 
     @strawberry.field
-    async def package_repos(self, info: strawberry.types.Info, package_name: str) -> list[PackageRepo]:
+    async def package_repos(
+        self,
+        info: strawberry.types.Info,
+        package_name: str,
+        ecosystem: Optional[str] = None,
+    ) -> list[PackageRepo]:
         ctx, _ = await unpack_ctx(info)
-        return sbom_package_repos(package_name=package_name, info_context=ctx)
+        return sbom_package_repos(package_name=package_name, ecosystem=ecosystem, info_context=ctx)
 
     @strawberry.field
     async def history(
@@ -366,6 +392,28 @@ class PostureQuery:
     async def home_analytics(self, info: strawberry.types.Info) -> HomeAnalytics:
         ctx, _ = await unpack_ctx(info)
         return home_analytics(info_context=ctx)
+
+    @strawberry.field
+    async def scanner_breakdown(self, info: strawberry.types.Info) -> list[ScannerBreakdownItem]:
+        ctx, _ = await unpack_ctx(info)
+        return scanner_breakdown(info_context=ctx)
+
+    @strawberry.field
+    async def risk_contributions(
+        self, info: strawberry.types.Info, dimension: str
+    ) -> list[RiskContributionItem]:
+        ctx, _ = await unpack_ctx(info)
+        return risk_contributions(dimension=dimension, info_context=ctx)
+
+    @strawberry.field
+    async def exploitability_summary(self, info: strawberry.types.Info) -> ExploitabilitySummary:
+        ctx, _ = await unpack_ctx(info)
+        return exploitability_summary(info_context=ctx)
+
+    @strawberry.field
+    async def sla_posture(self, info: strawberry.types.Info) -> SlaPostureSummary:
+        ctx, _ = await unpack_ctx(info)
+        return sla_posture(info_context=ctx)
 
 
 @strawberry.type

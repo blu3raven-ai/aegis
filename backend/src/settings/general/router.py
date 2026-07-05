@@ -6,7 +6,6 @@ import hmac
 import os
 import secrets
 
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,7 +16,6 @@ from src.authz.permissions.catalog import MANAGE_SETTINGS
 from src.settings.general.schemas import (
     AccountSettingsRequest,
     GeneralSettingsRequest,
-    ScannerPrerequisitesResponse,
     ToolSettingsRequest,
 )
 from src.shared.config import (
@@ -102,9 +100,9 @@ _TOOL_ENV_MAP: dict[str, dict[str, Any]] = {
     },
     "secret_scanning": {
         "enabled": "SECRETS_ENABLED",
-        "fields": {
-            "scanConcurrency": "SECRET_SCANNER_CONCURRENCY",
-        },
+        # scanConcurrency is an optional merged field (applied via ui_to_config
+        # below), managed centrally under Runners settings rather than per tool.
+        "fields": {},
     },
     "iac_scanning": {
         "enabled": "IAC_SECURITY_ENABLED",
@@ -205,50 +203,6 @@ def _validate_password_change(
     return True, body.new_password
 
 
-_RUNNER_HEALTHY_HEARTBEAT_SECONDS = 60
-
-
-def _evaluate_prerequisites_for_tool(tool: str, runners: list[dict]) -> dict:
-    """Return prerequisites response for a scanner tool.
-
-    Post embedded-migration, all scanner tools share the same prerequisite:
-    at least one runner has heartbeated within the last 60 seconds.
-    """
-    now = datetime.now(timezone.utc)
-    for runner in runners:
-        last_seen_iso = runner.get("lastSeen")
-        if not last_seen_iso:
-            continue
-        try:
-            last_seen = datetime.fromisoformat(last_seen_iso.replace("Z", "+00:00"))
-        except (TypeError, ValueError):
-            continue
-        if (now - last_seen).total_seconds() <= _RUNNER_HEALTHY_HEARTBEAT_SECONDS:
-            return {"status": "ready", "runnerName": runner.get("name", "runner")}
-
-    return {"status": "no_runner"}
-
-
-def _runner_based_prerequisites(tool: str) -> ScannerPrerequisitesResponse:
-    """Check if at least one runner is online to satisfy scanner prerequisites."""
-    from src.runner.registry import list_approved_online_runners
-
-    runners = list_approved_online_runners()
-    result = _evaluate_prerequisites_for_tool(tool, runners)
-
-    if result["status"] == "ready":
-        return ScannerPrerequisitesResponse(
-            runner_connected=True,
-            scanner_status="ready",
-            runner_name=result.get("runnerName", ""),
-        )
-
-    return ScannerPrerequisitesResponse(
-        runner_connected=False,
-        scanner_status="no_runner",
-        error="No runner connected",
-    )
-
 
 @router.get("")
 def get_settings(
@@ -256,20 +210,6 @@ def get_settings(
     _: None = Depends(Permission(MANAGE_SETTINGS)),
 ) -> dict[str, Any]:
     return _safe_config(read_app_config())
-
-
-@router.get("/tools/{tool}/prerequisites", response_model=ScannerPrerequisitesResponse)
-def get_tool_prerequisites(
-    request: Request,
-    tool: str,
-    _: None = Depends(Permission(MANAGE_SETTINGS)),
-) -> ScannerPrerequisitesResponse:
-    if tool not in _VALID_TOOLS:
-        raise _api_error(
-            f"Unknown tool: {tool}. Must be one of: {', '.join(sorted(_VALID_TOOLS))}.",
-            422,
-        )
-    return _runner_based_prerequisites(tool)
 
 
 @router.patch("/general")
@@ -345,15 +285,6 @@ async def save_tool_settings(
             if numeric <= 0:
                 raise _api_error(f"{ui_key} must be a positive number.", 400)
 
-    # Validate scanner prerequisites before enabling
-    if body.enabled:
-        prereq = _runner_based_prerequisites(tool)
-        if not prereq.runner_connected:
-            raise _api_error(
-                prereq.error or "No runner is connected. Connect a runner before enabling this scanner.",
-                400,
-            )
-
     tools = config.setdefault("tools", {})
     tool_config = tools.setdefault(tool, {})
     tool_config["enabled"] = body.enabled
@@ -401,60 +332,49 @@ async def save_tool_settings(
                 raise _api_error(err, 400)
             tool_config["ghsaApiKey"] = submitted_ghsa_key
 
+        # Release-age enrichment — opt-in (off by default); reaches deps.dev.
+        if "releaseAgeEnabled" in body.settings:
+            tool_config["releaseAgeEnabled"] = (
+                str(body.settings.get("releaseAgeEnabled") or "false").strip().lower() == "true"
+            )
+        if "releaseAgeThresholdDays" in body.settings:
+            try:
+                days = int(str(body.settings.get("releaseAgeThresholdDays")).strip())
+            except (TypeError, ValueError):
+                raise _api_error("releaseAgeThresholdDays must be an integer", 400)
+            tool_config["releaseAgeThresholdDays"] = str(max(1, min(days, 3650)))
+
+        # Base-image tag recommendation — opt-in; lists tags from the registry.
+        if "baseImageTagsEnabled" in body.settings:
+            tool_config["baseImageTagsEnabled"] = (
+                str(body.settings.get("baseImageTagsEnabled") or "false").strip().lower() == "true"
+            )
+        # Base-image upgrade recommendation — opt-in; SBOM-scans candidate tags.
+        if "baseImageRecommendEnabled" in body.settings:
+            tool_config["baseImageRecommendEnabled"] = (
+                str(body.settings.get("baseImageRecommendEnabled") or "false").strip().lower() == "true"
+            )
+
     ui_to_config = {
         "dependencies_scanning": {
             "scanConcurrency": "scanConcurrency",
-            "autoRerunEnabled": "autoRerunEnabled",
-            "rerunScheduleType": "rerunScheduleType",
-            "rerunScheduleValue": "rerunScheduleValue",
         },
         "container_scanning": {
             "scanConcurrency": "scanConcurrency",
-            "autoRerunEnabled": "autoRerunEnabled",
-            "rerunScheduleType": "rerunScheduleType",
-            "rerunScheduleValue": "rerunScheduleValue",
         },
         "code_scanning": {
             "scanConcurrency": "scanConcurrency",
-            "rulesets": "rulesets",
-            "autoRerunEnabled": "autoRerunEnabled",
-            "rerunScheduleType": "rerunScheduleType",
-            "rerunScheduleValue": "rerunScheduleValue",
         },
         "secret_scanning": {
             "scanConcurrency": "scanConcurrency",
-            "scanDepth": "scanDepth",
-            "scanHistoryWindow": "scanHistoryWindow",
-            "autoRerunEnabled": "autoRerunEnabled",
-            "rerunScheduleType": "rerunScheduleType",
-            "rerunScheduleValue": "rerunScheduleValue",
         },
         "iac_scanning": {
-            "autoRerunEnabled": "autoRerunEnabled",
-            "rerunScheduleType": "rerunScheduleType",
-            "rerunScheduleValue": "rerunScheduleValue",
         },
     }
     for ui_key, config_key in ui_to_config[tool].items():
         if ui_key not in body.settings:
             continue
         tool_config[config_key] = str(body.settings.get(ui_key) or "").strip()
-
-    # Coerce rulesets string → list for Code Scanning
-    if tool == "code_scanning" and "rulesets" in tool_config:
-        rulesets_raw = tool_config["rulesets"]
-        if isinstance(rulesets_raw, str):
-            tool_config["rulesets"] = [r.strip() for r in rulesets_raw.split(",") if r.strip()]
-
-    if tool == "secret_scanning" and "scanHistoryWindow" in tool_config:
-        if tool_config["scanHistoryWindow"] not in {"all", "30d", "90d", "180d", "365d"}:
-            tool_config["scanHistoryWindow"] = "all"
-
-    if "autoRerunEnabled" in tool_config:
-        tool_config["autoRerunEnabled"] = str(tool_config["autoRerunEnabled"]).lower() == "true"
-        if tool_config["autoRerunEnabled"]:
-            from src.license.limits import check_feature
-            check_feature(request, "custom_scan_schedule")
 
     write_app_config(config, f"settings.{tool}.updated")
     sync_runtime_env_from_config(config)

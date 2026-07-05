@@ -15,8 +15,14 @@ from src.sources.store import (
     SourceStoreError,
 )
 from src.sources.test_connection import test_connection
+from src.shared.encryption import DecryptionError
 from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import MANAGE_SOURCES, VIEW_SOURCES
+
+_DECRYPT_FAILED_MSG = (
+    "Stored credentials could not be decrypted — the encryption key may have "
+    "changed. Re-enter the token to reconnect."
+)
 source_connections_router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
 
 
@@ -81,7 +87,9 @@ def _serialize_connection(c: dict[str, Any]) -> dict[str, Any]:
         "syncSchedule": c.get("syncSchedule"),
         "statusMessage": c.get("statusMessage"),
         "lastSyncedAt": c.get("lastSyncedAt"),
+        "lastScanAt": c.get("lastScanAt"),
         "nextSyncAt": c.get("nextSyncAt"),
+        "findingCounts": c.get("findingCounts") or {"critical": 0, "high": 0, "medium": 0, "low": 0},
         "discoveredItemCount": c.get("discoveredItemCount"),
         "discoveredItems": list(c.get("discoveredItems") or []),
         "createdAt": c.get("createdAt"),
@@ -165,9 +173,12 @@ def get_connection_counts(
 
 
 @source_connections_router.get("/connections/internal-orgs")
-def get_internal_orgs(request: Request) -> JSONResponse:
-    # Any authenticated session — no specific permission required.
-    # The /api/v1/* prefix is already guarded by the session middleware.
+def get_internal_orgs(
+    request: Request,
+    _: None = Depends(Permission(VIEW_SOURCES)),
+) -> JSONResponse:
+    # Gated like its sibling connection reads: this discloses the connected
+    # org/owner inventory + health, which belongs behind view_sources.
     try:
         connections = sources_store.list_connections()
         return JSONResponse({
@@ -266,6 +277,11 @@ async def post_test_connection(
                 status_message=result.message,
             )
         return JSONResponse(result.to_dict())
+    except DecryptionError:
+        sources_store.update_connection_status(
+            connection_id, status="disconnected", status_message=_DECRYPT_FAILED_MSG
+        )
+        return _json_error(_DECRYPT_FAILED_MSG, status_code=400)
     except SourceNotFoundError as exc:
         return _json_error(exc, status_code=404)
     except SourceValidationError as exc:
@@ -289,6 +305,11 @@ async def post_scan_connection(
         connection = sources_store.get_connection_with_secrets(connection_id)
         queued = dispatch_source_scan(connection, run_prefix="manual")
         return JSONResponse({"queued": queued, "count": len(queued)}, status_code=202)
+    except DecryptionError:
+        sources_store.update_connection_status(
+            connection_id, status="disconnected", status_message=_DECRYPT_FAILED_MSG
+        )
+        return _json_error(_DECRYPT_FAILED_MSG, status_code=400)
     except ValueError as exc:
         return _json_error(str(exc), status_code=400)
     except SourceNotFoundError as exc:

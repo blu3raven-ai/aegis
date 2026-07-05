@@ -282,4 +282,54 @@ def fetch_registry_digest(
     return _parse_docker_content_digest(stdout)
 
 
-__all__: Iterable[str] = ("fetch_registry_digest",)
+_MAX_TAGS = 500
+
+
+def list_tags(
+    image_ref: str,
+    *,
+    docker_config: Path | None = None,
+    cancel_event: threading.Event | None = None,
+) -> list[str] | None:
+    """Return the registry tag list for ``image_ref``'s repo, or None.
+
+    Same SSRF validation and pull-scoped auth as ``fetch_registry_digest`` —
+    the ``/v2/<repo>/tags/list`` endpoint needs the identical token scope. The
+    raw list is returned verbatim (capped); newer-version selection is the
+    caller's job. None means "couldn't list" (unparseable ref, blocked host,
+    transport error), which the caller treats as a soft skip.
+    """
+    parsed = _parse_image_ref(image_ref)
+    if parsed is None:
+        return None
+    if not _validate_registry_host(parsed.registry):
+        return None
+
+    auth = _auth_header(
+        parsed.registry,
+        parsed.repo,
+        docker_config=docker_config,
+        cancel_event=cancel_event,
+    )
+    cmd: list[str] = ["curl", "-sf", "--max-time", str(int(_REGISTRY_HEAD_TIMEOUT_S))]
+    if auth:
+        cmd.extend(["-H", auth])
+    cmd.append(f"https://{parsed.registry}/v2/{parsed.repo}/tags/list")
+
+    rc, stdout, _ = run_tool(
+        cmd,
+        timeout=_REGISTRY_HEAD_TIMEOUT_S + 5,
+        cancel_event=cancel_event,
+    )
+    if rc != 0 or not stdout:
+        return None
+    try:
+        tags = json.loads(stdout).get("tags")
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(tags, list):
+        return None
+    return [t for t in tags if isinstance(t, str)][:_MAX_TAGS]
+
+
+__all__: Iterable[str] = ("fetch_registry_digest", "list_tags")

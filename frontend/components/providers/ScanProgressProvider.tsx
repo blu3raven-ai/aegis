@@ -236,7 +236,7 @@ export function ScanProgressProvider({ children }: { children: React.ReactNode }
                 size="xs"
                 onClick={() => scans.forEach((s) => void cancel(s.connectionId))}
                 leadingIcon={<X className="h-3.5 w-3.5" strokeWidth={2.5} />}
-                className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+                className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
               >
                 Cancel all
               </Button>

@@ -1,16 +1,16 @@
 """Pydantic schema enforcement on the SAST hunter LLM response."""
 from __future__ import annotations
 
-from runner.verification.llm_client import LlmResponse
+from runner.verification.llm_client import LlmClient, LlmResponse
 from runner.verification.pipeline import verify_finding
 
 
-class _FixedLlm:
-    """Returns a fixed content string for every chat call."""
+class _FixedLlm(LlmClient):
+    """Returns a fixed content string for every chat call (repair-safe)."""
 
     def __init__(self, content: str) -> None:
+        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._content = content
-        self._model = "stub"
 
     def chat(self, messages, *, temperature=0.0, max_tokens=1024):
         return LlmResponse(content=self._content, tokens_in=10, tokens_out=5,
@@ -53,8 +53,9 @@ def test_valid_hunter_response_schema_passes_through():
     ]
     idx = [0]
 
-    class _TwoShotLlm:
-        _model = "stub"
+    class _TwoShotLlm(LlmClient):
+        def __init__(self) -> None:
+            super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
 
         def chat(self, messages, *, temperature=0.0, max_tokens=1024):
             content = responses[idx[0]]
@@ -82,17 +83,18 @@ def test_hunter_schema_invalid_verdict_falls_back():
     assert result.verdict in ("needs_verify", "possible")
 
 
-class _TwoShotLlm:
+class _TwoShotLlm(LlmClient):
     """Returns a fixed hunter response then a fixed skeptic response."""
 
-    _model = "stub"
-
     def __init__(self, hunter_content: str, skeptic_content: str) -> None:
+        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._responses = [hunter_content, skeptic_content]
         self._idx = 0
 
     def chat(self, messages, *, temperature=0.0, max_tokens=1024):
-        content = self._responses[self._idx]
+        # Clamp to the last scripted response so a chat_json repair-retry sees the
+        # same (still-invalid) skeptic content and exhausts its budget.
+        content = self._responses[min(self._idx, len(self._responses) - 1)]
         self._idx += 1
         return LlmResponse(content=content, tokens_in=10, tokens_out=5,
                            prompt_hash=f"h-{self._idx}")

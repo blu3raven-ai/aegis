@@ -120,7 +120,7 @@ export function AddMappingSheet({
       {error && (
         <p
           role="alert"
-          className="mb-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical)]"
+          className="mb-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical-text)]"
         >
           {error}
         </p>

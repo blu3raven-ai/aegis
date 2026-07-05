@@ -29,7 +29,7 @@ describe("CweContextSection", () => {
     assert.match(src, /rel="noreferrer noopener"/)
   })
 
-  it("uses the established 2xs uppercase section heading", () => {
-    assert.match(src, /text-2xs font-semibold uppercase tracking-\[0\.14em\]/)
+  it("uses the standard section heading scale", () => {
+    assert.match(src, /text-base font-semibold text-\[var\(--color-text-primary\)\]/)
   })
 })

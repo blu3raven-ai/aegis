@@ -77,6 +77,9 @@ def saml_acs(
                 subject=identity.subject,
                 email=identity.email,
                 protocol="saml",
+                # The email rides in on a signed assertion (the SP config sets
+                # want_assertions_signed), so it is provider-attested.
+                email_verified=True,
             )
         except AccountConflict:
             return False

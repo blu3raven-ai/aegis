@@ -1,5 +1,4 @@
-// Pattern: Snyk integration status pill — colored dot + text.
-// Reference: Snyk integrations page → connection status indicator.
+// Integration status pill — colored dot + text.
 import { cn } from "@/lib/shared/utils";
 
 export type Status = "healthy" | "warning" | "failing" | "stale" | "disabled";

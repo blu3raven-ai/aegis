@@ -25,6 +25,12 @@ interface ReportTemplate {
 
 interface ReportTemplateGridProps {
   onSelect: (id: ReportTemplateId) => void
+  /**
+   * Per-template reasons to disable a card at runtime — e.g. a compliance
+   * attestation whose framework the workspace doesn't track. The reason is
+   * shown on the card and as its tooltip so the user knows how to enable it.
+   */
+  disabledReasons?: Partial<Record<ReportTemplateId, string>>
 }
 
 const TAG_LABEL: Record<TemplateTag, string> = {
@@ -35,7 +41,7 @@ const TAG_LABEL: Record<TemplateTag, string> = {
 
 const TAG_CLASS: Record<TemplateTag, string> = {
   scheduled:
-    "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)]",
+    "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low-text)]",
   audit:
     "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
   adhoc:
@@ -104,7 +110,7 @@ const TEMPLATES: ReportTemplate[] = [
     formats: ["PDF"],
     enabled: true,
     iconClass:
-      "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)]",
+      "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low-text)]",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -130,7 +136,7 @@ const TEMPLATES: ReportTemplate[] = [
     formats: ["CSV", "PDF"],
     enabled: true,
     iconClass:
-      "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)]",
+      "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high-text)]",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -157,7 +163,7 @@ const TEMPLATES: ReportTemplate[] = [
     formats: ["ZIP"],
     enabled: true,
     iconClass:
-      "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low)]",
+      "bg-[var(--color-severity-low-subtle)] text-[var(--color-severity-low-text)]",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -205,7 +211,7 @@ const TEMPLATES: ReportTemplate[] = [
   },
 ]
 
-export function ReportTemplateGrid({ onSelect }: ReportTemplateGridProps) {
+export function ReportTemplateGrid({ onSelect, disabledReasons }: ReportTemplateGridProps) {
   return (
     <section aria-label="Report templates">
       <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)] mb-3">
@@ -217,6 +223,7 @@ export function ReportTemplateGrid({ onSelect }: ReportTemplateGridProps) {
             key={template.id}
             template={template}
             onSelect={onSelect}
+            disabledReason={disabledReasons?.[template.id]}
           />
         ))}
       </div>
@@ -227,25 +234,38 @@ export function ReportTemplateGrid({ onSelect }: ReportTemplateGridProps) {
 function TemplateTile({
   template,
   onSelect,
+  disabledReason,
 }: {
   template: ReportTemplate
   onSelect: (id: ReportTemplateId) => void
+  disabledReason?: string
 }) {
   const { title, description, tag, formats, enabled, icon, iconClass } = template
 
+  // Static `enabled: false` means "coming soon"; a runtime `disabledReason`
+  // means the capability exists but isn't available for this workspace yet.
+  const interactive = enabled && !disabledReason
+
   const baseClass =
     "group relative flex h-full flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-left transition-all"
-  const stateClass = enabled
+  const stateClass = interactive
     ? "cursor-pointer hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)]"
     : "cursor-not-allowed opacity-60"
 
   return (
     <button
       type="button"
-      onClick={() => enabled && onSelect(template.id)}
-      disabled={!enabled}
-      aria-disabled={!enabled}
-      aria-label={enabled ? `Use ${title} template` : `${title} — coming soon`}
+      onClick={() => interactive && onSelect(template.id)}
+      disabled={!interactive}
+      aria-disabled={!interactive}
+      title={disabledReason}
+      aria-label={
+        interactive
+          ? `Use ${title} template`
+          : disabledReason
+            ? `${title} — ${disabledReason}`
+            : `${title} — coming soon`
+      }
       className={`${baseClass} ${stateClass}`}
     >
       {/* Head row — mock report-card-head: icon left, tag right */}
@@ -255,7 +275,7 @@ function TemplateTile({
         >
           {icon}
         </div>
-        {enabled ? (
+        {interactive ? (
           <span
             className={`text-2xs font-semibold uppercase tracking-[0.14em] rounded px-1.5 py-0.5 ${TAG_CLASS[tag]}`}
           >
@@ -263,7 +283,7 @@ function TemplateTile({
           </span>
         ) : (
           <span className="rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
-            Coming soon
+            {disabledReason ? "Unavailable" : "Coming soon"}
           </span>
         )}
       </div>
@@ -285,11 +305,15 @@ function TemplateTile({
             </span>
           ))}
         </div>
-        {enabled && (
+        {interactive ? (
           <span className="shrink-0 text-xs font-semibold text-[var(--color-accent)] transition-transform group-hover:translate-x-0.5">
             Use template →
           </span>
-        )}
+        ) : disabledReason ? (
+          <span className="shrink-0 text-xs font-medium text-[var(--color-text-tertiary)]">
+            {disabledReason}
+          </span>
+        ) : null}
       </div>
     </button>
   )

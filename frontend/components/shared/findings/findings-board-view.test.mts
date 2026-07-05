@@ -144,11 +144,16 @@ describe("/inbox page", () => {
 })
 
 describe("/findings page", () => {
-  it("renders FindingsBoardView with no initialStateFilter", () => {
+  // The page stays state-agnostic by default (no ?state= → undefined → "all"),
+  // but honors an explicit ?state= deep-link so a posture tile's count (which
+  // counts open findings) matches the linked view. initialStateFilter is only
+  // seeded from a validated ?state= param, never hardcoded.
+  it("renders FindingsBoardView, state-agnostic by default but honoring ?state=", () => {
     const src = read("app/(app)/findings/page.tsx")
     assert.ok(src.includes("FindingsBoardView"), "must import FindingsBoardView")
     assert.ok(src.includes('pageTitle="Findings"'), "must pass pageTitle Findings")
-    assert.ok(!src.includes("initialStateFilter"), "must not pass initialStateFilter (state-agnostic)")
+    assert.ok(src.includes("initialStateFilter={initialState}"), "passes initialStateFilter from the validated ?state= param")
+    assert.ok(src.includes("VALID_STATE_PARAMS"), "must validate ?state= against an allowlist before passing it")
   })
 
   it("uses FindingsIcon from page-icons", () => {

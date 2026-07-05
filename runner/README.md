@@ -17,7 +17,7 @@ runner/
 
   clients/                  external IO
     backend.py                HTTP client for backend presign + status endpoints
-    uploader.py               PUT helper for presigned URLs (with retry)
+    uploader.py               presigned multipart POST helper (size-capped, with retry)
     streamer.py               streams scan output to MinIO via the uploader
 
   observability/            metrics + structured logging

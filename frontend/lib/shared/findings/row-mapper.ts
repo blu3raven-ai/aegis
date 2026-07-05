@@ -10,6 +10,7 @@ export type FindingScanner =
   | "container_scanning"
   | "secret_scanning"
   | "iac_scanning"
+  | "agent_scanning"
 
 /** One step in a secret-rotation runbook (secrets `rotation` fix). */
 export interface FindingRecommendedFixStep {
@@ -102,6 +103,26 @@ export interface VerificationMetadata {
   tokens_out?: number
   ruled_out_reason?: VerificationRuledOutReason
   skipped?: string
+  /**
+   * Provenance the verifier records when it runs. `tier`/`escalated` are
+   * populated once the tiered-model escalation path ships; the drawer renders
+   * them only when present, so this stays honest until the backend writes them.
+   */
+  tier?: string
+  escalated?: boolean
+  latency_ms?: number
+  /**
+   * Why the verifier couldn't confirm a finding. `reason` is a single machine
+   * code (e.g. `hunter_no_chain`, `package_not_imported`, `schema_invalid: …`);
+   * the list keys carry the citations that failed grounding. Rendered as prose
+   * by `verdictRationale`.
+   */
+  reason?: string
+  unverified_citations?: string[]
+  suppression_downgraded?: string[]
+  ungrounded_no_path?: string[]
+  /** Deps reachability signal: `reachable` | `no_path` | `unknown`. */
+  reachability?: string
   [k: string]: unknown
 }
 
@@ -115,15 +136,28 @@ export interface FindingContainerImage {
   digest?: string
   baseOs?: string
   layerCount?: number
+  /** Layer that introduced the vulnerable package: digest + 0-based ordinal. */
+  layerDigest?: string
+  layerIndex?: number
+  /** Newer registry tags available for this image (opt-in tag listing). */
+  newerTags?: string[]
+  /** Most-affected layer across this image's open findings (detail-fetch only). */
+  layerConcentration?: { layerIndex: number; findingCount: number; totalWithLayer: number }
+  /** Newer base tag with fewer vulns, proven by rescanning (detail-fetch only). */
+  baseImageRecommendation?: { recommendedTag: string; currentVulnCount: number; recommendedVulnCount: number }
 }
 
 export interface FindingRow {
   id: string
   title: string
   cve?: string
+  /** Affected package as `name@version` (dependency/container findings). */
+  package?: string
   severity: FindingSeverity
   scanner: FindingScanner
   repo: string
+  /** Concrete repo web URL (self-hosted hosts); enables the view-in-repo link. */
+  repoHtmlUrl?: string
   filePath?: string
   age: string
   riskScore?: number
@@ -135,6 +169,8 @@ export interface FindingRow {
   state?: string
   /** Whether the finding's CVE is in CISA KEV (server-supplied). */
   kev?: boolean
+  /** Malicious-package report (OSV MAL-): remove the package, don't upgrade. */
+  malicious?: boolean
   /** First CWE id (e.g. "CWE-502") from KEV metadata. */
   cwe?: string
   /** ISO timestamp of when the finding was first detected. */
@@ -151,6 +187,8 @@ export interface FindingRow {
   assigneeUserId?: string
   /** Argus-verification verdict, when the org runs the verification pass. */
   verdict?: Verdict
+  /** One-line disproof for ruled-out findings; shown inline on the audit view. */
+  ruledOutReason?: string
   /** Short, client-safe code/context preview (redacted for secrets). */
   codeSnippet?: string
   /** 1-indexed file line of the snippet's first line, for gutter anchoring. */
@@ -201,6 +239,18 @@ const SCANNER_MAP: Record<string, FindingScanner> = {
   container_scanning: "container_scanning",
   secret_scanning: "secret_scanning",
   iac_scanning: "iac_scanning",
+  agent_scanning: "agent_scanning",
+  // The REST detail endpoint returns the backend's public shorthand (see
+  // _TOOL_TO_PUBLIC), so a finding opened via getFindingDetail arrives with
+  // these. Map them too — otherwise the shorthand fell through to the
+  // dependencies fallback and every non-deps finding opened by deep-link was
+  // mislabeled a dependency (e.g. a secret showing the deps reachability panel).
+  deps: "dependencies_scanning",
+  sast: "code_scanning",
+  container: "container_scanning",
+  secrets: "secret_scanning",
+  iac: "iac_scanning",
+  agent: "agent_scanning",
 }
 
 export function normaliseScanner(raw: string): FindingScanner {
@@ -261,12 +311,20 @@ function buildRepoLabel(api: ApiFinding): string {
 }
 
 /**
- * Strip the runner's ephemeral clone prefix (".../workspace/job-<hash>/") and
- * any leading slashes so a path reads repo-relative instead of leaking the
- * scanner's working directory.
+ * Strip the runner's clone-dir scaffolding so a path reads repo-relative
+ * instead of leaking the scanner's working directory: the ephemeral
+ * ".../workspace/job-<hash>/" prefix, then the "<repo>/_checkout/" prefix that
+ * semgrep/checkov paths carry (they run against the absolute clone dir). The
+ * "_checkout/" re-anchoring mirrors the backend resolver so display and
+ * file-resolution agree on the repo-relative path.
  */
 function cleanWorkspacePath(path: string): string {
-  return path.replace(/^.*?\/workspace\/job-[0-9a-f]+\//i, "").replace(/^\/+/, "")
+  const stripped = path
+    .replace(/^.*?\/workspace\/job-[0-9a-f]+\//i, "")
+    .replace(/^\/+/, "")
+  const marker = "_checkout/"
+  const idx = stripped.lastIndexOf(marker)
+  return idx === -1 ? stripped : stripped.slice(idx + marker.length)
 }
 
 function buildFilePath(api: ApiFinding): string | undefined {
@@ -311,20 +369,24 @@ export function mapApiFinding(api: ApiFinding): FindingRow {
     id: api.id,
     title: buildTitle(api),
     cve: api.cve ?? undefined,
+    package: api.package ?? undefined,
     severity: normaliseSeverity(api.severity),
     scanner: normaliseScanner(api.scanner),
     repo: buildRepoLabel(api),
+    repoHtmlUrl: api.repo_html_url ?? undefined,
     filePath: buildFilePath(api),
     age: buildAge(api),
     epssPercentile: api.epssPercentile ?? undefined,
     state: api.state ?? undefined,
     firstSeen: api.created_at ?? undefined,
     kev: api.kev ?? undefined,
+    malicious: api.malicious ?? undefined,
     cwe: api.cwe ?? undefined,
     riskScore: api.risk_score ?? undefined,
     actionBand: normaliseActionBand(api.action_band),
     assigneeUserId: api.assignee_user_id ?? undefined,
     verdict: api.verdict ?? undefined,
+    ruledOutReason: api.ruled_out_reason ?? undefined,
     codeSnippet: api.code_snippet ?? undefined,
     codeSnippetStartLine: api.code_snippet_start_line ?? undefined,
     highlightStart: api.code_highlight_start ?? undefined,
@@ -343,6 +405,24 @@ export function mapApiFinding(api: ApiFinding): FindingRow {
           digest: api.container_image.digest ?? undefined,
           baseOs: api.container_image.base_os ?? undefined,
           layerCount: api.container_image.layer_count ?? undefined,
+          layerDigest: api.container_image.layer_digest ?? undefined,
+          layerIndex: api.container_image.layer_index ?? undefined,
+          newerTags: api.container_image.newer_tags ?? undefined,
+          layerConcentration: api.container_image.layer_concentration
+            ? {
+                layerIndex: api.container_image.layer_concentration.layer_index,
+                findingCount: api.container_image.layer_concentration.finding_count,
+                totalWithLayer: api.container_image.layer_concentration.total_with_layer,
+              }
+            : undefined,
+          baseImageRecommendation: api.container_image.base_image_recommendation
+            ? {
+                recommendedTag: api.container_image.base_image_recommendation.recommended_tag,
+                currentVulnCount: api.container_image.base_image_recommendation.current_vuln_count,
+                recommendedVulnCount:
+                  api.container_image.base_image_recommendation.recommended_vuln_count,
+              }
+            : undefined,
         }
       : undefined,
     introducedByCommit: api.introduced_by_commit ?? undefined,

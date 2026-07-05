@@ -1,5 +1,6 @@
 import { InsightCard } from "@/components/shared/InsightCard"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
 
 export interface CoverageGap {
   repository: string
@@ -39,6 +40,7 @@ export function CoverageGapsCard({
                           month: "short",
                           day: "numeric",
                           year: "numeric",
+                          timeZone: getActiveTimeZone(),
                         })
                       : "—"}
                   </Td>

@@ -34,7 +34,9 @@ export interface RequireScannersAction {
 export interface StaleAlertAction {
   type: "stale_alert"
   stale_after_days: number
-  alert_channel_id: number
+  // Notify-channel delivery and auto-retrigger are coming-soon legs; a channel
+  // is optional because a stale alert opens a violation without one.
+  alert_channel_id?: number | null
   auto_retrigger: boolean
 }
 
@@ -93,8 +95,7 @@ export function isStaleAlertAction(action: RuleAction): action is StaleAlertActi
     typeof action === "object" &&
     action !== null &&
     (action as StaleAlertAction).type === "stale_alert" &&
-    typeof (action as StaleAlertAction).stale_after_days === "number" &&
-    typeof (action as StaleAlertAction).alert_channel_id === "number"
+    typeof (action as StaleAlertAction).stale_after_days === "number"
   )
 }
 

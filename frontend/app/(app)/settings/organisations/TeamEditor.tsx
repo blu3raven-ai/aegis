@@ -144,7 +144,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
                 placeholder="What does this team do?"
               />
             </FormField>
-            {error && name.trim() && <p className="text-xs text-[var(--color-severity-critical)]">{error}</p>}
+            {error && name.trim() && <p className="text-xs text-[var(--color-severity-critical-text)]">{error}</p>}
             <div className="flex gap-2">
               <Button
                 variant="primary"
@@ -200,7 +200,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
                       onClick={() => setShowDeleteDialog(true)}
                       disabled={submitting}
                       aria-label="Delete team"
-                      className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+                      className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
                     >
                       {ICON_TRASH}
                     </Button>

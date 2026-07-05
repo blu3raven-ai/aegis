@@ -27,6 +27,7 @@ from src.connectors.base import BaseIngester, TestResult
 from src.connectors.registry import register_connector
 from src.settings.webhooks.service import match_webhook_secret
 from src.connectors.webhooks.healthcheck import webhook_test_result
+from src.connectors.webhooks.ingest_guard import parse_json_object, read_guarded_body
 from src.connectors.webhooks.secret_resolver import verify_with_stored_secret
 from src.connectors.webhooks.signature import verify_bearer_token
 from src.db.engine import get_session
@@ -96,7 +97,8 @@ async def jenkins_webhook(
     authorization: str = Header(...),
 ):
     """Receive an authenticated webhook event from Jenkins."""
-    body = await request.body()
+    # No reliable per-delivery id header is sent, so no replay dedup here.
+    body = await read_guarded_body(request)
 
     def _verify(secret: str) -> bool:
         return verify_bearer_token(secret, authorization)
@@ -107,11 +109,7 @@ async def jenkins_webhook(
         logger.warning("jenkins.webhook: bearer token verification failed")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError as exc:
-        logger.error("jenkins.webhook: malformed JSON body: %s", exc)
-        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+    payload = parse_json_object(body)
 
     build = payload.get("build") or {}
     if not _should_dispatch(build):
@@ -130,8 +128,9 @@ async def jenkins_webhook(
     event = normalize_jenkins_build(payload)
     get_event_publisher().publish(event)
     logger.info(
-        "jenkins.webhook: published event_type=%s event_id=%s",
+        "jenkins.webhook: published event_type=%s event_id=%s authed_org=%s",
         event.event_type,
         event.event_id,
+        matched.org_id,
     )
     return {"status": "accepted", "event_id": event.event_id}

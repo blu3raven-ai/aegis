@@ -21,22 +21,21 @@ export function VerifyForm() {
     setIsExpired(false)
 
     startTransition(async () => {
-      const pending_token = sessionStorage.getItem("mfa_pending_token") ?? ""
       try {
+        // The pending-MFA token rides in an HttpOnly cookie set at login; the
+        // browser sends it automatically, so we only submit the code.
         await apiClient("/api/v1/auth/login/verify", {
           method: "POST",
-          body: { pending_token, code },
+          body: { code },
           suppressUnauthorizedRedirect: true,
           skipCsrf: true,
         })
-        sessionStorage.removeItem("mfa_pending_token")
         router.push("/")
         router.refresh()
       } catch (err) {
         if (err instanceof ApiClientError) {
           if (err.status === 401) {
             setIsExpired(true)
-            sessionStorage.removeItem("mfa_pending_token")
             setError("Session expired. Please sign in again.")
             return
           }
@@ -69,7 +68,7 @@ export function VerifyForm() {
       </FormField>
 
       {error && (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
           {error}
           {isExpired && (
             <>

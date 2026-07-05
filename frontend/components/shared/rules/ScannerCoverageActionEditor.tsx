@@ -10,17 +10,14 @@
  * go/no-go validation before submit.
  */
 
-import Link from "next/link"
 import type {
   RequireScannersAction,
   ScannerCoverageAction,
   ScannerType,
   StaleAlertAction,
 } from "@/lib/client/rules-api"
-import type { NotificationDestination } from "@/lib/client/destinations-api"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
-import { Select } from "@/components/ui/Select"
 
 const SCANNER_OPTIONS: { value: ScannerType; label: string }[] = [
   { value: "dependencies_scanning", label: "SCA / Dependencies" },
@@ -37,19 +34,17 @@ export const REQUIRE_DEFAULT: RequireScannersAction = {
 const STALE_DEFAULT: StaleAlertAction = {
   type: "stale_alert",
   stale_after_days: 7,
-  alert_channel_id: 0,
+  alert_channel_id: null,
   auto_retrigger: false,
 }
 
 interface ScannerCoverageActionEditorProps {
   value: ScannerCoverageAction
-  destinations: NotificationDestination[]
   onChange: (next: ScannerCoverageAction) => void
 }
 
 export function ScannerCoverageActionEditor({
   value,
-  destinations,
   onChange,
 }: ScannerCoverageActionEditorProps) {
   function switchType(next: "require_scanners" | "stale_alert") {
@@ -91,7 +86,7 @@ export function ScannerCoverageActionEditor({
             Alert when scans go stale
           </div>
           <div className="text-xs text-[var(--color-text-secondary)]">
-            Send a notification when scan age exceeds a threshold.
+            Open a coverage gap when scan age exceeds a threshold.
           </div>
         </label>
       </div>
@@ -99,7 +94,7 @@ export function ScannerCoverageActionEditor({
       {value.type === "require_scanners" ? (
         <RequireScannersFields value={value} onChange={onChange} />
       ) : (
-        <StaleAlertFields value={value} destinations={destinations} onChange={onChange} />
+        <StaleAlertFields value={value} onChange={onChange} />
       )}
     </div>
   )
@@ -144,7 +139,7 @@ function RequireScannersFields({
         ))}
       </div>
       {showError && (
-        <p className="mt-2 text-xs text-[var(--color-severity-critical)]">
+        <p className="mt-2 text-xs text-[var(--color-severity-critical-text)]">
           Select at least one scanner.
         </p>
       )}
@@ -154,20 +149,16 @@ function RequireScannersFields({
 
 function StaleAlertFields({
   value,
-  destinations,
   onChange,
 }: {
   value: StaleAlertAction
-  destinations: NotificationDestination[]
   onChange: (next: StaleAlertAction) => void
 }) {
-  const enabledDestinations = destinations.filter((d) => d.enabled)
   const daysInvalid = !(
     Number.isInteger(value.stale_after_days) &&
     value.stale_after_days >= 1 &&
     value.stale_after_days <= 365
   )
-  const channelInvalid = !enabledDestinations.some((d) => d.id === value.alert_channel_id)
 
   return (
     <div className="space-y-4">
@@ -199,53 +190,21 @@ function StaleAlertFields({
         </div>
       </FormField>
 
-      <FormField
-        label="Notify channel"
-        htmlFor="stale-channel"
-        error={channelInvalid ? "Select a notification destination." : undefined}
-      >
-        {enabledDestinations.length === 0 && (
-          <p className="mb-2 text-xs text-[var(--color-text-tertiary)]">
-            Set up a notification destination first →{" "}
-            <Link
-              href="/settings/notifications"
-              className="text-[var(--color-accent)] underline-offset-2 hover:underline"
-            >
-              Notification destinations
-            </Link>
-          </p>
-        )}
-        <Select
-          id="stale-channel"
-          value={value.alert_channel_id || ""}
-          onChange={(e) =>
-            onChange({
-              ...value,
-              alert_channel_id: Number.parseInt(e.target.value, 10) || 0,
-            })
-          }
-          invalid={channelInvalid}
-        >
-          <option value="">Select a destination…</option>
-          {enabledDestinations.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </Select>
-      </FormField>
-
-      <label className="flex cursor-pointer select-none items-center gap-2">
-        <input
-          type="checkbox"
-          checked={value.auto_retrigger}
-          onChange={(e) => onChange({ ...value, auto_retrigger: e.target.checked })}
-          className="h-4 w-4 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
-        />
-        <span className="text-sm text-[var(--color-text-primary)]">
-          Also re-trigger a scan automatically
-        </span>
-      </label>
+      <div className="rounded-lg border border-dashed border-[var(--color-border)] px-3 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-[var(--color-text-primary)]">
+            Alert delivery
+          </span>
+          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            Coming soon
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+          A stale scan opens a coverage gap you can see in this rule’s violations today.
+          Routing the alert to a notification channel and auto re-triggering a scan aren’t
+          wired up yet.
+        </p>
+      </div>
     </div>
   )
 }

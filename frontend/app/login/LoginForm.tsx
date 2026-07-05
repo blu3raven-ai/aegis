@@ -27,15 +27,15 @@ export function LoginForm() {
         const data = await apiClient<{
           user?: { id: string; email: string; role: string; status: string }
           mfa_required?: boolean
-          pending_token?: string
         }>("/api/v1/auth/login", {
           method: "POST",
           body: { identifier: email, password },
           suppressUnauthorizedRedirect: true,
           skipCsrf: true,
         })
-        if (data.mfa_required && data.pending_token) {
-          sessionStorage.setItem("mfa_pending_token", data.pending_token)
+        if (data.mfa_required) {
+          // The pending-MFA token rides in an HttpOnly cookie the browser sends
+          // with the verify request — nothing to stash client-side.
           router.push("/login/verify")
         } else if (data.user?.status === "pending") {
           router.push("/pending")
@@ -109,7 +109,7 @@ export function LoginForm() {
       </FormField>
 
       {error && (
-        <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}

@@ -216,7 +216,7 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
                       onClick={() => removeControl(i)}
                       disabled={controls.length <= 1}
                       aria-label="Remove control"
-                      className="hover:text-[var(--color-severity-critical)]"
+                      className="hover:text-[var(--color-severity-critical-text)]"
                     >
                       ×
                     </Button>
@@ -232,7 +232,7 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
           {error && (
             <p
               role="alert"
-              className="rounded-md border border-[var(--color-severity-critical)]/40 bg-[var(--color-severity-critical)]/5 px-3 py-2 text-xs text-[var(--color-severity-critical)]"
+              className="rounded-md border border-[var(--color-severity-critical)]/40 bg-[var(--color-severity-critical)]/5 px-3 py-2 text-xs text-[var(--color-severity-critical-text)]"
             >
               {error}
             </p>

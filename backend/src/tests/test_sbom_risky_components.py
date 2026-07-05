@@ -8,7 +8,7 @@ import uuid
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from sqlalchemy import delete  # noqa: E402
 
@@ -123,6 +123,130 @@ async def test_license_absent_yields_null(db_session):
         by = {c.package_name: c for c in conn.items}
         assert by["leftpad"].license is None
         assert by["leftpad"].license_category is None
+    finally:
+        await _cleanup(db_session, aid)
+
+
+@pytest.mark.asyncio
+async def test_multi_ecosystem_name_splits_into_per_ecosystem_rows(db_session):
+    # A name present in two ecosystems in scope splits into one row per
+    # ecosystem, each with its own accurate counts (not one merged row).
+    aid = str(uuid.uuid4())
+    db_session.add(Asset(
+        id=aid, type="repo", source="source_connection",
+        external_ref=f"github:acme-org/{uuid.uuid4().hex}", display_name="acme-org/mixed",
+    ))
+    await db_session.flush()
+    db_session.add_all([
+        SbomComponent(asset_id=aid, purl="pkg:npm/shared@1.0.0", name="shared",
+                      version="1.0.0", ecosystem="npm", source_tool="syft"),
+        SbomComponent(asset_id=aid, purl="pkg:pypi/shared@2.0.0", name="shared",
+                      version="2.0.0", ecosystem="pypi", source_tool="syft"),
+    ])
+    db_session.add(Finding(
+        tool="dependencies_scanning", identity_key=f"k-{uuid.uuid4()}", asset_id=aid,
+        state="open", severity="high", package_name="shared",
+    ))
+    await db_session.commit()
+    try:
+        conn = sbom_risky_components(info_context={"asset_ids": [aid]})
+        by_eco = {c.ecosystem: c for c in conn.items if c.package_name == "shared"}
+        assert set(by_eco) == {"npm", "pypi"}
+        assert by_eco["npm"].vulns.high == 1
+        assert by_eco["pypi"].vulns.high == 1
+    finally:
+        await _cleanup(db_session, aid)
+
+
+@pytest.mark.asyncio
+async def test_ecosystem_filter_excludes_same_name_other_ecosystem(db_session):
+    # B5: filtering to npm must not pull in a same-named pypi package's findings
+    # (the old name-membership filter over-counted cross-ecosystem collisions).
+    a, b = str(uuid.uuid4()), str(uuid.uuid4())
+    for aid, display in [(a, "acme-org/npm-repo"), (b, "acme-org/pypi-repo")]:
+        db_session.add(Asset(
+            id=aid, type="repo", source="source_connection",
+            external_ref=f"github:acme-org/{uuid.uuid4().hex}", display_name=display,
+        ))
+    await db_session.flush()
+    db_session.add_all([
+        SbomComponent(asset_id=a, purl="pkg:npm/dup@1.0.0", name="dup",
+                      version="1.0.0", ecosystem="npm", source_tool="syft"),
+        SbomComponent(asset_id=b, purl="pkg:pypi/dup@2.0.0", name="dup",
+                      version="2.0.0", ecosystem="pypi", source_tool="syft"),
+    ])
+    db_session.add_all([
+        Finding(tool="dependencies_scanning", identity_key=f"k-{uuid.uuid4()}", asset_id=a,
+                state="open", severity="high", package_name="dup"),
+        Finding(tool="dependencies_scanning", identity_key=f"k-{uuid.uuid4()}", asset_id=b,
+                state="open", severity="critical", package_name="dup"),
+    ])
+    await db_session.commit()
+    try:
+        conn = sbom_risky_components(ecosystems=["npm"], info_context={"asset_ids": [a, b]})
+        rows = [c for c in conn.items if c.package_name == "dup"]
+        assert len(rows) == 1
+        assert rows[0].ecosystem == "npm"
+        assert rows[0].vulns.high == 1
+        assert rows[0].vulns.critical == 0  # the pypi critical is excluded
+        assert rows[0].repo_count == 1
+    finally:
+        await _cleanup(db_session, a, b)
+
+
+@pytest.mark.asyncio
+async def test_single_ecosystem_finding_without_component_does_not_fragment(db_session):
+    # A single-ecosystem package with a finding on an asset that has NO component
+    # for it must stay ONE row (resolved to its sole ecosystem via the fallback),
+    # not fragment into a real-ecosystem row + a blank "unknown" row.
+    a, b = str(uuid.uuid4()), str(uuid.uuid4())
+    for aid, d in [(a, "acme-org/has-comp"), (b, "acme-org/no-comp")]:
+        db_session.add(Asset(
+            id=aid, type="repo", source="source_connection",
+            external_ref=f"github:acme-org/{uuid.uuid4().hex}", display_name=d,
+        ))
+    await db_session.flush()
+    # Only asset a carries the SBOM component for 'lib' (npm); asset b does not.
+    db_session.add(SbomComponent(asset_id=a, purl="pkg:npm/lib@1.0.0", name="lib",
+                                 version="1.0.0", ecosystem="npm", source_tool="syft"))
+    db_session.add_all([
+        Finding(tool="dependencies_scanning", identity_key=f"k-{uuid.uuid4()}", asset_id=a,
+                state="open", severity="high", package_name="lib"),
+        Finding(tool="dependencies_scanning", identity_key=f"k-{uuid.uuid4()}", asset_id=b,
+                state="open", severity="critical", package_name="lib"),
+    ])
+    await db_session.commit()
+    try:
+        conn = sbom_risky_components(info_context={"asset_ids": [a, b]})
+        rows = [c for c in conn.items if c.package_name == "lib"]
+        assert len(rows) == 1  # not fragmented
+        assert rows[0].ecosystem == "npm"  # resolved to the sole ecosystem
+        assert rows[0].repo_count == 2  # both assets counted
+        assert rows[0].vulns.high == 1 and rows[0].vulns.critical == 1
+    finally:
+        await _cleanup(db_session, a, b)
+
+
+@pytest.mark.asyncio
+async def test_finding_without_sbom_component_gets_blank_ecosystem(db_session):
+    # A finding whose package is in no current SBOM (unknown ecosystem) is not
+    # dropped — it lands in a blank-ecosystem row.
+    aid = str(uuid.uuid4())
+    db_session.add(Asset(
+        id=aid, type="repo", source="source_connection",
+        external_ref=f"github:acme-org/{uuid.uuid4().hex}", display_name="acme-org/orphan",
+    ))
+    await db_session.flush()
+    db_session.add(Finding(
+        tool="dependencies_scanning", identity_key=f"k-{uuid.uuid4()}", asset_id=aid,
+        state="open", severity="critical", package_name="ghost-pkg",
+    ))
+    await db_session.commit()
+    try:
+        conn = sbom_risky_components(info_context={"asset_ids": [aid]})
+        by = {c.package_name: c for c in conn.items}
+        assert by["ghost-pkg"].ecosystem == ""
+        assert by["ghost-pkg"].vulns.critical == 1
     finally:
         await _cleanup(db_session, aid)
 

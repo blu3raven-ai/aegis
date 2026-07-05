@@ -81,8 +81,8 @@ function aggregateStats(
 
 
 const NEUTRAL = "text-[var(--color-text-primary)]"
-const CRITICAL = "text-[var(--color-severity-critical)]"
-const OK = "text-[var(--color-state-fixed)]"
+const CRITICAL = "text-[var(--color-severity-critical-text)]"
+const OK = "text-[var(--color-state-fixed-text)]"
 
 function StatsStrip({
   frameworks,

@@ -104,7 +104,7 @@ interface NavItem {
 function NavItemCount({ count, tone }: { count: number; tone: CountTone }) {
   const className =
     tone === "danger"
-      ? "ml-auto shrink-0 rounded-full bg-[var(--color-severity-critical-subtle)] px-1.5 py-px text-2xs font-semibold tabular-nums text-[var(--color-severity-critical)]"
+      ? "ml-auto shrink-0 rounded-full bg-[var(--color-severity-critical-subtle)] px-1.5 py-px text-2xs font-semibold tabular-nums text-[var(--color-severity-critical-text)]"
       : "ml-auto shrink-0 rounded-full bg-[var(--color-surface-raised)] px-1.5 py-px text-2xs font-semibold tabular-nums text-[var(--color-text-secondary)]"
   return <span className={className}>{count.toLocaleString()}</span>
 }
@@ -141,13 +141,13 @@ export function SidebarContent({
   }
 
   // Overview: at-a-glance landing surfaces (devs → Home, analysts → Inbox /
-  // Findings, execs → Posture). /activity intentionally lives outside the
+  // Findings, execs → Insights). /activity intentionally lives outside the
   // sidebar — users reach it via the notification bell in the header.
   const overviewItems: NavItem[] = [
     { href: "/", label: "Home", icon: ICON_HOME },
     { href: "/inbox", label: "Inbox", icon: ICON_INBOX, count: navCounts?.inbox, countTone: "danger" },
     { href: "/findings", label: "Findings", icon: ICON_FINDINGS, count: navCounts?.findings, countTone: "neutral" },
-    { href: "/posture", label: "Posture", icon: ICON_POSTURE },
+    { href: "/insights", label: "Insights", icon: ICON_POSTURE },
   ];
 
   // Reporting: audit-ready deliverables and exec views
@@ -349,8 +349,8 @@ export function SidebarContent({
           return collapsed ? <Tooltip key={item.href} content={item.label}>{link}</Tooltip> : link
         })}
 
-        {/* Insights — audit + exec deliverables */}
-        <GroupLabel label="Insights" />
+        {/* Reporting — audit + exec deliverables */}
+        <GroupLabel label="Reporting" />
         {reportingItems.map((item) => {
           const active = isActive(item.href)
           const link = (

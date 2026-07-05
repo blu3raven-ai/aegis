@@ -98,7 +98,7 @@ export function PoweredToolsSection({ category, hasConnections }: PoweredToolsSe
                 {hasFindings ? (
                   <span className="text-xs font-medium tabular-nums text-[var(--color-text-primary)]">{count.toLocaleString()} open findings</span>
                 ) : typeof count === "number" ? (
-                  <span className="text-xs text-[var(--color-status-ok)]">All clear</span>
+                  <span className="text-xs text-[var(--color-status-ok-text)]">All clear</span>
                 ) : (
                   <span className="text-xs text-[var(--color-text-secondary)]">No scans yet</span>
                 )}

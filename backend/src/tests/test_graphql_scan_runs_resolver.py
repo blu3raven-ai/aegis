@@ -16,7 +16,7 @@ import pytest
 from graphql import GraphQLError
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.sources import scan_runs_resolvers  # noqa: E402
 

@@ -40,22 +40,22 @@ def test_streamer_calls_presign_once_per_poll_batch(job_dir):
 
     backend = MagicMock()
     backend.presign_uploads.return_value = {
-        "a.json": "https://minio/a",
-        "b.json": "https://minio/b",
+        "a.json": {"url": "https://minio/a", "fields": {"key": "a"}},
+        "b.json": {"url": "https://minio/b", "fields": {"key": "b"}},
     }
-    put_fn = MagicMock(return_value="ok")
+    post_fn = MagicMock(return_value="ok")
 
     s = ManifestStreamer(
         job_dir=job_dir,
         backend_client=backend,
-        put_fn=put_fn,
+        post_fn=post_fn,
         job_id="job-1",
     )
     s.done_event.set()
     s.run()
 
     backend.presign_uploads.assert_called_once_with("job-1", ["a.json", "b.json"])
-    assert put_fn.call_count == 2
+    assert post_fn.call_count == 2
 
 
 def test_streamer_re_presigns_on_expired_url(job_dir):
@@ -64,22 +64,22 @@ def test_streamer_re_presigns_on_expired_url(job_dir):
 
     backend = MagicMock()
     backend.presign_uploads.side_effect = [
-        {"a.json": "https://minio/a-v1"},
-        {"a.json": "https://minio/a-v2"},
+        {"a.json": {"url": "https://minio/a-v1", "fields": {"key": "a"}}},
+        {"a.json": {"url": "https://minio/a-v2", "fields": {"key": "a"}}},
     ]
-    put_fn = MagicMock(side_effect=[URL_EXPIRED_MARKER, "ok"])
+    post_fn = MagicMock(side_effect=[URL_EXPIRED_MARKER, "ok"])
 
     s = ManifestStreamer(
         job_dir=job_dir,
         backend_client=backend,
-        put_fn=put_fn,
+        post_fn=post_fn,
         job_id="job-1",
     )
     s.done_event.set()
     s.run()
 
     assert backend.presign_uploads.call_count == 2
-    assert put_fn.call_count == 2
+    assert post_fn.call_count == 2
     assert s.uploaded_count == 1
 
 
@@ -91,15 +91,15 @@ def test_streamer_handles_partial_backend_response(job_dir):
 
     backend = MagicMock()
     backend.presign_uploads.return_value = {
-        "a.json": "https://minio/a",
-        "b.json": "https://minio/b",
+        "a.json": {"url": "https://minio/a", "fields": {"key": "a"}},
+        "b.json": {"url": "https://minio/b", "fields": {"key": "b"}},
     }
-    put_fn = MagicMock(return_value="ok")
+    post_fn = MagicMock(return_value="ok")
 
     s = ManifestStreamer(
         job_dir=job_dir,
         backend_client=backend,
-        put_fn=put_fn,
+        post_fn=post_fn,
         job_id="job-1",
     )
     s.done_event.set()
@@ -116,12 +116,12 @@ def test_streamer_continues_when_backend_unreachable(job_dir):
 
     backend = MagicMock()
     backend.presign_uploads.side_effect = BackendError(0, "network down")
-    put_fn = MagicMock(return_value="ok")
+    post_fn = MagicMock(return_value="ok")
 
     s = ManifestStreamer(
         job_dir=job_dir,
         backend_client=backend,
-        put_fn=put_fn,
+        post_fn=post_fn,
         job_id="job-1",
     )
     s.done_event.set()

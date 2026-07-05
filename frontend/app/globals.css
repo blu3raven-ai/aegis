@@ -19,6 +19,7 @@
   --color-border-medium:  rgba(15,39,71,0.08);
   --color-border-strong:  rgba(15,39,71,0.12);
   --color-border-divider: rgba(15,39,71,0.06);
+  --color-toggle-off:     #cbd5e1;
 
   --color-text-primary:   #0f2747;
   --color-text-secondary: #64748b;
@@ -84,6 +85,7 @@
   --color-state-fixed-subtle:      rgb(16 185 129 / 0.05);
   --color-state-fixed-muted:       rgb(16 185 129 / 0.7);
   --color-state-fixed-border:      rgb(16 185 129 / 0.3);
+  --color-state-fixed-text:        #047857;
 
   --color-verdict-safe:            #10b981;
   --color-verdict-safe-subtle:     rgb(16 185 129 / 0.1);
@@ -122,6 +124,8 @@
   --color-scanner-secrets-fg:      #f97316;
   --color-scanner-iac-bg:          rgb(96 165 250 / 0.18);
   --color-scanner-iac-fg:          #60a5fa;
+  --color-scanner-agent-bg:        rgb(217 70 239 / 0.18);
+  --color-scanner-agent-fg:        #c026d3;
   --color-scanner-entry-bg:        rgb(96 165 250 / 0.18);
   --color-scanner-entry-fg:        #60a5fa;
   --color-scanner-impact-bg:       rgb(239 68 68 / 0.18);
@@ -165,6 +169,7 @@
   --color-border-medium:  #2B3447;
   --color-border-strong:  #424751;
   --color-border-divider: #1C253A;
+  --color-toggle-off:     #4a5163;
 
   --color-text-primary:   #F2F2F3;
   --color-text-secondary: #AFB0B6;
@@ -221,6 +226,7 @@
   --color-state-fixed-subtle:      rgb(52 211 153 / 0.08);
   --color-state-fixed-muted:       rgb(52 211 153 / 0.7);
   --color-state-fixed-border:      rgb(52 211 153 / 0.3);
+  --color-state-fixed-text:        #34d399;
 
   --color-verdict-safe:            #34d399;
   --color-verdict-safe-subtle:     rgb(52 211 153 / 0.12);
@@ -259,6 +265,8 @@
   --color-scanner-secrets-fg:      #ffba7c;
   --color-scanner-iac-bg:          rgb(96 165 250 / 0.18);
   --color-scanner-iac-fg:          #93c2fa;
+  --color-scanner-agent-bg:        rgb(217 70 239 / 0.18);
+  --color-scanner-agent-fg:        #e9a5f5;
   --color-scanner-entry-bg:        rgb(96 165 250 / 0.18);
   --color-scanner-entry-fg:        #93c2fa;
   --color-scanner-impact-bg:       rgb(248 113 113 / 0.18);
@@ -360,6 +368,63 @@ body {
 @keyframes row-flash {
   0%   { background: rgba(192,132,252,0.10); }
   100% { background: transparent; }
+}
+
+/* ── Chart entrance motion ──────────────────────────────────────────────────
+   Premium "draw-in" feel for analytics charts. Line/arc paths must carry
+   pathLength="1" so the dash math is length-independent. All of these are
+   collapsed to near-instant by the reduce-motion guard below. */
+
+/* Stroke draw-on for line and radial-arc paths. */
+@keyframes chart-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+.chart-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: chart-draw 900ms cubic-bezier(0.33, 1, 0.68, 1) forwards;
+}
+
+/* Soft fade + rise for area fills, bands, and card-level chart chrome. */
+@keyframes chart-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.chart-rise {
+  animation: chart-rise 560ms cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+/* Grow-from-baseline for bar marks. Requires fill-box so the SVG rect scales
+   about its own bottom edge rather than the viewBox origin. */
+@keyframes chart-grow {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+.chart-grow {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: chart-grow 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Fade-in for radial fills and marker halos. */
+@keyframes chart-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.chart-fade {
+  animation: chart-fade 700ms ease-out both;
+}
+
+/* Radial-arc sweep: reveal a stroked arc without disturbing its dash geometry.
+   The element supplies its visible arc length via the --arc-len custom prop;
+   the arc animates from fully-offset (hidden) to zero offset (fully drawn). */
+@keyframes chart-arc-sweep {
+  from { stroke-dashoffset: var(--arc-len, 0); }
+  to   { stroke-dashoffset: 0; }
+}
+.chart-arc-sweep {
+  animation: chart-arc-sweep 1000ms cubic-bezier(0.33, 1, 0.68, 1) both;
 }
 
 /* Respect the OS-level "reduce motion" preference: collapse animations and

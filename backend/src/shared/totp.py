@@ -29,9 +29,15 @@ def verify_totp(secret: str, code: str, *, window: int = 1) -> bool:
     Decrypts the secret if it is stored encrypted. Returns False for empty or
     invalid input. ``window`` controls how many 30-second steps before/after
     the current counter are accepted (default 1).
+
+    Raises DecryptionError (strict) when a stored secret can't be decrypted under
+    any configured root — so a wrong/rotated key surfaces as "2FA unavailable"
+    instead of silently rejecting every valid code as "wrong" (a lockout the
+    user can't distinguish from a bad code). Callers translate it to a clear
+    error rather than a credential failure.
     """
     if is_encrypted(secret):
-        secret = decrypt_string(secret)
+        secret = decrypt_string(secret, strict=True)
     if not secret:
         return False
     now_counter = int(time.time()) // 30

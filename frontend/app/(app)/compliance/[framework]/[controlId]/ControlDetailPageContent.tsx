@@ -165,7 +165,7 @@ export function ControlDetailPageContent() {
                 <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
                   Mapped Findings
                   {activeFindings.length > 0 && (
-                    <span className="ml-2 rounded-full bg-[var(--color-severity-critical-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-severity-critical)]">
+                    <span className="ml-2 rounded-full bg-[var(--color-severity-critical-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-severity-critical-text)]">
                       {activeFindings.length}
                     </span>
                   )}

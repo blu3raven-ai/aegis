@@ -18,19 +18,21 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import OsvAdvisory, SbomComponent
+from src.db.models import OsvAdvisory, Sbom, SbomComponent
 from src.osv.argus_match import match_via_argus
 from src.osv.matcher import (
     ComponentRef, VulnMatch, match_components, parse_purl, parse_purl_distro,
 )
 from src.osv.ecosystems import osv_release_ecosystem
+from src.osv.malicious import is_malicious_advisory
+from src.osv.severity import severity_word_from_osv_body
 from src.osv.store import _download_blob
 from src.settings.argus.service import fetch_argus_connection
 
 logger = logging.getLogger(__name__)
 
-# The org's single Argus connection is keyed under the default config slot, the
-# same record that routes verification (see scans.service).
+# The org's single Argus threat-intel enrichment connection is keyed under the
+# default config slot.
 _ARGUS_CONFIG_KEY = "default"
 
 
@@ -49,15 +51,6 @@ def _dedup_key(finding: dict) -> tuple[str | None, str | None, str | None]:
     advisory = adv.get("ghsa_id") or adv.get("cve_id")
     return (component, version, advisory)
 
-_SEVERITY_WORD = {
-    "CRITICAL": "critical",
-    "HIGH": "high",
-    "MODERATE": "medium",
-    "MEDIUM": "medium",
-    "LOW": "low",
-}
-
-
 def _cve_from_aliases(body: dict) -> str | None:
     for alias in body.get("aliases") or []:
         if isinstance(alias, str) and alias.upper().startswith("CVE-"):
@@ -73,17 +66,12 @@ def _cvss_vector(body: dict) -> str | None:
 
 
 def _severity_level(body: dict) -> str:
-    """Best-effort severity word from an OSV advisory body.
+    """Severity word from an OSV advisory body, or ``"unknown"`` if undeterminable.
 
-    OSV stores a CVSS *vector* (not a number) under ``severity``; the human
-    level lives in ``database_specific.severity`` for GHSA-sourced advisories.
-    Numeric CVSS is left to the downstream NVD/GHSA enricher.
+    Reads ``database_specific.severity`` when present, otherwise maps the CVSS
+    vector's base score to a band (see ``osv.severity``).
     """
-    ds = body.get("database_specific") or {}
-    word = ds.get("severity")
-    if isinstance(word, str) and word.upper() in _SEVERITY_WORD:
-        return _SEVERITY_WORD[word.upper()]
-    return "unknown"
+    return severity_word_from_osv_body(body) or "unknown"
 
 
 def _references(body: dict) -> list[dict]:
@@ -118,6 +106,7 @@ def _build_raw_finding(
     match: VulnMatch,
     adv_body: dict,
     match_source: str,
+    repo_html_url: str | None = None,
 ) -> dict:
     """Assemble one finding in the nested shape the lifecycle hooks parse.
 
@@ -126,20 +115,29 @@ def _build_raw_finding(
     rematch firing when a newly published advisory hits existing components).
     """
     cve_id = _cve_from_aliases(adv_body)
+    malicious = is_malicious_advisory(match.advisory_id)
+    # Malicious packages carry no CVSS and no fix — the package is compromised,
+    # so they are always critical and the copy points at removal, not upgrade.
+    severity = "critical" if malicious else _severity_level(adv_body)
+    summary = adv_body.get("summary", "")
+    if malicious and not summary:
+        summary = f"Malicious package: {comp.name}"
     raw: dict = {
         "repository": {"name": repo_name, "full_name": repo_full_name},
         "dependency": {
             "package": {"name": comp.name, "ecosystem": match.ecosystem},
-            "manifest_path": "",
+            "manifest_path": comp.manifest_path or "",
+            "scope": comp.scope,
         },
+        "malicious": malicious,
         "security_advisory": {
             # OSV advisory id holds the ghsa_id slot so identity is stable for
             # any advisory source (GHSA / PYSEC / DSA / CVE).
             "ghsa_id": match.advisory_id,
             "cve_id": cve_id,
-            "severity": _severity_level(adv_body),
+            "severity": severity,
             "cvss": {"score": None, "vector_string": _cvss_vector(adv_body)},
-            "summary": adv_body.get("summary", ""),
+            "summary": summary,
             "description": adv_body.get("details", ""),
             "html_url": "",
             "references": _references(adv_body),
@@ -154,10 +152,20 @@ def _build_raw_finding(
         "scanner": "osv",
         "matched_by": ["osv"],
         "match_source": match_source,
+        # Repo web URL (self-hosted-aware) captured at SBOM ingest; deep-links the
+        # finding to source. None for container SBOMs (image, not a repo).
+        "repo_html_url": repo_html_url,
+        # Manifest declaration site + code window (git deps only; None otherwise),
+        # surfaced by the deps lifecycle as the finding's file/line + code preview.
+        "manifest_line": comp.manifest_line,
+        "manifest_snippet": comp.manifest_snippet,
+        "manifest_snippet_start": comp.manifest_snippet_start,
     }
     if kind == "container":
         raw["imageName"] = image_name
         raw["imageTag"] = image_tag or "latest"
+        raw["layerDigest"] = comp.layer_digest
+        raw["layerIndex"] = comp.layer_index
     return raw
 
 
@@ -213,6 +221,13 @@ async def build_backend_match_findings(
                 namespace=namespace,
                 release_ecosystem=osv_release_ecosystem(parse_purl_distro(r.purl)),
                 purl=r.purl,
+                manifest_path=r.manifest_path,
+                manifest_line=r.manifest_line,
+                manifest_snippet=r.manifest_snippet,
+                manifest_snippet_start=r.manifest_snippet_start,
+                scope=r.scope,
+                layer_digest=r.layer_digest,
+                layer_index=r.layer_index,
             )
         )
 
@@ -224,6 +239,14 @@ async def build_backend_match_findings(
     else:
         repo_name, repo_full = _parse_repo_external_ref(external_ref)
         image_name = image_tag = None
+
+    # Repo web URL captured at SBOM ingest, for deep-linking the finding to
+    # source. Only repos have one; container images don't.
+    repo_html_url = None
+    if kind != "container":
+        repo_html_url = (
+            await session.execute(select(Sbom.html_url).where(Sbom.asset_id == asset_id))
+        ).scalar_one_or_none()
 
     findings: list[dict] = []
     if matched:
@@ -256,14 +279,19 @@ async def build_backend_match_findings(
                         match=m,
                         adv_body=bodies.get(m.advisory_id, {}),
                         match_source=match_source,
+                        repo_html_url=repo_html_url,
                     )
                 )
 
     # Additive premium match: Argus may surface advisories the free OSV mirror
-    # missed. Premium only ADDS findings — it never replaces a free one. Any
-    # Argus error degrades silently to the free set above.
+    # missed. Premium only ADDS findings — it never replaces a free one. Gated on
+    # the default connection's ``enabled`` flag; the store itself is empty today.
     conn = await fetch_argus_connection(session, _ARGUS_CONFIG_KEY)
-    premium = await match_via_argus(conn, components, asset_id=asset_id, surface=kind)
+    premium = (
+        match_via_argus(components, asset_id=asset_id, surface=kind)
+        if conn is not None and conn.enabled
+        else []
+    )
     if premium:
         seen = {_dedup_key(f) for f in findings}
         for pf in premium:

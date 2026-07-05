@@ -24,14 +24,21 @@ describe("EvidenceSection", () => {
     assert.match(src, /Mitigation found/)
   })
 
-  it("shows the Argus locked preview when Argus isn't enabled on a verifiable finding", () => {
-    assert.match(src, /if \(!argusEnabled && verifiable\) return <ArgusLockedPreview \/>/)
-    assert.match(src, /Enable Argus to verify this finding/)
+  it("shows the verification locked preview when it isn't enabled on a verifiable finding", () => {
+    assert.match(src, /if \(!verificationEnabled && verifiable\)/)
+    assert.match(src, /return <VerificationLockedPreview variant=\{variant\} \/>/)
+    assert.match(src, /Enable LLM verification to verify this finding/)
     assert.match(src, /blur-\[3px\]/)
-    assert.match(src, /href="\/settings#argus"/)
+    assert.match(src, /href="\/settings#llm"/)
   })
 
-  it("renders nothing when Argus has no reasoning and the preview doesn't apply", () => {
+  it("uses reachability framing for the dependency locked preview", () => {
+    assert.match(src, /scanner === "dependencies_scanning" \? "reachability" : "exploit"/)
+    assert.match(src, /Enable LLM verification to check reachability/)
+    assert.match(src, /vulnerable dependency/)
+  })
+
+  it("renders nothing when there's no reasoning and the preview doesn't apply", () => {
     assert.match(src, /if \(!hasReasoning\)/)
     assert.match(src, /return null/)
   })
@@ -40,7 +47,7 @@ describe("EvidenceSection", () => {
     assert.match(src, /verdict && <VerdictBadge/)
   })
 
-  it("uses the established 2xs uppercase section heading", () => {
+  it("uses the 2xs uppercase micro-label style for evidence line labels", () => {
     assert.match(src, /text-2xs font-semibold uppercase tracking-\[0\.14em\]/)
   })
 })

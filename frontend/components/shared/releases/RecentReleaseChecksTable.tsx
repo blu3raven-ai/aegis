@@ -72,8 +72,8 @@ export function RecentReleaseChecksTable({ releases, loading }: RecentReleaseChe
             const refLabel = release.ref ?? release.short_sha
             const blockerColor =
               release.blocker_count > 0
-                ? "text-[var(--color-severity-critical)]"
-                : "text-[var(--color-status-ok)]"
+                ? "text-[var(--color-severity-critical-text)]"
+                : "text-[var(--color-status-ok-text)]"
             const scannedAt = release.finished_at ?? release.started_at
 
             return (

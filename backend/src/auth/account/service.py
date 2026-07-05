@@ -22,6 +22,7 @@ from src.graphql.resolver_utils import raise_bad_input
 from src.db.helpers import run_db
 from src.db.models import User, UserPreferences
 from src.shared.encryption import encrypt_string
+from src.shared.passwords import verify_password
 from src.shared.totp import verify_totp
 from sqlalchemy import func, select
 
@@ -177,20 +178,31 @@ def account_notifications(*, info_context: dict) -> AccountNotifications:
 # Mutation resolvers
 # ---------------------------------------------------------------------------
 
-def change_email(*, email: str, info_context: dict) -> AccountMutationResult:
+def change_email(
+    *, email: str, current_password: str, info_context: dict
+) -> AccountMutationResult:
     user_id = info_context["user_id"]
     new_email = email.strip().lower() if email else ""
 
     async def _q(session):
+        user = await session.get(User, user_id)
+        if user is None:
+            raise GraphQLError("User not found.", extensions={"code": "NOT_FOUND"})
+        # Re-authenticate before re-routing the recovery email: a hijacked or
+        # unattended session must not silently change it. Password-backed users
+        # prove the current password; password-less SSO users have no local
+        # factor to check (their IdP is the auth authority).
+        if user.password_hash:
+            if not verify_password(current_password, user.password_hash):
+                raise GraphQLError(
+                    "Current password is incorrect.", extensions={"code": "FORBIDDEN"}
+                )
         if new_email:
             existing = await session.execute(
                 select(User).where(func.lower(User.email) == new_email, User.id != user_id)
             )
             if existing.scalar_one_or_none() is not None:
                 raise GraphQLError("Email already in use.", extensions={"code": "CONFLICT"})
-        user = await session.get(User, user_id)
-        if user is None:
-            raise GraphQLError("User not found.", extensions={"code": "NOT_FOUND"})
         user.email = new_email
 
     run_db(_q)
@@ -266,18 +278,26 @@ def verify_totp_enrollment(*, code: str, info_context: dict) -> AccountMutationR
     return AccountMutationResult(ok=True)
 
 
-def disable_totp(*, info_context: dict) -> AccountMutationResult:
+def disable_totp(*, code: str, info_context: dict) -> AccountMutationResult:
     user_id = info_context["user_id"]
-    _pending_totp.pop(user_id, None)
 
     async def _q(session):
         user = await session.get(User, user_id)
         if user is None:
             raise GraphQLError("User not found.", extensions={"code": "NOT_FOUND"})
+        # Removing the second factor is high-value: require a current code so a
+        # hijacked or unattended session can't strip 2FA on its own.
+        if user.totp_enabled and user.totp_secret:
+            if not verify_totp(user.totp_secret, code):
+                raise GraphQLError(
+                    "Verification code is incorrect.", extensions={"code": "FORBIDDEN"}
+                )
         user.totp_secret = None
         user.totp_enabled = False
 
     run_db(_q)
+    # Only drop the pending-enrollment scratch after the disable actually commits.
+    _pending_totp.pop(user_id, None)
     _fire_audit("account.totp.disabled", user_id, info_context.get("role", ""))
     return AccountMutationResult(ok=True)
 

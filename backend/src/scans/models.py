@@ -6,7 +6,7 @@ import re
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
-_VALID_SCANNERS = {"dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"}
+_VALID_SCANNERS = {"dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning", "agent_scanning"}
 _SHA_RE = re.compile(r"^[0-9a-f]{7,64}$")
 
 

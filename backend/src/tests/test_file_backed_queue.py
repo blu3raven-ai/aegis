@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 import pytest
 

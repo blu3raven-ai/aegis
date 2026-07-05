@@ -30,6 +30,55 @@ def _notif_to_dict(notif: Notification) -> dict[str, Any]:
     }
 
 
+async def insert_notification(
+    session,
+    user_id: str,
+    *,
+    notification_type: str,
+    category: str,
+    severity: str,
+    title: str,
+    message: str,
+    context: dict[str, Any] | None = None,
+    link: str | None = None,
+) -> dict[str, Any]:
+    """Insert one notification row on an existing async session, enforcing the
+    per-user retention cap. Use this from async request handlers (which already
+    hold a session); use `emit_notification` from sync contexts."""
+    notif = Notification(
+        id=f"notif_{uuid.uuid4().hex[:12]}",
+        user_id=user_id,
+        type=notification_type,
+        category=category,
+        severity=severity,
+        title=title,
+        message=message,
+        metadata_json=context or {},
+        link=link,
+        read=False,
+        created_at=datetime.now(timezone.utc),
+    )
+    session.add(notif)
+    await session.flush()
+
+    # Enforce retention limit per user
+    count_result = await session.execute(
+        select(func.count()).select_from(Notification).where(Notification.user_id == user_id)
+    )
+    total = count_result.scalar() or 0
+    if total > MAX_NOTIFICATIONS:
+        oldest = await session.execute(
+            select(Notification)
+            .where(Notification.user_id == user_id)
+            .order_by(Notification.created_at.asc())
+            .limit(total - MAX_NOTIFICATIONS)
+        )
+        for old in oldest.scalars().all():
+            await session.delete(old)
+
+    return _notif_to_dict(notif)
+
+
 def emit_notification(
     user_id: str,
     *,
@@ -42,43 +91,18 @@ def emit_notification(
     link: str | None = None,
 ) -> dict[str, Any]:
     """Create and store a notification for a user. Returns the new notification."""
-    notif_id = f"notif_{uuid.uuid4().hex[:12]}"
-    now = datetime.now(timezone.utc)
-
     async def _query(session):
-        notif = Notification(
-            id=notif_id,
-            user_id=user_id,
-            type=notification_type,
+        return await insert_notification(
+            session,
+            user_id,
+            notification_type=notification_type,
             category=category,
             severity=severity,
             title=title,
             message=message,
-            metadata_json=context or {},
+            context=context,
             link=link,
-            read=False,
-            created_at=now,
         )
-        session.add(notif)
-        await session.flush()
-
-        # Enforce retention limit per user
-        count_result = await session.execute(
-            select(func.count()).select_from(Notification).where(Notification.user_id == user_id)
-        )
-        total = count_result.scalar() or 0
-        if total > MAX_NOTIFICATIONS:
-            # Delete oldest notifications beyond the limit
-            oldest = await session.execute(
-                select(Notification)
-                .where(Notification.user_id == user_id)
-                .order_by(Notification.created_at.asc())
-                .limit(total - MAX_NOTIFICATIONS)
-            )
-            for old in oldest.scalars().all():
-                await session.delete(old)
-
-        return _notif_to_dict(notif)
 
     return run_db(_query)
 

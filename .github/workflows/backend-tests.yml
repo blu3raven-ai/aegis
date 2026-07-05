@@ -42,7 +42,7 @@ jobs:
       # A non-placeholder URL so the test conftest uses this service instead of
       # spinning up a testcontainer. Tables are created via Base.metadata.create_all.
       DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/aegis_test
-      RUNNER_ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+      APP_SECRET: "0000000000000000000000000000000000000000000000000000000000000000"
       SESSION_SECRET: test-only-session-secret-not-for-production
       ALLOWED_HOSTS: localhost,127.0.0.1,testserver
 

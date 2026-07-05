@@ -57,9 +57,12 @@ def verify(
 
 
 @totp_router.post("/disable")
-def disable(ctx: dict = Depends(require_caller_identity)) -> dict:
+def disable(
+    body: TotpVerifyRequest,
+    ctx: dict = Depends(require_caller_identity),
+) -> dict:
     try:
-        _disable_totp(info_context=ctx)
+        _disable_totp(code=body.code, info_context=ctx)
     except GraphQLError as e:
         raise_for_gql(e, logger=_logger)
     return {"ok": True}

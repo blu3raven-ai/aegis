@@ -2,7 +2,6 @@ import type { AppConfig } from "@/lib/server/app-config"
 import type {
   GetSettingsResult,
   SaveSettingsResult,
-  ScannerPrerequisitesResult,
   OrganisationTeam,
   ResourceSharingIndex,
   UserDirectoryEntry,
@@ -18,7 +17,6 @@ import { gqlQuery } from "./graphql-client.ts"
 export type {
   GetSettingsResult,
   SaveSettingsResult,
-  ScannerPrerequisitesResult,
   OrganisationTeam,
   ResourceSharingIndex,
   UserDirectoryEntry,
@@ -102,28 +100,6 @@ export function formatSettingsError(error: unknown, fallback = "Could not load s
     return error.message || fallback
   }
   return fallback
-}
-
-export async function checkScannerPrerequisites(tool: string): Promise<ScannerPrerequisitesResult> {
-  try {
-    const data = await requestJson<{
-      runner_connected: boolean
-      error: string | null
-      scanner_status: string | null
-      runner_name: string | null
-      runner_platform: string | null
-    }>(`/tools/${tool}/prerequisites`)
-    return {
-      ok: true,
-      runner_connected: data.runner_connected,
-      error: data.error,
-      scanner_status: data.scanner_status,
-      runner_name: data.runner_name,
-      runner_platform: data.runner_platform,
-    }
-  } catch (error) {
-    return { ok: false, error: formatSettingsError(error) }
-  }
 }
 
 export async function getSettings(): Promise<GetSettingsResult> {

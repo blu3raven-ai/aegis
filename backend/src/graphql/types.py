@@ -14,6 +14,7 @@ class PostureTrendPoint:
     medium: int
     low: int
     risk_score: int
+    new_findings: int = 0
 
 
 @strawberry.type
@@ -115,6 +116,9 @@ class SourceRepoExtras:
     scanners_with_coverage: list[str] = strawberry.field(default_factory=list)
     coverage_status: str = "never"
     source_url: Optional[str] = None
+    # True open-finding count across all severities (finding_counts keeps only
+    # the four ranked buckets for the severity pill).
+    open_finding_count: int = 0
 
 
 @strawberry.type
@@ -205,10 +209,21 @@ SourceDetail = Annotated[
 
 
 @strawberry.type
+class CoverageSummary:
+    """Fresh/Stale/Never coverage counts over the full repo scope (not the page),
+    so the KPI strip is correct even when the list is capped."""
+    total: int = 0
+    fresh: int = 0
+    stale: int = 0
+    never: int = 0
+
+
+@strawberry.type
 class RepoSourcesResponse:
     sources: list[SourceRepoSummary]
     next_cursor: Optional[str] = None
     total_count: Optional[int] = None
+    coverage_summary: Optional[CoverageSummary] = None
 
 
 @strawberry.type

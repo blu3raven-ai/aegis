@@ -6,6 +6,7 @@ export interface PostureCounts {
   high: number
   medium: number
   low: number
+  unknown: number
 }
 
 export interface PostureTopRepository {
@@ -34,6 +35,12 @@ export interface PostureRepositoryCoverage {
   percentage: number
 }
 
+export interface PostureSeveritySlice {
+  severity: string   // "critical" | "high" | "medium" | "low" | "unrated"
+  count: number
+  percentage: number
+}
+
 export interface PostureRiskScore {
   score: number
   rating: string   // "Low" | "Moderate" | "High" | "Severe"
@@ -42,6 +49,7 @@ export interface PostureRiskScore {
 
 export interface PostureSnapshotResponse {
   counts: PostureCounts
+  severityDistribution: PostureSeveritySlice[]
   topRepositories: PostureTopRepository[]
   ageBuckets: PostureAgeBucket[]
   remediation: PostureRemediation
@@ -57,6 +65,7 @@ export interface TrendPoint {
   medium: number
   low: number
   total: number
+  new_findings: number
 }
 
 export interface PostureTrendResponse {
@@ -115,6 +124,7 @@ interface GqlSnapshotResponse {
   posture: {
     snapshot: {
       counts: PostureCounts
+      severityDistribution: PostureSeveritySlice[]
       topRepositories: PostureTopRepository[]
       ageBuckets: PostureAgeBucket[]
       remediation: {
@@ -132,7 +142,8 @@ interface GqlSnapshotResponse {
 const SNAPSHOT_QUERY = `query PostureSnapshot {
   posture {
     snapshot {
-      counts { total critical high medium low }
+      counts { total critical high medium low unknown }
+      severityDistribution { severity count percentage }
       topRepositories { name open critical high }
       ageBuckets { label count }
       remediation { totalFixed avgDays medianDays fixedLast30d }
@@ -157,6 +168,7 @@ interface GqlTrendResponse {
       medium: number
       low: number
       total: number
+      newFindings: number
     }>
   }
 }
@@ -171,6 +183,7 @@ const TREND_QUERY = `query PostureTrend($days: Int!) {
       medium
       low
       total
+      newFindings
     }
   }
 }`
@@ -186,6 +199,7 @@ export async function getPostureTrend(days = 90): Promise<PostureTrendResponse> 
       medium: p.medium,
       low: p.low,
       total: p.total,
+      new_findings: p.newFindings,
     })),
     days,
   }
@@ -209,7 +223,7 @@ const BY_TEAM_QUERY = `query PostureByTeam {
       teamId
       teamName
       repoCount
-      counts { total critical high medium low }
+      counts { total critical high medium low unknown }
       riskScore { score rating summary }
     }
   }
@@ -226,4 +240,224 @@ export async function getPostureByTeam(): Promise<PostureByTeamResponse> {
       risk_score: t.riskScore,
     })),
   }
+}
+
+// ── Triage surface: scanner breakdown, risk contributions, exploitability, SLA ─
+
+export interface ScannerBreakdownItem {
+  scanner: string
+  critical: number
+  high: number
+  medium: number
+  low: number
+  total: number
+  riskScore: number
+  slaBreached: number
+}
+
+export interface RiskContributionItem {
+  dimension: string
+  label: string
+  riskScore: number
+  count: number
+  percentage: number
+}
+
+export interface ExploitabilityTopFinding {
+  findingId: number
+  tool: string
+  repo: string
+  severity: string
+  identityKey: string
+  cve: string
+  epssScore: number
+  epssPercentile: number
+  scoredDate: string | null
+}
+
+export interface ExploitabilitySummary {
+  kevCount: number
+  highEpssCount: number
+  epssTop: ExploitabilityTopFinding[]
+}
+
+export interface SlaBreachByScanner {
+  scanner: string
+  breached: number
+}
+
+export interface SlaPostureSummary {
+  totalBreached: number
+  criticalBreached: number
+  highBreached: number
+  mediumBreached: number
+  lowBreached: number
+  maxBreachAgeDays: number
+  byScanner: SlaBreachByScanner[]
+}
+
+interface GqlScannerBreakdownResponse {
+  posture: {
+    scannerBreakdown: Array<{
+      scanner: string
+      critical: number
+      high: number
+      medium: number
+      low: number
+      total: number
+      riskScore: number
+      slaBreached: number
+    }>
+  }
+}
+
+const SCANNER_BREAKDOWN_QUERY = `query PostureScannerBreakdown {
+  posture {
+    scannerBreakdown {
+      scanner
+      critical
+      high
+      medium
+      low
+      total
+      riskScore
+      slaBreached
+    }
+  }
+}`
+
+export async function getPostureScannerBreakdown(): Promise<ScannerBreakdownItem[]> {
+  const data = await gqlFetch<GqlScannerBreakdownResponse>(
+    "PostureScannerBreakdown",
+    SCANNER_BREAKDOWN_QUERY,
+    {},
+  )
+  return data.posture.scannerBreakdown
+}
+
+interface GqlRiskContributionsResponse {
+  posture: {
+    riskContributions: Array<{
+      dimension: string
+      label: string
+      riskScore: number
+      count: number
+      percentage: number
+    }>
+  }
+}
+
+const RISK_CONTRIBUTIONS_QUERY = `query PostureRiskContributions($dimension: String!) {
+  posture {
+    riskContributions(dimension: $dimension) {
+      dimension
+      label
+      riskScore
+      count
+      percentage
+    }
+  }
+}`
+
+export async function getPostureRiskContributions(
+  dimension: string,
+): Promise<RiskContributionItem[]> {
+  const data = await gqlFetch<GqlRiskContributionsResponse>(
+    "PostureRiskContributions",
+    RISK_CONTRIBUTIONS_QUERY,
+    { dimension },
+  )
+  return data.posture.riskContributions
+}
+
+interface GqlExploitabilitySummaryResponse {
+  posture: {
+    exploitabilitySummary: {
+      kevCount: number
+      highEpssCount: number
+      epssTop: Array<{
+        findingId: number
+        tool: string
+        repo: string
+        severity: string
+        identityKey: string
+        cve: string
+        epssScore: number
+        epssPercentile: number
+        scoredDate: string | null
+      }>
+    }
+  }
+}
+
+const EXPLOITABILITY_SUMMARY_QUERY = `query PostureExploitabilitySummary {
+  posture {
+    exploitabilitySummary {
+      kevCount
+      highEpssCount
+      epssTop {
+        findingId
+        tool
+        repo
+        severity
+        identityKey
+        cve
+        epssScore
+        epssPercentile
+        scoredDate
+      }
+    }
+  }
+}`
+
+export async function getPostureExploitabilitySummary(): Promise<ExploitabilitySummary> {
+  const data = await gqlFetch<GqlExploitabilitySummaryResponse>(
+    "PostureExploitabilitySummary",
+    EXPLOITABILITY_SUMMARY_QUERY,
+    {},
+  )
+  return data.posture.exploitabilitySummary
+}
+
+interface GqlSlaPostureResponse {
+  posture: {
+    slaPosture: {
+      totalBreached: number
+      criticalBreached: number
+      highBreached: number
+      mediumBreached: number
+      lowBreached: number
+      maxBreachAgeDays: number
+      byScanner: Array<{
+        scanner: string
+        breached: number
+      }>
+    }
+  }
+}
+
+const SLA_POSTURE_QUERY = `query PostureSlaPosture {
+  posture {
+    slaPosture {
+      totalBreached
+      criticalBreached
+      highBreached
+      mediumBreached
+      lowBreached
+      maxBreachAgeDays
+      byScanner {
+        scanner
+        breached
+      }
+    }
+  }
+}`
+
+export async function getPostureSlaPosture(): Promise<SlaPostureSummary> {
+  const data = await gqlFetch<GqlSlaPostureResponse>(
+    "PostureSlaPosture",
+    SLA_POSTURE_QUERY,
+    {},
+  )
+  return data.posture.slaPosture
 }

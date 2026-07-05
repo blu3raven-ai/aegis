@@ -7,9 +7,9 @@ interface Props {
 }
 
 const NEUTRAL = "text-[var(--color-text-primary)]"
-const POSITIVE = "text-[var(--color-state-fixed)]"
-const WARN = "text-[var(--color-severity-medium)]"
-const CRITICAL = "text-[var(--color-severity-critical)]"
+const POSITIVE = "text-[var(--color-state-fixed-text)]"
+const WARN = "text-[var(--color-severity-medium-text)]"
+const CRITICAL = "text-[var(--color-severity-critical-text)]"
 
 function complianceClass(pct: number): string {
   if (pct >= 90) return POSITIVE

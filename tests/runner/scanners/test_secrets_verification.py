@@ -1,132 +1,70 @@
-"""Secrets scanner: LLM verification helper."""
+"""Secrets scanner: verdicts come from TruffleHog provider verification only.
+
+Secret values are never sent to an LLM, so there is no hunter/skeptic pass and
+no LLM client here — the verdict is a pure function of the ``verified`` flag.
+"""
 from __future__ import annotations
 
 import json
 
-from runner.scanners._shared import JobEnv
-from runner.scanners.secrets.scanner import SecretsScanner, _maybe_verify_secrets
-from runner.verification.budget import ScanBudget
+from runner.scanners.secrets.scanner import SecretsScanner, _classify_secret_verdicts
 
 
-def _env(api_key: str | None = None) -> JobEnv:
-    env_vars: dict[str, str] = {}
-    if api_key:
-        env_vars["LLM_API_KEY"] = api_key
-    return JobEnv({"envVars": env_vars})
-
-
-def test_no_llm_marks_skipped_with_no_verdict():
-    findings = [{"file": "a.py", "line": 1, "verified": False, "match": "x"}]
-    out = _maybe_verify_secrets(
-        findings=findings, repo_root="/x", llm=None,
-        scan_budget=ScanBudget(scan_budget=100, daily_remaining=10_000),
+def test_provider_verified_secret_is_confirmed():
+    [out] = _classify_secret_verdicts(
+        [{"file": "a.py", "line": 1, "verified": True, "match": "AKIA..."}]
     )
-    assert out[0]["verdict"] is None
-    assert out[0]["verification_metadata"]["skipped"] == "llm_disabled"
+    assert out["verdict"] == "confirmed"
+    assert out["verification_metadata"]["auto_confirmed"] == "provider_verified"
 
 
-def test_verified_secrets_auto_confirmed_without_llm_calls(monkeypatch):
-    findings = [{"file": "a.py", "line": 1, "verified": True, "match": "AKIA..."}]
-    calls = []
-    def _stub_verify(*, finding, repo_root, llm, critic=None):
-        calls.append(finding)
-        return type("R", (), {
-            "verdict": "confirmed", "exploit_chain": "", "evidence": [],
-            "tokens_in": 0, "tokens_out": 0,
-            "verification_metadata": {"auto_confirmed": "provider_verified"},
-        })()
-    monkeypatch.setattr(
-        "runner.scanners.secrets.scanner.verify_secret_finding",
-        _stub_verify,
+def test_unverified_secret_gets_no_verdict():
+    [out] = _classify_secret_verdicts(
+        [{"file": "a.py", "line": 1, "verified": False, "match": "x"}]
     )
-    out = _maybe_verify_secrets(
-        findings=findings, repo_root="/x", llm=object(),
-        scan_budget=ScanBudget(scan_budget=100, daily_remaining=10_000),
-    )
-    assert out[0]["verdict"] == "confirmed"
-    assert len(calls) == 1
+    assert out["verdict"] is None
+    # No LLM ran, so no fabricated verdict / evidence / exploit chain.
+    assert "exploit_chain" not in out
+    assert out.get("evidence") in (None, [])
 
 
-def test_budget_exhausted_marks_remaining_possible(monkeypatch):
-    findings = [
-        {"file": "a.py", "line": 1, "verified": False, "match": "x"},
-        {"file": "b.py", "line": 1, "verified": False, "match": "y"},
-    ]
-    def _stub_verify(*, finding, repo_root, llm, critic=None):
-        return type("R", (), {
-            "verdict": "confirmed", "exploit_chain": "", "evidence": [],
-            "tokens_in": 60, "tokens_out": 60,
-            "verification_metadata": {},
-        })()
-    monkeypatch.setattr(
-        "runner.scanners.secrets.scanner.verify_secret_finding",
-        _stub_verify,
-    )
-    out = _maybe_verify_secrets(
-        findings=findings, repo_root="/x", llm=object(),
-        scan_budget=ScanBudget(scan_budget=100, daily_remaining=10_000),
-    )
-    assert out[0]["verdict"] == "confirmed"
-    assert out[1]["verdict"] == "possible"
-    assert out[1]["verification_metadata"]["skipped"] == "scan_budget"
+def test_missing_verified_flag_treated_as_unverified():
+    [out] = _classify_secret_verdicts([{"file": "a.py", "line": 1, "match": "x"}])
+    assert out["verdict"] is None
 
 
-def test_verify_findings_file_rewrites_with_verdict(tmp_path, monkeypatch):
+def test_classifier_does_not_mutate_input_or_emit_llm_metadata():
+    finding = {"file": "a.py", "line": 1, "verified": False, "match": "super-secret"}
+    [out] = _classify_secret_verdicts([finding])
+    assert "verdict" not in finding  # original untouched
+    md = out.get("verification_metadata", {})
+    assert "model" not in md and "tokens_in" not in md
+
+
+def test_verify_findings_file_writes_provider_verdicts(tmp_path):
     findings_file = tmp_path / "findings.jsonl"
-    findings_file.write_text(json.dumps({
-        "file": "config.py", "line": 4,
-        "rule": "trufflehog.aws", "severity": "high",
-        "match": 'AKIA...', "verified": False,
-    }) + "\n")
-
-    def _fake_verify(*, finding, repo_root, llm, critic=None):
-        return type("R", (), {
-            "verdict": "ruled_out",
-            "exploit_chain": "",
-            "evidence": [{"reasoning": "value is in a test fixture"}],
-            "tokens_in": 110, "tokens_out": 110,
-            "verification_metadata": {"tokens_used": 220},
-        })()
-
-    monkeypatch.setattr(
-        "runner.scanners.secrets.scanner.verify_secret_finding",
-        _fake_verify,
+    findings_file.write_text(
+        json.dumps({"file": "a.py", "line": 1, "match": "AKIA...", "verified": True}) + "\n"
+        + json.dumps({"file": "b.py", "line": 2, "match": "x", "verified": False}) + "\n"
     )
 
-    SecretsScanner()._verify_findings_file(
-        findings_file, repo_root=str(tmp_path), env=_env(api_key="sk-test"),
-    )
+    SecretsScanner()._verify_findings_file(findings_file)
 
     rewritten = [json.loads(l) for l in findings_file.read_text().splitlines() if l.strip()]
-    assert rewritten[0]["verdict"] == "ruled_out"
-    assert rewritten[0]["evidence"][0]["reasoning"] == "value is in a test fixture"
-    assert rewritten[0]["verification_metadata"]["tokens_used"] == 220
+    assert rewritten[0]["verdict"] == "confirmed"
+    assert rewritten[0]["verification_metadata"]["auto_confirmed"] == "provider_verified"
+    assert rewritten[1]["verdict"] is None
 
 
-def test_verify_findings_file_no_llm_key_marks_skipped(tmp_path, monkeypatch):
-    findings_file = tmp_path / "findings.jsonl"
-    findings_file.write_text(json.dumps({
-        "file": "x.py", "line": 1, "rule": "x", "severity": "high", "verified": False,
-    }) + "\n")
-
-    monkeypatch.delenv("LLM_API_KEY", raising=False)
-
-    SecretsScanner()._verify_findings_file(
-        findings_file, repo_root=str(tmp_path), env=_env(),
-    )
-
-    rewritten = [json.loads(l) for l in findings_file.read_text().splitlines() if l.strip()]
-    assert rewritten[0]["verdict"] is None
-    assert rewritten[0]["verification_metadata"]["skipped"] == "llm_disabled"
+def test_verify_findings_file_missing_is_noop(tmp_path):
+    # No exception when findings.jsonl was never written.
+    SecretsScanner()._verify_findings_file(tmp_path / "absent.jsonl")
 
 
-def test_scan_depth_ai_constant_removed():
-    """ai_enhanced is no longer a supported scan depth on the runner."""
+def test_scanner_does_not_import_the_llm_secret_verifier():
     from runner.scanners.secrets import scanner as mod
-    assert not hasattr(mod, "SCAN_DEPTH_AI")
-    assert "ai_enhanced" not in mod.SUPPORTED_SCAN_DEPTHS
 
-
-def test_scanner_module_does_not_import_classify():
-    from runner.scanners.secrets import scanner as mod
-    assert not hasattr(mod, "classify")
+    # The LLM secret-verification path is gone entirely.
+    assert not hasattr(mod, "verify_secret_finding")
+    assert not hasattr(mod, "_maybe_verify_secrets")
+    assert not hasattr(mod, "_build_llm_client")

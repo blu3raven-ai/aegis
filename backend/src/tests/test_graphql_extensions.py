@@ -223,6 +223,71 @@ async def test_alias_limit_skipped_in_dev(monkeypatch):
 
 
 
+_NESTED_ALIASES = "query A { outer { " + " ".join(f"a{i}: inner" for i in range(15)) + " } }"
+
+
+@pytest.mark.asyncio
+async def test_alias_limit_rejects_nested_aliases(monkeypatch):
+    """Regression (GQL-01): aliases nested under a namespace field are counted.
+
+    Real resolvers live at depth >= 2, so a top-level-only count saw 0 aliases
+    for every real attack query and the cap never fired. The extension runs on
+    the parsed AST before field resolution, so a flat schema + a query naming
+    non-existent nested fields exercises the walk without a nested schema.
+    """
+    monkeypatch.delenv("ENABLE_BACKEND_DOCS", raising=False)
+    ext = _reload_extensions()
+
+    @strawberry.type
+    class Q:
+        @strawberry.field
+        def hello(self) -> str:
+            return "world"
+
+    schema = strawberry.Schema(query=Q, extensions=[ext.AliasLimitExtension])
+    result = await schema.execute(_NESTED_ALIASES, operation_name="A")
+    codes = [e.extensions.get("code") for e in (result.errors or [])]
+    assert "ALIAS_LIMIT_EXCEEDED" in codes
+
+
+@pytest.mark.asyncio
+async def test_complexity_limit_rejects_excessive_fields(monkeypatch):
+    monkeypatch.delenv("ENABLE_BACKEND_DOCS", raising=False)
+    ext = _reload_extensions()
+    monkeypatch.setattr(ext.AliasLimitExtension, "MAX_TOTAL_FIELDS", 1)
+
+    @strawberry.type
+    class Q:
+        @strawberry.field
+        def hello(self) -> str:
+            return "world"
+
+    schema = strawberry.Schema(query=Q, extensions=[ext.AliasLimitExtension])
+    result = await schema.execute("query C { outer { inner } }", operation_name="C")
+    codes = [e.extensions.get("code") for e in (result.errors or [])]
+    assert "COMPLEXITY_LIMIT_EXCEEDED" in codes
+
+
+@pytest.mark.asyncio
+async def test_alias_limit_allows_legit_nested_query(monkeypatch):
+    monkeypatch.delenv("ENABLE_BACKEND_DOCS", raising=False)
+    ext = _reload_extensions()
+
+    @strawberry.type
+    class Q:
+        @strawberry.field
+        def hello(self) -> str:
+            return "world"
+
+    schema = strawberry.Schema(query=Q, extensions=[ext.AliasLimitExtension])
+    result = await schema.execute(
+        "query L { outer { a1: inner a2: inner } }", operation_name="L"
+    )
+    codes = [e.extensions.get("code") for e in (result.errors or [])]
+    assert "ALIAS_LIMIT_EXCEEDED" not in codes
+    assert "COMPLEXITY_LIMIT_EXCEEDED" not in codes
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _cleanup_env():
     """Restore module-level env var state after tests run."""

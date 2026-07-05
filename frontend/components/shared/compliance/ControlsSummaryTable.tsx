@@ -7,10 +7,10 @@ import { ControlBadge } from "./ControlBadge"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: "text-[var(--color-severity-critical)]",
-  high: "text-[var(--color-severity-high)]",
-  medium: "text-[var(--color-severity-medium)]",
-  low: "text-[var(--color-severity-low)]",
+  critical: "text-[var(--color-severity-critical-text)]",
+  high: "text-[var(--color-severity-high-text)]",
+  medium: "text-[var(--color-severity-medium-text)]",
+  low: "text-[var(--color-severity-low-text)]",
 }
 
 // Map internal status keys to the user-facing vocabulary used by the pills and
@@ -25,7 +25,7 @@ function StatusPill({ ctrl }: { ctrl: ControlSummaryItem }) {
   const status = deriveControlStatus(ctrl)
   if (status === "met") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-status-ok-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-status-ok)]">
+      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-status-ok-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-status-ok-text)]">
         <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-status-ok)]" />
         Compliant
       </span>
@@ -33,14 +33,14 @@ function StatusPill({ ctrl }: { ctrl: ControlSummaryItem }) {
   }
   if (status === "partial") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-severity-medium-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-medium)]">
+      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-severity-medium-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-medium-text)]">
         <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-severity-medium)]" />
         Partial
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-severity-critical-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-critical)]">
+    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-severity-critical-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-severity-critical-text)]">
       <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-severity-critical)]" />
       At Risk
     </span>
@@ -154,7 +154,7 @@ export function ControlsSummaryTable({ controls, framework, statusFilter = "all"
                     </Td>
                     <Td className="px-0 py-3 pr-4 text-right font-mono">
                       {ctrl.finding_count > 0 ? (
-                        <span className="font-semibold text-[var(--color-severity-critical)]">
+                        <span className="font-semibold text-[var(--color-severity-critical-text)]">
                           {ctrl.finding_count}
                         </span>
                       ) : (
@@ -185,7 +185,7 @@ export function ControlsSummaryTable({ controls, framework, statusFilter = "all"
                           )}
                           {ctrl.due_date &&
                             (ctrl.overdue ? (
-                              <span className="text-2xs text-[var(--color-severity-critical)]">
+                              <span className="text-2xs text-[var(--color-severity-critical-text)]">
                                 Overdue · {ctrl.due_date}
                               </span>
                             ) : (

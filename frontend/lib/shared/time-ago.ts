@@ -1,3 +1,5 @@
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
+
 export function timeAgo(iso: string): string {
   if (!iso) return ""
   const diff = Date.now() - new Date(iso).getTime()
@@ -9,7 +11,7 @@ export function timeAgo(iso: string): string {
   const days = Math.floor(hours / 24)
   if (days === 1) return "yesterday"
   if (days < 30) return `${days}d ago`
-  return new Date(iso).toLocaleDateString()
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })
 }
 
 /** Relative label for a future timestamp, e.g. "in 6h" or "in 3d". */
@@ -25,5 +27,5 @@ export function timeUntil(iso: string): string {
   const days = Math.floor(hours / 24)
   if (days === 1) return "tomorrow"
   if (days < 30) return `in ${days}d`
-  return new Date(iso).toLocaleDateString()
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })
 }

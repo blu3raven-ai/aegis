@@ -14,6 +14,19 @@ describe("FindingRowTags", () => {
     assert.match(src, /firstSeen\?:\s*string/)
   })
 
+  it("accepts a malicious prop", () => {
+    assert.match(src, /malicious\?:\s*boolean/)
+  })
+
+  it("renders a Malware chip when malicious=true", () => {
+    assert.match(src, /\{malicious && /)
+    assert.match(src, /Malware/)
+  })
+
+  it("shows the Malware chip even without kev/epss/new signals", () => {
+    assert.match(src, /if \(!malicious && !kev && !showEpss && !showNew\) return null/)
+  })
+
   it("renders KEV chip when kev=true", () => {
     assert.match(src, /\{kev && /)
   })

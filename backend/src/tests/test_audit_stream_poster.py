@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 # Cryptography requires a real Fernet key; tests touch encrypt()/decrypt().
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
-os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", "FAjK_lhsKHqBJ4uYY3oRWAa7c1pTkbHIfk7gjhFCpx8=")
+os.environ.setdefault("APP_SECRET", "0" * 64)
+os.environ.setdefault("APP_SECRET", "FAjK_lhsKHqBJ4uYY3oRWAa7c1pTkbHIfk7gjhFCpx8=")
 
 import pytest  # noqa: E402
 
@@ -695,11 +695,17 @@ def test_decrypt_token_with_wrong_key_raises(monkeypatch):
     """Key-rotation safety: decryption with the wrong key must fail loudly,
     not silently return garbage."""
     from src.security.crypto import decrypt
+    from src.shared import encryption
+
     ciphertext = encrypt("token-under-key-A")
-    # Swap to a different valid Fernet key.
-    monkeypatch.setenv("AEGIS_SECRET_ENCRYPTION_KEY", "Px9SQXqYZjf4l0HSp82ImSj2BUbnJgFp9TMhT9pNc5g=")
-    with pytest.raises(RuntimeError, match="decryption failed"):
-        decrypt(ciphertext)
+    # Rotate the root away so it can no longer decrypt the ciphertext.
+    monkeypatch.setenv("APP_SECRET", "a-different-root-secret-for-rotation-test")
+    encryption._reset_cache_for_tests()
+    try:
+        with pytest.raises(RuntimeError, match="decryption failed"):
+            decrypt(ciphertext)
+    finally:
+        encryption._reset_cache_for_tests()
 
 
 # ── idempotency: per-row event_id + replay-on-lost-ack ───────────────────────

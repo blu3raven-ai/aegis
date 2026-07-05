@@ -137,7 +137,7 @@ export function FindingDetailActions({
       {dismiss && (
         <div className="ml-auto flex items-center gap-2">
           {dismiss.error && (
-            <span className="text-[11px] text-[var(--color-severity-high)]" role="alert">
+            <span className="text-[11px] text-[var(--color-severity-high-text)]" role="alert">
               {dismiss.error}
             </span>
           )}

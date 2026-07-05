@@ -14,7 +14,6 @@ the per-type senders are faked so we don't issue real HTTP/SMTP.
 """
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -185,15 +184,21 @@ async def _create_rule(
 
 
 def _make_finding_event(severity: str = "critical", event_id: str | None = None) -> Event:
+    # Envelope shape as published by EventPublisher: the finding fields live
+    # under "payload"; event_id / org_id sit on the envelope alongside it.
     return Event(
         event_type="finding.created",
         data={
             "event_id": event_id or f"ev-{uuid4().hex[:8]}",
-            "severity": severity,
-            "title": f"Test finding {uuid4().hex[:6]}",
-            "tool": "trivy",
-            "scanner": "trivy",
-            "repo_id": "repo-test",
+            "org_id": "acme-org",
+            # Mirror the real emit_finding_created payload: it carries
+            # scanner_type (NOT "scanner") and no repo_id. Using the wrong keys
+            # here previously hid the scanner-condition routing bug.
+            "payload": {
+                "finding_id": f"f-{uuid4().hex[:8]}",
+                "severity": severity,
+                "scanner_type": "trivy",
+            },
         },
     )
 
@@ -265,13 +270,16 @@ async def test_handle_event_dispatches_to_matching_slack_destination(
 
 
 @pytest.mark.asyncio
-async def test_handle_event_sender_failure_records_failed_and_emits_failed_event(
+async def test_handle_event_sender_failure_parks_retry_and_emits_failed_event(
     db_session, notif_cleanup, recording_publisher, monkeypatch,
 ):
     # When a sender raises, the router must:
     #   - Catch the exception (not bubble out)
-    #   - Record a 'failed' delivery with the error message truncated to <=500
-    #   - Emit NotificationFailedEvent (not Dispatched)
+    #   - Park the delivery for retry (status='retry', attempts=1, backoff set,
+    #     payload stored) with the error message truncated to <=500
+    #   - Still emit NotificationFailedEvent (not Dispatched) for this attempt
+    from datetime import datetime, timezone
+
     destination_ids, _ = notif_cleanup
     dest_id = await _create_slack_destination(db_session, destination_ids)
     await db_session.commit()
@@ -290,7 +298,11 @@ async def test_handle_event_sender_failure_records_failed_and_emits_failed_event
         )
     )).scalars().all()
     assert len(rows) == 1
-    assert rows[0].status == "failed"
+    assert rows[0].status == "retry"
+    assert rows[0].attempts == 1
+    assert rows[0].next_attempt_at is not None
+    assert rows[0].next_attempt_at > datetime.now(timezone.utc)
+    assert rows[0].payload is not None
     assert rows[0].error is not None
     assert rows[0].error.startswith("connection refused")
     assert len(rows[0].error) <= 500
@@ -302,11 +314,11 @@ async def test_handle_event_sender_failure_records_failed_and_emits_failed_event
 
 
 @pytest.mark.asyncio
-async def test_handle_event_sender_returns_failure_records_failed_with_response_code(
+async def test_handle_event_sender_returns_failure_parks_retry_with_response_code(
     db_session, notif_cleanup, recording_publisher, monkeypatch,
 ):
-    # SendResult(success=False) without an exception — the router must record
-    # the response_code and error string from the result.
+    # SendResult(success=False) without an exception — the router must park the
+    # delivery for retry while preserving the response_code and error string.
     destination_ids, _ = notif_cleanup
     dest_id = await _create_slack_destination(db_session, destination_ids)
     await db_session.commit()
@@ -325,7 +337,8 @@ async def test_handle_event_sender_returns_failure_records_failed_with_response_
         )
     )).scalars().all()
     assert len(rows) == 1
-    assert rows[0].status == "failed"
+    assert rows[0].status == "retry"
+    assert rows[0].attempts == 1
     assert rows[0].response_code == 429
     assert rows[0].error == "rate limited"
 
@@ -385,7 +398,8 @@ async def test_handle_event_multiple_destinations_each_sender_called_independent
     assert len(slack_rows) == 1
     assert slack_rows[0].status == "delivered"
 
-    # Webhook delivery recorded as failed.
+    # Webhook delivery parked for retry (a failed first attempt is no longer
+    # dropped — it enters the retry queue).
     webhook_rows = (await db_session.execute(
         select(NotificationDelivery).where(
             NotificationDelivery.destination_id == webhook_id,
@@ -393,7 +407,7 @@ async def test_handle_event_multiple_destinations_each_sender_called_independent
         )
     )).scalars().all()
     assert len(webhook_rows) == 1
-    assert webhook_rows[0].status == "failed"
+    assert webhook_rows[0].status == "retry"
 
     # Two outcome events — one dispatched, one failed.
     types = sorted(e.event_type for e in recording_publisher.published)
@@ -436,7 +450,7 @@ async def test_handle_event_rules_path_claims_destination_skipping_others(
     # rules-vs-event-filter precedence: rules win.
     destination_ids, rule_ids = notif_cleanup
     target_id = await _create_slack_destination(db_session, destination_ids, name_prefix="target")
-    other_id = await _create_webhook_destination(db_session, destination_ids, name_prefix="other")
+    await _create_webhook_destination(db_session, destination_ids, name_prefix="other")
     await db_session.commit()
 
     await _create_rule(
@@ -465,6 +479,163 @@ async def test_handle_event_rules_path_claims_destination_skipping_others(
         )
     )).scalars().all()
     assert {r.destination_id for r in rows} == {target_id}
+
+
+@pytest.mark.asyncio
+async def test_bug1_critical_event_passes_min_severity_filter_via_envelope_payload(
+    db_session, notif_cleanup, recording_publisher, monkeypatch,
+):
+    # Bug 1: the router must unwrap event.data["payload"] to read the real
+    # severity. A CRITICAL finding on a destination gated at min_severity=high
+    # must be delivered. Before the fix, severity read off the envelope defaulted
+    # to "info" and the min_severity gate silently dropped every finding.
+    destination_ids, _ = notif_cleanup
+    dest_id = await _create_slack_destination(
+        db_session, destination_ids,
+        event_filter={"min_severity": "high"},
+    )
+    await db_session.commit()
+
+    slack = _FakeSender(success=True, response_code=200)
+    _patch_senders(monkeypatch, slack=slack)
+
+    event = _make_finding_event(severity="critical")
+    router = NotificationEventRouter()
+    router._handle_event(event)
+
+    assert len(slack.calls) == 1
+    rows = (await db_session.execute(
+        select(NotificationDelivery).where(
+            NotificationDelivery.destination_id == dest_id,
+            NotificationDelivery.event_id == event.data["event_id"],
+        )
+    )).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].status == "delivered"
+
+
+@pytest.mark.asyncio
+async def test_bug1_severity_rule_matches_and_claims_only_target(
+    db_session, notif_cleanup, recording_publisher, monkeypatch,
+):
+    # Bug 1: a routing rule with condition severity == "critical" must match a
+    # CRITICAL finding and claim ONLY its channel. Before the fix, severity read
+    # as "info", the rule never matched, and routing collapsed to event-filter
+    # fanout — delivering to the non-targeted destination too.
+    destination_ids, rule_ids = notif_cleanup
+    target_id = await _create_slack_destination(db_session, destination_ids, name_prefix="target")
+    await _create_webhook_destination(db_session, destination_ids, name_prefix="other")
+    await db_session.commit()
+
+    await _create_rule(
+        db_session, rule_ids,
+        channel_id=target_id,
+        conditions={"field": "severity", "op": "eq", "value": "critical"},
+        priority=1,
+    )
+    await db_session.commit()
+
+    slack = _FakeSender(success=True, response_code=200)
+    webhook = _FakeSender(success=True, response_code=200)
+    _patch_senders(monkeypatch, slack=slack, webhook=webhook)
+
+    event = _make_finding_event(severity="critical")
+    router = NotificationEventRouter()
+    router._handle_event(event)
+
+    assert len(slack.calls) == 1
+    assert webhook.calls == []
+    rows = (await db_session.execute(
+        select(NotificationDelivery).where(
+            NotificationDelivery.event_id == event.data["event_id"],
+        )
+    )).scalars().all()
+    assert {r.destination_id for r in rows} == {target_id}
+
+
+@pytest.mark.asyncio
+async def test_scanner_rule_matches_via_real_payload_scanner_type_key(
+    db_session, notif_cleanup, recording_publisher, monkeypatch,
+):
+    # The real finding.created payload carries the scanner name under
+    # "scanner_type"; a routing rule conditioned on "scanner" must still match.
+    # Before the fix the router only read "scanner", so it fell back to the
+    # event_type and scanner-conditioned rules never matched.
+    destination_ids, rule_ids = notif_cleanup
+    target_id = await _create_slack_destination(db_session, destination_ids, name_prefix="target")
+    await _create_webhook_destination(db_session, destination_ids, name_prefix="other")
+    await db_session.commit()
+
+    await _create_rule(
+        db_session, rule_ids,
+        channel_id=target_id,
+        conditions={"field": "scanner", "op": "eq", "value": "trivy"},
+        priority=1,
+    )
+    await db_session.commit()
+
+    slack = _FakeSender(success=True, response_code=200)
+    webhook = _FakeSender(success=True, response_code=200)
+    _patch_senders(monkeypatch, slack=slack, webhook=webhook)
+
+    event = _make_finding_event(severity="high")
+    router = NotificationEventRouter()
+    router._handle_event(event)
+
+    assert len(slack.calls) == 1
+    assert webhook.calls == []
+    rows = (await db_session.execute(
+        select(NotificationDelivery).where(
+            NotificationDelivery.event_id == event.data["event_id"],
+        )
+    )).scalars().all()
+    assert {r.destination_id for r in rows} == {target_id}
+
+
+@pytest.mark.asyncio
+async def test_bug2_rule_selected_destination_bypasses_own_event_filter(
+    db_session, notif_cleanup, recording_publisher, monkeypatch,
+):
+    # Bug 2: a destination chosen by an explicit routing rule must be delivered
+    # to even when its OWN event_filter would exclude the event — the rule has
+    # already decided routing. Here the rule (severity == critical) claims a
+    # destination whose event_filter demands min_severity=critical too, but the
+    # point is the in-loop re-filter must not run for rule-selected dests.
+    destination_ids, rule_ids = notif_cleanup
+    # event_filter that would drop anything below critical; the rule condition is
+    # what actually admits this event, and the loop must not re-apply the filter.
+    dest_id = await _create_slack_destination(
+        db_session, destination_ids,
+        event_filter={"min_severity": "critical", "event_types": ["finding.severity_changed"]},
+    )
+    await db_session.commit()
+
+    await _create_rule(
+        db_session, rule_ids,
+        channel_id=dest_id,
+        conditions={"field": "severity", "op": "eq", "value": "critical"},
+        priority=1,
+    )
+    await db_session.commit()
+
+    slack = _FakeSender(success=True, response_code=200)
+    _patch_senders(monkeypatch, slack=slack)
+
+    # event_type finding.created is NOT in the dest's event_filter.event_types,
+    # so the dest's own filter would exclude it — but the rule selected it.
+    event = _make_finding_event(severity="critical")
+    router = NotificationEventRouter()
+    router._handle_event(event)
+
+    assert len(slack.calls) == 1
+    rows = (await db_session.execute(
+        select(NotificationDelivery).where(
+            NotificationDelivery.destination_id == dest_id,
+            NotificationDelivery.event_id == event.data["event_id"],
+        )
+    )).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].status == "delivered"
 
 
 @pytest.mark.asyncio

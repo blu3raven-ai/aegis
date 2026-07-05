@@ -45,6 +45,7 @@ from runner.scanners.container import (
     registry_auth,
     registry_digest,
 )
+from runner.scanners.container.layer_attribution import annotate_sbom_with_layers
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,7 @@ class ContainerScanConfig(BaseScanConfig):
     scan_mode: str
     scan_platform: str
     previous_digests_raw: str
+    list_tags: bool
 
     @classmethod
     def from_job(cls, job: dict[str, Any]) -> "ContainerScanConfig":
@@ -89,6 +91,7 @@ class ContainerScanConfig(BaseScanConfig):
             scan_mode=scan_mode,
             scan_platform=env.get("SCAN_PLATFORM", "linux/amd64"),
             previous_digests_raw=env.get("PREVIOUS_DIGESTS", ""),
+            list_tags=env.get("CONTAINER_LIST_TAGS", "").lower() == "true",
         )
 
 
@@ -189,6 +192,7 @@ class ContainerScanner:
                     cancel_event=cancel_event,
                     previous_digests=previous_digests,
                     log_tail=log_tail,
+                    list_tags=cfg.list_tags,
                 )
             except ScannerTimeoutError as e:
                 log_tail.append(f"[!] Timeout scanning {image_ref}: {e}")
@@ -229,6 +233,7 @@ class ContainerScanner:
         cancel_event: threading.Event | None,
         previous_digests: dict[str, str] | None = None,
         log_tail: list[str] | None = None,
+        list_tags: bool = False,
     ) -> Path | None:
         safe_name = _sanitize_name(image_ref)
         image_out = out_dir / safe_name
@@ -270,6 +275,14 @@ class ContainerScanner:
             log_finished(image_ref)
             return None
 
+        # Attribute each component to its introducing image layer (from the
+        # syft-json sidecar) before the cdx SBOM is registered for upload.
+        if syft_json_path.exists() and syft_json_path.stat().st_size > 0:
+            try:
+                annotate_sbom_with_layers(sbom_path, syft_json_path)
+            except Exception:
+                logger.warning("layer attribution failed for %s", image_ref, exc_info=True)
+
         register_output(out_dir, sbom_path, safe_name)
         if syft_json_path.exists() and syft_json_path.stat().st_size > 0:
             register_output(out_dir, syft_json_path, safe_name)
@@ -288,6 +301,17 @@ class ContainerScanner:
             if fallback:
                 (image_out / "digest.txt").write_text(fallback)
                 register_output(out_dir, image_out / "digest.txt", safe_name)
+
+        # Opt-in: dump the repo's registry tag list so the backend can surface
+        # newer available tags. Best-effort — never fails the scan.
+        if list_tags:
+            try:
+                tags = registry_digest.list_tags(image_ref, cancel_event=cancel_event)
+                if tags:
+                    (image_out / "tags.json").write_text(json.dumps({"tags": tags}))
+                    register_output(out_dir, image_out / "tags.json", safe_name)
+            except Exception:
+                logger.warning("tag listing failed for %s", image_ref, exc_info=True)
 
         log_finished(image_ref)
         return sbom_path

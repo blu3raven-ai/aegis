@@ -9,7 +9,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.helpers import run_db
-from src.db.models import Asset, Finding, ScanRun
+from src.db.models import Asset, Finding, ScanRun, Sbom, SbomComponent
 from src.images.service import list_images as _list_image_rows
 from src.shared.archived_filter import exclude_archived
 
@@ -35,6 +35,9 @@ class RepoView(_CommonView):
     scanners_with_coverage: list[str] = field(default_factory=list)
     coverage_status: str = "never"
     source_url: str | None = None
+    # True count of open findings across all severities (the severity buckets in
+    # finding_counts keep only critical/high/medium/low for the pill).
+    open_finding_count: int = 0
 
 
 @dataclass
@@ -84,10 +87,21 @@ class ImageDetailView(ImageView):
 
 
 @dataclass
+class CoverageSummary:
+    """Coverage KPI counts over the caller's FULL repo scope (not the page), so
+    the Fresh/Stale/Never strip is accurate even when the list is capped."""
+    total: int = 0
+    fresh: int = 0
+    stale: int = 0
+    never: int = 0
+
+
+@dataclass
 class RepoListResult:
     sources: list[RepoView]
     next_cursor: str | None = None
     total_count: int | None = None
+    coverage_summary: CoverageSummary | None = None
 
 
 @dataclass
@@ -105,6 +119,93 @@ def _coverage_status(last_scanned_at: datetime | None) -> str:
         return "never"
     cutoff = datetime.now(timezone.utc) - timedelta(days=_FRESH_WINDOW_DAYS)
     return "fresh" if last_scanned_at >= cutoff else "stale"
+
+
+async def _repo_coverage_summary(
+    session: AsyncSession, asset_ids: list[str]
+) -> CoverageSummary:
+    """Coverage counts over the caller's FULL repo scope (no page limit), so the
+    KPI strip is correct for estates larger than one page. Same definition as
+    ``_coverage_status``: covered = a non-empty dependency SBOM; fresh if scanned
+    within the window, else stale; never = the rest."""
+    if not asset_ids:
+        return CoverageSummary()
+    repo_ids = select(Asset.id).where(Asset.id.in_(asset_ids), Asset.type == "repo")
+    total = (
+        await session.execute(select(func.count()).select_from(repo_ids.subquery()))
+    ).scalar_one()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=_FRESH_WINDOW_DAYS)
+    row = (
+        await session.execute(
+            select(
+                func.count().filter(Sbom.scanned_at >= cutoff).label("fresh"),
+                func.count().filter(Sbom.scanned_at < cutoff).label("stale"),
+            )
+            .select_from(Sbom)
+            .where(
+                Sbom.asset_id.in_(repo_ids),
+                select(SbomComponent.id)
+                .where(SbomComponent.asset_id == Sbom.asset_id)
+                .exists(),
+            )
+        )
+    ).one()
+    fresh, stale = row.fresh or 0, row.stale or 0
+    return CoverageSummary(total=total, fresh=fresh, stale=stale, never=total - fresh - stale)
+
+
+async def _dependency_sbom_scanned(
+    session: AsyncSession, asset_ids: list[str]
+) -> dict[str, datetime]:
+    """Map asset_id → SBOM ``scanned_at`` for assets with a non-empty dependency
+    SBOM. Coverage means "a dependency-scan SBOM exists" (the SBOM page's
+    definition), read from the per-asset ``Sbom`` table — org-level "Scan now"
+    runs leave ``ScanRun.asset_id`` NULL, so ScanRun can't answer this and a
+    real SBOM otherwise reads "never". Empty SBOMs (no components) are excluded
+    so the coverage badge agrees with the detail page's empty state."""
+    if not asset_ids:
+        return {}
+    stmt = (
+        select(Sbom.asset_id, Sbom.scanned_at)
+        .where(Sbom.asset_id.in_(asset_ids))
+        .where(
+            select(SbomComponent.id)
+            .where(SbomComponent.asset_id == Sbom.asset_id)
+            .exists()
+        )
+    )
+    return {aid: ts for aid, ts in (await session.execute(stmt)).all()}
+
+
+async def _open_finding_tools(
+    session: AsyncSession, asset_ids: list[str]
+) -> dict[str, set[str]]:
+    """Map asset_id → the set of scanner tools that have at least one open
+    finding on the asset (used to report which scanners have coverage, since the
+    org-level ScanRun envelopes aren't asset-linked)."""
+    if not asset_ids:
+        return {}
+    stmt = exclude_archived(
+        select(Finding.asset_id, Finding.tool)
+        .where(Finding.asset_id.in_(asset_ids))
+        .where(Finding.state == "open")
+        .distinct(),
+        Finding,
+    )
+    out: dict[str, set[str]] = {}
+    for aid, tool in (await session.execute(stmt)).all():
+        out.setdefault(aid, set()).add(tool)
+    return out
+
+
+def _scanners_with_coverage(finding_tools: set[str], has_sbom: bool) -> list[str]:
+    """Scanner types with evidence for the asset: any tool with an open finding,
+    plus dependency scanning when a non-empty SBOM exists."""
+    return [
+        t
+        for t in _REPO_SCANNER_TYPES
+        if t in finding_tools or (t == "dependencies_scanning" and has_sbom)
+    ]
 
 
 def _truncate(value: str | None, length: int) -> str | None:
@@ -132,32 +233,55 @@ async def _list_repo_sources_async(
     if not asset_ids:
         return []
 
+    since_cutoff: datetime | None = None
+    if since_days:
+        since_cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
+
     stmt = (
         select(Asset)
         .where(Asset.id.in_(asset_ids))
         .where(Asset.type == "repo")
-        .order_by(Asset.updated_at.desc())
-        .limit(limit)
     )
+    # Apply the has_critical / since filters in SQL, BEFORE the limit, so the
+    # page bounds the filtered set — not the input to the filter (which would
+    # silently drop matches beyond the first `limit` most-recent repos).
+    if has_critical is True:
+        stmt = stmt.where(
+            Asset.id.in_(
+                exclude_archived(
+                    select(Finding.asset_id)
+                    .where(Finding.state == "open")
+                    .where(Finding.severity == "critical"),
+                    Finding,
+                )
+            )
+        )
+    if since_cutoff is not None:
+        # `since` is dependency-scan freshness — a fresh, non-empty SBOM.
+        stmt = stmt.where(
+            Asset.id.in_(
+                select(Sbom.asset_id)
+                .where(Sbom.scanned_at >= since_cutoff)
+                .where(
+                    select(SbomComponent.id)
+                    .where(SbomComponent.asset_id == Sbom.asset_id)
+                    .exists()
+                )
+            )
+        )
+    stmt = stmt.order_by(Asset.updated_at.desc()).limit(limit)
     assets = (await session.execute(stmt)).scalars().all()
     if not assets:
         return []
 
     repo_asset_ids = [a.id for a in assets]
 
-    since_cutoff: datetime | None = None
-    if since_days:
-        since_cutoff = datetime.now(timezone.utc) - timedelta(days=since_days)
-
-    scan_runs_stmt = (
-        select(ScanRun.tool, ScanRun.asset_id, func.max(ScanRun.finished_at).label("last_finished"))
-        .where(ScanRun.asset_id.in_(repo_asset_ids))
-        .where(ScanRun.status == "completed")
-        .group_by(ScanRun.tool, ScanRun.asset_id)
-    )
-    scan_run_map: dict[str, dict[str, datetime]] = {}
-    for tool, asset_id, last_finished in (await session.execute(scan_runs_stmt)).all():
-        scan_run_map.setdefault(asset_id, {})[tool] = last_finished
+    # Coverage = a non-empty dependency-scan SBOM exists for the asset. Read it
+    # from the per-asset Sbom table (every dependency scan upserts one), not from
+    # ScanRun: org-level "Scan now" runs leave ScanRun.asset_id NULL, so a real
+    # SBOM would otherwise read "never". Freshness is the SBOM's scanned_at.
+    sbom_scanned_map = await _dependency_sbom_scanned(session, repo_asset_ids)
+    finding_tools_map = await _open_finding_tools(session, repo_asset_ids)
 
     finding_counts_stmt = exclude_archived(
         select(Finding.asset_id, Finding.severity, func.count(Finding.id).label("cnt"))
@@ -172,21 +296,23 @@ async def _list_repo_sources_async(
 
     out: list[RepoView] = []
     for a in assets:
-        tool_map = scan_run_map.get(a.id, {})
-        scanners = [t for t in _REPO_SCANNER_TYPES if t in tool_map]
-        last_scanned_at = max(tool_map.values()) if tool_map else None
-        counts = _normalize_counts(finding_map.get(a.id, {}))
-
-        if has_critical is True and counts["critical"] == 0:
-            continue
-        if since_cutoff and (last_scanned_at is None or last_scanned_at < since_cutoff):
-            continue
+        last_scanned_at = sbom_scanned_map.get(a.id)
+        scanners = _scanners_with_coverage(
+            finding_tools_map.get(a.id, set()), has_sbom=last_scanned_at is not None
+        )
+        raw_counts = finding_map.get(a.id, {})
+        counts = _normalize_counts(raw_counts)
+        # True open-finding total across ALL severities, so a repo whose findings
+        # carry a NULL/non-canonical severity isn't shown as "0 findings" (the
+        # severity buckets keep only critical/high/medium/low for the pill).
+        open_finding_count = sum(raw_counts.values())
 
         out.append(RepoView(
             asset_id=a.id,
             display_name=a.display_name,
             last_scanned_at=last_scanned_at,
             finding_counts=counts,
+            open_finding_count=open_finding_count,
             last_scanned_sha=_truncate(a.last_scanned_sha, 7),
             manifest_set_hash=_truncate(a.manifest_set_hash, 8),
             scanners_with_coverage=scanners,
@@ -241,14 +367,12 @@ async def _get_repo_detail_async(
         for f in findings_rows
     ]
 
-    tool_timestamps: list[datetime] = []
-    scanners: list[str] = []
-    for r in history_rows:
-        if r.status == "completed" and r.finished_at:
-            tool_timestamps.append(r.finished_at)
-            if r.tool not in scanners:
-                scanners.append(r.tool)
-    last_scanned_at = max(tool_timestamps) if tool_timestamps else None
+    # Coverage from the same per-asset SBOM source as the list view, so a repo's
+    # card and its detail page never disagree (the scan_history above is only the
+    # display list, not the coverage source).
+    last_scanned_at = (await _dependency_sbom_scanned(session, [asset.id])).get(asset.id)
+    finding_tools = (await _open_finding_tools(session, [asset.id])).get(asset.id, set())
+    scanners = _scanners_with_coverage(finding_tools, has_sbom=last_scanned_at is not None)
 
     sev_raw = {
         row[0] or "unknown": row[1]
@@ -410,7 +534,16 @@ def list_repo_sources(
     """Return repository sources for the caller's scope. Sync wrapper around the async loader."""
     async def _run(session: AsyncSession) -> RepoListResult:
         sources = await _list_repo_sources_async(session, asset_ids, since_days, has_critical, min(limit, 500))
-        return RepoListResult(sources=sources, next_cursor=None, total_count=None)
+        # Coverage counts + true in-scope repo count over the FULL scope (not the
+        # capped page), so the KPI strip and "showing first N of M" are honest for
+        # estates larger than one page. total_count == coverage_summary.total.
+        coverage = await _repo_coverage_summary(session, asset_ids)
+        return RepoListResult(
+            sources=sources,
+            next_cursor=None,
+            total_count=coverage.total,
+            coverage_summary=coverage,
+        )
     return run_db(_run)
 
 

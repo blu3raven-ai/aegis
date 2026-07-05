@@ -22,6 +22,7 @@ import { LinkButton } from "@/components/ui/LinkButton"
 import { Sheet } from "@/components/ui/Sheet"
 import { cn } from "@/lib/shared/utils"
 import { revealSecretValue } from "@/lib/client/findings-api"
+import { useHasPermission } from "@/lib/client/use-permission"
 
 interface CodePreviewSectionProps {
   snippet: string | undefined
@@ -40,6 +41,8 @@ interface CodePreviewSectionProps {
   detailLoading?: boolean
   /** SCM web URL for this finding's location; renders a "View in repository" link when set. */
   repoUrl?: string | null
+  /** Scanner that produced the finding — tailors the missing-snippet copy honestly. */
+  scanner?: string
 }
 
 /** First line number from a "path:line" location — fallback gutter anchor. */
@@ -112,6 +115,7 @@ function CodeLines({
   highlightStart,
   highlightEnd,
   firstHighlightRef,
+  blurHighlighted = false,
 }: {
   lines: string[]
   startLine: number | null
@@ -119,6 +123,8 @@ function CodeLines({
   highlightStart?: number
   highlightEnd?: number
   firstHighlightRef?: React.Ref<HTMLSpanElement>
+  /** Blur the highlighted line's content (secret preview: hide the value until revealed). */
+  blurHighlighted?: boolean
 }) {
   const base = startLine ?? 1
   const hlEnd = highlightEnd ?? highlightStart
@@ -144,14 +150,22 @@ function CodeLines({
                 aria-hidden={!highlighted}
                 className={cn(
                   "select-none text-right tabular-nums",
-                  highlighted ? "font-semibold text-[var(--color-severity-high)]" : "text-[var(--color-text-tertiary)]",
+                  highlighted ? "font-semibold text-[var(--color-severity-high-text)]" : "text-[var(--color-text-tertiary)]",
                 )}
               >
                 {lineNo}
               </span>
             )}
             {highlighted && <span className="sr-only">Flagged line {lineNo}: </span>}
-            <span className="whitespace-pre">{line || " "}</span>
+            <span
+              className={cn(
+                "whitespace-pre",
+                highlighted && blurHighlighted && "select-none blur-[5px]",
+              )}
+              title={highlighted && blurHighlighted ? "Hidden — use Reveal to view the secret" : undefined}
+            >
+              {line || " "}
+            </span>
           </span>
         )
       })}
@@ -169,8 +183,16 @@ export function CodePreviewSection({
   showEmptyWhenMissing,
   detailLoading,
   repoUrl,
+  scanner,
 }: CodePreviewSectionProps) {
   const isSecret = Boolean(secretFindingId)
+  // Revealing the raw secret is gated on the same workspace permission the
+  // backend enforces (reveal_secret — a dedicated, more-sensitive grant than
+  // triage; review_findings does NOT imply it). Without it, the reveal
+  // affordance is hidden entirely — the redacted window still shows, the value
+  // just can't be unmasked. The server re-checks on every reveal; this only
+  // hides the button.
+  const { allowed: canReveal } = useHasPermission("reveal_secret")
   const [copied, setCopied] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const [rawValue, setRawValue] = useState<string | null>(null)
@@ -199,8 +221,17 @@ export function CodePreviewSection({
   const shown = revealed && rawValue != null ? rawValue : trimmed ?? ""
   const display = isSecret ? shown : dedent(shown)
   const lines = display.split("\n")
-  const anchor = isSecret ? null : startLine ?? parseStartLine(filePath)
-  const showGutter = !isSecret && (lines.length > 1 || anchor != null)
+  // A secret with a real (multi-line) redacted window shows it in file context
+  // with the offending line highlighted, exactly like other findings. The bare
+  // masked value and the revealed raw value stay a plain block — there's no
+  // surrounding code to number or anchor a highlight against.
+  const secretShowsWindow = isSecret && !revealed && lines.length > 1
+  const useCodeLines = !isSecret || secretShowsWindow
+  const anchor = useCodeLines ? startLine ?? parseStartLine(filePath) : null
+  const showGutter = useCodeLines && (lines.length > 1 || anchor != null)
+  // Blur the flagged line's value until the analyst explicitly reveals it, so
+  // the full secret isn't shoulder-surfable in the window view.
+  const blurHighlighted = isSecret && !revealed
 
   // Centre the highlighted line within the height-capped inline view.
   useEffect(() => {
@@ -274,18 +305,32 @@ export function CodePreviewSection({
         </section>
       )
     }
-    if (showEmptyWhenMissing && filePath) {
+    // Findings whose vulnerability has no line in the user's code: container
+    // image packages, and transitive deps (not declared in any manifest). For
+    // these, promising "re-run to capture the code" would be dishonest — there
+    // is no source site to capture. Everything else with a location just failed
+    // to capture a window (unreadable source), which a re-run can fix.
+    const noSourceSite =
+      scanner === "container_scanning" || (scanner === "dependencies_scanning" && !filePath)
+    if (showEmptyWhenMissing && (filePath || noSourceSite)) {
+      const message = noSourceSite
+        ? scanner === "container_scanning"
+          ? "No source to preview — this vulnerability comes from a package in the container image, not a line in your code."
+          : "No source to preview — this transitive dependency isn't declared in your manifests, so there's no line to point at."
+        : "We couldn't capture the surrounding code for this location. The source may not have been readable during the scan — re-run it to pull in the lines."
       return (
         <section aria-labelledby="finding-code-preview-title">
           <h3 id="finding-code-preview-title" className="text-base font-semibold text-[var(--color-text-primary)]">
             Code preview
           </h3>
           <div className="mt-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] p-4 text-center">
-            <p className="truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-tertiary)]" title={filePath}>
-              {filePath}
-            </p>
-            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-              No code was captured for this finding. Re-run the scan to pull in the surrounding lines.
+            {filePath && (
+              <p className="truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-tertiary)]" title={filePath}>
+                {filePath}
+              </p>
+            )}
+            <p className={cn("text-xs text-[var(--color-text-secondary)]", filePath && "mt-1")}>
+              {message}
             </p>
             {repoUrl && (
               <div className="mt-3 flex justify-center">
@@ -309,19 +354,24 @@ export function CodePreviewSection({
           {isSecret ? "Secret" : "Code preview"}
         </h3>
         <div className="flex items-center gap-2">
-          {repoUrl && <ViewInRepoButton url={repoUrl} />}
-          {!isSecret && (
-            <Button
-              variant="secondary"
-              size="xs"
-              onClick={() => setExpanded(true)}
-              leadingIcon={<ExpandIcon />}
-              aria-label="Expand code preview"
-            >
-              Expand
-            </Button>
+          {/* Prefer a deep-link to the file in its repository; fall back to the
+              in-app full-window view only when no repo URL resolves. */}
+          {repoUrl ? (
+            <ViewInRepoButton url={repoUrl} />
+          ) : (
+            !isSecret && (
+              <Button
+                variant="secondary"
+                size="xs"
+                onClick={() => setExpanded(true)}
+                leadingIcon={<ExpandIcon />}
+                aria-label="Expand code preview"
+              >
+                Expand
+              </Button>
+            )
           )}
-          {isSecret && (
+          {isSecret && canReveal && (
             <Button
               variant="secondary"
               size="xs"
@@ -351,18 +401,7 @@ export function CodePreviewSection({
         </p>
       )}
 
-      {isSecret ? (
-        <div className="mt-2 overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)] px-3 py-2">
-          <code
-            className={cn(
-              "whitespace-pre font-[family-name:var(--font-jetbrains-mono)] text-[13px]",
-              display ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)]",
-            )}
-          >
-            {display || "•••••••••••• (hidden — Reveal to view)"}
-          </code>
-        </div>
-      ) : (
+      {useCodeLines ? (
         <div className="mt-2 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)]">
           <pre ref={preRef} className="relative max-h-72 overflow-auto p-3 text-[12px] leading-relaxed">
             <CodeLines
@@ -372,18 +411,30 @@ export function CodePreviewSection({
               highlightStart={highlightStart}
               highlightEnd={highlightEnd}
               firstHighlightRef={hlRef}
+              blurHighlighted={blurHighlighted}
             />
           </pre>
+        </div>
+      ) : (
+        <div className="mt-2 overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)] px-3 py-2">
+          <code
+            className={cn(
+              "whitespace-pre font-[family-name:var(--font-jetbrains-mono)] text-[13px]",
+              display ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)]",
+            )}
+          >
+            {display || (canReveal ? "•••••••••••• (hidden — Reveal to view)" : "•••••••••••• (hidden)")}
+          </code>
         </div>
       )}
 
       {isSecret && revealed && (
-        <p className="mt-1.5 text-[11px] text-[var(--color-severity-medium)]">
+        <p className="mt-1.5 text-[11px] text-[var(--color-severity-medium-text)]">
           Showing the raw secret. This view is recorded in the audit log.
         </p>
       )}
       {error && (
-        <p className="mt-1.5 text-[11px] text-[var(--color-severity-high)]" role="alert">
+        <p className="mt-1.5 text-[11px] text-[var(--color-severity-high-text)]" role="alert">
           {error}
         </p>
       )}

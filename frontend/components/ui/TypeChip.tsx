@@ -1,5 +1,4 @@
-// Pattern: Snyk projects list — project type label with icon.
-// Reference: Snyk projects table → "Project Type" column.
+// Source type label with icon.
 import { Boxes, Cloud, Code2, Workflow } from "lucide-react";
 import { cn } from "@/lib/shared/utils";
 

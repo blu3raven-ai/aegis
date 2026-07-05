@@ -216,7 +216,7 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
         iconOnly
         onClick={onRemove}
         aria-label="remove condition"
-        className="ml-auto hover:bg-[var(--color-severity-critical)]/10 hover:text-[var(--color-severity-critical)]"
+        className="ml-auto hover:bg-[var(--color-severity-critical)]/10 hover:text-[var(--color-severity-critical-text)]"
       >
         ×
       </Button>
@@ -305,7 +305,7 @@ function GroupNode({ cond, onChange, onRemove, depth = 0, fields, operatorsForFi
             iconOnly
             onClick={onRemove}
             aria-label="remove group"
-            className="ml-auto hover:bg-[var(--color-severity-critical)]/10 hover:text-[var(--color-severity-critical)]"
+            className="ml-auto hover:bg-[var(--color-severity-critical)]/10 hover:text-[var(--color-severity-critical-text)]"
           >
             ×
           </Button>

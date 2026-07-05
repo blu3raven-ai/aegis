@@ -51,6 +51,7 @@ class SecretsHooks(LifecycleHooks):
             "locations": raw.get("locations", []),
             "classificationHistory": raw.get("classificationHistory", []),
             "repository": raw.get("repository", ""),
+            "repoHtmlUrl": raw.get("repo_html_url", ""),
             "filePath": raw.get("filePath", ""),
             "line": raw.get("line"),
             "commit": raw.get("commit") or "",

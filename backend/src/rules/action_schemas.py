@@ -26,7 +26,9 @@ class RequireScannersAction(BaseModel):
 class StaleAlertAction(BaseModel):
     type: Literal["stale_alert"]
     stale_after_days: int = Field(ge=1, le=365)
-    alert_channel_id: int
+    # Notify-channel delivery and auto-retrigger are not yet wired: a stale
+    # alert opens a violation regardless, so a channel is optional.
+    alert_channel_id: int | None = None
     auto_retrigger: bool = False
 
 

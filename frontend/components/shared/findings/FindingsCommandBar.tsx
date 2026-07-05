@@ -52,6 +52,21 @@ const STATIC_ATTRIBUTES: AttributeDef[] = [
     },
   },
   {
+    key: "scanner",
+    label: "scanner",
+    group: "Origin",
+    description: "Which scanner surfaced the finding",
+    type: "enum",
+    options: [
+      { value: "dependencies_scanning", label: "Dependencies" },
+      { value: "code_scanning", label: "Code Scanning" },
+      { value: "container_scanning", label: "Containers" },
+      { value: "secret_scanning", label: "Secrets" },
+      { value: "iac_scanning", label: "Infrastructure as Code" },
+      { value: "agent_scanning", label: "Agent Security" },
+    ],
+  },
+  {
     key: "cwe",
     label: "cwe",
     group: "Origin",
@@ -190,15 +205,17 @@ function BandMultiPicker({ value, onApply, onClose }: CustomPickerProps) {
 }
 
 export interface FindingsCommandBarProps {
-  /** Filter state. Scanner selection lives in the top-level scanner tabs, not here. */
+  /** Filter state. "all" means the filter is inactive. */
   severity: string
   repo: string
   state: string
+  scanner: string
   moreFilters: FindingsMoreFiltersValues
   /** Filter setters. */
   onSeverityChange: (next: string) => void
   onRepoChange: (next: string) => void
   onStateChange: (next: string) => void
+  onScannerChange: (next: string) => void
   onMoreFiltersChange: (patch: Partial<FindingsMoreFiltersValues>) => void
 
   searchInput: string
@@ -239,6 +256,7 @@ export function FindingsCommandBar(props: FindingsCommandBarProps) {
     severity: props.severity === "all" ? null : props.severity,
     repo: props.repo === "all" ? null : props.repo,
     state: props.state === "all" ? null : props.state,
+    scanner: props.scanner === "all" ? null : props.scanner,
     cwe: props.moreFilters.cwe,
     kev: props.moreFilters.kev ? "true" : null,
     epss: props.moreFilters.epssMin === null ? null : String(props.moreFilters.epssMin),
@@ -256,6 +274,9 @@ export function FindingsCommandBar(props: FindingsCommandBarProps) {
         break
       case "state":
         props.onStateChange(value ?? "all")
+        break
+      case "scanner":
+        props.onScannerChange(value ?? "all")
         break
       case "cwe":
         props.onMoreFiltersChange({ cwe: value })

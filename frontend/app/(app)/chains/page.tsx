@@ -295,13 +295,13 @@ function StatStrip() {
       <StatItem
         label="Active chains"
         value="3"
-        valueClass="text-[var(--color-severity-critical)]"
+        valueClass="text-[var(--color-severity-critical-text)]"
         delta="▼ 2 vs last week"
       />
       <StatItem
         label="Reachable from public"
         value="2"
-        valueClass="text-[var(--color-severity-critical)]"
+        valueClass="text-[var(--color-severity-critical-text)]"
         delta="verified by Argus"
       />
       <StatItem
@@ -434,19 +434,19 @@ function ChainNode({ node }: { node: MockNode }) {
     },
     exploit: {
       border: "border-[var(--color-severity-medium-border)]",
-      roleColor: "text-[var(--color-severity-medium)]",
+      roleColor: "text-[var(--color-severity-medium-text)]",
       iconBg: "bg-[var(--color-severity-medium-subtle)]",
-      iconColor: "text-[var(--color-severity-medium)]",
+      iconColor: "text-[var(--color-severity-medium-text)]",
     },
     escalation: {
       border: "border-[var(--color-severity-critical)]",
-      roleColor: "text-[var(--color-severity-critical)]",
+      roleColor: "text-[var(--color-severity-critical-text)]",
       iconBg: "bg-[var(--color-severity-critical-subtle)]",
-      iconColor: "text-[var(--color-severity-critical)]",
+      iconColor: "text-[var(--color-severity-critical-text)]",
     },
     impact: {
       border: "border-[var(--color-severity-critical)]",
-      roleColor: "text-[var(--color-severity-critical)]",
+      roleColor: "text-[var(--color-severity-critical-text)]",
       iconBg: "bg-[var(--color-severity-critical)]",
       iconColor: "text-white",
       bg: "bg-[var(--color-severity-critical-subtle)]",
@@ -505,10 +505,10 @@ function ChainArrow() {
 
 function NodeTag({ kind, label }: { kind: TagKind; label: string }) {
   const styles: Record<TagKind, string> = {
-    kev:   "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
-    epss:  "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)]",
+    kev:   "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]",
+    epss:  "bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)]",
     cwe:   "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]",
-    crown: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]",
+    crown: "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]",
   }
   return (
     <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.04em] ${styles[kind]}`}>
@@ -572,8 +572,8 @@ function SeverityPill({ severity }: { severity: Severity }) {
     <span
       className={`rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.04em] ${
         isCritical
-          ? "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
-          : "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high)]"
+          ? "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
+          : "bg-[var(--color-severity-high-subtle)] text-[var(--color-severity-high-text)]"
       }`}
     >
       {isCritical ? "Critical chain" : "High chain"}
@@ -584,7 +584,7 @@ function SeverityPill({ severity }: { severity: Severity }) {
 function ReachabilityTag({ reachability, label }: { reachability: Reachability; label: string }) {
   if (reachability === "public") {
     return (
-      <span className="inline-flex items-center gap-1 rounded bg-[var(--color-severity-critical-subtle)] px-1.5 py-0.5 text-2xs text-[var(--color-severity-critical)]">
+      <span className="inline-flex items-center gap-1 rounded bg-[var(--color-severity-critical-subtle)] px-1.5 py-0.5 text-2xs text-[var(--color-severity-critical-text)]">
         <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
           <circle cx="12" cy="12" r="10" />
           <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />

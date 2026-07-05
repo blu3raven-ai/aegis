@@ -1,8 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-
-const APPROX_COST_PER_1K_TOKENS = 0.01
+import { APPROX_COST_PER_1K_TOKENS } from "@/lib/client/llm-settings-api"
 
 interface DayUsage {
   date: string

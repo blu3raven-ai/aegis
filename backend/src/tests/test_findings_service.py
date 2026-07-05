@@ -325,6 +325,8 @@ def test_finding_dict_exposes_container_image_context():
                 "imageDigest": "sha256:abcd",
                 "baseOs": "debian 12",
                 "layerCount": "9",
+                "layerDigest": "sha256:layer3",
+                "layerIndex": "2",
             },
         )
     )
@@ -335,6 +337,9 @@ def test_finding_dict_exposes_container_image_context():
         "digest": "sha256:abcd",
         "base_os": "debian 12",
         "layer_count": 9,
+        "layer_digest": "sha256:layer3",
+        "layer_index": 2,
+        "newer_tags": None,
     }
 
 
@@ -354,7 +359,7 @@ def test_finding_to_dict_hydrates_fat_code_window_for_detail_view(monkeypatch):
     # lean column — the detail view must hydrate to surface it.
     monkeypatch.setattr(
         blob_mod,
-        "download_json",
+        "_load_fat_blob",
         lambda key: {"code_window": "def f():\n    eval(x)", "code_window_start_line": 10},
     )
     finding = make_finding(tool="code_scanning", detail={"startLine": 11, "endLine": 11})
@@ -373,7 +378,7 @@ def test_finding_to_dict_list_path_stays_lean_no_blob_read(monkeypatch):
         calls["n"] += 1
         return {"code_window": "x"}
 
-    monkeypatch.setattr(blob_mod, "download_json", _spy)
+    monkeypatch.setattr(blob_mod, "_load_fat_blob", _spy)
     finding = make_finding(tool="code_scanning", detail={"startLine": 11})
     finding.detail_blob_key = "blob/key"
     out = _finding_to_dict(finding)  # hydrate defaults False
@@ -521,9 +526,16 @@ def test_code_snippet_exposed_for_sast():
     assert _finding_to_dict(finding)["code_snippet"] == "eval(user_input)"
 
 
-def test_code_snippet_for_deps_uses_manifest_snippet():
+def test_code_snippet_for_deps_uses_manifest_window():
+    # Deps render through the same generic code-window path as code/iac: the
+    # runner captures the manifest declaration line + a surrounding window.
     finding = make_finding(
-        tool="dependencies_scanning", detail={"manifestSnippet": "log4j-core==2.14.0"}
+        tool="dependencies_scanning",
+        detail={
+            "code_window": "log4j-core==2.14.0",
+            "code_window_start_line": 12,
+            "startLine": 12,
+        },
     )
     assert _finding_to_dict(finding)["code_snippet"] == "log4j-core==2.14.0"
 
@@ -545,8 +557,91 @@ def test_secret_code_snippet_never_leaks_raw_value():
     assert "AKIAIOSFODNN7EXAMPLE" not in (snippet or "")
 
 
+def test_secret_highlight_snaps_to_redaction_marker_when_reported_line_off():
+    # git-history scans report a diff-relative line that can drift from the
+    # file's current line. The window is anchored to real file lines, so the
+    # highlight must snap to the line actually holding the secret (its marker),
+    # not the reported line one row below it.
+    finding = make_finding(
+        tool="secret_scanning",
+        title=None,
+        detail={
+            "code_window": "a = 1\nAPI_KEY = •••redacted-secret•••\nBACKEND = 2",
+            "code_window_start_line": 14,
+            "line": 16,  # scanner over-reports by one; the marker sits on line 15
+            "raw": {},
+        },
+    )
+    out = _finding_to_dict(finding)
+    assert out["code_highlight_start"] == 15
+    assert out["code_highlight_end"] == 15
+
+
+def test_secret_highlight_stays_on_reported_line_when_marker_matches():
+    # filesystem scans report accurate lines; the marker is on the reported
+    # line, so the highlight must not move.
+    finding = make_finding(
+        tool="secret_scanning",
+        title=None,
+        detail={
+            "code_window": "x\ngenai.configure(api_key=•••redacted-secret•••)\ny",
+            "code_window_start_line": 73,
+            "line": 74,
+            "raw": {},
+        },
+    )
+    assert _finding_to_dict(finding)["code_highlight_start"] == 74
+
+
+def test_secret_highlight_locates_unmasked_raw_value_in_legacy_window():
+    # Windows stored before the runner redacted still carry the raw value; the
+    # highlight locates it (then the API re-masks it out of the snippet).
+    finding = make_finding(
+        tool="secret_scanning",
+        title=None,
+        detail={
+            "code_window": "a\nb\ntoken = 'sk-live-abc'\nc",
+            "code_window_start_line": 20,
+            "line": 24,
+            "raw": {"Raw": "sk-live-abc"},
+        },
+    )
+    out = _finding_to_dict(finding)
+    assert out["code_highlight_start"] == 22
+    assert "sk-live-abc" not in (out["code_snippet"] or "")
+
+
+def test_secret_highlight_falls_back_to_reported_line_without_a_hit():
+    # No marker or raw value in the window (e.g. the file changed since a
+    # history scan) — keep the reported line rather than mis-highlighting.
+    finding = make_finding(
+        tool="secret_scanning",
+        title=None,
+        detail={
+            "code_window": "unrelated\ncode\nhere",
+            "code_window_start_line": 40,
+            "line": 41,
+            "raw": {},
+        },
+    )
+    assert _finding_to_dict(finding)["code_highlight_start"] == 41
+
+
 def test_code_snippet_none_when_absent():
     assert _finding_to_dict(make_finding(detail={}))["code_snippet"] is None
+
+
+def test_repo_html_url_emitted_from_detail():
+    finding = make_finding(
+        tool="code_scanning",
+        detail={"repoHtmlUrl": "https://ghe.acme-corp.internal/acme/api"},
+    )
+    assert _finding_to_dict(finding)["repo_html_url"] == "https://ghe.acme-corp.internal/acme/api"
+
+
+def test_repo_html_url_none_when_absent_or_blank():
+    assert _finding_to_dict(make_finding(detail={}))["repo_html_url"] is None
+    assert _finding_to_dict(make_finding(detail={"repoHtmlUrl": "  "}))["repo_html_url"] is None
 
 
 def test_code_flows_exposed_when_present():
@@ -600,14 +695,20 @@ def test_bare_snippet_highlights_itself_anchored_to_start_line():
     assert out["code_highlight_end"] == 7
 
 
-def test_deps_preview_anchors_to_manifest_match_line():
+def test_deps_preview_anchors_to_manifest_declaration_line():
+    # Window starts at line 10; the declaration (startLine) is line 12 and is the
+    # highlighted line — the offending dep shown in surrounding manifest context.
     finding = make_finding(
         tool="dependencies_scanning",
-        detail={"manifestSnippet": "log4j-core==2.14.0", "manifestMatchLine": 12},
+        detail={
+            "code_window": '"deps": {\n  "a": "1"\n  "log4j-core": "2.14.0"',
+            "code_window_start_line": 10,
+            "startLine": 12,
+        },
     )
     out = _finding_to_dict(finding)
-    assert out["code_snippet"] == "log4j-core==2.14.0"
-    assert out["code_snippet_start_line"] == 12
+    assert '"log4j-core": "2.14.0"' in out["code_snippet"]
+    assert out["code_snippet_start_line"] == 10
     assert out["code_highlight_start"] == 12
     assert out["code_highlight_end"] == 12
 
@@ -1097,6 +1198,34 @@ def test_has_fix_false_when_no_fix_available():
     assert row.has_fix is False
 
 
+def test_ruled_out_reason_surfaced_on_list_row():
+    from src.findings.resolvers import _row_from_dict
+    finding = make_finding(
+        verification_metadata={
+            "ruled_out_reason": {
+                "file": "app/lib/fetch.ts",
+                "line": 42,
+                "reasoning": "URL is validated against an allowlist before the fetch sink.",
+            }
+        },
+    )
+    finding.verdict = "ruled_out"
+    row = _row_from_dict(_finding_to_dict(finding))
+    assert row.ruled_out_reason == "URL is validated against an allowlist before the fetch sink."
+
+
+def test_ruled_out_reason_none_for_non_ruled_out_verdict():
+    from src.findings.resolvers import _row_from_dict
+    # Same metadata shape, but a needs_verify verdict must not leak the reason —
+    # a downgraded suppression writes ruled_out_reason yet is NOT ruled out.
+    finding = make_finding(
+        verification_metadata={"ruled_out_reason": {"reasoning": "unconfirmed mitigation"}},
+    )
+    finding.verdict = "needs_verify"
+    row = _row_from_dict(_finding_to_dict(finding))
+    assert row.ruled_out_reason is None
+
+
 def test_cursor_predicate_returns_none_for_deferred_sorts():
     """A stray/stale cursor under a page-number sort must not inject a keyset
     clause keyed on the wrong column (it would silently scramble the page)."""
@@ -1144,6 +1273,69 @@ def test_code_preview_secret_falls_back_to_redacted_match_without_window():
     preview = _code_preview("secret_scanning", {"raw": {"Redacted": "AKIA...MPLE"}})
     assert preview["text"] == "AKIA...MPLE"
     assert preview["start_line"] is None
+
+
+def test_code_preview_secret_masks_value_from_secret_field_in_window():
+    """Detectors that carry the raw value in `Secret` (not Raw) must still mask."""
+    from src.findings.service import _code_preview
+
+    detail = {
+        "raw": {"Secret": "sk-live-abc123", "Redacted": "sk-...23"},
+        "code_window": "A=1\nKEY=sk-live-abc123\nB=2",
+        "code_window_start_line": 5,
+        "line": 6,
+    }
+    preview = _code_preview("secret_scanning", detail)
+    assert "sk-live-abc123" not in preview["text"]
+
+
+def test_code_preview_secret_masks_value_from_match_field_in_window():
+    """Detectors that carry the raw value in `Match` must still mask."""
+    from src.findings.service import _code_preview
+
+    detail = {
+        "raw": {"Match": "ghp_rawtoken999"},
+        "code_window": "x\nTOKEN=ghp_rawtoken999\ny",
+        "code_window_start_line": 1,
+        "line": 2,
+    }
+    preview = _code_preview("secret_scanning", detail)
+    assert "ghp_rawtoken999" not in preview["text"]
+
+
+def test_code_preview_secret_no_window_never_leaks_raw_match():
+    """Without a Redacted form, the no-window path must NOT fall back to the
+    raw Match — for many detectors that field IS the plaintext secret."""
+    from src.findings.service import _code_preview
+
+    preview = _code_preview("secret_scanning", {"raw": {"Match": "sk-raw-plaintext"}})
+    assert preview is None
+
+
+def test_code_preview_secret_scrubs_unrelated_credential_in_context():
+    """A different credential on a nearby line of the window is also masked."""
+    from src.findings.service import _code_preview
+
+    jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.abcDEF123_signature-part"
+    detail = {
+        "raw": {"Secret": "sk-flagged-value-1234567890", "Redacted": "sk-...90"},
+        "code_window": f"api_key=sk-flagged-value-1234567890\ntoken={jwt}\nport=8080",
+        "code_window_start_line": 1,
+        "line": 1,
+    }
+    preview = _code_preview("secret_scanning", detail)
+    # Flagged value masked (precise) AND the unrelated JWT masked (context scrub).
+    assert "sk-flagged-value-1234567890" not in preview["text"]
+    assert jwt not in preview["text"]
+    # Non-secret context is untouched.
+    assert "port=8080" in preview["text"]
+
+
+def test_scrub_known_secrets_leaves_ordinary_config_alone():
+    from src.findings.service import _scrub_known_secrets
+
+    text = "host=localhost\nport=5432\nname=my_app_db\nsize=sk-123"  # too short for sk- rule
+    assert _scrub_known_secrets(text) == text
 
 
 def _blast_asset(db_session, label):

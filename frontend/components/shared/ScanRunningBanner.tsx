@@ -84,7 +84,7 @@ function toneClasses(tone: Tone): { dot: string; pulse: boolean; text: string } 
     return {
       dot: "bg-[var(--color-severity-critical)]",
       pulse: false,
-      text: "text-[var(--color-severity-critical)]",
+      text: "text-[var(--color-severity-critical-text)]",
     }
   }
   if (tone === "queued") {
@@ -167,9 +167,9 @@ export function ScanRunningBanner({
 
   const StatusIcon = isFailed ? AlertTriangle : Loader2
   const chipClass = isFailed
-    ? "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
+    ? "bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
     : isQueued
-    ? "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending)]"
+    ? "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]"
     : "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
 
   const headline = isFailed
@@ -232,7 +232,7 @@ export function ScanRunningBanner({
               onClick={onCancel}
               disabled={isCancelling}
               leadingIcon={<X className="h-3.5 w-3.5" strokeWidth={2.5} />}
-              className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+              className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
             />
           )}
         </div>
@@ -389,7 +389,7 @@ export function ScanRunningBanner({
               onClick={onCancel}
               disabled={isCancelling}
               leadingIcon={<X className="h-3.5 w-3.5" strokeWidth={2.5} />}
-              className="text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical)]"
+              className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
             >
               {isCancelling ? "Cancelling…" : "Cancel scan"}
             </Button>

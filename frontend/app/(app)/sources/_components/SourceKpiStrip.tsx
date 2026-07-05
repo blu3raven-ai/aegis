@@ -45,11 +45,11 @@ export function SourceKpiStrip({ connections }: SourceKpiStripProps) {
       <div className="flex items-center gap-1.5 text-sm">
         <span className={`h-2 w-2 rounded-full ${healthy === total && total > 0 ? "bg-[var(--color-status-ok)]" : issues > 0 ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-text-tertiary)]"}`} aria-hidden="true" />
         {issues > 0 ? (
-          <span className="text-[var(--color-severity-critical)] font-medium">{issues} need{issues === 1 ? "s" : ""} attention</span>
+          <span className="text-[var(--color-severity-critical-text)] font-medium">{issues} need{issues === 1 ? "s" : ""} attention</span>
         ) : syncing > 0 ? (
-          <span className="text-[var(--color-severity-medium)] font-medium">{syncing} syncing</span>
+          <span className="text-[var(--color-severity-medium-text)] font-medium">{syncing} syncing</span>
         ) : total > 0 ? (
-          <span className="text-[var(--color-status-ok)] font-medium">All healthy</span>
+          <span className="text-[var(--color-status-ok-text)] font-medium">All healthy</span>
         ) : (
           <span className="text-[var(--color-text-secondary)]">No connections</span>
         )}

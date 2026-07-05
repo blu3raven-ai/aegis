@@ -4,9 +4,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from pydantic import ValidationError
-
-from runner.verification.llm_client import LlmResponse
 from runner.verification.pipeline import VerificationResult
 from runner.verification.prompts.iac import (
     HUNTER_SYSTEM_IAC,
@@ -97,6 +94,7 @@ def verify_iac_finding(
     finding: dict,
     repo_root: str,
     llm,
+    escalation_llm=None,
 ) -> VerificationResult:
     """Hunter -> Skeptic for a single IaC (checkov) misconfiguration finding.
 
@@ -105,6 +103,14 @@ def verify_iac_finding(
     source citations the SAST/SCA critic was built for. Hunter narrative +
     skeptic compensating-control check is sufficient for ``confirmed``; schema
     failures fall back to ``needs_verify``.
+
+    ``escalation_llm`` is the optional frontier tier. When it is ``None`` (no
+    escalation model configured) the flow is identical to the single-tier path.
+    Escalation retries only the hunter on a *schema* failure — the default tier
+    couldn't emit a valid exploit chain — so a stronger model gets one recall
+    shot at producing a verdict the default tier failed to produce.
+    ``verification_metadata["tier"]`` records which tier drove the verdict and
+    ``["escalated"]`` marks that escalation fired.
     """
     tokens_in = 0
     tokens_out = 0
@@ -112,6 +118,7 @@ def verify_iac_finding(
         "model": getattr(llm, "_model", "unknown"),
         "prompt_hashes": [],
         "scanner": "iac_scanning",
+        "tier": "default",
     }
 
     file_path = finding.get("file", "")
@@ -119,31 +126,52 @@ def verify_iac_finding(
     resource_excerpt = _read_resource_excerpt(repo_root, file_path, line)
     sibling_excerpt = _collect_sibling_excerpt(repo_root, file_path)
 
-    hunter_resp: LlmResponse = llm.chat(
-        [
-            {"role": "system", "content": HUNTER_SYSTEM_IAC},
-            {
-                "role": "user",
-                "content": hunter_iac_user_message(
-                    finding, resource_excerpt, sibling_excerpt
-                ),
-            },
-        ],
+    hunter_messages = [
+        {"role": "system", "content": HUNTER_SYSTEM_IAC},
+        {
+            "role": "user",
+            "content": hunter_iac_user_message(
+                finding, resource_excerpt, sibling_excerpt
+            ),
+        },
+    ]
+
+    # The tier the rest of the verification runs on; escalation promotes it.
+    active_llm = llm
+
+    hunter_result = active_llm.chat_json(
+        hunter_messages,
+        HunterResponse,
         temperature=0.0,
         max_tokens=_HUNTER_MAX_TOKENS,
     )
-    tokens_in += hunter_resp.tokens_in
-    tokens_out += hunter_resp.tokens_out
-    metadata["prompt_hashes"].append(hunter_resp.prompt_hash)
+    tokens_in += hunter_result.tokens_in
+    tokens_out += hunter_result.tokens_out
+    metadata["prompt_hashes"].extend(hunter_result.prompt_hashes)
 
-    try:
-        hunter_model = HunterResponse.model_validate_json(hunter_resp.content)
-        chain = hunter_model.exploit_chain.strip()
-        evidence = hunter_model.evidence
-    except (ValidationError, ValueError) as exc:
+    # Escalate a schema failure — not a substantive verdict — to the frontier
+    # tier: the default model couldn't emit a valid exploit chain, so a stronger
+    # model gets one retry and drives the rest of the verification. Pure recall
+    # upside; it can only add a verdict the default tier failed to produce.
+    if hunter_result.parsed is None and escalation_llm is not None:
+        metadata["escalated"] = True
+        metadata["tier"] = "frontier"
+        metadata["model"] = getattr(escalation_llm, "_model", "unknown")
+        active_llm = escalation_llm
+        hunter_result = active_llm.chat_json(
+            hunter_messages,
+            HunterResponse,
+            temperature=0.0,
+            max_tokens=_HUNTER_MAX_TOKENS,
+        )
+        tokens_in += hunter_result.tokens_in
+        tokens_out += hunter_result.tokens_out
+        metadata["prompt_hashes"].extend(hunter_result.prompt_hashes)
+
+    if hunter_result.parsed is None:
         logger.warning(
             "iac hunter response failed schema validation: %s — falling back",
-            exc,
+            hunter_result.error,
         )
         return VerificationResult(
             verdict="needs_verify",
@@ -151,8 +179,11 @@ def verify_iac_finding(
             evidence=[],
             tokens_in=tokens_in,
             tokens_out=tokens_out,
-            verification_metadata={**metadata, "reason": f"hunter_schema_invalid: {exc}"},
+            verification_metadata={**metadata, "reason": f"hunter_schema_invalid: {hunter_result.error}"},
         )
+    hunter_model = hunter_result.parsed
+    chain = hunter_model.exploit_chain.strip()
+    evidence = hunter_model.evidence
 
     if not chain:
         metadata["reason"] = "hunter_no_chain"
@@ -165,7 +196,7 @@ def verify_iac_finding(
             verification_metadata=metadata,
         )
 
-    skeptic_resp = llm.chat(
+    skeptic_result = active_llm.chat_json(
         [
             {"role": "system", "content": SKEPTIC_SYSTEM_IAC},
             {
@@ -175,19 +206,18 @@ def verify_iac_finding(
                 ),
             },
         ],
+        SkepticResponse,
         temperature=0.0,
         max_tokens=_SKEPTIC_MAX_TOKENS,
     )
-    tokens_in += skeptic_resp.tokens_in
-    tokens_out += skeptic_resp.tokens_out
-    metadata["prompt_hashes"].append(skeptic_resp.prompt_hash)
+    tokens_in += skeptic_result.tokens_in
+    tokens_out += skeptic_result.tokens_out
+    metadata["prompt_hashes"].extend(skeptic_result.prompt_hashes)
 
-    try:
-        skeptic_model = SkepticResponse.model_validate_json(skeptic_resp.content)
-    except (ValidationError, ValueError) as exc:
+    if skeptic_result.parsed is None:
         logger.warning(
             "iac skeptic response failed schema validation: %s — falling back",
-            exc,
+            skeptic_result.error,
         )
         return VerificationResult(
             verdict="needs_verify",
@@ -195,8 +225,9 @@ def verify_iac_finding(
             evidence=evidence,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
-            verification_metadata={**metadata, "reason": f"skeptic_schema_invalid: {exc}"},
+            verification_metadata={**metadata, "reason": f"skeptic_schema_invalid: {skeptic_result.error}"},
         )
+    skeptic_model = skeptic_result.parsed
 
     if skeptic_model.mitigation_found:
         metadata["ruled_out_reason"] = {

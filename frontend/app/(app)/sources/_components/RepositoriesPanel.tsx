@@ -19,9 +19,9 @@ const EXPECTED_SCANNERS = 4
 const PER_PAGE = 25
 
 const NEUTRAL = "text-[var(--color-text-primary)]"
-const CRITICAL = "text-[var(--color-severity-critical)]"
-const WARN = "text-[var(--color-severity-medium)]"
-const OK = "text-[var(--color-state-fixed)]"
+const CRITICAL = "text-[var(--color-severity-critical-text)]"
+const WARN = "text-[var(--color-severity-medium-text)]"
+const OK = "text-[var(--color-state-fixed-text)]"
 
 const REPOS_ATTRIBUTES: AttributeDef[] = [
   {
@@ -131,7 +131,7 @@ export function RepositoriesPanel({ onCountChange }: RepositoriesPanelProps = {}
     <>
       {error && (
         <div className="flex items-center justify-between gap-3 border-b border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-5 py-3">
-          <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+          <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
           <button
             type="button"
             onClick={() => void loadRepos()}

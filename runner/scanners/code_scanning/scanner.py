@@ -18,7 +18,6 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
-from runner.scanners._argus import argus_configured, verify_via_argus
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
     BaseScanConfig,
@@ -28,11 +27,14 @@ from runner.scanners._shared import (
     ProgressEmitter,
     TIMEOUT_CLONE,
     TIMEOUT_GIT_QUERY,
+    build_escalation_llm_client,
+    build_llm_client,
     clone_repo,
     log_finished,
     log_scanning,
     parse_repos,
     register_output,
+    derive_html_url,
     repo_name_from_url,
 )
 from runner.scanners._subprocess import (
@@ -57,24 +59,6 @@ _SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 _MIN_VERIFY_SEVERITY = 1  # skip 'info'
 
 
-def _build_llm_client(env: JobEnv):
-    """Construct an LLM client from job env or return None if BYO key isn't configured.
-
-    The backend ships LLM_API_KEY (and friends) inside job['envVars'], not the
-    runner process environment, so JobEnv.get is the only correct read path.
-    """
-    from runner.verification.llm_client import LlmClient
-
-    api_key = env.get("LLM_API_KEY")
-    if not api_key:
-        return None
-    return LlmClient(
-        api_key=api_key,
-        api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
-        model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
-    )
-
-
 def _build_scan_budget(env: JobEnv) -> ScanBudget:
     return ScanBudget(
         scan_budget=env.get_int("LLM_TOKEN_BUDGET_PER_SCAN", 200000),
@@ -83,7 +67,7 @@ def _build_scan_budget(env: JobEnv) -> ScanBudget:
 
 
 def _maybe_verify(
-    *, findings: list[dict], repo_root: str, llm, scan_budget: ScanBudget,
+    *, findings: list[dict], repo_root: str, llm, escalation_llm=None, scan_budget: ScanBudget,
 ) -> list[dict]:
     out: list[dict] = []
     for f in findings:
@@ -109,7 +93,9 @@ def _maybe_verify(
             continue
 
         try:
-            result = verify_finding(finding=f, repo_root=repo_root, llm=llm)
+            result = verify_finding(
+                finding=f, repo_root=repo_root, llm=llm, escalation_llm=escalation_llm,
+            )
             scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
             copy["verdict"] = result.verdict
             copy["evidence"] = result.evidence
@@ -127,6 +113,43 @@ def _maybe_verify(
 _CODE_SCAN_DROP_ENV = ("GIT_TOKEN",)
 
 DEFAULT_SEMGREP_RULES_PATH = "/opt/semgrep-rules"
+
+# Recall-first default: scan with the broad semgrep registry packs and let the
+# downstream verification layer tune precision. Overridable via RULESETS (custom
+# registry refs or on-disk paths) or SEMGREP_RULES_PATH (an air-gapped bundle,
+# e.g. the one baked in at DEFAULT_SEMGREP_RULES_PATH).
+DEFAULT_REGISTRY_RULESETS = (
+    "p/security-audit",
+    "p/sql-injection",
+    "p/xss",
+    "p/command-injection",
+    "p/owasp-top-ten",
+    "p/cwe-top-25",
+    "p/insecure-transport",
+    "p/trailofbits",
+)
+
+# Host the default registry packs are fetched from at scan time.
+_SEMGREP_REGISTRY_HOST = "semgrep.dev"
+_REGISTRY_PROBE_TIMEOUT_S = 4.0
+
+
+def _registry_reachable(
+    host: str = _SEMGREP_REGISTRY_HOST, timeout: float = _REGISTRY_PROBE_TIMEOUT_S
+) -> bool:
+    """Best-effort TCP reachability check for the semgrep registry.
+
+    The default rule packs are pulled from the registry when a scan runs; a
+    runner with no outbound access would otherwise fail the code scan. Probe
+    first so the caller can fall back to the bundled rules. Any error (DNS,
+    timeout, refused) is treated as unreachable."""
+    import socket
+
+    try:
+        with socket.create_connection((host, 443), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -151,7 +174,7 @@ class CodeScanningConfig(BaseScanConfig):
             repos=parse_repos(env.get("GIT_REPOS")),
             git_token=env.get("GIT_TOKEN") or None,
             rulesets=env.get("RULESETS", ""),
-            rules_path=env.get("SEMGREP_RULES_PATH", DEFAULT_SEMGREP_RULES_PATH),
+            rules_path=env.get("SEMGREP_RULES_PATH", ""),
             base_sha=env.get("BASE_SHA") or None,
             scan_scope=env.get("SCAN_SCOPE", "full_tree"),
         )
@@ -282,53 +305,60 @@ class CodeScanningScanner:
             except json.JSONDecodeError:
                 logger.warning("[!] skip non-JSON line in %s", findings_file)
 
-        if argus_configured(env):
-            verified = verify_via_argus(
-                scanner="code_scanning",
-                findings=raw_findings,
-                repo_root=repo_root,
-                env=env,
-            )
-        else:
-            verified = _maybe_verify(
-                findings=raw_findings,
-                repo_root=repo_root,
-                llm=_build_llm_client(env),
-                scan_budget=_build_scan_budget(env),
-            )
+        verified = _maybe_verify(
+            findings=raw_findings,
+            repo_root=repo_root,
+            llm=build_llm_client(env),
+            escalation_llm=build_escalation_llm_client(env),
+            scan_budget=_build_scan_budget(env),
+        )
 
         with open(findings_file, "w") as f:
             for finding in verified:
                 f.write(json.dumps(finding, separators=(",", ":")) + "\n")
 
     @staticmethod
-    def _build_config_args(rulesets: str, default_rules_path: str) -> list[str]:
-        """Compute semgrep ``--config`` arguments.
+    def _build_config_args(
+        rulesets: str,
+        rules_path: str,
+        registry_reachable: Callable[[], bool] = _registry_reachable,
+    ) -> list[str]:
+        """Compute semgrep ``--config`` arguments, in precedence order:
 
-        Mirrors the bash original (run.sh):
-          - If ``RULESETS`` is empty, use the bundled rules path.
-          - Otherwise, for each comma-separated entry, absolute paths that
-            exist on disk pass through directly; named entries fall back to
-            the bundled rules path.
-          - If after parsing we have no custom rules, use bundled.
+          1. ``RULESETS`` — comma-separated registry refs (``p/…``/``r/…``) or
+             absolute on-disk paths that exist.
+          2. ``rules_path`` (``SEMGREP_RULES_PATH``) — an explicit rules
+             directory, e.g. an air-gapped bundle.
+          3. Default — the broad registry packs in ``DEFAULT_REGISTRY_RULESETS``,
+             or, when the registry is unreachable, the bundled rules at
+             ``DEFAULT_SEMGREP_RULES_PATH`` so an offline runner still produces
+             code findings instead of failing.
         """
         config_args: list[str] = []
-        use_bundled = False
-
-        if not rulesets:
-            use_bundled = True
-        else:
-            for raw in rulesets.split(","):
-                r = "".join(raw.split())
-                if not r:
-                    continue
-                if r.startswith("/") and Path(r).exists():
+        for raw in (rulesets or "").split(","):
+            r = "".join(raw.split())
+            if not r:
+                continue
+            if r.startswith("/"):
+                if Path(r).exists():
                     config_args.extend(["--config", r])
-                else:
-                    use_bundled = True
+            elif r.startswith(("p/", "r/")):
+                config_args.extend(["--config", r])
+        if config_args:
+            return config_args
 
-        if use_bundled or not config_args:
-            config_args.extend(["--config", default_rules_path])
+        if rules_path:
+            return ["--config", rules_path]
+
+        if not registry_reachable():
+            logger.warning(
+                "[!] semgrep registry unreachable; falling back to bundled rules at %s",
+                DEFAULT_SEMGREP_RULES_PATH,
+            )
+            return ["--config", DEFAULT_SEMGREP_RULES_PATH]
+
+        for pack in DEFAULT_REGISTRY_RULESETS:
+            config_args.extend(["--config", pack])
         return config_args
 
     def _scan_repo(
@@ -365,7 +395,7 @@ class CodeScanningScanner:
             head_sha = self._read_head_sha(clone_dir, cancel_event)
             (repo_out / "head-sha.txt").write_text(head_sha or "HEAD")
 
-            html_url = self._derive_html_url(repo_url)
+            html_url = derive_html_url(repo_url)
             (repo_out / "html_url.txt").write_text(html_url)
 
             sarif_file = repo_out / "semgrep.sarif"
@@ -462,19 +492,3 @@ class CodeScanningScanner:
         if rc != 0:
             return ""
         return stdout.strip()
-
-    @staticmethod
-    def _derive_html_url(repo_url: str) -> str:
-        """Strip credentials and ``.git`` suffix to derive the web URL.
-
-        Mirrors the bash ``sed`` pipeline in run.sh.
-        """
-        url = repo_url
-        # strip any embedded user-info between scheme and host
-        if url.startswith("https://") and "@" in url[len("https://"):].split("/", 1)[0]:
-            scheme, rest = url.split("://", 1)
-            host_path = rest.split("@", 1)[1]
-            url = f"{scheme}://{host_path}"
-        if url.endswith(".git"):
-            url = url[:-4]
-        return url

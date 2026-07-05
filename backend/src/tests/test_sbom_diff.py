@@ -40,10 +40,20 @@ def test_version_changed_when_purl_stable():
     d = diff_sboms(frm, to)
     assert d.added == [] and d.removed == []
     assert d.version_changed == [
-        {"name": "lodash", "purl": "pkg:npm/lodash", "from_version": "1.0", "to_version": "2.0",
+        {"name": "lodash", "purl": "pkg:npm/lodash", "type": None, "from_version": "1.0", "to_version": "2.0",
          "from_licenses": [], "to_licenses": []}
     ]
     assert d.unchanged_count == 0
+
+
+def test_version_changed_carries_component_type():
+    # The component ecosystem/type propagates onto the version-bump row so the
+    # diff export can populate its ecosystem column (not just added/removed rows).
+    frm = _sbom([{"name": "lodash", "version": "1.0", "purl": "pkg:npm/lodash", "type": "library"}])
+    to = _sbom([{"name": "lodash", "version": "2.0", "purl": "pkg:npm/lodash", "type": "library"}])
+    d = diff_sboms(frm, to)
+    assert len(d.version_changed) == 1
+    assert d.version_changed[0]["type"] == "library"
 
 
 def test_unchanged_count():
@@ -62,7 +72,7 @@ def test_version_embedded_purl_bump_classifies_as_version_changed():
     d = diff_sboms(frm, to)
     assert d.added == [] and d.removed == []
     assert d.version_changed == [
-        {"name": "lodash", "purl": "pkg:npm/lodash", "from_version": "1.0", "to_version": "2.0",
+        {"name": "lodash", "purl": "pkg:npm/lodash", "type": None, "from_version": "1.0", "to_version": "2.0",
          "from_licenses": [], "to_licenses": []}
     ]
 
@@ -99,7 +109,7 @@ def test_purl_less_components_key_on_name():
     to = _sbom([_c("internal-lib", "2.0")])
     d = diff_sboms(frm, to)
     assert d.version_changed == [
-        {"name": "internal-lib", "purl": "", "from_version": "1.0", "to_version": "2.0",
+        {"name": "internal-lib", "purl": "", "type": None, "from_version": "1.0", "to_version": "2.0",
          "from_licenses": [], "to_licenses": []}
     ]
 

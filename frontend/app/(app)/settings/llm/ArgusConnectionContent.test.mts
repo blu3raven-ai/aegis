@@ -53,4 +53,13 @@ describe("ArgusConnectionContent", () => {
     assert.match(src, /•••••••• \(stored\)/)
     assert.match(src, /form\.refresh_token\.length > 0/)
   })
+
+  it("saves and discards through the shared page-level save bar", () => {
+    assert.match(src, /useSaveBarSection\(/)
+    assert.match(src, /id: "argus"/)
+    assert.match(src, /onSave: handleSave/)
+    assert.match(src, /onDiscard: handleDiscard/)
+    // No inline primary Save button — the global save bar owns saving.
+    assert.doesNotMatch(src, /Save connection/)
+  })
 })

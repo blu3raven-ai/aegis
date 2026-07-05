@@ -9,10 +9,10 @@ export interface FindingsGroupHeaderProps {
 }
 
 const SEV_TOKENS: Record<keyof FindingsGroupHeaderProps["severityCounts"], { bg: string; fg: string; abbr: string }> = {
-  critical: { bg: "bg-[var(--color-severity-critical-subtle)]", fg: "text-[var(--color-severity-critical)]", abbr: "crit" },
-  high:     { bg: "bg-[var(--color-severity-high-subtle)]",     fg: "text-[var(--color-severity-high)]",     abbr: "high" },
-  medium:   { bg: "bg-[var(--color-severity-medium-subtle)]",   fg: "text-[var(--color-severity-medium)]",   abbr: "med" },
-  low:      { bg: "bg-[var(--color-severity-low-subtle)]",      fg: "text-[var(--color-severity-low)]",      abbr: "low" },
+  critical: { bg: "bg-[var(--color-severity-critical-subtle)]", fg: "text-[var(--color-severity-critical-text)]", abbr: "crit" },
+  high:     { bg: "bg-[var(--color-severity-high-subtle)]",     fg: "text-[var(--color-severity-high-text)]",     abbr: "high" },
+  medium:   { bg: "bg-[var(--color-severity-medium-subtle)]",   fg: "text-[var(--color-severity-medium-text)]",   abbr: "med" },
+  low:      { bg: "bg-[var(--color-severity-low-subtle)]",      fg: "text-[var(--color-severity-low-text)]",      abbr: "low" },
 }
 
 export function FindingsGroupHeader({

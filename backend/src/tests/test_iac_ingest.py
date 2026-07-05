@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.iac.ingest import read_iac_findings  # noqa: E402
 from src.iac.lifecycle import iac_scanning_hooks  # noqa: E402
@@ -65,6 +65,24 @@ def test_verification_fields_carried_when_present():
     detail = iac_scanning_hooks.extract_detail(raw)
     assert detail["verdict"] == "confirmed"
     assert detail["evidence"] == {"why": "public"}
+
+
+def test_recommended_fix_carried_when_present():
+    # The runner stamps a config_patch fix onto IaC findings; extract_detail must
+    # pass it through so upsert_finding promotes it onto the typed column (the
+    # secrets hook already does — this keeps the IaC remediation half wired).
+    fix = {"kind": "config_patch", "before": "x = 0", "after": "x = 1"}
+    detail = iac_scanning_hooks.extract_detail({**_raw(12), "recommended_fix": fix})
+    assert detail["recommended_fix"] == fix
+
+
+def test_extract_detail_carries_repo_html_url():
+    detail = iac_scanning_hooks.extract_detail(
+        {**_raw(12), "repo_html_url": "https://ghe.acme-corp.internal/acme/app"}
+    )
+    assert detail["repoHtmlUrl"] == "https://ghe.acme-corp.internal/acme/app"
+    # Absent -> empty string (renders no view-in-repo link).
+    assert iac_scanning_hooks.extract_detail(_raw(12))["repoHtmlUrl"] == ""
 
 
 def test_detail_splits_lean_queryable_vs_blob():

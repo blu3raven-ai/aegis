@@ -24,6 +24,7 @@ export interface RepoExtras {
   scanners_with_coverage: string[]
   coverage_status: "fresh" | "stale" | "never"
   source_url: string | null
+  open_finding_count: number
 }
 
 export interface RepoSourceSummary extends CommonSourceFields {
@@ -109,6 +110,9 @@ export interface RepoSummary {
   manifest_set_hash: string | null
   last_scanned_at: string | null
   findings_count_by_severity: FindingCounts
+  /** True open-finding total across all severities (findings_count_by_severity
+   *  keeps only the four ranked buckets, so it can undercount NULL/other). */
+  open_finding_count: number
   scanners_with_coverage: string[]
   coverage_status: "fresh" | "stale" | "never"
   source_url: string | null
@@ -160,6 +164,7 @@ function toRepoSummary(s: RepoSourceSummary): RepoSummary {
     manifest_set_hash: s.repo.manifest_set_hash,
     last_scanned_at: s.last_scanned_at,
     findings_count_by_severity: s.finding_counts,
+    open_finding_count: s.repo.open_finding_count,
     scanners_with_coverage: s.repo.scanners_with_coverage,
     coverage_status: s.repo.coverage_status,
     source_url: s.repo.source_url,
@@ -243,6 +248,7 @@ interface GqlRepoExtras {
   scannersWithCoverage: string[]
   coverageStatus: "fresh" | "stale" | "never"
   sourceUrl: string | null
+  openFindingCount: number
 }
 
 interface GqlImageExtras {
@@ -318,6 +324,7 @@ const REPO_SUMMARY_FIELDS = `
     scannersWithCoverage
     coverageStatus
     sourceUrl
+    openFindingCount
   }
 `
 
@@ -348,6 +355,7 @@ const REPO_SOURCES_QUERY = `
         sources { ${REPO_SUMMARY_FIELDS} }
         nextCursor
         totalCount
+        coverageSummary { total fresh stale never }
       }
     }
   }
@@ -423,6 +431,7 @@ function gqlRepoSummaryToTs(r: GqlRepoSummaryRow): RepoSourceSummary {
       scanners_with_coverage: r.repo.scannersWithCoverage,
       coverage_status: r.repo.coverageStatus,
       source_url: r.repo.sourceUrl,
+      open_finding_count: r.repo.openFindingCount,
     },
   }
 }
@@ -477,17 +486,27 @@ export async function listRepos(filters: {
 /** Like {@link listRepos} but also returns the backend's total count, so a
  *  caller that caps the page (e.g. limit: 200) can show "first N of M" instead
  *  of presenting the capped page length as the authoritative total. */
+/** Fresh/Stale/Never coverage counts over the full repo scope (server-computed,
+ *  so the KPI strip stays accurate when the list page is capped). */
+export interface CoverageSummary {
+  total: number
+  fresh: number
+  stale: number
+  never: number
+}
+
 export async function listReposWithCount(filters: {
   since_days?: number
   has_critical?: boolean
   limit?: number
-} = {}): Promise<{ repos: RepoSummary[]; totalCount: number | null }> {
+} = {}): Promise<{ repos: RepoSummary[]; totalCount: number | null; coverageSummary: CoverageSummary | null }> {
   const data = await gqlFetch<{
     sources: {
       repoSources: {
         sources: GqlRepoSummaryRow[]
         nextCursor: string | null
         totalCount: number | null
+        coverageSummary: CoverageSummary | null
       }
     }
   }>("RepoSources", REPO_SOURCES_QUERY, {
@@ -499,6 +518,7 @@ export async function listReposWithCount(filters: {
   return {
     repos: (repoSources?.sources ?? []).map((s) => toRepoSummary(gqlRepoSummaryToTs(s))),
     totalCount: repoSources?.totalCount ?? null,
+    coverageSummary: repoSources?.coverageSummary ?? null,
   }
 }
 

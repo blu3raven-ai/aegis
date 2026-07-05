@@ -7,7 +7,6 @@ import { ThemeToggleButton } from "@/components/layout/ThemeToggleButton"
 import { SearchModal } from "@/components/layout/SearchModal"
 import { NotificationBell } from "@/components/layout/NotificationBell"
 import { HeaderCTAs } from "@/components/layout/HeaderCTAs"
-import { HelpButton } from "@/components/layout/HelpButton"
 import Link from "next/link"
 import { useConnectorCatalog, type Integration } from "@/lib/client/integrations-catalog-api"
 import { getSourceConnection } from "@/lib/client/source-connections-api"
@@ -28,10 +27,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   roles: "Roles",
   runners: "Runners",
   users: "Users",
-  code: "Code",
-  containers: "Containers",
-  dependencies: "Dependencies",
-  secrets: "Secrets",
   "iac-security": "IaC Security",
   sbom: "SBOM",
   components: "Components",
@@ -45,7 +40,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   notifications: "Notifications",
   operations: "Operations",
   policies: "Policies",
-  posture: "Posture",
+  insights: "Insights",
   reports: "Reports",
   repos: "Repositories",
   releases: "Releases",
@@ -60,7 +55,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   rules: "Policies",
   integrations: "Integrations",
   "sla_policies": "SLA Policies",
-  llm: "Argus",
 }
 
 /** Canonical labels for bundled compliance frameworks. Framework ids are dynamic
@@ -105,7 +99,7 @@ function safeDecode(segment: string): string {
  *   "/sources"               → [{ label: "Inventory" }, { label: "Sources" }]
  *   "/integrations"          → [{ label: "Configure" }, { label: "Integrations" }]
  *   "/settings/account"      → [{ label: "Settings" }, { label: "Account" }]
- *   "/settings/dependencies" → [{ label: "Settings" }, { label: "Tools" }, { label: "Dependencies" }]
+ *   "/settings/iac-security" → [{ label: "Settings" }, { label: "Tools" }, { label: "IaC Security" }]
  * */
 function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?: string | null, repoName?: string | null): { label: string; href?: string }[] {
   if (pathname === "/") return [{ label: "Home" }]
@@ -124,7 +118,7 @@ function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?:
     // Home ("/") stays bare (handled by the early return at the top of this fn).
     if (i === 0) {
       const OVERVIEW: Record<string, string> = {
-        inbox: "Inbox", findings: "Findings", posture: "Posture",
+        inbox: "Inbox", findings: "Findings", insights: "Insights",
       }
       const WORKSPACE: Record<string, string> = {
         members: "Members", roles: "Roles", teams: "Teams",
@@ -132,12 +126,12 @@ function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?:
       const INVENTORY: Record<string, string> = {
         sources: "Sources", sbom: "SBOM", chains: "Chains",
       }
-      const INSIGHTS: Record<string, string> = {
+      const REPORTING: Record<string, string> = {
         compliance: "Compliance", reports: "Reports",
       }
       const CONFIGURE: Record<string, string> = {
-        // /rules is the actual route — the sidebar surfaces it as "Policies"
-        // (Snyk / Apiiro / Endor vocabulary), so the breadcrumb matches.
+        // /rules is the actual route — the sidebar surfaces it as "Policies",
+        // so the breadcrumb matches.
         policies: "Policies", rules: "Policies",
         integrations: "Integrations", notifications: "Notifications",
       }
@@ -156,9 +150,9 @@ function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?:
         crumbs.push({ label: INVENTORY[segment], href: prefix })
         continue
       }
-      if (INSIGHTS[segment]) {
-        crumbs.push({ label: "Insights" })
-        crumbs.push({ label: INSIGHTS[segment], href: prefix })
+      if (REPORTING[segment]) {
+        crumbs.push({ label: "Reporting" })
+        crumbs.push({ label: REPORTING[segment], href: prefix })
         continue
       }
       if (CONFIGURE[segment]) {
@@ -171,8 +165,7 @@ function buildBreadcrumbs(pathname: string, catalog: Integration[], sourceName?:
     // Settings sub-categories: Tools, System, Workspace are synthetic groupings (no href).
     if (i > 0 && segments[i - 1] === "settings") {
       const TOOLS: Record<string, string> = {
-        dependencies: "Dependencies", containers: "Containers", code: "Code",
-        secrets: "Secrets", "iac-security": "IaC Security",
+        "iac-security": "IaC Security",
       }
       const SYSTEM: Record<string, string> = {
         runners: "Runners", integrations: "Integrations", license: "License",
@@ -384,7 +377,6 @@ export function AppHeader({
       <div className="flex items-center gap-2">
         <HeaderCTAs />
         <div className="mx-1 h-5 w-px bg-[var(--color-border)]" aria-hidden="true" />
-        <HelpButton />
         <NotificationBell />
         <Link
           href="/settings"

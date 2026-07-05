@@ -8,13 +8,14 @@ import { Select } from "@/components/ui/Select"
 import { KpiCard } from "@/components/shared/KpiCard"
 import { CommandBar, type AttributeDef } from "@/components/shared/command-bar"
 import { RepoCoverageBadge } from "@/components/shared/repos/RepoCoverageBadge"
-import { listReposWithCount, type FindingCounts, type RepoSummary } from "@/lib/client/sources-api"
+import { listReposWithCount, type CoverageSummary, type FindingCounts, type RepoSummary } from "@/lib/client/sources-api"
 
 // The repo list is fetched as a single capped page; when the estate exceeds it
 // the UI surfaces "first N of M" rather than presenting the page as the total.
 const REPO_LIMIT = 200
 import { relativeTime } from "@/lib/shared/relative-time"
 import { EmptySbomState } from "@/components/shared/sbom/EmptySbomState"
+import { SbomEcosystemAnalyticsPanel } from "@/components/shared/sbom/SbomEcosystemAnalytics"
 
 type CoverageFilter = "all" | "fresh" | "stale" | "never"
 type SortMode = "coverage" | "last-scan" | "findings" | "name"
@@ -62,7 +63,9 @@ const SEVERITY_PILL: Record<Severity, string> = {
 }
 
 function totalFindings(repo: RepoSummary): number {
-  return Object.values(repo.findings_count_by_severity).reduce((a, b) => a + b, 0)
+  // Authoritative open-finding total (includes NULL/non-canonical severities the
+  // four-bucket breakdown drops); the buckets still drive the worst-severity pill.
+  return repo.open_finding_count
 }
 
 // The most severe bucket carrying at least one finding, or null when clean.
@@ -128,6 +131,7 @@ function RepoCard({ repo }: { repo: RepoSummary }) {
 export default function SbomRepositoriesPage() {
   const [repos, setRepos] = useState<RepoSummary[]>([])
   const [totalCount, setTotalCount] = useState<number | null>(null)
+  const [coverageSummary, setCoverageSummary] = useState<CoverageSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -139,9 +143,10 @@ export default function SbomRepositoriesPage() {
     setLoading(true)
     setError(null)
     try {
-      const { repos: result, totalCount: count } = await listReposWithCount({ limit: REPO_LIMIT })
+      const { repos: result, totalCount: count, coverageSummary: cov } = await listReposWithCount({ limit: REPO_LIMIT })
       setRepos(result)
       setTotalCount(count)
+      setCoverageSummary(cov)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load repositories")
     } finally {
@@ -162,6 +167,11 @@ export default function SbomRepositoriesPage() {
     }),
     [repos],
   )
+
+  // KPI strip counts the FULL estate (server-computed), not just the fetched
+  // page, so Fresh/Stale/Never stay correct past the page cap. Falls back to the
+  // page-local counts before the first response lands.
+  const kpi = coverageSummary ?? counts
 
   // True when the estate has more repos than the single page we fetched.
   const capped = totalCount != null && totalCount > repos.length
@@ -232,25 +242,25 @@ export default function SbomRepositoriesPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <KpiCard
           label="Repositories"
-          value={loading && repos.length === 0 ? "—" : counts.total.toLocaleString()}
+          value={loading && repos.length === 0 ? "—" : kpi.total.toLocaleString()}
           note={loading && repos.length === 0 ? "Loading…" : "In coverage scope"}
           valueClass={NEUTRAL}
         />
         <KpiCard
           label="Fresh"
-          value={loading && repos.length === 0 ? "—" : counts.fresh.toLocaleString()}
+          value={loading && repos.length === 0 ? "—" : kpi.fresh.toLocaleString()}
           note={loading && repos.length === 0 ? "Loading…" : "Scanned recently"}
-          valueClass={counts.fresh > 0 ? OK : NEUTRAL}
+          valueClass={kpi.fresh > 0 ? OK : NEUTRAL}
         />
         <KpiCard
           label="Stale"
-          value={loading && repos.length === 0 ? "—" : counts.stale.toLocaleString()}
+          value={loading && repos.length === 0 ? "—" : kpi.stale.toLocaleString()}
           note={loading && repos.length === 0 ? "Loading…" : "Scan is outdated"}
-          valueClass={counts.stale > 0 ? PENDING : NEUTRAL}
+          valueClass={kpi.stale > 0 ? PENDING : NEUTRAL}
         />
         <KpiCard
           label="Never scanned"
-          value={loading && repos.length === 0 ? "—" : counts.never.toLocaleString()}
+          value={loading && repos.length === 0 ? "—" : kpi.never.toLocaleString()}
           note={loading && repos.length === 0 ? "Loading…" : "No SBOM yet"}
           valueClass={NEUTRAL}
         />
@@ -260,12 +270,14 @@ export default function SbomRepositoriesPage() {
         Coverage = whether a dependency-scan SBOM exists; independent of finding counts, which other scanners also produce.
       </p>
 
+      <SbomEcosystemAnalyticsPanel />
+
       {error && (
         <div
           role="alert"
           className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3"
         >
-          <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+          <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
           <Button variant="secondary" size="sm" onClick={() => void load()}>
             Retry
           </Button>
@@ -327,7 +339,11 @@ export default function SbomRepositoriesPage() {
         <div className="space-y-3">
           <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
             {isFiltered
-              ? `${sorted.length.toLocaleString()} of ${counts.total.toLocaleString()} repositories`
+              ? capped
+                ? // Only the first page was fetched, so a filter searches the loaded
+                  // subset, not the estate — say so, or the count looks like the whole.
+                  `${sorted.length.toLocaleString()} of ${counts.total.toLocaleString()} loaded · ${totalCount!.toLocaleString()} in estate`
+                : `${sorted.length.toLocaleString()} of ${counts.total.toLocaleString()} repositories`
               : capped
                 ? `Showing the first ${counts.total.toLocaleString()} of ${totalCount!.toLocaleString()} repositories`
                 : `${counts.total.toLocaleString()} ${counts.total === 1 ? "repository" : "repositories"}`}

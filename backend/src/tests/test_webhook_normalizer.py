@@ -60,6 +60,32 @@ def test_github_pr_opened_vs_updated_type_and_fields():
     assert opened.payload["title"] == "Add thing"
 
 
+def test_github_push_missing_repository_returns_none():
+    # A well-formed JSON object missing a required field is a plausible event
+    # variant; the normalizer returns None so the route can drop it cleanly
+    # instead of raising KeyError → 500.
+    assert normalize_github_push({}) is None
+
+
+def test_github_push_missing_owner_or_name_returns_none():
+    assert normalize_github_push({"repository": {"name": "widgets"}}) is None
+    assert normalize_github_push({"repository": {"owner": {"login": "acme-org"}}}) is None
+
+
+def test_github_pr_missing_required_fields_returns_none():
+    base_repo = {"repository": {"name": "widgets", "owner": {"login": "acme-org"}}}
+    # No pull_request block at all.
+    assert normalize_github_pr(base_repo, opened=True) is None
+    # pull_request present but missing number.
+    assert normalize_github_pr(
+        {**base_repo, "pull_request": {"base": {"sha": "base1"}}}, opened=True
+    ) is None
+    # pull_request present but missing base.sha.
+    assert normalize_github_pr(
+        {**base_repo, "pull_request": {"number": 7}}, opened=False
+    ) is None
+
+
 # ── GitLab ───────────────────────────────────────────────────────────────────
 
 def test_gitlab_push_org_is_top_level_namespace():

@@ -133,7 +133,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}

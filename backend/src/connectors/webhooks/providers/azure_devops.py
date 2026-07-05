@@ -18,7 +18,6 @@ divergence is intentionally not handled here.
 """
 from __future__ import annotations
 
-import json
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -27,6 +26,7 @@ from src.connectors.base import BaseIngester, TestResult
 from src.connectors.registry import register_connector
 from src.settings.webhooks.service import match_webhook_secret
 from src.connectors.webhooks.healthcheck import webhook_test_result
+from src.connectors.webhooks.ingest_guard import parse_json_object, read_guarded_body
 from src.connectors.webhooks.secret_resolver import verify_with_stored_secret
 from src.connectors.webhooks.signature import verify_basic_auth
 from src.db.engine import get_session
@@ -85,7 +85,8 @@ async def azure_devops_webhook(
     authorization: str = Header(...),
 ):
     """Receive an authenticated webhook event from Azure DevOps Services."""
-    body = await request.body()
+    # No reliable per-delivery id header is sent, so no replay dedup here.
+    body = await read_guarded_body(request)
 
     def _verify(secret: str) -> bool:
         return verify_basic_auth(secret, authorization)
@@ -96,11 +97,7 @@ async def azure_devops_webhook(
         logger.warning("azure_devops.webhook: basic auth verification failed")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError as exc:
-        logger.error("azure_devops.webhook: malformed JSON body: %s", exc)
-        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+    payload = parse_json_object(body)
 
     event_type = payload.get("eventType", "")
 
@@ -116,8 +113,9 @@ async def azure_devops_webhook(
 
     get_event_publisher().publish(event)
     logger.info(
-        "azure_devops.webhook: published event_type=%s event_id=%s",
+        "azure_devops.webhook: published event_type=%s event_id=%s authed_org=%s",
         event.event_type,
         event.event_id,
+        matched.org_id,
     )
     return {"status": "accepted", "event_id": event.event_id}

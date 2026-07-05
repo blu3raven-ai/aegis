@@ -26,6 +26,50 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _ruled_out_grounded(evidence: Any, verification_metadata: Any) -> bool:
+    """Whether a ``ruled_out`` verdict cites a real file, in the evidence or in
+    the suppression's ``ruled_out_reason``. An ungrounded ruled_out must not be
+    allowed to hide a finding (recall safety)."""
+    if any(isinstance(e, dict) and e.get("file") for e in (evidence or [])):
+        return True
+    meta = verification_metadata if isinstance(verification_metadata, dict) else {}
+    reason = meta.get("ruled_out_reason")
+    return bool(isinstance(reason, dict) and reason.get("file"))
+
+
+async def compute_deps_verdict(
+    session: AsyncSession,
+    *,
+    reachability: str,
+    cve_id: str | None,
+    cwe_raw: Any,
+) -> str:
+    """KEV-aware dependency verdict: resolve the KEV listing and normalise the
+    CWE input, then run the recall-safe fuse.
+
+    Shared by the scan upsert path and the reachability result-ingest so both
+    fuse reachability into a verdict identically. ``reachability`` must already
+    be the *effective* label — callers are responsible for downgrading an
+    ungrounded ``no_path`` to ``unknown`` before calling.
+    """
+    from src.shared.deps_verdict import deps_verdict
+
+    kev_listed = False
+    if cve_id:
+        kev_row = await session.execute(
+            select(KevEntry.cve_id).where(KevEntry.cve_id == cve_id)
+        )
+        kev_listed = kev_row.scalar() is not None
+
+    if isinstance(cwe_raw, list):
+        cwes = [str(c).strip() for c in cwe_raw if str(c).strip()]
+    elif isinstance(cwe_raw, str) and cwe_raw.strip():
+        cwes = [cwe_raw.strip()]
+    else:
+        cwes = []
+    return deps_verdict(reachability, kev_listed=kev_listed, cwes=cwes)
+
+
 # Finding CRUD
 
 async def read_findings(
@@ -124,6 +168,7 @@ async def upsert_finding(
 
     # Extract typed-column values from full detail BEFORE split runs.
     queryable = extract_queryable_fields(detail)
+    malicious = bool(detail.get("malicious"))
 
     # Promote verification fields from `detail` into typed columns.
     v_verdict = detail.get("verdict")
@@ -132,8 +177,20 @@ async def upsert_finding(
     v_meta = detail.get("verification_metadata")
     v_fix = detail.get("recommended_fix")
 
-    # Provisional confidence for when Argus hasn't verified this finding. It only
-    # ever seeds a NULL verdict — a real (Argus) verdict always takes precedence.
+    # Recall-safety gate: an LLM `ruled_out` verdict may only HIDE a finding when
+    # it is grounded in a real code citation (a file in the evidence, or in the
+    # suppression's ruled_out_reason). An ungrounded ruled_out — e.g. from a buggy
+    # or compromised runner — is downgraded to needs_verify so a real vulnerability
+    # stays visible. Deps keeps its own grounded gate (compute_deps_verdict below).
+    if (
+        tool != "dependencies_scanning"
+        and v_verdict == "ruled_out"
+        and not _ruled_out_grounded(v_evidence, v_meta)
+    ):
+        v_verdict = "needs_verify"
+
+    # Provisional confidence for when the LLM Service hasn't verified this finding.
+    # It only ever seeds a NULL verdict — a real verdict always takes precedence.
     seed_verdict = heuristic_verdict(
         detail.get("confidence"), has_cve=queryable["cve_id"] is not None
     )
@@ -142,22 +199,12 @@ async def upsert_finding(
     # everything else keeps the scanner-signal heuristic.
     reachability = detail.get("reachability")
     if tool == "dependencies_scanning" and reachability:
-        from src.shared.deps_verdict import deps_verdict
-        cve_id = queryable["cve_id"]
-        kev_listed = False
-        if cve_id:
-            kev_row = await session.execute(
-                select(KevEntry.cve_id).where(KevEntry.cve_id == cve_id)
-            )
-            kev_listed = kev_row.scalar() is not None
-        cwe_raw = detail.get("cwe")
-        if isinstance(cwe_raw, list):
-            cwes = [str(c).strip() for c in cwe_raw if str(c).strip()]
-        elif isinstance(cwe_raw, str) and cwe_raw.strip():
-            cwes = [cwe_raw.strip()]
-        else:
-            cwes = []
-        seed_verdict = deps_verdict(reachability, kev_listed=kev_listed, cwes=cwes)
+        seed_verdict = await compute_deps_verdict(
+            session,
+            reachability=reachability,
+            cve_id=queryable["cve_id"],
+            cwe_raw=detail.get("cwe"),
+        )
 
     if existing:
         lean, fat = split_detail(tool, detail)
@@ -171,6 +218,7 @@ async def upsert_finding(
         existing.rule_name = queryable["rule_name"]
         existing.package_name = queryable["package_name"]
         existing.package_version = queryable["package_version"]
+        existing.malicious = malicious
         if engine is not None:
             existing.engine = engine
         old_verdict = existing.verdict
@@ -222,6 +270,7 @@ async def upsert_finding(
             rule_name=queryable["rule_name"],
             package_name=queryable["package_name"],
             package_version=queryable["package_version"],
+            malicious=malicious,
             engine=engine,
             verdict=v_verdict if v_verdict is not None else seed_verdict,
             evidence=v_evidence,

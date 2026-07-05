@@ -63,13 +63,13 @@ export function RepoDetailHero({ repo }: RepoDetailHeroProps) {
               <span className="text-xs text-[var(--color-text-secondary)]">Findings</span>
               <div className="flex items-center gap-1.5 text-xs tabular-nums">
                 {critical > 0 && (
-                  <span className="font-bold text-[var(--color-severity-critical)]">{critical} C</span>
+                  <span className="font-bold text-[var(--color-severity-critical-text)]">{critical} C</span>
                 )}
                 {high > 0 && (
-                  <span className="font-semibold text-[var(--color-severity-high)]">{high} H</span>
+                  <span className="font-semibold text-[var(--color-severity-high-text)]">{high} H</span>
                 )}
                 {medium > 0 && (
-                  <span className="text-[var(--color-severity-medium)]">{medium} M</span>
+                  <span className="text-[var(--color-severity-medium-text)]">{medium} M</span>
                 )}
                 {low > 0 && (
                   <span className="text-[var(--color-text-secondary)]">{low} L</span>

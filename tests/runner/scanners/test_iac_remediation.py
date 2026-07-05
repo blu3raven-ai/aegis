@@ -408,3 +408,16 @@ def test_attach_swallows_per_finding_errors(tmp_path, monkeypatch):
 
     out = attach_iac_fixes([finding], str(tmp_path))
     assert "recommended_fix" not in out[0]
+
+
+def test_extract_tf_block_ignores_braces_in_strings_and_comments():
+    # A `}` inside a string literal or comment must not prematurely balance the
+    # block — otherwise the extracted before/after gets truncated.
+    lines = [
+        'resource "aws_s3_bucket" "b" {',
+        '  desc = "a close } brace in a string"  # and a } in a comment',
+        '  acl  = "private"',
+        "}",
+    ]
+    block = remediation._extract_tf_block(lines, 1)
+    assert block == "\n".join(lines)  # full block, not truncated at line 2

@@ -42,6 +42,20 @@ def _make_app(recorder: MagicMock | None = None) -> tuple[FastAPI, MagicMock]:
     def runner_job():
         return JSONResponse({"ok": True})
 
+    @app.put("/api/v1/settings/argus")
+    def put_argus(request: Request):
+        return JSONResponse({"ok": True})
+
+    @app.delete("/api/v1/settings/argus")
+    def delete_argus(request: Request):
+        return JSONResponse({"deleted": True})
+
+    @app.put("/api/v1/settings/llm")
+    def put_llm(request: Request):
+        # Mirrors the real handler attaching richer detail for the middleware to record.
+        request.state.audit_metadata = {"enabled": True}
+        return JSONResponse({"ok": True})
+
     return app, mock_rec
 
 
@@ -93,3 +107,42 @@ def test_status_code_captured_in_request_context():
     client.post("/api/v1/notifications/destinations", json={})
     kwargs = mock_rec.record.call_args.kwargs
     assert kwargs["request"].status_code == 201
+
+
+def test_put_argus_connection_records_updated():
+    app, mock_rec = _make_app()
+    client = TestClient(app)
+    client.put("/api/v1/settings/argus", json={})
+    mock_rec.record.assert_called_once()
+    kwargs = mock_rec.record.call_args.kwargs
+    assert kwargs["action"] == "argus_connection.updated"
+    assert kwargs["resource_type"] == "argus_connection"
+
+
+def test_delete_argus_connection_records_deleted():
+    app, mock_rec = _make_app()
+    client = TestClient(app)
+    client.delete("/api/v1/settings/argus")
+    mock_rec.record.assert_called_once()
+    kwargs = mock_rec.record.call_args.kwargs
+    assert kwargs["action"] == "argus_connection.deleted"
+    assert kwargs["resource_type"] == "argus_connection"
+
+
+def test_put_llm_config_records_updated():
+    app, mock_rec = _make_app()
+    client = TestClient(app)
+    client.put("/api/v1/settings/llm", json={})
+    mock_rec.record.assert_called_once()
+    kwargs = mock_rec.record.call_args.kwargs
+    assert kwargs["action"] == "llm_config.updated"
+    assert kwargs["resource_type"] == "llm_config"
+
+
+def test_handler_metadata_forwarded_to_record():
+    # A handler that sets request.state.audit_metadata has it forwarded verbatim.
+    app, mock_rec = _make_app()
+    client = TestClient(app)
+    client.put("/api/v1/settings/llm", json={})
+    kwargs = mock_rec.record.call_args.kwargs
+    assert kwargs["metadata"] == {"enabled": True}

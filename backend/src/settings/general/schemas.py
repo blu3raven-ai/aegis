@@ -34,14 +34,6 @@ class RateLimitResponse(BaseModel):
     used: int
 
 
-class ScannerPrerequisitesResponse(BaseModel):
-    runner_connected: bool = False
-    error: str | None = None
-    scanner_status: str | None = None  # ready | no_runner
-    runner_name: str | None = None
-    runner_platform: str | None = None
-
-
 class AuthSecuritySettingsRequest(BaseModel):
     requireMfaManualUsers: bool
     requireMfaAdmins: bool

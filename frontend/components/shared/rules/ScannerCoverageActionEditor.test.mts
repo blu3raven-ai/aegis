@@ -46,18 +46,15 @@ describe("ScannerCoverageActionEditor stale_alert fields", () => {
     assert.match(src, /min=\{1\}[\s\S]{0,500}max=\{365\}/)
   })
 
-  it("filters channels to enabled destinations", () => {
-    assert.ok(src.includes("destinations.filter((d) => d.enabled)"))
-  })
-
-  it("shows the no-destinations helper when there are no enabled channels", () => {
-    // Should match the SlaActionEditor's empty-state copy for consistency.
-    assert.ok(src.includes("Set up a notification destination first"))
-  })
-
-  it("renders the auto_retrigger checkbox", () => {
-    assert.ok(src.includes("auto_retrigger"))
-    assert.ok(src.includes("Also re-trigger a scan"))
+  it("marks alert delivery and auto-retrigger as coming soon", () => {
+    // Neither the notify channel nor auto-retrigger is wired to a delivery
+    // path, so they are presented as coming-soon rather than interactive.
+    assert.ok(src.includes("Coming soon"), "should badge the delivery leg as coming soon")
+    assert.ok(!src.includes("<Select"), "the channel <Select> should be removed")
+    assert.ok(
+      !src.includes("Also re-trigger a scan"),
+      "the auto_retrigger checkbox should be removed",
+    )
   })
 })
 

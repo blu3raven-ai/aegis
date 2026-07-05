@@ -1,5 +1,6 @@
 import { InsightCard } from "@/components/shared/InsightCard"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
 
 export interface RepoCoverageRow {
   name: string
@@ -44,6 +45,7 @@ export function RepositoryCoverageTable({
                           month: "short",
                           day: "numeric",
                           year: "numeric",
+                          timeZone: getActiveTimeZone(),
                         })
                       : "—"}
                   </Td>

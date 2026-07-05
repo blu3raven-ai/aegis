@@ -7,9 +7,9 @@
 
 import { Card } from "@/components/ui/Card"
 
-const SEV_BADGE_CRIT = "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical)]"
-const SEV_BADGE_HIGH = "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high)]"
-const SEV_BADGE_MED = "bg-[var(--color-severity-medium)]/10 text-[var(--color-severity-medium)]"
+const SEV_BADGE_CRIT = "bg-[var(--color-severity-critical)]/10 text-[var(--color-severity-critical-text)]"
+const SEV_BADGE_HIGH = "bg-[var(--color-severity-high)]/10 text-[var(--color-severity-high-text)]"
+const SEV_BADGE_MED = "bg-[var(--color-severity-medium)]/10 text-[var(--color-severity-medium-text)]"
 
 function FeaturedCard() {
   return (
@@ -132,8 +132,8 @@ function RepoRow({ name, detail, blocked }: { name: string; detail: string; bloc
     ? "border-l-[var(--color-severity-critical)]"
     : "border-l-[var(--color-status-ok)]"
   const detailClass = blocked
-    ? "text-[var(--color-severity-critical)]"
-    : "text-[var(--color-status-ok)]"
+    ? "text-[var(--color-severity-critical-text)]"
+    : "text-[var(--color-status-ok-text)]"
   return (
     <Card padding="none" className={`flex items-center gap-3 border-l-4 ${borderClass} px-4 py-3`}>
       <span className="flex-1 truncate text-sm font-medium text-[var(--color-text-primary)]">{name}</span>
@@ -198,17 +198,17 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
           <div className="grid grid-cols-3 gap-4">
             <div>
               <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Introduced</p>
-              <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-severity-high)]">13</p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-severity-high-text)]">13</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
             </div>
             <div>
               <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Fixed</p>
-              <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok)]">18</p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">18</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
             </div>
             <div>
               <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Net change</p>
-              <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok)]">−5</p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">−5</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">in your repos</p>
             </div>
           </div>

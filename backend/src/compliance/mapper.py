@@ -101,6 +101,16 @@ def map_finding(
                 _MappingDraft("iso27001", "A.5.23", 0.75, "Cloud service configuration control weakness"),
             )
 
+    # ── Rule 8: Agent-targeted malicious content ─────────────────────────────
+    # Injected instructions, poisoned skills/config, and exfil planted for an AI
+    # coding agent are unauthorized/malicious software introduced through the
+    # repo, and evidence of a technical-vulnerability-management gap.
+    if scanner_type == "agent_scanning":
+        mappings += [
+            _MappingDraft("soc2", "CC6.8", 0.9, "Malicious content targeting an AI agent introduced via the repository"),
+            _MappingDraft("iso27001", "A.8.8", 0.8, "Agent-targeted malicious content is a technical vulnerability management gap"),
+        ]
+
     # ── Rule 7: All high/critical findings → incident response readiness ─────
     if high_impact:
         mappings.append(

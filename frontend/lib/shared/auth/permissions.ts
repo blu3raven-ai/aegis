@@ -2,6 +2,7 @@ export type Permission =
   | "view_dashboards"
   | "view_findings"
   | "review_findings"
+  | "reveal_secret"
   | "export_findings"
   | "run_scans"
   | "cancel_scans"
@@ -56,6 +57,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { id: "view_findings", label: "View Findings", description: "View SCA and Secrets security alerts." },
       { id: "review_findings", label: "Review Findings", description: "Acknowledge or dismiss findings." },
+      { id: "reveal_secret", label: "Reveal Secret Value", description: "Unmask a secret finding's raw credential (audited)." },
       { id: "export_findings", label: "Export Findings", description: "Download finding data in various formats." },
     ],
   },

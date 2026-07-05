@@ -24,7 +24,7 @@ function CopyableBlock({ text, label }: { text: string; label: string }) {
     <div>
       <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">{label}</p>
       <div
-        className="relative cursor-pointer rounded-lg bg-[var(--color-surface-raised)] p-3 pr-16 font-mono text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-border)]"
+        className="relative cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 pr-16 font-mono text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-border)]"
         onClick={handleCopy}
         title="Click to copy"
       >
@@ -85,13 +85,13 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
       size="md"
     >
       {error ? (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       ) : (
         <div className="space-y-4">
           {/* Token expiry countdown */}
-          <div className={`flex items-center gap-2 text-xs font-medium ${expired ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-secondary)]"}`}>
+          <div className={`flex items-center gap-2 text-xs font-medium ${expired ? "text-[var(--color-severity-critical-text)]" : "text-[var(--color-text-secondary)]"}`}>
             <span className={`h-2 w-2 rounded-full ${expired ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-status-ok)]"}`} />
             {expired
               ? "Token expired — close and generate a new one"

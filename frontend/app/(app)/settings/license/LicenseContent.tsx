@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
 import { useLicense, fetchLicenseStatus, invalidateLicenseCache } from "@/lib/client/license/client"
 import { TIER_LABELS, type LicenseStatus, type Tier } from "@/lib/shared/license/types"
 import { Dialog } from "@/components/layout/Dialog"
@@ -21,11 +20,9 @@ function formatExpiryDate(value: string | number): string {
 }
 
 const TIER_COLORS: Record<Tier, string> = {
-  community: "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]",
+  community: "bg-[var(--color-border-strong)] text-[var(--color-text-secondary)]",
   enterprise: "bg-[var(--color-accent)]/10 text-[var(--color-accent)]",
 }
-
-const FOCUS_RING = "focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
 
 export function LicenseContent() {
   const { tier, addons, limits, usage, license, isLoading } = useLicense()
@@ -173,7 +170,7 @@ export function LicenseContent() {
               </Button>
             </div>
             {activateMsg && (
-              <p className={`mt-3 text-sm ${activateMsg.ok ? "text-[var(--color-status-ok)]" : "text-[var(--color-severity-critical)]"}`}>
+              <p className={`mt-3 text-sm ${activateMsg.ok ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-severity-critical-text)]"}`}>
                 {activateMsg.text}
               </p>
             )}
@@ -201,7 +198,7 @@ export function LicenseContent() {
                   <span className="min-w-[140px] text-sm text-[var(--color-text-secondary)]">{label}</span>
                   <div className="flex flex-1 items-center gap-3">
                     {!isUnlimited && !isDisabled && (
-                      <div className="h-1.5 flex-1 max-w-[200px] overflow-hidden rounded-full bg-[var(--color-surface-raised)]">
+                      <div className="h-1.5 flex-1 max-w-[200px] overflow-hidden rounded-full bg-[var(--color-border-strong)]">
                         <div
                           className={`h-full rounded-full transition-all ${isOver || isAtLimit ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-accent)]"}`}
                           style={{ width: `${Math.min(pct, 100)}%` }}
@@ -213,9 +210,9 @@ export function LicenseContent() {
                     {isDisabled ? (
                       <span className="text-xs text-[var(--color-text-tertiary)]">Locked</span>
                     ) : isUnlimited ? (
-                      <span className="text-sm text-[var(--color-text-secondary)]"><span className={`font-semibold tabular-nums ${isOver ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-primary)]"}`}>{used}</span> <span className="text-xs">/ Unlimited</span></span>
+                      <span className="text-sm text-[var(--color-text-secondary)]"><span className={`font-semibold tabular-nums ${isOver ? "text-[var(--color-severity-critical-text)]" : "text-[var(--color-text-primary)]"}`}>{used}</span> <span className="text-xs">/ Unlimited</span></span>
                     ) : (
-                      <span className={`text-sm font-semibold tabular-nums ${isOver ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-primary)]"}`}>{used}<span className="font-normal text-[var(--color-text-secondary)]"> / {max}</span></span>
+                      <span className={`text-sm font-semibold tabular-nums ${isOver ? "text-[var(--color-severity-critical-text)]" : "text-[var(--color-text-primary)]"}`}>{used}<span className="font-normal text-[var(--color-text-secondary)]"> / {max}</span></span>
                     )}
                   </span>
                 </div>
@@ -242,7 +239,7 @@ export function LicenseContent() {
                   onClick={() => setShowRemoveConfirm(true)}
                   disabled={removing}
                   isLoading={removing}
-                  className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
+                  className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)]"
                 >
                   {removing ? "Removing…" : "Remove License"}
                 </Button>
@@ -250,36 +247,6 @@ export function LicenseContent() {
             </Card>
           </div>
         )}
-
-        {/* Argus add-on */}
-        <div>
-          <p className={sectionHeadingClass}>Add-ons</p>
-          <div className={`rounded-lg border px-6 py-5 ${hasArgus ? "border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)]" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-[var(--color-text-primary)]">Blu3Raven Argus</span>
-                  {hasArgus ? (
-                    <span className="rounded-full bg-[var(--color-argus-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-argus)]">Active</span>
-                  ) : (
-                    <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-text-tertiary)]">Not activated</span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                  AI-powered threat intelligence with EPSS scores, exploit availability, and advisory enrichment. Works with any plan.
-                </p>
-              </div>
-              {hasArgus ? (
-                <Link
-                  href="/settings/dependencies"
-                  className={`shrink-0 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] ${FOCUS_RING}`}
-                >
-                  Configure
-                </Link>
-              ) : null}
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )

@@ -6,15 +6,15 @@ import { join } from "node:path"
 const ROOT = join(import.meta.dirname, "../..")
 const sidebar = readFileSync(join(ROOT, "components/layout/SidebarContent.tsx"), "utf8")
 
-describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configure", () => {
+describe("Sidebar — IA: Overview / Workspace / Inventory / Reporting / Configure", () => {
   it("renders all five group labels", () => {
     assert.ok(sidebar.includes('label="Overview"'), "Overview group label present")
     assert.ok(sidebar.includes('label="Workspace"'), "Workspace group label present")
     assert.ok(sidebar.includes('label="Inventory"'), "Inventory group label present")
-    assert.ok(sidebar.includes('label="Insights"'), "Insights group label present")
+    assert.ok(sidebar.includes('label="Reporting"'), "Reporting group label present")
     assert.ok(sidebar.includes('label="Configure"'), "Configure group label present")
     assert.ok(!sidebar.includes('label="Configuration"'), "Tail group is labelled Configure, not Configuration")
-    assert.ok(!sidebar.includes('label="Reporting"'), "Reporting renamed to Insights")
+    assert.ok(!sidebar.includes('label="Insights"'), "Insights group renamed to Reporting (Insights is now the Overview page)")
     assert.ok(!sidebar.includes('label="Data"'), "Data renamed to Inventory (ASPM-standard term)")
   })
 
@@ -25,10 +25,10 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configur
     assert.ok(!sidebar.includes('label="Library"'), "Library group label gone")
   })
 
-  it("Overview section contains Home, Inbox, Findings, Posture in order (Activity intentionally hidden — reached via notification bell)", () => {
+  it("Overview section contains Home, Inbox, Findings, Insights in order (Activity intentionally hidden — reached via notification bell)", () => {
     const block = sidebar.match(/overviewItems[\s\S]*?\];/m)?.[0] ?? ""
     assert.ok(block.length > 0, "overviewItems array present")
-    const expected = ["Home", "Inbox", "Findings", "Posture"]
+    const expected = ["Home", "Inbox", "Findings", "Insights"]
     for (const label of expected) {
       assert.ok(block.includes(`label: "${label}"`), `Overview missing item: ${label}`)
     }
@@ -40,11 +40,11 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configur
     assert.ok(!block.includes('label: "Activity"'), "Activity should not appear in sidebar (notification-bell only)")
   })
 
-  it("Insights group contains Compliance and Reports", () => {
+  it("Reporting group contains Compliance and Reports", () => {
     const block = sidebar.match(/reportingItems[\s\S]*?\];/m)?.[0] ?? ""
     assert.ok(block.length > 0, "reportingItems array present")
     for (const label of ["Compliance", "Reports"]) {
-      assert.ok(block.includes(`label: "${label}"`), `Insights missing item: ${label}`)
+      assert.ok(block.includes(`label: "${label}"`), `Reporting missing item: ${label}`)
     }
   })
 
@@ -55,7 +55,7 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configur
     assert.ok(block.includes('label: "Policies"'), "Configuration missing item: Policies")
     assert.ok(block.includes('label: "Integrations"'), "Configuration missing item: Integrations")
     assert.ok(block.includes('label: "Notifications"'), "Configuration missing item: Notifications")
-    assert.ok(!block.includes('label: "Rules"'), "Rules renamed to Policies (Snyk / Apiiro / Endor vocabulary)")
+    assert.ok(!block.includes('label: "Rules"'), "Rules renamed to Policies")
   })
 
   it("Inventory group contains Sources, SBOM and Chains (Images unified into /sources, Findings lives under Overview, Releases is reached via /sources/[id])", () => {
@@ -81,7 +81,7 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configur
   it("wires new routes to the right hrefs", () => {
     assert.ok(sidebar.includes('href: "/"'), "Home href present")
     assert.ok(sidebar.includes('href: "/inbox"'), "Inbox href present")
-    assert.ok(sidebar.includes('href: "/posture"'), "Posture href present")
+    assert.ok(sidebar.includes('href: "/insights"'), "Insights href present")
     assert.ok(sidebar.includes('href: "/compliance"'), "Compliance href present")
     assert.ok(sidebar.includes('href: "/reports"'), "Reports href present")
     assert.ok(sidebar.includes('href: "/integrations"'), "Integrations href present")
@@ -132,6 +132,7 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Insights / Configur
       "--color-state-dismissed-subtle",
       "--color-severity-critical",
       "--color-severity-critical-subtle",
+      "--color-severity-critical-text",
     ])
     const tokens = new Set(sidebar.match(/--color-[a-z-]+/g) ?? [])
     for (const tok of tokens) {

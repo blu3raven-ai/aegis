@@ -20,6 +20,7 @@ export function EmailModal({
   onSuccess: () => void
 }) {
   const [email, setEmail] = useState(initialEmail ?? "")
+  const [currentPassword, setCurrentPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -30,7 +31,7 @@ export function EmailModal({
       try {
         await apiClient("/api/v1/auth/email", {
           method: "PATCH",
-          body: { email: email.trim() },
+          body: { email: email.trim(), current_password: currentPassword },
         })
         onSuccess()
       } catch (err) {
@@ -65,6 +66,20 @@ export function EmailModal({
             autoFocus
             autoComplete="email"
             invalid={!!error}
+          />
+        </FormField>
+        <FormField
+          label="Current password"
+          htmlFor="account-email-password"
+          hint="Confirm your password to change your email. Leave blank if you sign in with SSO."
+        >
+          <Input
+            id="account-email-password"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            placeholder="Current password"
+            autoComplete="current-password"
           />
         </FormField>
         <div className="flex justify-end gap-2">

@@ -67,3 +67,30 @@ async def test_upsert_records_idempotent_run_history(db_session):
         assert [e.run_id for e in history] == ["auto-2", "auto-1"]
     finally:
         await _cleanup(db_session, aid)
+
+
+@pytest.mark.asyncio
+async def test_upsert_persists_and_overwrites_html_url(db_session):
+    aid = await _mk_asset(db_session)
+    sbom = {"components": []}
+    try:
+        with patch("src.dependencies.sbom_store.upload_to_minio"), \
+             patch("src.dependencies.sbom_store.populate_components", return_value=0):
+            upsert_sbom(org="acme", repo="api", commit_sha="c1", sbom=sbom,
+                        manifests={}, run_id="run-1", asset_id=aid,
+                        html_url="https://ghe.acme-corp.internal/acme/api")
+        stored = (await db_session.execute(
+            select(Sbom.html_url).where(Sbom.asset_id == aid)
+        )).scalar_one()
+        assert stored == "https://ghe.acme-corp.internal/acme/api"
+
+        # Re-ingest without a URL overwrites in place (mirrors commit_sha).
+        with patch("src.dependencies.sbom_store.upload_to_minio"), \
+             patch("src.dependencies.sbom_store.populate_components", return_value=0):
+            upsert_sbom(org="acme", repo="api", commit_sha="c2", sbom=sbom,
+                        manifests={}, run_id="run-1", asset_id=aid)
+        assert (await db_session.execute(
+            select(Sbom.html_url).where(Sbom.asset_id == aid)
+        )).scalar_one() is None
+    finally:
+        await _cleanup(db_session, aid)

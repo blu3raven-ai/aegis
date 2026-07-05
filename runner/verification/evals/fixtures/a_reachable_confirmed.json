@@ -1,0 +1,23 @@
+{
+  "id": "a_reachable_confirmed",
+  "verifier": "deps",
+  "note": "Package imported and the vulnerable sink is called directly. LLM confirms a reachable path — finding stays visible.",
+  "finding": {
+    "packageName": "evilpkg",
+    "packageVersion": "1.0.0",
+    "cve": "CVE-0000-0001",
+    "ecosystem": "pypi"
+  },
+  "repo_files": {
+    "src/app.py": "import evilpkg\n\nevilpkg.render(user_input)\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"reachability\":\"reachable\",\"evidence\":[{\"kind\":\"sink\",\"file\":\"src/app.py\",\"line\":3,\"snippet\":\"evilpkg.render(user_input)\"}]}",
+      "tokens_in": 120,
+      "tokens_out": 40
+    }
+  ],
+  "expected": {"reachability": "reachable", "suppressed": false},
+  "label": {"truly_reachable": true}
+}

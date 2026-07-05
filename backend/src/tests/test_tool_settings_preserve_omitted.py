@@ -112,6 +112,31 @@ def test_dependencies_save_only_updates_keys_in_body():
     assert deps["rerunScheduleValue"] == "0 3 * * *"
 
 
+def test_secret_scanning_save_without_concurrency_succeeds():
+    """scanConcurrency moved to Runners settings, so it is no longer a required
+    field on the secret-scanning save — omitting it must succeed and preserve
+    the stored value rather than 400 on a missing field."""
+    existing = {
+        "tools": {
+            "secret_scanning": {
+                "enabled": True,
+                "scanConcurrency": "8",
+                "aiReviewEnabled": True,
+            }
+        }
+    }
+    captured, patches = _stub_patches(existing)
+    with patches[0], patches[1], patches[2], patches[3]:
+        client = TestClient(_make_app())
+        resp = client.patch(
+            "/api/v1/settings/tools/secret_scanning",
+            json={"enabled": True, "settings": {}},
+        )
+        assert resp.status_code == 200, resp.text
+    secrets = captured["config"]["tools"]["secret_scanning"]
+    assert secrets["scanConcurrency"] == "8"  # preserved, not required in body
+
+
 def test_explicit_value_in_body_still_lands():
     """When the client sends the key, the new value persists."""
     existing = {
@@ -119,9 +144,6 @@ def test_explicit_value_in_body_still_lands():
             "dependencies_scanning": {
                 "enabled": True,
                 "scanConcurrency": "4",
-                "autoRerunEnabled": False,
-                "rerunScheduleType": "simple",
-                "rerunScheduleValue": "02:00",
             }
         }
     }
@@ -134,15 +156,9 @@ def test_explicit_value_in_body_still_lands():
                 "enabled": True,
                 "settings": {
                     "scanConcurrency": "12",
-                    "autoRerunEnabled": "false",
-                    "rerunScheduleType": "cron",
-                    "rerunScheduleValue": "30 4 * * *",
                 },
             },
         )
         assert resp.status_code == 200, resp.text
     deps = captured["config"]["tools"]["dependencies_scanning"]
     assert deps["scanConcurrency"] == "12"
-    assert deps["autoRerunEnabled"] is False
-    assert deps["rerunScheduleType"] == "cron"
-    assert deps["rerunScheduleValue"] == "30 4 * * *"

@@ -55,7 +55,9 @@ def test_jit_oidc_creates_new_user_with_sso_protocol_oidc():
     subject = f"oidc-sub-{uniq}"
 
     async def _act(session):
-        return await jit_or_lookup(session, subject=subject, email=email, protocol="oidc")
+        return await jit_or_lookup(
+            session, subject=subject, email=email, protocol="oidc", email_verified=True,
+        )
 
     try:
         user = run_db(_act)
@@ -79,6 +81,7 @@ def test_jit_assigns_default_role_when_configured():
             subject=f"with-role-{uniq}",
             email=f"with-role-{uniq}@example.com",
             protocol="saml",
+            email_verified=True,
         )
 
     try:
@@ -119,6 +122,7 @@ def test_jit_lookup_by_subject_returns_linked_user_regardless_of_email():
             subject=subject,
             email=f"new-{uniq}@example.com",
             protocol="saml",
+            email_verified=True,
         )
 
     try:
@@ -130,16 +134,14 @@ def test_jit_lookup_by_subject_returns_linked_user_regardless_of_email():
         _cleanup_users(f"jit-drift-{uniq}")
 
 
-def test_jit_reactivates_deprovisioned_user_and_writes_audit_event():
-    """A deprovisioned user signing in via SSO is flipped back to active
-    and an explicit `user.reactivated` audit event is written.
-
-    Reactivation is intentional: an IdP can re-add a user to the SSO group
-    after a previous deprovisioning. The audit log makes it traceable.
-    The scim_managed flag is NOT touched on reactivation.
+def test_jit_blocks_deprovisioned_user_and_audits_the_attempt():
+    """A deprovisioned user signing in via SSO is BLOCKED, not silently
+    reactivated — reactivation must be an explicit admin action, so an IdP that
+    still lists an off-boarded employee can't undo the deprovisioning. The
+    account stays deprovisioned.
     """
-    from sqlalchemy import delete, select as _select
-    from src.db.models import AuditEvent
+    from sqlalchemy import select as _select
+    from src.auth.federation.jit import AccountDeprovisioned
 
     _reset_sso_cfg()
     uniq = uuid4().hex[:8]
@@ -166,40 +168,21 @@ def test_jit_reactivates_deprovisioned_user_and_writes_audit_event():
             subject=subject,
             email=f"dep-{uniq}@example.com",
             protocol="saml",
+            email_verified=True,
         )
 
-    async def _events(session):
-        rows = (
-            await session.execute(
-                _select(AuditEvent)
-                .where(AuditEvent.action == "user.reactivated")
-                .where(AuditEvent.resource_id == user_id)
-            )
-        ).scalars().all()
-        return [(r.action, r.metadata_json, r.actor_user_id, r.resource_id) for r in rows]
-
-    async def _cleanup_events(session):
-        await session.execute(
-            delete(AuditEvent).where(AuditEvent.resource_id == user_id)
-        )
+    async def _status(session):
+        return (
+            await session.execute(_select(User.status).where(User.id == user_id))
+        ).scalar_one()
 
     try:
-        user = run_db(_act)
-        assert user.id == user_id
-        assert user.status == "active"
-        # scim_managed is preserved across JIT reactivation — the flag tracks
-        # provisioning origin, not lifecycle state.
-        assert user.scim_managed is True
+        with pytest.raises(AccountDeprovisioned):
+            run_db(_act)
 
-        events = run_db(_events)
-        assert len(events) == 1, events
-        action, metadata, actor_user_id, resource_id = events[0]
-        assert action == "user.reactivated"
-        assert metadata == {"trigger": "jit_sign_in"}
-        assert actor_user_id == "system:sso_jit"
-        assert resource_id == user_id
+        # The account is NOT flipped back to active.
+        assert run_db(_status) == "deprovisioned"
     finally:
-        run_db(_cleanup_events)
         _cleanup_users(user_id)
 
 
@@ -227,6 +210,7 @@ def test_jit_account_conflict_carries_message():
             subject=f"new-{uniq}",
             email=email,
             protocol="saml",
+            email_verified=True,
         )
 
     try:
@@ -260,6 +244,7 @@ def test_jit_attaches_to_local_user_without_sso():
             subject=f"new-sso-{uniq}",
             email=email,
             protocol="oidc",
+            email_verified=True,
         )
 
     try:
@@ -271,3 +256,87 @@ def test_jit_attaches_to_local_user_without_sso():
         assert user.password_hash == "hashed-local-password"
     finally:
         _cleanup_users(f"jit-local-{uniq}")
+
+
+def test_jit_refuses_to_link_pre_existing_account_on_unverified_email():
+    """An unverified IdP email must not attach onto a pre-existing account.
+
+    This is the account-takeover guard: an IdP that lets a caller assert an
+    arbitrary, unverified email could otherwise be used to link the caller's
+    SSO subject onto a victim's existing (e.g. local password) account.
+    """
+    _reset_sso_cfg()
+    uniq = uuid4().hex[:8]
+    email = f"victim-{uniq}@example.com"
+
+    async def _seed(session):
+        session.add(User(
+            id=f"jit-victim-{uniq}",
+            username=f"u-victim-{uniq}",
+            email=email,
+            password_hash="hashed-local-password",
+            status="active",
+        ))
+
+    run_db(_seed)
+
+    async def _act(session):
+        return await jit_or_lookup(
+            session,
+            subject=f"attacker-sub-{uniq}",
+            email=email,
+            protocol="oidc",
+            email_verified=False,
+        )
+
+    async def _fetch(session):
+        from sqlalchemy import select as _select
+        return (
+            await session.execute(_select(User).where(User.id == f"jit-victim-{uniq}"))
+        ).scalar_one()
+
+    try:
+        with pytest.raises(AccountConflict):
+            run_db(_act)
+        # The pre-existing account is untouched — no subject was attached.
+        victim = run_db(_fetch)
+        assert victim.sso_subject is None
+        assert victim.password_hash == "hashed-local-password"
+    finally:
+        _cleanup_users(f"jit-victim-{uniq}")
+
+
+def test_jit_matches_existing_email_case_insensitively():
+    """An IdP releasing a differently-cased email must link to the existing
+    account, not mint a second takeover-shaped row (5.2)."""
+    _reset_sso_cfg()
+    uniq = uuid4().hex[:8]
+    user_id = f"jit-ci-{uniq}"
+
+    async def _seed(session):
+        session.add(User(
+            id=user_id,
+            username=f"u-ci-{uniq}",
+            email=f"Alice-{uniq}@Example.com",  # mixed case, no SSO link yet
+            password_hash="hashed",
+            status="active",
+        ))
+
+    run_db(_seed)
+
+    async def _act(session):
+        return await jit_or_lookup(
+            session,
+            subject=f"ci-sub-{uniq}",
+            email=f"alice-{uniq}@example.com",  # IdP lower-cases it
+            protocol="oidc",
+            email_verified=True,
+        )
+
+    try:
+        user = run_db(_act)
+        # Linked the existing row rather than creating a clone.
+        assert user.id == user_id
+        assert user.sso_subject == f"ci-sub-{uniq}"
+    finally:
+        _cleanup_users(user_id)

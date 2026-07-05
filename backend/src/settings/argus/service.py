@@ -1,9 +1,8 @@
-"""Per-org connection to the hosted Argus verification service.
+"""Per-org connection to the hosted Argus threat-intel enrichment service.
 
 The durable credential is an OAuth2 refresh token, stored encrypted at rest.
-Short-lived access tokens are minted on demand at scan-dispatch time via the
-standard refresh-token grant, so a leaked job env never carries a long-lived
-secret.
+Short-lived access tokens are minted on demand by the backend threat-intel match
+path via the standard refresh-token grant, so a leaked secret is never long-lived.
 """
 from __future__ import annotations
 
@@ -15,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import ArgusConnection
 from src.security.crypto import decrypt, encrypt
+from src.shared.url_guard import UnsafeURLError, assert_sendable_url
 
 _TOKEN_TIMEOUT = 15.0
 
@@ -123,8 +123,13 @@ def mint_argus_access_token(conn: ArgusConnectionDTO) -> str:
     Synchronous so it can be called from the sync scan-dispatch + settings
     routes (a single bounded HTTP call).
     """
+    # token_endpoint is admin-supplied config — block SSRF to internal hosts.
     try:
-        with httpx.Client(timeout=_TOKEN_TIMEOUT) as client:
+        assert_sendable_url(conn.token_endpoint)
+    except UnsafeURLError as exc:
+        raise ArgusAuthError(f"unsafe argus token endpoint: {exc}") from exc
+    try:
+        with httpx.Client(timeout=_TOKEN_TIMEOUT, follow_redirects=False) as client:
             resp = client.post(
                 conn.token_endpoint,
                 data={

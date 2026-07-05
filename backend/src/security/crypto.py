@@ -1,19 +1,22 @@
-"""Symmetric encryption for sensitive config values stored in the database."""
+"""Symmetric encryption for sensitive config values stored in the database.
+
+The Fernet key is derived from the single APP_SECRET root (via the shared
+HKDF-per-context helper) rather than a separate raw key, so all at-rest secrets
+trace back to one root. Decryption failures are raised loudly — a wrong/rotated
+key must never silently yield an empty or garbage secret.
+"""
 
 from __future__ import annotations
 
-import os
-
 from cryptography.fernet import Fernet, InvalidToken
+
+from src.shared.encryption import derive_key
+
+_CONTEXT = "settings_secret"
 
 
 def _fernet() -> Fernet:
-    key = os.environ.get("AEGIS_SECRET_ENCRYPTION_KEY")
-    if not key:
-        raise RuntimeError(
-            "AEGIS_SECRET_ENCRYPTION_KEY is not set — cannot encrypt or decrypt secrets"
-        )
-    return Fernet(key.encode())
+    return Fernet(derive_key(_CONTEXT))
 
 
 def encrypt(plaintext: str) -> str:

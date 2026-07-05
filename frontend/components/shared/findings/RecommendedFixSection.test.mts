@@ -182,3 +182,12 @@ describe("RecommendedFixSection — provenance + graceful fallback", () => {
     assert.match(src, /fix\.description/)
   })
 })
+
+describe("ExternalLink href safety", () => {
+  it("only links server-supplied hrefs that are http(s), blocking javascript: URLs", () => {
+    // scheme check on the (server/verifier-supplied) href before it becomes a live link
+    assert.match(src, /test\(href\.trim\(\)\)/)
+    // non-http(s) href renders as inert text instead of an anchor
+    assert.match(src, /if \(!safe\)/)
+  })
+})

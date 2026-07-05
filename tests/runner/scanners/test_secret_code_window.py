@@ -58,3 +58,29 @@ def test_secret_window_skipped_when_source_unreadable(tmp_path):
     findings = normalize_file(out, "trufflehog", "r")
     assert len(findings) == 1
     assert findings[0].get("code_window") is None
+
+
+def _secret_scan_output(path):
+    path.write_text(json.dumps({
+        "Raw": "x", "Redacted": "x", "DetectorName": "AWS",
+        "SourceMetadata": {"Data": {"Filesystem": {"file": "a.env", "line": 1}}},
+    }))
+
+
+def test_normalize_stamps_repo_html_url_from_sidecar(tmp_path):
+    repo = tmp_path / "myrepo"
+    repo.mkdir()
+    (repo / "html_url.txt").write_text("https://ghe.acme-corp.internal/acme/myrepo\n")
+    out = repo / "out.json"
+    _secret_scan_output(out)
+    findings = normalize_file(out, "trufflehog", "myrepo")
+    assert findings[0]["repo_html_url"] == "https://ghe.acme-corp.internal/acme/myrepo"
+
+
+def test_normalize_omits_repo_html_url_when_no_sidecar(tmp_path):
+    repo = tmp_path / "r"
+    repo.mkdir()
+    out = repo / "out.json"
+    _secret_scan_output(out)
+    findings = normalize_file(out, "trufflehog", "r")
+    assert "repo_html_url" not in findings[0]

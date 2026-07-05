@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.helpers import run_db
 from src.db.models import LlmUsageDaily
 from src.settings.llm.service import fetch_public_llm_config
-from src.settings.llm.usage import daily_remaining
 from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import MANAGE_SETTINGS
 
@@ -64,5 +63,5 @@ def get_usage(
         "days": series,
         "today_used": today_used,
         "today_budget": today_budget,
-        "today_remaining": daily_remaining(org_id=org_id, daily_budget=today_budget),
+        "today_remaining": max(0, today_budget - today_used),
     }

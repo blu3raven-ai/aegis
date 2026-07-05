@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react"
 
+import { THEME_CHANGE_EVENT, getStoredTheme, setTheme } from "@/lib/client/theme"
+
 export function ThemeToggleButton() {
   const [isDark, setIsDark] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     function getEffectiveDark(): boolean {
-      const theme = (() => { try { return localStorage.getItem("theme") ?? "system" } catch { return "system" } })()
+      const theme = getStoredTheme()
       if (theme === "dark") return true
       if (theme === "light") return false
       return window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -19,8 +21,7 @@ export function ThemeToggleButton() {
 
     const mq = window.matchMedia("(prefers-color-scheme: dark)")
     function handleSystemChange() {
-      const theme = (() => { try { return localStorage.getItem("theme") ?? "system" } catch { return "system" } })()
-      if (theme === "system") setIsDark(mq.matches)
+      if (getStoredTheme() === "system") setIsDark(mq.matches)
     }
     mq.addEventListener("change", handleSystemChange)
     return () => mq.removeEventListener("change", handleSystemChange)
@@ -34,13 +35,12 @@ export function ThemeToggleButton() {
       else if (theme === "light") setIsDark(false)
       else setIsDark(window.matchMedia("(prefers-color-scheme: dark)").matches)
     }
-    window.addEventListener("theme:change", handleThemeChange)
-    return () => window.removeEventListener("theme:change", handleThemeChange)
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
   }, [])
 
   function toggle() {
-    const next = isDark ? "light" : "dark"
-    window.dispatchEvent(new CustomEvent("theme:change", { detail: { theme: next } }))
+    setTheme(isDark ? "light" : "dark")
   }
 
   if (!mounted) {

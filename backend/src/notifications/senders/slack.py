@@ -12,6 +12,7 @@ from typing import Any
 from src.connectors.base import BaseSender, SendResult, TestResult
 from src.connectors.http import default_client
 from src.connectors.registry import register_connector
+from src.notifications.url_guard import UnsafeURLError, assert_sendable_url
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +34,21 @@ class SlackSender(BaseSender):
             return SendResult(success=False, error="slack config missing webhook_url")
 
         try:
+            assert_sendable_url(url)
+        except UnsafeURLError:
+            return SendResult(success=False, error="blocked: destination URL is not permitted")
+
+        try:
             with default_client() as client:
                 resp = client.post(url, json=payload)
             if resp.status_code == 200:
                 return SendResult(success=True, response_code=resp.status_code)
+            # Record only the status code — never the response body, which an
+            # attacker-controlled internal endpoint could use as an exfil oracle.
             return SendResult(
                 success=False,
                 response_code=resp.status_code,
-                error=f"slack returned {resp.status_code}: {resp.text[:200]}",
+                error=f"slack returned status {resp.status_code}",
             )
         except Exception as exc:
             logger.warning("SlackSender.send error: %s", exc)

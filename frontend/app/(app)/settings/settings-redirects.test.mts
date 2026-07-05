@@ -11,7 +11,7 @@ const REDIRECTS: Array<[file: string, target: string]> = [
   ["audit/page.tsx", "/settings#audit"],
   ["api-keys/page.tsx", "/settings#api-keys"],
   ["runners/page.tsx", "/settings#runners"],
-  ["llm/page.tsx", "/settings#argus"],
+  ["llm/page.tsx", "/settings#llm"],
   ["license/page.tsx", "/settings#license"],
   ["notifications/page.tsx", "/notifications/channels"],
   ["notifications/rules/page.tsx", "/notifications/routing"],

@@ -9,7 +9,10 @@ import { RemoteRunnerList } from "./RemoteRunnerList"
 import type { Runner } from "./types"
 import { useSSE } from "@/components/providers/SSEProvider"
 import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { getSettings, saveToolSettings } from "@/lib/client/settings-api"
+import { useHasPermission } from "@/lib/client/use-permission"
 
 export function RunnersContent({ canEdit }: { canEdit: boolean }) {
   const router = useRouter()
@@ -98,6 +101,8 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
         )}
       </div>
 
+      <ScanConcurrencyCard />
+
       {confirmModeSwitch && (
         <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] p-4">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">Switch to Local mode?</p>
@@ -121,6 +126,120 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
         onClose={() => { setShowAddModal(false); void loadRunners() }}
       />
     </>
+  )
+}
+
+
+// Scanners that accept a scan-concurrency knob (iac has none). Concurrency is
+// how many workers each scan runs in parallel — a runner-load setting, so it
+// lives here rather than duplicated on every scanner page. Stored per tool, but
+// edited as one value applied across all of them.
+const CONCURRENCY_TOOLS = [
+  "dependencies_scanning",
+  "container_scanning",
+  "code_scanning",
+  "secret_scanning",
+] as const
+
+function ScanConcurrencyCard() {
+  // Concurrency writes tool config, which is manage_settings-gated — a plain
+  // manage_runners user can see it but not edit.
+  const { allowed: canEdit } = useHasPermission("manage_settings")
+  const [value, setValue] = useState("")
+  const [initial, setInitial] = useState("")
+  const [enabledMap, setEnabledMap] = useState<Record<string, boolean>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  const load = useCallback(async () => {
+    const res = await getSettings()
+    if (!res.ok) {
+      setError(res.error)
+      setLoading(false)
+      return
+    }
+    const tools = res.data.tools
+    const current = String(tools.dependencies_scanning.scanConcurrency ?? "4")
+    setValue(current)
+    setInitial(current)
+    setEnabledMap(
+      Object.fromEntries(CONCURRENCY_TOOLS.map((t) => [t, tools[t].enabled ?? false])),
+    )
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const dirty = value.trim() !== "" && value !== initial
+
+  async function handleSave() {
+    const n = Number(value)
+    if (!Number.isInteger(n) || n <= 0) {
+      setError("Enter a whole number greater than zero.")
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      // Write every scanner. Pass each tool's current enablement through so a
+      // concurrency change never enables (or trips the runner prereq on) a tool.
+      for (const tool of CONCURRENCY_TOOLS) {
+        const res = await saveToolSettings({
+          tool,
+          enabled: enabledMap[tool] ?? false,
+          settings: { scanConcurrency: value },
+        })
+        if (!res.ok) {
+          setError(res.error)
+          return
+        }
+      }
+      setInitial(value)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[var(--color-text-primary)]">Scan concurrency</p>
+          <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+            Parallel workers each scan runs, applied to all scanners.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {saved && (
+            <span className="text-xs text-[var(--color-status-ok)]">Saved</span>
+          )}
+          {dirty && canEdit && (
+            <Button variant="primary" size="sm" onClick={() => void handleSave()} isLoading={saving}>
+              Save
+            </Button>
+          )}
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            aria-label="Scan concurrency"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            disabled={!canEdit || loading || saving}
+            className="w-20 tabular-nums"
+          />
+        </div>
+      </div>
+      {error && (
+        <p className="mt-2 text-xs text-[var(--color-severity-critical-text)]">{error}</p>
+      )}
+    </div>
   )
 }
 
@@ -189,7 +308,7 @@ function SegmentedToggle<T extends string>({
                 className={`rounded-sm px-1 py-0 text-[9px] font-bold uppercase tracking-[0.12em] ${
                   selected
                     ? "bg-[var(--color-accent-on)]/20 text-[var(--color-accent-on)]"
-                    : "bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]"
+                    : "bg-[var(--color-bg-hover)] text-[var(--color-text-tertiary)]"
                 }`}
               >
                 {opt.badge}

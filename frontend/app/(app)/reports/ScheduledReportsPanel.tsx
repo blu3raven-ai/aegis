@@ -150,7 +150,7 @@ export function ScheduledReportsPanel() {
       </div>
 
       {error && (
-        <p role="alert" className="mb-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical)]">
+        <p role="alert" className="mb-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical-text)]">
           {error}
         </p>
       )}
@@ -210,7 +210,7 @@ export function ScheduledReportsPanel() {
                     variant="ghost"
                     size="xs"
                     onClick={() => handleDelete(s.id)}
-                    className="text-[var(--color-severity-critical)] hover:text-[var(--color-severity-critical)]"
+                    className="text-[var(--color-severity-critical-text)] hover:text-[var(--color-severity-critical-text)]"
                   >
                     Delete
                   </Button>
@@ -247,7 +247,7 @@ function LastRunCell({
   const ts = new Date(at).toLocaleString()
   if (status === "failed") {
     return (
-      <span className="text-[var(--color-severity-critical)]" title={error ?? undefined}>
+      <span className="text-[var(--color-severity-critical-text)]" title={error ?? undefined}>
         Failed · {ts}
       </span>
     )
@@ -444,7 +444,7 @@ function ScheduleModal({
           )}
 
           {error && (
-            <p role="alert" className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical)]">
+            <p role="alert" className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-xs text-[var(--color-severity-critical-text)]">
               {error}
             </p>
           )}

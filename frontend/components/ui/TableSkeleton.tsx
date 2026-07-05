@@ -1,5 +1,4 @@
-// Pattern: Snyk + Linear loading skeleton — n rows of pulsing gray bars.
-// Reference: Snyk projects list during initial fetch.
+// Loading skeleton — n rows of pulsing gray bars shown during initial fetch.
 import { cn } from "@/lib/shared/utils";
 
 type Props = {

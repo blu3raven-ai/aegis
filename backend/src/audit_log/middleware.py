@@ -48,6 +48,10 @@ _EXPLICIT_ACTION_MAP: dict[tuple[str, str], tuple[str, str]] = {
     ("PUT",    r"/api/v1/notifications/destinations/\d+"):  ("notification.destination.updated",  "notification_destination"),
     ("DELETE", r"/api/v1/notifications/destinations/\d+"):  ("notification.destination.deleted",  "notification_destination"),
     ("POST",   "/integrations/argus/webhook"):              ("argus.webhook.received",             "argus_event"),
+    ("PUT",    "/api/v1/settings/argus"):                   ("argus_connection.updated",           "argus_connection"),
+    ("DELETE", "/api/v1/settings/argus"):                   ("argus_connection.deleted",           "argus_connection"),
+    ("PUT",    "/api/v1/settings/llm"):                     ("llm_config.updated",                 "llm_config"),
+    ("DELETE", "/api/v1/settings/llm"):                     ("llm_config.deleted",                 "llm_config"),
 }
 
 
@@ -143,11 +147,15 @@ class AuditMiddleware(BaseHTTPMiddleware):
             )
             resource_id = _extract_resource_id(path)
 
+            # Handlers may attach richer detail via request.state.audit_metadata.
+            metadata = getattr(request.state, "audit_metadata", None)
+
             self._recorder.record(
                 action=action,
                 resource_type=resource_type,
                 resource_id=resource_id,
                 actor=actor,
+                metadata=metadata,
                 request=req_ctx,
             )
         except Exception:

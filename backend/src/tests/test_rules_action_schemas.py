@@ -95,6 +95,17 @@ def test_scanner_coverage_stale_alert_valid():
     assert out.auto_retrigger is False
 
 
+def test_scanner_coverage_stale_alert_without_channel_is_valid():
+    # Notify-channel delivery is a coming-soon leg, so a channel is optional:
+    # the stale alert still opens a violation without one.
+    out = validate_action_for_category(
+        "scanner_coverage",
+        {"type": "stale_alert", "stale_after_days": 7},
+    )
+    assert out.stale_after_days == 7
+    assert out.alert_channel_id is None
+
+
 @pytest.mark.parametrize("days", [0, 366])
 def test_scanner_coverage_stale_after_days_bounds(days):
     with pytest.raises(ValueError):

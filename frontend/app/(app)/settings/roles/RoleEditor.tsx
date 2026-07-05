@@ -65,7 +65,7 @@ export function RoleEditor({
   return (
     <div className="space-y-6">
       {isLocked && (
-        <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3 text-sm text-[var(--color-state-pending)]">
+        <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3 text-sm text-[var(--color-state-pending-text)]">
           This is a protected role. It cannot be modified or deleted.
         </div>
       )}

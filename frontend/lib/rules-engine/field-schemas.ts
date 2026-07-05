@@ -13,13 +13,13 @@ export interface ConditionFieldSchema {
 
 // ── Canonical field lists ─────────────────────────────────────────────────────
 
+// Only fields carried by the finding.created event payload can be matched at
+// routing time. Repository, CVE, label, and chain-role conditions require
+// payload enrichment that isn't in place yet, so they are omitted rather than
+// offered as conditions that would silently never match.
 export const NOTIFICATION_ROUTING_FIELDS: ConditionFieldSchema[] = [
   { value: "severity", label: "Severity", inputType: "select", valueSuggestions: ["critical", "high", "medium", "low", "info"] },
   { value: "scanner", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning"] },
-  { value: "repo_id", label: "Repository ID", inputType: "text" },
-  { value: "repo_labels", label: "Repo labels", inputType: "text" },
-  { value: "cve_id", label: "CVE ID", inputType: "text" },
-  { value: "chain_role", label: "Chain role", inputType: "select", valueSuggestions: ["entrypoint", "pivot", "sink"] },
 ]
 
 export const SLA_RULE_FIELDS: ConditionFieldSchema[] = [
@@ -45,6 +45,8 @@ export const SCANNER_COVERAGE_RULE_FIELDS: ConditionFieldSchema[] = [
 export const AUTO_DISMISS_RULE_FIELDS: ConditionFieldSchema[] = [
   { value: "severity", label: "Severity", inputType: "select", valueSuggestions: ["critical", "high", "medium", "low", "info"] },
   { value: "scanner", label: "Scanner", inputType: "select", valueSuggestions: ["dependencies_scanning", "code_scanning", "container_scanning", "secret_scanning", "iac_scanning"] },
+  { value: "dependency_scope", label: "Dependency scope", inputType: "select", valueSuggestions: ["dev", "prod"] },
+  { value: "release_age_days", label: "Release age (days)", inputType: "number" },
   { value: "file_path", label: "File path", inputType: "text" },
   { value: "cwe_id", label: "CWE ID", inputType: "text" },
   { value: "cve_id", label: "CVE ID", inputType: "text" },

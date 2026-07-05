@@ -25,6 +25,10 @@ class DependenciesHooks(LifecycleHooks):
         return f"{repo}::{package_name}::{ecosystem}::{advisory_id}::{manifest_path}"
 
     def initial_state(self, raw: dict[str, Any]) -> str:
+        # Malicious packages have no fix but must never be deferred — the
+        # package is compromised and needs removal, so keep them open.
+        if raw.get("malicious"):
+            return "open"
         return "open" if self.has_fix(raw) else "deferred"
 
     def extract_repo(self, raw: dict[str, Any]) -> str | None:
@@ -48,6 +52,10 @@ class DependenciesHooks(LifecycleHooks):
             "vulnerableVersionRange": vuln.get("vulnerable_version_range", ""),
             "patchedVersion": (vuln.get("first_patched_version") or {}).get("identifier"),
             "manifestPath": dep.get("manifest_path", ""),
+            "dependencyScope": dep.get("scope"),
+            "release_age_days": raw.get("release_age_days"),
+            "release_recent": raw.get("release_recent"),
+            "repoHtmlUrl": raw.get("repo_html_url", ""),
             "advisoryUrl": advisory.get("html_url", ""),
             "cvssScore": cvss.get("score"),
             "cvssVector": cvss.get("vector_string"),
@@ -58,12 +66,26 @@ class DependenciesHooks(LifecycleHooks):
             "references": advisory.get("references", []),
             "currentVersion": raw.get("current_version"),
             "source": raw.get("source", "git"),
-            "scanner": raw.get("scanner", "grype"),
-            "manifestSnippet": raw.get("manifest_snippet"),
-            "manifestMatchLine": raw.get("manifest_match_line"),
+            "scanner": raw.get("scanner", "osv"),
+            # Manifest declaration site: the line becomes the finding's location
+            # (highlighted in the code window); the window itself is FAT detail,
+            # hydrated only in the drawer. All null for transitive deps.
+            "startLine": raw.get("manifest_line"),
+            "code_window": raw.get("manifest_snippet"),
+            "code_window_start_line": raw.get("manifest_snippet_start"),
             "matchedBy": raw.get("matched_by", []),
             "matchSource": raw.get("match_source"),
+            "malicious": bool(raw.get("malicious")),
         }
+
+    def extract_file_location(self, raw: dict) -> tuple[str, int] | None:
+        """Manifest path + declared line for git-blame attribution, when known."""
+        dep = raw.get("dependency") or {}
+        file = dep.get("manifest_path") or ""
+        line = raw.get("manifest_line") or 0
+        if file and line:
+            return file, int(line)
+        return None
 
     def has_fix(self, raw: dict[str, Any]) -> bool:
         first_patched = (raw.get("security_vulnerability") or {}).get("first_patched_version")

@@ -78,13 +78,13 @@ export function ChangesDiffTable({ changes }: ChangesDiffTableProps) {
             >
               <div className="px-3 py-2 border-r border-[var(--color-border-divider)]">
                 <div className="text-2xs text-[var(--color-text-tertiary)] mb-0.5">{row.key}</div>
-                <div className={`text-xs font-[family-name:var(--font-jetbrains-mono)] break-all ${row.changed ? "text-[var(--color-severity-critical)]" : "text-[var(--color-text-secondary)]"}`}>
+                <div className={`text-xs font-[family-name:var(--font-jetbrains-mono)] break-all ${row.changed ? "text-[var(--color-severity-critical-text)]" : "text-[var(--color-text-secondary)]"}`}>
                   {row.before ?? <span className="italic text-[var(--color-text-tertiary)]">—</span>}
                 </div>
               </div>
               <div className="px-3 py-2">
                 <div className="text-2xs text-[var(--color-text-tertiary)] mb-0.5">{row.key}</div>
-                <div className={`text-xs font-[family-name:var(--font-jetbrains-mono)] break-all ${row.changed ? "text-[var(--color-status-ok)]" : "text-[var(--color-text-secondary)]"}`}>
+                <div className={`text-xs font-[family-name:var(--font-jetbrains-mono)] break-all ${row.changed ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-text-secondary)]"}`}>
                   {row.after ?? <span className="italic text-[var(--color-text-tertiary)]">—</span>}
                 </div>
               </div>

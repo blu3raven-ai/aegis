@@ -1,4 +1,4 @@
-"""IacScanner — clones the repo, runs checkov, parses results, writes findings.jsonl."""
+"""IacScanner — clones each repo, runs checkov, parses results, writes findings.jsonl."""
 from __future__ import annotations
 
 import dataclasses
@@ -10,7 +10,6 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
-from runner.scanners._argus import argus_configured, verify_via_argus
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
     GitCloneError,
@@ -18,8 +17,12 @@ from runner.scanners._shared import (
     JobEnv,
     ProgressEmitter,
     TIMEOUT_CLONE,
+    build_escalation_llm_client,
+    build_llm_client,
     clone_repo,
     compute_diff_files,
+    derive_html_url,
+    parse_repos,
     register_output,
     repo_name_from_url,
 )
@@ -43,27 +46,9 @@ _FAILURE_EXIT_CODE = 2
 _IAC_VERIFY_SEVERITIES = {"high", "critical"}
 
 
-def _build_llm_client(env: JobEnv):
-    """Return an LLM client or None when LLM_API_KEY is unset.
-
-    Reads from job['envVars'] via JobEnv — the backend ships LLM config there,
-    not in the runner process environment.
-    """
-    from runner.verification.llm_client import LlmClient
-
-    api_key = env.get("LLM_API_KEY")
-    if not api_key:
-        return None
-    return LlmClient(
-        api_key=api_key,
-        api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
-        model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
-    )
-
-
 @dataclasses.dataclass(frozen=True)
 class IacScanConfig:
-    repo_url: str
+    repos: list[str]
     git_token: str | None
     # When SCAN_SCOPE="diff_scoped" AND BASE_SHA is set, findings outside the
     # diff are dropped post-parse. Checkov has no native --include-only flag,
@@ -75,7 +60,7 @@ class IacScanConfig:
     def from_job(cls, job: dict[str, Any]) -> "IacScanConfig":
         env = JobEnv(job)
         return cls(
-            repo_url=env.get("GIT_REPOS", ""),
+            repos=parse_repos(env.get("GIT_REPOS")),
             git_token=env.get("GIT_TOKEN") or None,
             base_sha=env.get("BASE_SHA") or None,
             scan_scope=env.get("SCAN_SCOPE", "full_tree"),
@@ -97,10 +82,9 @@ class IacScanner:
         log_tail: list[str] = []
 
         cfg = IacScanConfig.from_job(job)
-        repo_url = cfg.repo_url
-        git_token = cfg.git_token
+        repos = cfg.repos
 
-        emitter = ProgressEmitter(on_progress, expected=1 if repo_url else 0)
+        emitter = ProgressEmitter(on_progress, expected=len(repos))
 
         if cancel_event is not None and cancel_event.is_set():
             emitter.done()
@@ -109,7 +93,7 @@ class IacScanner:
                 exit_code=CANCELLED_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
             )
 
-        if not repo_url:
+        if not repos:
             log_tail.append("[!] No GIT_REPOS specified - nothing to scan")
             emitter.done()
             write_done_marker(out_dir)
@@ -117,6 +101,67 @@ class IacScanner:
 
         emitter.starting()
 
+        # BYO LLM client + per-scan budget are shared across every repo in the
+        # connection so total LLM spend is bounded per scan, not per repo.
+        env = JobEnv(job)
+        llm = build_llm_client(env)
+        escalation_llm = build_escalation_llm_client(env)
+        budget = make_iac_budget(env)
+
+        all_findings: list[dict] = []
+        any_clone_failed = False
+        for repo_url in repos:
+            if cancel_event is not None and cancel_event.is_set():
+                break
+            findings, cloned = self._scan_one_repo(
+                repo_url, out_dir, cfg, llm, escalation_llm, budget,
+                cancel_event, log_tail, emitter,
+            )
+            any_clone_failed = any_clone_failed or not cloned
+            all_findings.extend(findings)
+
+        findings_path = out_dir / "findings.jsonl"
+        with findings_path.open("w", encoding="utf-8") as fh:
+            for f in all_findings:
+                fh.write(json.dumps(f) + "\n")
+
+        register_output(out_dir, findings_path, "_all")
+        log_tail.append(
+            f"[+] iac scan complete — {len(all_findings)} findings "
+            f"across {len(repos)} repo(s)"
+        )
+        emitter.normalizing()
+        write_done_marker(out_dir)
+        emitter.done()
+
+        # Surface a failure exit only when every repo failed to clone; partial
+        # clone failures are logged but must not sink a multi-repo scan.
+        exit_code = 0
+        if cancel_event is not None and cancel_event.is_set():
+            exit_code = CANCELLED_EXIT_CODE
+        elif any_clone_failed and not all_findings:
+            exit_code = _FAILURE_EXIT_CODE
+        return ExecutionResult(
+            exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
+        )
+
+    def _scan_one_repo(
+        self,
+        repo_url: str,
+        out_dir: Path,
+        cfg: "IacScanConfig",
+        llm,
+        escalation_llm,
+        budget: ScanBudget,
+        cancel_event: threading.Event | None,
+        log_tail: list[str],
+        emitter: ProgressEmitter,
+    ) -> tuple[list[dict], bool]:
+        """Clone + checkov-scan a single repo. Returns (stamped findings, cloned_ok).
+
+        Each finding is stamped with this repo's name/html_url so backend ingest
+        attaches it to the right asset. The clone tree is always cleaned up.
+        """
         repo_name = repo_name_from_url(repo_url)
         repo_out = out_dir / repo_name
         repo_out.mkdir(parents=True, exist_ok=True)
@@ -124,25 +169,11 @@ class IacScanner:
 
         emitter.scanning(repo_name)
         try:
-            clone_repo(
-                repo_url, clone_dir, token=git_token, timeout=TIMEOUT_CLONE
-            )
-        except InsecureURLError as e:
+            clone_repo(repo_url, clone_dir, token=cfg.git_token, timeout=TIMEOUT_CLONE)
+        except (InsecureURLError, GitCloneError) as e:
             log_tail.append(f"[!] {e}")
             emitter.finished(repo_name)
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=_FAILURE_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
-            )
-        except GitCloneError as e:
-            log_tail.append(f"[!] {e}")
-            emitter.finished(repo_name)
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=_FAILURE_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
-            )
+            return [], False
 
         # Wrap everything from this point in try/finally so the clone tree is
         # always cleaned up — even if findings.jsonl serialization, verification,
@@ -151,10 +182,10 @@ class IacScanner:
             try:
                 raw = _run_checkov(clone_dir, log_tail, cancel_event)
             except ScannerTimeoutError as e:
-                log_tail.append(f"[!] checkov timeout: {e}")
+                log_tail.append(f"[!] checkov timeout ({repo_name}): {e}")
                 raw = {"results": {"failed_checks": []}}
             except Exception as e:  # noqa: BLE001
-                log_tail.append(f"[!] checkov error: {e}")
+                log_tail.append(f"[!] checkov error ({repo_name}): {e}")
                 logger.exception("[!] checkov error")
                 raw = {"results": {"failed_checks": []}}
 
@@ -185,48 +216,30 @@ class IacScanner:
                             "[!] checkov diff resolution failed (%s) - keeping full results", e
                         )
 
-            env = JobEnv(job)
-            if argus_configured(env):
-                findings = verify_via_argus(
-                    scanner="iac", findings=findings, repo_root=str(clone_dir), env=env
-                )
-            else:
-                findings = self._maybe_verify_iac(
-                    findings=findings,
-                    repo_root=str(clone_dir),
-                    llm=_build_llm_client(env),
-                    scan_budget=make_iac_budget(env),
-                    cancel_event=cancel_event,
-                )
+            findings = self._maybe_verify_iac(
+                findings=findings,
+                repo_root=str(clone_dir),
+                llm=llm,
+                escalation_llm=escalation_llm,
+                scan_budget=budget,
+                cancel_event=cancel_event,
+            )
 
             # Deterministic config-hardening patches for pattern-clear checks.
             # Always-on and independent of the LLM verifier above.
             findings = attach_iac_fixes(findings, str(clone_dir))
 
-            findings_path = out_dir / "findings.jsonl"
-            with findings_path.open("w", encoding="utf-8") as fh:
-                for f in findings:
-                    # Stamp the repo so backend ingest can attach the finding to
-                    # the right asset (mirrors the other scanners' output).
-                    f.setdefault("repo_full_name", repo_name)
-                    fh.write(json.dumps(f) + "\n")
-
-            register_output(out_dir, findings_path, repo_name)
-
-            log_tail.append(f"[+] iac scan complete — {len(findings)} findings")
-            emitter.finished(repo_name)
-            emitter.normalizing()
-            write_done_marker(out_dir)
-            emitter.done()
+            html_url = derive_html_url(repo_url)
+            for f in findings:
+                # Stamp the repo so backend ingest can attach the finding to the
+                # right asset (mirrors the other scanners' output).
+                f.setdefault("repo_full_name", repo_name)
+                # Web URL of the repo so the finding can deep-link back to source.
+                f.setdefault("repo_html_url", html_url)
+            return findings, True
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
-
-        exit_code = 0
-        if cancel_event is not None and cancel_event.is_set():
-            exit_code = CANCELLED_EXIT_CODE
-        return ExecutionResult(
-            exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
-        )
+            emitter.finished(repo_name)
 
     def _maybe_verify_iac(
         self,
@@ -234,6 +247,7 @@ class IacScanner:
         findings: list[dict],
         repo_root: str,
         llm,
+        escalation_llm=None,
         scan_budget: ScanBudget,
         cancel_event: threading.Event | None = None,
     ) -> list[dict]:
@@ -273,7 +287,8 @@ class IacScanner:
 
             try:
                 result = verify_iac_finding(
-                    finding=copy, repo_root=repo_root, llm=llm
+                    finding=copy, repo_root=repo_root, llm=llm,
+                    escalation_llm=escalation_llm,
                 )
                 scan_budget.record(
                     tokens_in=result.tokens_in, tokens_out=result.tokens_out

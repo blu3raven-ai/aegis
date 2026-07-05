@@ -35,9 +35,13 @@ class BackendClient:
         # the new token on their next call without each holding their own copy.
         self._headers = {"Authorization": f"Bearer {new_token}"}
 
-    def presign_uploads(self, job_id: str, files: list[str]) -> dict[str, str]:
+    def presign_uploads(self, job_id: str, files: list[str]) -> dict[str, dict]:
+        """Map each file to its pre-signed POST spec ``{"url", "fields"}``."""
         body = self._request("POST", f"/jobs/{job_id}/uploads/presign", json={"files": files})
-        return {u["file"]: u["url"] for u in body.get("urls", [])}
+        return {
+            u["file"]: {"url": u["url"], "fields": u.get("fields", {})}
+            for u in body.get("urls", [])
+        }
 
     def list_sbom_downloads(self, job_id: str) -> list[dict[str, str]]:
         body = self._request("GET", f"/jobs/{job_id}/sboms")

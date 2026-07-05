@@ -39,7 +39,9 @@ const sizeClasses: Record<InputSize, { input: string; iconLeft: string; iconRigh
 const validityClasses = (invalid: boolean) =>
   invalid
     ? "border-[var(--color-severity-critical-border)] focus-visible:ring-[var(--color-severity-critical)]"
-    : "border-[var(--color-border)] focus-visible:ring-[var(--color-accent)]"
+    // border-strong keeps the field readable against surface/well backgrounds in
+    // dark mode, where the softer --color-border collapses into the card.
+    : "border-[var(--color-border-strong)] focus-visible:ring-[var(--color-accent)]"
 
 // Single source of truth for input chrome. Use this for every text-style input
 // (text/email/password/number/url/tel). For `type="search"` with a built-in

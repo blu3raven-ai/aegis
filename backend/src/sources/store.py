@@ -57,11 +57,17 @@ def _encrypt_auth(auth: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _decrypt_auth(auth: dict[str, Any]) -> dict[str, Any]:
+def _decrypt_auth(auth: dict[str, Any], *, strict: bool = False) -> dict[str, Any]:
     """Decrypt sensitive fields in an auth dict after reading from DB.
 
     Backward-compatible: if a value is not Fernet-encrypted (no gAAAAA prefix),
     it is returned as-is (legacy plaintext data).
+
+    ``strict=True`` (use paths — sync, clone) raises DecryptionError when a value
+    can't be decrypted under any configured root, so the caller reports "couldn't
+    decrypt credentials — key changed" instead of shipping an empty token that
+    reads as "no token". Display/masking paths stay lenient so an undecryptable
+    credential never 500s the sources UI.
     """
     if not auth:
         return auth
@@ -69,7 +75,7 @@ def _decrypt_auth(auth: dict[str, Any]) -> dict[str, Any]:
     for key in _SENSITIVE_AUTH_KEYS:
         value = result.get(key)
         if isinstance(value, str) and value and is_encrypted(value):
-            result[key] = decrypt_string(value)
+            result[key] = decrypt_string(value, strict=strict)
     return result
 
 
@@ -204,7 +210,7 @@ def _conn_to_dict(conn: SourceConnection) -> dict[str, Any]:
 def list_connections(category: str | None = None) -> list[dict[str, Any]]:
     async def _query(session):
         from sqlalchemy import func
-        from src.db.models import ScanRun
+        from src.db.models import Asset, Finding, ScanRun
 
         stmt = select(SourceConnection)
         if category:
@@ -219,18 +225,47 @@ def list_connections(category: str | None = None) -> list[dict[str, Any]]:
             await session.execute(select(org_col, func.max(ScanRun.started_at)).group_by(org_col))
         ).all()
         last_scan_by_org = {org: ts for org, ts in rows if org}
+
+        # Open findings per org, bucketed by severity. Findings tie back to a
+        # connection through the owner segment of the asset's external_ref
+        # (source discovery never stamps source_ref) — the same owner→org signal
+        # the per-source findings/scans views use.
+        owner_col = func.lower(func.split_part(func.split_part(Asset.external_ref, ":", 2), "/", 1))
+        finding_rows = (
+            await session.execute(
+                select(owner_col, Finding.severity, func.count(Finding.id))
+                .join(Finding, Finding.asset_id == Asset.id)
+                .where(Finding.state == "open")
+                .group_by(owner_col, Finding.severity)
+            )
+        ).all()
+        counts_by_org: dict[str, dict[str, int]] = {}
+        for owner, severity, cnt in finding_rows:
+            if not owner:
+                continue
+            bucket = counts_by_org.setdefault(owner, {"critical": 0, "high": 0, "medium": 0, "low": 0})
+            if severity in bucket:
+                bucket[severity] = cnt
+
         for conn, d in zip(conns, dicts):
             org = ((conn.auth or {}).get("orgOrOwner") or "").strip().lower()
             d["lastScanAt"] = _dt_to_iso(last_scan_by_org.get(org)) if org else None
+            d["findingCounts"] = counts_by_org.get(org) or {"critical": 0, "high": 0, "medium": 0, "low": 0}
         return dicts
 
     return run_db(_query)
 
 
-def _conn_to_dict_unmasked(conn: SourceConnection) -> dict[str, Any]:
-    """Return connection dict with real (unmasked, decrypted) auth — for internal use only."""
+def _conn_to_dict_unmasked(conn: SourceConnection, *, strict: bool = False) -> dict[str, Any]:
+    """Return connection dict with real (unmasked, decrypted) auth — for internal use only.
+
+    ``strict`` is opt-in: single-connection use paths (sync, test) raise on an
+    undecryptable credential so the caller reports it accurately. The bulk
+    ``list_connections_with_secrets`` path stays lenient so one bad row doesn't
+    take down scan-env resolution for every other connection.
+    """
     result = _conn_to_dict(conn)
-    result["auth"] = _decrypt_auth(conn.auth or {})
+    result["auth"] = _decrypt_auth(conn.auth or {}, strict=strict)
     return result
 
 
@@ -257,13 +292,19 @@ def get_connection(connection_id: str) -> dict[str, Any]:
 
 
 def get_connection_with_secrets(connection_id: str) -> dict[str, Any]:
-    """Get connection with unmasked auth — for internal use (test/sync) only."""
+    """Get connection with unmasked auth — for internal use (test/sync) only.
+
+    Strict: an undecryptable credential raises DecryptionError so sync/test can
+    report "couldn't decrypt credentials — key changed" instead of proceeding
+    with an empty token that reads as "no token".
+    """
     async def _query(session):
         conn = await session.get(SourceConnection, connection_id)
         if not conn:
             raise SourceNotFoundError(f"Connection '{connection_id}' not found.")
         result = _conn_to_dict(conn)
-        result["auth"] = _decrypt_auth(conn.auth or {})  # override masked auth with decrypted auth
+        # override masked auth with decrypted auth (strict — see docstring)
+        result["auth"] = _decrypt_auth(conn.auth or {}, strict=True)
         return result
 
     return run_db(_query)

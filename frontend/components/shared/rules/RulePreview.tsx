@@ -77,7 +77,7 @@ export function RulePreview({ ruleId, refreshKey = 0 }: RulePreviewProps) {
   if (state.status === "error") {
     return (
       <div className="rounded-lg border border-[var(--color-severity-critical)]/30 bg-[var(--color-surface-raised)] px-5 py-5">
-        <p className="text-sm text-[var(--color-severity-critical)]">{state.message}</p>
+        <p className="text-sm text-[var(--color-severity-critical-text)]">{state.message}</p>
         <Button
           variant="secondary"
           size="sm"

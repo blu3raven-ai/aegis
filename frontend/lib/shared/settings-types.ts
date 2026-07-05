@@ -9,18 +9,6 @@ export type SaveSettingsResult =
   | { ok: true }
   | { ok: false; error: string }
 
-/** Single source of truth for all scanner prerequisite responses. */
-export type ScannerPrerequisitesResult =
-  | {
-      ok: true
-      runner_connected: boolean
-      error: string | null
-      scanner_status: string | null
-      runner_name: string | null
-      runner_platform: string | null
-    }
-  | { ok: false; error: string }
-
 export interface TeamAsset {
   assetId: string
   type: "repo" | "image"

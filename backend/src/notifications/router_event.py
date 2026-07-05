@@ -12,7 +12,9 @@ main.py lifespan).
 """
 from __future__ import annotations
 
+import json
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from src.shared.event_bus import Event, EventBus, get_event_bus
@@ -107,8 +109,10 @@ class NotificationEventRouter:
         # and may not exist in all environments.
         from src.notifications.destination import (  # type: ignore[import]
             get_enabled_destinations,
+            next_attempt_at,
             record_delivery,
         )
+        from src.notifications.dispatch import send_to_destination  # type: ignore[import]
         from src.notifications.routing import Finding, route_finding  # type: ignore[import]
         from src.notifications.rules_model import get_active_rules  # type: ignore[import]
         from src.notifications.formatter import (  # type: ignore[import]
@@ -116,31 +120,28 @@ class NotificationEventRouter:
             format_for_slack,
             format_for_webhook,
         )
-        from src.notifications.senders.email import EmailSender  # type: ignore[import]
-        from src.notifications.senders.slack import SlackSender  # type: ignore[import]
-        from src.notifications.senders.webhook import GenericWebhookSender  # type: ignore[import]
         from src.shared.event_publisher import get_event_publisher
         from src.shared.event_types.notification import (  # type: ignore[import]
             NotificationDispatchedEvent,
             NotificationFailedEvent,
         )
 
-        sender_map = {
-            "slack": SlackSender(),
-            "webhook": GenericWebhookSender(),
-            "email": EmailSender(),
-        }
         formatter_map = {
             "slack": format_for_slack,
             "webhook": format_for_webhook,
             "email": format_for_email,
         }
 
-        # Convert Event to the dict shape the helper functions expect
+        # event.data is the published envelope {event_id, org_id, payload};
+        # the finding fields (severity, scanner, repo_id, cve_id) live one level
+        # down under "payload". Unwrap it so filters, rules, and formatters read
+        # the real fields rather than the envelope.
+        env = event.data or {}
         raw: dict[str, Any] = {
             "event_type": event.event_type,
-            "event_id": event.data.get("event_id", ""),
-            "payload": event.data,
+            "event_id": env.get("event_id", ""),
+            "org_id": env.get("org_id", ""),
+            "payload": env.get("payload", {}),
         }
 
         event_id = raw["event_id"]
@@ -165,7 +166,7 @@ class NotificationEventRouter:
                     or payload_data.get("new_severity")
                     or "info"
                 ),
-                scanner=payload_data.get("scanner") or event_type,
+                scanner=payload_data.get("scanner") or payload_data.get("scanner_type") or event_type,
                 repo_id=payload_data.get("repo_id") or payload_data.get("repository_id") or "",
                 repo_labels=payload_data.get("repo_labels") or [],
                 cve_id=payload_data.get("cve_id"),
@@ -188,24 +189,24 @@ class NotificationEventRouter:
                 if _event_matches_filter(raw, d.get("event_filter"))
             ]
 
+        # Each destination in `destinations` is already resolved: fanout dests
+        # were filtered at selection, and rule-selected dests were chosen by an
+        # explicit routing rule that must not be second-guessed by the dest's own
+        # event_filter. So no per-destination re-filter here.
         for dest in destinations:
-            if not _event_matches_filter(raw, dest.get("event_filter")):
-                continue
-
             dtype = dest.get("destination_type", "")
-            sender = sender_map.get(dtype)
             formatter = formatter_map.get(dtype)
 
-            if sender is None or formatter is None:
+            if formatter is None:
                 logger.warning(
-                    "no sender/formatter for destination type %r — skipping", dtype
+                    "no formatter for destination type %r — skipping", dtype
                 )
                 continue
 
             formatted_payload: dict[str, Any] = {}
             try:
                 formatted_payload = formatter(raw)
-                result = sender.send(formatted_payload, dest.get("config") or {})
+                result = send_to_destination(dtype, formatted_payload, dest.get("config") or {})
             except Exception as exc:
                 logger.exception(
                     "unexpected error dispatching to destination %s", dest.get("id")
@@ -218,18 +219,36 @@ class NotificationEventRouter:
                 result_code = result.response_code
                 result_err = result.error
 
-            status = "delivered" if result_ok else "failed"
-
             try:
-                record_delivery(
-                    destination_id=dest["id"],
-                    event_id=event_id,
-                    event_type=event_type,
-                    status=status,
-                    payload_summary=_summary_snippet(formatted_payload),
-                    response_code=result_code,
-                    error=result_err,
-                )
+                if result_ok:
+                    record_delivery(
+                        destination_id=dest["id"],
+                        event_id=event_id,
+                        event_type=event_type,
+                        status="delivered",
+                        payload_summary=_summary_snippet(formatted_payload),
+                        response_code=result_code,
+                        error=result_err,
+                        next_attempt_at=None,
+                        payload=None,
+                    )
+                else:
+                    # A failed first attempt is parked for retry rather than
+                    # dropped: store the formatted payload so the worker can
+                    # re-send without the original event.
+                    now = datetime.now(timezone.utc)
+                    record_delivery(
+                        destination_id=dest["id"],
+                        event_id=event_id,
+                        event_type=event_type,
+                        status="retry",
+                        payload_summary=_summary_snippet(formatted_payload),
+                        response_code=result_code,
+                        error=result_err,
+                        attempts=1,
+                        next_attempt_at=next_attempt_at(1, now),
+                        payload=json.dumps(formatted_payload, default=str),
+                    )
             except Exception:
                 logger.warning(
                     "failed to record delivery for dest %s / event %s",

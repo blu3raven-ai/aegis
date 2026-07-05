@@ -28,17 +28,25 @@ from src.findings.service import (
     _finding_to_dict,
     advisory_intel,
     assign_finding,
+    base_image_recommendation,
     count_related_repos,
+    layer_concentration,
     list_related_findings,
     finding_advisory,
     list_assignable_users,
     summarize_findings,
 )
+from src.notifications.producers import notify_comment_mentions, notify_finding_assigned
 from src.settings.audit_stream.service import record_event
 from src.authz.enforcement import require_permission
 from src.authz.enforcement.dependencies import Permission
 from src.authz.teams.access import actor_user_id
-from src.authz.permissions.catalog import REVIEW_FINDINGS, RUN_SCANS, VIEW_FINDINGS
+from src.authz.permissions.catalog import (
+    REVEAL_SECRET,
+    REVIEW_FINDINGS,
+    RUN_SCANS,
+    VIEW_FINDINGS,
+)
 from src.shared.lifecycle import (
     VALID_DISMISS_REASONS,
     bulk_dismiss_in_session,
@@ -243,6 +251,13 @@ async def patch_finding(finding_id: int, request: Request) -> dict[str, Any]:
                     finding_id, patch["assignee_user_id"], session, asset_ids,
                 )
                 payload = _finding_to_dict(updated)
+                await notify_finding_assigned(
+                    session,
+                    finding=updated,
+                    assignee_user_id=payload["assignee_user_id"],
+                    previous_assignee=previous,
+                    actor_user_id=user_id,
+                )
         except LookupError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
@@ -263,12 +278,13 @@ async def reveal_secret_value(finding_id: int, request: Request) -> dict[str, st
     """Reveal the raw value of a secret finding — sensitive and audited.
 
     List and detail payloads only ever carry the redacted match. The raw
-    secret is fetched here on demand: gated on REVIEW_FINDINGS, restricted to
-    the caller's asset scope, and recorded to the audit log on every reveal so
-    a plaintext credential never ships to clients that shouldn't see it and
-    every disclosure leaves a trail.
+    secret is fetched here on demand: gated on REVEAL_SECRET (a dedicated,
+    more-sensitive permission than triage — review_findings does NOT imply it),
+    restricted to the caller's asset scope, and recorded to the audit log on
+    every reveal so a plaintext credential never ships to clients that shouldn't
+    see it and every disclosure leaves a trail.
     """
-    require_permission(request, REVIEW_FINDINGS)
+    require_permission(request, REVEAL_SECRET)
 
     asset_ids = await resolve_asset_ids_from_request(request)
     scope = set(asset_ids)
@@ -391,6 +407,12 @@ async def add_finding_comment(finding_id: int, request: Request) -> dict[str, An
             metadata_json={"comment": text},
         )
         session.add(event)
+        await notify_comment_mentions(
+            session,
+            finding=finding,
+            comment_text=text,
+            actor_user_id=user_id,
+        )
         await session.commit()
         await session.refresh(event)
         names = await _usernames_for(session, {user_id})
@@ -422,6 +444,12 @@ async def get_finding_detail(finding_id: int, request: Request) -> dict[str, Any
     asset_ids = await resolve_asset_ids_from_request(request)
     async with get_session() as session:
         data["also_affects_repos"] = await count_related_repos(finding, asset_ids, session)
+        img = data.get("container_image")
+        if isinstance(img, dict):
+            img["layer_concentration"] = await layer_concentration(finding, session)
+            img["base_image_recommendation"] = await base_image_recommendation(
+                img.get("digest"), session
+            )
     return {"finding": data}
 
 
@@ -557,8 +585,15 @@ async def patch_findings_bulk(request: Request) -> dict[str, Any]:
 
         if "assignee_user_id" in patch:
             for f in in_scope:
-                _, previous = await assign_finding(
+                updated, previous = await assign_finding(
                     f.id, patch["assignee_user_id"], session, asset_ids,
+                )
+                await notify_finding_assigned(
+                    session,
+                    finding=updated,
+                    assignee_user_id=patch["assignee_user_id"],
+                    previous_assignee=previous,
+                    actor_user_id=user_id,
                 )
                 record_event(
                     action="finding.assigned",

@@ -59,10 +59,10 @@ export function FrameworkCard({
     derived === null || derived.total === 0
       ? "text-[var(--color-text-secondary)]"
       : derived.pct >= 0.95
-        ? "text-[var(--color-status-ok)]"
+        ? "text-[var(--color-status-ok-text)]"
         : derived.pct >= 0.8
-          ? "text-[var(--color-severity-medium)]"
-          : "text-[var(--color-severity-critical)]"
+          ? "text-[var(--color-severity-medium-text)]"
+          : "text-[var(--color-severity-critical-text)]"
 
   const innerContent = (
     <>

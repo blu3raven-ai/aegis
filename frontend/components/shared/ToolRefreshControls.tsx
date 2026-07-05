@@ -146,7 +146,7 @@ export function ToolRefreshControls({
 
   return (
     <div className="flex items-center gap-3">
-      {error && <span className="text-xs text-[var(--color-severity-critical)] mr-2">{error}</span>}
+      {error && <span className="text-xs text-[var(--color-severity-critical-text)] mr-2">{error}</span>}
       <div className="text-right text-xs space-y-0.5">
         <p className="text-[var(--color-text-secondary)]">
           {isRunning ? "Scanning..." : isRefreshing ? "Starting scan..." : `Last scanned: ${timestamp}`}
@@ -160,7 +160,7 @@ export function ToolRefreshControls({
           size="md"
           onClick={() => void handleCancel()}
           disabled={isCancelling}
-          className="border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
+          className="border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)]"
         >
           Cancel Scan
         </Button>

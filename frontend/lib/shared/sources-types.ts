@@ -27,6 +27,8 @@ export type ScannerType =
   | "secret_scanning"
   | "code_scanning"
   | "container_scanning"
+  | "iac_scanning"
+  | "agent_scanning"
 
 export type ConnectionMethod = "pat" | "webhook" | "cicd"
 
@@ -70,6 +72,8 @@ export interface SourceConnection {
   lastSyncedAt?: string
   /** Most recent scan for this source's org (from the latest scan_run). */
   lastScanAt?: string
+  /** Open-finding counts by severity across this source's assets. */
+  findingCounts?: { critical: number; high: number; medium: number; low: number }
   nextSyncAt?: string
   discoveredItemCount?: number
   discoveredItems?: string[]
@@ -120,7 +124,7 @@ export const CATEGORY_SOURCE_TYPES: Record<SourceCategory, SourceType[]> = {
 // Scanner job types that run for each source category. Mirrors the backend's
 // SCANNERS_BY_CATEGORY — keep the two in sync.
 export const CATEGORY_SCANNERS: Record<SourceCategory, ScannerType[]> = {
-  "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning"],
+  "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning", "iac_scanning", "agent_scanning"],
   "container-registry": ["container_scanning"],
   "cloud-infrastructure": [],
   "ci-systems": [],
@@ -131,6 +135,8 @@ export const SCANNER_LABELS: Record<ScannerType, string> = {
   secret_scanning: "Secret Scanning",
   code_scanning: "Code Scanning",
   container_scanning: "Container Scanning",
+  iac_scanning: "IaC Scanning",
+  agent_scanning: "Agent Security",
 }
 
 export const SCANNER_DESCRIPTIONS: Record<ScannerType, string> = {
@@ -138,6 +144,8 @@ export const SCANNER_DESCRIPTIONS: Record<ScannerType, string> = {
   secret_scanning: "Looks for passwords, API keys, and other secrets accidentally left in your code.",
   code_scanning: "Reviews your own code for security weaknesses and risky mistakes.",
   container_scanning: "Inspects your container images for known vulnerabilities in their software.",
+  iac_scanning: "Checks your infrastructure-as-code (Terraform, Kubernetes, Dockerfiles) for misconfigurations and security gaps.",
+  agent_scanning: "Scans AI-agent files (CLAUDE.md, .cursorrules, MCP configs, skills) for hidden or malicious instructions that could hijack a coding assistant.",
 }
 
 export const CONNECTION_METHOD_LABELS: Record<ConnectionMethod, string> = {
@@ -185,7 +193,7 @@ export const SOURCE_TYPE_LABELS: Record<SourceType, string> = {
 
 /**
  * Display label for a source: the user's custom name when set, otherwise the
- * org/owner that identifies it (e.g. "frogasia"). Sources created without a
+ * org/owner that identifies it (e.g. "acme-org"). Sources created without a
  * name default to the provider label (e.g. "GitHub"), which is ambiguous when
  * several sources share a provider — so fall back to the org instead.
  */

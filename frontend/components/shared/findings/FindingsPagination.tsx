@@ -52,9 +52,8 @@ export function FindingsPagination({ page, pageSize, total, onChange }: Findings
           disabled={page <= 1}
           onClick={() => onChange(page - 1)}
           aria-label="Previous page"
-        >
-          <ChevronLeftIcon />
-        </Button>
+          leadingIcon={<ChevronLeftIcon />}
+        />
         {pages.map((p) => (
           <Button
             key={p}
@@ -73,9 +72,8 @@ export function FindingsPagination({ page, pageSize, total, onChange }: Findings
           disabled={page >= totalPages}
           onClick={() => onChange(page + 1)}
           aria-label="Next page"
-        >
-          <ChevronRightIcon />
-        </Button>
+          leadingIcon={<ChevronRightIcon />}
+        />
       </nav>
     </div>
   )

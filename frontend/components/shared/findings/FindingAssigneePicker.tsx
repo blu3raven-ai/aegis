@@ -165,7 +165,7 @@ export function FindingAssigneePicker({
             </button>
           )}
           {error && (
-            <div role="alert" className="px-2 py-1 text-2xs text-[var(--color-severity-critical)]">
+            <div role="alert" className="px-2 py-1 text-2xs text-[var(--color-severity-critical-text)]">
               {error}
             </div>
           )}

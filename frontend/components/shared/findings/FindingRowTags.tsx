@@ -3,6 +3,7 @@
 const NEW_WINDOW_DAYS = 7
 
 export interface FindingRowTagsProps {
+  malicious?: boolean
   kev?: boolean
   epssPercentile?: number
   firstSeen?: string
@@ -16,15 +17,25 @@ function isNew(firstSeen: string | undefined): boolean {
   return ageDays <= NEW_WINDOW_DAYS
 }
 
-export function FindingRowTags({ kev, epssPercentile, firstSeen }: FindingRowTagsProps) {
+export function FindingRowTags({
+  malicious,
+  kev,
+  epssPercentile,
+  firstSeen,
+}: FindingRowTagsProps) {
   const showEpss = typeof epssPercentile === "number" && epssPercentile >= 0.5
   const showNew = isNew(firstSeen)
-  if (!kev && !showEpss && !showNew) return null
+  if (!malicious && !kev && !showEpss && !showNew) return null
 
   return (
     <span className="inline-flex items-center gap-1">
+      {malicious && (
+        <span className="rounded-sm bg-[var(--color-severity-critical-subtle)] px-1.5 py-0.5 text-2xs font-semibold uppercase text-[var(--color-severity-critical-text)]">
+          Malware
+        </span>
+      )}
       {kev && (
-        <span className="rounded-sm bg-[var(--color-severity-critical-subtle)] px-1.5 py-0.5 text-2xs font-semibold uppercase text-[var(--color-severity-critical)]">
+        <span className="rounded-sm bg-[var(--color-severity-critical-subtle)] px-1.5 py-0.5 text-2xs font-semibold uppercase text-[var(--color-severity-critical-text)]">
           KEV
         </span>
       )}

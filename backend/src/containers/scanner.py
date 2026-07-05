@@ -1,4 +1,5 @@
-"""Container Scanner — Syft + Grype orchestration via runner service."""
+"""Container Scanner — the runner generates a Syft SBOM; the backend matches it
+against the OSV mirror. No vulnerability matcher runs on the runner."""
 from __future__ import annotations
 
 import logging
@@ -13,6 +14,7 @@ from src.containers.lifecycle import container_scanning_hooks
 from src.containers.sbom_store import upsert_sbom, list_stored_sboms
 from src.shared.config import get_container_scanner_config, get_scan_sources_for_org
 from src.shared.enrichment import enrich_findings_with_advisory_data
+from src.releases.enrichment import maybe_enrich_release_age
 from src.shared.lifecycle import ScanContext, apply_lifecycle as _apply_lifecycle
 from src.shared.paths import DATA_DIR
 from src.storage import (
@@ -109,6 +111,10 @@ def _execute_via_runner(
     if registry_auths:
         env_vars["REGISTRY_AUTHS"] = _json.dumps(registry_auths)
 
+    # Opt-in: have the runner list registry tags so ingest can recommend newer ones.
+    if config.get("baseImageTagsEnabled") in (True, "true"):
+        env_vars["CONTAINER_LIST_TAGS"] = "true"
+
     if config.get("argusEnabled") in (True, "true"):
         argus_endpoint = config.get("argusEndpoint") or os.getenv("ARGUS_ENDPOINT", "")
         argus_api_key = config.get("argusApiKey") or os.getenv("ARGUS_API_KEY", "")
@@ -169,7 +175,7 @@ def _download_scan_output_from_minio(
         filename = parts[1]
 
         if image_safe_name not in image_sboms:
-            image_sboms[image_safe_name] = {"sbom": None, "digest": None}
+            image_sboms[image_safe_name] = {"sbom": None, "digest": None, "tags": None}
 
         if filename == "sbom.cdx.json":
             sbom = download_json(key)
@@ -182,6 +188,11 @@ def _download_scan_output_from_minio(
             blob = download_bytes(key)
             if blob:
                 image_sboms[image_safe_name]["digest"] = blob.decode().strip()
+
+        elif filename == "tags.json":
+            tags_doc = download_json(key)
+            if isinstance(tags_doc, dict):
+                image_sboms[image_safe_name]["tags"] = tags_doc.get("tags")
 
     return image_sboms
 
@@ -205,16 +216,26 @@ def _image_external_ref(source_type: str, full_ref: str) -> str:
     return image_ref(source_type, image, tag)
 
 
-def _index_container_sboms(org: str, run_id: str, source_type: str, prefix: str) -> dict[str, str]:
+def _index_container_sboms(
+    org: str, run_id: str, source_type: str, prefix: str
+) -> tuple[dict[str, str], dict[str, list[str]], dict[str, dict[str, Any]]]:
     """Index each image SBOM under its resolved image asset.
 
-    Returns {asset_id: external_ref} for the images indexed this run so the
-    caller can match their components against the OSV mirror.
+    Returns ({asset_id: external_ref}, {asset_id: newer_tags}, {asset_id: meta})
+    for the images indexed this run — the first so the caller can match
+    components against the OSV mirror, the second to surface newer available
+    registry tags, the third (``pullable_ref``/``digest``/``sbom``) so the
+    base-image recommendation can rescan candidates and count against the
+    current image's own SBOM. The tag/meta maps are empty unless the opt-in tag
+    listing ran and found strictly-newer same-flavour tags.
     """
     from src.assets.service import upsert_asset
     from src.db.helpers import run_db
+    from src.containers.tag_recommendation import select_newer_tags
 
     assets: dict[str, str] = {}
+    newer_by_asset: dict[str, list[str]] = {}
+    meta_by_asset: dict[str, dict[str, Any]] = {}
     image_sboms = _download_scan_output_from_minio(org, run_id, prefix)
     for image_safe_name, data in image_sboms.items():
         sbom = data.get("sbom")
@@ -228,15 +249,29 @@ def _index_container_sboms(org: str, run_id: str, source_type: str, prefix: str)
         except ValueError:
             logger.warning("Skipping image with unresolvable ref %s", full_ref)
             continue
-        asset_id = run_db(lambda s, e=external_ref, d=full_ref: upsert_asset(
-            s, type="image", source="source_connection", external_ref=e, display_name=d,
+        # Display the canonical registry-prefixed ref (e.g. "ghcr:acme/app:1.2.3")
+        # so image assets read the same way as repos ("github:acme/repo") — and so
+        # a clean (no-finding) image doesn't get stuck at the bare SBOM component
+        # name that the findings-lifecycle writer would otherwise overwrite.
+        asset_id = run_db(lambda s, e=external_ref: upsert_asset(
+            s, type="image", source="source_connection", external_ref=e, display_name=e,
         ))
         try:
             upsert_sbom(org, full_ref, digest, sbom, run_id, asset_id=asset_id)
             assets[asset_id] = external_ref
+            raw_tags = data.get("tags")
+            if isinstance(raw_tags, list) and raw_tags:
+                # Current tag is the last ":"-segment of the image ref.
+                current_tag = full_ref.rpartition(":")[2] if ":" in full_ref else None
+                newer = select_newer_tags(current_tag, raw_tags)
+                if newer:
+                    newer_by_asset[asset_id] = newer
+                    meta_by_asset[asset_id] = {
+                        "pullable_ref": full_ref, "digest": digest, "sbom": sbom,
+                    }
         except Exception:
             logger.warning("Failed to ingest SBOM for image %s", full_ref)
-    return assets
+    return assets, newer_by_asset, meta_by_asset
 
 
 def ingest_container_from_minio(org: str, run_id: str, source_type: str | None = None) -> int:
@@ -260,15 +295,22 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
         return 0
 
     prefix = f"container_scanning/{org}/{run_id}/"
-    assets = _index_container_sboms(org, run_id, source_type, prefix)
+    assets, newer_by_asset, meta_by_asset = _index_container_sboms(
+        org, run_id, source_type, prefix
+    )
 
     async def _match(session) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for asset_id, external_ref in assets.items():
-            out.extend(await build_backend_match_findings(
+            asset_findings = await build_backend_match_findings(
                 session, asset_id=asset_id, external_ref=external_ref, kind="container",
                 match_source="scan",
-            ))
+            )
+            newer = newer_by_asset.get(asset_id)
+            if newer:
+                for f in asset_findings:
+                    f["newerTags"] = newer
+            out.extend(asset_findings)
         return out
 
     findings: list[dict[str, Any]] = run_db(_match) if assets else []
@@ -292,6 +334,8 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
             )
         except Exception:
             logger.warning("Advisory enrichment failed for %s", org)
+
+    maybe_enrich_release_age(findings, config, org)
 
     if findings:
         ctx = ScanContext(
@@ -317,6 +361,19 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
                     source_component="containers.scanner",
                 )
 
+    # Opt-in: prove a newer base tag has fewer vulns by rescanning candidates.
+    # Never runs for a candidate (reco-) scan's own ingest — those don't reach
+    # here (the runner callback skips ingest for reco- runs).
+    if (
+        not run_id.startswith("reco-")
+        and config.get("baseImageRecommendEnabled") in (True, "true")
+        and meta_by_asset
+    ):
+        try:
+            _recommend_base_images(org, config, source_type, meta_by_asset, newer_by_asset)
+        except Exception:
+            logger.warning("Base-image recommendation failed for %s", org, exc_info=True)
+
     logger.info(
         "Ingested %d container findings for org=%s run=%s",
         len(findings),
@@ -339,6 +396,137 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
     })
 
     return len(findings)
+
+
+def _gather_images_and_auths(org: str) -> tuple[list[str], list[dict[str, str]]]:
+    """Collect the org's configured container images and per-registry pull auth."""
+    sources = get_scan_sources_for_org(org)
+    all_images: list[str] = []
+    registry_auths: list[dict[str, str]] = []
+    seen_registries: set[str] = set()
+    for src in sources:
+        images = getattr(src, "container_images", []) or []
+        all_images.extend(images)
+        token = getattr(src, "registry_token", "") or ""
+        if not token:
+            continue
+        for img in images:
+            parts = img.split("/")
+            registry = parts[0] if len(parts) > 1 and "." in parts[0] else ""
+            if registry and registry not in seen_registries:
+                seen_registries.add(registry)
+                username = getattr(src, "registry_username", "") or ""
+                if not username:
+                    username = _resolve_registry_username(registry, token)
+                registry_auths.append(
+                    {"registry": registry, "username": username, "token": token}
+                )
+    return all_images, registry_auths
+
+
+def _scan_candidate_sbom(
+    org: str,
+    config: dict[str, str],
+    candidate_ref: str,
+    registry_auths: list[dict[str, str]],
+    source_type: str | None,
+) -> dict | None:
+    """SBOM-scan one candidate image ref and return its CycloneDX SBOM.
+
+    Uses a ``reco-`` run id so the runner completion callback skips the normal
+    ingest — the SBOM is consumed here for counting, never persisted as findings.
+    Returns None on any failure (image gone, auth, timeout) — a soft skip."""
+    from uuid import uuid4
+
+    candidate_run_id = f"reco-{uuid4().hex[:12]}"
+    # Don't re-list tags or recurse on the candidate scan.
+    cand_config = {
+        **config, "baseImageTagsEnabled": "false", "baseImageRecommendEnabled": "false",
+    }
+    result = _execute_via_runner(
+        org, candidate_run_id, cand_config, docker_images=candidate_ref,
+        scan_mode="sbom_only", registry_auths=registry_auths, source_type=source_type,
+    )
+    if not result:
+        return None
+    prefix = f"container_scanning/{org}/{candidate_run_id}/"
+    for data in _download_scan_output_from_minio(org, candidate_run_id, prefix).values():
+        if data.get("sbom"):
+            return data["sbom"]
+    return None
+
+
+def _recommend_base_images(
+    org: str,
+    config: dict[str, str],
+    source_type: str | None,
+    meta_by_asset: dict[str, dict[str, Any]],
+    newer_by_asset: dict[str, list[str]],
+) -> None:
+    """Scan the top newer candidate per image and store the better base tag.
+
+    Counts current and candidate vulnerabilities identically (in memory against
+    the OSV mirror) so the delta is honest, and records the result — including a
+    "nothing improves" negative — keyed by the current image digest.
+    """
+    from datetime import datetime, timezone
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from src.db.helpers import run_db
+    from src.db.models import BaseImageRecommendation
+    from src.containers.base_image_reco import (
+        build_candidate_ref, count_sbom_vulns, pick_recommendation,
+    )
+
+    _, registry_auths = _gather_images_and_auths(org)
+
+    for asset_id, meta in meta_by_asset.items():
+        newer = newer_by_asset.get(asset_id) or []
+        digest = meta.get("digest")
+        current_sbom = meta.get("sbom")
+        pullable_ref = meta.get("pullable_ref")
+        if not (newer and digest and current_sbom and pullable_ref):
+            continue
+
+        top_tag = newer[0]
+        candidate_ref = build_candidate_ref(pullable_ref, top_tag)
+        candidate_sbom = _scan_candidate_sbom(
+            org, config, candidate_ref, registry_auths, source_type
+        )
+        if candidate_sbom is None:
+            continue
+
+        async def _count(session, cur=current_sbom, cand=candidate_sbom):
+            return (
+                await count_sbom_vulns(session, cur),
+                await count_sbom_vulns(session, cand),
+            )
+
+        current_count, candidate_count = run_db(_count)
+        reco = pick_recommendation(current_count, {top_tag: candidate_count})
+
+        async def _store(session, d=digest, ref=pullable_ref, cc=current_count, r=reco):
+            values = {
+                "image_digest": d,
+                "current_ref": ref,
+                "current_vuln_count": cc,
+                "recommended_tag": r[0] if r else None,
+                "recommended_vuln_count": r[1] if r else None,
+                "candidates_scanned": 1,
+                "computed_at": datetime.now(timezone.utc),
+            }
+            stmt = (
+                pg_insert(BaseImageRecommendation)
+                .values(**values)
+                .on_conflict_do_update(
+                    index_elements=["image_digest"],
+                    set_={k: v for k, v in values.items() if k != "image_digest"},
+                )
+            )
+            await session.execute(stmt)
+            await session.commit()
+
+        run_db(_store)
 
 
 def execute_container_scan_once(
@@ -393,29 +581,7 @@ def _run_full_or_sbom(
     source_type: str | None = None,
 ) -> None:
     """Run full or sbom_only scan via runner."""
-    sources = get_scan_sources_for_org(org)
-    all_images: list[str] = []
-    registry_auths: list[dict[str, str]] = []
-    seen_registries: set[str] = set()
-    for src in sources:
-        images = getattr(src, "container_images", []) or []
-        all_images.extend(images)
-        token = getattr(src, "registry_token", "") or ""
-        if not token:
-            continue
-        for img in images:
-            parts = img.split("/")
-            registry = parts[0] if len(parts) > 1 and "." in parts[0] else ""
-            if registry and registry not in seen_registries:
-                seen_registries.add(registry)
-                username = getattr(src, "registry_username", "") or ""
-                if not username:
-                    username = _resolve_registry_username(registry, token)
-                registry_auths.append({
-                    "registry": registry,
-                    "username": username,
-                    "token": token,
-                })
+    all_images, registry_auths = _gather_images_and_auths(org)
 
     if not all_images:
         raise ValueError(f"No container images configured for org {org}")

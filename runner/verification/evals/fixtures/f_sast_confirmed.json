@@ -1,0 +1,29 @@
+{
+  "id": "f_sast_confirmed",
+  "verifier": "sast",
+  "note": "SQL query built with string concatenation of user input; no mitigation. Hunter builds a source-to-sink chain with grounded citations, skeptic finds no mitigation -> confirmed. Finding stays visible.",
+  "finding": {
+    "tool": "semgrep",
+    "rule": "python.lang.security.audit.sqli",
+    "severity": "high",
+    "file": "app/handlers.py",
+    "line": 7
+  },
+  "repo_files": {
+    "app/handlers.py": "from db import query\n\n\ndef search(request):\n    q = request.args.get('q')\n    sql = \"SELECT * FROM users WHERE name LIKE '%\" + q + \"%'\"\n    rows = query(sql)\n    return rows\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"exploit_chain\":\"request.args['q'] flows into the SQL string concatenation at handlers.py:7 and reaches query()\",\"evidence\":[{\"kind\":\"source\",\"file\":\"app/handlers.py\",\"line\":5,\"snippet\":\"q = request.args.get('q')\"},{\"kind\":\"sink\",\"file\":\"app/handlers.py\",\"line\":7,\"snippet\":\"sql = \\\"SELECT * FROM users WHERE name LIKE '%\\\" + q + \\\"%'\\\"\"}]}",
+      "tokens_in": 150,
+      "tokens_out": 60
+    },
+    {
+      "content": "{\"mitigation_found\":false,\"reasoning\":\"no parameterization or input validation upstream\"}",
+      "tokens_in": 120,
+      "tokens_out": 20
+    }
+  ],
+  "expected": {"signal": "confirmed", "suppressed": false},
+  "label": {"truly_reachable": true}
+}

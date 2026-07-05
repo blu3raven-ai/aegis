@@ -112,7 +112,7 @@ function ScheduleEditor({
             className="font-mono"
           />
           <p className={cronInvalid
-            ? "text-xs text-[var(--color-severity-critical)]"
+            ? "text-xs text-[var(--color-severity-critical-text)]"
             : "text-xs text-[var(--color-text-tertiary)]"}>
             {cronInvalid
               ? "Enter a valid 5-field cron (minute hour day month weekday)."
@@ -409,7 +409,7 @@ export function ScopeConfigContent({
             Back to {categoryLabel}
           </Link>
         )}
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           {fetchError}
         </div>
       </div>
@@ -617,7 +617,7 @@ export function ScopeConfigContent({
 
       {/* Save error */}
       {saveError && (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           {saveError}
         </div>
       )}

@@ -127,7 +127,7 @@ export function PasswordModal({
           onChange={setConfirmNewPassword}
           autoComplete="new-password"
         />
-        {error && <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>}
+        {error && <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="secondary" size="md" onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" size="md" isLoading={isPending} disabled={isPending}>

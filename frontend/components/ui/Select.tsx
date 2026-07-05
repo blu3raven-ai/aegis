@@ -25,17 +25,20 @@ const sizeClasses: Record<SelectSize, string> = {
 const validityClasses = (invalid: boolean) =>
   invalid
     ? "border-[var(--color-severity-critical-border)] focus-visible:ring-[var(--color-severity-critical)]"
-    : "border-[var(--color-border)] focus-visible:ring-[var(--color-accent)]"
+    // border-strong keeps the field readable against surface/well backgrounds in
+    // dark mode, where the softer --color-border collapses into the card.
+    : "border-[var(--color-border-strong)] focus-visible:ring-[var(--color-accent)]"
 
 // Chevron SVG inlined as a background image so the select carries its own
 // affordance without the caller having to wrap it in a relative parent.
+// The chevron is baked with an explicit neutral-gray stroke, NOT currentColor:
+// `currentColor` inside a data-URI background image doesn't inherit the element's
+// text colour — it defaults to black, so on a dark select the caret vanished.
+// #94a3b8 reads on both white (light) and dark field backgrounds, and only
+// colours the caret — the selected value keeps its --color-text-primary.
 const caretSvg = encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>',
 )
-// No `color` override here: the chevron SVG uses stroke="currentColor", which
-// resolves to the select's own text color (--color-text-primary from `base`).
-// Setting a dimmer color inline would also dim the selected value text, making
-// the field read as disabled — especially in dark mode.
 const caretStyle = {
   backgroundImage: `url("data:image/svg+xml;utf8,${caretSvg}")`,
   backgroundSize: "1rem",

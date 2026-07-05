@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import os
+import socket
 from uuid import uuid4
 
 import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import delete, select
 
-os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
+os.environ.setdefault("APP_SECRET", Fernet.generate_key().decode())
 
 from src.db.models import ArgusConnection  # noqa: E402
 from src.settings.argus import service as svc  # noqa: E402
@@ -20,6 +21,23 @@ from src.settings.argus.service import (  # noqa: E402
     mint_argus_access_token,
     upsert_argus_connection,
 )
+
+
+@pytest.fixture(autouse=True)
+def _resolve_test_hosts(monkeypatch):
+    # mint_argus_access_token's SSRF guard resolves the token endpoint host.
+    # Only synthesize a public IP for hosts that don't really resolve (the
+    # example endpoints); real hosts — notably the Postgres DB — must keep
+    # resolving normally. Blocking behavior is covered in test_settings_url_guard.
+    real = socket.getaddrinfo
+
+    def _stub(host, *args, **kwargs):
+        try:
+            return real(host, *args, **kwargs)
+        except socket.gaierror:
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]
+
+    monkeypatch.setattr("socket.getaddrinfo", _stub)
 
 
 @pytest.fixture

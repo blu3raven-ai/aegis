@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
@@ -25,6 +26,7 @@ _TOOL_TO_PUBLIC = {
     "code_scanning": "sast",
     "secret_scanning": "secrets",
     "iac_scanning": "iac",
+    "agent_scanning": "agent",
 }
 _PUBLIC_TO_TOOL = {v: k for k, v in _TOOL_TO_PUBLIC.items()}
 
@@ -495,6 +497,62 @@ def _secret_verified(detail: dict) -> bool | None:
 # scans carry code_window_start_line directly.
 _CONTEXT_RADIUS = 40
 
+# Mirrors the runner secrets-normalizer redaction marker. Every detected secret
+# in a code window is masked to this before storage.
+_SECRET_REDACTION = "•••redacted-secret•••"
+
+# High-confidence credential shapes scrubbed from a secret finding's *context*
+# window (defense in depth). The finding's own value is masked precisely from
+# raw.Raw/RawV2/Secret/Match; this catches an UNRELATED credential that happens
+# to sit on a nearby line of the surrounding code. Deliberately limited to
+# unambiguous, well-known prefixes so ordinary config isn't mangled.
+_KNOWN_SECRET_PATTERNS = re.compile(
+    r"""(?x)
+    eyJ[A-Za-z0-9_=-]{8,}\.[A-Za-z0-9_=-]{8,}(?:\.[A-Za-z0-9_=-]+)?  # JWT
+  | sk-[A-Za-z0-9_-]{20,}                                            # OpenAI / Stripe secret key
+  | AKIA[0-9A-Z]{16}                                                 # AWS access key id
+  | gh[pousr]_[A-Za-z0-9]{30,}                                       # GitHub token
+  | xox[baprs]-[A-Za-z0-9-]{10,}                                     # Slack token
+  | AIza[0-9A-Za-z_-]{35}                                            # Google API key
+    """
+)
+
+
+def _scrub_known_secrets(text: str) -> str:
+    """Mask well-known credential formats anywhere in a secret context window."""
+    return _KNOWN_SECRET_PATTERNS.sub(_SECRET_REDACTION, text)
+
+
+def _secret_highlight_line(
+    window: str,
+    win_start: int | None,
+    reported_line: int | None,
+    secret_values: list[str],
+) -> int | None:
+    """Absolute file line to highlight for a secret within its code window.
+
+    The scanner's reported line can be off — notably git-history scans, where
+    the diff-relative line drifts from the file's current line — but the window
+    is anchored to real file lines. So highlight the line that actually holds
+    the secret: the redaction marker (the runner masks every detected value) or,
+    for older unmasked windows, the raw value. Nearest the reported line wins
+    when a window holds several secrets; falls back to the reported line.
+    """
+    if win_start is None:
+        return reported_line
+    needles = [v for v in secret_values if v]
+    needles.append(_SECRET_REDACTION)
+    hits = [
+        win_start + i
+        for i, text in enumerate(window.split("\n"))
+        if any(n in text for n in needles)
+    ]
+    if not hits:
+        return reported_line
+    if reported_line is None:
+        return hits[0]
+    return min(hits, key=lambda ln: abs(ln - reported_line))
+
 
 def _as_int(value: Any) -> int | None:
     try:
@@ -515,6 +573,12 @@ def _container_image(detail: dict) -> dict[str, Any] | None:
         "digest": (detail.get("imageDigest") or "").strip() or None,
         "base_os": (detail.get("baseOs") or "").strip() or None,
         "layer_count": _as_int(detail.get("layerCount")),
+        # The layer that introduced the vulnerable package (digest + 0-based
+        # ordinal), when syft could attribute it. None for OS packages it can't.
+        "layer_digest": (detail.get("layerDigest") or "").strip() or None,
+        "layer_index": _as_int(detail.get("layerIndex")),
+        # Newer registry tags available for this image (opt-in tag listing).
+        "newer_tags": [t for t in (detail.get("newerTags") or []) if isinstance(t, str)] or None,
     }
 
 
@@ -532,31 +596,42 @@ def _code_preview(tool: str, detail: dict) -> dict[str, Any] | None:
         # detected secret) so the secret shows in its file context. Defense in
         # depth: re-mask this finding's own value here before it leaves the API.
         window = (detail.get("code_window") or "").strip("\n")
+        # Every field a detector may carry the raw secret in. TruffleHog puts it
+        # in Raw/RawV2 for some detectors and Secret/Match for others; masking
+        # only Raw/RawV2 left the plaintext value in the window (and the no-window
+        # fallback) for the rest. Mask longest-first so a value that contains a
+        # shorter one is fully removed. Redacted is the safe display form.
+        secret_values = sorted(
+            (v for v in (raw.get("Raw"), raw.get("RawV2"), raw.get("Secret"), raw.get("Match")) if v),
+            key=len,
+            reverse=True,
+        )
         if window:
-            for value in (raw.get("Raw"), raw.get("RawV2")):
-                if value:
-                    window = window.replace(value, "•••redacted-secret•••")
             win_start = _as_int(detail.get("code_window_start_line"))
             line = _as_int(detail.get("line"))
+            # Locate the true secret line before re-masking (older windows may
+            # still carry the raw value), then re-mask this finding's own value
+            # as defense in depth before it leaves the API.
+            highlight = _secret_highlight_line(window, win_start, line, secret_values)
+            for value in secret_values:
+                window = window.replace(value, _SECRET_REDACTION)
+            # Scrub any OTHER well-known credential sitting in the surrounding
+            # context lines (line anchoring above is unaffected — only text
+            # content changes, never line count).
+            window = _scrub_known_secrets(window)
             if win_start is not None:
-                return {"text": window, "start_line": win_start, "highlight_start": line, "highlight_end": line}
-        redacted = (raw.get("Redacted") or raw.get("Match") or "").strip()
+                return {"text": window, "start_line": win_start, "highlight_start": highlight, "highlight_end": highlight}
+        # No window: only the pre-redacted display form is safe. Never fall back
+        # to Match — for many detectors that IS the raw secret.
+        redacted = (raw.get("Redacted") or "").strip()
         if not redacted:
             return None
         return {"text": redacted, "start_line": None, "highlight_start": None, "highlight_end": None}
 
-    # Dependencies anchor to the line in the manifest where the vulnerable
-    # package is declared.
-    if tool == "dependencies_scanning":
-        snippet = (detail.get("manifestSnippet") or "").strip("\n")
-        if not snippet:
-            return None
-        line = _as_int(detail.get("manifestMatchLine"))
-        return {"text": snippet, "start_line": line, "highlight_start": line, "highlight_end": line}
-
-    # Code, IaC, and container findings are all file+line+snippet: prefer the
-    # surrounding window (anchored to its real first line) so the offending
-    # line(s) show highlighted in context, else the bare matched snippet.
+    # Code, IaC, container, and dependency findings are all file+line+window:
+    # prefer the surrounding window (anchored to its real first line) so the
+    # offending line(s) show highlighted in context, else the bare snippet. For
+    # deps the "line" is the manifest declaration site captured by the runner.
     hl_start = _as_int(detail.get("startLine") or detail.get("start_line"))
     hl_end = _as_int(detail.get("endLine") or detail.get("end_line")) or hl_start
 
@@ -706,9 +781,14 @@ def _finding_to_dict(
         # finding's asset display_name ("owner/repo"), supplied by the caller.
         "repo": repo,
         "org_id": repo.split("/", 1)[0] if repo and "/" in repo else None,
+        # Concrete repo web URL (self-hosted hosts); FAT detail, so present on the
+        # hydrated drawer path and None on the lean list path. Drives the
+        # view-in-repo deep-link for self-hosted SCM instances.
+        "repo_html_url": (detail.get("repoHtmlUrl") or "").strip() or None,
         "created_at": finding.created_at.isoformat() if finding.created_at else None,
         "updated_at": finding.updated_at.isoformat() if finding.updated_at else None,
         "kev": lookup.is_kev(finding.cve_id),
+        "malicious": bool(finding.malicious),
         "cwe": cwe,
         "description": description,
         "rule": rule,
@@ -876,6 +956,78 @@ async def count_related_repos(
         stmt = stmt.where(Finding.asset_id != finding.asset_id)
     result = await session.execute(stmt)
     return int(result.scalar() or 0)
+
+
+async def base_image_recommendation(
+    image_digest: str | None, session: AsyncSession
+) -> dict[str, Any] | None:
+    """Recommended newer base tag for an image, if one has fewer vulns.
+
+    Reads the cache the opt-in base-image recommendation flow writes. Returns
+    None when there's no digest, no cached row, or the row's negative (nothing
+    improved on the current image)."""
+    if not image_digest:
+        return None
+    from src.db.models import BaseImageRecommendation
+
+    row = (
+        await session.execute(
+            select(BaseImageRecommendation).where(
+                BaseImageRecommendation.image_digest == image_digest
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None or not row.recommended_tag:
+        return None
+    return {
+        "recommended_tag": row.recommended_tag,
+        "current_vuln_count": row.current_vuln_count,
+        "recommended_vuln_count": row.recommended_vuln_count,
+    }
+
+
+async def layer_concentration(
+    finding: Finding, session: AsyncSession
+) -> dict[str, Any] | None:
+    """Per-image layer concentration for a container finding.
+
+    Groups this image's open container findings by the layer that introduced
+    them and returns the single most-affected layer — "layer N accounts for X of
+    Y findings on this image" — so a triager can see whether the base image (low
+    layers) is the dominant source. Returns None for non-container findings, an
+    image with no layer-attributed findings, or an unscoped finding.
+
+    Only findings whose ``layerIndex`` is stored lean are counted, so this
+    reflects images scanned since layer attribution became queryable; older
+    findings simply don't contribute until rescanned.
+    """
+    if finding.tool != "container_scanning" or finding.asset_id is None:
+        return None
+
+    layer_expr = Finding.detail["layerIndex"].astext
+    stmt = (
+        select(layer_expr, func.count())
+        .where(Finding.asset_id == finding.asset_id)
+        .where(Finding.tool == "container_scanning")
+        .where(Finding.state == "open")
+        .where(layer_expr.isnot(None))
+        .group_by(layer_expr)
+    )
+    rows = (await session.execute(stmt)).all()
+    if not rows:
+        return None
+
+    total = sum(int(count) for _, count in rows)
+    top_layer, top_count = max(rows, key=lambda r: int(r[1]))
+    try:
+        layer_index = int(top_layer)
+    except (TypeError, ValueError):
+        return None
+    return {
+        "layer_index": layer_index,
+        "finding_count": int(top_count),
+        "total_with_layer": total,
+    }
 
 
 async def list_related_findings(

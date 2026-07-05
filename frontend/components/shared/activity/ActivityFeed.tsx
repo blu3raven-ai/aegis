@@ -5,21 +5,26 @@ import { EmptyActivityState } from "./EmptyActivityState"
 import type { ActivityEvent } from "@/lib/client/activity-api"
 import { Button } from "@/components/ui/Button"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { getActiveTimeZone } from "@/lib/client/active-timezone"
 
+// Calendar day (YYYY-MM-DD) an instant falls on in the active display zone.
+// en-CA renders ISO-ordered date parts, and the timeZone shifts the boundary so
+// the day-grouping matches the per-item times (which render in the same zone).
+function dayKey(date: Date): string {
+  return date.toLocaleDateString("en-CA", { timeZone: getActiveTimeZone() })
+}
 
 function dayLabel(isoString: string): string {
   try {
     const date = new Date(isoString)
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    const eventDay = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-    const diffMs = today.getTime() - eventDay.getTime()
-    const diffDays = Math.round(diffMs / 86_400_000)
+    const diffDays = Math.round(
+      (Date.parse(dayKey(new Date())) - Date.parse(dayKey(date))) / 86_400_000,
+    )
 
     if (diffDays === 0) return "Today"
     if (diffDays === 1) return "Yesterday"
-    if (diffDays < 7) return `${diffDays} days ago`
-    return date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+    if (diffDays > 1 && diffDays < 7) return `${diffDays} days ago`
+    return date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric", timeZone: getActiveTimeZone() })
   } catch {
     return "Unknown"
   }

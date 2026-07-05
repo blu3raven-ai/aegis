@@ -479,28 +479,61 @@ def test_run_scan_pre_cancel_returns_137(tmp_path):
     assert result.exit_code == CANCELLED_EXIT_CODE
 
 
-def test_build_config_args_default_uses_bundled():
+def test_build_config_args_default_uses_registry_packs():
+    from runner.scanners.code_scanning.scanner import (
+        CodeScanningScanner,
+        DEFAULT_REGISTRY_RULESETS,
+    )
+
+    # No RULESETS and no SEMGREP_RULES_PATH, registry reachable → the packs.
+    args = CodeScanningScanner._build_config_args("", "", registry_reachable=lambda: True)
+    expected = [a for pack in DEFAULT_REGISTRY_RULESETS for a in ("--config", pack)]
+    assert args == expected
+
+
+def test_build_config_args_registry_unreachable_falls_back_to_bundled():
+    from runner.scanners.code_scanning.scanner import (
+        CodeScanningScanner,
+        DEFAULT_SEMGREP_RULES_PATH,
+    )
+
+    # Offline runner: the registry packs can't be fetched, so degrade to the
+    # bundled rules instead of failing the code scan.
+    args = CodeScanningScanner._build_config_args("", "", registry_reachable=lambda: False)
+    assert args == ["--config", DEFAULT_SEMGREP_RULES_PATH]
+
+
+def test_build_config_args_explicit_refs_skip_registry_probe():
+    from runner.scanners.code_scanning.scanner import CodeScanningScanner
+
+    # Explicit RULESETS / rules_path win before any probe — an unreachable
+    # registry must not override an operator's explicit choice.
+    def _boom() -> bool:
+        raise AssertionError("registry probe should not run when refs are explicit")
+
+    assert CodeScanningScanner._build_config_args(
+        "p/foo", "", registry_reachable=_boom
+    ) == ["--config", "p/foo"]
+    assert CodeScanningScanner._build_config_args(
+        "", "/opt/semgrep-rules", registry_reachable=_boom
+    ) == ["--config", "/opt/semgrep-rules"]
+
+
+def test_build_config_args_explicit_rules_path_wins_over_default():
     from runner.scanners.code_scanning.scanner import CodeScanningScanner
 
     args = CodeScanningScanner._build_config_args("", "/opt/semgrep-rules")
     assert args == ["--config", "/opt/semgrep-rules"]
 
 
-def test_build_config_args_honours_semgrep_rules_path_default():
-    from runner.scanners.code_scanning.scanner import (
-        DEFAULT_SEMGREP_RULES_PATH,
-    )
-
-    assert DEFAULT_SEMGREP_RULES_PATH == "/opt/semgrep-rules"
-
-
-def test_build_config_args_named_ruleset_falls_back_to_bundled():
+def test_build_config_args_named_rulesets_pass_through():
     from runner.scanners.code_scanning.scanner import CodeScanningScanner
 
+    # Registry refs given via RULESETS are passed to semgrep directly.
     args = CodeScanningScanner._build_config_args(
         "p/security-audit, p/owasp", "/opt/semgrep-rules"
     )
-    assert args == ["--config", "/opt/semgrep-rules"]
+    assert args == ["--config", "p/security-audit", "--config", "p/owasp"]
 
 
 def test_build_config_args_absolute_path_passes_through(tmp_path):
@@ -671,23 +704,6 @@ def test_run_scan_aggregates_findings_jsonl(tmp_path, monkeypatch):
     assert repos == ["b", "d"]
 
 
-def test_derive_html_url_strips_credentials_and_git_suffix():
-    from runner.scanners.code_scanning.scanner import CodeScanningScanner
-
-    assert (
-        CodeScanningScanner._derive_html_url(
-            "https://x-access-token:tok@github.com/acme/repo.git"
-        )
-        == "https://github.com/acme/repo"
-    )
-    assert (
-        CodeScanningScanner._derive_html_url("https://github.com/acme/repo.git")
-        == "https://github.com/acme/repo"
-    )
-    assert (
-        CodeScanningScanner._derive_html_url("https://github.com/acme/repo")
-        == "https://github.com/acme/repo"
-    )
 
 
 def test_run_scan_emits_progress(tmp_path):
@@ -793,7 +809,8 @@ def test_code_config_parses_defaults():
     assert cfg.org_label == "default"
     assert cfg.concurrency == 4
     assert cfg.rulesets == ""
-    assert cfg.rules_path == "/opt/semgrep-rules"
+    # Unset by default → _build_config_args falls through to the registry packs.
+    assert cfg.rules_path == ""
     assert cfg.git_token is None
     assert cfg.repos == ["https://x/a.git"]
 

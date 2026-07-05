@@ -309,7 +309,7 @@ class RunnerAgent:
         self._drain.track_job_start()
         log_with_context(
             logger, logging.INFO, "[+] Job assigned",
-            job_id=job_id, scanner_type=job_type, run_id=run_id,
+            job_id=job_id, org=org, scanner_type=job_type, run_id=run_id,
         )
 
         cancel_event = threading.Event()
@@ -392,7 +392,7 @@ class RunnerAgent:
                 else:
                     log_with_context(
                         logger, logging.ERROR, "[!] Job failed — scanner killed",
-                        job_id=job_id, scanner_type=job_type, exit_code=137,
+                        job_id=job_id, org=org, scanner_type=job_type, exit_code=137,
                     )
                     self._report_failure(job_id, "Scanner was killed unexpectedly (exit 137)")
                 return
@@ -400,7 +400,7 @@ class RunnerAgent:
             if result.exit_code is not None and result.exit_code not in (0, 1, 2):
                 log_with_context(
                     logger, logging.WARNING, "[!] Job failed — unexpected exit code",
-                    job_id=job_id, scanner_type=job_type, exit_code=result.exit_code,
+                    job_id=job_id, org=org, scanner_type=job_type, exit_code=result.exit_code,
                 )
                 jobs_processed_total.labels(scanner_type=job_type, status="failed").inc()
                 job_duration_seconds.labels(scanner_type=job_type).observe(time.monotonic() - _job_start)
@@ -439,7 +439,7 @@ class RunnerAgent:
                 self._processed_total += 1
             log_with_context(
                 logger, logging.INFO, "[✓] Job completed",
-                job_id=job_id, scanner_type=job_type,
+                job_id=job_id, org=org, scanner_type=job_type,
                 files_uploaded=uploaded, duration_seconds=round(time.monotonic() - _job_start, 2),
             )
 

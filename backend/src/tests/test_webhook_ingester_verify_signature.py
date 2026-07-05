@@ -20,7 +20,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
+os.environ.setdefault("APP_SECRET", Fernet.generate_key().decode())
 
 from src.settings.webhooks.service import create_endpoint  # noqa: E402
 from src.db.helpers import run_db  # noqa: E402

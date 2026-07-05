@@ -41,7 +41,7 @@ def test_budget_exhausted_marks_remaining_possible(monkeypatch):
         {"file": "b.py", "line": 1, "tool": "sast", "rule": "y", "severity": "high"},
     ]
 
-    def _fake_verify(*, finding, repo_root, llm, critic=None):
+    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None):
         return type("R", (), {
             "verdict": "confirmed", "exploit_chain": "x", "evidence": [],
             "tokens_in": 60, "tokens_out": 60, "verification_metadata": {},
@@ -73,7 +73,7 @@ def test_verify_findings_file_rewrites_with_verdict(tmp_path, monkeypatch):
         "engine": "semgrep",
     }) + "\n")
 
-    def _fake_verify(*, finding, repo_root, llm, critic=None):
+    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None):
         return type("R", (), {
             "verdict": "confirmed",
             "exploit_chain": "http_request -> eval",
@@ -122,3 +122,31 @@ def test_verify_findings_file_missing_file_is_noop(tmp_path):
     CodeScanningScanner()._verify_findings_file(
         tmp_path / "nonexistent.jsonl", repo_root=str(tmp_path), env=_env(),
     )
+
+
+# --- Frontier escalation client is dormant unless explicitly configured ----------
+
+def test_build_escalation_llm_client_dormant_without_model():
+    from runner.scanners._shared import build_escalation_llm_client
+    env = JobEnv({"envVars": {"LLM_API_KEY": "k"}})  # no LLM_ESCALATION_MODEL
+    assert build_escalation_llm_client(env) is None
+
+
+def test_build_escalation_llm_client_none_without_key():
+    from runner.scanners._shared import build_escalation_llm_client
+    env = JobEnv({"envVars": {"LLM_ESCALATION_MODEL": "big-model"}})  # no key
+    assert build_escalation_llm_client(env) is None
+
+
+def test_build_escalation_llm_client_when_configured():
+    from runner.scanners._shared import build_escalation_llm_client
+    env = JobEnv({"envVars": {
+        "LLM_API_KEY": "k",
+        "LLM_API_BASE_URL": "https://default/v1",
+        "LLM_ESCALATION_MODEL": "big-model",
+    }})
+    client = build_escalation_llm_client(env)
+    assert client is not None
+    assert client._model == "big-model"
+    # Falls back to the default endpoint when no escalation-specific one is set.
+    assert client._api_base_url == "https://default/v1"

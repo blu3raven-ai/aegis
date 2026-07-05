@@ -128,9 +128,20 @@ function ExternalLink({
   children: string
   ariaLabel?: string
 }) {
+  // href here is server-supplied (rotation step.url / code_patch diffUrl) and can
+  // be verifier-influenced — only render a live link for http(s) so a javascript:
+  // URL can't execute on click. Anything else renders as inert text.
+  const safe = /^https?:\/\//i.test(href.trim()) ? href.trim() : null
+  if (!safe) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-text-tertiary)]">
+        {children}
+      </span>
+    )
+  }
   return (
     <a
-      href={href}
+      href={safe}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={ariaLabel}
@@ -156,8 +167,8 @@ function CodeBlock({ children }: { children: string }) {
 }
 
 function diffLineClass(line: string): string {
-  if (line.startsWith("+") && !line.startsWith("+++")) return "text-[var(--color-severity-low)]"
-  if (line.startsWith("-") && !line.startsWith("---")) return "text-[var(--color-severity-critical)]"
+  if (line.startsWith("+") && !line.startsWith("+++")) return "text-[var(--color-severity-low-text)]"
+  if (line.startsWith("-") && !line.startsWith("---")) return "text-[var(--color-severity-critical-text)]"
   if (line.startsWith("@@")) return "text-[var(--color-text-tertiary)]"
   return "text-[var(--color-text-primary)]"
 }
@@ -195,7 +206,7 @@ function ProvenanceCaption({ fix }: { fix: FindingRecommendedFix }) {
         <p className="mt-1 flex flex-wrap items-center gap-2 text-2xs uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           {meta.length > 0 && <span>{meta.join(" · ")}</span>}
           {fix.validated && (
-            <span className="inline-flex items-center gap-1 text-[var(--color-severity-low)]">
+            <span className="inline-flex items-center gap-1 text-[var(--color-severity-low-text)]">
               <CheckIcon /> Validated
             </span>
           )}
@@ -226,7 +237,7 @@ function UpgradeBody({
             </span>
           )}
           {fix.fromVersion && (
-            <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-severity-critical)]">
+            <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-severity-critical-text)]">
               {fix.fromVersion}
             </span>
           )}
@@ -234,7 +245,7 @@ function UpgradeBody({
             <span className="mx-1 text-[var(--color-text-tertiary)]">→</span>
           )}
           {fix.toVersion && (
-            <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-severity-low)]">
+            <span className="font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-severity-low-text)]">
               {fix.toVersion}
             </span>
           )}
@@ -403,7 +414,7 @@ function RotationStep({ step }: { step: FindingRecommendedFixStep }) {
         <p className="text-sm text-[var(--color-text-primary)]">
           {step.label}
           {step.destructive && (
-            <span className="ml-2 inline-flex items-center rounded-sm bg-[color-mix(in_srgb,var(--color-severity-critical)_14%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-critical)]">
+            <span className="ml-2 inline-flex items-center rounded-sm bg-[color-mix(in_srgb,var(--color-severity-critical)_14%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-critical-text)]">
               Destructive
             </span>
           )}
@@ -455,7 +466,7 @@ function RotationBody({ fix }: { fix: FindingRecommendedFix }) {
             </span>
           )}
           {fix.verifiedActive && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-high)]">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-high-text)]">
               Verified active
             </span>
           )}
@@ -474,7 +485,7 @@ function RotationBody({ fix }: { fix: FindingRecommendedFix }) {
         </ol>
       )}
 
-      <p className="mt-3 text-xs text-[var(--color-severity-medium)]">
+      <p className="mt-3 text-xs text-[var(--color-severity-medium-text)]">
         Removing the secret from code does not remediate it — the live credential must be
         revoked and rotated.
       </p>

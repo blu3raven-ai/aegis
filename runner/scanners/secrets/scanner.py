@@ -1,9 +1,9 @@
 """SecretsScanner - embedded port of scanners/secrets/run.sh.
 
-Per-repo flow (selected by ``SCAN_DEPTH``):
-
-* ``light``    - shallow clone -> ``trufflehog filesystem``
-* ``deep``     - full clone -> ``trufflehog git`` (optionally ``--since-commit``)
+Per-repo flow: full clone -> ``trufflehog git`` over the whole history
+(optionally ``--since-commit`` for diff-scoped runs). If the git scan errors
+outright, it falls back to ``trufflehog filesystem`` over the same working tree
+so the repo is still covered.
 
 Per-repo work runs through a ThreadPoolExecutor; outputs are normalised into
 ``findings.jsonl`` and the ``_done`` manifest marker is written.
@@ -20,7 +20,6 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
-from runner.scanners._argus import argus_configured, verify_via_argus
 from runner.scanners._manifest import write_done_marker
 from runner.scanners._shared import (
     BaseScanConfig,
@@ -34,6 +33,7 @@ from runner.scanners._shared import (
     TIMEOUT_TRUFFLEHOG,
     clone_repo,
     compute_diff_files,
+    derive_html_url,
     log_finished,
     log_scanning,
     parse_repos,
@@ -47,8 +47,6 @@ from runner.scanners._subprocess import (
 )
 from runner.scanners.base import ExecutionResult
 from runner.scanners.secrets import normalize
-from runner.verification.budget import ScanBudget
-from runner.verification.pipeline import verify_secret_finding
 
 logger = logging.getLogger(__name__)
 
@@ -56,41 +54,33 @@ logger = logging.getLogger(__name__)
 # Secrets tooling pulls in untrusted source; scrub credentials before exec.
 _SECRETS_TOOL_DROP_ENV = ("GIT_TOKEN",)
 
-SCAN_DEPTH_LIGHT = "light"
-SCAN_DEPTH_DEEP = "deep"
-SUPPORTED_SCAN_DEPTHS = {SCAN_DEPTH_LIGHT, SCAN_DEPTH_DEEP}
-_UNSUPPORTED_DEPTH_EXIT_CODE = 2
+_CONFIG_ERROR_EXIT_CODE = 2
 
 _START_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+class SecretGitScanError(Exception):
+    """Raised when the git-history scan fails outright (clone present but the
+    ``trufflehog git`` run errored). Signals ``_scan_repo`` to fall back to a
+    filesystem scan of the same working tree rather than losing the repo."""
 
 
 @dataclasses.dataclass(frozen=True)
 class SecretsScanConfig(BaseScanConfig):
     repos: list[str]
     git_token: str | None
-    scan_depth: str
     start_date: str
-    # When SCAN_SCOPE="diff_scoped" AND BASE_SHA is set, deep-mode trufflehog
-    # runs only over commits since BASE_SHA via --since-commit. Filesystem
-    # (light) mode has no native diff flag and ignores these fields.
+    # When SCAN_SCOPE="diff_scoped" AND BASE_SHA is set, trufflehog runs only
+    # over commits since BASE_SHA via --since-commit. The filesystem fallback
+    # has no native diff flag and ignores these fields.
     base_sha: str | None
     scan_scope: str
 
     @classmethod
     def from_job(cls, job: dict[str, Any]) -> "SecretsScanConfig":
         env = JobEnv(job)
-        scan_depth = env.get("SCAN_DEPTH", SCAN_DEPTH_LIGHT).lower()
-        if scan_depth not in SUPPORTED_SCAN_DEPTHS:
-            raise ScannerConfigError(
-                f"[!] SCAN_DEPTH={scan_depth!r} is not implemented in the "
-                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_DEPTHS)}."
-            )
         start_date = env.get("SCAN_START_DATE", "")
-        if (
-            scan_depth == SCAN_DEPTH_DEEP
-            and start_date
-            and not _START_DATE_RE.match(start_date)
-        ):
+        if start_date and not _START_DATE_RE.match(start_date):
             raise ScannerConfigError(
                 f"[!] SCAN_START_DATE={start_date!r} must be YYYY-MM-DD"
             )
@@ -100,7 +90,6 @@ class SecretsScanConfig(BaseScanConfig):
             concurrency=max(1, env.get_int("CONCURRENCY", 4)),
             repos=parse_repos(env.get("GIT_REPOS")),
             git_token=env.get("GIT_TOKEN") or None,
-            scan_depth=scan_depth,
             start_date=start_date,
             base_sha=env.get("BASE_SHA") or None,
             scan_scope=env.get("SCAN_SCOPE", "full_tree"),
@@ -132,7 +121,7 @@ class SecretsScanner:
             emitter.done()
             write_done_marker(out_dir)
             return ExecutionResult(
-                exit_code=_UNSUPPORTED_DEPTH_EXIT_CODE,
+                exit_code=_CONFIG_ERROR_EXIT_CODE,
                 job_dir=out_dir,
                 log_tail=log_tail,
             )
@@ -165,7 +154,6 @@ class SecretsScanner:
                     repo_url,
                     out_dir,
                     git_token=cfg.git_token,
-                    scan_depth=cfg.scan_depth,
                     start_date=cfg.start_date,
                     cancel_event=cancel_event,
                     base_sha=cfg.base_sha,
@@ -207,7 +195,7 @@ class SecretsScanner:
 
         try:
             findings_file = out_dir / "findings.jsonl"
-            self._verify_findings_file(findings_file, repo_root=str(out_dir), env=JobEnv(job))
+            self._verify_findings_file(findings_file)
         except Exception:  # noqa: BLE001
             logger.exception("[!] _verify_findings_file failed (continuing)")
             log_tail.append("[!] secret verification failed; findings unverified")
@@ -226,11 +214,12 @@ class SecretsScanner:
     # internal helpers
     # ------------------------------------------------------------------
 
-    def _verify_findings_file(self, findings_file: Path, *, repo_root: str, env: JobEnv) -> None:
-        """Read findings.jsonl, run _maybe_verify_secrets, rewrite in place.
+    def _verify_findings_file(self, findings_file: Path) -> None:
+        """Read findings.jsonl, apply provider-verification verdicts, rewrite in place.
 
-        No-op when the file is missing. When the LLM client can't be built
-        (no BYO key configured), every finding is marked skipped=llm_disabled.
+        No-op when the file is missing. Secret verdicts come solely from
+        TruffleHog's provider verification — secret values are never sent to an
+        LLM (see :func:`_classify_secret_verdicts`).
         """
         if not findings_file.exists():
             return
@@ -244,23 +233,10 @@ class SecretsScanner:
             except json.JSONDecodeError:
                 logger.warning("[!] skip non-JSON line in %s", findings_file)
 
-        if argus_configured(env):
-            verified = verify_via_argus(
-                scanner="secrets",
-                findings=raw_findings,
-                repo_root=repo_root,
-                env=env,
-            )
-        else:
-            verified = _maybe_verify_secrets(
-                findings=raw_findings,
-                repo_root=repo_root,
-                llm=_build_llm_client(env),
-                scan_budget=_build_scan_budget(env),
-            )
+        classified = _classify_secret_verdicts(raw_findings)
 
         with open(findings_file, "w") as f:
-            for finding in verified:
+            for finding in classified:
                 f.write(json.dumps(finding, separators=(",", ":")) + "\n")
 
     def _scan_repo(
@@ -269,7 +245,6 @@ class SecretsScanner:
         out_dir: Path,
         *,
         git_token: str | None,
-        scan_depth: str,
         start_date: str,
         cancel_event: threading.Event | None,
         base_sha: str | None = None,
@@ -278,18 +253,20 @@ class SecretsScanner:
         repo_name = repo_name_from_url(repo_url)
         repo_out = out_dir / repo_name
         repo_out.mkdir(parents=True, exist_ok=True)
+        # Web URL of the repo, read back during normalize to deep-link findings.
+        (repo_out / "html_url.txt").write_text(derive_html_url(repo_url))
         log_scanning(repo_name)
 
         clone_dir = repo_out / "_checkout"
         # Light: shallow clone for trufflehog filesystem mode.
-        # Deep: full history for trufflehog git.
-        clone_depth: int | None = 1 if scan_depth == SCAN_DEPTH_LIGHT else None
+        # Full clone: trufflehog git needs the whole history. The filesystem
+        # fallback (only if the git scan errors) reads the same working tree.
         try:
             clone_repo(
                 repo_url,
                 clone_dir,
                 token=git_token,
-                depth=clone_depth,
+                depth=None,
                 timeout=TIMEOUT_CLONE,
             )
         except (InsecureURLError, GitCloneError):
@@ -300,22 +277,30 @@ class SecretsScanner:
         try:
             produced: list[Path] = []
 
-            if scan_depth == SCAN_DEPTH_LIGHT:
-                produced.extend(
-                    self._scan_trufflehog_filesystem(
-                        clone_dir,
-                        repo_out,
-                        cancel_event,
-                        base_sha=base_sha,
-                        scan_scope=scan_scope,
-                    )
-                )
-            elif scan_depth == SCAN_DEPTH_DEEP:
+            # Always scan full git history; if that errors outright (clone is
+            # present but trufflehog git fails), fall back to a filesystem scan
+            # of the working tree so the repo is still covered.
+            try:
                 produced.extend(
                     self._scan_trufflehog_git(
                         clone_dir,
                         repo_out,
                         start_date,
+                        cancel_event,
+                        base_sha=base_sha,
+                        scan_scope=scan_scope,
+                    )
+                )
+            except SecretGitScanError as exc:
+                logger.warning(
+                    "[!] git-history scan failed for %s (%s); falling back to filesystem",
+                    repo_name,
+                    exc,
+                )
+                produced.extend(
+                    self._scan_trufflehog_filesystem(
+                        clone_dir,
+                        repo_out,
                         cancel_event,
                         base_sha=base_sha,
                         scan_scope=scan_scope,
@@ -337,7 +322,7 @@ class SecretsScanner:
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
 
-    # ---- trufflehog (light) ------------------------------------------
+    # ---- trufflehog filesystem (fallback when the git scan errors) -------
 
     def _scan_trufflehog_filesystem(
         self,
@@ -450,12 +435,9 @@ class SecretsScanner:
             cancel_event=cancel_event,
         )
         if rc != 0 and not stdout:
-            logger.warning(
-                "[!] trufflehog git failed (exit %d) for %s: %s",
-                rc,
-                repo_out.name,
-                (stderr or "")[:200],
-            )
+            # Clone succeeded but the git scan errored — let _scan_repo fall
+            # back to a filesystem scan of the same working tree.
+            raise SecretGitScanError(f"exit {rc}: {(stderr or '')[:200]}")
         output.write_text(stdout or "")
         return [output]
 
@@ -600,62 +582,22 @@ def _apply_diff_scope(
     return filtered
 
 
-def _build_llm_client(env: JobEnv):
-    """Construct an LLM client from job env or return None if BYO key isn't configured.
+def _classify_secret_verdicts(findings: list[dict]) -> list[dict]:
+    """Assign secret verdicts from TruffleHog's provider verification alone.
 
-    The backend ships LLM_API_KEY (and friends) inside job['envVars'], not the
-    runner process environment, so JobEnv.get is the only correct read path.
+    Secrets are never sent to an LLM: the secret value (and the surrounding code
+    window) is exactly the material that must not leave for a third-party model,
+    and TruffleHog already performs a live provider check. So the verdict is
+    derived solely from its ``verified`` flag — a provider-verified secret is
+    ``confirmed``; anything else is left unverified for manual triage.
     """
-    from runner.verification.llm_client import LlmClient
-
-    api_key = env.get("LLM_API_KEY")
-    if not api_key:
-        return None
-    return LlmClient(
-        api_key=api_key,
-        api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
-        model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
-    )
-
-
-def _build_scan_budget(env: JobEnv) -> ScanBudget:
-    return ScanBudget(
-        scan_budget=env.get_int("LLM_TOKEN_BUDGET_PER_SCAN", 200000),
-        daily_remaining=env.get_int("LLM_DAILY_REMAINING", 1000000),
-    )
-
-
-def _maybe_verify_secrets(
-    *, findings: list[dict], repo_root: str, llm, scan_budget: ScanBudget,
-) -> list[dict]:
     out: list[dict] = []
     for f in findings:
         copy = dict(f)
-
-        if llm is None:
+        if f.get("verified"):
+            copy["verdict"] = "confirmed"
+            copy.setdefault("verification_metadata", {})["auto_confirmed"] = "provider_verified"
+        else:
             copy["verdict"] = None
-            copy.setdefault("verification_metadata", {})["skipped"] = "llm_disabled"
-            out.append(copy)
-            continue
-
-        # Provider-verified secrets bypass the budget — auto-confirmed
-        if not f.get("verified") and not scan_budget.allow():
-            copy["verdict"] = "possible"
-            copy.setdefault("verification_metadata", {})["skipped"] = scan_budget.skip_reason
-            out.append(copy)
-            continue
-
-        try:
-            result = verify_secret_finding(finding=f, repo_root=repo_root, llm=llm)
-            if not f.get("verified"):
-                scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
-            copy["verdict"] = result.verdict
-            copy["evidence"] = result.evidence
-            copy["exploit_chain"] = result.exploit_chain
-            copy["verification_metadata"] = result.verification_metadata
-        except Exception as e:  # noqa: BLE001
-            copy["verdict"] = None
-            copy.setdefault("verification_metadata", {})["skipped"] = f"llm_error:{type(e).__name__}"
-
         out.append(copy)
     return out

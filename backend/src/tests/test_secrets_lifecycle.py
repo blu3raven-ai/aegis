@@ -85,6 +85,13 @@ def test_extract_detail_maps_fields_and_detector_fallback():
     assert d["aiReasoning"] is None
 
 
+def test_extract_detail_carries_repo_html_url():
+    d = hooks.extract_detail({"detector": "x", "repo_html_url": "https://gitlab.acme-corp.internal/acme/api"})
+    assert d["repoHtmlUrl"] == "https://gitlab.acme-corp.internal/acme/api"
+    # Absent -> empty string (renders no view-in-repo link).
+    assert hooks.extract_detail({"detector": "x"})["repoHtmlUrl"] == ""
+
+
 def test_extract_detail_prefers_detector_over_rule_id():
     d = hooks.extract_detail({"detector": "trufflehog-aws", "ruleID": "aws-access-key"})
     assert d["detector"] == "trufflehog-aws"

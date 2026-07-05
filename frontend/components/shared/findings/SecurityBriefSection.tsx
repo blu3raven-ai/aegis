@@ -11,10 +11,10 @@ import {
 } from "@/lib/shared/findings/cvss"
 
 const CVSS_SCORE_TONE: Record<CvssSeverity, string> = {
-  Critical: "text-[var(--color-severity-critical)]",
-  High: "text-[var(--color-severity-high)]",
-  Medium: "text-[var(--color-severity-medium)]",
-  Low: "text-[var(--color-severity-low)]",
+  Critical: "text-[var(--color-severity-critical-text)]",
+  High: "text-[var(--color-severity-high-text)]",
+  Medium: "text-[var(--color-severity-medium-text)]",
+  Low: "text-[var(--color-severity-low-text)]",
   None: "text-[var(--color-text-secondary)]",
 }
 
@@ -26,8 +26,8 @@ function formatDate(iso: string | null): string | null {
 }
 
 const CVSS_TONE: Record<CvssTone, string> = {
-  danger: "text-[var(--color-severity-critical)]",
-  warn: "text-[var(--color-severity-high)]",
+  danger: "text-[var(--color-severity-critical-text)]",
+  warn: "text-[var(--color-severity-high-text)]",
   neutral: "text-[var(--color-text-secondary)]",
 }
 
@@ -115,22 +115,22 @@ export function SecurityBriefSection({
   const kevDue = formatDate(kev?.due_date ?? null)
 
   return (
-    <section className="mt-6">
-      <h3 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+    <section>
+      <h3 className="mb-2 text-base font-semibold text-[var(--color-text-primary)]">
         Security brief
       </h3>
 
       {kev && (
         <div className="mb-3 rounded border border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-critical)_10%,transparent)] p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-[var(--color-severity-critical)]" fill="currentColor" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" fill="currentColor" aria-hidden="true">
               <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" />
             </svg>
-            <span className="text-sm font-semibold text-[var(--color-severity-critical)]">
+            <span className="text-sm font-semibold text-[var(--color-severity-critical-text)]">
               CISA Known Exploited
             </span>
             {kev.known_ransomware && (
-              <span className="rounded-md border border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-severity-critical)]">
+              <span className="rounded-md border border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-severity-critical-text)]">
                 Ransomware
               </span>
             )}
@@ -179,7 +179,7 @@ export function SecurityBriefSection({
               )}
               {advisory.fixed_version && (
                 <Field label="Fixed in">
-                  <span className="font-mono text-xs text-[var(--color-status-ok)]">
+                  <span className="font-mono text-xs text-[var(--color-status-ok-text)]">
                     {advisory.fixed_version}
                   </span>
                 </Field>

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 
 def _fake_schedule(**overrides):
@@ -155,3 +155,18 @@ def test_tick_scheduler_swallows_exceptions():
     now = datetime(2026, 6, 14, 9, 0, tzinfo=timezone.utc)
     with patch("src.reports.runner.run_due_schedules", side_effect=RuntimeError("nope")):
         scheduler._tick_scheduled_reports(now)  # must not raise
+
+
+def test_tick_matches_scheduled_reports_in_utc():
+    # The panel labels the schedule time "(UTC)", so the tick must match against
+    # UTC. The timer produces a naive local `now`; the runner must still receive
+    # a UTC-aware instant so "09:00" fires at 09:00 UTC, not 09:00 host-local.
+    from src.scheduler import AutoRerunScheduler
+    scheduler = AutoRerunScheduler()
+    naive_local = datetime(2026, 6, 14, 9, 0)  # naive, exactly as the timer yields
+    with patch("src.reports.runner.run_due_schedules", return_value=0) as mock_run:
+        scheduler._tick_scheduled_reports(naive_local)
+    passed = mock_run.call_args.kwargs["now"]
+    assert passed.tzinfo is not None
+    assert passed.utcoffset() == timedelta(0)
+    assert passed == naive_local.astimezone(timezone.utc)

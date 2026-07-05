@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { gqlQuery, isQuerySyntaxError } from "@/lib/client/graphql-client"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
@@ -66,9 +66,10 @@ const SBOM_BULK_LOOKUP_QUERY = `
         matches {
           query found name ecosystem purl queriedVersion exposure
           occurrences { repo version flagged latent }
+          occurrenceTotal occurrencesTruncated
           license licenseCategory
         }
-        truncated
+        truncated inputTruncated acceptedCount
       }
     }
   }
@@ -109,6 +110,7 @@ interface BulkMatch {
   ecosystem: string; purl: string
   queriedVersion: string | null; exposure: BulkExposure
   occurrences: BulkOccurrence[]
+  occurrenceTotal: number; occurrencesTruncated: boolean
   license: string | null; licenseCategory: LicenseCategory | null
   // Index signature so the match satisfies bucketBulkMatches' constraint.
   [key: string]: unknown
@@ -116,6 +118,7 @@ interface BulkMatch {
 
 interface BulkResult {
   matches: BulkMatch[]; truncated: boolean
+  inputTruncated: boolean; acceptedCount: number
 }
 
 // ---------------------------------------------------------------------------
@@ -181,11 +184,12 @@ function parseManifestInput(raw: string): string[] {
   return [...new Set(parsed)]
 }
 
-type VersionOp = "" | "eq" | "gte" | "lte" | "range"
+type VersionOp = "" | "eq" | "gt" | "gte" | "lt" | "lte" | "range"
 type ViewMode = "search" | "bulk"
 
-/** Parse a free-text version constraint (e.g. "≥4.17.21", "<=2.0", "1.0..2.0")
- * into the operator + value(s) the search API expects. Bare text means "=". */
+/** Parse a free-text version constraint (e.g. "≥4.17.21", ">2.0", "<2.0",
+ * "1.0..2.0") into the operator + value(s) the search API expects. Bare text
+ * means "=". `>=`/`<=` must precede the bare `>`/`<` in the alternation. */
 function parseVersion(text: string): { op: VersionOp; val: string; end: string } {
   const t = text.trim()
   if (!t) return { op: "", val: "", end: "" }
@@ -193,18 +197,23 @@ function parseVersion(text: string): { op: VersionOp; val: string; end: string }
     const [a, b] = t.split("..")
     return { op: "range", val: a.trim(), end: (b ?? "").trim() }
   }
-  const m = t.match(/^\s*(>=|≥|<=|≤|=)?\s*(.*)$/)
+  const m = t.match(/^\s*(>=|≥|<=|≤|>|<|=)?\s*(.*)$/)
   const sym = m?.[1] ?? ""
   const val = (m?.[2] ?? t).trim()
   const op: VersionOp =
-    sym === ">=" || sym === "≥" ? "gte" : sym === "<=" || sym === "≤" ? "lte" : "eq"
+    sym === ">=" || sym === "≥" ? "gte"
+      : sym === "<=" || sym === "≤" ? "lte"
+        : sym === ">" ? "gt"
+          : sym === "<" ? "lt"
+            : "eq"
   return { op, val, end: "" }
 }
 
 /** Render the active version constraint back into a compact chip label. */
 function formatVersion(op: VersionOp, val: string, end: string): string {
   if (op === "range") return `${val}..${end}`
-  const sym = op === "gte" ? "≥" : op === "lte" ? "≤" : "="
+  const sym =
+    op === "gte" ? "≥" : op === "gt" ? ">" : op === "lte" ? "≤" : op === "lt" ? "<" : "="
   return `${sym} ${val}`.trim()
 }
 
@@ -272,8 +281,12 @@ export function SbomExplorer() {
       .catch(() => {})
   }, [])
 
-  // Main search
+  // Main search. A monotonic sequence guards against out-of-order responses:
+  // a slow earlier fetch (e.g. from a rapid facet change) can't overwrite the
+  // result of a newer one. Mirrors RiskyComponentsView.
+  const fetchSeqRef = useRef(0)
   const fetchData = useCallback(async () => {
+    const seq = ++fetchSeqRef.current
     setLoading(true)
     setError(null)
     setSearchSyntaxError(null)
@@ -293,8 +306,10 @@ export function SbomExplorer() {
         page,
         perPage,
       })
+      if (fetchSeqRef.current !== seq) return // superseded by a newer fetch
       setData(result.sbom.search)
     } catch (e: any) {
+      if (fetchSeqRef.current !== seq) return
       // A malformed search query is user-correctable: show an inline hint, not
       // the red "failed to load" banner that implies a backend outage.
       if (isQuerySyntaxError(e)) {
@@ -303,7 +318,7 @@ export function SbomExplorer() {
         setError(e.message || "Failed to load SBOM data")
       }
     } finally {
-      setLoading(false)
+      if (fetchSeqRef.current === seq) setLoading(false)
     }
   }, [debouncedSearch, ecosystems, source, repos, licenseCategories, dependency, versionOp, versionValue, versionValueEnd, vulnerableOnly, page, perPage])
 
@@ -689,7 +704,7 @@ function BulkLookupPanel({
 
       {error && (
         <div className="rounded-xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
-          <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+          <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
         </div>
       )}
 
@@ -714,18 +729,29 @@ function BulkLookupPanel({
             </span>
             <span className="flex items-center gap-1.5 text-xs">
               <span className="h-2 w-2 rounded-full bg-[var(--color-status-ok)]" />
-              <span className="font-semibold tabular-nums text-[var(--color-status-ok)]">{notFound.length}</span>
+              <span className="font-semibold tabular-nums text-[var(--color-status-ok-text)]">{notFound.length}</span>
               <span className="text-[var(--color-text-secondary)]">not found</span>
             </span>
           </div>
 
           {results.truncated && (
             <div className="flex items-start gap-2 border-b border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] px-4 py-2.5">
-              <svg className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--color-severity-medium)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--color-severity-medium-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
               </svg>
               <p className="text-xs text-[var(--color-text-secondary)]">
                 Too many matches to scan exhaustively — some packages may show fewer repositories than they actually appear in, or read as not found. Narrow the list to get complete results.
+              </p>
+            </div>
+          )}
+
+          {results.inputTruncated && (
+            <div className="flex items-start gap-2 border-b border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] px-4 py-2.5">
+              <svg className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--color-severity-medium-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                Only the first {results.acceptedCount.toLocaleString()} of {parsedCount.toLocaleString()} pasted packages were checked — the rest aren&apos;t in any bucket below. Split the list into smaller batches to check them all.
               </p>
             </div>
           )}
@@ -805,9 +831,9 @@ function BulkSectionHeader({ label, count, tone }: { label: string; count: numbe
 function OccurrenceChip({ occ }: { occ: BulkOccurrence }) {
   let cls = "border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
   if (occ.flagged) {
-    cls = "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical)]"
+    cls = "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
   } else if (occ.latent) {
-    cls = "border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium)]"
+    cls = "border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)]"
   }
   // Full identity in a tooltip so a truncated repo name is still recoverable,
   // and the flagged/latent state is stated in words (not conveyed by colour alone).
@@ -855,7 +881,9 @@ function BulkExposureSection({
       <div className="divide-y divide-[var(--color-border)]">
         {matches.map((r, i) => {
           const chips = r.occurrences.slice(0, MAX_OCCURRENCE_CHIPS)
-          const more = r.occurrences.length - chips.length
+          // Count off the TRUE occurrence total, not the per-query-capped list,
+          // so a package in 200 repos reads "+192 more", not a capped figure.
+          const more = r.occurrenceTotal - chips.length
           return (
             <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-4 py-2.5">
               <code className="font-mono text-xs font-medium text-[var(--color-text-primary)]">

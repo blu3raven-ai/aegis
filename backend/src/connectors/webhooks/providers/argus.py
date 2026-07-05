@@ -24,6 +24,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from src.connectors.base import BaseIngester, TestResult
 from src.connectors.registry import register_connector
+from src.connectors.webhooks.ingest_guard import parse_json_object, read_guarded_body
 from src.connectors.webhooks.signature import verify_hmac_sha256
 from src.shared.event_publisher import get_event_publisher
 from src.shared.event_types.intel import (
@@ -96,7 +97,7 @@ async def argus_webhook(request: Request):
     types are acknowledged (200) but not acted upon — this avoids Argus
     retrying on webhook expansion without crashing older Aegis instances.
     """
-    body = await request.body()
+    body = await read_guarded_body(request)
     signature = request.headers.get(_ARGUS_SIGNATURE_HEADER, "")
     secret = os.getenv(_ARGUS_SECRET_ENV, "")
 
@@ -104,11 +105,7 @@ async def argus_webhook(request: Request):
         logger.warning("argus.webhook: signature verification failed; rejecting request")
         raise HTTPException(status_code=401, detail="Invalid or missing signature")
 
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError as exc:
-        logger.error("argus.webhook: malformed JSON body: %s", exc)
-        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+    payload = parse_json_object(body)
 
     event_type = payload.get("event_type", "")
     org_id = payload.get("org_id", "")

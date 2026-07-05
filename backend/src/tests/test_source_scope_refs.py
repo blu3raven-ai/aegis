@@ -11,16 +11,23 @@ def _conn(source_type, items):
 
 def test_repo_items_become_canonical_repo_refs():
     refs = _scope_refs(
-        _conn("github", ["ytl-ai-labs/ilmu-asr-poc", "ytl-ai-labs/asr_evaluation"])
+        _conn("github", ["acme-org/example-repo", "acme-org/example-worker"])
     )
     assert refs == [
-        "github:ytl-ai-labs/ilmu-asr-poc",
-        "github:ytl-ai-labs/asr_evaluation",
+        "github:acme-org/example-repo",
+        "github:acme-org/example-worker",
     ]
 
 
 def test_source_type_is_normalised_like_repo_ref():
     assert _scope_refs(_conn("GitHub", ["acme/foo"])) == ["github:acme/foo"]
+
+
+def test_display_cased_owner_maps_to_lowercased_ref():
+    # Discovered items keep the provider's display casing ("Acme-Org/...")
+    # but assets are stored lower-cased, so the scope ref must lower-case the
+    # owner (name case preserved) or the per-source findings list comes up empty.
+    assert _scope_refs(_conn("github", ["Acme-Org/MyRepo"])) == ["github:acme-org/MyRepo"]
 
 
 def test_registry_image_items_become_image_refs():

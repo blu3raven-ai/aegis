@@ -32,6 +32,15 @@ def _event_title(event_type: str) -> str:
     return _EVENT_TITLES.get(event_type, event_type.replace(".", " ").title())
 
 
+def _escape_mrkdwn(s: str) -> str:
+    """Escape Slack mrkdwn control chars in event-derived text.
+
+    Slack documents escaping `&`, `<`, `>` (in that order) so attacker-influenced
+    finding text can't inject links or formatting into a mrkdwn section.
+    """
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _severity_from_payload(payload: dict[str, Any]) -> str:
     return (
         payload.get("severity")
@@ -80,6 +89,10 @@ def format_for_slack(event: dict[str, Any]) -> dict[str, Any]:
     emoji = _SEVERITY_EMOJI.get(sev, ":white_circle:")
     title = _event_title(et)
     summary = _summary_line(event)
+    # Event-derived text lands in mrkdwn sections; escape before interpolation so
+    # `<`, `>`, `&` in finding text can't inject Slack links/formatting. Static
+    # structural text (emoji, titles, field labels) is trusted and left as-is.
+    safe_summary = _escape_mrkdwn(summary)
 
     blocks: list[dict[str, Any]] = [
         {
@@ -88,14 +101,17 @@ def format_for_slack(event: dict[str, Any]) -> dict[str, Any]:
         },
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": summary},
+            "text": {"type": "mrkdwn", "text": safe_summary},
         },
         {
             "type": "context",
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": f"org: *{org}* | event: `{et}` | id: `{event.get('event_id', '')}`",
+                    "text": (
+                        f"org: *{_escape_mrkdwn(org)}* | event: `{_escape_mrkdwn(et)}` "
+                        f"| id: `{_escape_mrkdwn(event.get('event_id', ''))}`"
+                    ),
                 }
             ],
         },
@@ -108,11 +124,14 @@ def format_for_slack(event: dict[str, Any]) -> dict[str, Any]:
             2,
             {
                 "type": "section",
-                "fields": [{"type": "mrkdwn", "text": f"*{k}*\n{v}"} for k, v in fields.items()],
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*{k}*\n{_escape_mrkdwn(v)}"}
+                    for k, v in fields.items()
+                ],
             },
         )
 
-    return {"text": summary, "blocks": blocks}
+    return {"text": safe_summary, "blocks": blocks}
 
 
 def _payload_fields(event_type: str, payload: dict[str, Any]) -> dict[str, str]:

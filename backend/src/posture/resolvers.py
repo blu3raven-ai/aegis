@@ -11,14 +11,20 @@ from typing import Optional
 
 import strawberry
 
+from src.graphql.resolver_utils import raise_bad_input
 from src.graphql.types import (
-    HomeAgeBucket, HomeAnalytics, HomeRemediationStats, HomeRepoSummary,
-    PostureTrendPoint,
+    EpssTopFinding, HomeAgeBucket, HomeAnalytics, HomeRemediationStats,
+    HomeRepoSummary, PostureTrendPoint,
 )
 from src.posture.service import (
+    RISK_DIMENSIONS,
+    get_exploitability_summary,
     get_posture_by_team,
     get_posture_snapshot,
     get_posture_trend,
+    get_risk_contributions,
+    get_scanner_breakdown,
+    get_sla_posture,
 )
 from src.shared.home_views import (
     get_age_buckets_by_asset_ids,
@@ -36,6 +42,7 @@ class PostureCounts:
     high: int
     medium: int
     low: int
+    unknown: int = 0
 
 
 @strawberry.type
@@ -153,6 +160,7 @@ def posture_trend(*, days: int = 30, info_context: dict) -> list[PostureTrendPoi
             medium=r["medium"],
             low=r["low"],
             risk_score=r["risk_score"],
+            new_findings=r.get("new_findings", 0),
         )
         for r in rows
     ]
@@ -182,4 +190,110 @@ def home_analytics(*, info_context: dict) -> HomeAnalytics:
             median_days=rem["median_days"],
             fixed_last_30d=rem["fixed_last_30d"],
         ),
+    )
+
+
+
+# ── Triage surface types ───────────────────────────────────────────────────
+
+@strawberry.type
+class ScannerBreakdownItem:
+    scanner: str
+    critical: int
+    high: int
+    medium: int
+    low: int
+    total: int
+    risk_score: int
+    sla_breached: int
+
+
+@strawberry.type
+class RiskContributionItem:
+    dimension: str
+    label: str
+    risk_score: int
+    count: int
+    percentage: int
+
+
+@strawberry.type
+class ExploitabilitySummary:
+    kev_count: int
+    high_epss_count: int
+    epss_top: list[EpssTopFinding]
+
+
+@strawberry.type
+class SlaBreachByScanner:
+    scanner: str
+    breached: int
+
+
+@strawberry.type
+class SlaPostureSummary:
+    total_breached: int
+    critical_breached: int
+    high_breached: int
+    medium_breached: int
+    low_breached: int
+    max_breach_age_days: int
+    by_scanner: list[SlaBreachByScanner]
+
+
+# ── Triage resolvers ───────────────────────────────────────────────────────
+
+def scanner_breakdown(*, info_context: dict) -> list[ScannerBreakdownItem]:
+    asset_ids = info_context.get("asset_ids") or []
+    rows = get_scanner_breakdown(asset_ids=asset_ids)
+    return [ScannerBreakdownItem(**r) for r in rows]
+
+
+def risk_contributions(*, dimension: str, info_context: dict) -> list[RiskContributionItem]:
+    if dimension not in RISK_DIMENSIONS:
+        raise_bad_input(
+            f"Invalid dimension '{dimension}'. Must be one of: {', '.join(RISK_DIMENSIONS)}."
+        )
+    asset_ids = info_context.get("asset_ids") or []
+    rows = get_risk_contributions(asset_ids=asset_ids, dimension=dimension)
+    return [RiskContributionItem(**r) for r in rows]
+
+
+def exploitability_summary(*, info_context: dict) -> ExploitabilitySummary:
+    asset_ids = info_context.get("asset_ids") or []
+    data = get_exploitability_summary(asset_ids=asset_ids)
+    return ExploitabilitySummary(
+        kev_count=data["kev_count"],
+        high_epss_count=data["high_epss_count"],
+        epss_top=[
+            EpssTopFinding(
+                finding_id=int(f["finding_id"]),
+                tool=str(f.get("tool", "")),
+                repo=str(f.get("repo", "")),
+                severity=str(f.get("severity", "")),
+                identity_key=str(f.get("identity_key", "")),
+                cve=str(f.get("cve", "")),
+                epss_score=float(f.get("epss_score") or 0),
+                epss_percentile=float(f.get("epss_percentile") or 0),
+                scored_date=f.get("scored_date"),
+            )
+            for f in data["epss_top"]
+        ],
+    )
+
+
+def sla_posture(*, info_context: dict) -> SlaPostureSummary:
+    asset_ids = info_context.get("asset_ids") or []
+    data = get_sla_posture(asset_ids=asset_ids)
+    return SlaPostureSummary(
+        total_breached=data["total_breached"],
+        critical_breached=data["critical_breached"],
+        high_breached=data["high_breached"],
+        medium_breached=data["medium_breached"],
+        low_breached=data["low_breached"],
+        max_breach_age_days=data["max_breach_age_days"],
+        by_scanner=[
+            SlaBreachByScanner(scanner=r["scanner"], breached=r["breached"])
+            for r in data["by_scanner"]
+        ],
     )

@@ -32,6 +32,7 @@ dependencies = [
   # Multi-ecosystem version comparison for backend OSV matching (semver, PEP440,
   # Maven, Go, gem, NuGet, and distro dpkg/apk/rpm schemes).
   "univers>=30.11.0",
+  "cvss>=3.0,<4",
 ]
 
 [project.optional-dependencies]

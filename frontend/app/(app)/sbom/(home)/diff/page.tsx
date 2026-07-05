@@ -5,6 +5,7 @@ import { SbomScanSelector, type RepoOption } from "@/components/shared/sbom/Sbom
 import { SbomDiffView } from "@/components/shared/sbom/SbomDiffView"
 import { Button } from "@/components/ui/Button"
 import { diffSbomsByRepo, type SbomDiffResponse } from "@/lib/client/sbom-diff-api"
+import { diffToCsv } from "@/lib/sbom/diff-export"
 import { listReposWithCount } from "@/lib/client/sources-api"
 
 type DiffState = "idle" | "loading" | "ok" | "error"
@@ -102,14 +103,31 @@ export default function SbomDiffPage() {
     }
   }, [sideARepo, sideAHash, sideBHash])
 
+  // Export the loaded diff as CSV entirely in the browser — the response is
+  // already in memory, so no round-trip is needed to attach it to a review.
+  const handleExport = useCallback(() => {
+    if (!diffResult) return
+    const blob = new Blob([diffToCsv(diffResult)], { type: "text/csv;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const shortA = (sideAHash ?? "base").slice(0, 8)
+    const shortB = (sideBHash ?? "target").slice(0, 8)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = `sbom-diff-${shortA}-${shortB}.csv`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }, [diffResult, sideAHash, sideBHash])
+
   return (
     <div className="px-6 py-6">
       {reposError && (
         <div role="alert" className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
-          <svg className="h-4 w-4 shrink-0 text-[var(--color-severity-critical)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg className="h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
           </svg>
-          <p className="text-sm text-[var(--color-severity-critical)]">{reposError}</p>
+          <p className="text-sm text-[var(--color-severity-critical-text)]">{reposError}</p>
           <Button variant="secondary" size="xs" onClick={loadRepos} className="ml-auto">Retry</Button>
         </div>
       )}
@@ -174,18 +192,32 @@ export default function SbomDiffPage() {
 
       {diffState === "error" && errorMessage && (
         <div role="alert" className="mt-6 flex items-start gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
-          <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
           </svg>
-          <p className="text-sm text-[var(--color-severity-critical)]">{errorMessage}</p>
+          <p className="text-sm text-[var(--color-severity-critical-text)]">{errorMessage}</p>
         </div>
       )}
 
       {diffState === "ok" && diffResult && (
         <div className="mt-6 flex flex-col gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-            Results
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+              Results
+            </h2>
+            <Button
+              variant="secondary"
+              size="xs"
+              onClick={handleExport}
+              leadingIcon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+              }
+            >
+              Export CSV
+            </Button>
+          </div>
           <SbomDiffView diff={diffResult} />
         </div>
       )}

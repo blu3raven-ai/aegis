@@ -6,15 +6,14 @@ import { Select } from "@/components/ui/Select"
 
 // Event filter builder — event type multi-select + min severity picker
 
+// Must mirror the router's SUBSCRIBED_EVENT_TYPES — only these are delivered.
+// Offering an event the router drops (chain.*, scan.*) would filter a
+// destination down to events it can never receive.
 const KNOWN_EVENT_TYPES = [
-  "chain.created",
-  "chain.updated",
   "finding.created",
-  "finding.state_changed",
+  "finding.severity_changed",
   "intel.exploit_availability_changed",
   "intel.anomaly_detected",
-  "scan.completed",
-  "scan.failed",
 ] as const
 
 const SEVERITY_OPTIONS = [
@@ -26,10 +25,10 @@ const SEVERITY_OPTIONS = [
 ]
 
 const SEVERITY_COLORS: Record<string, string> = {
-  low: "text-[var(--color-severity-low)]",
-  medium: "text-[var(--color-severity-medium)]",
-  high: "text-[var(--color-severity-high)]",
-  critical: "text-[var(--color-severity-critical)]",
+  low: "text-[var(--color-severity-low-text)]",
+  medium: "text-[var(--color-severity-medium-text)]",
+  high: "text-[var(--color-severity-high-text)]",
+  critical: "text-[var(--color-severity-critical-text)]",
 }
 
 export interface EventFilter {

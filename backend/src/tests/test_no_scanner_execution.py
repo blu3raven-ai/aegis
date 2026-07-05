@@ -71,10 +71,6 @@ EXEMPT_FILES: tuple[tuple[str, str], ...] = (
     # canonical `source` field, not tool-output parsing)
     ("secrets/scanner.py", "label-only branch on canonical source field"),
     ("secrets/periodic_sweep.py", "comment-only mention of detector version"),
-    ("storage.py", "catalog label default (`.get('scanner', 'grype')`)"),
-    ("containers/lifecycle.py", "catalog label default in finding upserts"),
-    ("containers/matcher.py", "catalog label default in matcher lookup"),
-    ("dependencies/lifecycle.py", "catalog label default in finding upserts"),
     ("shared/enrichment.py", "comment + label-only branch in advisory enrichment"),
     # Connector catalog metadata (registry entries name the tool as a string label)
     ("integrations/ci_wizards.py", "catalog metadata names tools as labels"),
@@ -91,8 +87,8 @@ EXEMPT_FILES: tuple[tuple[str, str], ...] = (
     ("containers/sbom_store.py", "label-only `source_tool` field on SBOM components"),
     ("graphql/sbom_resolvers.py", "filter on canonical `source_tool` label"),
     ("sbom/resolvers.py", "filter on canonical `source_tool` label"),
-    # BYO router accepts findings from any out-of-band scanner — docstring
-    # names common examples (Trivy, Snyk) but the router never executes them.
+    # BYO router accepts findings from any out-of-band scanner — the docstring
+    # describes accepted formats but the router never executes any scanner.
     ("scans/byo_router.py", "docstring names BYO scanner examples; no execution or parsing"),
     # DB CHECK constraint enumerates valid label values for the `engine` column
     ("db/models.py", "CHECK constraint enumerates valid engine label values"),

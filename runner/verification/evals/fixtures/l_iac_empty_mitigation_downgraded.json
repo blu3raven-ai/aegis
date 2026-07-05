@@ -1,0 +1,30 @@
+{
+  "id": "l_iac_empty_mitigation_downgraded",
+  "verifier": "iac",
+  "note": "Hunter flags the bucket; skeptic claims a mitigation but emits an empty snippet. The verifier downgrades to needs_verify (NOT suppressed) rather than trust a claim with no cited code. The IaC recall guard: a mitigation asserted without a snippet must never hide a finding.",
+  "finding": {
+    "check_id": "CKV_AWS_18",
+    "title": "Ensure S3 bucket has access logging enabled",
+    "severity": "high",
+    "resource": "aws_s3_bucket.data",
+    "file": "infra/s3.tf",
+    "line": 1
+  },
+  "repo_files": {
+    "infra/s3.tf": "resource \"aws_s3_bucket\" \"data\" {\n  bucket = \"acme-data\"\n}\n"
+  },
+  "llm_responses": [
+    {
+      "content": "{\"exploit_chain\":\"the bucket lacks native logging\",\"evidence\":[{\"kind\":\"resource\",\"file\":\"infra/s3.tf\",\"line\":1,\"snippet\":\"resource \\\"aws_s3_bucket\\\" \\\"data\\\"\"}]}",
+      "tokens_in": 160,
+      "tokens_out": 40
+    },
+    {
+      "content": "{\"mitigation_found\":true,\"mitigation_file\":\"infra/policy.tf\",\"mitigation_line\":1,\"mitigation_snippet\":\"\",\"reasoning\":\"a bucket policy elsewhere compensates\"}",
+      "tokens_in": 140,
+      "tokens_out": 30
+    }
+  ],
+  "expected": {"signal": "needs_verify", "suppressed": false},
+  "label": {"truly_reachable": true}
+}

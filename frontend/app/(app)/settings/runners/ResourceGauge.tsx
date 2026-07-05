@@ -27,7 +27,7 @@ export function ResourceGauge({ label, percent, detail }: ResourceGaugeProps) {
   return (
     <div className="flex items-center gap-3">
       <span className="w-16 shrink-0 text-xs font-medium text-[var(--color-text-secondary)]">{label}</span>
-      <div className="flex-1 h-2 rounded-full bg-[var(--color-surface-raised)] overflow-hidden">
+      <div className="flex-1 h-2 rounded-full bg-[var(--color-border-strong)] overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-300 ${gaugeColor(clamped)}`}
           style={{ width: `${clamped}%` }}

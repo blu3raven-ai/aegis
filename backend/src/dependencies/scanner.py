@@ -1,7 +1,6 @@
 """Dependency scanning orchestration via runner service."""
 from __future__ import annotations
 
-import json
 import logging
 import time
 from dataclasses import dataclass
@@ -11,6 +10,7 @@ from typing import Any, Literal
 
 from src.shared.config import get_dependencies_scanner_config, get_scan_sources_for_org, read_app_config
 from src.shared.enrichment import enrich_findings_with_advisory_data
+from src.releases.enrichment import maybe_enrich_release_age
 from src.shared.paths import DATA_DIR
 from src.dependencies.lifecycle import dependencies_hooks
 from src.dependencies.sbom_store import upsert_sbom
@@ -105,7 +105,7 @@ def _ingest_sboms_from_minio(org: str, run_id: str, source_type: str, prefix: st
     Returns {asset_id: external_ref} for the repos indexed this run so the
     caller can match their components against the OSV mirror.
     """
-    from src.shared.object_store import list_objects, download_json
+    from src.shared.object_store import list_objects, download_json, download_bytes
     from src.assets.refs import repo_ref
     from src.assets.service import upsert_asset
     from src.db.helpers import run_db
@@ -121,6 +121,10 @@ def _ingest_sboms_from_minio(org: str, run_id: str, source_type: str, prefix: st
         sbom_json = download_json(key)
         if not sbom_json:
             continue
+        # Runner writes a repo web URL sidecar next to the SBOM; it deep-links
+        # the backend-built deps findings. Best-effort — absent on old scans.
+        html_url_bytes = download_bytes(key.rsplit("/", 1)[0] + "/html_url.txt")
+        html_url = html_url_bytes.decode("utf-8", "replace").strip() if html_url_bytes else None
         try:
             external_ref = repo_ref(source_type, org, repo_name)
         except ValueError:
@@ -134,7 +138,7 @@ def _ingest_sboms_from_minio(org: str, run_id: str, source_type: str, prefix: st
         try:
             upsert_sbom(
                 org=org, repo=repo_name, commit_sha="HEAD", sbom=sbom_json,
-                manifests={}, run_id=run_id, asset_id=asset_id,
+                manifests={}, run_id=run_id, asset_id=asset_id, html_url=html_url,
             )
             assets[asset_id] = external_ref
         except Exception:
@@ -190,6 +194,8 @@ def ingest_dependencies_from_minio(org: str, run_id: str, source_type: str | Non
     except Exception:
         logger.warning("Advisory enrichment failed for %s", org)
 
+    maybe_enrich_release_age(all_findings, get_dependencies_scanner_config(), org)
+
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     new_findings: list[dict[str, Any]] = []
     if all_findings:
@@ -210,6 +216,57 @@ def ingest_dependencies_from_minio(org: str, run_id: str, source_type: str | Non
                 scanner_type="dependencies_scanning",
                 source_component="dependencies.scanner",
             )
+
+    # Enqueue reachability jobs for the CVE-bearing deps findings just persisted.
+    # The lifecycle dicts carry no finding ids, so re-query by the asset scope we
+    # already resolved (BOLA-safe: asset_id is filtered at the SQL layer). This is
+    # best-effort — an enqueue failure must never fail or roll back the scan
+    # ingest. enqueue_reachability_jobs is a no-op when verification is disabled.
+    try:
+        from sqlalchemy import select
+
+        from src.db.models import Finding
+        from src.dependencies.reachability_dispatch import (
+            ReachabilityFinding,
+            enqueue_reachability_jobs,
+        )
+        from src.shared.finding_detail_blob import hydrate_detail
+
+        async def _load_reachability_candidates(session) -> list[ReachabilityFinding]:
+            out: list[ReachabilityFinding] = []
+            for asset_id, external_ref in assets.items():
+                rows = (
+                    await session.execute(
+                        select(Finding).where(
+                            Finding.tool == "dependencies_scanning",
+                            Finding.asset_id == asset_id,
+                            Finding.cve_id.isnot(None),
+                        )
+                    )
+                ).scalars().all()
+                for f in rows:
+                    detail = hydrate_detail(f)
+                    out.append(ReachabilityFinding(
+                        finding_id=str(f.id),
+                        asset_id=asset_id,
+                        external_ref=external_ref,
+                        package=f.package_name or "",
+                        version=f.package_version or "",
+                        ecosystem=detail.get("ecosystem", "") or "",
+                        cve=f.cve_id,
+                        malicious=bool(f.malicious),
+                    ))
+            return out
+
+        candidates = run_db(_load_reachability_candidates) if assets else []
+        job_ids = enqueue_reachability_jobs(org=org, run_id=run_id, findings=candidates)
+        if job_ids:
+            logger.info(
+                "Enqueued %d reachability job(s) for %s/%s from %d candidate finding(s)",
+                len(job_ids), org, run_id, len(candidates),
+            )
+    except Exception:
+        logger.warning("Reachability enqueue failed for %s/%s", org, run_id, exc_info=True)
 
     sev_counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
     for f in all_findings:

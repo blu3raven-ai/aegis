@@ -11,7 +11,6 @@ Secret resolution is DB-first via :func:`match_webhook_secret`; if no
 """
 from __future__ import annotations
 
-import json
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -20,6 +19,8 @@ from src.connectors.base import BaseIngester, TestResult
 from src.connectors.registry import register_connector
 from src.settings.webhooks.service import match_webhook_secret
 from src.connectors.webhooks.healthcheck import webhook_test_result
+from src.connectors.webhooks.dedupe import register_delivery
+from src.connectors.webhooks.ingest_guard import parse_json_object, read_guarded_body
 from src.connectors.webhooks.secret_resolver import verify_with_stored_secret
 from src.connectors.webhooks.signature import verify_hmac_sha256
 from src.db.engine import get_session
@@ -77,9 +78,10 @@ async def github_webhook(
     request: Request,
     x_github_event: str = Header(...),
     x_hub_signature_256: str = Header(...),
+    x_github_delivery: str | None = Header(default=None),
 ):
     """Receive a signed webhook event from GitHub."""
-    body = await request.body()
+    body = await read_guarded_body(request)
 
     def _verify(secret: str) -> bool:
         return verify_hmac_sha256(body, x_hub_signature_256, secret)
@@ -90,11 +92,7 @@ async def github_webhook(
         logger.warning("github.webhook: signature verification failed")
         raise HTTPException(status_code=401, detail="Invalid signature")
 
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError as exc:
-        logger.error("github.webhook: malformed JSON body: %s", exc)
-        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+    payload = parse_json_object(body)
 
     if x_github_event == "ping":
         return {"status": "pong"}
@@ -114,6 +112,21 @@ async def github_webhook(
         logger.info("github.webhook: ignoring event type=%s", x_github_event)
         return {"status": "ignored", "reason": f"event type {x_github_event}"}
 
+    # A well-formed JSON object can still be missing required fields (an
+    # unexpected event variant); the normalizer returns None for those.
+    if event is None:
+        logger.info("github.webhook: ignoring %s with missing required fields", x_github_event)
+        return {"status": "ignored", "reason": "missing required fields"}
+
+    if x_github_delivery is not None and register_delivery("github", x_github_delivery):
+        logger.info("github.webhook: dropping replayed delivery id=%s", x_github_delivery)
+        return {"status": "duplicate", "event_id": None}
+
     get_event_publisher().publish(event)
-    logger.info("github.webhook: published event_type=%s event_id=%s", event.event_type, event.event_id)
+    logger.info(
+        "github.webhook: published event_type=%s event_id=%s authed_org=%s",
+        event.event_type,
+        event.event_id,
+        matched.org_id,
+    )
     return {"status": "accepted", "event_id": event.event_id}

@@ -307,7 +307,7 @@ export function AddConnectionModal({
     try {
       const key = await createApiKey({
         name: `CI/CD — ${SOURCE_TYPE_LABELS[selectedType]}`,
-        scopes: ["trigger:scans"],
+        scopes: ["scan:trigger"],
       })
       setApiKeyToken(key.token)
     } catch {
@@ -623,12 +623,12 @@ export function AddConnectionModal({
 
               {error && (
                 <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
-                  <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                   </svg>
                   <div>
-                    <p className="text-sm font-medium text-[var(--color-severity-critical)]">Connection failed</p>
-                    <p className="mt-0.5 text-xs text-[var(--color-severity-critical)]">{error}</p>
+                    <p className="text-sm font-medium text-[var(--color-severity-critical-text)]">Connection failed</p>
+                    <p className="mt-0.5 text-xs text-[var(--color-severity-critical-text)]">{error}</p>
                   </div>
                 </div>
               )}
@@ -696,7 +696,7 @@ export function AddConnectionModal({
                 </Step>
               </ol>
 
-              {error && <p className="text-xs text-[var(--color-severity-critical)]">{error}</p>}
+              {error && <p className="text-xs text-[var(--color-severity-critical-text)]">{error}</p>}
             </div>
           )}
 
@@ -714,7 +714,7 @@ export function AddConnectionModal({
                 <ol className="space-y-4">
                   <Step n={1}>
                     Create an API key with{" "}
-                    <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">trigger:scans</code>{" "}
+                    <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">scan:trigger</code>{" "}
                     scope and add it to your CI as a secret named{" "}
                     <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">AEGIS_API_KEY</code>.
                     {apiKeyToken ? (
@@ -734,7 +734,7 @@ export function AddConnectionModal({
                             {apiKeyBusy ? "Creating…" : "Create API key"}
                           </Button>
                         </span>
-                        {apiKeyError && <p className="text-[var(--color-severity-critical)]">{apiKeyError}</p>}
+                        {apiKeyError && <p className="text-[var(--color-severity-critical-text)]">{apiKeyError}</p>}
                       </>
                     )}
                   </Step>

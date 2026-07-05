@@ -10,7 +10,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-os.environ.setdefault("AEGIS_SECRET_ENCRYPTION_KEY", Fernet.generate_key().decode())
+os.environ.setdefault("APP_SECRET", Fernet.generate_key().decode())
 
 from src.settings.webhooks.service import (  # noqa: E402
     create_endpoint,
@@ -40,11 +40,16 @@ async def test_match_returns_db_secret_when_verifier_accepts(db_session: AsyncSe
     matched = await match_webhook_secret(
         db_session, provider="github", verify=_make_verifier(secret)
     )
-    assert matched == secret
+    assert matched is not None
+    assert matched.secret == secret
+    assert matched.org_id == "default"
+    assert matched.endpoint_id == payload["id"]
 
 
 @pytest.mark.asyncio
-async def test_match_iterates_multiple_rows_until_one_verifies(db_session: AsyncSession):
+async def test_match_returns_the_org_whose_secret_verified(db_session: AsyncSession):
+    """The match must attribute the request to the org that owns the
+    accepting secret — not to any other org configured for the provider."""
     a = await create_endpoint(db_session, org_id="org-a", provider="github")
     b = await create_endpoint(db_session, org_id="org-b", provider="github")
     await db_session.commit()
@@ -54,7 +59,10 @@ async def test_match_iterates_multiple_rows_until_one_verifies(db_session: Async
     matched = await match_webhook_secret(
         db_session, provider="github", verify=_make_verifier(target)
     )
-    assert matched == target
+    assert matched is not None
+    assert matched.secret == target
+    assert matched.org_id == "org-b"
+    assert matched.endpoint_id == b["id"]
 
 
 @pytest.mark.asyncio
@@ -65,7 +73,11 @@ async def test_match_falls_back_to_env_var_when_no_db_row_matches(
     matched = await match_webhook_secret(
         db_session, provider="github", verify=_make_verifier("env-fallback-secret")
     )
-    assert matched == "env-fallback-secret"
+    assert matched is not None
+    assert matched.secret == "env-fallback-secret"
+    # Bootstrap env-var has no tenant binding.
+    assert matched.org_id is None
+    assert matched.endpoint_id is None
 
 
 @pytest.mark.asyncio

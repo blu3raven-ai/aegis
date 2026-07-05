@@ -15,7 +15,7 @@ import os
 import pytest
 from cryptography.fernet import Fernet
 
-os.environ["RUNNER_ENCRYPTION_KEY"] = "test-only-encryption-secret-do-not-use-in-prod"
+os.environ["APP_SECRET"] = "test-only-encryption-secret-do-not-use-in-prod"
 
 from src.shared import encryption as shared_enc  # noqa: E402
 from src.runner.encryption import (  # noqa: E402
@@ -62,12 +62,16 @@ def test_runner_encrypt_env_vars_round_trip():
     env = {
         "GIT_TOKEN": "ghp_aaaaaaaaaaaaaaaaaaaaaa",
         "ARGUS_TOKEN": "argus-short-lived-access-token",
+        "LLM_API_KEY": "sk-secret-model-key",
         "OTHER": "not-secret",
     }
     encrypted = encrypt_env_vars(env)
     assert encrypted["GIT_TOKEN"].startswith("ENC:")
     assert encrypted["ARGUS_TOKEN"].startswith("ENC:")
-    assert "ARGUS_TOKEN" in SENSITIVE_KEYS
+    # The BYO LLM key must not ride the job queue in cleartext (transit leak).
+    assert encrypted["LLM_API_KEY"].startswith("ENC:")
+    assert "sk-secret-model-key" not in encrypted["LLM_API_KEY"]
+    assert {"ARGUS_TOKEN", "LLM_API_KEY"} <= SENSITIVE_KEYS
     assert encrypted["OTHER"] == "not-secret"
 
     decrypted = decrypt_env_vars(encrypted)
@@ -92,12 +96,12 @@ def test_shared_and_runner_use_same_base_secret_but_distinct_contexts():
 
 
 def _legacy_shared_cipher() -> Fernet:
-    secret = os.environ["RUNNER_ENCRYPTION_KEY"].encode()
+    secret = os.environ["APP_SECRET"].encode()
     return Fernet(base64.urlsafe_b64encode(hashlib.sha256(secret).digest()))
 
 
 def _legacy_runner_cipher() -> Fernet:
-    secret = os.environ["RUNNER_ENCRYPTION_KEY"].encode()
+    secret = os.environ["APP_SECRET"].encode()
     raw = hashlib.pbkdf2_hmac("sha256", secret, b"runner-job-env-vars", 100_000)
     return Fernet(base64.urlsafe_b64encode(raw))
 
@@ -163,3 +167,146 @@ def test_encrypt_dict_decrypt_dict_round_trip():
     payload = {"token": "abc", "type": "pat"}
     ct = shared_enc.encrypt_dict(payload)
     assert shared_enc.decrypt_dict(ct) == payload
+
+
+
+
+# ── consolidation: crypto + federation derive from the single APP_SECRET root
+
+
+def test_derive_key_is_context_isolated_and_fernet_valid():
+    k1 = shared_enc.derive_key("settings_secret")
+    k2 = shared_enc.derive_key("federation_state")
+    assert k1 != k2
+    Fernet(k1).encrypt(b"x")  # usable as a Fernet key
+    with pytest.raises(ValueError):
+        shared_enc.derive_key("")
+
+
+def test_settings_crypto_round_trips_from_root():
+    from src.security import crypto
+
+    ct = crypto.encrypt("integration-secret")
+    assert crypto.decrypt(ct) == "integration-secret"
+    assert crypto.decrypt(None) is None
+
+
+def test_settings_crypto_raises_loudly_when_no_candidate_root_matches(monkeypatch):
+    """When NO configured root can decrypt (the encrypting root is fully rotated
+    away), fail loudly — never silently return garbage."""
+    from src.security import crypto
+
+    ct = crypto.encrypt("under-root-A")
+    monkeypatch.delenv("APP_SECRET", raising=False)
+    monkeypatch.setenv("APP_SECRET", "a-totally-different-root-value")
+    shared_enc._reset_cache_for_tests()
+    try:
+        with pytest.raises(RuntimeError, match="decryption failed"):
+            crypto.decrypt(ct)
+    finally:
+        shared_enc._reset_cache_for_tests()
+
+
+def test_shared_encryption_returns_empty_when_no_candidate_root_matches(monkeypatch):
+    """No candidate root/scheme matches → empty string (lenient default), not a
+    crash. Phase 2 wires strict=True for use paths."""
+    ct = shared_enc.encrypt("pat-value", context="source_connection_auth")
+    monkeypatch.delenv("APP_SECRET", raising=False)
+    monkeypatch.setenv("APP_SECRET", "a-totally-different-root-value")
+    shared_enc._reset_cache_for_tests()
+    try:
+        assert shared_enc.decrypt(ct, context="source_connection_auth") == ""
+    finally:
+        shared_enc._reset_cache_for_tests()
+
+
+def test_federation_state_round_trips_from_root():
+    from src.auth.federation.state import decode_state, encode_state
+
+    token = encode_state(state="s-value", nonce="n-value")
+    assert decode_state(token) == {"state": "s-value", "nonce": "n-value"}
+
+
+def test_aegis_secret_key_alone_is_sufficient(monkeypatch):
+    """A fresh install that sets only APP_SECRET can encrypt and decrypt —
+    no separate encryption key needed."""
+    from src.security import crypto
+
+    monkeypatch.setenv("APP_SECRET", "sole-root-secret-value")
+    shared_enc._reset_cache_for_tests()
+    try:
+        ct = crypto.encrypt("secret")
+        assert crypto.decrypt(ct) == "secret"
+    finally:
+        shared_enc._reset_cache_for_tests()
+
+
+def test_shared_encryption_strict_raises_when_no_candidate_root_matches(monkeypatch):
+    """Phase 2: strict=True raises DecryptionError instead of returning "" when
+    no configured root can decrypt — so use paths report a key problem clearly."""
+    ct = shared_enc.encrypt("pat-value", context="source_connection_auth")
+    monkeypatch.delenv("APP_SECRET", raising=False)
+    monkeypatch.setenv("APP_SECRET", "a-totally-different-root-value")
+    shared_enc._reset_cache_for_tests()
+    try:
+        with pytest.raises(shared_enc.DecryptionError):
+            shared_enc.decrypt(ct, context="source_connection_auth", strict=True)
+        # Lenient default still returns "" for the same input.
+        assert shared_enc.decrypt(ct, context="source_connection_auth") == ""
+    finally:
+        shared_enc._reset_cache_for_tests()
+
+
+def test_source_decrypt_auth_strict_raises_on_undecryptable_token(monkeypatch):
+    """The source use-path (_decrypt_auth strict=True) raises so sync reports
+    'couldn't decrypt credentials' instead of shipping an empty token."""
+    from src.sources import store
+
+    auth = {"token": shared_enc.encrypt("ghp_x", context="source_connection_auth")}
+    monkeypatch.delenv("APP_SECRET", raising=False)
+    monkeypatch.setenv("APP_SECRET", "a-totally-different-root-value")
+    shared_enc._reset_cache_for_tests()
+    try:
+        with pytest.raises(shared_enc.DecryptionError):
+            store._decrypt_auth(auth, strict=True)
+        # Lenient (display) path masks the empty value without raising.
+        assert store._decrypt_auth(auth)["token"] == ""
+    finally:
+        shared_enc._reset_cache_for_tests()
+
+
+def test_verify_totp_raises_when_stored_secret_cannot_decrypt(monkeypatch):
+    """Phase 5b: a wrong/rotated key surfaces as DecryptionError (→ '2FA
+    unavailable') instead of silently rejecting every valid code as 'wrong'."""
+    from src.shared.totp import verify_totp
+
+    enc = shared_enc.encrypt_string("JBSWY3DPEHPK3PXP")  # a base32 TOTP secret
+    monkeypatch.delenv("APP_SECRET", raising=False)
+    monkeypatch.setenv("APP_SECRET", "a-totally-different-root-value")
+    shared_enc._reset_cache_for_tests()
+    try:
+        with pytest.raises(shared_enc.DecryptionError):
+            verify_totp(enc, "000000")
+        # A plaintext (unencrypted) secret is verified without any decrypt.
+        assert verify_totp("JBSWY3DPEHPK3PXP", "000000") is False
+    finally:
+        shared_enc._reset_cache_for_tests()
+
+
+def test_ephemeral_key_refused_outside_dev(monkeypatch):
+    """No root + a non-dev FASTAPI_ENV (staging, mis-typed prod) refuses to run
+    on an ephemeral key; dev/test/unset still get one."""
+    monkeypatch.delenv("APP_SECRET", raising=False)
+    try:
+        for bad in ("staging", "prod", "Production "):
+            monkeypatch.setenv("FASTAPI_ENV", bad)
+            shared_enc._reset_cache_for_tests()
+            with pytest.raises(RuntimeError, match="ephemeral"):
+                shared_enc.candidate_secrets()
+        for ok in ("dev", "test", ""):
+            monkeypatch.setenv("FASTAPI_ENV", ok)
+            shared_enc._reset_cache_for_tests()
+            assert len(shared_enc.candidate_secrets()) == 1  # ephemeral allowed
+    finally:
+        monkeypatch.delenv("FASTAPI_ENV", raising=False)
+        shared_enc._reset_cache_for_tests()

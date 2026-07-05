@@ -4,7 +4,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 import pytest  # noqa: E402
 
@@ -140,18 +140,26 @@ def test_report_visible_to_creator_only_when_no_persisted_asset_ids():
     )
 
 
-def test_report_visible_via_asset_intersection():
+def test_report_visible_requires_asset_containment():
+    # The report's bytes span asset-1 AND asset-2, so a viewer must be entitled
+    # to BOTH — a grant to only one of them (intersection) must NOT expose it.
     from src.reports.service import _report_visible_to_viewer
 
     report = MagicMock()
     report.created_by = "alice@example.com"
     report.filters = {"asset_ids": ["asset-1", "asset-2"]}
 
-    assert _report_visible_to_viewer(
+    # Overlap on asset-2 only → the report also contains asset-1 data → hidden.
+    assert not _report_visible_to_viewer(
         report, viewer_id="bob@example.com", viewer_asset_ids={"asset-2", "asset-9"}
     )
+    # No overlap → hidden.
     assert not _report_visible_to_viewer(
         report, viewer_id="bob@example.com", viewer_asset_ids={"asset-9"}
+    )
+    # Every spanned asset within the viewer's grants → visible.
+    assert _report_visible_to_viewer(
+        report, viewer_id="bob@example.com", viewer_asset_ids={"asset-1", "asset-2", "asset-9"}
     )
 
 
@@ -174,7 +182,7 @@ def test_generate_findings_pdf_returns_pdf_bytes(monkeypatch):
             return [
                 {"severity": "critical", "title": "rce in x", "tool": "semgrep",
                  "state": "open", "identity_key": "k1"},
-                {"severity": "high", "title": "ssrf in y", "tool": "snyk",
+                {"severity": "high", "title": "ssrf in y", "tool": "trivy",
                  "state": "open", "identity_key": "k2"},
             ]
         if captured["calls"] == 2:

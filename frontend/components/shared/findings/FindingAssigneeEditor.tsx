@@ -52,7 +52,7 @@ export function FindingAssigneeEditor({
         triggerAriaLabel={currentAssignee ? `Change assignee (${currentAssignee})` : "Set assignee"}
       />
       {error && (
-        <div role="alert" className="text-2xs text-[var(--color-severity-critical)]">
+        <div role="alert" className="text-2xs text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}

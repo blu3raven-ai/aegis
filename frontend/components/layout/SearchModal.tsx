@@ -26,10 +26,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/settings/users", label: "Members", category: "Settings" },
   { href: "/settings/organisations", label: "Teams", category: "Settings" },
   { href: "/notifications", label: "Notifications", category: "Settings" },
-  { href: "/settings/dependencies", label: "Dependency Scanning Settings", category: "Settings" },
-  { href: "/settings/containers", label: "Container Scanning Settings", category: "Settings" },
-  { href: "/settings/code", label: "Code Scanning Settings", category: "Settings" },
-  { href: "/settings/secrets", label: "Secret Scanning Settings", category: "Settings" },
   { href: "/settings/iac-security", label: "IaC Security Settings", category: "Settings" },
 ]
 
