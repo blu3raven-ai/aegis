@@ -22,6 +22,9 @@ export const COMING_SOON_CONNECTORS: ConnectorType[] = [
     enterprise_only: false,
     config_fields: [],
     docs_url: "",
+    version: "",
+    status: "preview",
+    href: null,
     coming_soon: true,
   },
   {
@@ -33,6 +36,9 @@ export const COMING_SOON_CONNECTORS: ConnectorType[] = [
     enterprise_only: true,
     config_fields: [],
     docs_url: "",
+    version: "",
+    status: "preview",
+    href: null,
     coming_soon: true,
   },
   {
@@ -44,6 +50,9 @@ export const COMING_SOON_CONNECTORS: ConnectorType[] = [
     enterprise_only: true,
     config_fields: [],
     docs_url: "",
+    version: "",
+    status: "preview",
+    href: null,
     coming_soon: true,
   },
   {
@@ -55,6 +64,9 @@ export const COMING_SOON_CONNECTORS: ConnectorType[] = [
     enterprise_only: true,
     config_fields: [],
     docs_url: "",
+    version: "",
+    status: "preview",
+    href: null,
     coming_soon: true,
   },
 ]
@@ -179,7 +191,6 @@ export function CatalogConnectorModal({
     setError(null)
     try {
       const dest = await createDestination({
-        org_id: ORG_ID,
         destination_type: connector.id,
         name,
         config: fieldValues,
@@ -193,7 +204,7 @@ export function CatalogConnectorModal({
   }
 
   return (
-    <Modal title={`Configure ${connector.name}`} onClose={onClose}>
+    <Modal open title={`Configure ${connector.name}`} onClose={onClose}>
       <form onSubmit={(e) => { void handleSubmit(e) }} className="space-y-4">
         {error && (
           <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>

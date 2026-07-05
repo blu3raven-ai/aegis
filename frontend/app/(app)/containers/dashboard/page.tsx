@@ -25,7 +25,7 @@ function ContainersDashboard() {
       pageTitle="Container Scanning"
       pageIcon={<FindingsIcon />}
       pageDescription="Vulnerabilities found in container images."
-      initialScannerFilter="container"
+      initialScannerFilter="container_scanning"
     />
   )
 }

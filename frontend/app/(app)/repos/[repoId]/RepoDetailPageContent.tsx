@@ -7,7 +7,7 @@ import { RepoDetailHero } from "@/components/shared/repos/RepoDetailHero"
 import { ScanHistoryTimeline } from "@/components/shared/repos/ScanHistoryTimeline"
 import { ScannerCoverageStrip } from "@/components/shared/repos/ScannerCoverageStrip"
 import { PageHeader } from "@/components/layout/PageHeader"
-import { getRepo, type RepoDetail } from "@/lib/client/repos-api"
+import { getRepo, type RepoDetail } from "@/lib/client/sources-api"
 import {
   getRelease,
   listReleases,
@@ -23,6 +23,9 @@ import { RecentReleaseChecksTable } from "@/components/shared/releases/RecentRel
 
 const DEMO: RepoDetail = {
   repo_id: "example-org/payments-api",
+  asset_id: "example-org/payments-api",
+  display_name: "example-org/payments-api",
+  open_finding_count: 6,
   org: "example-org",
   repo: "payments-api",
   last_scanned_sha: "a1b2c3d",
@@ -49,6 +52,8 @@ const DEMO: RepoDetail = {
       findings_count: 2,
     },
   ],
+  source_url: null,
+  default_branch: null,
   active_findings: [],
 }
 

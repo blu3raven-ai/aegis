@@ -9,7 +9,7 @@ export default function CodeLandingPage() {
       pageTitle="Code Scanning"
       pageIcon={<FindingsIcon />}
       pageDescription="Findings from static code analysis."
-      initialScannerFilter="sast"
+      initialScannerFilter="code_scanning"
     />
   )
 }

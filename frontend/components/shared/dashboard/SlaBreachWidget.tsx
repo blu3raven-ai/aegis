@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import type { BreachSummary } from "@/lib/client/sla-api"
+import type { SlaBreachSummary } from "@/lib/client/sla-api"
 
 type Severity = "critical" | "high" | "medium" | "low"
 
@@ -31,7 +31,7 @@ const SEV_COLORS = {
 }
 
 interface SlaBreachWidgetProps {
-  summary: BreachSummary
+  summary: SlaBreachSummary
   /** href base for findings filtered by SLA breach — severity appended as query param */
   findingsHref?: string
 }

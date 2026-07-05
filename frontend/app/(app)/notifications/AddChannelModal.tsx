@@ -73,7 +73,7 @@ export function AddChannelModal({ open, onClose }: AddChannelModalProps) {
     setCatalogState("loading")
     Promise.all([
       getCatalog(),
-      listDestinations(ORG_ID),
+      listDestinations(),
     ])
       .then(([cat, dests]) => {
         setCatalog(cat.connectors)
@@ -131,7 +131,7 @@ export function AddChannelModal({ open, onClose }: AddChannelModalProps) {
 
   const handleDestinationCreated = useCallback((_dest: NotificationDestination) => {
     // Refresh destinations so "Connected" badges update
-    listDestinations(ORG_ID)
+    listDestinations()
       .then((rows) => setDestinations(rows))
       .catch(() => {})
     setConfiguringConnector(null)

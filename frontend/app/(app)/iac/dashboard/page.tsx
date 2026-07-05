@@ -25,7 +25,7 @@ function IacDashboard() {
       pageTitle="IaC Security"
       pageIcon={<FindingsIcon />}
       pageDescription="Infrastructure-as-Code misconfigurations."
-      initialScannerFilter="iac"
+      initialScannerFilter="iac_scanning"
     />
   )
 }
