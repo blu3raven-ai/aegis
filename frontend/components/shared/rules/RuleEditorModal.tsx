@@ -91,7 +91,7 @@ interface FieldErrors {
   }
 }
 
-const DEFAULT_SLA_ACTION: SlaAction = { deadline_days: 7, escalations: [] }
+const DEFAULT_SLA_ACTION: SlaAction = { deadline_days: 30, escalations: [] }
 
 function defaultActionFor(cat: EditableRuleCategory): RuleAction {
   if (cat === "sla") return { ...DEFAULT_SLA_ACTION, escalations: [] }
