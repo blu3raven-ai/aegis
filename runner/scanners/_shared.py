@@ -169,8 +169,6 @@ class ProgressEmitter:
     this emitter intentionally does not track uploaded/failed counts.
     """
 
-    _LOG_TAIL_MAX = 50
-
     def __init__(
         self,
         on_progress: Callable[[list[str], dict], None] | None,
@@ -183,7 +181,6 @@ class ProgressEmitter:
         self._expected = max(0, int(expected))
         self._stage = "starting"
         self._current_repo: str | None = None
-        self._log_tail: list[str] = []
 
     def starting(self) -> None:
         with self._lock:
@@ -217,12 +214,6 @@ class ProgressEmitter:
             self._current_repo = None
             self._emit_locked()
 
-    def log(self, line: str) -> None:
-        with self._lock:
-            self._log_tail.append(line)
-            if len(self._log_tail) > self._LOG_TAIL_MAX:
-                self._log_tail = self._log_tail[-self._LOG_TAIL_MAX :]
-
     def _emit_locked(self) -> None:
         if self._on_progress is None:
             return
@@ -235,7 +226,7 @@ class ProgressEmitter:
         if self._current_repo:
             progress["currentRepo"] = self._current_repo
         try:
-            self._on_progress(list(self._log_tail), progress)
+            self._on_progress([], progress)
         except Exception:  # noqa: BLE001
             # A failed progress emission must never abort the scan.
             logger.debug("on_progress callback raised; ignoring", exc_info=True)
