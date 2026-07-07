@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import Callable
 
 from runner.scanners._manifest import write_done_marker
-from runner.scanners._shared import JobEnv, ProgressEmitter
+from runner.scanners._shared import (
+    JobEnv,
+    ProgressEmitter,
+    build_llm_client as _build_llm_client,
+)
 from runner.scanners.base import ExecutionResult
 from runner.verification.pipelines.aggregate import run_aggregate_verification
 
@@ -143,21 +147,3 @@ def _build_repo_root_map(input_dir: Path, findings: list[dict]) -> dict[str, Pat
         if candidate.exists() and candidate.is_dir():
             out[repo] = candidate
     return out
-
-
-def _build_llm_client(env: JobEnv):
-    """Return an LLM client or None when LLM_API_KEY is unset.
-
-    Reads from job['envVars'] via JobEnv — the backend ships LLM config there,
-    not in the runner process environment.
-    """
-    from runner.verification.llm_client import LlmClient
-
-    api_key = env.get("LLM_API_KEY")
-    if not api_key:
-        return None
-    return LlmClient(
-        api_key=api_key,
-        api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
-        model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
-    )

@@ -11,7 +11,6 @@ from the REGISTRY_AUTHS env var.
 """
 from __future__ import annotations
 
-import concurrent.futures
 import dataclasses
 import json
 import logging
@@ -33,12 +32,9 @@ from runner.scanners._shared import (
     log_scanning_image,
     parse_repos,
     register_output,
+    run_per_repo,
 )
-from runner.scanners._subprocess import (
-    CANCELLED_EXIT_CODE,
-    ScannerTimeoutError,
-    run_tool,
-)
+from runner.scanners._subprocess import run_tool
 from runner.scanners.base import ExecutionResult
 from runner.scanners.container import (
     digest_compare,
@@ -158,70 +154,42 @@ class ContainerScanner:
 
             emitter = ProgressEmitter(on_progress, expected=len(images))
 
-            if cancel_event is not None and cancel_event.is_set():
-                emitter.done()
-                write_done_marker(out_dir)
-                return ExecutionResult(
-                    exit_code=CANCELLED_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
+            def _pre_scan() -> None:
+                try:
+                    count = registry_auth.configure_registry_auth()
+                    if count:
+                        logger.info(
+                            "[+] Registry auth configured for %d registries", count
+                        )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("[!] Registry auth setup failed: %s", e)
+
+            def _scan_one(image_ref: str) -> None:
+                self._scan_image(
+                    image_ref,
+                    out_dir,
+                    scan_platform=cfg.scan_platform,
+                    cancel_event=cancel_event,
+                    previous_digests=previous_digests,
+                    log_tail=log_tail,
+                    list_tags=cfg.list_tags,
                 )
 
-            if not images:
-                log_tail.append("[!] No valid images to scan")
-                emitter.done()
-                write_done_marker(out_dir)
-                return ExecutionResult(exit_code=0, job_dir=out_dir, log_tail=log_tail)
-
-            emitter.starting()
-
-            try:
-                count = registry_auth.configure_registry_auth()
-                if count:
-                    logger.info("[+] Registry auth configured for %d registries", count)
-            except Exception as e:  # noqa: BLE001
-                logger.warning("[!] Registry auth setup failed: %s", e)
-
-            def _scan_one(image_ref: str) -> Path | None:
-                if cancel_event is not None and cancel_event.is_set():
-                    return None
-                # Use the sanitized image name as the progress label, matching the
-                # per-image output directory. Backend schema reuses the *Repos
-                # counter names for container jobs.
-                safe_name = _sanitize_name(image_ref)
-                emitter.scanning(safe_name)
-                try:
-                    return self._scan_image(
-                        image_ref,
-                        out_dir,
-                        scan_platform=cfg.scan_platform,
-                        cancel_event=cancel_event,
-                        previous_digests=previous_digests,
-                        log_tail=log_tail,
-                        list_tags=cfg.list_tags,
-                    )
-                except ScannerTimeoutError as e:
-                    log_tail.append(f"[!] Timeout scanning {image_ref}: {e}")
-                    return None
-                except Exception as e:  # noqa: BLE001
-                    log_tail.append(f"[!] Image {image_ref} failed: {e}")
-                    logger.exception("[!] Image %s failed", image_ref)
-                    return None
-                finally:
-                    emitter.finished(safe_name)
-
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=cfg.concurrency
-            ) as pool:
-                list(pool.map(_scan_one, images))
-
-            emitter.normalizing()
-            write_done_marker(out_dir)
-            emitter.done()
-
-            exit_code = 0
-            if cancel_event is not None and cancel_event.is_set():
-                exit_code = CANCELLED_EXIT_CODE
-            return ExecutionResult(
-                exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
+            # Progress labels use the sanitized image name, matching the
+            # per-image output directory. Backend schema reuses the *Repos
+            # counter names for container jobs.
+            return run_per_repo(
+                items=images,
+                out_dir=out_dir,
+                emitter=emitter,
+                concurrency=cfg.concurrency,
+                cancel_event=cancel_event,
+                log_tail=log_tail,
+                scan_one=_scan_one,
+                label_of=_sanitize_name,
+                item_noun="Image",
+                empty_message="[!] No valid images to scan",
+                pre_scan=_pre_scan,
             )
         finally:
             if _promoted_registry_auths:

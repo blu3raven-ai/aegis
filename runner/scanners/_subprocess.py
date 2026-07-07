@@ -77,6 +77,27 @@ def run_tool(
         for var in drop_env:
             full_env.pop(var, None)
 
+    # Without a cancel_event there is nothing to poll for, so the plain blocking
+    # call is enough — subprocess.run drains both pipes via communicate(), so it
+    # neither deadlocks on large output nor needs the reader threads below.
+    if cancel_event is None:
+        try:
+            completed = subprocess.run(
+                list(args),
+                cwd=str(cwd) if cwd else None,
+                env=full_env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE if capture_output else None,
+                stderr=subprocess.PIPE if capture_output else None,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ScannerTimeoutError(
+                f"{args[0]} exceeded timeout of {timeout}s"
+            ) from exc
+        return completed.returncode, completed.stdout or "", completed.stderr or ""
+
     proc = subprocess.Popen(
         list(args),
         cwd=str(cwd) if cwd else None,
