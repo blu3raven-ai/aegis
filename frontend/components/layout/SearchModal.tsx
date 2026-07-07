@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { search, type SearchHit } from "@/lib/client/search-api"
 import { Skeleton } from "@/components/ui/Skeleton"
@@ -50,16 +50,6 @@ interface SearchModalProps {
   onClose: () => void
 }
 
-// Debounce hook — delays committing a value until the caller stops changing it.
-function useDebounced<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState<T>(value)
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), delayMs)
-    return () => clearTimeout(id)
-  }, [value, delayMs])
-  return debounced
-}
-
 type FetchState = "idle" | "loading" | "done" | "error"
 
 export function SearchModal({ open, onClose }: SearchModalProps) {
@@ -71,7 +61,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   const [apiResults, setApiResults] = useState<FlatResult[]>([])
   const [apiGrouped, setApiGrouped] = useState<Record<string, FlatResult[]>>({})
 
-  const debouncedQuery = useDebounced(query, 150)
+  const debouncedQuery = useDeferredValue(query)
 
   // Fetch from the real backend when the debounced query changes
   useEffect(() => {

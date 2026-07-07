@@ -1,6 +1,7 @@
 /** Client for the polymorphic sources surface (repos, images, cloud) and per-asset detail. */
 
 import { apiClient } from "./api-client.ts"
+import { gqlFetch } from "./graphql-fetch.ts"
 
 export interface FindingCounts {
   critical: number
@@ -196,43 +197,6 @@ function toImageRow(s: ImageSourceSummary, firstSeen: string): ImageRow {
 }
 
 // ── GraphQL transport (inlined to keep the test-time module graph tiny) ────
-
-const CSRF_COOKIE_NAME = "__Host-csrf"
-
-function readCsrfCookie(): string | null {
-  if (typeof document === "undefined") return null
-  for (const pair of document.cookie.split(";").map((p) => p.trim())) {
-    const [k, ...rest] = pair.split("=")
-    if (k === CSRF_COOKIE_NAME) return rest.join("=")
-  }
-  return null
-}
-
-async function gqlFetch<T>(operationName: string, query: string, variables: Record<string, unknown>): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  }
-  const csrf = readCsrfCookie()
-  if (csrf !== null) headers["X-CSRF-Token"] = csrf
-
-  const res = await fetch("/api/v1/graphql", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ operationName, query, variables }),
-    credentials: "include",
-  })
-
-  const body = (await res.json()) as { data?: T; errors?: { message: string }[] }
-  if (body.errors && body.errors.length > 0) {
-    throw new Error(body.errors[0].message)
-  }
-  if (!body.data) {
-    throw new Error(`${operationName} returned no data`)
-  }
-  return body.data
-}
-
 // ── GraphQL adapter shape (camelCase wire fields → snake_case TS types) ────
 
 interface GqlFindingCounts {

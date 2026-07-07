@@ -3,7 +3,7 @@
 import { RoleRecord } from "@/lib/client/settings-api"
 import { Card } from "@/components/ui/Card"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
-import { format } from "date-fns"
+import { formatDate } from "@/lib/shared/utils"
 
 interface RolesTableProps {
   roles: RoleRecord[]
@@ -72,7 +72,7 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                   </div>
                 </Td>
                 <Td className="px-6 py-4 text-[var(--color-text-secondary)] whitespace-nowrap text-[11px]">
-                  {format(new Date(role.createdAt), "MMM d, yyyy")}
+                  {formatDate(role.createdAt)}
                 </Td>
                 <Td className="px-6 py-4 text-right whitespace-nowrap">
                   <div className="flex items-center justify-end gap-1">
