@@ -258,6 +258,71 @@ def test_jit_attaches_to_local_user_without_sso():
         _cleanup_users(f"jit-local-{uniq}")
 
 
+def test_jit_refuses_to_link_privileged_account_even_on_verified_email():
+    """SSO must not silently link onto an account that can administer users.
+
+    The verified-email signal is only as trustworthy as the IdP behind it, so a
+    privileged account (whose role grants user administration) is the highest-
+    value takeover target. Linking it to SSO must be a deliberate action taken
+    from account settings, never an implicit first-sign-in side effect — even
+    when the assertion email is marked verified.
+    """
+    _reset_sso_cfg()
+    uniq = uuid4().hex[:8]
+    role_id = f"role_admin_jit_{uniq}"
+    email = f"admin-{uniq}@example.com"
+    user_id = f"jit-admin-{uniq}"
+
+    async def _seed(session):
+        session.add(Role(
+            id=role_id,
+            name="JIT Admin",
+            description="",
+            permissions=["manage_users"],
+            protected=False,
+        ))
+        session.add(User(
+            id=user_id,
+            username=f"u-admin-{uniq}",
+            email=email,
+            password_hash="hashed-local-password",
+            status="active",
+            role_id=role_id,
+        ))
+
+    run_db(_seed)
+
+    async def _act(session):
+        return await jit_or_lookup(
+            session,
+            subject=f"attacker-sub-{uniq}",
+            email=email,
+            protocol="saml",
+            email_verified=True,
+        )
+
+    async def _fetch(session):
+        from sqlalchemy import select as _select
+        return (
+            await session.execute(_select(User).where(User.id == user_id))
+        ).scalar_one()
+
+    async def _drop_role(session):
+        from sqlalchemy import delete as _delete
+        await session.execute(_delete(Role).where(Role.id == role_id))
+
+    try:
+        with pytest.raises(AccountConflict):
+            run_db(_act)
+        # The privileged account is untouched — no SSO subject attached.
+        victim = run_db(_fetch)
+        assert victim.sso_subject is None
+        assert victim.password_hash == "hashed-local-password"
+    finally:
+        _cleanup_users(user_id)
+        run_db(_drop_role)
+
+
 def test_jit_refuses_to_link_pre_existing_account_on_unverified_email():
     """An unverified IdP email must not attach onto a pre-existing account.
 
