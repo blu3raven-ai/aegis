@@ -258,6 +258,8 @@ class SecretsScanner:
         log_scanning(repo_name)
 
         clone_dir = repo_out / "_checkout"
+        if not str(repo_out.resolve()).startswith(str(out_dir.resolve())):
+            raise ValueError(f"repo_out escapes out_dir: {repo_out}")
         # Light: shallow clone for trufflehog filesystem mode.
         # Full clone: trufflehog git needs the whole history. The filesystem
         # fallback (only if the git scan errors) reads the same working tree.
@@ -270,7 +272,8 @@ class SecretsScanner:
                 timeout=TIMEOUT_CLONE,
             )
         except (InsecureURLError, GitCloneError):
-            shutil.rmtree(repo_out, ignore_errors=True)
+            if str(repo_out.resolve()).startswith(str(out_dir.resolve())):
+                shutil.rmtree(repo_out, ignore_errors=True)
             log_finished(repo_name)
             raise
 

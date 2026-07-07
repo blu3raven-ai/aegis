@@ -28,7 +28,11 @@ def download_sboms(
     for entry in entries:
         name = entry["file"]
         url = entry["url"]
-        target = output_dir / name
+        # Reject any path that would escape output_dir (e.g. "../../../etc/passwd")
+        target = (output_dir / name).resolve()
+        if not str(target).startswith(str(output_dir.resolve())):
+            logger.warning("[!] SBOM download skipped unsafe path: %s", name)
+            continue
         try:
             with httpx.Client(timeout=60.0) as client:
                 resp = client.get(url)

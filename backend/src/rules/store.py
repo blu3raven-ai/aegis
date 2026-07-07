@@ -431,7 +431,7 @@ def _finding_to_dry_run_subject(finding: Finding, *, age_days: int) -> RuleFindi
         finding_id=finding.id,
         severity=(finding.severity or "").lower(),
         scanner=finding.tool or "",
-        repo_id=finding.repo or "",
+        repo_id=getattr(finding, "repo", None) or "",
         repo_labels=[],
         repo_archived=False,
         cve_id=finding.cve_id,

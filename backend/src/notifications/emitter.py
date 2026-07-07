@@ -295,7 +295,7 @@ def notify_settings_changed(tool: str, actor: str) -> None:
             context={"tool": tool, "actor": actor},
             link=link,
         )
-        _publish_notification_sse({"title": title, "severity": "info", "category": "settings", "message": message})
+        _publish_notification_sse({"title": title, "severity": "info", "category": "settings", "message": message}, require_admin=True)
     except Exception:
         logger.warning("Failed to emit settings changed notification", exc_info=True)
 

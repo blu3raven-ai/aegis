@@ -311,6 +311,21 @@ async def upsert_finding(
         return finding
 
 
+def set_secret_review_status(org: str, identity_key: str, status: str) -> None:
+    """Bulk-update review_status on secrets findings matched by identity_key."""
+    from sqlalchemy import update as _sa_update
+    from src.db.helpers import run_db
+
+    async def _run(session: AsyncSession) -> None:
+        await session.execute(
+            _sa_update(Finding)
+            .where(Finding.tool == "secrets", Finding.identity_key == identity_key)
+            .values(review_status=status, updated_at=_utcnow())
+        )
+
+    run_db(_run)
+
+
 async def update_finding_state(
     session: AsyncSession,
     finding: Finding,

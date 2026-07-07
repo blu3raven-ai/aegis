@@ -98,6 +98,7 @@ class EmitInterface:
             return await upsert_finding(
                 session,
                 tool=tool,
+                asset_id=finding_data.get("asset_id"),
                 org=org,
                 repo=repo,
                 identity_key=identity_key,

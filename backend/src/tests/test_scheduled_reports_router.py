@@ -20,7 +20,7 @@ _VIEWER_PERMS = {"view_findings"}
 _FAKE_SCHEDULE = {
     "id": 1, "name": "x", "report_type": "posture", "format": "json",
     "schedule_type": "simple", "schedule_value": "09:00", "filters": {},
-    "destination_ids": [], "created_by": "u", "enabled": True,
+    "destination_ids": [], "created_by": "test@example.com", "enabled": True,
     "last_run_at": None, "last_run_status": None, "last_run_error": None,
     "created_at": "2026-06-14T00:00:00+00:00", "updated_at": "2026-06-14T00:00:00+00:00",
 }
@@ -97,7 +97,7 @@ def test_list_scheduled_reports():
         {
             "id": 1, "name": "Daily posture", "report_type": "posture", "format": "json",
             "schedule_type": "simple", "schedule_value": "09:00", "filters": {},
-            "destination_ids": [], "created_by": "u", "enabled": True,
+            "destination_ids": [], "created_by": "test@example.com", "enabled": True,
             "last_run_at": None, "last_run_status": None, "last_run_error": None,
             "created_at": "2026-06-14T00:00:00+00:00", "updated_at": "2026-06-14T00:00:00+00:00",
         },
@@ -138,7 +138,7 @@ def test_update_scheduled_report_edits_fields():
     fake_result = {
         "id": 1, "name": "Monthly posture", "report_type": "posture", "format": "pdf",
         "schedule_type": "simple", "schedule_value": "06:30", "filters": {},
-        "destination_ids": [10], "created_by": "u", "enabled": True,
+        "destination_ids": [10], "created_by": "test@example.com", "enabled": True,
         "last_run_at": None, "last_run_status": None, "last_run_error": None,
         "created_at": "2026-06-14T00:00:00+00:00", "updated_at": "2026-06-27T00:00:00+00:00",
     }

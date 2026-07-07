@@ -195,9 +195,16 @@ async def update_scheduled_report(
     stored_asset_ids = set(existing["filters"].get("asset_ids") or [])
     if stored_asset_ids and not stored_asset_ids.issubset(set(viewer_asset_ids)):
         raise HTTPException(status_code=404, detail="Scheduled report not found")
+    caller = _identify_caller(request)
+    if existing.get("created_by") != caller:
+        raise HTTPException(status_code=404, detail="Scheduled report not found")
     patch = body.model_dump(exclude_unset=True)
     if not patch:
         raise HTTPException(status_code=422, detail="empty patch body")
+    # Re-scope any asset_ids in the patch to the caller's allowed set.
+    if "filters" in patch and "asset_ids" in patch["filters"]:
+        requested = set(patch["filters"]["asset_ids"] or [])
+        patch["filters"]["asset_ids"] = list(requested & set(viewer_asset_ids))
     try:
         result = update_schedule(schedule_id, patch)
     except ScheduledReportNotFound:
@@ -222,6 +229,9 @@ async def delete_scheduled_report(
     viewer_asset_ids = await resolve_asset_ids_from_request(request)
     stored_asset_ids = set(existing["filters"].get("asset_ids") or [])
     if stored_asset_ids and not stored_asset_ids.issubset(set(viewer_asset_ids)):
+        raise HTTPException(status_code=404, detail="Scheduled report not found")
+    caller = _identify_caller(request)
+    if existing.get("created_by") != caller:
         raise HTTPException(status_code=404, detail="Scheduled report not found")
     if not delete_schedule(schedule_id):
         raise HTTPException(status_code=404, detail="Scheduled report not found")

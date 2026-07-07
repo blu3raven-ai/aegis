@@ -141,7 +141,7 @@ def _build_run_output_dir(org: str, run_id: str) -> Path:
 
 def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
     """Ingest code scanning results from object store after runner completion."""
-    from src.shared.object_store import find_findings_jsonl
+    from src.shared.object_store import find_findings_jsonl, download_json as _download_json
     from src.code_scanning.ingest import ingest_findings_jsonl
     import tempfile
 
@@ -162,10 +162,17 @@ def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | No
         finally:
             os.unlink(tmp_path)
 
+    active_rules_data = _download_json(f"code_scanning/{org}/{run_id}/active_rules.json")
+    active_rule_ids: set[str] = (
+        {str(r) for r in active_rules_data if r}
+        if isinstance(active_rules_data, list)
+        else set()
+    )
+
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     new_findings: list[dict[str, Any]] = []
     if all_findings:
-        ctx = ScanContext(tool="code_scanning", org=org, run_id=run_id, source_type=source_type)
+        ctx = ScanContext(tool="code_scanning", org=org, run_id=run_id, source_type=source_type, active_rule_ids=active_rule_ids)
         new_findings = _apply_lifecycle(code_scanning_hooks, ctx, all_findings)
 
         try:
