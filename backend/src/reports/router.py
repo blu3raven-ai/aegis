@@ -29,9 +29,10 @@ from src.reports.service import (
     get_report,
     list_reports,
 )
+from src.authz.enforcement import has_permission
 from src.authz.enforcement.dependencies import Permission
 from src.authz.enforcement.scope import resolve_asset_ids_from_request
-from src.authz.permissions.catalog import VIEW_FINDINGS
+from src.authz.permissions.catalog import MANAGE_SETTINGS, VIEW_FINDINGS
 
 router = APIRouter(prefix="/api/v1/findings/reports", tags=["findings"])
 
@@ -177,6 +178,9 @@ async def get_scheduled_report(
     stored_asset_ids = set(result["filters"].get("asset_ids") or [])
     if stored_asset_ids and not stored_asset_ids.issubset(set(viewer_asset_ids)):
         raise HTTPException(status_code=404, detail="Scheduled report not found")
+    caller = _identify_caller(request)
+    if result.get("created_by") != caller and not has_permission(request, MANAGE_SETTINGS):
+        raise HTTPException(status_code=403, detail="Permission denied")
     return ScheduledReportResponse(**result)
 
 
@@ -196,17 +200,13 @@ async def update_scheduled_report(
     if stored_asset_ids and not stored_asset_ids.issubset(set(viewer_asset_ids)):
         raise HTTPException(status_code=404, detail="Scheduled report not found")
     caller = _identify_caller(request)
-    if existing.get("created_by") != caller:
-        raise HTTPException(status_code=404, detail="Scheduled report not found")
+    if existing.get("created_by") != caller and not has_permission(request, MANAGE_SETTINGS):
+        raise HTTPException(status_code=403, detail="Permission denied")
     patch = body.model_dump(exclude_unset=True)
     if not patch:
         raise HTTPException(status_code=422, detail="empty patch body")
-    # Re-scope any asset_ids in the patch to the caller's allowed set.
-    if "filters" in patch and "asset_ids" in patch["filters"]:
-        requested = set(patch["filters"]["asset_ids"] or [])
-        patch["filters"]["asset_ids"] = list(requested & set(viewer_asset_ids))
     try:
-        result = update_schedule(schedule_id, patch)
+        result = update_schedule(schedule_id, patch, caller_asset_ids=viewer_asset_ids)
     except ScheduledReportNotFound:
         raise HTTPException(status_code=404, detail="Scheduled report not found")
     except ValueError as exc:
@@ -231,8 +231,8 @@ async def delete_scheduled_report(
     if stored_asset_ids and not stored_asset_ids.issubset(set(viewer_asset_ids)):
         raise HTTPException(status_code=404, detail="Scheduled report not found")
     caller = _identify_caller(request)
-    if existing.get("created_by") != caller:
-        raise HTTPException(status_code=404, detail="Scheduled report not found")
+    if existing.get("created_by") != caller and not has_permission(request, MANAGE_SETTINGS):
+        raise HTTPException(status_code=403, detail="Permission denied")
     if not delete_schedule(schedule_id):
         raise HTTPException(status_code=404, detail="Scheduled report not found")
     _record_audit(request=request, action="scheduled_report.deleted", schedule_id=schedule_id)
