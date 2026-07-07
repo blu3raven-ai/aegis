@@ -57,7 +57,7 @@ def audited(
     def _fire(args: tuple, kwargs: dict, result: Any) -> None:
         try:
             from fastapi import Request
-            from src.audit_log.recorder import ActorInfo, RequestContext, get_recorder
+            from src.audit_log.recorder import ActorInfo, RequestContext, client_ip_from_request, get_recorder
 
             request: Request | None = None
             # FastAPI injects Request via keyword arg "request" or positional
@@ -76,7 +76,7 @@ def audited(
                 req_ctx = RequestContext(
                     method=request.method.upper(),
                     path=request.url.path,
-                    ip=_client_ip(request),
+                    ip=client_ip_from_request(request),
                     user_agent=request.headers.get("user-agent"),
                 )
 
@@ -95,10 +95,3 @@ def audited(
             logger.warning("audited: failed to record event action=%s", action, exc_info=True)
 
     return decorator
-
-
-def _client_ip(request: Any) -> str | None:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else None
