@@ -44,7 +44,7 @@ class AgentScanningHooks(LifecycleHooks):
         return raw.get("severity")
 
     def extract_engine(self, raw: dict[str, Any]) -> str | None:
-        return raw.get("engine") or "agent"
+        return raw.get("engine") or None
 
     def extract_detail(self, raw: dict[str, Any]) -> dict:
         detail: dict[str, Any] = {

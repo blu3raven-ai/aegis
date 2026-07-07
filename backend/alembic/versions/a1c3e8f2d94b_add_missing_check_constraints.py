@@ -1,7 +1,7 @@
 """add missing check constraints to pre-existing tables
 
 Revision ID: a1c3e8f2d94b
-Revises: bef98ef7bec2
+Revises: 2be1d26b5f3b
 Create Date: 2026-07-07
 
 The initial schema created the core tables without their CHECK constraints.
@@ -16,7 +16,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "a1c3e8f2d94b"
-down_revision: Union[str, Sequence[str], None] = "bef98ef7bec2"
+down_revision: Union[str, Sequence[str], None] = "2be1d26b5f3b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
