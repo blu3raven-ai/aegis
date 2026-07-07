@@ -109,7 +109,7 @@ def test_get_connections_passes_category_filter():
         resp = client.get("/api/v1/sources/connections?category=code-repositories")
 
     assert resp.status_code == 200
-    list_mock.assert_called_once_with(category="code-repositories")
+    list_mock.assert_called_once_with(category="code-repositories", org_id="default")
 
 
 def test_get_connections_no_category_passes_none():
@@ -122,7 +122,7 @@ def test_get_connections_no_category_passes_none():
         resp = client.get("/api/v1/sources/connections")
 
     assert resp.status_code == 200
-    list_mock.assert_called_once_with(category=None)
+    list_mock.assert_called_once_with(category=None, org_id="default")
 
 
 # ---------------------------------------------------------------------------

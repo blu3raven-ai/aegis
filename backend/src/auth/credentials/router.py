@@ -19,8 +19,9 @@ class CreateApiKeyRequest(BaseModel):
 
 
 @router.get("")
-async def list_api_keys(_: None = Depends(Permission(MANAGE_SETTINGS))) -> dict:
-    keys = await service.list_keys()
+async def list_api_keys(request: Request, _: None = Depends(Permission(MANAGE_SETTINGS))) -> dict:
+    org_id = getattr(request.state, "user_org", "default")
+    keys = await service.list_keys(org_id=org_id)
     return {"keys": [k.to_dict() for k in keys]}
 
 
@@ -32,11 +33,13 @@ async def create_api_key(
     _: None = Depends(Permission(MANAGE_SETTINGS)),
 ) -> dict:
     created_by = getattr(request.state, "user_sub", None)
+    org_id = getattr(request.state, "user_org", "default")
     record, token = await service.create(
         name=body.name,
         scopes=body.scopes,
         created_by=created_by,
         expires_in_days=body.expires_in_days,
+        org_id=org_id,
     )
     result = record.to_dict()
     # Token returned exactly once — never stored or logged
@@ -51,7 +54,8 @@ async def revoke_api_key(
     key_id: int,
     _: None = Depends(Permission(MANAGE_SETTINGS)),
 ) -> dict:
-    record = await service.revoke(key_id)
+    org_id = getattr(request.state, "user_org", "default")
+    record = await service.revoke(key_id, org_id=org_id)
     if record is None:
         raise HTTPException(status_code=404, detail="api key not found")
     return record.to_dict()

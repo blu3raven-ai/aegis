@@ -91,6 +91,7 @@ def register_runner(
         "lastHeartbeatAt": now_iso(),
         "jobsCompleted": 0,
         "authTokenHash": auth_hash,
+        "orgId": None,
     }
     # Auto-approve compose runners (token matches RUNNER_REGISTRATION_TOKEN env var)
     if is_local:

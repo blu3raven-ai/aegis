@@ -488,6 +488,7 @@ def _propagate_session_to_state(request: Request) -> None:
     request.state.user_sub = session.user_id
     request.state.user_role_id = getattr(session.user, "role_id", None)
     request.state.user_role = role_kind_from_id(request.state.user_role_id)
+    request.state.user_org = "default"
     license_key = read_license_key()
     tier, license_claims = resolve_current_tier(license_key, EMBEDDED_PUBLIC_KEY)
     request.state.tier = tier

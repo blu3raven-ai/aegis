@@ -47,6 +47,7 @@ class AuditRecorder:
         changes: dict[str, Any] | None,
         metadata: dict[str, Any] | None,
         request: RequestContext | None,
+        org_id: str = "default",
     ) -> AuditEvent | None:
         """Construct the AuditEvent row, or None when audit logging is disabled.
 
@@ -76,6 +77,7 @@ class AuditRecorder:
             status_code=request.status_code,
             created_at=now,
             occurred_at=now,
+            org_id=org_id,
         )
 
     def record(
@@ -88,10 +90,12 @@ class AuditRecorder:
         changes: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         request: RequestContext | None = None,
+        org_id: str = "default",
     ) -> None:
         event = self._build_event(
             action=action, resource_type=resource_type, resource_id=resource_id,
             actor=actor, changes=changes, metadata=metadata, request=request,
+            org_id=org_id,
         )
         if event is None:
             return
@@ -115,6 +119,7 @@ class AuditRecorder:
         changes: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         request: RequestContext | None = None,
+        org_id: str = "default",
     ) -> None:
         """Add an audit event to an existing AsyncSession.
 
@@ -127,6 +132,7 @@ class AuditRecorder:
         event = self._build_event(
             action=action, resource_type=resource_type, resource_id=resource_id,
             actor=actor, changes=changes, metadata=metadata, request=request,
+            org_id=org_id,
         )
         if event is not None:
             session.add(event)
