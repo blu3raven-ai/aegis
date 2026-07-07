@@ -13,6 +13,17 @@ from src.db.models import AuditEvent
 logger = logging.getLogger(__name__)
 
 
+def client_ip_from_request(request: Any) -> str | None:
+    """Client IP for an audit record, honouring X-Forwarded-For.
+
+    Returns the first hop of X-Forwarded-For when present (the original client
+    behind a trusted reverse proxy), otherwise the direct peer address."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else None
+
+
 @dataclass
 class ActorInfo:
     user_id: str | None = None

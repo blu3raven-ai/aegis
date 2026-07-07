@@ -17,7 +17,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from src.audit_log.recorder import ActorInfo, AuditRecorder, RequestContext
+from src.audit_log.recorder import ActorInfo, AuditRecorder, RequestContext, client_ip_from_request
 
 logger = logging.getLogger(__name__)
 
@@ -96,13 +96,6 @@ def _extract_resource_id(path: str) -> str | None:
     return None
 
 
-def _client_ip(request: Request) -> str | None:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else None
-
-
 class AuditMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, recorder: AuditRecorder | None = None) -> None:
         super().__init__(app)
@@ -141,7 +134,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             req_ctx = RequestContext(
                 method=method,
                 path=path,
-                ip=_client_ip(request),
+                ip=client_ip_from_request(request),
                 user_agent=request.headers.get("user-agent"),
                 status_code=response.status_code,
             )
