@@ -157,6 +157,11 @@ _pr_feedback_task: asyncio.Task | None = None
 _notif_retry_stop = asyncio.Event()
 _notif_retry_task: asyncio.Task | None = None
 
+# Serializes `alembic upgrade head` across worker processes at startup.
+# Derived per the src/shared/ha.py convention:
+#   int.from_bytes(sha256(b"aegis_schema_migration").digest()[:8], "big", signed=True)
+_MIGRATION_ADVISORY_LOCK_KEY = 1587967693441817285
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
@@ -168,8 +173,15 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
             "ephemeral key that is lost on restart until it is set."
         )
 
-    # Run Alembic migrations
-    subprocess.run(["alembic", "upgrade", "head"], cwd=os.path.dirname(os.path.dirname(__file__)), check=True)
+    # Run Alembic migrations. The server runs multiple worker processes, each
+    # of which executes this lifespan; a blocking advisory lock serializes them
+    # so concurrent workers can't race on schema DDL against a fresh database.
+    # Workers that lose the race block here until the winner finishes, then run
+    # `upgrade head` as a no-op against the already-migrated schema.
+    from src.shared.ha import advisory_lock
+
+    async with advisory_lock(_MIGRATION_ADVISORY_LOCK_KEY):
+        subprocess.run(["alembic", "upgrade", "head"], cwd=os.path.dirname(os.path.dirname(__file__)), check=True)
     # Seed defaults if empty
     async with get_session() as session:
         await seed_if_empty(session)

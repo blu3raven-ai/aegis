@@ -69,3 +69,36 @@ async def try_advisory_lock(lock_key: int) -> AsyncIterator[bool]:
     finally:
         await session.close()
         await engine.dispose()
+
+
+@asynccontextmanager
+async def advisory_lock(lock_key: int) -> AsyncIterator[None]:
+    """Acquire a Postgres session-scoped advisory lock, blocking until granted.
+
+    Unlike :func:`try_advisory_lock`, this waits for the lock instead of
+    returning immediately, so callers that must serialize a critical section
+    (rather than elect a single owner and skip) will each run the body in turn.
+    The lock is held for the duration of the ``async with`` block on a
+    dedicated connection, then released.
+
+    A fresh engine is built per call for the same event-loop-affinity reason
+    described in :func:`try_advisory_lock`.
+    """
+    engine = create_async_engine(DATABASE_URL, echo=False, pool_size=1, max_overflow=0)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    session = factory()
+    try:
+        await session.execute(text("SELECT pg_advisory_lock(:k)"), {"k": lock_key})
+        try:
+            yield
+        finally:
+            try:
+                await session.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": lock_key})
+                await session.commit()
+            except Exception:
+                # Connection teardown below auto-releases; a failed explicit
+                # unlock is non-fatal.
+                await session.rollback()
+    finally:
+        await session.close()
+        await engine.dispose()
