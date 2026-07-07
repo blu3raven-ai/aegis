@@ -149,6 +149,9 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             if user_status == "active" and path.startswith("/pending"):
                 return RedirectResponse("/", status_code=302)
 
+            if user_status not in {"pending", "active"}:
+                return self._unauth(path)
+
             request.state.session = session
             request.state.user = session.user
             return await call_next(request)

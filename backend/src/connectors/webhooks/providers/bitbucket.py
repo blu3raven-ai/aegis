@@ -104,6 +104,8 @@ async def bitbucket_webhook(
         logger.info("bitbucket.webhook: dropping replayed delivery id=%s", x_request_uuid)
         return {"status": "duplicate", "event_id": None}
 
+    if matched.org_id is not None:
+        event = event.model_copy(update={"org_id": matched.org_id})
     get_event_publisher().publish(event)
     logger.info(
         "bitbucket.webhook: published event_type=%s event_id=%s authed_org=%s",

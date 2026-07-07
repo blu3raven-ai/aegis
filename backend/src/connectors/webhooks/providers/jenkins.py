@@ -126,6 +126,8 @@ async def jenkins_webhook(
         return {"status": "ignored", "reason": "missing scm.commit"}
 
     event = normalize_jenkins_build(payload)
+    if matched.org_id is not None:
+        event = event.model_copy(update={"org_id": matched.org_id})
     get_event_publisher().publish(event)
     logger.info(
         "jenkins.webhook: published event_type=%s event_id=%s authed_org=%s",
