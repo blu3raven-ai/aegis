@@ -1367,15 +1367,25 @@ async def list_assignable_users(
     *,
     q: str | None = None,
     limit: int = 20,
+    allowed_user_ids: set[str] | None = None,
 ) -> list[dict[str, str]]:
     """Return up to `limit` active users matching `q` on username or email.
 
     Trims and lowers `q` before the LIKE pattern build so the caller can pass
     raw input without normalising. Empty/whitespace queries return the first
     `limit` users by username order.
+
+    `allowed_user_ids` scopes the result to co-assignees the caller may see:
+    `None` applies no restriction (caller sees every asset), an empty set
+    yields no rows (caller has no asset scope), and a populated set restricts
+    the query to those ids.
     """
+    if allowed_user_ids is not None and not allowed_user_ids:
+        return []
     capped_limit = max(1, min(int(limit or 20), MAX_ASSIGNABLE_USERS_LIMIT))
     stmt = select(User.id, User.username).where(User.status == "active")
+    if allowed_user_ids is not None:
+        stmt = stmt.where(User.id.in_(allowed_user_ids))
     if q:
         normalized = q.strip()
         if normalized:

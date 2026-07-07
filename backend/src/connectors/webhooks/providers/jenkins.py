@@ -18,6 +18,7 @@ no-ops rather than 4xx noise.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 
@@ -26,6 +27,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from src.connectors.base import BaseIngester, TestResult
 from src.connectors.registry import register_connector
 from src.settings.webhooks.service import match_webhook_secret
+from src.connectors.webhooks.dedupe import register_delivery
 from src.connectors.webhooks.healthcheck import webhook_test_result
 from src.connectors.webhooks.ingest_guard import parse_json_object, read_guarded_body
 from src.connectors.webhooks.secret_resolver import verify_with_stored_secret
@@ -97,7 +99,7 @@ async def jenkins_webhook(
     authorization: str = Header(...),
 ):
     """Receive an authenticated webhook event from Jenkins."""
-    # No reliable per-delivery id header is sent, so no replay dedup here.
+    # No per-delivery id header is sent; dedup on a hash of the body instead.
     body = await read_guarded_body(request)
 
     def _verify(secret: str) -> bool:
@@ -126,6 +128,12 @@ async def jenkins_webhook(
         return {"status": "ignored", "reason": "missing scm.commit"}
 
     event = normalize_jenkins_build(payload)
+
+    delivery_id = hashlib.sha256(body).hexdigest()[:32]
+    if register_delivery("jenkins", delivery_id):
+        logger.info("jenkins.webhook: dropping replayed delivery id=%s", delivery_id)
+        return {"status": "duplicate", "event_id": None}
+
     if matched.org_id is not None:
         event = event.model_copy(update={"org_id": matched.org_id})
     get_event_publisher().publish(event)

@@ -965,6 +965,26 @@ async def test_list_assignable_users_returns_id_and_username_only(db_session, as
     assert all("email" not in r for r in rows)
 
 
+@pytest.mark.asyncio
+async def test_list_assignable_users_restricts_to_allowed_ids(db_session, assignable_users_fixture):
+    alice, bob, _, suffix = assignable_users_fixture
+    rows = await list_assignable_users(
+        db_session, q=suffix, limit=10, allowed_user_ids={alice.id}
+    )
+    ids = {r["id"] for r in rows}
+    assert alice.id in ids
+    assert bob.id not in ids
+
+
+@pytest.mark.asyncio
+async def test_list_assignable_users_empty_allowed_ids_returns_nothing(db_session, assignable_users_fixture):
+    _, _, _, suffix = assignable_users_fixture
+    rows = await list_assignable_users(
+        db_session, q=suffix, limit=10, allowed_user_ids=set()
+    )
+    assert rows == []
+
+
 @pytest_asyncio.fixture
 async def _isolated_upsert_finding(db_session):
     """Patch upsert_finding side effects (blob upload, compliance mapper) so

@@ -55,7 +55,7 @@ from src.shared.lifecycle import (
     reopen_finding,
 )
 from src.shared.home_views_refresher import request_home_views_refresh
-from src.authz.enforcement.scope import resolve_asset_ids_from_request
+from src.authz.enforcement.scope import assignable_user_ids, resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/findings", tags=["findings"])
 
@@ -151,9 +151,20 @@ async def get_assignable_users(
     limit: int = 20,
     _: None = Depends(Permission(REVIEW_FINDINGS)),
 ) -> dict[str, list[dict[str, str]]]:
-    """Return active users matching `q` for finding-assignee pickers."""
+    """Return active users matching `q` for finding-assignee pickers.
+
+    Scoped to co-assignees the caller shares an asset with, so the picker
+    never enumerates the full user directory.
+    """
+    ctx = {
+        "user_id": request.state.user_sub,
+        "role": getattr(request.state, "user_role", "viewer"),
+    }
     async with get_session() as session:
-        users = await list_assignable_users(session, q=q, limit=limit)
+        allowed = await assignable_user_ids(session, ctx)
+        users = await list_assignable_users(
+            session, q=q, limit=limit, allowed_user_ids=allowed
+        )
     return {"users": users}
 
 

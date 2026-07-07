@@ -31,6 +31,27 @@ def _reject_if_deprovisioned(user: User) -> None:
         raise AccountDeprovisioned("Account is deprovisioned; an administrator must reactivate it.")
 
 
+async def _is_privileged_account(session: AsyncSession, user: User) -> bool:
+    """True if the account's role can administer users.
+
+    Checked through the permissions layer rather than a role-name comparison,
+    so any role that grants user administration — built-in or custom — is
+    protected from silent SSO auto-linking. The role is loaded on the caller's
+    own session (not a fresh connection) so this stays inside the login
+    transaction.
+    """
+    from src.authz.permissions.catalog import MANAGE_USERS
+    from src.authz.permissions.service import resolve_role_permissions
+    from src.db.models import Role
+
+    if not user.role_id:
+        return False
+    role = await session.get(Role, user.role_id)
+    if role is None:
+        return False
+    return MANAGE_USERS in resolve_role_permissions({"permissions": role.permissions})
+
+
 async def jit_or_lookup(
     session: AsyncSession,
     subject: str,
@@ -70,6 +91,16 @@ async def jit_or_lookup(
             raise AccountConflict("Email already linked to a different SSO identity.")
         if not email_verified:
             raise AccountConflict("Email is not provider-verified; cannot link to an existing account.")
+        # A privileged account is the highest-value takeover target, and the
+        # verified-email signal is only as trustworthy as the IdP behind it.
+        # Linking SSO onto such an account must be a deliberate step taken from
+        # account settings by someone already authenticated to it, never an
+        # implicit consequence of a first SSO sign-in.
+        if await _is_privileged_account(session, row):
+            raise AccountConflict(
+                "Cannot auto-link an SSO identity onto a privileged account; "
+                "link it from account settings instead."
+            )
         row.sso_subject = subject
         row.sso_protocol = protocol
         _reject_if_deprovisioned(row)
