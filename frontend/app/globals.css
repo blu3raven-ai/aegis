@@ -291,8 +291,6 @@
   --color-foreground: var(--color-text-primary);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains-mono);
-  --font-headline: var(--font-space-grotesk);
-  --font-body-brand: var(--font-manrope);
   /* Tailwind v4 requires font-size utilities to be registered here.
      text-[var(--type-2xs)] silently falls back to 16px; use text-2xs instead. */
   --text-2xs: 0.625rem;
