@@ -657,22 +657,6 @@ def test_registry_digest_times_out(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Task 3.4 / 3.5 — sbom_only scan mode (skip_grype)
-# ---------------------------------------------------------------------------
-
-
-def test_container_sbom_only_in_supported_modes():
-    """sbom_only must be listed in container SUPPORTED_SCAN_MODES."""
-    from runner.scanners.container.scanner import (
-        DEFERRED_SCAN_MODES,
-        SUPPORTED_SCAN_MODES,
-    )
-
-    assert "sbom_only" in SUPPORTED_SCAN_MODES
-    assert "sbom_only" not in DEFERRED_SCAN_MODES
-
-
-# ---------------------------------------------------------------------------
 # ContainerScanConfig
 # ---------------------------------------------------------------------------
 

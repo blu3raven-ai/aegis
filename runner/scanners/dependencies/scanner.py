@@ -48,11 +48,6 @@ _SBOM_TOOL_DROP_ENV = ("GIT_TOKEN",)
 
 SCAN_MODE_FULL = "full"
 SCAN_MODE_SBOM_ONLY = "sbom_only"
-SUPPORTED_SCAN_MODES = {
-    SCAN_MODE_FULL,
-    SCAN_MODE_SBOM_ONLY,
-}
-DEFERRED_SCAN_MODES: set[str] = set()
 _UNSUPPORTED_MODE_EXIT_CODE = 2
 
 
@@ -66,11 +61,10 @@ class DependenciesScanConfig(BaseScanConfig):
     def from_job(cls, job: dict[str, Any]) -> "DependenciesScanConfig":
         env = JobEnv(job)
         scan_mode = env.get("SCAN_MODE", SCAN_MODE_FULL).lower()
-        if scan_mode not in SUPPORTED_SCAN_MODES:
+        if scan_mode not in (SCAN_MODE_FULL, SCAN_MODE_SBOM_ONLY):
             raise ScannerConfigError(
                 f"[!] SCAN_MODE={scan_mode!r} is not implemented in the "
-                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_MODES)}. "
-                f"Deferred: {sorted(DEFERRED_SCAN_MODES)}."
+                f"embedded scanner. Supported: {[SCAN_MODE_FULL, SCAN_MODE_SBOM_ONLY]}."
             )
         return cls(
             org_label=env.get("ORG_LABEL", "default"),

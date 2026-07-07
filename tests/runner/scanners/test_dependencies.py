@@ -270,22 +270,6 @@ def _fake_download_two_sboms_kw(*, backend_client, job_id, output_dir):
 
 
 # ---------------------------------------------------------------------------
-# Task 3.2 / 3.3 — sbom_only scan mode (skip_grype)
-# ---------------------------------------------------------------------------
-
-
-def test_run_scan_sbom_only_in_supported_modes():
-    """sbom_only must be listed in SUPPORTED_SCAN_MODES (no longer deferred)."""
-    from runner.scanners.dependencies.scanner import (
-        DEFERRED_SCAN_MODES,
-        SUPPORTED_SCAN_MODES,
-    )
-
-    assert "sbom_only" in SUPPORTED_SCAN_MODES
-    assert "sbom_only" not in DEFERRED_SCAN_MODES
-
-
-# ---------------------------------------------------------------------------
 # DependenciesScanConfig
 # ---------------------------------------------------------------------------
 
