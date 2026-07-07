@@ -14,6 +14,7 @@ from src.notifications.destination import (
     create_destination,
     delete_destination,
     get_destination,
+    redact_config,
     update_destination,
 )
 from src.notifications.rules_model import (
@@ -59,7 +60,7 @@ def get_notification_destination(
     dest = get_destination(dest_id)
     if dest is None:
         raise HTTPException(status_code=404, detail="destination not found")
-    return dest
+    return {**dest, "config": redact_config(dest.get("config"))}
 
 
 @_destinations.post("/destinations", status_code=201)
@@ -93,7 +94,7 @@ def create_notification_destination(
         logger.exception("create_destination failed")
         raise HTTPException(status_code=500, detail="internal error") from exc
 
-    return dest
+    return {**dest, "config": redact_config(dest.get("config"))}
 
 
 @_destinations.put("/destinations/{dest_id}")
@@ -113,7 +114,7 @@ def update_notification_destination(
     )
     if dest is None:
         raise HTTPException(status_code=404, detail="destination not found")
-    return dest
+    return {**dest, "config": redact_config(dest.get("config"))}
 
 
 @_destinations.delete("/destinations/{dest_id}", status_code=204)

@@ -1,6 +1,7 @@
 """Runner registration, approval, token management, heartbeat tracking."""
 from __future__ import annotations
 
+import hmac
 import os
 import secrets
 from datetime import datetime, timezone
@@ -53,6 +54,8 @@ def register_runner(
     local_token = os.environ.get("RUNNER_REGISTRATION_TOKEN", "")
     if local_token and local_token in ("change-me", "default"):
         logger.warning("RUNNER_REGISTRATION_TOKEN is using a default value — change it in production")
+        if raw_token == local_token:
+            return None, None, "RUNNER_REGISTRATION_TOKEN is set to a default value; update it before registering runners"
     is_local = bool(local_token and raw_token == local_token)
 
     if not token_record and not is_local:
@@ -65,6 +68,8 @@ def register_runner(
         existing = _find_runner_by_name(name)
         if existing:
             existing["authTokenHash"] = auth_hash
+            existing["status"] = "pending_approval"
+            existing["approvedAt"] = None
             existing["lastHeartbeatAt"] = now_iso()
             if os_name:
                 existing["os"] = os_name
@@ -86,6 +91,7 @@ def register_runner(
         "lastHeartbeatAt": now_iso(),
         "jobsCompleted": 0,
         "authTokenHash": auth_hash,
+        "orgId": None,
     }
     # Auto-approve compose runners (token matches RUNNER_REGISTRATION_TOKEN env var)
     if is_local:
@@ -112,7 +118,8 @@ def authenticate_runner(raw_token: str) -> dict[str, Any] | None:
     """Authenticate a runner by its server-issued auth token."""
     token_hash = hash_token(raw_token)
     for runner in list_runners():
-        if runner.get("authTokenHash") == token_hash:
+        stored = runner.get("authTokenHash") or ""
+        if hmac.compare_digest(stored, token_hash):
             return runner
     return None
 

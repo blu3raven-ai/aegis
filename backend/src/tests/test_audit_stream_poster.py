@@ -535,6 +535,7 @@ def test_batch_size_constant_caps_per_loop_delivery():
 
 def test_webhook_omits_authorization_header_when_no_token():
     import httpx
+    from unittest.mock import patch
 
     from src.audit_stream.adapters import webhook_deliver
 
@@ -545,18 +546,21 @@ def test_webhook_omits_authorization_header_when_no_token():
         return httpx.Response(200)
 
     transport = httpx.MockTransport(handler)
-    result = asyncio.run(webhook_deliver(
-        url="https://hook.example.com/x",
-        token=None,
-        events=[{"id": 1}],
-        transport=transport,
-    ))
+    # Pin DNS for the test host so the SSRF guard passes without real resolution.
+    with patch("socket.getaddrinfo", return_value=[(2, 1, 0, "", ("93.184.216.34", 0))]):
+        result = asyncio.run(webhook_deliver(
+            url="https://hook.example.com/x",
+            token=None,
+            events=[{"id": 1}],
+            transport=transport,
+        ))
     assert result["ok"] is True
     assert "authorization" not in captured["headers"]
 
 
 def test_webhook_sets_bearer_authorization_header_when_token_present():
     import httpx
+    from unittest.mock import patch
 
     from src.audit_stream.adapters import webhook_deliver
 
@@ -567,18 +571,20 @@ def test_webhook_sets_bearer_authorization_header_when_token_present():
         return httpx.Response(200)
 
     transport = httpx.MockTransport(handler)
-    asyncio.run(webhook_deliver(
-        url="https://hook.example.com/x",
-        token="bearer-xyz",
-        events=[{"id": 1}],
-        transport=transport,
-    ))
+    with patch("socket.getaddrinfo", return_value=[(2, 1, 0, "", ("93.184.216.34", 0))]):
+        asyncio.run(webhook_deliver(
+            url="https://hook.example.com/x",
+            token="bearer-xyz",
+            events=[{"id": 1}],
+            transport=transport,
+        ))
     assert captured["auth"] == "Bearer bearer-xyz"
 
 
 def test_splunk_body_is_newline_delimited_json():
     import httpx
     import json
+    from unittest.mock import patch
 
     from src.audit_stream.adapters import splunk_hec_deliver
 
@@ -589,12 +595,13 @@ def test_splunk_body_is_newline_delimited_json():
         return httpx.Response(200)
 
     transport = httpx.MockTransport(handler)
-    asyncio.run(splunk_hec_deliver(
-        url="https://splunk.example.com:8088",
-        token="t",
-        events=[{"id": 1}, {"id": 2}, {"id": 3}],
-        transport=transport,
-    ))
+    with patch("socket.getaddrinfo", return_value=[(2, 1, 0, "", ("93.184.216.34", 0))]):
+        asyncio.run(splunk_hec_deliver(
+            url="https://splunk.example.com:8088",
+            token="t",
+            events=[{"id": 1}, {"id": 2}, {"id": 3}],
+            transport=transport,
+        ))
     lines = captured["body"].split("\n")
     assert len(lines) == 3
     parsed = [json.loads(line) for line in lines]

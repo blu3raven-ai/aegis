@@ -52,6 +52,13 @@ def _apply_op(op: str, field_val: Any, rule_val: Any) -> bool:
     if op in ("gt", "gte", "lt", "lte"):
         lhs = _SEVERITY_RANK.get(str(field_val), field_val) if isinstance(field_val, str) else field_val
         rhs = _SEVERITY_RANK.get(str(rule_val), rule_val) if isinstance(rule_val, str) else rule_val
+        # Coerce to float when types diverge (e.g. int field vs string threshold "30")
+        # to avoid TypeError on int > str comparisons.
+        if type(lhs) is not type(rhs):
+            try:
+                lhs, rhs = float(lhs), float(rhs)
+            except (TypeError, ValueError):
+                pass
         if op == "gt":
             return lhs > rhs
         if op == "gte":

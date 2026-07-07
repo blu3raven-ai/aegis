@@ -55,7 +55,7 @@ def test_returns_204_after_short_wait_when_no_job_queued(monkeypatch):
     """With wait=1 and never-assigning, endpoint returns 204 after ~1s (verify call count, not wall time)."""
     poll_calls = {"n": 0}
 
-    def fake_assign(_runner_id):
+    def fake_assign(_runner_id, org=None):
         poll_calls["n"] += 1
         return None
 
@@ -82,7 +82,7 @@ def test_picks_up_job_mid_wait(monkeypatch):
     }
     state = {"calls": 0}
 
-    def assign_after_3(_runner_id):
+    def assign_after_3(_runner_id, org=None):
         state["calls"] += 1
         return job if state["calls"] >= 3 else None
 
@@ -107,7 +107,7 @@ def test_wait_param_is_clamped_to_60():
     """A malicious wait=99999 must not pin a worker for hours."""
     poll_calls = {"n": 0}
 
-    def fake_assign(_):
+    def fake_assign(_, org=None):
         poll_calls["n"] += 1
         return None
 

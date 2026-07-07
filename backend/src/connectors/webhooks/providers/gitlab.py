@@ -11,6 +11,7 @@ Secret resolution is DB-first via :func:`match_webhook_secret`; if no
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -104,16 +105,19 @@ async def gitlab_webhook(
         state = attrs.get("state", "")
         action = attrs.get("action", "")
         # "open" / "reopen" actions map to opened; everything else (update) maps to updated
-        opened = action in ("open", "reopen") or state in _MR_OPENED_STATES and action not in ("update",)
+        opened = action in ("open", "reopen") or (state in _MR_OPENED_STATES and action not in ("update",))
         event = normalize_gitlab_mr(payload, opened=opened)
     else:
         logger.info("gitlab.webhook: ignoring event kind=%s header=%s", object_kind, x_gitlab_event)
         return {"status": "ignored", "reason": f"event {x_gitlab_event}"}
 
-    if x_gitlab_event_uuid is not None and register_delivery("gitlab", x_gitlab_event_uuid):
-        logger.info("gitlab.webhook: dropping replayed delivery id=%s", x_gitlab_event_uuid)
+    delivery_id = x_gitlab_event_uuid or hashlib.sha256(body).hexdigest()[:32]
+    if register_delivery("gitlab", delivery_id):
+        logger.info("gitlab.webhook: dropping replayed delivery id=%s", delivery_id)
         return {"status": "duplicate", "event_id": None}
 
+    if matched.org_id is not None:
+        event = event.model_copy(update={"org_id": matched.org_id})
     get_event_publisher().publish(event)
     logger.info(
         "gitlab.webhook: published event_type=%s event_id=%s authed_org=%s",

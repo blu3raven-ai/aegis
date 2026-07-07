@@ -958,10 +958,11 @@ async def test_list_assignable_users_empty_q_returns_recent(db_session, assignab
 
 
 @pytest.mark.asyncio
-async def test_list_assignable_users_returns_id_username_email_only(db_session, assignable_users_fixture):
+async def test_list_assignable_users_returns_id_and_username_only(db_session, assignable_users_fixture):
     alice, _, _, suffix = assignable_users_fixture
     rows = await list_assignable_users(db_session, q=suffix, limit=5)
-    assert all(set(r.keys()) == {"id", "username", "email"} for r in rows)
+    assert all(set(r.keys()) == {"id", "username"} for r in rows)
+    assert all("email" not in r for r in rows)
 
 
 @pytest_asyncio.fixture

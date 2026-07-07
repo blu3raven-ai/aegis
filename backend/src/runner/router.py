@@ -159,7 +159,7 @@ async def poll_next_job(request: Request, wait: int = 0) -> JSONResponse:
     deadline = time.monotonic() + wait
 
     while True:
-        job = assign_next_job(runner["id"])
+        job = assign_next_job(runner["id"], org=runner.get("orgId"))
         if job:
             # Transition scan run from "queued" to "running" now that runner claimed the job
             _transition_run_to_running(job)
@@ -298,8 +298,10 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
     }.get(job_type)
     if tool_label:
         log_tail_trimmed = (log_tail or [])[-8:]
+        asset_id = (job.get("envVars") or {}).get("REPO_ID")
         get_event_bus().publish_sync(Event(
             event_type="scan.progress",
+            asset_id=asset_id,
             data={
                 "tool": tool_label,
                 "org": org,
@@ -330,9 +332,9 @@ async def complete_job_endpoint(job_id: str, body: CompleteRequest, request: Req
     if job.get("runnerId") != runner["id"]:
         return JSONResponse({"error": "Not your job"}, status_code=403)
 
-    # If the job was already cancelled, don't overwrite with "completed"
-    if job.get("status") == "cancelled":
-        return JSONResponse({"ok": True, "skipped": "job_cancelled"})
+    # Idempotent: any terminal state — do not re-run ingestion.
+    if job.get("status") in ("completed", "failed", "cancelled"):
+        return JSONResponse({"ok": True})
 
     complete_job(job_id)
 
@@ -361,10 +363,12 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
     org = job.get("org", "")
     run_id = job.get("runId", "")
     job_type = job.get("jobType", "dependencies_scanning")
+    env_vars = job.get("envVars") or {}
     # Required by the per-scanner hooks to resolve each finding's repo asset.
     # Carried in env_vars (persisted + decrypted on read); the job dict's own
     # fields are limited to mapped DB columns.
-    source_type = (job.get("envVars") or {}).get("SOURCE_TYPE") or None
+    source_type = env_vars.get("SOURCE_TYPE") or None
+    asset_id = env_vars.get("REPO_ID") or None
 
     # If the run was already cancelled, don't overwrite with ingestion
     run_record = _read_run_record(job_type, org, run_id)
@@ -410,6 +414,7 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
         _logger.info("[✓] Ingestion completed for %s %s/%s", job_type, org, run_id)
         get_event_bus().publish_sync(Event(
             event_type="scan.completed",
+            asset_id=asset_id,
             data={"tool": job_type, "org": org, "runId": run_id},
         ))
         # Emit notifications
@@ -427,10 +432,19 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
         fail_job(job.get("id", ""), str(e))
         get_event_bus().publish_sync(Event(
             event_type="scan.failed",
+            asset_id=asset_id,
             data={"tool": job_type, "org": org, "runId": run_id, "error": str(e)},
         ))
         from src.notifications.emitter import notify_scan_failed
         notify_scan_failed(job_type, org, run_id, str(e))
+    finally:
+        # Transition the umbrella ScanRun once all per-scanner jobs settle.
+        # The umbrella has id=base_scan_id (no scanner suffix) and stays
+        # 'queued' until every {base_scan_id}:{scanner} job reaches a terminal
+        # state — without this fan-in it would remain 'queued' forever.
+        if ":" in run_id:
+            base_scan_id = run_id.rsplit(":", 1)[0]
+            _try_close_umbrella_run(base_scan_id, org)
 
 
 def _read_run_record(job_type: str, org: str, run_id: str) -> dict[str, Any] | None:
@@ -483,6 +497,40 @@ def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, An
     except Exception:
         import logging
         logging.getLogger(__name__).warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)
+
+
+_TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled"})
+
+
+def _try_close_umbrella_run(base_scan_id: str, org: str) -> None:
+    """Transition the CI-trigger umbrella ScanRun when all sub-scanner jobs settle.
+
+    The umbrella row (id=base_scan_id) is created in 'queued' by submit_ci_scan
+    and is never touched by the per-scanner ingestion paths, which each write to
+    their own '{base_scan_id}:{scanner}' row. This function closes that gap:
+    once every '{base_scan_id}:*' job reaches a terminal state it marks the
+    umbrella 'completed' or 'failed' so CI polling and dedup detection both see
+    the correct final state.
+    """
+    import logging
+    _logger = logging.getLogger(__name__)
+    try:
+        from src.runner.storage import list_jobs
+        prefix = f"{base_scan_id}:"
+        sub_jobs = [j for j in list_jobs() if j.get("runId", "").startswith(prefix)]
+        if not sub_jobs:
+            return
+        if any(j.get("status") not in _TERMINAL_JOB_STATUSES for j in sub_jobs):
+            return  # Some sub-jobs are still running
+        overall = "failed" if any(j.get("status") == "failed" for j in sub_jobs) else "completed"
+        from src.storage import update_dependencies_run
+        update_dependencies_run(org, base_scan_id, {
+            "status": overall,
+            "finishedAt": now_iso(),
+        })
+        _logger.info("[✓] Closed umbrella run %s → %s", base_scan_id, overall)
+    except Exception:
+        _logger.warning("[!] Failed to close umbrella run %s", base_scan_id, exc_info=True)
 
 
 # Upload presign

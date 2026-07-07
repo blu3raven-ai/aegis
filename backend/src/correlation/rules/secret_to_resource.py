@@ -117,13 +117,15 @@ class SecretToResourceRule:
         org: str,
         ctx: RuleContext,
     ) -> None:
+        # Stable anchor: same secret+SAST pair always resolves to the same chain.
+        stable_event_id = f"data_exfil:{org}:{secret_finding_id}:{sast_finding_id}"
         chain_id = ctx.emit.emit_chain(
             {
                 "org_id": org,
                 "chain_type": _CHAIN_TYPE,
                 "severity": "critical",
             },
-            source_event_id=event["event_id"],
+            source_event_id=stable_event_id,
             rule_name=self.name,
         )
         if chain_id is None:

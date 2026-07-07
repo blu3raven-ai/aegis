@@ -98,6 +98,7 @@ class EmitInterface:
             return await upsert_finding(
                 session,
                 tool=tool,
+                asset_id=finding_data.get("asset_id"),
                 org=org,
                 repo=repo,
                 identity_key=identity_key,
@@ -143,10 +144,15 @@ class EmitInterface:
         dedup_hash = hashlib.sha256(dedup_str.encode()).hexdigest()[:16]
         idem_key = _idem_key(rule_name, source_event_id, f"chain:{dedup_hash}")
 
-        if self._redis.exists(idem_key):
-            logger.debug("emit_chain: duplicate suppressed rule=%s event=%s",
-                         rule_name, source_event_id)
-            return None
+        # Use a single GET rather than EXISTS+GET to avoid a race where the key
+        # expires between the two calls and we'd silently return None.
+        existing = self._redis.get(idem_key)
+        if existing is not None:
+            if isinstance(existing, bytes):
+                existing = existing.decode()
+            logger.debug("emit_chain: duplicate, returning existing chain=%s rule=%s event=%s",
+                         existing, rule_name, source_event_id)
+            return existing
 
         chain_id = self._chain_store.create_chain(
             org_id=chain_data["org_id"],
@@ -169,6 +175,29 @@ class EmitInterface:
         ))
 
         return chain_id
+
+    def lookup_chain(
+        self,
+        org_id: str,
+        chain_type: str,
+        source_event_id: str,
+        rule_name: str,
+    ) -> str | None:
+        """Return the stored chain_id for the given anchor parameters, or None.
+
+        Uses the same idempotency key as emit_chain. Call this when emit_chain
+        returns None so edges can still be added to the existing chain.
+        Returns None if the idempotency entry has expired from Redis.
+        """
+        dedup_str = f"{org_id}:{chain_type}:{rule_name}:{source_event_id}"
+        dedup_hash = hashlib.sha256(dedup_str.encode()).hexdigest()[:16]
+        idem_key = _idem_key(rule_name, source_event_id, f"chain:{dedup_hash}")
+        existing = self._redis.get(idem_key)
+        if existing is not None:
+            if isinstance(existing, bytes):
+                existing = existing.decode()
+            return existing
+        return None
 
     def emit_chain_edge(
         self,

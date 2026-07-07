@@ -80,7 +80,20 @@ class CrossRepoCveClusterRule:
             rule_name=self.name,
         )
         if chain_id is None:
-            return  # chain already exists; edges handled at next finding
+            # Chain exists but the idempotency entry was not returned — look it
+            # up via the same anchor so edges can still be recorded.
+            chain_id = ctx.emit.lookup_chain(
+                org_id=org,
+                chain_type=_CHAIN_TYPE,
+                source_event_id=cluster_event_id,
+                rule_name=self.name,
+            )
+        if chain_id is None:
+            logger.warning(
+                "cross_repo_cve_cluster: chain not found for org=%s cve=%s; skipping edges",
+                org, cve_id,
+            )
+            return
 
         # Add an edge for every affected finding → the triggering finding acts as
         # the cluster root. All findings point inward to represent shared exposure.

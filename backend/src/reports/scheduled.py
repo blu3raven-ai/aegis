@@ -123,7 +123,7 @@ def get_schedule(schedule_id: int) -> dict | None:
     return run_db(_query)
 
 
-def update_schedule(schedule_id: int, patch: dict) -> dict:
+def update_schedule(schedule_id: int, patch: dict, *, caller_asset_ids: list | None = None) -> dict:
     """Partial update. Pass any subset of mutable fields."""
     mutable = {
         "name", "report_type", "format", "schedule_type", "schedule_value",
@@ -132,6 +132,14 @@ def update_schedule(schedule_id: int, patch: dict) -> dict:
     invalid = set(patch) - mutable
     if invalid:
         raise ValueError(f"cannot update fields: {sorted(invalid)}")
+
+    # Enforce that any requested asset_ids are within the caller's granted scope.
+    # If caller_asset_ids is provided, intersect; if empty, clamp to empty (fail-closed).
+    if "filters" in patch and "asset_ids" in patch["filters"]:
+        allowed = set(caller_asset_ids or [])
+        patch = {**patch, "filters": {**patch["filters"], "asset_ids": [
+            aid for aid in (patch["filters"].get("asset_ids") or []) if aid in allowed
+        ]}}
 
     async def _query(session: AsyncSession) -> dict:
         sr = await session.get(ScheduledReport, schedule_id)
