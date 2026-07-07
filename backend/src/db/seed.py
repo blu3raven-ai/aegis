@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import AppConfig, Role, User
+from src.db.models import AppConfig, Role, Rule, User
 from src.authz.roles.service import BUILTIN_PERMISSION_IDS
 
 logger = logging.getLogger(__name__)
@@ -89,6 +89,89 @@ DEFAULT_ROLES = [
         "protected": True,
     },
 ]
+
+
+_DEFAULT_RULES = [
+    # SLA tiers — one per severity level, ascending priority
+    {
+        "category": "sla",
+        "name": "Critical — 7-day SLA",
+        "description": "Critical findings must be remediated within 7 days.",
+        "priority": 10,
+        "conditions": {"field": "severity", "op": "eq", "value": "critical"},
+        "action": {"deadline_days": 7, "escalations": []},
+    },
+    {
+        "category": "sla",
+        "name": "High — 30-day SLA",
+        "description": "High findings must be remediated within 30 days.",
+        "priority": 20,
+        "conditions": {"field": "severity", "op": "eq", "value": "high"},
+        "action": {"deadline_days": 30, "escalations": []},
+    },
+    {
+        "category": "sla",
+        "name": "Medium — 90-day SLA",
+        "description": "Medium findings must be remediated within 90 days.",
+        "priority": 30,
+        "conditions": {"field": "severity", "op": "eq", "value": "medium"},
+        "action": {"deadline_days": 90, "escalations": []},
+    },
+    {
+        "category": "sla",
+        "name": "Low — 180-day SLA",
+        "description": "Low findings must be remediated within 180 days.",
+        "priority": 40,
+        "conditions": {"field": "severity", "op": "eq", "value": "low"},
+        "action": {"deadline_days": 180, "escalations": []},
+    },
+    # Scanner coverage — catch-all baseline for all repos
+    {
+        "category": "scanner_coverage",
+        "name": "Baseline scanning",
+        "description": "All repositories must run dependency and code scanning.",
+        "priority": 100,
+        "conditions": {},
+        "action": {
+            "type": "require_scanners",
+            "required_scanners": ["dependencies_scanning", "code_scanning"],
+        },
+    },
+]
+
+
+async def seed_default_rules(session: AsyncSession) -> None:
+    """Seed default SLA tiers and scanner coverage rule if no rules exist yet.
+
+    Runs on every startup but is a no-op once any rule exists, so it is safe
+    for both fresh installs and existing deployments.
+    """
+    result = await session.execute(select(Rule).limit(1))
+    if result.scalars().first() is not None:
+        return
+
+    logger.info("No rules found — seeding default SLA tiers and baseline scanner coverage rule.")
+    now = datetime.now(timezone.utc)
+
+    for rule_data in _DEFAULT_RULES:
+        category = rule_data["category"]
+        rule_id = f"{category.replace('_', '-')}-{secrets.token_urlsafe(8)}"
+        session.add(Rule(
+            id=rule_id,
+            category=category,
+            name=rule_data["name"],
+            description=rule_data["description"],
+            enabled=True,
+            priority=rule_data["priority"],
+            conditions=rule_data["conditions"],
+            action=rule_data["action"],
+            created_by="system",
+            created_at=now,
+            updated_at=now,
+        ))
+
+    await session.flush()
+    logger.info("Default rules seeded.")
 
 
 async def seed_if_empty(session: AsyncSession) -> None:
