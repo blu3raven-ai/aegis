@@ -111,7 +111,7 @@ async def gitlab_webhook(
         logger.info("gitlab.webhook: ignoring event kind=%s header=%s", object_kind, x_gitlab_event)
         return {"status": "ignored", "reason": f"event {x_gitlab_event}"}
 
-    delivery_id = x_gitlab_event_uuid or hashlib.sha256(body).hexdigest()
+    delivery_id = x_gitlab_event_uuid or hashlib.sha256(body).hexdigest()[:32]
     if register_delivery("gitlab", delivery_id):
         logger.info("gitlab.webhook: dropping replayed delivery id=%s", delivery_id)
         return {"status": "duplicate", "event_id": None}

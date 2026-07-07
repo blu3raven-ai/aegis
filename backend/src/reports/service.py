@@ -403,15 +403,15 @@ def _serialize_risk_register_csv(*, asset_ids: list[str]) -> bytes:
     writer.writeheader()
     for sev, rows in payload["open_by_severity"].items():
         for r in rows:
-            writer.writerow({
+            writer.writerow({k: _sanitize_csv_cell(v) for k, v in {
                 "severity": sev, "state": r["state"], "title": r["title"],
                 "source": r["source"], "age_days": r["age_days"], "reason": "",
-            })
+            }.items()})
     for r in payload["accepted"]:
-        writer.writerow({
+        writer.writerow({k: _sanitize_csv_cell(v) for k, v in {
             "severity": r["severity"], "state": "dismissed", "title": r["title"],
             "source": r["source"], "age_days": r["age_days"], "reason": r["reason"],
-        })
+        }.items()})
     return buf.getvalue().encode()
 
 

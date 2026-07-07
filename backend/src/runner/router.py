@@ -332,11 +332,9 @@ async def complete_job_endpoint(job_id: str, body: CompleteRequest, request: Req
     if job.get("runnerId") != runner["id"]:
         return JSONResponse({"error": "Not your job"}, status_code=403)
 
-    # Idempotent: already completed or cancelled — do not re-run ingestion
-    if job.get("status") == "completed":
-        return JSONResponse({"ok": True, "skipped": "already_completed"})
-    if job.get("status") == "cancelled":
-        return JSONResponse({"ok": True, "skipped": "job_cancelled"})
+    # Idempotent: any terminal state — do not re-run ingestion.
+    if job.get("status") in ("completed", "failed", "cancelled"):
+        return JSONResponse({"ok": True})
 
     complete_job(job_id)
 

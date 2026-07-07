@@ -80,6 +80,20 @@ def normalize_gitlab_push(payload: dict) -> CodePushEvent:
     namespace = project.get("path_with_namespace", "")
     # org_id is the top-level namespace (group or user)
     org_id = namespace.split("/")[0] if "/" in namespace else namespace
+    commits = []
+    for c in payload.get("commits", []):
+        if not isinstance(c, dict):
+            continue
+        # GitLab uses "id" for the commit SHA; fall back to "sha" for
+        # non-standard payloads. Skip entries that carry no identifier at all
+        # rather than forwarding an empty string that downstream workers would
+        # treat as a real SHA.
+        sha = c.get("id") or c.get("sha", "")
+        if not sha:
+            continue
+        author_info = c.get("author") or {}
+        commits.append({"sha": sha, "author": author_info.get("email", "")})
+
     return CodePushEvent(
         org_id=org_id,
         source_component="integrations.gitlab",
@@ -88,14 +102,7 @@ def normalize_gitlab_push(payload: dict) -> CodePushEvent:
             "ref": payload.get("ref"),
             "before_sha": payload.get("before"),
             "after_sha": payload.get("after"),
-            "commits": [
-                {
-                    "sha": c.get("id", ""),
-                    "author": (c.get("author") or {}).get("email", ""),
-                }
-                for c in payload.get("commits", [])
-                if isinstance(c, dict)
-            ],
+            "commits": commits,
         },
     )
 
