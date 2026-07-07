@@ -440,3 +440,10 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+@media (pointer: coarse) {
+  button,
+  [role="button"] {
+    min-height: 44px;
+  }
+}
