@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import case, select
+from sqlalchemy import case, or_, and_, select
 
 from src.db.helpers import run_db
 from src.db.models import Asset, ScanRun, Finding, Decision
@@ -589,7 +589,12 @@ def read_latest_findings(org: str | None = None, *, asset_ids: list[str] | None 
             .outerjoin(
                 Decision,
                 (Decision.tool == Finding.tool)
-                & (Decision.asset_id == Finding.asset_id)
+                # Secrets have NULL asset_id; use IS NOT DISTINCT FROM semantics
+                # because NULL = NULL evaluates to NULL (not TRUE) in SQL.
+                & or_(
+                    and_(Decision.asset_id.is_(None), Finding.asset_id.is_(None)),
+                    Decision.asset_id == Finding.asset_id,
+                )
                 & (Decision.identity_key == Finding.identity_key),
             )
             .where(Finding.tool == "secret_scanning")

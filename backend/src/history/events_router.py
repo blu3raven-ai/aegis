@@ -19,6 +19,26 @@ events_router = APIRouter(prefix="/api/v1/history/events", tags=["history"])
 HEARTBEAT_INTERVAL = 30  # seconds
 
 
+async def _resolve_allowed_asset_ids(request: Request, role: str) -> "frozenset[str] | None":
+    """Return the asset IDs this caller may see in asset-scoped SSE events.
+
+    Admins and owners receive None (no filter — see all asset events).
+    Other roles receive the frozenset of their granted asset IDs.
+    An empty frozenset means no grants — no asset-scoped events delivered.
+    """
+    if role in ("admin", "owner"):
+        return None
+    from src.authz.enforcement.scope import get_user_asset_ids
+    from src.db.engine import async_session_factory
+    ctx = {
+        "user_id": getattr(request.state, "user_sub", None),
+        "role": role,
+    }
+    async with async_session_factory() as db:
+        asset_ids = await get_user_asset_ids(db, ctx)
+    return frozenset(asset_ids)
+
+
 @events_router.get("/stream")
 async def sse_stream(
     request: Request,
@@ -29,11 +49,14 @@ async def sse_stream(
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     role = getattr(request.state, "user_role", None) or "viewer"
+    allowed_asset_ids = await _resolve_allowed_asset_ids(request, role)
 
     bus = get_event_bus()
 
     try:
-        _sub_obj, subscription = bus.subscribe(user_id=user_sub, role=role)
+        _sub_obj, subscription = bus.subscribe(
+            user_id=user_sub, role=role, allowed_asset_ids=allowed_asset_ids
+        )
     except ConnectionError as exc:
         return JSONResponse({"error": str(exc)}, status_code=429)
 
