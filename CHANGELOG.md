@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 
 ---
 
+## v2.6.1 — 2026-07-08
+
+### Security
+
+- Runner re-registration now treats an approved runner's name as untouchable — a newcomer with the same name starts pending rather than silently rotating the trusted runner's auth token (SR-09)
+- Azure DevOps and Jenkins webhook receivers now deduplicate deliveries using a SHA-256 body hash as a deterministic delivery id, preventing replay attacks (SR-12)
+- Assignable-user picker is scoped to users who share an asset with the caller; callers with no asset scope receive an empty list (SR-15)
+- SSO JIT provisioning blocks auto-link when the target account holds `manage_users`, preventing an attacker from attaching a verified SSO identity to a pre-existing privileged account (SR-16)
+
+### Fixed
+
+- SAST finding identity key now includes `start_line` alongside the snippet fingerprint, preventing two distinct findings at different locations from collapsing into one when their code content is identical
+- Agent-scanning lifecycle no longer writes `engine = 'agent'`; non-SAST findings correctly store `NULL` per the model spec
+- Migration chain repaired: a backfill migration now runs before the `ck_findings_engine` check constraint is applied, so instances with pre-existing `'agent'` values upgrade cleanly
+- Dependency security updates: weasyprint ≥ 68, cryptography ≥ 48, PyJWT ≥ 2.8, starlette ≥ 1.3
+- Frontend text contrast raised to meet WCAG AA on light backgrounds
+- Interactive overlay elements converted from non-focusable `div` to accessible `button` elements
+- Unused font imports (Space Grotesk, Manrope) and unreferenced CSS tokens removed, reducing stylesheet weight
+- Removed dead backend modules (old flat auth stack, unused settings store files, speculative feature flags) reducing the codebase by ~1 600 lines
+
+---
+
 ## v2.6.0 — 2026-07-07
 
 ### Security
