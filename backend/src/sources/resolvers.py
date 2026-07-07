@@ -188,6 +188,9 @@ def repo_sources(
 ) -> RepoSourcesResponse:
     """Finding-aggregated list of repo source assets in the caller's scope."""
     _require_view_findings(info_context)
+    limit = max(1, min(limit or 100, 500))
+    if since_days is not None:
+        since_days = max(1, min(since_days, 365))
     result = _list_repo_sources(
         asset_ids=asset_ids,
         since_days=since_days,

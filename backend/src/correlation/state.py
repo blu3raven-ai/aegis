@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import select
 
 from src.db.helpers import run_db
-from src.db.models import Chain, ChainEdge, Finding, SbomComponent
+from src.db.models import Asset, Chain, ChainEdge, Finding, SbomComponent
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +66,10 @@ class CorrelationState:
         async def _fetch(session):
             stmt = select(Finding)
 
-            if org_id is not None:
-                stmt = stmt.where(Finding.org == org_id)
             if repo_id is not None:
-                stmt = stmt.where(Finding.repo == repo_id)
+                # repo_id may be an asset UUID or an asset external_ref
+                asset_id_subq = select(Asset.id).where(Asset.external_ref == repo_id)
+                stmt = stmt.where(Finding.asset_id.in_(asset_id_subq))
             if scanner_type is not None:
                 stmt = stmt.where(Finding.tool == scanner_type)
 
@@ -197,8 +197,7 @@ def _finding_to_dict(row: Finding) -> dict[str, Any]:
     return {
         "id": row.id,
         "tool": row.tool,
-        "org": row.org,
-        "repo": row.repo,
+        "asset_id": row.asset_id,
         "identity_key": row.identity_key,
         "state": row.state,
         "severity": row.severity,

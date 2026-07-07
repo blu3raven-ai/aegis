@@ -80,13 +80,23 @@ def _serialize_findings_json(rows: list[dict]) -> bytes:
     return json.dumps(rows, default=_json_default, indent=2).encode()
 
 
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sanitize_csv_cell(value: object) -> object:
+    """Prevent spreadsheet formula injection by prefixing dangerous cell values."""
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
 def _serialize_findings_csv(rows: list[dict]) -> bytes:
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=_FINDING_FIELDS, extrasaction="ignore")
     writer.writeheader()
     for row in rows:
         writer.writerow({
-            k: (v.isoformat() if isinstance(v, datetime) else v)
+            k: _sanitize_csv_cell(v.isoformat() if isinstance(v, datetime) else v)
             for k, v in row.items()
         })
     return buf.getvalue().encode()

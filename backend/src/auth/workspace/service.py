@@ -545,6 +545,25 @@ def create_user(*, input: UserCreateInput, info_context: dict) -> WorkspaceUser:
     if new_role_kind == "owner" and not has_role_permission(actor_role, actor_role_id, MANAGE_OWNER_ROLE):
         raise_permission_denied("Only roles with manage_owner_role can promote to owner.")
 
+    # Escalation guard: actor cannot grant permissions they don't hold, except
+    # when manage_owner_role explicitly permits creating an owner (already gated
+    # above).
+    if actor_role != "owner" and new_role_kind != "owner":
+        try:
+            if isinstance(actor_role_id, str) and actor_role_id:
+                actor_record = get_role(actor_role_id)
+            else:
+                actor_record = get_role_by_slug(actor_role)
+            actor_perms = resolve_role_permissions(actor_record)
+        except ValueError:
+            actor_perms = set()
+        target_perms = resolve_role_permissions(role_record)
+        escalated = target_perms - actor_perms
+        if escalated:
+            raise_permission_denied(
+                f"Cannot create user with permissions you don't hold: {', '.join(sorted(escalated))}"
+            )
+
     password_hash = _hash_password(password)
     new_user_id = f"usr_{_secrets.token_hex(12)}"
 
@@ -688,9 +707,16 @@ def update_user_role(*, user_id: str, input: UserRoleInput, info_context: dict) 
                 "totpEnabled": user.totp_enabled or False,
             }, current_role_kind, False
 
+        from sqlalchemy import update as _sa_update
+        from src.db.models import UserSession
         user.role_id = new_role_id
         user.session_version = (user.session_version or 1) + 1
         user.updated_at = datetime.now(timezone.utc)
+        await session.execute(
+            _sa_update(UserSession)
+            .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(timezone.utc), revocation_reason="role_changed")
+        )
         await session.flush()
         now_iso = user.updated_at.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
         created_iso = (
@@ -791,9 +817,16 @@ def reset_user_password(*, user_id: str, password: str, info_context: dict) -> W
         user = await session.get(User, user_id)
         if user is None:
             raise GraphQLError("User not found.", extensions={"code": "NOT_FOUND"})
+        from sqlalchemy import update as _sa_update
+        from src.db.models import UserSession
         user.password_hash = password_hash
         user.session_version = (user.session_version or 1) + 1
         user.updated_at = datetime.now(timezone.utc)
+        await session.execute(
+            _sa_update(UserSession)
+            .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(timezone.utc), revocation_reason="password_reset")
+        )
         await session.flush()
         return user.username
 

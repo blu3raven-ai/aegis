@@ -11,6 +11,7 @@ Secret resolution is DB-first via :func:`match_webhook_secret`; if no
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -118,8 +119,9 @@ async def github_webhook(
         logger.info("github.webhook: ignoring %s with missing required fields", x_github_event)
         return {"status": "ignored", "reason": "missing required fields"}
 
-    if x_github_delivery is not None and register_delivery("github", x_github_delivery):
-        logger.info("github.webhook: dropping replayed delivery id=%s", x_github_delivery)
+    delivery_id = x_github_delivery or hashlib.sha256(body).hexdigest()
+    if register_delivery("github", delivery_id):
+        logger.info("github.webhook: dropping replayed delivery id=%s", delivery_id)
         return {"status": "duplicate", "event_id": None}
 
     if matched.org_id is not None:

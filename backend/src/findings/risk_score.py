@@ -73,6 +73,13 @@ async def recompute_finding_risk_scores(
     if asset_ids is not None and len(asset_ids) == 0:
         return 0
 
+    if asset_ids is None and org is not None:
+        from src.authz.enforcement.scope import resolve_asset_ids_for_org
+        org_asset_ids = await resolve_asset_ids_for_org(session, org)
+        if not org_asset_ids:
+            return 0
+        asset_ids = org_asset_ids
+
     where_clauses = ["LOWER(COALESCE(f.severity, '')) IN ('critical', 'high', 'medium', 'low')"]
     params: dict = {}
     if asset_ids:

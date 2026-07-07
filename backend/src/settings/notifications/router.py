@@ -94,7 +94,7 @@ def create_notification_destination(
         logger.exception("create_destination failed")
         raise HTTPException(status_code=500, detail="internal error") from exc
 
-    return dest
+    return {**dest, "config": redact_config(dest.get("config"))}
 
 
 @_destinations.put("/destinations/{dest_id}")
@@ -114,7 +114,7 @@ def update_notification_destination(
     )
     if dest is None:
         raise HTTPException(status_code=404, detail="destination not found")
-    return dest
+    return {**dest, "config": redact_config(dest.get("config"))}
 
 
 @_destinations.delete("/destinations/{dest_id}", status_code=204)
