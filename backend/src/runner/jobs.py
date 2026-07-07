@@ -23,7 +23,7 @@ from typing import Any
 
 from src.runner.encryption import SENSITIVE_KEYS as _SENSITIVE_KEYS, encrypt_env_vars, decrypt_env_vars
 from src.runner.storage import atomic_assign_job, list_jobs, read_job, read_runner, write_job, write_runner
-from src.shared.paths import now_iso
+from src.shared.paths import now_iso, parse_iso_utc
 
 # Explicit re-export so ``from src.runner.jobs import read_job`` keeps working.
 __all__ = [
@@ -262,7 +262,7 @@ def requeue_stale_jobs() -> list[dict[str, Any]]:
         if not last_hb:
             continue
         try:
-            hb_time = datetime.fromisoformat(last_hb.replace("Z", "+00:00"))
+            hb_time = parse_iso_utc(last_hb)
             if (now - hb_time).total_seconds() > STALE_JOB_SECONDS:
                 job["status"] = "queued"
                 job["runnerId"] = None

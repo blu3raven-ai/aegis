@@ -17,7 +17,7 @@ from src.runner.storage import (
     validate_registration_token,
     write_runner,
 )
-from src.shared.paths import now_iso
+from src.shared.paths import now_iso, parse_iso_utc
 
 
 import logging
@@ -209,7 +209,7 @@ def compute_runner_status(runner: dict[str, Any]) -> str:
         return "offline"
 
     try:
-        hb_time = datetime.fromisoformat(last_hb.replace("Z", "+00:00"))
+        hb_time = parse_iso_utc(last_hb)
         elapsed = (datetime.now(timezone.utc) - hb_time).total_seconds()
     except (ValueError, TypeError):
         return "offline"
@@ -229,7 +229,7 @@ def list_runners_with_status() -> list[dict[str, Any]]:
 
         registered = runner.get("registeredAt", "")
         try:
-            reg_time = datetime.fromisoformat(registered.replace("Z", "+00:00"))
+            reg_time = parse_iso_utc(registered)
             uptime_minutes = min(60, (datetime.now(timezone.utc) - reg_time).total_seconds() / 60)
         except (ValueError, TypeError):
             uptime_minutes = 60

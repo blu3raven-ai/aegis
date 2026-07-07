@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from src.db.helpers import run_db
 from src.db.models import Runner, RunnerHeartbeat, RunnerJob, RunnerToken
-from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso
+from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso, parse_iso_utc
 
 
 def _runner_to_dict(runner: Runner) -> dict[str, Any]:
@@ -72,9 +72,9 @@ def write_runner(runner: dict[str, Any]) -> None:
             if runner.get("authTokenHash"):
                 existing.auth_token_hash = runner["authTokenHash"]
             if "approvedAt" in runner:
-                existing.approved_at = datetime.fromisoformat(runner["approvedAt"].replace("Z", "+00:00")) if runner["approvedAt"] else None
+                existing.approved_at = parse_iso_utc(runner["approvedAt"]) if runner["approvedAt"] else None
             if runner.get("lastHeartbeatAt"):
-                existing.last_heartbeat = datetime.fromisoformat(runner["lastHeartbeatAt"].replace("Z", "+00:00"))
+                existing.last_heartbeat = parse_iso_utc(runner["lastHeartbeatAt"])
             if "jobsCompleted" in runner:
                 existing.jobs_completed = runner["jobsCompleted"]
             if "orgId" in runner:
@@ -135,9 +135,9 @@ def write_job(job: dict[str, Any]) -> None:
                 if key in job:
                     setattr(existing, attr, job[key])
             if job.get("startedAt"):
-                existing.started_at = datetime.fromisoformat(job["startedAt"].replace("Z", "+00:00"))
+                existing.started_at = parse_iso_utc(job["startedAt"])
             if job.get("completedAt"):
-                existing.completed_at = datetime.fromisoformat(job["completedAt"].replace("Z", "+00:00"))
+                existing.completed_at = parse_iso_utc(job["completedAt"])
         else:
             session.add(RunnerJob(
                 id=job["id"],
