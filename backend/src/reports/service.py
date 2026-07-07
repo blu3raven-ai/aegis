@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 
@@ -91,15 +92,7 @@ def _sanitize_csv_cell(value: object) -> object:
 
 
 def _serialize_findings_csv(rows: list[dict]) -> bytes:
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=_FINDING_FIELDS, extrasaction="ignore")
-    writer.writeheader()
-    for row in rows:
-        writer.writerow({
-            k: _sanitize_csv_cell(v.isoformat() if isinstance(v, datetime) else v)
-            for k, v in row.items()
-        })
-    return buf.getvalue().encode()
+    return _write_csv(rows, _FINDING_FIELDS).encode()
 
 
 def _serialize_posture_json(asset_ids: list[str]) -> bytes:
@@ -122,6 +115,32 @@ def _get_jinja_env():
             autoescape=select_autoescape(["html", "xml", "j2"]),
         )
     return _jinja_env
+
+
+def _serialize_pdf(template: str, payload: dict) -> bytes:
+    """Render a report template with `payload` and return the PDF bytes."""
+    from src.exports.pdf import render_pdf
+
+    env = _get_jinja_env()
+    html = env.get_template(template).render(**payload)
+    return render_pdf(html)
+
+
+def _write_csv(rows: Iterable[dict], fields: list[str]) -> str:
+    """CSV with a header row and formula-injection-sanitized string cells.
+
+    Every CSV a report emits must route through here so the anti-injection
+    prefixing in `_sanitize_csv_cell` is applied uniformly; datetimes are
+    normalised to ISO-8601 first."""
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({
+            k: _sanitize_csv_cell(v.isoformat() if isinstance(v, datetime) else v)
+            for k, v in row.items()
+        })
+    return buf.getvalue()
 
 
 def _finding_title(row: dict) -> str:
@@ -184,23 +203,17 @@ def _build_posture_pdf_payload(*, title: str, asset_ids: list[str]) -> dict:
 
 
 def _serialize_findings_pdf(rows: list[dict], *, title: str, scope_label: str) -> bytes:
-    from src.exports.pdf import render_pdf
-
-    env = _get_jinja_env()
-    html = env.get_template("report_findings.html.j2").render(
-        **_build_findings_pdf_payload(title=title, rows=rows, scope_label=scope_label)
+    return _serialize_pdf(
+        "report_findings.html.j2",
+        _build_findings_pdf_payload(title=title, rows=rows, scope_label=scope_label),
     )
-    return render_pdf(html)
 
 
 def _serialize_posture_pdf(*, asset_ids: list[str], title: str) -> bytes:
-    from src.exports.pdf import render_pdf
-
-    env = _get_jinja_env()
-    html = env.get_template("report_posture.html.j2").render(
-        **_build_posture_pdf_payload(title=title, asset_ids=asset_ids)
+    return _serialize_pdf(
+        "report_posture.html.j2",
+        _build_posture_pdf_payload(title=title, asset_ids=asset_ids),
     )
-    return render_pdf(html)
 
 
 _SEV_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
@@ -293,13 +306,10 @@ def _build_executive_pdf_payload(*, title: str, asset_ids: list[str]) -> dict:
 
 
 def _serialize_executive_pdf(*, asset_ids: list[str], title: str) -> bytes:
-    from src.exports.pdf import render_pdf
-
-    env = _get_jinja_env()
-    html = env.get_template("report_executive.html.j2").render(
-        **_build_executive_pdf_payload(title=title, asset_ids=asset_ids)
+    return _serialize_pdf(
+        "report_executive.html.j2",
+        _build_executive_pdf_payload(title=title, asset_ids=asset_ids),
     )
-    return render_pdf(html)
 
 
 _RISK_SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
@@ -384,13 +394,10 @@ def _build_risk_register_payload(*, title: str, asset_ids: list[str]) -> dict:
 
 
 def _serialize_risk_register_pdf(*, asset_ids: list[str], title: str) -> bytes:
-    from src.exports.pdf import render_pdf
-
-    env = _get_jinja_env()
-    html = env.get_template("report_risk_register.html.j2").render(
-        **_build_risk_register_payload(title=title, asset_ids=asset_ids)
+    return _serialize_pdf(
+        "report_risk_register.html.j2",
+        _build_risk_register_payload(title=title, asset_ids=asset_ids),
     )
-    return render_pdf(html)
 
 
 _RISK_CSV_FIELDS = ["severity", "state", "title", "source", "age_days", "reason"]
@@ -398,21 +405,21 @@ _RISK_CSV_FIELDS = ["severity", "state", "title", "source", "age_days", "reason"
 
 def _serialize_risk_register_csv(*, asset_ids: list[str]) -> bytes:
     payload = _build_risk_register_payload(title="", asset_ids=asset_ids)
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=_RISK_CSV_FIELDS, extrasaction="ignore")
-    writer.writeheader()
-    for sev, rows in payload["open_by_severity"].items():
-        for r in rows:
-            writer.writerow({k: _sanitize_csv_cell(v) for k, v in {
-                "severity": sev, "state": r["state"], "title": r["title"],
-                "source": r["source"], "age_days": r["age_days"], "reason": "",
-            }.items()})
-    for r in payload["accepted"]:
-        writer.writerow({k: _sanitize_csv_cell(v) for k, v in {
-            "severity": r["severity"], "state": "dismissed", "title": r["title"],
-            "source": r["source"], "age_days": r["age_days"], "reason": r["reason"],
-        }.items()})
-    return buf.getvalue().encode()
+
+    def _rows() -> Iterable[dict]:
+        for sev, rows in payload["open_by_severity"].items():
+            for r in rows:
+                yield {
+                    "severity": sev, "state": r["state"], "title": r["title"],
+                    "source": r["source"], "age_days": r["age_days"], "reason": "",
+                }
+        for r in payload["accepted"]:
+            yield {
+                "severity": r["severity"], "state": "dismissed", "title": r["title"],
+                "source": r["source"], "age_days": r["age_days"], "reason": r["reason"],
+            }
+
+    return _write_csv(_rows(), _RISK_CSV_FIELDS).encode()
 
 
 async def _mark_failed(session: AsyncSession, report_id: int, error: str) -> None:
@@ -472,14 +479,6 @@ def _serialize_soc2_evidence_zip(*, asset_ids: list[str], title: str) -> bytes:
 
     data = run_db(_gather)
 
-    def _csv(rows: list[dict], fields: list[str]) -> str:
-        buf = io.StringIO()
-        w = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
-        w.writeheader()
-        for r in rows:
-            w.writerow(r)
-        return buf.getvalue()
-
     generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     manifest = (
         f"{title}\n"
@@ -494,14 +493,14 @@ def _serialize_soc2_evidence_zip(*, asset_ids: list[str], title: str) -> bytes:
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("MANIFEST.txt", manifest)
-        zf.writestr("controls.csv", _csv(data["controls"], [
+        zf.writestr("controls.csv", _write_csv(data["controls"], [
             "control_id", "title", "category", "status", "manual_status",
             "evidence_note", "assessed_by", "assessed_at", "open_findings",
         ]))
-        zf.writestr("mapped_findings.csv", _csv(data["mapped"], [
+        zf.writestr("mapped_findings.csv", _write_csv(data["mapped"], [
             "control_id", "tool", "severity", "state", "identity_key", "rationale",
         ]))
-        zf.writestr("accepted_risks.csv", _csv(data["accepted"], [
+        zf.writestr("accepted_risks.csv", _write_csv(data["accepted"], [
             "severity", "title", "source", "reason", "decided_by", "age_days",
         ]))
     return out.getvalue()
