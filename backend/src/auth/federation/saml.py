@@ -103,7 +103,7 @@ def _sp_config(row: SsoConfig, origin: str) -> Iterator[SPConfig]:
                     "allow_unsolicited": True,
                     "authn_requests_signed": True,
                     "want_assertions_signed": True,
-                    "want_response_signed": False,
+                    "want_response_signed": True,
                     "logout_requests_signed": True,
                     "logout_responses_signed": True,
                 },

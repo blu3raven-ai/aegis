@@ -190,13 +190,23 @@ def change_email(
             raise GraphQLError("User not found.", extensions={"code": "NOT_FOUND"})
         # Re-authenticate before re-routing the recovery email: a hijacked or
         # unattended session must not silently change it. Password-backed users
-        # prove the current password; password-less SSO users have no local
-        # factor to check (their IdP is the auth authority).
+        # prove the current password; SSO users without a local password must
+        # prove a TOTP code instead. SSO users with neither factor are blocked.
         if user.password_hash:
             if not verify_password(current_password, user.password_hash):
                 raise GraphQLError(
                     "Current password is incorrect.", extensions={"code": "FORBIDDEN"}
                 )
+        elif user.totp_enabled and user.totp_secret:
+            if not verify_totp(user.totp_secret, current_password):
+                raise GraphQLError(
+                    "TOTP code is incorrect.", extensions={"code": "FORBIDDEN"}
+                )
+        else:
+            raise GraphQLError(
+                "Email changes for SSO accounts require TOTP to be enabled.",
+                extensions={"code": "FORBIDDEN"},
+            )
         if new_email:
             existing = await session.execute(
                 select(User).where(func.lower(User.email) == new_email, User.id != user_id)

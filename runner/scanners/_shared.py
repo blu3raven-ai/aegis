@@ -34,12 +34,25 @@ def setup_output_dir(job_id: str, base_dir: Path | str = "/workspace") -> Path:
 
 
 def repo_name_from_url(url: str) -> str:
-    """Extract the basename from a git URL, stripping .git and trailing /."""
+    """Extract the repository basename from a git URL.
+
+    Strips .git suffix and trailing slashes, validates the resulting name
+    is a safe single path component, then sanitizes remaining characters.
+    Raises ValueError for names that would be unsafe as filesystem path components.
+    """
+    import re as _re
     path = url.rstrip("/")
     if path.endswith(".git"):
         path = path[:-4]
     path = path.rstrip("/")
-    return path.rsplit("/", 1)[-1]
+    raw = path.rsplit("/", 1)[-1]
+    # Use Path.name to strip any embedded separators (e.g. backslashes).
+    name = Path(raw).name
+    if not name or name in (".", "..") or "/" in name or "\x00" in name:
+        raise ValueError(f"Unsafe repository name derived from URL: {url!r}")
+    # Sanitize: collapse non-word chars to underscores.
+    name = _re.sub(r"[^\w\-]", "_", name).strip("_") or "repo"
+    return name
 
 
 def derive_html_url(repo_url: str) -> str:

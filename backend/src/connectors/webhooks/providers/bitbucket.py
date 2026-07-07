@@ -12,6 +12,7 @@ working.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -100,10 +101,13 @@ async def bitbucket_webhook(
         logger.info("bitbucket.webhook: ignoring event key=%s", x_event_key)
         return {"status": "ignored", "reason": f"event {x_event_key}"}
 
-    if x_request_uuid is not None and register_delivery("bitbucket", x_request_uuid):
-        logger.info("bitbucket.webhook: dropping replayed delivery id=%s", x_request_uuid)
+    delivery_id = x_request_uuid or hashlib.sha256(body).hexdigest()
+    if register_delivery("bitbucket", delivery_id):
+        logger.info("bitbucket.webhook: dropping replayed delivery id=%s", delivery_id)
         return {"status": "duplicate", "event_id": None}
 
+    if matched.org_id is not None:
+        event = event.model_copy(update={"org_id": matched.org_id})
     get_event_publisher().publish(event)
     logger.info(
         "bitbucket.webhook: published event_type=%s event_id=%s authed_org=%s",

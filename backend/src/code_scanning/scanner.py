@@ -141,12 +141,13 @@ def _build_run_output_dir(org: str, run_id: str) -> Path:
 
 def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
     """Ingest code scanning results from object store after runner completion."""
-    from src.shared.object_store import find_findings_jsonl
-    from src.code_scanning.ingest import ingest_findings_jsonl
+    from src.shared.object_store import find_findings_jsonl, download_bytes as _download_bytes
+    from src.code_scanning.ingest import ingest_findings_jsonl, load_active_rule_ids
     import tempfile
 
     data = find_findings_jsonl(f"code_scanning/{org}/{run_id}/")
     all_findings: list[dict[str, Any]] = []
+    active_rule_ids: set[str] = set()
 
     if data is None:
         logger.warning("No code scanning output for %s/%s", org, run_id)
@@ -154,18 +155,23 @@ def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | No
         return
 
     if data:
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".jsonl", delete=False) as tmp:
-            tmp.write(data)
-            tmp_path = tmp.name
-        try:
-            all_findings = ingest_findings_jsonl(Path(tmp_path))
-        finally:
-            os.unlink(tmp_path)
+        # Both files must share a directory so load_active_rule_ids can locate
+        # active_rules.json relative to findings.jsonl via findings_path.parent.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            findings_path = Path(tmpdir) / "findings.jsonl"
+            findings_path.write_bytes(data)
+
+            active_rules_raw = _download_bytes(f"code_scanning/{org}/{run_id}/active_rules.json")
+            if active_rules_raw:
+                (Path(tmpdir) / "active_rules.json").write_bytes(active_rules_raw)
+
+            all_findings = ingest_findings_jsonl(findings_path)
+            active_rule_ids = load_active_rule_ids(findings_path)
 
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     new_findings: list[dict[str, Any]] = []
     if all_findings:
-        ctx = ScanContext(tool="code_scanning", org=org, run_id=run_id, source_type=source_type)
+        ctx = ScanContext(tool="code_scanning", org=org, run_id=run_id, source_type=source_type, active_rule_ids=active_rule_ids)
         new_findings = _apply_lifecycle(code_scanning_hooks, ctx, all_findings)
 
         try:

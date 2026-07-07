@@ -1375,7 +1375,7 @@ async def list_assignable_users(
     `limit` users by username order.
     """
     capped_limit = max(1, min(int(limit or 20), MAX_ASSIGNABLE_USERS_LIMIT))
-    stmt = select(User.id, User.username, User.email).where(User.status == "active")
+    stmt = select(User.id, User.username).where(User.status == "active")
     if q:
         normalized = q.strip()
         if normalized:
@@ -1385,6 +1385,6 @@ async def list_assignable_users(
 
     rows = (await session.execute(stmt)).all()
     return [
-        {"id": row.id, "username": row.username, "email": row.email or ""}
+        {"id": row.id, "username": row.username or ""}
         for row in rows
     ]

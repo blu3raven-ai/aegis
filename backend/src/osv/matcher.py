@@ -13,6 +13,7 @@ the start) AND ``version < fixed`` (when a fix exists) AND
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 from sqlalchemy import or_, select
@@ -22,6 +23,16 @@ from src.db.models import OsvVulnerableRange
 from src.osv.ecosystems import osv_base_ecosystem, version_class_for
 
 logger = logging.getLogger(__name__)
+
+# Ecosystems that require PEP 503-style name normalization (lowercase, [-_.] → "-")
+_NORMALISED_ECOSYSTEMS = frozenset({"PyPI", "Conda"})
+
+
+def _normalize_package_name(name: str, base_ecosystem: str) -> str:
+    """Normalize a package name for case/separator-insensitive matching."""
+    if base_ecosystem not in _NORMALISED_ECOSYSTEMS:
+        return name
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 @dataclass(frozen=True)
@@ -163,8 +174,9 @@ async def match_components(
         base = osv_base_ecosystem(c.purl_type, c.namespace)
         if not base or version_class_for(base) is None or not c.name or not c.version:
             continue
-        names_by_base.setdefault(base, set()).add(c.name)
-        comps_by_key.setdefault((base, c.name), []).append(c)
+        norm_name = _normalize_package_name(c.name, base)
+        names_by_base.setdefault(base, set()).add(norm_name)
+        comps_by_key.setdefault((base, norm_name), []).append(c)
 
     results: dict[ComponentRef, list[VulnMatch]] = {}
 
@@ -183,7 +195,8 @@ async def match_components(
         rows = (await session.execute(stmt)).scalars().all()
         for row in rows:
             row_is_release_specific = ":" in row.ecosystem
-            for comp in comps_by_key.get((base, row.package_name), []):
+            norm_pkg = _normalize_package_name(row.package_name, base)
+            for comp in comps_by_key.get((base, norm_pkg), []):
                 # Release narrowing: a component pinned to a known release only
                 # matches advisories for that release (or release-agnostic base
                 # advisories). Components with no mapped release keep matching all

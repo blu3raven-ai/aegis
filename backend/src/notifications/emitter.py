@@ -160,6 +160,34 @@ def notify_scan_failed(tool: str, org: str, run_id: str, error: str) -> None:
 
 
 
+def _get_users_with_org_asset_access(org: str) -> list[str]:
+    """Return user IDs with access to any asset in the given org. Falls back to admins."""
+    from src.db.helpers import run_db
+    from src.db.models import Asset, Grant, TeamMember, User
+    from sqlalchemy import select
+
+    async def _q(session) -> list[str]:
+        from src.authz.roles.service import ADMIN_ROLE_IDS
+        from src.authz.enforcement.scope import users_with_asset_access, resolve_asset_ids_for_org
+
+        asset_ids = await resolve_asset_ids_for_org(session, org)
+        if not asset_ids:
+            # No assets found; notify admins/owners only
+            rows = await session.execute(
+                select(User.id).where(User.role_id.in_(ADMIN_ROLE_IDS), User.status == "active")
+            )
+            return [str(r) for r in rows.scalars().all()]
+        all_users: set[str] = set()
+        for aid in asset_ids:
+            all_users |= await users_with_asset_access(session, aid)
+        return list(all_users)
+
+    try:
+        return run_db(_q)
+    except Exception:
+        return _get_active_user_ids()
+
+
 def notify_new_critical_findings(
     tool: str,
     org: str,
@@ -191,7 +219,7 @@ def notify_new_critical_findings(
     link = f"/findings?scanner={tool}"
 
     try:
-        user_ids = _get_active_user_ids()
+        user_ids = _get_users_with_org_asset_access(org)
         emit_notification_to_all(
             user_ids,
             notification_type="finding.new",
@@ -295,7 +323,7 @@ def notify_settings_changed(tool: str, actor: str) -> None:
             context={"tool": tool, "actor": actor},
             link=link,
         )
-        _publish_notification_sse({"title": title, "severity": "info", "category": "settings", "message": message})
+        _publish_notification_sse({"title": title, "severity": "info", "category": "settings", "message": message}, require_admin=True)
     except Exception:
         logger.warning("Failed to emit settings changed notification", exc_info=True)
 

@@ -19,7 +19,7 @@ class CreateApiKeyRequest(BaseModel):
 
 
 @router.get("")
-async def list_api_keys(_: None = Depends(Permission(MANAGE_SETTINGS))) -> dict:
+async def list_api_keys(request: Request, _: None = Depends(Permission(MANAGE_SETTINGS))) -> dict:
     keys = await service.list_keys()
     return {"keys": [k.to_dict() for k in keys]}
 

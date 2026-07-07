@@ -207,12 +207,12 @@ def _conn_to_dict(conn: SourceConnection) -> dict[str, Any]:
     }
 
 
-def list_connections(category: str | None = None) -> list[dict[str, Any]]:
+def list_connections(category: str | None = None, org_id: str = "default") -> list[dict[str, Any]]:
     async def _query(session):
         from sqlalchemy import func
         from src.db.models import Asset, Finding, ScanRun
 
-        stmt = select(SourceConnection)
+        stmt = select(SourceConnection).where(SourceConnection.org_id == org_id)
         if category:
             stmt = stmt.where(SourceConnection.category == normalize_category(category))
         conns = list((await session.execute(stmt)).scalars().all())
@@ -281,17 +281,17 @@ def list_connections_with_secrets(category: str | None = None) -> list[dict[str,
     return run_db(_query)
 
 
-def get_connection(connection_id: str) -> dict[str, Any]:
+def get_connection(connection_id: str, org_id: str = "default") -> dict[str, Any]:
     async def _query(session):
         conn = await session.get(SourceConnection, connection_id)
-        if not conn:
+        if not conn or conn.org_id != org_id:
             raise SourceNotFoundError(f"Connection '{connection_id}' not found.")
         return _conn_to_dict(conn)
 
     return run_db(_query)
 
 
-def get_connection_with_secrets(connection_id: str) -> dict[str, Any]:
+def get_connection_with_secrets(connection_id: str, org_id: str = "default") -> dict[str, Any]:
     """Get connection with unmasked auth — for internal use (test/sync) only.
 
     Strict: an undecryptable credential raises DecryptionError so sync/test can
@@ -300,7 +300,7 @@ def get_connection_with_secrets(connection_id: str) -> dict[str, Any]:
     """
     async def _query(session):
         conn = await session.get(SourceConnection, connection_id)
-        if not conn:
+        if not conn or conn.org_id != org_id:
             raise SourceNotFoundError(f"Connection '{connection_id}' not found.")
         result = _conn_to_dict(conn)
         # override masked auth with decrypted auth (strict — see docstring)
@@ -310,10 +310,12 @@ def get_connection_with_secrets(connection_id: str) -> dict[str, Any]:
     return run_db(_query)
 
 
-def count_by_category() -> dict[str, int]:
+def count_by_category(org_id: str = "default") -> dict[str, int]:
     async def _query(session):
         result = await session.execute(
-            select(SourceConnection.category, func.count()).group_by(SourceConnection.category)
+            select(SourceConnection.category, func.count())
+            .where(SourceConnection.org_id == org_id)
+            .group_by(SourceConnection.category)
         )
         counts: dict[str, int] = {cat: 0 for cat in VALID_CATEGORIES}
         for cat, cnt in result.all():
@@ -329,7 +331,7 @@ def count_by_category() -> dict[str, int]:
     return run_db(_query)
 
 
-def create_connection(data: dict[str, Any]) -> dict[str, Any]:
+def create_connection(data: dict[str, Any], org_id: str = "default") -> dict[str, Any]:
     raw_category = data.get("category", "")
     category = normalize_category(raw_category)
     source_type = data.get("sourceType", "")
@@ -395,6 +397,7 @@ def create_connection(data: dict[str, Any]) -> dict[str, Any]:
             discovered_items=[],
             created_at=now,
             updated_at=now,
+            org_id=org_id,
         )
         session.add(conn)
         await session.flush()
@@ -423,12 +426,12 @@ def _validate_schedule_fields(data: dict[str, Any]) -> None:
         raise SourceValidationError("Scan schedule is set to custom but no cron expression was provided.")
 
 
-def update_connection(connection_id: str, data: dict[str, Any]) -> dict[str, Any]:
+def update_connection(connection_id: str, data: dict[str, Any], org_id: str = "default") -> dict[str, Any]:
     _validate_schedule_fields(data)
 
     async def _query(session):
         conn = await session.get(SourceConnection, connection_id)
-        if not conn:
+        if not conn or conn.org_id != org_id:
             raise SourceNotFoundError(f"Connection '{connection_id}' not found.")
 
         if "scanners" in data:
@@ -469,10 +472,10 @@ def update_connection(connection_id: str, data: dict[str, Any]) -> dict[str, Any
     return run_db(_query)
 
 
-def delete_connection(connection_id: str) -> None:
+def delete_connection(connection_id: str, org_id: str = "default") -> None:
     async def _query(session):
         conn = await session.get(SourceConnection, connection_id)
-        if not conn:
+        if not conn or conn.org_id != org_id:
             raise SourceNotFoundError(f"Connection '{connection_id}' not found.")
         await session.delete(conn)
 

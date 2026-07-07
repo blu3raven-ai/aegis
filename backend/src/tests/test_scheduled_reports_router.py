@@ -17,6 +17,14 @@ from src.reports.router import router as reports_router  # noqa: E402
 
 _VIEWER_PERMS = {"view_findings"}
 
+_FAKE_SCHEDULE = {
+    "id": 1, "name": "x", "report_type": "posture", "format": "json",
+    "schedule_type": "simple", "schedule_value": "09:00", "filters": {},
+    "destination_ids": [], "created_by": "test@example.com", "enabled": True,
+    "last_run_at": None, "last_run_status": None, "last_run_error": None,
+    "created_at": "2026-06-14T00:00:00+00:00", "updated_at": "2026-06-14T00:00:00+00:00",
+}
+
 
 def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
@@ -89,13 +97,14 @@ def test_list_scheduled_reports():
         {
             "id": 1, "name": "Daily posture", "report_type": "posture", "format": "json",
             "schedule_type": "simple", "schedule_value": "09:00", "filters": {},
-            "destination_ids": [], "created_by": "u", "enabled": True,
+            "destination_ids": [], "created_by": "test@example.com", "enabled": True,
             "last_run_at": None, "last_run_status": None, "last_run_error": None,
             "created_at": "2026-06-14T00:00:00+00:00", "updated_at": "2026-06-14T00:00:00+00:00",
         },
     ]
     with (
         patch("src.reports.router.list_schedules", return_value=fake_items),
+        patch("src.reports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[])),
     ):
         r = TestClient(app).get("/api/v1/findings/reports/scheduled")
     assert r.status_code == 200
@@ -115,7 +124,11 @@ def test_update_scheduled_report_404():
 
 def test_update_scheduled_report_empty_body():
     app = _make_app()
-    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS):
+    with (
+        patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS),
+        patch("src.reports.router.get_schedule", return_value=_FAKE_SCHEDULE),
+        patch("src.reports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[])),
+    ):
         r = TestClient(app).patch("/api/v1/findings/reports/scheduled/1", json={})
     assert r.status_code == 422
 
@@ -125,12 +138,14 @@ def test_update_scheduled_report_edits_fields():
     fake_result = {
         "id": 1, "name": "Monthly posture", "report_type": "posture", "format": "pdf",
         "schedule_type": "simple", "schedule_value": "06:30", "filters": {},
-        "destination_ids": [10], "created_by": "u", "enabled": True,
+        "destination_ids": [10], "created_by": "test@example.com", "enabled": True,
         "last_run_at": None, "last_run_status": None, "last_run_error": None,
         "created_at": "2026-06-14T00:00:00+00:00", "updated_at": "2026-06-27T00:00:00+00:00",
     }
     recorder = MagicMock()
     with (
+        patch("src.reports.router.get_schedule", return_value=_FAKE_SCHEDULE),
+        patch("src.reports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[])),
         patch("src.reports.router.update_schedule", return_value=fake_result) as upd,
         patch("src.reports.router.get_recorder", return_value=recorder),
     ):
@@ -157,6 +172,8 @@ def test_update_scheduled_report_edits_fields():
 def test_update_scheduled_report_validation_error():
     app = _make_app()
     with (
+        patch("src.reports.router.get_schedule", return_value=_FAKE_SCHEDULE),
+        patch("src.reports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[])),
         patch("src.reports.router.update_schedule",
               side_effect=ValueError("posture reports do not support csv format")),
     ):
@@ -171,6 +188,8 @@ def test_delete_scheduled_report():
     app = _make_app()
     recorder = MagicMock()
     with (
+        patch("src.reports.router.get_schedule", return_value=_FAKE_SCHEDULE),
+        patch("src.reports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[])),
         patch("src.reports.router.delete_schedule", return_value=True),
         patch("src.reports.router.get_recorder", return_value=recorder),
     ):

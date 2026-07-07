@@ -12,7 +12,7 @@ from graphql import GraphQLError
 
 from src.authz.enforcement import has_permission
 from src.authz.permissions.catalog import VIEW_FINDINGS
-from src.graphql.resolver_utils import raise_permission_denied
+from src.graphql.resolver_utils import raise_bad_input, raise_permission_denied
 from src.graphql.types import (
     CoverageSummary as CoverageSummaryGQL,
     ImageSourcesResponse,
@@ -188,6 +188,10 @@ def repo_sources(
 ) -> RepoSourcesResponse:
     """Finding-aggregated list of repo source assets in the caller's scope."""
     _require_view_findings(info_context)
+    if limit < 1 or limit > 500:
+        raise_bad_input("limit must be between 1 and 500")
+    if since_days is not None and (since_days < 0 or since_days > 3650):
+        raise_bad_input("sinceDays must be between 0 and 3650")
     result = _list_repo_sources(
         asset_ids=asset_ids,
         since_days=since_days,

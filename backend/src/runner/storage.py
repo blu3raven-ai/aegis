@@ -32,6 +32,7 @@ def _runner_to_dict(runner: Runner) -> dict[str, Any]:
         "diskTotalGb": runner.disk_total_gb,
         "cores": runner.cores,
         "jobsCompleted": runner.jobs_completed or 0,
+        "orgId": runner.org_id,
     }
 
 
@@ -76,6 +77,8 @@ def write_runner(runner: dict[str, Any]) -> None:
                 existing.last_heartbeat = datetime.fromisoformat(runner["lastHeartbeatAt"].replace("Z", "+00:00"))
             if "jobsCompleted" in runner:
                 existing.jobs_completed = runner["jobsCompleted"]
+            if "orgId" in runner:
+                existing.org_id = runner["orgId"]
         else:
             now = datetime.now(timezone.utc)
             session.add(Runner(
@@ -87,6 +90,7 @@ def write_runner(runner: dict[str, Any]) -> None:
                 auth_token_hash=runner.get("authTokenHash", ""),
                 created_at=now,
                 jobs_completed=runner.get("jobsCompleted", 0),
+                org_id=runner.get("orgId"),
             ))
 
     run_db(_query)
@@ -149,14 +153,44 @@ def write_job(job: dict[str, Any]) -> None:
     run_db(_query)
 
 
-def list_jobs(status: str | None = None) -> list[dict[str, Any]]:
+def list_jobs(status: str | None = None, org: str | None = None) -> list[dict[str, Any]]:
     async def _query(session):
         stmt = select(RunnerJob)
         if status is not None:
             stmt = stmt.where(RunnerJob.status == status)
+        if org is not None:
+            stmt = stmt.where(RunnerJob.org == org)
         stmt = stmt.order_by(RunnerJob.created_at)
         result = await session.execute(stmt)
         return [_job_to_dict(j) for j in result.scalars().all()]
+
+    return run_db(_query)
+
+
+def atomic_assign_job(runner_id: str, org: str | None = None) -> dict[str, Any] | None:
+    """Atomically claim the next queued job using SELECT … FOR UPDATE SKIP LOCKED.
+
+    Safe under concurrent multi-process deployments: the DB-level row lock
+    prevents two workers from claiming the same job in separate transactions.
+    """
+    async def _query(session):
+        stmt = (
+            select(RunnerJob)
+            .where(RunnerJob.status == "queued")
+            .order_by(RunnerJob.created_at)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+        if org is not None:
+            stmt = stmt.where(RunnerJob.org == org)
+        result = await session.execute(stmt)
+        job = result.scalars().first()
+        if job is None:
+            return None
+        job.status = "assigned"
+        job.runner_id = runner_id
+        job.started_at = datetime.now(timezone.utc)
+        return _job_to_dict(job)
 
     return run_db(_query)
 

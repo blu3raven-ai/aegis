@@ -75,16 +75,26 @@ def _build_where_clauses(filters: FindingFilters) -> list:
     return clauses
 
 
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _sanitize_csv_cell(value: Any) -> Any:
+    """Prefix string cells that start with formula-trigger characters."""
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
 def _finding_to_row(finding: Finding) -> dict[str, Any]:
     """Map a Finding ORM row to the flat export dict."""
     detail: dict = finding.detail or {}
-    return {
+    row = {
         "id": finding.id,
         "severity": finding.severity or "",
         "scanner": finding.tool,
         "title": finding.title or finding.identity_key,
         "cve_id": finding.cve_id or "",
-        "repo": finding.repo or "",
+        "repo": getattr(finding, "repo", None) or "",
         "file_path": finding.file_path or "",
         "line": detail.get("start_line") or detail.get("line") or "",
         "first_seen_at": finding.first_seen_at.isoformat() if finding.first_seen_at else "",
@@ -92,6 +102,7 @@ def _finding_to_row(finding: Finding) -> dict[str, Any]:
         "status": finding.state,
         "assignee": detail.get("assignee") or "",
     }
+    return {k: _sanitize_csv_cell(v) for k, v in row.items()}
 
 
 async def count_findings(

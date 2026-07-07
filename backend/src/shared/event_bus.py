@@ -23,6 +23,7 @@ class Event:
     event_type: str
     data: dict[str, Any]
     require_admin: bool = False
+    asset_id: str | None = None  # When set, only delivered to subscribers that have a grant on this asset
     timestamp: float = field(default_factory=time.time)
 
     def to_sse(self, event_id: int) -> str:
@@ -36,6 +37,8 @@ class _Subscriber:
     user_id: str
     role: str
     queue: asyncio.Queue[Event | None]
+    # Asset IDs this subscriber may see for asset-scoped events. None = no restriction (admin/owner).
+    allowed_asset_ids: "frozenset[str] | None" = None
     created_at: float = field(default_factory=time.time)
     last_read_at: float = field(default_factory=time.time)
 
@@ -81,9 +84,16 @@ class EventBus:
         return sum(1 for s in self._subscribers.values() if s.user_id == user_id)
 
     def subscribe(
-        self, user_id: str, role: str,
+        self,
+        user_id: str,
+        role: str,
+        allowed_asset_ids: "frozenset[str] | None" = None,
     ) -> tuple["_Subscriber", AsyncGenerator[Event, None]]:
         """Return (subscriber, async-generator) for this connection.
+
+        Pass allowed_asset_ids to restrict asset-scoped events (scan.progress,
+        etc.) to only the assets the caller holds a grant on. None means no
+        restriction (admin/owner roles).
 
         Raises ConnectionError if the per-user connection limit is reached.
         """
@@ -100,6 +110,7 @@ class EventBus:
                 user_id=user_id,
                 role=role,
                 queue=queue,
+                allowed_asset_ids=allowed_asset_ids,
             )
             self._subscribers[sub_id] = sub
 
@@ -118,6 +129,12 @@ class EventBus:
                 sub.last_read_at = time.time()
                 if event.require_admin and not is_admin:
                     continue
+                # Asset-scoped events (scan progress/completion) are filtered to
+                # subscribers with a grant on the event's asset.
+                # Admin/owner subscribers (allowed_asset_ids=None) see all assets.
+                if event.asset_id is not None and sub.allowed_asset_ids is not None:
+                    if event.asset_id not in sub.allowed_asset_ids:
+                        continue
                 yield event
         finally:
             with self._lock:

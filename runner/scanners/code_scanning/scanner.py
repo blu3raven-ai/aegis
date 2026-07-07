@@ -378,6 +378,8 @@ class CodeScanningScanner:
         log_scanning(repo_name)
 
         clone_dir = repo_out / "_checkout"
+        if not str(repo_out.resolve()).startswith(str(out_dir.resolve())):
+            raise ValueError(f"repo_out escapes out_dir: {repo_out}")
         try:
             clone_repo(
                 repo_url,
@@ -387,7 +389,8 @@ class CodeScanningScanner:
                 timeout=TIMEOUT_CLONE,
             )
         except (InsecureURLError, GitCloneError):
-            shutil.rmtree(repo_out, ignore_errors=True)
+            if str(repo_out.resolve()).startswith(str(out_dir.resolve())):
+                shutil.rmtree(repo_out, ignore_errors=True)
             log_finished(repo_name)
             raise
 

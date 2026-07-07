@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from src.runner.encryption import SENSITIVE_KEYS as _SENSITIVE_KEYS, encrypt_env_vars, decrypt_env_vars
-from src.runner.storage import list_jobs, read_job, read_runner, write_job, write_runner
+from src.runner.storage import atomic_assign_job, list_jobs, read_job, read_runner, write_job, write_runner
 from src.shared.paths import now_iso
 
 # Explicit re-export so ``from src.runner.jobs import read_job`` keeps working.
@@ -83,18 +83,12 @@ def _create_job_inner(
     return job_id
 
 
-def _assign_next_job_inner(*, runner_id: str) -> dict[str, Any] | None:
-    with _assign_lock:
-        queued = list_jobs(status="queued")
-        if not queued:
-            return None
-        job = queued[0]
-        job["status"] = "assigned"
-        job["runnerId"] = runner_id
-        job["startedAt"] = now_iso()
-        write_job(job)
-
-    # Decrypt sensitive env vars for runner
+def _assign_next_job_inner(*, runner_id: str, org: str | None = None) -> dict[str, Any] | None:
+    # atomic_assign_job uses SELECT ... FOR UPDATE SKIP LOCKED in a single
+    # transaction, which is safe across concurrent workers. The module-level
+    # _assign_lock is preserved only for backward-compat call sites that
+    # pre-date the Postgres backend; the atomic DB lock makes it redundant.
+    job = atomic_assign_job(runner_id=runner_id, org=org)
     if job and job.get("envVars"):
         job["envVars"] = _decrypt_env_vars(job["envVars"])
     return job
@@ -154,9 +148,9 @@ def create_job(
     return read_job(job_id) or {"id": job_id}
 
 
-def assign_next_job(runner_id: str) -> dict[str, Any] | None:
+def assign_next_job(runner_id: str, org: str | None = None) -> dict[str, Any] | None:
     """Module-level API — preserved for backward compat. Delegates to _inner."""
-    return _assign_next_job_inner(runner_id=runner_id)
+    return _assign_next_job_inner(runner_id=runner_id, org=org)
 
 
 def update_job_status(job_id: str, status: str, **kwargs: Any) -> dict[str, Any] | None:

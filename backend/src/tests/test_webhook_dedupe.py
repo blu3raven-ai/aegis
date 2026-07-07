@@ -168,7 +168,7 @@ def test_github_replay_is_deduped(monkeypatch):
     assert publisher.publish.call_count == 1
 
 
-def test_github_without_delivery_header_still_processes(monkeypatch):
+def test_github_without_delivery_header_dedupes_by_body_hash(monkeypatch):
     monkeypatch.setenv("GITHUB_WEBHOOK_SECRET", _GH_SECRET)
     _delete_all()
 
@@ -191,11 +191,10 @@ def test_github_without_delivery_header_still_processes(monkeypatch):
         second = client.post("/integrations/github/webhook", content=body, headers=headers)
 
     assert first.json()["status"] == "accepted"
-    assert second.json()["status"] == "accepted"
-    # No delivery id → no dedup → both publish.
-    assert publisher.publish.call_count == 2
-    # No rows recorded when the header is absent.
-    assert _row_count() == 0
+    # Same body without a delivery header → sha256 fallback deduplicates the replay.
+    assert second.json()["status"] == "duplicate"
+    assert publisher.publish.call_count == 1
+    assert _row_count() == 1
 
 
 def test_gitlab_replay_is_deduped(monkeypatch):
