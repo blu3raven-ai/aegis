@@ -84,7 +84,7 @@ _CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 
 def _sanitize_csv_cell(value: object) -> object:
-    """Prevent spreadsheet formula injection by prefixing dangerous cell values."""
+    """Prefix string cells that start with formula-trigger characters."""
     if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
         return "'" + value
     return value

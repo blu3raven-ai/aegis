@@ -545,9 +545,6 @@ def create_user(*, input: UserCreateInput, info_context: dict) -> WorkspaceUser:
     if new_role_kind == "owner" and not has_role_permission(actor_role, actor_role_id, MANAGE_OWNER_ROLE):
         raise_permission_denied("Only roles with manage_owner_role can promote to owner.")
 
-    # Escalation guard: actor cannot grant permissions they don't hold, except
-    # when manage_owner_role explicitly permits creating an owner (already gated
-    # above).
     if actor_role != "owner" and new_role_kind != "owner":
         try:
             if isinstance(actor_role_id, str) and actor_role_id:
