@@ -87,17 +87,18 @@ def code_finding_identity(
 ) -> str:
     """Identity key for a SAST finding: ``{repo}:{file_path}:{rule_id}:{loc}``.
 
-    ``loc`` is a content fingerprint of the matched snippet when one is present,
-    so a finding keeps its identity — and its triage state — when an unrelated
-    edit shifts its line number. Only when there is no snippet does it fall back
-    to the raw start line. Colons in the components are escaped so they cannot be
+    ``loc`` combines the start line with a content fingerprint of the matched
+    snippet (``{line}:h{fp}``). Including the line prevents two textually
+    identical vulnerable patterns at different locations in the same file from
+    collapsing to a single Finding row. Without a snippet it falls back to the
+    raw start line. Colons in the components are escaped so they cannot be
     confused with the separators.
     """
     def _esc(v: str) -> str:
         return str(v).replace(":", "%3A")
 
     fp = _snippet_fingerprint(snippet)
-    loc = f"h{fp}" if fp else str(start_line or 0)
+    loc = f"{start_line or 0}:h{fp}" if fp else str(start_line or 0)
     return f"{_esc(repo)}:{_esc(file_path)}:{_esc(rule_id)}:{loc}"
 
 

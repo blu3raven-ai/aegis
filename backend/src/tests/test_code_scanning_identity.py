@@ -26,11 +26,18 @@ def _raw(start_line: int, snippet: str, *, rule="py.sqli", path="app/db.py"):
     }
 
 
-def test_identity_stable_across_line_drift():
-    """Same vuln, shifted down 40 lines by an unrelated edit — one finding."""
+def test_identical_snippets_at_different_lines_have_different_keys():
+    """Two identical vulnerable patterns at different locations must not collapse."""
+    line_10 = code_scanning_hooks.compute_identity_key(_raw(10, "os.system(user_input)"))
+    line_42 = code_scanning_hooks.compute_identity_key(_raw(42, "os.system(user_input)"))
+    assert line_10 != line_42
+
+
+def test_identity_changes_when_line_shifts():
+    """A finding that moves to a new line gets a new key (acceptable re-key vs data loss)."""
     before = code_scanning_hooks.compute_identity_key(_raw(12, "query(f'... {user_id}')"))
     after = code_scanning_hooks.compute_identity_key(_raw(52, "query(f'... {user_id}')"))
-    assert before == after
+    assert before != after
 
 
 def test_identity_distinguishes_distinct_snippets():
@@ -41,9 +48,9 @@ def test_identity_distinguishes_distinct_snippets():
 
 
 def test_identity_normalizes_indentation():
-    """Reindenting the matched line must not re-key the finding."""
+    """Reindentation at the same line must not re-key the finding."""
     a = code_finding_identity("acme/api", "app/db.py", "py.sqli", 12, "    do_thing(x)")
-    b = code_finding_identity("acme/api", "app/db.py", "py.sqli", 99, "do_thing(x)")
+    b = code_finding_identity("acme/api", "app/db.py", "py.sqli", 12, "do_thing(x)")
     assert a == b
 
 
