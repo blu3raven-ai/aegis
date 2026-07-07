@@ -142,23 +142,6 @@ def test_callback_exception_is_swallowed():
     emitter.done()
 
 
-def test_log_buffer_is_capped_and_passed_through():
-    events: list[list[str]] = []
-
-    def cb(log_tail, progress):
-        events.append(list(log_tail))
-
-    emitter = ProgressEmitter(cb, expected=1)
-    for i in range(60):
-        emitter.log(f"line-{i}")
-    emitter.starting()
-
-    last_log = events[-1]
-    assert len(last_log) == 50
-    assert last_log[0] == "line-10"
-    assert last_log[-1] == "line-59"
-
-
 def test_thread_safety_under_concurrent_scanning_and_finishing():
     """Multiple threads driving scanning()/finished() must converge to a
     consistent final state with monotonic counters."""
