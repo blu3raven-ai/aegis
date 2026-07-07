@@ -28,8 +28,7 @@ from runner.scanners._shared import (
     ProgressEmitter,
     ScannerConfigError,
     TIMEOUT_SYFT_IMAGE,
-    log_finished,
-    log_scanning_image,
+    log,
     parse_repos,
     register_output,
     run_per_repo,
@@ -213,7 +212,7 @@ class ContainerScanner:
         safe_name = _sanitize_name(image_ref)
         image_out = out_dir / safe_name
         image_out.mkdir(parents=True, exist_ok=True)
-        log_scanning_image(image_ref)
+        log("scanning", image_ref)
 
         # Skip-unchanged optimisation — compare the registry HEAD digest
         # against the backend-supplied previous digest *before* running syft,
@@ -247,7 +246,7 @@ class ContainerScanner:
             cancel_event,
             syft_json_output=syft_json_path,
         ):
-            log_finished(image_ref)
+            log("done", image_ref)
             return None
 
         # Attribute each component to its introducing image layer (from the
@@ -288,7 +287,7 @@ class ContainerScanner:
             except Exception:
                 logger.warning("tag listing failed for %s", image_ref, exc_info=True)
 
-        log_finished(image_ref)
+        log("done", image_ref)
         return sbom_path
 
     def _record_skipped_image(
@@ -317,7 +316,7 @@ class ContainerScanner:
         logger.info(message)
         if log_tail is not None:
             log_tail.append(message)
-        log_finished(image_ref)
+        log("done", image_ref)
 
     def _run_syft(
         self,

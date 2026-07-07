@@ -36,8 +36,7 @@ from runner.scanners._shared import (
     clone_repo,
     compute_diff_files,
     derive_html_url,
-    log_finished,
-    log_scanning,
+    log,
     parse_repos,
     register_output,
     repo_name_from_url,
@@ -214,7 +213,7 @@ class SecretsScanner:
         repo_out.mkdir(parents=True, exist_ok=True)
         # Web URL of the repo, read back during normalize to deep-link findings.
         (repo_out / "html_url.txt").write_text(derive_html_url(repo_url))
-        log_scanning(repo_name)
+        log("scanning", repo_name)
 
         clone_dir = repo_out / "_checkout"
         if not str(repo_out.resolve()).startswith(str(out_dir.resolve())):
@@ -233,7 +232,7 @@ class SecretsScanner:
         except (InsecureURLError, GitCloneError):
             if str(repo_out.resolve()).startswith(str(out_dir.resolve())):
                 shutil.rmtree(repo_out, ignore_errors=True)
-            log_finished(repo_name)
+            log("done", repo_name)
             raise
 
         try:
@@ -279,7 +278,7 @@ class SecretsScanner:
             for f in sorted(repo_out.glob("*.json")):
                 register_output(out_dir, f, repo_name)
 
-            log_finished(repo_name)
+            log("done", repo_name)
             return produced[0] if produced and produced[0].exists() else None
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)

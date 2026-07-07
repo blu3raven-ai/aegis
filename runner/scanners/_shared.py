@@ -147,16 +147,9 @@ def register_output(output_dir: Path, file_path: Path, repo: str) -> None:
     _manifest.record_output(output_dir, file_path, repo)
 
 
-def log_scanning(target: str) -> None:
-    print(f"[+] Scanning repo: {target}", flush=True)
-
-
-def log_scanning_image(target: str) -> None:
-    print(f"[+] Scanning image: {target}", flush=True)
-
-
-def log_finished(target: str) -> None:
-    print(f"[✓] Finished: {target}", flush=True)
+def log(prefix: str, target: str) -> None:
+    """Emit a per-target progress marker to stdout (e.g. ``[scanning] acme/repo``)."""
+    print(f"[{prefix}] {target}", flush=True)
 
 
 class ProgressEmitter:

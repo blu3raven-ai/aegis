@@ -30,8 +30,7 @@ from runner.scanners._shared import (
     TIMEOUT_SYFT_REPO,
     clone_repo,
     derive_html_url,
-    log_finished,
-    log_scanning,
+    log,
     parse_repos,
     register_output,
     repo_name_from_url,
@@ -173,7 +172,7 @@ class DependenciesScanner:
         repo_name = repo_name_from_url(repo_url)
         repo_out = out_dir / repo_name
         repo_out.mkdir(parents=True, exist_ok=True)
-        log_scanning(repo_name)
+        log("scanning", repo_name)
 
         clone_dir = repo_out / "_checkout"
         clone_repo(repo_url, clone_dir, token=git_token, timeout=TIMEOUT_CLONE)
@@ -202,7 +201,7 @@ class DependenciesScanner:
             logger.warning(
                 "[!] Both SBOM generators failed for %s - skipping", repo_name
             )
-            log_finished(repo_name)
+            log("done", repo_name)
             shutil.rmtree(clone_dir, ignore_errors=True)
             return
 
@@ -228,7 +227,7 @@ class DependenciesScanner:
 
         register_output(out_dir, merged_sbom, repo_name)
 
-        log_finished(repo_name)
+        log("done", repo_name)
         shutil.rmtree(clone_dir, ignore_errors=True)
 
     def _read_head_sha(
