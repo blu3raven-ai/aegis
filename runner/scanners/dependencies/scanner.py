@@ -7,7 +7,6 @@ against the OSV mirror — the runner produces SBOMs only.
 """
 from __future__ import annotations
 
-import concurrent.futures
 import dataclasses
 import json
 import logging
@@ -23,8 +22,6 @@ from runner.scanners.dependencies.declared_ranges import (
 )
 from runner.scanners._shared import (
     BaseScanConfig,
-    GitCloneError,
-    InsecureURLError,
     JobEnv,
     ProgressEmitter,
     ScannerConfigError,
@@ -38,12 +35,9 @@ from runner.scanners._shared import (
     parse_repos,
     register_output,
     repo_name_from_url,
+    run_per_repo,
 )
-from runner.scanners._subprocess import (
-    CANCELLED_EXIT_CODE,
-    ScannerTimeoutError,
-    run_tool,
-)
+from runner.scanners._subprocess import run_tool
 from runner.scanners.base import ExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -146,65 +140,22 @@ class DependenciesScanner:
         """Per-repo clone + SBOM build + register. No findings.jsonl is written."""
         emitter = ProgressEmitter(on_progress, expected=len(repos))
 
-        if cancel_event is not None and cancel_event.is_set():
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=CANCELLED_EXIT_CODE,
-                job_dir=out_dir,
-                log_tail=log_tail,
-            )
-
-        if not repos:
-            log_tail.append("[!] No GIT_REPOS specified - nothing to scan")
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=0, job_dir=out_dir, log_tail=log_tail
-            )
-
-        emitter.starting()
-
         def _scan_one(repo_url: str) -> None:
-            if cancel_event is not None and cancel_event.is_set():
-                return
-            repo_name = repo_name_from_url(repo_url)
-            emitter.scanning(repo_name)
-            try:
-                self._scan_repo(
-                    repo_url,
-                    out_dir,
-                    git_token=git_token,
-                    cancel_event=cancel_event,
-                )
-            except InsecureURLError as e:
-                log_tail.append(f"[!] {e}")
-            except GitCloneError as e:
-                log_tail.append(f"[!] {e}")
-            except ScannerTimeoutError as e:
-                log_tail.append(f"[!] Timeout scanning {repo_url}: {e}")
-            except Exception as e:  # noqa: BLE001
-                log_tail.append(f"[!] Repo {repo_url} failed: {e}")
-                logger.exception("[!] Repo %s failed", repo_url)
-            finally:
-                emitter.finished(repo_name)
+            self._scan_repo(
+                repo_url,
+                out_dir,
+                git_token=git_token,
+                cancel_event=cancel_event,
+            )
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=concurrency
-        ) as pool:
-            list(pool.map(_scan_one, repos))
-
-        emitter.normalizing()
-        write_done_marker(out_dir)
-        emitter.done()
-
-        exit_code = (
-            CANCELLED_EXIT_CODE
-            if (cancel_event is not None and cancel_event.is_set())
-            else 0
-        )
-        return ExecutionResult(
-            exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
+        return run_per_repo(
+            items=repos,
+            out_dir=out_dir,
+            emitter=emitter,
+            concurrency=concurrency,
+            cancel_event=cancel_event,
+            log_tail=log_tail,
+            scan_one=_scan_one,
         )
 
     # ------------------------------------------------------------------
