@@ -545,7 +545,7 @@ def create_user(*, input: UserCreateInput, info_context: dict) -> WorkspaceUser:
     if new_role_kind == "owner" and not has_role_permission(actor_role, actor_role_id, MANAGE_OWNER_ROLE):
         raise_permission_denied("Only roles with manage_owner_role can promote to owner.")
 
-    if actor_role != "owner" and new_role_kind != "owner":
+    if new_role_kind != "owner":
         try:
             if isinstance(actor_role_id, str) and actor_role_id:
                 actor_record = get_role(actor_role_id)
@@ -642,21 +642,20 @@ def update_user_role(*, user_id: str, input: UserRoleInput, info_context: dict) 
     new_role_id = role_record["id"]
     new_role_kind = role_kind_from_id(new_role_id)
 
-    if actor_role != "owner":
-        try:
-            if isinstance(actor_role_id, str) and actor_role_id:
-                actor_record = get_role(actor_role_id)
-            else:
-                actor_record = get_role_by_slug(actor_role)
-            actor_perms = resolve_role_permissions(actor_record)
-        except ValueError:
-            actor_perms = set()
-        target_perms = resolve_role_permissions(role_record)
-        escalated = target_perms - actor_perms
-        if escalated:
-            raise_permission_denied(
-                f"Cannot assign role with permissions you don't hold: {', '.join(sorted(escalated))}"
-            )
+    try:
+        if isinstance(actor_role_id, str) and actor_role_id:
+            actor_record = get_role(actor_role_id)
+        else:
+            actor_record = get_role_by_slug(actor_role)
+        actor_perms = resolve_role_permissions(actor_record)
+    except ValueError:
+        actor_perms = set()
+    target_perms = resolve_role_permissions(role_record)
+    escalated = target_perms - actor_perms
+    if escalated:
+        raise_permission_denied(
+            f"Cannot assign role with permissions you don't hold: {', '.join(sorted(escalated))}"
+        )
 
     from sqlalchemy import select, func as _func
 

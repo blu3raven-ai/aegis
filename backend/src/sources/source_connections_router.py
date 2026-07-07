@@ -127,12 +127,11 @@ def post_source(
     _: None = Depends(Permission(MANAGE_SOURCES)),
 ) -> JSONResponse:
     try:
-        org_id = getattr(request.state, "user_org", "default")
         # License: enforce source connection limit
         from src.license.limits import check_limit
-        current_count = len(sources_store.list_connections(org_id=org_id))
+        current_count = len(sources_store.list_connections())
         check_limit(request, "max_source_connections", current_count)
-        connection = sources_store.create_connection(body.model_dump(), org_id=org_id)
+        connection = sources_store.create_connection(body.model_dump())
         return JSONResponse({"connection": connection}, status_code=201)
     except SourceNotFoundError as exc:
         return _json_error(exc, status_code=404)
@@ -153,8 +152,7 @@ def get_connections(
     _: None = Depends(Permission(VIEW_SOURCES)),
 ) -> JSONResponse:
     try:
-        org_id = getattr(request.state, "user_org", "default")
-        connections = sources_store.list_connections(category=category, org_id=org_id)
+        connections = sources_store.list_connections(category=category)
         return JSONResponse({"connections": [_serialize_connection(c) for c in connections]})
     except SourceStoreError as exc:
         return _json_error(exc, status_code=500)
@@ -166,8 +164,7 @@ def get_connection_counts(
     _: None = Depends(Permission(VIEW_SOURCES)),
 ) -> JSONResponse:
     try:
-        org_id = getattr(request.state, "user_org", "default")
-        counts = sources_store.count_by_category(org_id=org_id)
+        counts = sources_store.count_by_category()
         return JSONResponse(
             {"counts": [{"category": k, "count": v} for k, v in counts.items()]}
         )
@@ -183,8 +180,7 @@ def get_internal_orgs(
     # Gated like its sibling connection reads: this discloses the connected
     # org/owner inventory + health, which belongs behind view_sources.
     try:
-        org_id = getattr(request.state, "user_org", "default")
-        connections = sources_store.list_connections(org_id=org_id)
+        connections = sources_store.list_connections()
         return JSONResponse({
             "connections": [
                 {
@@ -207,8 +203,7 @@ def get_source(
     _: None = Depends(Permission(VIEW_SOURCES)),
 ) -> JSONResponse:
     try:
-        org_id = getattr(request.state, "user_org", "default")
-        conn = sources_store.get_connection(connection_id, org_id=org_id)
+        conn = sources_store.get_connection(connection_id)
         return JSONResponse({"connection": conn})
     except SourceNotFoundError as exc:
         return _json_error(exc, status_code=404)
@@ -230,9 +225,8 @@ def put_source(
         if body.syncSchedule is not None and body.syncSchedule != "6h":
             from src.license.limits import check_feature
             check_feature(request, "custom_scan_schedule")
-        org_id = getattr(request.state, "user_org", "default")
         update_data = {k: v for k, v in body.model_dump().items() if v is not None}
-        connection = sources_store.update_connection(connection_id, update_data, org_id=org_id)
+        connection = sources_store.update_connection(connection_id, update_data)
         return JSONResponse({"connection": connection})
     except SourceNotFoundError as exc:
         return _json_error(exc, status_code=404)
@@ -251,8 +245,7 @@ def delete_source(
     _: None = Depends(Permission(MANAGE_SOURCES)),
 ) -> JSONResponse:
     try:
-        org_id = getattr(request.state, "user_org", "default")
-        sources_store.delete_connection(connection_id, org_id=org_id)
+        sources_store.delete_connection(connection_id)
         return JSONResponse({"ok": True})
     except SourceNotFoundError as exc:
         return _json_error(exc, status_code=404)
@@ -269,8 +262,7 @@ async def post_test_connection(
     _: None = Depends(Permission(MANAGE_SOURCES)),
 ) -> JSONResponse:
     try:
-        org_id = getattr(request.state, "user_org", "default")
-        connection = sources_store.get_connection_with_secrets(connection_id, org_id=org_id)
+        connection = sources_store.get_connection_with_secrets(connection_id)
         result = await test_connection(connection["sourceType"], connection["auth"])
         if result.success:
             sources_store.update_connection_status(
@@ -310,8 +302,7 @@ async def post_scan_connection(
     from src.sources.triggers import dispatch_source_scan
 
     try:
-        org_id = getattr(request.state, "user_org", "default")
-        connection = sources_store.get_connection_with_secrets(connection_id, org_id=org_id)
+        connection = sources_store.get_connection_with_secrets(connection_id)
         queued = dispatch_source_scan(connection, run_prefix="manual")
         return JSONResponse({"queued": queued, "count": len(queued)}, status_code=202)
     except DecryptionError:
@@ -347,8 +338,7 @@ async def get_active_scan_runs(
     from src.db.models import ScanRun
 
     try:
-        org_id = getattr(request.state, "user_org", "default")
-        connection = sources_store.get_connection(connection_id, org_id=org_id)
+        connection = sources_store.get_connection(connection_id)
         auth = connection.get("auth") or {}
         org = (auth.get("orgOrOwner") or "").strip()
         if not org:
@@ -405,9 +395,8 @@ async def get_all_active_scan_runs(
 
     try:
         # org_label (lower-cased) -> the connections that scan that org.
-        org_id = getattr(request.state, "user_org", "default")
         conns_by_org: dict[str, list[dict[str, str]]] = {}
-        for conn in sources_store.list_connections(org_id=org_id):
+        for conn in sources_store.list_connections():
             org = ((conn.get("auth") or {}).get("orgOrOwner") or "").strip()
             if org:
                 conns_by_org.setdefault(org.lower(), []).append(
@@ -460,8 +449,7 @@ async def post_cancel_scan_connection(
 
     try:
         # Confirm the connection exists before cancelling anything.
-        org_id = getattr(request.state, "user_org", "default")
-        sources_store.get_connection(connection_id, org_id=org_id)
+        sources_store.get_connection(connection_id)
 
         if not body.run_ids:
             return JSONResponse({"cancelled": []})
