@@ -65,7 +65,7 @@ def register_delivery(provider: str, delivery_id: str) -> bool:
     return is_duplicate
 
 
-def prune_old_deliveries(older_than_days: int = 7) -> int:
+def prune_old_deliveries(older_than_days: int = 30) -> int:
     """Delete delivery records older than ``older_than_days``; return the count."""
     cutoff = utcnow() - timedelta(days=older_than_days)
 

@@ -743,6 +743,17 @@ def _set_user_status(*, user_id: str, status: str, action: str, info_context: di
         user.status = status
         if status == "disabled":
             user.session_version = (user.session_version or 1) + 1
+            # Revoke all active sessions so the gate immediately blocks the user
+            from sqlalchemy import update as _sa_update
+            from src.db.models import UserSession
+            await session.execute(
+                _sa_update(UserSession)
+                .where(
+                    UserSession.user_id == user_id,
+                    UserSession.revoked_at.is_(None),
+                )
+                .values(revoked_at=datetime.now(timezone.utc), revocation_reason="user_disabled")
+            )
         user.updated_at = datetime.now(timezone.utc)
         await session.flush()
         return user.username
