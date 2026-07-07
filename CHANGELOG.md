@@ -4,6 +4,38 @@ All notable changes to this project are documented here.
 
 ---
 
+## v2.6.0 — 2026-07-07
+
+### Security
+
+- Disabled accounts are now rejected at the session gate and at login, and their active sessions are revoked immediately on disable
+- Password resets, role changes, and account disable now terminate the affected user's existing sessions
+- Scheduled reports enforce owner and asset-scope checks on read, update, and delete; report scope can no longer be widened on update
+- Notification destination reads redact webhook URLs, tokens, and signing secrets across both REST and GraphQL
+- Inbound webhooks bind the scan to the authenticated source, so a request body can no longer redirect a scan to another source
+- Container-registry connection tests (ECR, ACR, GCR) validate the target URL, closing a server-side request forgery vector
+- Source-connection URL validation resolves and pins the target address to prevent DNS-rebinding between check and use
+- Webhook replay protection is now unconditional for GitHub, GitLab, and Bitbucket, with a body-hash fallback when no delivery id is present
+- Runner registration rejects default registration tokens, and runner auth-token comparison is constant-time
+- Registry credentials are cleared from the scanner environment after each container job
+- Email changes require a second factor (password or one-time code) for single-sign-on accounts
+- Repository-clone cleanup and SBOM download harden against path traversal
+- CSV and report exports sanitize spreadsheet formula-injection prefixes in scanner-supplied fields
+- GraphQL list arguments are validated against explicit bounds instead of silently clamping
+
+### Fixed
+
+- Database migrations are serialized across worker processes, preventing a startup race on a fresh database
+- Correlation chains now accumulate cross-repository and credential-reuse edges discovered after the chain is first created
+- Code-scanning ingestion honors the disabled-rule guard, so disabling a rule no longer marks its open findings fixed
+- KEV exposure summary counts all matching findings instead of a truncated subset
+- OSV matching normalizes PyPI package names, skips commit-range (GIT) advisories, and orders pre-release versions before their release
+- GitLab push webhooks tolerate malformed commit payloads instead of failing the delivery
+- Duplicate job-completion callbacks are idempotent and no longer re-run ingestion
+- Compliance findings-for-control lists sort by severity risk order
+
+---
+
 ## v2.5.0 — 2026-07-05
 
 ### Added
