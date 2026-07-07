@@ -159,11 +159,12 @@ def test_container_scanner_has_correct_type():
     assert ContainerScanner.SCANNER_TYPE == "container_scanning"
 
 
-def test_container_scanner_implements_base_protocol():
-    from runner.scanners.base import BaseScanner
+def test_container_scanner_exposes_run_scan():
     from runner.scanners.container.scanner import ContainerScanner
 
-    assert isinstance(ContainerScanner(), BaseScanner)
+    scanner = ContainerScanner()
+    assert hasattr(scanner, "run_scan") and callable(scanner.run_scan)
+    assert scanner.SCANNER_TYPE == "container_scanning"
 
 
 def test_run_scan_empty_images_returns_clean(tmp_path):

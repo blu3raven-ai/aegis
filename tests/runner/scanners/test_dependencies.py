@@ -69,11 +69,12 @@ def test_dependencies_scanner_has_correct_type():
     assert DependenciesScanner.SCANNER_TYPE == "dependencies_scanning"
 
 
-def test_dependencies_scanner_implements_base_protocol():
-    from runner.scanners.base import BaseScanner
+def test_dependencies_scanner_exposes_run_scan():
     from runner.scanners.dependencies.scanner import DependenciesScanner
 
-    assert isinstance(DependenciesScanner(), BaseScanner)
+    scanner = DependenciesScanner()
+    assert hasattr(scanner, "run_scan") and callable(scanner.run_scan)
+    assert scanner.SCANNER_TYPE == "dependencies_scanning"
 
 
 def test_run_scan_empty_repos_returns_clean(tmp_path):

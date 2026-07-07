@@ -1,10 +1,9 @@
-"""Tests for BaseScanner protocol + ExecutionResult dataclass."""
+"""Tests for the ExecutionResult dataclass and the scanner run_scan contract."""
 from __future__ import annotations
 
-import threading
 from pathlib import Path
 
-from runner.scanners.base import BaseScanner, ExecutionResult
+from runner.scanners.base import ExecutionResult
 
 
 def test_execution_result_defaults():
@@ -19,7 +18,7 @@ def test_execution_result_with_log_tail():
     assert result.log_tail == ["a", "b"]
 
 
-def test_base_scanner_is_runtime_checkable_protocol():
+def test_scanner_run_scan_contract():
     class FakeScanner:
         SCANNER_TYPE = "fake"
 
@@ -28,6 +27,6 @@ def test_base_scanner_is_runtime_checkable_protocol():
 
     fake = FakeScanner()
     assert hasattr(fake, "SCANNER_TYPE")
-    assert callable(fake.run_scan)
+    assert hasattr(fake, "run_scan") and callable(fake.run_scan)
     result = fake.run_scan({"jobId": "x"}, Path("/tmp/x"))
     assert isinstance(result, ExecutionResult)

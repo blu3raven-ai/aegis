@@ -6,7 +6,6 @@ modules. The mapping keys are the exact strings the backend sends in job["type"]
 from __future__ import annotations
 
 from runner.scanners.agent.scanner import AgentScanner
-from runner.scanners.base import BaseScanner
 from runner.scanners.code_scanning.scanner import CodeScanningScanner
 from runner.scanners.container.scanner import ContainerScanner
 from runner.scanners.dependencies.scanner import DependenciesScanner
@@ -15,7 +14,7 @@ from runner.scanners.iac.scanner import IacScanner
 from runner.scanners.secrets.scanner import SecretsScanner
 from runner.scanners.verification.scanner import VerificationScanner
 
-_SCANNERS: dict[str, BaseScanner] = {
+_SCANNERS: dict[str, object] = {
     "dependencies_scanning": DependenciesScanner(),
     "container_scanning": ContainerScanner(),
     "secret_scanning": SecretsScanner(),
@@ -32,7 +31,7 @@ _SCANNERS: dict[str, BaseScanner] = {
 }
 
 
-def get_scanner(scanner_type: str) -> BaseScanner:
+def get_scanner(scanner_type: str) -> object:
     if scanner_type not in _SCANNERS:
         raise ValueError(
             f"Unknown scanner type: {scanner_type!r}. "
