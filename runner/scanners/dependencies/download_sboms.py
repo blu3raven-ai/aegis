@@ -28,7 +28,7 @@ def download_sboms(
     for entry in entries:
         name = entry["file"]
         url = entry["url"]
-        # Reject any path that would escape output_dir (e.g. "../../../etc/passwd")
+        # Skip entries whose resolved path exits output_dir.
         target = (output_dir / name).resolve()
         if not str(target).startswith(str(output_dir.resolve())):
             logger.warning("[!] SBOM download skipped unsafe path: %s", name)
