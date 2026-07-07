@@ -292,7 +292,7 @@ export function SsoContent() {
             >
               <div className="flex items-start gap-2">
                 <code
-                  className="block flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-primary)] break-all"
+                  className="block flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs text-[var(--color-text-primary)] break-all"
                 >
                   {data?.samlSpMetadataUrl ?? ""}
                 </code>
@@ -376,7 +376,7 @@ export function SsoContent() {
               description="Register this URI with your IdP."
               layout="stack"
             >
-              <code className="block w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-primary)] break-all">
+              <code className="block w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs text-[var(--color-text-primary)] break-all">
                 {data?.oidcRedirectUri ?? ""}
               </code>
             </SettingsRow>
@@ -394,7 +394,7 @@ export function SsoContent() {
         </SettingsRow>
 
         <SettingsRow label="SCIM endpoint URL" description="Configure your IdP to use this URL." layout="stack">
-          <code className="block w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-primary)] break-all">
+          <code className="block w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs text-[var(--color-text-primary)] break-all">
             {scim.data?.scimEndpointUrl ?? ""}
           </code>
         </SettingsRow>

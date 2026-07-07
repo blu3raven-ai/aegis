@@ -5,9 +5,6 @@
   --color-bg:             #f4f7fb;
   --color-surface:        #ffffff;
   --color-surface-raised: #fafbfd;
-  /* Alias kept for backwards compatibility — ~20 sites still reference
-     --color-surface-2. New code should use --color-surface-raised. */
-  --color-surface-2:      var(--color-surface-raised);
   --color-bg-section:     #fafbfd;
   --color-bg-input:       #ffffff;
   --color-bg-hover:       rgba(15,39,71,0.05);
@@ -24,7 +21,6 @@
   --color-text-primary:   #0f2747;
   --color-text-secondary: #5e6d82;
   --color-text-tertiary:  #677689;
-  --color-text-muted:     rgba(24,59,104,0.62);
 
   --color-accent:         #2d7ff9;
   --color-accent-hover:   #1a6ae8;
@@ -156,8 +152,6 @@
   --color-bg:             #070d19;
   --color-surface:        #0C1524;
   --color-surface-raised: #09101e;
-  /* Alias — see :root for context. */
-  --color-surface-2:      var(--color-surface-raised);
   --color-bg-section:     #09101e;
   --color-bg-input:       #0f1e38;
   --color-bg-hover:       #253348;
@@ -174,7 +168,6 @@
   --color-text-primary:   #F2F2F3;
   --color-text-secondary: #AFB0B6;
   --color-text-tertiary:  #848592;
-  --color-text-muted:     #75829A;
 
   --color-accent:         #0fbcff;
   --color-accent-hover:   #3dcbff;

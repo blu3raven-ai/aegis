@@ -16,7 +16,7 @@ export function TypeChip({ type }: { type: SourceType }) {
   if (!style) return null;
   return (
     <span className={cn(
-      "inline-flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)]",
+      "inline-flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)]",
       "px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--color-text-secondary)] whitespace-nowrap leading-none",
     )}>
       <style.Icon className="h-3 w-3" aria-hidden />
