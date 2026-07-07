@@ -19,12 +19,12 @@ if TYPE_CHECKING:
 class RuleContext:
     """Injected into every rule.evaluate() call.
 
-    argus is always an ArgusConnector instance — either the real one (Mode B)
-    or NullArgusConnector (Mode A / heuristic fallback). Rules never need to
-    check for None; they always get a connector with working fallbacks.
+    argus is always an ArgusConnector instance — configured (Mode B) or in
+    disabled mode (Mode A / heuristic fallback). Rules never need to check for
+    None; they always get a connector with working fallbacks.
     """
     state: "CorrelationState"
-    argus: "ArgusConnector"  # NullArgusConnector when Argus is unconfigured
+    argus: "ArgusConnector"  # disabled mode when Argus is unconfigured
     emit: "EmitInterface"
 
 
