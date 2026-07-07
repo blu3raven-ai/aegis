@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.graphql.resolver_utils import raise_bad_input
 from src.graphql.types import EpssTopFinding, EpssTopResponse
 from src.epss.service import EpssService
 
@@ -14,7 +15,8 @@ def epss_top(*, asset_ids: list[str], limit: int = 20, info_context: dict[str, A
     if not asset_ids:
         return EpssTopResponse(findings=[], count=0)
 
-    limit = max(1, min(limit or 20, 200))
+    if limit < 1 or limit > 200:
+        raise_bad_input("limit must be between 1 and 200")
     all_findings = _service.top_findings_by_asset_ids(asset_ids, limit=limit)
 
     return EpssTopResponse(

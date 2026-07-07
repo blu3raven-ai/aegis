@@ -119,7 +119,7 @@ async def github_webhook(
         logger.info("github.webhook: ignoring %s with missing required fields", x_github_event)
         return {"status": "ignored", "reason": "missing required fields"}
 
-    delivery_id = x_github_delivery or hashlib.sha256(body).hexdigest()
+    delivery_id = x_github_delivery or hashlib.sha256(body).hexdigest()[:32]
     if register_delivery("github", delivery_id):
         logger.info("github.webhook: dropping replayed delivery id=%s", delivery_id)
         return {"status": "duplicate", "event_id": None}
