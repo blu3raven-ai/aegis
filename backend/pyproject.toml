@@ -16,18 +16,16 @@ dependencies = [
   "psycopg2-binary>=2.9",
   "PyJWT>=2.8",
   "boto3>=1.35.0",
-  "cryptography>=42.0",
+  "cryptography>=48.0",
   "strawberry-graphql[fastapi]>=0.235.0",
   "prometheus-client>=0.20.0",
   "idna>=3.15",
   "qrcode[pil]>=7.4",
   "pysaml2>=7.5.4",
-  "pyopenssl>=24.0.0",
+  "pyopenssl>=26.2.0",
   "authlib>=1.6.12",
   "itsdangerous>=2.2.0",
-  "weasyprint>=62,<63",
-  # WeasyPrint 62 is incompatible with pydyf 0.11+ (upstream packaging bug)
-  "pydyf>=0.10,<0.11",
+  "weasyprint>=68",
   "jinja2>=3.1",
   # Multi-ecosystem version comparison for backend OSV matching (semver, PEP440,
   # Maven, Go, gem, NuGet, and distro dpkg/apk/rpm schemes).
@@ -40,6 +38,14 @@ test = [
   "pytest>=8.0.0",
   "pytest-asyncio>=0.23.0",
   "testcontainers[postgres,minio]>=4.0.0",
+]
+
+[tool.uv]
+# pysaml2==7.5.4 declares pyopenssl<24.3.0, but that chain caps cryptography<44
+# and blocks the bundled-OpenSSL CVE fixes. Override pyopenssl to >=26.2.0
+# (cryptography>=46,<49) so cryptography 48.x resolves cleanly.
+override-dependencies = [
+  "pyopenssl>=26.2.0",
 ]
 
 [tool.pytest.ini_options]
