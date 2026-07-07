@@ -150,7 +150,7 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 return RedirectResponse("/", status_code=302)
 
             if user_status not in {"pending", "active"}:
-                return self._unauth(path)
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
             request.state.session = session
             request.state.user = session.user
