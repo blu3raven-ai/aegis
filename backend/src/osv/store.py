@@ -134,6 +134,10 @@ def _flatten_ranges(adv: dict, fallback_ecosystem: str) -> list[dict]:
         ranges = affected.get("ranges") or []
         produced = 0
         for rng in ranges:
+            # GIT-type ranges carry commit SHAs, not version strings; they cannot
+            # be ordered as semver and would produce meaningless or spurious matches.
+            if rng.get("type") == "GIT":
+                continue
             # OSV events are ordered; an "introduced" opens an interval that the
             # next "fixed"/"last_affected" closes. An unclosed interval is
             # open-ended (everything from "introduced" onward is affected).

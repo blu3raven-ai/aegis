@@ -4,7 +4,7 @@ import asyncio
 import ipaddress
 import socket
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 
@@ -21,10 +21,12 @@ class ConnectionTestError(Exception):
 
 
 def _validate_instance_url(url: str) -> str:
-    """Validate that a user-supplied instance URL is safe to connect to.
+    """Validate a user-supplied instance URL and return it with the hostname
+    replaced by a pinned, validated IP address.
 
-    Blocks private/loopback IPs, non-HTTPS schemes (except known dev hosts),
-    and URLs that resolve to internal networks.
+    Resolves the hostname once, rejects any address in private/internal ranges,
+    then substitutes the resolved IP into the returned URL. Callers should pair
+    this with _HostPinningTransport so TLS SNI still uses the original hostname.
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("https", "http"):
@@ -34,20 +36,55 @@ def _validate_instance_url(url: str) -> str:
     if not hostname:
         raise ConnectionTestError("Invalid URL: missing hostname")
 
-    # Resolve hostname and check for private/loopback IPs
+    # Resolve once and validate every returned address.
     try:
+        resolved_ip: str | None = None
         for info in socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM):
             addr = info[4][0]
             ip = ipaddress.ip_address(addr)
             if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
                 raise ConnectionTestError(
                     f"URL resolves to a private/internal address ({addr}). "
-                    "Only publicly routable GitLab instances are allowed."
+                    "Only publicly routable instances are allowed."
                 )
+            if resolved_ip is None:
+                resolved_ip = addr
     except socket.gaierror:
         raise ConnectionTestError(f"Cannot resolve hostname: {hostname}")
 
-    return url.rstrip("/")
+    if resolved_ip is None:
+        raise ConnectionTestError(f"Cannot resolve hostname: {hostname}")
+
+    # Replace hostname with the validated IP so the caller connects to the
+    # address we checked, not whatever the next DNS lookup returns.
+    ip_obj = ipaddress.ip_address(resolved_ip)
+    ip_host = f"[{resolved_ip}]" if ip_obj.version == 6 else resolved_ip
+    port_suffix = f":{parsed.port}" if parsed.port else ""
+    pinned_netloc = f"{ip_host}{port_suffix}"
+    pinned_url = urlunparse((
+        parsed.scheme, pinned_netloc, parsed.path,
+        parsed.params, parsed.query, parsed.fragment,
+    ))
+    return pinned_url.rstrip("/")
+
+
+class _HostPinningTransport(httpx.AsyncHTTPTransport):
+    """HTTP transport that preserves the original hostname for TLS SNI.
+
+    When _validate_instance_url substitutes a validated IP for the hostname,
+    this transport injects the original hostname as the TLS server name so
+    certificate verification still works against the expected hostname.
+    """
+
+    def __init__(self, hostname: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._hostname = hostname
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        # httpcore reads extensions["sni_hostname"] for the TLS server name;
+        # without this, connecting via IP would fail cert verification.
+        request.extensions["sni_hostname"] = self._hostname.encode("ascii")
+        return await super().handle_async_request(request)
 
 
 # Result type
@@ -255,6 +292,7 @@ async def _test_gitlab(auth: dict) -> ConnectionTestResult:
         instance_url = _validate_instance_url(raw_url)
     except ConnectionTestError as exc:
         return ConnectionTestResult(success=False, message=str(exc))
+    original_hostname = urlparse(raw_url).hostname or ""
     group = auth.get("group") or auth.get("orgOrOwner")
 
     if not token:
@@ -263,7 +301,7 @@ async def _test_gitlab(auth: dict) -> ConnectionTestResult:
     headers = {"PRIVATE-TOKEN": token}
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=15, transport=_HostPinningTransport(original_hostname)) as client:
             # 1. Validate token and check scopes
             token_resp = await client.get(
                 f"{instance_url}/api/v4/personal_access_tokens/self",
@@ -589,6 +627,7 @@ async def _test_gitlab_ci(auth: dict) -> ConnectionTestResult:
         instance_url = _validate_instance_url(raw_url)
     except ConnectionTestError as exc:
         return ConnectionTestResult(success=False, message=str(exc))
+    original_hostname = urlparse(raw_url).hostname or ""
     group = auth.get("group") or auth.get("orgOrOwner")
 
     if not token:
@@ -597,7 +636,7 @@ async def _test_gitlab_ci(auth: dict) -> ConnectionTestResult:
     headers = {"PRIVATE-TOKEN": token}
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=15, transport=_HostPinningTransport(original_hostname)) as client:
             # 1. Validate token and check scopes
             token_resp = await client.get(
                 f"{instance_url}/api/v4/personal_access_tokens/self",
@@ -747,10 +786,11 @@ async def _test_gitea(auth: dict) -> ConnectionTestResult:
         return ConnectionTestResult(success=False, message="Instance URL is required")
 
     base_url = _validate_instance_url(instance_url)
+    original_hostname = urlparse(instance_url).hostname or ""
     headers = {"Authorization": f"token {token}", "Accept": "application/json"}
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, transport=_HostPinningTransport(original_hostname)) as client:
             # Verify token
             resp = await client.get(f"{base_url}/api/v1/user", headers=headers)
             resp.raise_for_status()
@@ -952,10 +992,11 @@ async def _test_gitlab_registry(auth: dict) -> ConnectionTestResult:
         return ConnectionTestResult(success=False, message="Group or project path is required")
 
     base_url = _validate_instance_url(instance_url)
+    original_hostname = urlparse(instance_url).hostname or ""
     headers = {"PRIVATE-TOKEN": token, "Accept": "application/json"}
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, transport=_HostPinningTransport(original_hostname)) as client:
             items: list[str] = []
             page = 1
 
