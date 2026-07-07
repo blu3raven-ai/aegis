@@ -84,12 +84,14 @@ def test_change_email_requires_correct_password_for_password_users():
         _cleanup(uid)
 
 
-def test_change_email_skips_reauth_for_passwordless_sso_users():
+def test_change_email_requires_totp_for_passwordless_sso_users():
     uid = f"reauth-sso-{uuid4().hex[:8]}"
     _seed_user(uid, password_hash="", sso_subject=f"sub-{uid}", sso_protocol="oidc")
     try:
-        change_email(email="moved@example.com", current_password="", info_context=_ctx(uid))
-        assert _email_of(uid) == "moved@example.com"
+        with pytest.raises(GraphQLError) as exc:
+            change_email(email="moved@example.com", current_password="", info_context=_ctx(uid))
+        assert exc.value.extensions["code"] == "FORBIDDEN"
+        assert _email_of(uid) != "moved@example.com"
     finally:
         _cleanup(uid)
 
