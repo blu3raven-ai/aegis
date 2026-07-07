@@ -68,6 +68,8 @@ def register_runner(
         existing = _find_runner_by_name(name)
         if existing:
             existing["authTokenHash"] = auth_hash
+            existing["status"] = "pending_approval"
+            existing["approvedAt"] = None
             existing["lastHeartbeatAt"] = now_iso()
             if os_name:
                 existing["os"] = os_name
