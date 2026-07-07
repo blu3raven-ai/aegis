@@ -104,6 +104,19 @@ class CredentialReuseChainRule:
             rule_name=self.name,
         )
         if chain_id is None:
+            # Chain exists but the idempotency entry was not returned — look it
+            # up via the same anchor so edges can still be recorded.
+            chain_id = ctx.emit.lookup_chain(
+                org_id=org,
+                chain_type=_CHAIN_TYPE,
+                source_event_id=dedup_event_id,
+                rule_name=self.name,
+            )
+        if chain_id is None:
+            logger.warning(
+                "credential_reuse_chain: chain not found for org=%s hash=%.6s...; skipping edges",
+                org, secret_hash,
+            )
             return
 
         # Add an edge for every known location of the reused credential.
