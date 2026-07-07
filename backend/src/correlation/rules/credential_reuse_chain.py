@@ -106,6 +106,7 @@ class CredentialReuseChainRule:
         if chain_id is None:
             return
 
+        # Add an edge for every known location of the reused credential.
         for other in matching:
             ctx.emit.emit_chain_edge(
                 chain_id,

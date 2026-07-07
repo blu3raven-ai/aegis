@@ -70,13 +70,15 @@ class ContainerBaseImagePropagationRule:
             finding_id, base_image_digest, len(sibling_findings), org,
         )
 
+        # Stable anchor: all containers sharing the same base image merge into one chain.
+        stable_event_id = f"base_image:{org}:{base_image_digest}"
         chain_id = ctx.emit.emit_chain(
             {
                 "org_id": org,
                 "chain_type": _CHAIN_TYPE,
                 "severity": "high",
             },
-            source_event_id=event["event_id"],
+            source_event_id=stable_event_id,
             rule_name=self.name,
         )
         if chain_id is None:

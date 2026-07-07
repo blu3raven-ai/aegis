@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import socket
 import uuid
@@ -10,6 +11,7 @@ import httpx
 
 from src.db.models import AuditStreamConfig
 from src.security.crypto import decrypt
+from src.shared.url_guard import UnsafeURLError, assert_sendable_url
 
 
 def _token_for(cfg: AuditStreamConfig) -> str | None:
@@ -22,6 +24,10 @@ async def webhook_deliver(
     events: list[dict],
     transport: httpx.BaseTransport | None = None,
 ) -> dict:
+    try:
+        assert_sendable_url(url)
+    except UnsafeURLError as exc:
+        return {"ok": False, "error": str(exc)}
     headers: dict[str, str] = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -29,7 +35,7 @@ async def webhook_deliver(
         async with httpx.AsyncClient(timeout=10.0, transport=transport) as client:
             resp = await client.post(url, json={"events": events}, headers=headers)
             if resp.status_code >= 300:
-                return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+                return {"ok": False, "error": f"HTTP {resp.status_code}"}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
     return {"ok": True, "error": None}
@@ -41,6 +47,10 @@ async def splunk_hec_deliver(
     events: list[dict],
     transport: httpx.BaseTransport | None = None,
 ) -> dict:
+    try:
+        assert_sendable_url(url)
+    except UnsafeURLError as exc:
+        return {"ok": False, "error": str(exc)}
     headers: dict[str, str] = {
         "Authorization": f"Splunk {token or ''}",
         "X-Splunk-Request-Channel": str(uuid.uuid4()),
@@ -51,7 +61,7 @@ async def splunk_hec_deliver(
         async with httpx.AsyncClient(timeout=10.0, transport=transport) as client:
             resp = await client.post(full_url, content=body.encode(), headers=headers)
             if resp.status_code >= 300:
-                return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+                return {"ok": False, "error": f"HTTP {resp.status_code}"}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
     return {"ok": True, "error": None}
@@ -65,6 +75,20 @@ async def syslog_deliver(
     host, _, port_s = url.partition(":")
     if not host or not port_s.isdigit():
         return {"ok": False, "error": "Syslog target must be 'host:port'."}
+    try:
+        assert_sendable_url(f"syslog://{host}")
+    except UnsafeURLError:
+        # assert_sendable_url rejects non-http(s) schemes, so fall through to
+        # the ip_address check below which handles syslog validation directly.
+        pass
+    # Validate that the syslog host does not resolve to a private/loopback address.
+    try:
+        for info in socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM):
+            ip = ipaddress.ip_address(info[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return {"ok": False, "error": f"Syslog host resolves to a private address ({info[4][0]})"}
+    except socket.gaierror:
+        return {"ok": False, "error": f"Cannot resolve syslog host: {host}"}
     port = int(port_s)
     try:
         await asyncio.get_running_loop().run_in_executor(None, _syslog_write, host, port, events)

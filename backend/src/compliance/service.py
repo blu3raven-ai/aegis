@@ -357,7 +357,10 @@ async def get_findings_for_control(
         .where(*where)
         .order_by(
             ComplianceControlMapping.suppressed.asc(),
-            Finding.severity.asc().nullslast(),
+            case(
+                *((Finding.severity == sev, rank) for sev, rank in _SEV_RANK.items()),
+                else_=99,
+            ).asc(),
             Finding.id.desc(),
         )
     )
