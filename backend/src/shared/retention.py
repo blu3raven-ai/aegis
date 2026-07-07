@@ -9,6 +9,7 @@ from typing import Any
 
 from src.shared.object_store import list_objects_with_metadata, get_object_tags, get_s3_client, _S3_BUCKET
 from src.shared.config import read_app_config
+from src.shared.paths import parse_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ def should_delete_object(
 
     if ingested_at:
         try:
-            ingested_dt = datetime.fromisoformat(ingested_at.replace("Z", "+00:00"))
+            ingested_dt = parse_iso_utc(ingested_at)
             return (now - ingested_dt) > timedelta(days=retention_days)
         except (ValueError, TypeError):
             logger.warning("Invalid ingested_at tag value: %s", ingested_at)

@@ -12,6 +12,7 @@ from src.shared.archived_filter import exclude_archived, include_archived
 from src.shared.paths import (
     dt_to_iso as _dt_to_iso,
     now_iso,
+    parse_iso_utc,
 )
 from src.secrets.store import (
     ensure_secret_identity,
@@ -90,12 +91,12 @@ def _apply_run_patch(run: ScanRun, patch: dict[str, Any]) -> None:
         run.error = patch["error"]
     if "finishedAt" in patch:
         try:
-            run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
+            run.finished_at = parse_iso_utc(patch["finishedAt"])
         except (ValueError, AttributeError):
             pass
     if "startedAt" in patch:
         try:
-            run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
+            run.started_at = parse_iso_utc(patch["startedAt"])
         except (ValueError, AttributeError):
             pass
 

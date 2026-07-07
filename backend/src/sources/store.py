@@ -11,7 +11,7 @@ from src.assets.refs import image_ref, repo_ref
 from src.db.helpers import run_db
 from src.db.models import SourceConnection
 from src.shared.encryption import decrypt_string, encrypt_string, is_encrypted
-from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso
+from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso, parse_iso_utc
 
 _logger = logging.getLogger(__name__)
 
@@ -503,9 +503,9 @@ def update_connection_status(
         if discovered_items is not None:
             conn.discovered_items = discovered_items
         if last_synced_at is not None:
-            conn.last_synced_at = datetime.fromisoformat(last_synced_at.replace("Z", "+00:00"))
+            conn.last_synced_at = parse_iso_utc(last_synced_at)
         if next_sync_at is not None:
-            conn.next_sync_at = datetime.fromisoformat(next_sync_at.replace("Z", "+00:00"))
+            conn.next_sync_at = parse_iso_utc(next_sync_at)
         conn.updated_at = datetime.now(timezone.utc)
         await session.flush()
         return _conn_to_dict(conn)

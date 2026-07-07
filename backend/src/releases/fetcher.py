@@ -13,10 +13,12 @@ packages, RubyGems, Hex, …) has no deps.dev entry and is skipped.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from urllib.parse import quote
 
 import httpx
+
+from src.shared.paths import parse_iso_utc
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,6 @@ def fetch_release_date(
         return None
     try:
         # deps.dev returns RFC 3339, e.g. "2024-05-01T12:00:00Z".
-        return datetime.fromisoformat(published.replace("Z", "+00:00")).date()
+        return parse_iso_utc(published).date()
     except (ValueError, TypeError):
         return None
