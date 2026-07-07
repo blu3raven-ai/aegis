@@ -29,8 +29,7 @@ from runner.scanners._shared import (
     build_escalation_llm_client,
     build_llm_client,
     clone_repo,
-    log_finished,
-    log_scanning,
+    log,
     parse_repos,
     register_output,
     repo_name_from_url,
@@ -151,7 +150,7 @@ class DepsReachabilityScanner:
 
         clone_dir = out_dir / repo_name / "_checkout"
         try:
-            log_scanning(repo_name)
+            log("scanning", repo_name)
             clone_repo(
                 repo_url,
                 clone_dir,
@@ -259,4 +258,4 @@ class DepsReachabilityScanner:
             log_tail.append(f"[!] failed to write {_RESULTS_FILENAME}: {exc}")
             return
         register_output(out_dir, results_path, repo)
-        log_finished(repo)
+        log("done", repo)

@@ -31,8 +31,7 @@ from runner.scanners._shared import (
     build_escalation_llm_client,
     build_llm_client,
     clone_repo,
-    log_finished,
-    log_scanning,
+    log,
     parse_repos,
     register_output,
     derive_html_url,
@@ -341,7 +340,7 @@ class CodeScanningScanner:
         repo_name = repo_name_from_url(repo_url)
         repo_out = out_dir / repo_name
         repo_out.mkdir(parents=True, exist_ok=True)
-        log_scanning(repo_name)
+        log("scanning", repo_name)
 
         clone_dir = repo_out / "_checkout"
         if not str(repo_out.resolve()).startswith(str(out_dir.resolve())):
@@ -357,7 +356,7 @@ class CodeScanningScanner:
         except (InsecureURLError, GitCloneError):
             if str(repo_out.resolve()).startswith(str(out_dir.resolve())):
                 shutil.rmtree(repo_out, ignore_errors=True)
-            log_finished(repo_name)
+            log("done", repo_name)
             raise
 
         try:
@@ -386,7 +385,7 @@ class CodeScanningScanner:
                         )
                         for f in sorted(repo_out.glob("*.json")):
                             register_output(out_dir, f, repo_name)
-                        log_finished(repo_name)
+                        log("done", repo_name)
                         return sarif_file
                 except ValueError as e:
                     logger.warning(
@@ -421,7 +420,7 @@ class CodeScanningScanner:
             for f in sorted(repo_out.glob("*.json")):
                 register_output(out_dir, f, repo_name)
 
-            log_finished(repo_name)
+            log("done", repo_name)
             return sarif_file if sarif_file.exists() else None
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
