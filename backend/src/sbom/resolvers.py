@@ -328,19 +328,32 @@ def _parse_version_tuple(v: str) -> tuple[int, ...] | None:
     has no numeric component. A single leading 'v' (Go module style, e.g.
     'v1.5.0') is stripped so it compares as '1.5.0'. Returning None (rather than
     coercing to (0,)) lets callers EXCLUDE unparseable versions from a numeric
-    filter instead of silently treating them as version 0."""
+    filter instead of silently treating them as version 0.
+
+    The last element is a release indicator (1 = full release, 0 = pre-release
+    or build metadata present) so that '1.0.0-beta' compares as strictly less
+    than '1.0.0' rather than equal."""
     v = v.strip()
     if v[:1] in ("v", "V"):
         v = v[1:]
-    parts = re.split(r"[.\-+]", v)
     result: list[int] = []
-    for p in parts:
-        digits = re.match(r"(\d+)", p)
-        if digits:
-            result.append(int(digits.group(1)))
+    has_prerelease = False
+    for p in v.split("."):
+        m = re.match(r"^(\d+)([-+].+)?$", p)
+        if m:
+            result.append(int(m.group(1)))
+            if m.group(2):
+                has_prerelease = True
+                break
+        elif re.match(r"^\d+$", p):
+            result.append(int(p))
         else:
+            has_prerelease = True
             break
-    return tuple(result) if result else None
+    if not result:
+        return None
+    result.append(0 if has_prerelease else 1)
+    return tuple(result)
 
 
 def sbom_search(

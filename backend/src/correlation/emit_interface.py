@@ -145,9 +145,13 @@ class EmitInterface:
         idem_key = _idem_key(rule_name, source_event_id, f"chain:{dedup_hash}")
 
         if self._redis.exists(idem_key):
-            logger.debug("emit_chain: duplicate suppressed rule=%s event=%s",
-                         rule_name, source_event_id)
-            return None
+            # Return the existing chain_id so callers can still add edges to it.
+            existing = self._redis.get(idem_key)
+            if isinstance(existing, bytes):
+                existing = existing.decode()
+            logger.debug("emit_chain: duplicate, returning existing chain=%s rule=%s event=%s",
+                         existing, rule_name, source_event_id)
+            return existing
 
         chain_id = self._chain_store.create_chain(
             org_id=chain_data["org_id"],

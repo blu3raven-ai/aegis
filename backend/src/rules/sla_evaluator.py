@@ -394,7 +394,7 @@ def _check_and_fire_escalations(
             )
             continue
 
-        key = f"{at_hours}h"
+        key = f"{at_hours}h:{channel_id}"
         if state.get(key):
             continue
         if elapsed_hours < at_hours:

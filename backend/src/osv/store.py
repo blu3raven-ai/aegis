@@ -137,12 +137,11 @@ def _flatten_ranges(adv: dict, fallback_ecosystem: str) -> list[dict]:
             # OSV events are ordered; an "introduced" opens an interval that the
             # next "fixed"/"last_affected" closes. An unclosed interval is
             # open-ended (everything from "introduced" onward is affected).
+            # Consecutive "introduced" without an intervening "fixed" replace
+            # the pending open interval rather than emitting a spurious open range.
             open_introduced: str | None = None
             for event in rng.get("events") or []:
                 if "introduced" in event:
-                    if open_introduced is not None:
-                        rows.append(_row(pkg_name, ecosystem, open_introduced, None, None))
-                        produced += 1
                     open_introduced = str(event["introduced"])
                 elif "fixed" in event:
                     rows.append(_row(pkg_name, ecosystem, open_introduced or "0", str(event["fixed"]), None))

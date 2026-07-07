@@ -166,6 +166,16 @@ async def login(
         )
         raise HTTPException(status_code=401, detail="invalid credentials")
 
+    if user.status == "disabled":
+        _audit.record(
+            action="auth.login.failure",
+            resource_type="user",
+            actor=ActorInfo(email=user.email or payload.identifier),
+            request=ctx,
+            metadata={"reason": "account_disabled"},
+        )
+        raise HTTPException(status_code=401, detail="invalid credentials")
+
     if user.totp_enabled and user.totp_secret:
         pending_token = secrets.token_urlsafe(32)
         _pending_mfa[pending_token] = {

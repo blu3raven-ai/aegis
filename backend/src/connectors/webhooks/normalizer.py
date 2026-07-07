@@ -89,8 +89,12 @@ def normalize_gitlab_push(payload: dict) -> CodePushEvent:
             "before_sha": payload.get("before"),
             "after_sha": payload.get("after"),
             "commits": [
-                {"sha": c["id"], "author": c["author"]["email"]}
+                {
+                    "sha": c.get("id", ""),
+                    "author": (c.get("author") or {}).get("email", ""),
+                }
                 for c in payload.get("commits", [])
+                if isinstance(c, dict)
             ],
         },
     )

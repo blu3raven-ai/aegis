@@ -80,7 +80,7 @@ class CrossRepoCveClusterRule:
             rule_name=self.name,
         )
         if chain_id is None:
-            return  # chain already exists; edges handled at next finding
+            return
 
         # Add an edge for every affected finding → the triggering finding acts as
         # the cluster root. All findings point inward to represent shared exposure.

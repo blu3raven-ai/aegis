@@ -153,7 +153,6 @@ class KevService:
                     KevEntry.known_ransomware_use,
                 )
                 .order_by(sa.desc("finding_count"))
-                .limit(20)
             )
 
             kev_rows = (await session.execute(kev_join_stmt)).fetchall()

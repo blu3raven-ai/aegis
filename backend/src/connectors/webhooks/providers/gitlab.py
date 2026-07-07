@@ -105,7 +105,7 @@ async def gitlab_webhook(
         state = attrs.get("state", "")
         action = attrs.get("action", "")
         # "open" / "reopen" actions map to opened; everything else (update) maps to updated
-        opened = action in ("open", "reopen") or state in _MR_OPENED_STATES and action not in ("update",)
+        opened = action in ("open", "reopen") or (state in _MR_OPENED_STATES and action not in ("update",))
         event = normalize_gitlab_mr(payload, opened=opened)
     else:
         logger.info("gitlab.webhook: ignoring event kind=%s header=%s", object_kind, x_gitlab_event)

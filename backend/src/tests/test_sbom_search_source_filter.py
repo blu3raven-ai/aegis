@@ -133,9 +133,12 @@ async def test_version_filter_flags_truncation_when_scan_cap_hit(db_session, mon
 
 def test_parse_version_tuple_handles_v_prefix_and_unparseable():
     parse = resolvers_mod._parse_version_tuple
-    assert parse("1.2.3") == (1, 2, 3)
-    assert parse("v1.5.0") == (1, 5, 0)  # Go module style
-    assert parse("V2.0") == (2, 0)
+    # Last element is a release indicator: 1 = full release, 0 = pre-release.
+    assert parse("1.2.3") == (1, 2, 3, 1)
+    assert parse("v1.5.0") == (1, 5, 0, 1)  # Go module style
+    assert parse("V2.0") == (2, 0, 1)
+    assert parse("1.0.0-beta") == (1, 0, 0, 0)   # pre-release < full release
+    assert parse("2.0.0-rc1") == (2, 0, 0, 0)
     assert parse("latest") is None  # no numeric part → excluded, not (0,)
     assert parse("") is None
 
