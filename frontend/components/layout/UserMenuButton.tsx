@@ -81,7 +81,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
 
         {open && (
           <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} aria-label="Close menu" />
             <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-xl">
               <div className="border-b border-[var(--color-border)] px-3 py-2 mb-1">
                 <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">

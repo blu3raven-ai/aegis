@@ -119,11 +119,11 @@ export function CiSnippetPicker({ sourceId, defaultTab = "github", aegisUrl }: P
 
       <div className="mt-4 space-y-2 text-xs text-[var(--color-text-secondary)]">
         <p>
-          1. Create an API key with <code className="bg-[var(--color-surface-2)] px-1 py-0.5 rounded text-2xs">scan:trigger</code> scope in{" "}
+          1. Create an API key with <code className="bg-[var(--color-surface-raised)] px-1 py-0.5 rounded text-2xs">scan:trigger</code> scope in{" "}
           <a href="/settings/api-keys" className="text-[var(--color-accent)] underline">Settings → API Keys</a>.
         </p>
         <p>
-          2. Add the key to your CI as a secret named <code className="bg-[var(--color-surface-2)] px-1 py-0.5 rounded text-2xs">AEGIS_API_KEY</code>.
+          2. Add the key to your CI as a secret named <code className="bg-[var(--color-surface-raised)] px-1 py-0.5 rounded text-2xs">AEGIS_API_KEY</code>.
         </p>
         <p>3. Add the snippet below to your CI config:</p>
       </div>
@@ -135,7 +135,7 @@ export function CiSnippetPicker({ sourceId, defaultTab = "github", aegisUrl }: P
         <button
           type="button"
           onClick={copy}
-          className="absolute top-2 right-2 inline-flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-2xs font-semibold uppercase tracking-[0.14em] hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          className="absolute top-2 right-2 inline-flex items-center gap-1 rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-1 text-2xs font-semibold uppercase tracking-[0.14em] hover:bg-[var(--color-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
         >
           {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
           {copied ? "Copied" : "Copy"}

@@ -271,7 +271,7 @@ function SegmentedToggle<T extends string>({
     <div
       role="radiogroup"
       aria-label="Execution mode"
-      className="inline-flex rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-0.5"
+      className="inline-flex rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-raised)] p-0.5"
     >
       {options.map((opt, i) => {
         const selected = opt.value === value
@@ -342,7 +342,7 @@ function LocalStatusBody({ online }: { online: boolean }) {
         storage.
       </p>
       {!online && (
-        <pre className="mt-2 overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 font-mono text-xs text-[var(--color-text-primary)]">
+        <pre className="mt-2 overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 font-mono text-xs text-[var(--color-text-primary)]">
           $ docker compose up
         </pre>
       )}
