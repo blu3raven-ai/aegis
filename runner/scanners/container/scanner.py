@@ -108,117 +108,124 @@ class ContainerScanner:
         env_vars: dict[str, str] = job.get("envVars") or {}
 
         # registry_auth reads REGISTRY_AUTHS from os.environ — promote any
-        # job-supplied value before configuration runs.
+        # job-supplied value before configuration runs. Track whether we set
+        # it so we can clean it up after the scan regardless of outcome.
+        _promoted_registry_auths = False
         if "REGISTRY_AUTHS" in env_vars and "REGISTRY_AUTHS" not in os.environ:
             os.environ["REGISTRY_AUTHS"] = env_vars["REGISTRY_AUTHS"]
-
-        out_dir = Path(job_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-
-        log_tail: list[str] = []
+            _promoted_registry_auths = True
 
         try:
-            cfg = ContainerScanConfig.from_job(job)
-        except ScannerConfigError as exc:
-            message = str(exc)
-            logger.error(message)
-            log_tail = [message]
-            emitter = ProgressEmitter(on_progress, expected=0)
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=_UNSUPPORTED_MODE_EXIT_CODE,
-                job_dir=out_dir,
-                log_tail=log_tail,
-            )
+            out_dir = Path(job_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
 
-        if "ORG_LABEL" not in os.environ:
-            os.environ["ORG_LABEL"] = cfg.org_label
+            log_tail: list[str] = []
 
-        raw_images = cfg.images
-        images: list[str] = []
-        for ref in raw_images:
-            if _validate_image_ref(ref):
-                images.append(ref)
-            else:
-                log_tail.append(f"[!] Invalid image reference: {ref}")
-
-        previous_digests = digest_compare.parse_previous_digests(
-            cfg.previous_digests_raw
-        )
-        if cfg.previous_digests_raw and not previous_digests:
-            log_tail.append(
-                "[!] PREVIOUS_DIGESTS could not be parsed — proceeding "
-                "without skip-unchanged optimisation"
-            )
-
-        emitter = ProgressEmitter(on_progress, expected=len(images))
-
-        if cancel_event is not None and cancel_event.is_set():
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=CANCELLED_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
-            )
-
-        if not images:
-            log_tail.append("[!] No valid images to scan")
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(exit_code=0, job_dir=out_dir, log_tail=log_tail)
-
-        emitter.starting()
-
-        try:
-            count = registry_auth.configure_registry_auth()
-            if count:
-                logger.info("[+] Registry auth configured for %d registries", count)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("[!] Registry auth setup failed: %s", e)
-
-        def _scan_one(image_ref: str) -> Path | None:
-            if cancel_event is not None and cancel_event.is_set():
-                return None
-            # Use the sanitized image name as the progress label, matching the
-            # per-image output directory. Backend schema reuses the *Repos
-            # counter names for container jobs.
-            safe_name = _sanitize_name(image_ref)
-            emitter.scanning(safe_name)
             try:
-                return self._scan_image(
-                    image_ref,
-                    out_dir,
-                    scan_platform=cfg.scan_platform,
-                    cancel_event=cancel_event,
-                    previous_digests=previous_digests,
+                cfg = ContainerScanConfig.from_job(job)
+            except ScannerConfigError as exc:
+                message = str(exc)
+                logger.error(message)
+                log_tail = [message]
+                emitter = ProgressEmitter(on_progress, expected=0)
+                emitter.done()
+                write_done_marker(out_dir)
+                return ExecutionResult(
+                    exit_code=_UNSUPPORTED_MODE_EXIT_CODE,
+                    job_dir=out_dir,
                     log_tail=log_tail,
-                    list_tags=cfg.list_tags,
                 )
-            except ScannerTimeoutError as e:
-                log_tail.append(f"[!] Timeout scanning {image_ref}: {e}")
-                return None
+
+            if "ORG_LABEL" not in os.environ:
+                os.environ["ORG_LABEL"] = cfg.org_label
+
+            raw_images = cfg.images
+            images: list[str] = []
+            for ref in raw_images:
+                if _validate_image_ref(ref):
+                    images.append(ref)
+                else:
+                    log_tail.append(f"[!] Invalid image reference: {ref}")
+
+            previous_digests = digest_compare.parse_previous_digests(
+                cfg.previous_digests_raw
+            )
+            if cfg.previous_digests_raw and not previous_digests:
+                log_tail.append(
+                    "[!] PREVIOUS_DIGESTS could not be parsed — proceeding "
+                    "without skip-unchanged optimisation"
+                )
+
+            emitter = ProgressEmitter(on_progress, expected=len(images))
+
+            if cancel_event is not None and cancel_event.is_set():
+                emitter.done()
+                write_done_marker(out_dir)
+                return ExecutionResult(
+                    exit_code=CANCELLED_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
+                )
+
+            if not images:
+                log_tail.append("[!] No valid images to scan")
+                emitter.done()
+                write_done_marker(out_dir)
+                return ExecutionResult(exit_code=0, job_dir=out_dir, log_tail=log_tail)
+
+            emitter.starting()
+
+            try:
+                count = registry_auth.configure_registry_auth()
+                if count:
+                    logger.info("[+] Registry auth configured for %d registries", count)
             except Exception as e:  # noqa: BLE001
-                log_tail.append(f"[!] Image {image_ref} failed: {e}")
-                logger.exception("[!] Image %s failed", image_ref)
-                return None
-            finally:
-                emitter.finished(safe_name)
+                logger.warning("[!] Registry auth setup failed: %s", e)
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=cfg.concurrency
-        ) as pool:
-            list(pool.map(_scan_one, images))
+            def _scan_one(image_ref: str) -> Path | None:
+                if cancel_event is not None and cancel_event.is_set():
+                    return None
+                # Use the sanitized image name as the progress label, matching the
+                # per-image output directory. Backend schema reuses the *Repos
+                # counter names for container jobs.
+                safe_name = _sanitize_name(image_ref)
+                emitter.scanning(safe_name)
+                try:
+                    return self._scan_image(
+                        image_ref,
+                        out_dir,
+                        scan_platform=cfg.scan_platform,
+                        cancel_event=cancel_event,
+                        previous_digests=previous_digests,
+                        log_tail=log_tail,
+                        list_tags=cfg.list_tags,
+                    )
+                except ScannerTimeoutError as e:
+                    log_tail.append(f"[!] Timeout scanning {image_ref}: {e}")
+                    return None
+                except Exception as e:  # noqa: BLE001
+                    log_tail.append(f"[!] Image {image_ref} failed: {e}")
+                    logger.exception("[!] Image %s failed", image_ref)
+                    return None
+                finally:
+                    emitter.finished(safe_name)
 
-        emitter.normalizing()
-        write_done_marker(out_dir)
-        emitter.done()
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=cfg.concurrency
+            ) as pool:
+                list(pool.map(_scan_one, images))
 
-        exit_code = 0
-        if cancel_event is not None and cancel_event.is_set():
-            exit_code = CANCELLED_EXIT_CODE
-        return ExecutionResult(
-            exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
-        )
+            emitter.normalizing()
+            write_done_marker(out_dir)
+            emitter.done()
+
+            exit_code = 0
+            if cancel_event is not None and cancel_event.is_set():
+                exit_code = CANCELLED_EXIT_CODE
+            return ExecutionResult(
+                exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
+            )
+        finally:
+            if _promoted_registry_auths:
+                os.environ.pop("REGISTRY_AUTHS", None)
 
     # ------------------------------------------------------------------
     # internal helpers

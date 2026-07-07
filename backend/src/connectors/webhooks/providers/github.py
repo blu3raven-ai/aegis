@@ -122,6 +122,8 @@ async def github_webhook(
         logger.info("github.webhook: dropping replayed delivery id=%s", x_github_delivery)
         return {"status": "duplicate", "event_id": None}
 
+    if matched.org_id is not None:
+        event = event.model_copy(update={"org_id": matched.org_id})
     get_event_publisher().publish(event)
     logger.info(
         "github.webhook: published event_type=%s event_id=%s authed_org=%s",

@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from src.shared.url_guard import UnsafeURLError, assert_sendable_url
+
 # Exceptions
 
 
@@ -812,6 +814,11 @@ async def _test_ecr(auth: dict) -> ConnectionTestResult:
     if not registry_url:
         return ConnectionTestResult(success=False, message="Registry URL is required (e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com)")
 
+    try:
+        assert_sendable_url(f"https://{registry_url}")
+    except UnsafeURLError as exc:
+        return ConnectionTestResult(success=False, message=f"Registry URL not permitted: {exc}")
+
     import base64
     b64_auth = base64.b64encode(f"AWS:{token}".encode()).decode()
     headers = {"Authorization": f"Basic {b64_auth}", "Accept": "application/json"}
@@ -850,6 +857,11 @@ async def _test_acr(auth: dict) -> ConnectionTestResult:
         return ConnectionTestResult(success=False, message="ACR admin password or token is required")
     if not registry_url:
         return ConnectionTestResult(success=False, message="Registry URL is required (e.g. myregistry.azurecr.io)")
+
+    try:
+        assert_sendable_url(f"https://{registry_url}")
+    except UnsafeURLError as exc:
+        return ConnectionTestResult(success=False, message=f"Registry URL not permitted: {exc}")
 
     username = auth.get("username") or registry_url.split(".")[0]
 
@@ -890,6 +902,11 @@ async def _test_gcr(auth: dict) -> ConnectionTestResult:
     org = auth.get("orgOrOwner") or ""
     if not token:
         return ConnectionTestResult(success=False, message="Service account JSON key or access token is required")
+
+    try:
+        assert_sendable_url(f"https://{registry_url}")
+    except UnsafeURLError as exc:
+        return ConnectionTestResult(success=False, message=f"Registry URL not permitted: {exc}")
 
     import base64
     b64_auth = base64.b64encode(f"_json_key:{token}".encode()).decode() if token.strip().startswith("{") \

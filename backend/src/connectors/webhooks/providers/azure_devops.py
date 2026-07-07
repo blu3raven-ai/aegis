@@ -111,6 +111,8 @@ async def azure_devops_webhook(
         logger.info("azure_devops.webhook: ignoring event type=%s", event_type)
         return {"status": "ignored", "reason": f"event type {event_type}"}
 
+    if matched.org_id is not None:
+        event = event.model_copy(update={"org_id": matched.org_id})
     get_event_publisher().publish(event)
     logger.info(
         "azure_devops.webhook: published event_type=%s event_id=%s authed_org=%s",
