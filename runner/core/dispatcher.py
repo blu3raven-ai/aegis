@@ -12,7 +12,6 @@ from runner.scanners.dependencies.scanner import DependenciesScanner
 from runner.scanners.deps_reachability.scanner import DepsReachabilityScanner
 from runner.scanners.iac.scanner import IacScanner
 from runner.scanners.secrets.scanner import SecretsScanner
-from runner.scanners.verification.scanner import VerificationScanner
 
 _SCANNERS: dict[str, object] = {
     "dependencies_scanning": DependenciesScanner(),
@@ -22,12 +21,6 @@ _SCANNERS: dict[str, object] = {
     "iac_scanning": IacScanner(),
     "agent_scanning": AgentScanner(),
     "dependencies_reachability": DepsReachabilityScanner(),
-    # Dormant — NOT dead code. The aggregate cross-scanner correlator/dedupe
-    # engine for the upcoming Attack Chains feature (frontend is a mock preview
-    # today). The backend does not dispatch a "verification" job yet, so this
-    # never runs; it's pre-registered so wiring Chains later is backend-only.
-    # Do not delete without removing Chains from the roadmap.
-    "verification": VerificationScanner(),
 }
 
 
