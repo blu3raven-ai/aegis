@@ -17,7 +17,6 @@ A full scan is triggered when:
 from __future__ import annotations
 
 import hashlib
-import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,12 +24,6 @@ from typing import Callable
 
 from src.code_scanning.diff_detector import compute_file_diff
 from src.code_scanning.file_finding_cache import FileFindingCache, Finding
-
-# Source file extensions considered for the closure index.
-# Kept narrow to avoid reading binaries / vendored assets.
-_SOURCE_EXTENSIONS = frozenset({
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".mjs",
-})
 
 
 @dataclass
@@ -95,21 +88,6 @@ class SastBaselineDelta:
                 all_files=diff.added,  # baseline_sha=None → all files are 'added'
                 rule_pack_version=rule_pack_version,
                 t0=t0,
-            )
-
-        if os.getenv("AEGIS_SAST_ONE_HOP_EXPANSION", "false").lower() == "true":
-            from src.code_scanning.dependency_closure import compute_one_hop_closure
-            all_repo_files = self._list_repo_files(checkout_path)
-            expanded = compute_one_hop_closure(
-                changed_files=list(diff.modified + diff.added),
-                all_repo_files=all_repo_files,
-                checkout_path=checkout_path,
-            )
-            # Rebuild diff with the expanded file set so delta_scan picks it up
-            diff = type(diff)(
-                added=list(expanded),
-                modified=[],
-                deleted=diff.deleted,
             )
 
         return self._delta_scan(
@@ -218,21 +196,6 @@ class SastBaselineDelta:
             deleted_files=deleted_count,
             duration_ms=int((time.monotonic() - t0) * 1000),
         )
-
-    def _list_repo_files(self, checkout_path: Path) -> list[str]:
-        """Return repo-relative paths for all source files under checkout_path.
-
-        Restricted to recognised source extensions to avoid reading binaries or
-        large vendored assets into memory during index construction.
-        """
-        files: list[str] = []
-        for path in checkout_path.rglob("*"):
-            if path.is_file() and path.suffix.lower() in _SOURCE_EXTENSIONS:
-                try:
-                    files.append(str(path.relative_to(checkout_path)))
-                except ValueError:
-                    pass
-        return files
 
     def _rule_pack_changed(self, repo_id: str, rule_pack_version: str) -> bool:
         """Return True if any cached entry for this repo has a different rule pack version.
