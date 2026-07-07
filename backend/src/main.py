@@ -13,7 +13,7 @@ from starlette.responses import FileResponse
 from starlette.staticfiles import StaticFiles
 
 from src.db.engine import engine, get_session
-from src.db.seed import seed_if_empty
+from src.db.seed import seed_default_rules, seed_if_empty
 from src.license.keys import EMBEDDED_PUBLIC_KEY
 from src.license.middleware import resolve_current_tier
 from src.license.store import read_license_key
@@ -185,6 +185,7 @@ async def lifespan(app: FastAPI):  # noqa: ARG001
     # Seed defaults if empty
     async with get_session() as session:
         await seed_if_empty(session)
+        await seed_default_rules(session)
 
     # Ensure MinIO bucket + runner service account exist (replaces minio-init container)
     from src.storage_init import ensure_minio_ready
