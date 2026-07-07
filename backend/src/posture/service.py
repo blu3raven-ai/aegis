@@ -463,13 +463,40 @@ def get_risk_contributions(
     if dimension == "severity":
         return _risk_by_severity(asset_ids)
     if dimension == "scanner":
-        return _risk_by_tool(asset_ids)
+        return _risk_by_group(asset_ids, dimension="scanner", label_expr="f.tool", group_expr="f.tool")
     if dimension == "repo":
-        return _risk_by_repo(asset_ids)
+        return _risk_by_group(
+            asset_ids,
+            dimension="repo",
+            label_expr="a.display_name",
+            group_expr="a.display_name",
+            from_extra="JOIN assets a ON a.id = f.asset_id",
+            label_default="unknown",
+        )
     if dimension == "team":
         return _risk_by_team(asset_ids)
     if dimension == "ecosystem":
-        return _risk_by_ecosystem(asset_ids)
+        # Collapse SbomComponent to one row per (asset_id, name) before joining:
+        # the table's uniqueness is (asset_id, purl), so a bare join on name
+        # would multiply a finding's counts by the number of versions — or
+        # distinct ecosystems — a package resolves to in the SBOM. Mirrors
+        # sbom_ecosystem_analytics; findings with no component match fall into
+        # the unknown ("") ecosystem bucket.
+        return _risk_by_group(
+            asset_ids,
+            dimension="ecosystem",
+            label_expr="COALESCE(sc.ecosystem, '')",
+            group_expr="COALESCE(sc.ecosystem, '')",
+            from_extra="""LEFT JOIN (
+                SELECT DISTINCT ON (asset_id, name) asset_id, name, ecosystem
+                FROM sbom_components
+                WHERE asset_id = ANY(:asset_ids)
+                ORDER BY asset_id, name, ecosystem
+            ) sc ON sc.asset_id = f.asset_id AND sc.name = f.package_name""",
+            where_extra="AND f.package_name IS NOT NULL",
+            label_default="",
+            skip_zero=True,
+        )
     # Caller validates against RISK_DIMENSIONS before reaching here.
     return []
 
@@ -491,65 +518,57 @@ def _risk_finish(rows: list[dict[str, Any]], *, dimension: str) -> list[dict[str
     return out
 
 
-def _risk_by_tool(asset_ids: list[str]) -> list[dict[str, Any]]:
+def _risk_by_group(
+    asset_ids: list[str],
+    *,
+    dimension: str,
+    label_expr: str,
+    group_expr: str,
+    from_extra: str = "",
+    where_extra: str = "",
+    label_default: str | None = None,
+    skip_zero: bool = False,
+) -> list[dict[str, Any]]:
+    """Weighted-volume risk grouped by one label column.
+
+    Every single-column dimension (scanner / repo / ecosystem) shares the same
+    severity-bucketed aggregate; they differ only in the join, the label
+    expression, an optional extra predicate, and how an empty label is rendered.
+    `label_default=None` keeps the raw label (used when the column is never
+    null); otherwise a falsy label falls back to `label_default`.
+    """
     async def _query(session: AsyncSession) -> list[dict[str, Any]]:
         stmt = sa.text(
-            """
-            SELECT f.tool AS label,
+            f"""
+            SELECT {label_expr} AS label,
                    COUNT(*) FILTER (WHERE lower(f.severity) = 'critical') AS critical,
                    COUNT(*) FILTER (WHERE lower(f.severity) = 'high') AS high,
                    COUNT(*) FILTER (WHERE lower(f.severity) = 'medium') AS medium,
                    COUNT(*) FILTER (WHERE lower(f.severity) = 'low') AS low,
                    COUNT(*) AS total
             FROM findings f
+            {from_extra}
             WHERE f.asset_id = ANY(:asset_ids)
               AND f.state = 'open'
               AND f.archived = false
-            GROUP BY f.tool
+              {where_extra}
+            GROUP BY {group_expr}
             """
         )
         rows = (await session.execute(stmt, {"asset_ids": asset_ids})).fetchall()
         raw: list[dict[str, Any]] = []
         for r in rows:
             c, h, m, l = int(r.critical or 0), int(r.high or 0), int(r.medium or 0), int(r.low or 0)
+            total = int(r.total or 0)
+            if skip_zero and total == 0:
+                continue
+            label = r.label if label_default is None else (r.label or label_default)
             raw.append({
-                "label": r.label,
+                "label": label,
                 "risk_score": posture_weighted_volume(critical=c, high=h, medium=m, low=l),
-                "count": int(r.total or 0),
+                "count": total,
             })
-        return _risk_finish(raw, dimension="scanner")
-
-    return run_db(_query)
-
-
-def _risk_by_repo(asset_ids: list[str]) -> list[dict[str, Any]]:
-    async def _query(session: AsyncSession) -> list[dict[str, Any]]:
-        stmt = sa.text(
-            """
-            SELECT a.display_name AS label,
-                   COUNT(*) FILTER (WHERE lower(f.severity) = 'critical') AS critical,
-                   COUNT(*) FILTER (WHERE lower(f.severity) = 'high') AS high,
-                   COUNT(*) FILTER (WHERE lower(f.severity) = 'medium') AS medium,
-                   COUNT(*) FILTER (WHERE lower(f.severity) = 'low') AS low,
-                   COUNT(*) AS total
-            FROM findings f
-            JOIN assets a ON a.id = f.asset_id
-            WHERE f.asset_id = ANY(:asset_ids)
-              AND f.state = 'open'
-              AND f.archived = false
-            GROUP BY a.display_name
-            """
-        )
-        rows = (await session.execute(stmt, {"asset_ids": asset_ids})).fetchall()
-        raw: list[dict[str, Any]] = []
-        for r in rows:
-            c, h, m, l = int(r.critical or 0), int(r.high or 0), int(r.medium or 0), int(r.low or 0)
-            raw.append({
-                "label": r.label or "unknown",
-                "risk_score": posture_weighted_volume(critical=c, high=h, medium=m, low=l),
-                "count": int(r.total or 0),
-            })
-        return _risk_finish(raw, dimension="repo")
+        return _risk_finish(raw, dimension=dimension)
 
     return run_db(_query)
 
@@ -656,57 +675,6 @@ def _risk_by_severity(asset_ids: list[str]) -> list[dict[str, Any]]:
             })
         out.sort(key=lambda x: x["risk_score"], reverse=True)
         return out
-
-    return run_db(_query)
-
-
-def _risk_by_ecosystem(asset_ids: list[str]) -> list[dict[str, Any]]:
-    """Group by SbomComponent.ecosystem joined via package_name.
-
-    Mirrors sbom_ecosystem_analytics ecosystem resolution: findings with no
-    component match fall into the unknown ("") ecosystem bucket.
-    """
-    async def _query(session: AsyncSession) -> list[dict[str, Any]]:
-        # Collapse SbomComponent to one row per (asset_id, name) before joining:
-        # the table's uniqueness is (asset_id, purl), so a bare join on name
-        # would multiply a finding's counts by the number of versions — or
-        # distinct ecosystems — a package resolves to in the SBOM. Mirrors
-        # sbom_ecosystem_analytics.
-        stmt = sa.text(
-            """
-            SELECT COALESCE(sc.ecosystem, '') AS label,
-                   COUNT(*) FILTER (WHERE lower(f.severity) = 'critical') AS critical,
-                   COUNT(*) FILTER (WHERE lower(f.severity) = 'high') AS high,
-                   COUNT(*) FILTER (WHERE lower(f.severity) = 'medium') AS medium,
-                   COUNT(*) FILTER (WHERE lower(f.severity) = 'low') AS low,
-                   COUNT(*) AS total
-            FROM findings f
-            LEFT JOIN (
-                SELECT DISTINCT ON (asset_id, name) asset_id, name, ecosystem
-                FROM sbom_components
-                WHERE asset_id = ANY(:asset_ids)
-                ORDER BY asset_id, name, ecosystem
-            ) sc ON sc.asset_id = f.asset_id AND sc.name = f.package_name
-            WHERE f.asset_id = ANY(:asset_ids)
-              AND f.state = 'open'
-              AND f.archived = false
-              AND f.package_name IS NOT NULL
-            GROUP BY COALESCE(sc.ecosystem, '')
-            """
-        )
-        rows = (await session.execute(stmt, {"asset_ids": asset_ids})).fetchall()
-        raw: list[dict[str, Any]] = []
-        for r in rows:
-            c, h, m, l = int(r.critical or 0), int(r.high or 0), int(r.medium or 0), int(r.low or 0)
-            total = int(r.total or 0)
-            if total == 0:
-                continue
-            raw.append({
-                "label": r.label or "",
-                "risk_score": posture_weighted_volume(critical=c, high=h, medium=m, low=l),
-                "count": total,
-            })
-        return _risk_finish(raw, dimension="ecosystem")
 
     return run_db(_query)
 
