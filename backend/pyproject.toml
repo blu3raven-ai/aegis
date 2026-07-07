@@ -25,9 +25,7 @@ dependencies = [
   "pyopenssl>=24.0.0",
   "authlib>=1.6.12",
   "itsdangerous>=2.2.0",
-  "weasyprint>=62,<63",
-  # WeasyPrint 62 is incompatible with pydyf 0.11+ (upstream packaging bug)
-  "pydyf>=0.10,<0.11",
+  "weasyprint>=68",
   "jinja2>=3.1",
   # Multi-ecosystem version comparison for backend OSV matching (semver, PEP440,
   # Maven, Go, gem, NuGet, and distro dpkg/apk/rpm schemes).
