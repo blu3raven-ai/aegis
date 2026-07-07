@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import os
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -44,6 +45,7 @@ class _MemStorage:
     def __init__(self):
         self.runners: dict[str, dict] = {}
         self.jobs: dict[str, dict] = {}
+        self._lock = threading.Lock()
 
     # Runner side
     def read_runner(self, runner_id):
@@ -76,6 +78,21 @@ class _MemStorage:
         rows.sort(key=lambda r: r.get("createdAt", ""))
         return rows
 
+    def atomic_assign_job(self, runner_id, org=None):
+        with self._lock:
+            rows = [dict(j) for j in self.jobs.values() if j.get("status") == "queued"]
+            if org is not None:
+                rows = [r for r in rows if r.get("org") == org]
+            rows.sort(key=lambda r: r.get("createdAt", ""))
+            if not rows:
+                return None
+            job = rows[0]
+            job["status"] = "assigned"
+            job["runnerId"] = runner_id
+            job["startedAt"] = datetime.now(timezone.utc).isoformat()
+            self.jobs[job["id"]] = dict(job)
+            return dict(job)
+
 
 @pytest.fixture
 def mem(monkeypatch):
@@ -100,6 +117,8 @@ def mem(monkeypatch):
     monkeypatch.setattr("src.runner.jobs.read_job", s.read_job)
     monkeypatch.setattr("src.runner.jobs.write_job", s.write_job)
     monkeypatch.setattr("src.runner.jobs.list_jobs", s.list_jobs)
+    monkeypatch.setattr("src.runner.storage.atomic_assign_job", s.atomic_assign_job)
+    monkeypatch.setattr("src.runner.jobs.atomic_assign_job", s.atomic_assign_job)
     return s
 
 

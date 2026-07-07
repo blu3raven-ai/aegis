@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from src.shared.object_store import list_objects, get_object_tags, get_s3_client, _S3_BUCKET
+from src.shared.object_store import list_objects_with_metadata, get_object_tags, get_s3_client, _S3_BUCKET
 from src.shared.config import read_app_config
 
 logger = logging.getLogger(__name__)
@@ -79,10 +79,12 @@ def run_cleanup_once() -> dict[str, int]:
         prefix = f"{tool}/"
         deleted = 0
         try:
-            keys = list_objects(prefix)
-            for key in keys:
+            objects = list_objects_with_metadata(prefix)
+            for key, last_modified in objects:
                 tags = get_object_tags(key)
-                if should_delete_object(tags, retention[tool], now=now):
+                if should_delete_object(
+                    tags, retention[tool], now=now, object_last_modified=last_modified
+                ):
                     try:
                         get_s3_client().delete_object(
                             Bucket=_S3_BUCKET,

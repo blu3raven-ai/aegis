@@ -165,6 +165,23 @@ def list_objects(prefix: str, bucket: str = _S3_BUCKET) -> list[str]:
     return keys
 
 
+def list_objects_with_metadata(
+    prefix: str, bucket: str = _S3_BUCKET
+) -> list[tuple[str, "datetime"]]:
+    """Return (key, last_modified) pairs for every object under prefix."""
+    from datetime import datetime, timezone
+    client = get_s3_client()
+    results: list[tuple[str, datetime]] = []
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []):
+            last_mod = obj.get("LastModified")
+            if last_mod is not None and last_mod.tzinfo is None:
+                last_mod = last_mod.replace(tzinfo=timezone.utc)
+            results.append((obj["Key"], last_mod))
+    return results
+
+
 def find_findings_jsonl(prefix: str) -> bytes | None:
     """Download findings.jsonl from a prefix, falling back to any .jsonl file.
 
