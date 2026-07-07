@@ -69,9 +69,53 @@ def _run_to_dict(run: ScanRun) -> dict[str, Any]:
     }
 
 
-# Dependencies Run CRUD — stored in scan_runs table (tool='dependencies_scanning')
+# Scan-run CRUD — every scanner stores runs in the scan_runs table keyed by
+# `tool`. The bodies are identical modulo the tool string (and whether the
+# tool tracks per-repository counts), so the per-tool functions below are thin
+# wrappers over these shared helpers. Secret runs use a richer row shape and
+# keep their own functions, but share `_apply_run_patch`.
 
-def create_dependencies_run(org_key: str, run_id: str) -> dict[str, Any]:
+_RUN_PATCH_RESERVED = {
+    "status", "error", "finishedAt", "startedAt", "progress", "id", "org", "organization",
+}
+
+
+def _apply_run_patch(run: ScanRun, patch: dict[str, Any]) -> None:
+    """Apply a status/timestamp/progress/metadata patch to a ScanRun in place."""
+    meta = dict(run.metadata_json or {})
+
+    if "status" in patch:
+        run.status = patch["status"]
+    if "error" in patch:
+        run.error = patch["error"]
+    if "finishedAt" in patch:
+        try:
+            run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass
+    if "startedAt" in patch:
+        try:
+            run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass
+
+    if "progress" in patch and isinstance(patch["progress"], dict):
+        existing_progress = run.progress or {}
+        existing_percent = existing_progress.get("percent", 0) if isinstance(existing_progress.get("percent"), (int, float)) else 0
+        patch_percent = patch["progress"].get("percent", existing_percent) if isinstance(patch["progress"].get("percent"), (int, float)) else existing_percent
+        run.progress = {**existing_progress, **patch["progress"], "percent": max(existing_percent, patch_percent)}
+    elif "progress" in patch:
+        run.progress = patch["progress"]
+
+    for key, value in patch.items():
+        if key not in _RUN_PATCH_RESERVED:
+            meta[key] = value
+    run.metadata_json = meta
+
+
+def _create_run(tool: str, org_key: str, run_id: str, *, track_repos: bool) -> dict[str, Any]:
+    """Insert a queued ScanRun row and return its API dict. `track_repos` adds
+    the per-repository `repositories`/`counts` fields used by dep/container scans."""
     run_dict: dict[str, Any] = {
         "id": run_id,
         "org": org_key,
@@ -80,8 +124,6 @@ def create_dependencies_run(org_key: str, run_id: str) -> dict[str, Any]:
         "startedAt": None,
         "finishedAt": None,
         "findingsCount": 0,
-        "repositories": [],
-        "counts": {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
         "error": None,
         "logTail": [],
         "progress": {
@@ -93,73 +135,49 @@ def create_dependencies_run(org_key: str, run_id: str) -> dict[str, Any]:
             "stage": "queued",
         },
     }
+    metadata: dict[str, Any] = {
+        "org_label": org_key,
+        "createdAt": run_dict["createdAt"],
+        "findingsCount": 0,
+        "logTail": [],
+    }
+    if track_repos:
+        counts = {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0}
+        run_dict["repositories"] = []
+        run_dict["counts"] = counts
+        metadata["repositories"] = []
+        metadata["counts"] = counts
 
     async def _query(session):
         session.add(ScanRun(
             id=run_id,
-            tool="dependencies_scanning",
+            tool=tool,
             status="queued",
             started_at=None,
             progress=run_dict["progress"],
-            metadata_json={
-                "org_label": org_key,
-                "createdAt": run_dict["createdAt"],
-                "findingsCount": 0,
-                "repositories": [],
-                "counts": run_dict["counts"],
-                "logTail": [],
-            },
+            metadata_json=metadata,
         ))
 
     run_db(_query)
     return run_dict
 
 
-def update_dependencies_run(org_key: str, run_id: str, patch: dict[str, Any]) -> None:
+def _update_run(run_id: str, patch: dict[str, Any]) -> None:
     async def _query(session):
         run = await session.get(ScanRun, run_id)
         if not run:
             return
-        meta = dict(run.metadata_json or {})
-
-        if "status" in patch:
-            run.status = patch["status"]
-        if "error" in patch:
-            run.error = patch["error"]
-        if "finishedAt" in patch:
-            try:
-                run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-        if "startedAt" in patch:
-            try:
-                run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-
-        if "progress" in patch and isinstance(patch["progress"], dict):
-            existing_progress = run.progress or {}
-            existing_percent = existing_progress.get("percent", 0) if isinstance(existing_progress.get("percent"), (int, float)) else 0
-            patch_percent = patch["progress"].get("percent", existing_percent) if isinstance(patch["progress"].get("percent"), (int, float)) else existing_percent
-            run.progress = {**existing_progress, **patch["progress"], "percent": max(existing_percent, patch_percent)}
-        elif "progress" in patch:
-            run.progress = patch["progress"]
-
-        skip_keys = {"status", "error", "finishedAt", "startedAt", "progress", "id", "org"}
-        for key, value in patch.items():
-            if key not in skip_keys:
-                meta[key] = value
-        run.metadata_json = meta
+        _apply_run_patch(run, patch)
 
     run_db(_query)
 
 
-def list_dependencies_runs(org_key: str) -> list[dict[str, Any]]:
+def _list_runs(tool: str, org_key: str) -> list[dict[str, Any]]:
     async def _query(session):
         result = await session.execute(
             select(ScanRun)
             .where(
-                ScanRun.tool == "dependencies_scanning",
+                ScanRun.tool == tool,
                 ScanRun.metadata_json["org_label"].astext == org_key,
             )
             .order_by(ScanRun.started_at.desc().nullslast())
@@ -167,6 +185,20 @@ def list_dependencies_runs(org_key: str) -> list[dict[str, Any]]:
         return [_run_to_dict(r) for r in result.scalars().all()]
 
     return run_db(_query)
+
+
+# Dependencies Run CRUD — stored in scan_runs table (tool='dependencies_scanning')
+
+def create_dependencies_run(org_key: str, run_id: str) -> dict[str, Any]:
+    return _create_run("dependencies_scanning", org_key, run_id, track_repos=True)
+
+
+def update_dependencies_run(org_key: str, run_id: str, patch: dict[str, Any]) -> None:
+    _update_run(run_id, patch)
+
+
+def list_dependencies_runs(org_key: str) -> list[dict[str, Any]]:
+    return _list_runs("dependencies_scanning", org_key)
 
 
 # Dependencies Findings — read from unified Finding table
@@ -271,101 +303,15 @@ def empty_dependencies_snapshot(org: str) -> dict[str, Any]:
 # ContainerScanning Run CRUD — stored in scan_runs table (tool='container_scanning')
 
 def create_container_scanning_run(org_key: str, run_id: str) -> dict[str, Any]:
-    run_dict: dict[str, Any] = {
-        "id": run_id,
-        "org": org_key,
-        "status": "queued",
-        "createdAt": now_iso(),
-        "startedAt": None,
-        "finishedAt": None,
-        "findingsCount": 0,
-        "repositories": [],
-        "counts": {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0},
-        "error": None,
-        "logTail": [],
-        "progress": {
-            "expectedRepos": None,
-            "scannedRepos": 0,
-            "finishedRepos": 0,
-            "percent": 0,
-            "currentRepo": None,
-            "stage": "queued",
-        },
-    }
-
-    async def _query(session):
-        session.add(ScanRun(
-            id=run_id,
-            tool="container_scanning",
-            status="queued",
-            started_at=None,
-            progress=run_dict["progress"],
-            metadata_json={
-                "org_label": org_key,
-                "createdAt": run_dict["createdAt"],
-                "findingsCount": 0,
-                "repositories": [],
-                "counts": run_dict["counts"],
-                "logTail": [],
-            },
-        ))
-
-    run_db(_query)
-    return run_dict
+    return _create_run("container_scanning", org_key, run_id, track_repos=True)
 
 
 def update_container_scanning_run(org_key: str, run_id: str, patch: dict[str, Any]) -> None:
-    async def _query(session):
-        run = await session.get(ScanRun, run_id)
-        if not run:
-            return
-        meta = dict(run.metadata_json or {})
-
-        if "status" in patch:
-            run.status = patch["status"]
-        if "error" in patch:
-            run.error = patch["error"]
-        if "finishedAt" in patch:
-            try:
-                run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-        if "startedAt" in patch:
-            try:
-                run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-
-        if "progress" in patch and isinstance(patch["progress"], dict):
-            existing_progress = run.progress or {}
-            existing_percent = existing_progress.get("percent", 0) if isinstance(existing_progress.get("percent"), (int, float)) else 0
-            patch_percent = patch["progress"].get("percent", existing_percent) if isinstance(patch["progress"].get("percent"), (int, float)) else existing_percent
-            run.progress = {**existing_progress, **patch["progress"], "percent": max(existing_percent, patch_percent)}
-        elif "progress" in patch:
-            run.progress = patch["progress"]
-
-        skip_keys = {"status", "error", "finishedAt", "startedAt", "progress", "id", "org"}
-        for key, value in patch.items():
-            if key not in skip_keys:
-                meta[key] = value
-        run.metadata_json = meta
-
-    run_db(_query)
+    _update_run(run_id, patch)
 
 
 def list_container_scanning_runs(org_key: str) -> list[dict[str, Any]]:
-    async def _query(session):
-        result = await session.execute(
-            select(ScanRun)
-            .where(
-                ScanRun.tool == "container_scanning",
-                ScanRun.metadata_json["org_label"].astext == org_key,
-            )
-            .order_by(ScanRun.started_at.desc().nullslast())
-        )
-        return [_run_to_dict(r) for r in result.scalars().all()]
-
-    return run_db(_query)
+    return _list_runs("container_scanning", org_key)
 
 
 # ContainerScanning Findings — read from unified Finding table
@@ -498,37 +444,7 @@ def update_secret_run(org: str, run_id: str, patch: dict[str, Any]) -> dict[str,
                           metadata_json={"org_label": org.lower()})
             session.add(run)
 
-        meta = dict(run.metadata_json or {})
-
-        if "status" in patch:
-            run.status = patch["status"]
-        if "error" in patch:
-            run.error = patch["error"]
-        if "finishedAt" in patch:
-            try:
-                run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-        if "startedAt" in patch:
-            try:
-                run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-
-        if "progress" in patch and isinstance(patch["progress"], dict):
-            existing_progress = run.progress or {}
-            existing_percent = existing_progress.get("percent", 0) if isinstance(existing_progress.get("percent"), (int, float)) else 0
-            patch_percent = patch["progress"].get("percent", existing_percent) if isinstance(patch["progress"].get("percent"), (int, float)) else existing_percent
-            run.progress = {**existing_progress, **patch["progress"], "percent": max(existing_percent, patch_percent)}
-        elif "progress" in patch:
-            run.progress = patch["progress"]
-
-        skip_keys = {"status", "error", "finishedAt", "startedAt", "progress", "id", "organization", "org"}
-        for key, value in patch.items():
-            if key not in skip_keys:
-                meta[key] = value
-        run.metadata_json = meta
-
+        _apply_run_patch(run, patch)
         return _secret_run_to_dict(run)
 
     return run_db(_query)
@@ -647,285 +563,39 @@ def combine_secrets_snapshots(orgs: list[str], snapshots: list[dict[str, Any] | 
 # Code Scanning Run CRUD — stored in scan_runs table (tool='code_scanning')
 
 def create_code_scanning_run(org_key: str, run_id: str) -> dict[str, Any]:
-    run_dict: dict[str, Any] = {
-        "id": run_id,
-        "org": org_key,
-        "status": "queued",
-        "createdAt": now_iso(),
-        "startedAt": None,
-        "finishedAt": None,
-        "findingsCount": 0,
-        "error": None,
-        "logTail": [],
-        "progress": {
-            "expectedRepos": None,
-            "scannedRepos": 0,
-            "finishedRepos": 0,
-            "percent": 0,
-            "currentRepo": None,
-            "stage": "queued",
-        },
-    }
-
-    async def _query(session):
-        session.add(ScanRun(
-            id=run_id,
-            tool="code_scanning",
-            status="queued",
-            started_at=None,
-            progress=run_dict["progress"],
-            metadata_json={
-                "org_label": org_key,
-                "createdAt": run_dict["createdAt"],
-                "findingsCount": 0,
-                "logTail": [],
-            },
-        ))
-
-    run_db(_query)
-    return run_dict
+    return _create_run("code_scanning", org_key, run_id, track_repos=False)
 
 
 def update_code_scanning_run(org_key: str, run_id: str, patch: dict[str, Any]) -> None:
-    async def _query(session):
-        run = await session.get(ScanRun, run_id)
-        if not run:
-            return
-        meta = dict(run.metadata_json or {})
-
-        if "status" in patch:
-            run.status = patch["status"]
-        if "error" in patch:
-            run.error = patch["error"]
-        if "finishedAt" in patch:
-            try:
-                run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-        if "startedAt" in patch:
-            try:
-                run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-
-        if "progress" in patch and isinstance(patch["progress"], dict):
-            existing_progress = run.progress or {}
-            existing_percent = existing_progress.get("percent", 0) if isinstance(existing_progress.get("percent"), (int, float)) else 0
-            patch_percent = patch["progress"].get("percent", existing_percent) if isinstance(patch["progress"].get("percent"), (int, float)) else existing_percent
-            run.progress = {**existing_progress, **patch["progress"], "percent": max(existing_percent, patch_percent)}
-        elif "progress" in patch:
-            run.progress = patch["progress"]
-
-        skip_keys = {"status", "error", "finishedAt", "startedAt", "progress", "id", "org"}
-        for key, value in patch.items():
-            if key not in skip_keys:
-                meta[key] = value
-        run.metadata_json = meta
-
-    run_db(_query)
+    _update_run(run_id, patch)
 
 
 def list_code_scanning_runs(org_key: str) -> list[dict[str, Any]]:
-    async def _query(session):
-        result = await session.execute(
-            select(ScanRun)
-            .where(
-                ScanRun.tool == "code_scanning",
-                ScanRun.metadata_json["org_label"].astext == org_key,
-            )
-            .order_by(ScanRun.started_at.desc().nullslast())
-        )
-        return [_run_to_dict(r) for r in result.scalars().all()]
-
-    return run_db(_query)
+    return _list_runs("code_scanning", org_key)
 
 
 def create_iac_run(org_key: str, run_id: str) -> dict[str, Any]:
-    run_dict: dict[str, Any] = {
-        "id": run_id,
-        "org": org_key,
-        "status": "queued",
-        "createdAt": now_iso(),
-        "startedAt": None,
-        "finishedAt": None,
-        "findingsCount": 0,
-        "error": None,
-        "logTail": [],
-        "progress": {
-            "expectedRepos": None,
-            "scannedRepos": 0,
-            "finishedRepos": 0,
-            "percent": 0,
-            "currentRepo": None,
-            "stage": "queued",
-        },
-    }
-
-    async def _query(session):
-        session.add(ScanRun(
-            id=run_id,
-            tool="iac_scanning",
-            status="queued",
-            started_at=None,
-            progress=run_dict["progress"],
-            metadata_json={
-                "org_label": org_key,
-                "createdAt": run_dict["createdAt"],
-                "findingsCount": 0,
-                "logTail": [],
-            },
-        ))
-
-    run_db(_query)
-    return run_dict
+    return _create_run("iac_scanning", org_key, run_id, track_repos=False)
 
 
 def update_iac_run(org_key: str, run_id: str, patch: dict[str, Any]) -> None:
-    async def _query(session):
-        run = await session.get(ScanRun, run_id)
-        if not run:
-            return
-        meta = dict(run.metadata_json or {})
-
-        if "status" in patch:
-            run.status = patch["status"]
-        if "error" in patch:
-            run.error = patch["error"]
-        if "finishedAt" in patch:
-            try:
-                run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-        if "startedAt" in patch:
-            try:
-                run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-
-        if "progress" in patch and isinstance(patch["progress"], dict):
-            existing_progress = run.progress or {}
-            existing_percent = existing_progress.get("percent", 0) if isinstance(existing_progress.get("percent"), (int, float)) else 0
-            patch_percent = patch["progress"].get("percent", existing_percent) if isinstance(patch["progress"].get("percent"), (int, float)) else existing_percent
-            run.progress = {**existing_progress, **patch["progress"], "percent": max(existing_percent, patch_percent)}
-        elif "progress" in patch:
-            run.progress = patch["progress"]
-
-        skip_keys = {"status", "error", "finishedAt", "startedAt", "progress", "id", "org"}
-        for key, value in patch.items():
-            if key not in skip_keys:
-                meta[key] = value
-        run.metadata_json = meta
-
-    run_db(_query)
+    _update_run(run_id, patch)
 
 
 def list_iac_runs(org_key: str) -> list[dict[str, Any]]:
-    async def _query(session):
-        result = await session.execute(
-            select(ScanRun)
-            .where(
-                ScanRun.tool == "iac_scanning",
-                ScanRun.metadata_json["org_label"].astext == org_key,
-            )
-            .order_by(ScanRun.started_at.desc().nullslast())
-        )
-        return [_run_to_dict(r) for r in result.scalars().all()]
-
-    return run_db(_query)
+    return _list_runs("iac_scanning", org_key)
 
 
 def create_agent_run(org_key: str, run_id: str) -> dict[str, Any]:
-    run_dict: dict[str, Any] = {
-        "id": run_id,
-        "org": org_key,
-        "status": "queued",
-        "createdAt": now_iso(),
-        "startedAt": None,
-        "finishedAt": None,
-        "findingsCount": 0,
-        "error": None,
-        "logTail": [],
-        "progress": {
-            "expectedRepos": None,
-            "scannedRepos": 0,
-            "finishedRepos": 0,
-            "percent": 0,
-            "currentRepo": None,
-            "stage": "queued",
-        },
-    }
-
-    async def _query(session):
-        session.add(ScanRun(
-            id=run_id,
-            tool="agent_scanning",
-            status="queued",
-            started_at=None,
-            progress=run_dict["progress"],
-            metadata_json={
-                "org_label": org_key,
-                "createdAt": run_dict["createdAt"],
-                "findingsCount": 0,
-                "logTail": [],
-            },
-        ))
-
-    run_db(_query)
-    return run_dict
+    return _create_run("agent_scanning", org_key, run_id, track_repos=False)
 
 
 def update_agent_run(org_key: str, run_id: str, patch: dict[str, Any]) -> None:
-    async def _query(session):
-        run = await session.get(ScanRun, run_id)
-        if not run:
-            return
-        meta = dict(run.metadata_json or {})
-
-        if "status" in patch:
-            run.status = patch["status"]
-        if "error" in patch:
-            run.error = patch["error"]
-        if "finishedAt" in patch:
-            try:
-                run.finished_at = datetime.fromisoformat(patch["finishedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-        if "startedAt" in patch:
-            try:
-                run.started_at = datetime.fromisoformat(patch["startedAt"].replace("Z", "+00:00"))
-            except (ValueError, AttributeError):
-                pass
-
-        if "progress" in patch and isinstance(patch["progress"], dict):
-            existing_progress = run.progress or {}
-            existing_percent = existing_progress.get("percent", 0) if isinstance(existing_progress.get("percent"), (int, float)) else 0
-            patch_percent = patch["progress"].get("percent", existing_percent) if isinstance(patch["progress"].get("percent"), (int, float)) else existing_percent
-            run.progress = {**existing_progress, **patch["progress"], "percent": max(existing_percent, patch_percent)}
-        elif "progress" in patch:
-            run.progress = patch["progress"]
-
-        skip_keys = {"status", "error", "finishedAt", "startedAt", "progress", "id", "org"}
-        for key, value in patch.items():
-            if key not in skip_keys:
-                meta[key] = value
-        run.metadata_json = meta
-
-    run_db(_query)
+    _update_run(run_id, patch)
 
 
 def list_agent_runs(org_key: str) -> list[dict[str, Any]]:
-    async def _query(session):
-        result = await session.execute(
-            select(ScanRun)
-            .where(
-                ScanRun.tool == "agent_scanning",
-                ScanRun.metadata_json["org_label"].astext == org_key,
-            )
-            .order_by(ScanRun.started_at.desc().nullslast())
-        )
-        return [_run_to_dict(r) for r in result.scalars().all()]
-
-    return run_db(_query)
+    return _list_runs("agent_scanning", org_key)
 
 
 # Code Scanning Findings — read from unified Finding table
