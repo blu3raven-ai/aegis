@@ -436,11 +436,12 @@ def test_code_scanning_scanner_has_correct_type():
     assert CodeScanningScanner.SCANNER_TYPE == "code_scanning"
 
 
-def test_code_scanning_scanner_implements_base_protocol():
-    from runner.scanners.base import BaseScanner
+def test_code_scanning_scanner_exposes_run_scan():
     from runner.scanners.code_scanning.scanner import CodeScanningScanner
 
-    assert isinstance(CodeScanningScanner(), BaseScanner)
+    scanner = CodeScanningScanner()
+    assert hasattr(scanner, "run_scan") and callable(scanner.run_scan)
+    assert scanner.SCANNER_TYPE == "code_scanning"
 
 
 def test_run_scan_empty_repos_returns_clean(tmp_path):
