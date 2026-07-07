@@ -24,16 +24,6 @@ TOLERANCE_SECONDS = 300  # 5-minute replay window
 
 
 
-def _generate_secret() -> str:
-    """Return a URL-safe 32-byte (256-bit) random secret."""
-    return secrets.token_urlsafe(32)
-
-
-def _hash_secret(raw: str) -> str:
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
-
 def sign_payload(
     payload: dict[str, Any],
     secret: str,
@@ -138,8 +128,8 @@ def create_signing_secret(channel_id: int) -> tuple[dict[str, Any], str]:
     The caller is responsible for persisting the raw value in the destination's
     config (under '_signing_secrets') so outbound signing works after restart.
     """
-    raw = _generate_secret()
-    secret_hash = _hash_secret(raw)
+    raw = secrets.token_urlsafe(32)  # 256-bit URL-safe secret
+    secret_hash = hashlib.sha256(raw.encode()).hexdigest()
     now = datetime.now(timezone.utc)
 
     async def _q(session):
@@ -196,33 +186,6 @@ def revoke_signing_secret_version(channel_id: int, version: int) -> dict[str, An
         row.revoked_at = now
         await session.flush()
         return _secret_to_dict(row)
-
-    return run_db(_q)
-
-
-def get_raw_secrets_for_channel(channel_id: int) -> list[str]:
-    """Retrieve raw signing secrets from the channel's config for outbound use.
-
-    Raw values live in config['_signing_secrets'] as a list of
-    {"version": N, "raw": "...", "status": "active"|"rotating"} dicts.
-    Only active/rotating entries are returned so revoked keys are never used.
-    """
-    async def _q(session):
-        result = await session.execute(
-            select(NotificationDestination).where(
-                NotificationDestination.id == channel_id,
-            )
-        )
-        dest = result.scalars().first()
-        if dest is None:
-            return []
-        entries: list[dict[str, Any]] = dest.config.get("_signing_secrets") or []
-        # Return raw values for non-revoked entries only
-        return [
-            e["raw"]
-            for e in entries
-            if isinstance(e, dict) and e.get("raw") and e.get("status") != "revoked"
-        ]
 
     return run_db(_q)
 
