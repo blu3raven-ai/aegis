@@ -1,8 +1,8 @@
 "use client"
 
 import { ApiClientError, CsrfMissingError } from "./api-client.types.ts"
+import { readCsrfCookie } from "./csrf.ts"
 
-const CSRF_COOKIE_NAME = "__Host-csrf"
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 
 export interface ApiClientOptions extends Omit<RequestInit, "body"> {
@@ -11,16 +11,6 @@ export interface ApiClientOptions extends Omit<RequestInit, "body"> {
   headers?: Record<string, string>
   suppressUnauthorizedRedirect?: boolean
   skipCsrf?: boolean
-}
-
-function readCookie(name: string): string | null {
-  if (typeof document === "undefined") return null
-  const pairs = document.cookie.split(";").map((p) => p.trim())
-  for (const pair of pairs) {
-    const [k, ...rest] = pair.split("=")
-    if (k === name) return rest.join("=")
-  }
-  return null
 }
 
 export async function apiClient<T = unknown>(
@@ -52,7 +42,7 @@ export async function apiClient<T = unknown>(
   }
 
   if (UNSAFE_METHODS.has(method) && !skipCsrf) {
-    const csrf = readCookie(CSRF_COOKIE_NAME)
+    const csrf = readCsrfCookie()
     if (csrf === null) throw new CsrfMissingError()
     headers["X-CSRF-Token"] = csrf
   }

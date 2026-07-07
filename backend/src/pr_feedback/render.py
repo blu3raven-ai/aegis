@@ -13,15 +13,18 @@ _VERDICT_LABELS = {
 }
 
 
+_SEVERITY_BUCKETS = {
+    "critical": "high",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
+    "info": "low",
+    "informational": "low",
+}
+
+
 def _severity_bucket(sev: str) -> str:
-    s = (sev or "").lower()
-    if s in ("critical", "high"):
-        return "high"
-    if s == "medium":
-        return "medium"
-    if s in ("low", "info", "informational"):
-        return "low"
-    return "low"
+    return _SEVERITY_BUCKETS.get((sev or "").lower(), "low")
 
 
 def render_sticky_comment(

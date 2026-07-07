@@ -91,60 +91,11 @@ class EpssService:
         if asset_ids is None and org_id is None:
             raise ValueError("either org_id or asset_ids is required")
 
-        if asset_ids is not None and not asset_ids:
+        # Org-only callers no longer have an asset scope; fail closed. Everything
+        # with a scope runs the same query as top_findings_by_asset_ids.
+        if not asset_ids:
             return []
-
-        async def _run(session):
-            base = (
-                sa.select(
-                    Finding.id.label("finding_id"),
-                    Finding.tool,
-                    Finding.asset_id,
-                    Asset.display_name.label("repo"),
-                    Finding.severity,
-                    Finding.identity_key,
-                    EpssScore.cve,
-                    EpssScore.score,
-                    EpssScore.percentile,
-                    EpssScore.scored_date,
-                )
-                .select_from(Finding)
-                .join(
-                    EpssScore,
-                    sa.or_(
-                        Finding.cve_id == EpssScore.cve,
-                        Finding.identity_key.contains(EpssScore.cve),
-                    ),
-                )
-                .join(Asset, Asset.id == Finding.asset_id)
-                .where(Finding.state == "open")
-                .order_by(EpssScore.score.desc(), Finding.id.asc())
-                .limit(limit)
-            )
-
-            if asset_ids is not None:
-                join_stmt = base.where(Finding.asset_id.in_(asset_ids))
-            else:
-                # Org-only callers no longer have a scope after Plan D; fail closed.
-                join_stmt = base.where(sa.false())
-
-            rows = (await session.execute(join_stmt)).fetchall()
-            return [
-                {
-                    "finding_id": r.finding_id,
-                    "tool": r.tool,
-                    "repo": r.repo,
-                    "severity": r.severity,
-                    "identity_key": r.identity_key,
-                    "cve": r.cve,
-                    "epss_score": r.score,
-                    "epss_percentile": r.percentile,
-                    "scored_date": r.scored_date.isoformat() if r.scored_date else None,
-                }
-                for r in rows
-            ]
-
-        return run_db(_run)
+        return self.top_findings_by_asset_ids(asset_ids, limit=limit)
 
     def top_findings_by_asset_ids(self, asset_ids: list[str], limit: int = 20) -> list[dict[str, Any]]:
         """Return open findings scoped by asset_ids ranked by EPSS score, descending."""

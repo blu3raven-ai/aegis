@@ -11,7 +11,6 @@ from the REGISTRY_AUTHS env var.
 """
 from __future__ import annotations
 
-import concurrent.futures
 import dataclasses
 import json
 import logging
@@ -29,16 +28,12 @@ from runner.scanners._shared import (
     ProgressEmitter,
     ScannerConfigError,
     TIMEOUT_SYFT_IMAGE,
-    log_finished,
-    log_scanning_image,
+    log,
     parse_repos,
     register_output,
+    run_per_repo,
 )
-from runner.scanners._subprocess import (
-    CANCELLED_EXIT_CODE,
-    ScannerTimeoutError,
-    run_tool,
-)
+from runner.scanners._subprocess import run_tool
 from runner.scanners.base import ExecutionResult
 from runner.scanners.container import (
     digest_compare,
@@ -57,11 +52,6 @@ _SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._-]")
 
 SCAN_MODE_FULL = "full"
 SCAN_MODE_SBOM_ONLY = "sbom_only"
-SUPPORTED_SCAN_MODES = {
-    SCAN_MODE_FULL,
-    SCAN_MODE_SBOM_ONLY,
-}
-DEFERRED_SCAN_MODES: set[str] = set()
 _UNSUPPORTED_MODE_EXIT_CODE = 2
 
 
@@ -77,11 +67,10 @@ class ContainerScanConfig(BaseScanConfig):
     def from_job(cls, job: dict[str, Any]) -> "ContainerScanConfig":
         env = JobEnv(job)
         scan_mode = env.get("SCAN_MODE", SCAN_MODE_FULL).lower()
-        if scan_mode not in SUPPORTED_SCAN_MODES:
+        if scan_mode not in (SCAN_MODE_FULL, SCAN_MODE_SBOM_ONLY):
             raise ScannerConfigError(
                 f"[!] SCAN_MODE={scan_mode!r} is not implemented in the "
-                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_MODES)}. "
-                f"Deferred: {sorted(DEFERRED_SCAN_MODES)}."
+                f"embedded scanner. Supported: {[SCAN_MODE_FULL, SCAN_MODE_SBOM_ONLY]}."
             )
         return cls(
             org_label=env.get("ORG_LABEL", "default"),
@@ -158,70 +147,42 @@ class ContainerScanner:
 
             emitter = ProgressEmitter(on_progress, expected=len(images))
 
-            if cancel_event is not None and cancel_event.is_set():
-                emitter.done()
-                write_done_marker(out_dir)
-                return ExecutionResult(
-                    exit_code=CANCELLED_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
+            def _pre_scan() -> None:
+                try:
+                    count = registry_auth.configure_registry_auth()
+                    if count:
+                        logger.info(
+                            "[+] Registry auth configured for %d registries", count
+                        )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("[!] Registry auth setup failed: %s", e)
+
+            def _scan_one(image_ref: str) -> None:
+                self._scan_image(
+                    image_ref,
+                    out_dir,
+                    scan_platform=cfg.scan_platform,
+                    cancel_event=cancel_event,
+                    previous_digests=previous_digests,
+                    log_tail=log_tail,
+                    list_tags=cfg.list_tags,
                 )
 
-            if not images:
-                log_tail.append("[!] No valid images to scan")
-                emitter.done()
-                write_done_marker(out_dir)
-                return ExecutionResult(exit_code=0, job_dir=out_dir, log_tail=log_tail)
-
-            emitter.starting()
-
-            try:
-                count = registry_auth.configure_registry_auth()
-                if count:
-                    logger.info("[+] Registry auth configured for %d registries", count)
-            except Exception as e:  # noqa: BLE001
-                logger.warning("[!] Registry auth setup failed: %s", e)
-
-            def _scan_one(image_ref: str) -> Path | None:
-                if cancel_event is not None and cancel_event.is_set():
-                    return None
-                # Use the sanitized image name as the progress label, matching the
-                # per-image output directory. Backend schema reuses the *Repos
-                # counter names for container jobs.
-                safe_name = _sanitize_name(image_ref)
-                emitter.scanning(safe_name)
-                try:
-                    return self._scan_image(
-                        image_ref,
-                        out_dir,
-                        scan_platform=cfg.scan_platform,
-                        cancel_event=cancel_event,
-                        previous_digests=previous_digests,
-                        log_tail=log_tail,
-                        list_tags=cfg.list_tags,
-                    )
-                except ScannerTimeoutError as e:
-                    log_tail.append(f"[!] Timeout scanning {image_ref}: {e}")
-                    return None
-                except Exception as e:  # noqa: BLE001
-                    log_tail.append(f"[!] Image {image_ref} failed: {e}")
-                    logger.exception("[!] Image %s failed", image_ref)
-                    return None
-                finally:
-                    emitter.finished(safe_name)
-
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=cfg.concurrency
-            ) as pool:
-                list(pool.map(_scan_one, images))
-
-            emitter.normalizing()
-            write_done_marker(out_dir)
-            emitter.done()
-
-            exit_code = 0
-            if cancel_event is not None and cancel_event.is_set():
-                exit_code = CANCELLED_EXIT_CODE
-            return ExecutionResult(
-                exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
+            # Progress labels use the sanitized image name, matching the
+            # per-image output directory. Backend schema reuses the *Repos
+            # counter names for container jobs.
+            return run_per_repo(
+                items=images,
+                out_dir=out_dir,
+                emitter=emitter,
+                concurrency=cfg.concurrency,
+                cancel_event=cancel_event,
+                log_tail=log_tail,
+                scan_one=_scan_one,
+                label_of=_sanitize_name,
+                item_noun="Image",
+                empty_message="[!] No valid images to scan",
+                pre_scan=_pre_scan,
             )
         finally:
             if _promoted_registry_auths:
@@ -245,7 +206,7 @@ class ContainerScanner:
         safe_name = _sanitize_name(image_ref)
         image_out = out_dir / safe_name
         image_out.mkdir(parents=True, exist_ok=True)
-        log_scanning_image(image_ref)
+        log("scanning", image_ref)
 
         # Skip-unchanged optimisation — compare the registry HEAD digest
         # against the backend-supplied previous digest *before* running syft,
@@ -279,7 +240,7 @@ class ContainerScanner:
             cancel_event,
             syft_json_output=syft_json_path,
         ):
-            log_finished(image_ref)
+            log("done", image_ref)
             return None
 
         # Attribute each component to its introducing image layer (from the
@@ -320,7 +281,7 @@ class ContainerScanner:
             except Exception:
                 logger.warning("tag listing failed for %s", image_ref, exc_info=True)
 
-        log_finished(image_ref)
+        log("done", image_ref)
         return sbom_path
 
     def _record_skipped_image(
@@ -349,7 +310,7 @@ class ContainerScanner:
         logger.info(message)
         if log_tail is not None:
             log_tail.append(message)
-        log_finished(image_ref)
+        log("done", image_ref)
 
     def _run_syft(
         self,

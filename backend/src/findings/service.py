@@ -239,6 +239,20 @@ def _band_ordinal_sql():
     )
 
 
+def _severity_rank_expr():
+    """SQL CASE mapping the severity string to an ordinal (critical=4 … low=1,
+    unknown=0) so ORDER BY / keyset comparisons use severity precedence rather
+    than the lexicographic order of the string."""
+    from sqlalchemy import case
+    return case(
+        (func.lower(Finding.severity) == "critical", 4),
+        (func.lower(Finding.severity) == "high", 3),
+        (func.lower(Finding.severity) == "medium", 2),
+        (func.lower(Finding.severity) == "low", 1),
+        else_=0,
+    )
+
+
 def _sort_columns(sort: str, direction: str):
     """Return the list of ORDER BY columns for the given sort + direction.
 
@@ -247,14 +261,7 @@ def _sort_columns(sort: str, direction: str):
     """
     desc = direction == "desc"
     if sort == "severity_age":
-        from sqlalchemy import case
-        rank_expr = case(
-            (func.lower(Finding.severity) == "critical", 4),
-            (func.lower(Finding.severity) == "high", 3),
-            (func.lower(Finding.severity) == "medium", 2),
-            (func.lower(Finding.severity) == "low", 1),
-            else_=0,
-        )
+        rank_expr = _severity_rank_expr()
         return [
             rank_expr.desc() if desc else rank_expr.asc(),
             Finding.first_seen_at.desc() if desc else Finding.first_seen_at.asc(),
@@ -274,15 +281,8 @@ def _sort_columns(sort: str, direction: str):
         )
         return [primary, Finding.id.desc() if desc else Finding.id.asc()]
     if sort == "action_band":
-        from sqlalchemy import case
         band = _band_ordinal_sql()
-        sev_rank = case(
-            (func.lower(Finding.severity) == "critical", 4),
-            (func.lower(Finding.severity) == "high", 3),
-            (func.lower(Finding.severity) == "medium", 2),
-            (func.lower(Finding.severity) == "low", 1),
-            else_=0,
-        )
+        sev_rank = _severity_rank_expr()
         primary = band.desc() if desc else band.asc()
         secondary = sev_rank.desc() if desc else sev_rank.asc()
         # Transparent tiebreak: band, then severity rank, then id. EPSS is
@@ -292,14 +292,7 @@ def _sort_columns(sort: str, direction: str):
     if sort == "severity":
         # Sort by severity rank — Postgres CASE expression so we can use the
         # ordinal rather than the lexicographic order of the severity string.
-        from sqlalchemy import case
-        rank_expr = case(
-            (func.lower(Finding.severity) == "critical", 4),
-            (func.lower(Finding.severity) == "high", 3),
-            (func.lower(Finding.severity) == "medium", 2),
-            (func.lower(Finding.severity) == "low", 1),
-            else_=0,
-        )
+        rank_expr = _severity_rank_expr()
         primary = rank_expr.desc() if desc else rank_expr.asc()
         secondary = Finding.id.desc() if desc else Finding.id.asc()
         return [primary, secondary]
@@ -333,14 +326,7 @@ def _cursor_predicate(cursor_payload: dict[str, Any], sort: str, direction: str)
         last_rank = cursor_payload.get("rank")
         if last_rank is None:
             return None
-        from sqlalchemy import case
-        rank_expr = case(
-            (func.lower(Finding.severity) == "critical", 4),
-            (func.lower(Finding.severity) == "high", 3),
-            (func.lower(Finding.severity) == "medium", 2),
-            (func.lower(Finding.severity) == "low", 1),
-            else_=0,
-        )
+        rank_expr = _severity_rank_expr()
         if direction == "desc":
             return or_(
                 rank_expr < last_rank,
@@ -1367,15 +1353,25 @@ async def list_assignable_users(
     *,
     q: str | None = None,
     limit: int = 20,
+    allowed_user_ids: set[str] | None = None,
 ) -> list[dict[str, str]]:
     """Return up to `limit` active users matching `q` on username or email.
 
     Trims and lowers `q` before the LIKE pattern build so the caller can pass
     raw input without normalising. Empty/whitespace queries return the first
     `limit` users by username order.
+
+    `allowed_user_ids` scopes the result to co-assignees the caller may see:
+    `None` applies no restriction (caller sees every asset), an empty set
+    yields no rows (caller has no asset scope), and a populated set restricts
+    the query to those ids.
     """
+    if allowed_user_ids is not None and not allowed_user_ids:
+        return []
     capped_limit = max(1, min(int(limit or 20), MAX_ASSIGNABLE_USERS_LIMIT))
     stmt = select(User.id, User.username).where(User.status == "active")
+    if allowed_user_ids is not None:
+        stmt = stmt.where(User.id.in_(allowed_user_ids))
     if q:
         normalized = q.strip()
         if normalized:

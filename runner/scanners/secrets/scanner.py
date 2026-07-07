@@ -10,7 +10,9 @@ Per-repo work runs through a ThreadPoolExecutor; outputs are normalised into
 """
 from __future__ import annotations
 
-import concurrent.futures
+# The per-repo thread pool now lives in _shared.run_per_repo; this import is
+# retained as the module-local surface that lets the pool be swapped in tests.
+import concurrent.futures  # noqa: F401
 import dataclasses
 import json
 import logging
@@ -34,17 +36,13 @@ from runner.scanners._shared import (
     clone_repo,
     compute_diff_files,
     derive_html_url,
-    log_finished,
-    log_scanning,
+    log,
     parse_repos,
     register_output,
     repo_name_from_url,
+    run_per_repo,
 )
-from runner.scanners._subprocess import (
-    CANCELLED_EXIT_CODE,
-    ScannerTimeoutError,
-    run_tool,
-)
+from runner.scanners._subprocess import run_tool
 from runner.scanners.base import ExecutionResult
 from runner.scanners.secrets import normalize
 
@@ -129,85 +127,45 @@ class SecretsScanner:
         repos = cfg.repos
         emitter = ProgressEmitter(on_progress, expected=len(repos))
 
-        if cancel_event is not None and cancel_event.is_set():
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=CANCELLED_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
+        def _scan_one(repo_url: str) -> None:
+            self._scan_repo(
+                repo_url,
+                out_dir,
+                git_token=cfg.git_token,
+                start_date=cfg.start_date,
+                cancel_event=cancel_event,
+                base_sha=cfg.base_sha,
+                scan_scope=cfg.scan_scope,
             )
 
-        if not repos:
-            log_tail.append("[!] No GIT_REPOS specified - nothing to scan")
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(exit_code=0, job_dir=out_dir, log_tail=log_tail)
-
-        emitter.starting()
-
-        def _scan_one(repo_url: str) -> Path | None:
-            if cancel_event is not None and cancel_event.is_set():
-                return None
-            repo_name = repo_name_from_url(repo_url)
-            emitter.scanning(repo_name)
+        def _post_scan() -> None:
             try:
-                return self._scan_repo(
-                    repo_url,
-                    out_dir,
-                    git_token=cfg.git_token,
-                    start_date=cfg.start_date,
-                    cancel_event=cancel_event,
-                    base_sha=cfg.base_sha,
-                    scan_scope=cfg.scan_scope,
+                total, errors = normalize.normalize_secrets_output(
+                    cfg.org_label, out_dir, cfg.run_id
                 )
-            except InsecureURLError as e:
-                log_tail.append(f"[!] {e}")
-                return None
-            except GitCloneError as e:
-                log_tail.append(f"[!] {e}")
-                return None
-            except ScannerTimeoutError as e:
-                log_tail.append(f"[!] Timeout scanning {repo_url}: {e}")
-                return None
+                log_tail.append(
+                    f"[+] Normalized {total} secrets findings ({errors} errors)"
+                )
             except Exception as e:  # noqa: BLE001
-                log_tail.append(f"[!] Repo {repo_url} failed: {e}")
-                logger.exception("[!] Repo %s failed", repo_url)
-                return None
-            finally:
-                emitter.finished(repo_name)
+                log_tail.append(f"[!] Normalization failed: {e}")
+                logger.exception("[!] Normalization failed")
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=cfg.concurrency
-        ) as pool:
-            list(pool.map(_scan_one, repos))
+            try:
+                findings_file = out_dir / "findings.jsonl"
+                self._verify_findings_file(findings_file)
+            except Exception:  # noqa: BLE001
+                logger.exception("[!] _verify_findings_file failed (continuing)")
+                log_tail.append("[!] secret verification failed; findings unverified")
 
-        emitter.normalizing()
-
-        try:
-            total, errors = normalize.normalize_secrets_output(
-                cfg.org_label, out_dir, cfg.run_id
-            )
-            log_tail.append(
-                f"[+] Normalized {total} secrets findings ({errors} errors)"
-            )
-        except Exception as e:  # noqa: BLE001
-            log_tail.append(f"[!] Normalization failed: {e}")
-            logger.exception("[!] Normalization failed")
-
-        try:
-            findings_file = out_dir / "findings.jsonl"
-            self._verify_findings_file(findings_file)
-        except Exception:  # noqa: BLE001
-            logger.exception("[!] _verify_findings_file failed (continuing)")
-            log_tail.append("[!] secret verification failed; findings unverified")
-
-        write_done_marker(out_dir)
-        emitter.done()
-
-        exit_code = 0
-        if cancel_event is not None and cancel_event.is_set():
-            exit_code = CANCELLED_EXIT_CODE
-        return ExecutionResult(
-            exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
+        return run_per_repo(
+            items=repos,
+            out_dir=out_dir,
+            emitter=emitter,
+            concurrency=cfg.concurrency,
+            cancel_event=cancel_event,
+            log_tail=log_tail,
+            scan_one=_scan_one,
+            post_scan=_post_scan,
         )
 
     # ------------------------------------------------------------------
@@ -255,7 +213,7 @@ class SecretsScanner:
         repo_out.mkdir(parents=True, exist_ok=True)
         # Web URL of the repo, read back during normalize to deep-link findings.
         (repo_out / "html_url.txt").write_text(derive_html_url(repo_url))
-        log_scanning(repo_name)
+        log("scanning", repo_name)
 
         clone_dir = repo_out / "_checkout"
         if not str(repo_out.resolve()).startswith(str(out_dir.resolve())):
@@ -274,7 +232,7 @@ class SecretsScanner:
         except (InsecureURLError, GitCloneError):
             if str(repo_out.resolve()).startswith(str(out_dir.resolve())):
                 shutil.rmtree(repo_out, ignore_errors=True)
-            log_finished(repo_name)
+            log("done", repo_name)
             raise
 
         try:
@@ -320,7 +278,7 @@ class SecretsScanner:
             for f in sorted(repo_out.glob("*.json")):
                 register_output(out_dir, f, repo_name)
 
-            log_finished(repo_name)
+            log("done", repo_name)
             return produced[0] if produced and produced[0].exists() else None
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)

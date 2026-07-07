@@ -1,6 +1,7 @@
 "use client";
 
 import { apiClient } from "./api-client";
+import { gqlFetch } from "./graphql-fetch.ts"
 
 export type WebhookProvider =
   | "github"
@@ -26,42 +27,6 @@ interface ListResponse {
   endpoints: WebhookEndpointMasked[];
   providers: WebhookProvider[];
 }
-
-const CSRF_COOKIE_NAME = "__Host-csrf";
-
-function readCsrfCookie(): string | null {
-  if (typeof document === "undefined") return null;
-  for (const pair of document.cookie.split(";").map((p) => p.trim())) {
-    const [k, ...rest] = pair.split("=");
-    if (k === CSRF_COOKIE_NAME) return rest.join("=");
-  }
-  return null;
-}
-
-async function gqlFetch<T>(operationName: string, query: string, variables: Record<string, unknown>): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
-  const csrf = readCsrfCookie();
-  if (csrf !== null) headers["X-CSRF-Token"] = csrf;
-
-  const res = await fetch("/api/v1/graphql", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ operationName, query, variables }),
-    credentials: "include",
-  });
-  const body = (await res.json()) as { data?: T; errors?: { message: string }[] };
-  if (body.errors && body.errors.length > 0) {
-    throw new Error(body.errors[0].message);
-  }
-  if (!body.data) {
-    throw new Error(`${operationName} returned no data`);
-  }
-  return body.data;
-}
-
 // ---------------------------------------------------------------------------
 // Webhook endpoints list — served via GraphQL
 // ---------------------------------------------------------------------------

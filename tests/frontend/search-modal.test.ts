@@ -38,8 +38,8 @@ describe("SearchModal component", () => {
   it("imports search from search-api", () => {
     assert.ok(src.includes("search-api"))
   })
-  it("uses debounce", () => {
-    assert.ok(src.includes("useDebounced") || src.includes("setTimeout"))
+  it("defers the query to keep typing responsive", () => {
+    assert.ok(src.includes("useDeferredValue"))
   })
   it("uses AbortController", () => {
     assert.ok(src.includes("AbortController"))

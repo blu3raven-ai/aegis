@@ -5,8 +5,10 @@ communicates with it over HTTPS using an API key. This module is the sole
 integration point — never call Argus from anywhere else in Aegis.
 
 Open-core boundary:
-  - NullArgusConnector is returned when ARGUS_ENDPOINT / ARGUS_API_KEY are absent.
-  - Every ArgusConnector method falls back to heuristics on network failure.
+  - When ARGUS_ENDPOINT / ARGUS_API_KEY are absent, ArgusConnector runs in
+    disabled mode: every method returns the heuristic fallback and makes no
+    network calls.
+  - Every ArgusConnector method also falls back to heuristics on network failure.
   - Data sent to Argus is metadata only — never source code, never secret values.
 
 Data contract (spec §6 / Mode B):
@@ -81,19 +83,30 @@ class Explanation:
 
 
 class ArgusConnector:
-    """Real connector — makes HTTPS calls to the configured Argus endpoint.
+    """Connector to the Argus intelligence service, with heuristic fallbacks.
 
-    Falls back to heuristics on any network or HTTP error so Mode A (Argus
-    unconfigured) and degraded Mode B (Argus temporarily unreachable) both
-    produce valid results.
+    When no endpoint/api_key is configured the connector runs in disabled mode
+    (Mode A, open-source): every method returns the heuristic fallback and makes
+    no network calls. When configured (Mode B) it makes HTTPS calls and still
+    falls back to heuristics on any network or HTTP error, so a temporarily
+    unreachable Argus degrades gracefully.
 
     Args:
-        endpoint: Base URL of the Argus service (trailing slash optional).
+        endpoint: Base URL of the Argus service (trailing slash optional). When
+            absent (or api_key absent), the connector runs in disabled mode.
         api_key:  Subscription API key for Bearer authentication.
         timeout_ms: Per-request timeout in milliseconds.
     """
 
-    def __init__(self, endpoint: str, api_key: str, timeout_ms: int = _DEFAULT_TIMEOUT_MS) -> None:
+    def __init__(
+        self,
+        endpoint: str | None = None,
+        api_key: str | None = None,
+        timeout_ms: int = _DEFAULT_TIMEOUT_MS,
+    ) -> None:
+        self._enabled = bool(endpoint and api_key)
+        if not self._enabled:
+            return
         self._endpoint = endpoint.rstrip("/")
         self._api_key = api_key
         self._timeout = timeout_ms / 1000.0  # httpx uses seconds
@@ -118,6 +131,9 @@ class ArgusConnector:
         source code or secret values. Required fields: cve_id, severity,
         package, version. Optional: file_path, line, epss_score.
         """
+        if not self._enabled:
+            argus_fallbacks_total.labels(reason="unconfigured").inc()
+            return _heuristic_score_from_metadata(finding_metadata)
         payload = _safe_finding_payload(finding_metadata)
         endpoint_label = "/v1/score/finding"
         try:
@@ -167,6 +183,9 @@ class ArgusConnector:
           "minimal" — up to 10 lines per snippet (default)
           "full"    — up to the limit Argus accepts
         """
+        if not self._enabled:
+            argus_fallbacks_total.labels(reason="unconfigured").inc()
+            return Explanation(markdown=heuristic_explain(chain_metadata), fix_suggestions=[], source="heuristic")
         payload = _safe_chain_payload(chain_metadata, snippet_strip_level)
         endpoint_label = "/v1/explain/chain"
         try:
@@ -195,6 +214,9 @@ class ArgusConnector:
         Returns an empty dict when Argus is unreachable — built-in rules are
         unaffected.
         """
+        if not self._enabled:
+            argus_fallbacks_total.labels(reason="unconfigured").inc()
+            return empty_rule_pack()
         params: dict[str, str] = {}
         if since:
             params["since"] = since
@@ -221,6 +243,8 @@ class ArgusConnector:
         Returns an empty list when Argus is unreachable — built-in rules are
         unaffected.
         """
+        if not self._enabled:
+            return []
         endpoint_label = "/v1/rules/packs"
         try:
             resp = self._call_with_retry(endpoint_label, "GET")
@@ -406,48 +430,14 @@ class ArgusConnector:
             raise _ArgusNetworkError(f"Network error calling {url}: {exc}") from exc
 
 
-class NullArgusConnector(ArgusConnector):
-    """Always returns heuristic fallbacks. Used when Argus is unconfigured.
-
-    No network calls are made. This is the default in Mode A (open-source,
-    no Argus subscription).
-    """
-
-    def __init__(self) -> None:
-        pass  # skip endpoint/key validation
-
-    def score_finding(self, finding_metadata: dict) -> RiskScore:
-        argus_fallbacks_total.labels(reason="unconfigured").inc()
-        return _heuristic_score_from_metadata(finding_metadata)
-
-    def explain_chain(
-        self,
-        chain_metadata: dict,
-        snippet_strip_level: str = "minimal",
-    ) -> Explanation:
-        argus_fallbacks_total.labels(reason="unconfigured").inc()
-        return Explanation(
-            markdown=heuristic_explain(chain_metadata),
-            fix_suggestions=[],
-            source="heuristic",
-        )
-
-    def fetch_premium_rule_pack(self, since: str | None = None) -> dict:
-        argus_fallbacks_total.labels(reason="unconfigured").inc()
-        return empty_rule_pack()
-
-    def get_rule_packs(self) -> list[dict]:
-        return []
-
-
-
 def get_argus_connector() -> ArgusConnector:
-    """Return a real ArgusConnector if env is configured, else NullArgusConnector."""
-    endpoint = os.getenv("ARGUS_ENDPOINT")
-    api_key = os.getenv("ARGUS_API_KEY")
-    if endpoint and api_key:
-        return ArgusConnector(endpoint, api_key)
-    return NullArgusConnector()
+    """Build an ArgusConnector from env — disabled (heuristic) when unconfigured.
+
+    When ARGUS_ENDPOINT / ARGUS_API_KEY are absent the returned connector runs
+    in disabled mode: every method returns the heuristic fallback with no
+    network calls.
+    """
+    return ArgusConnector(os.getenv("ARGUS_ENDPOINT"), os.getenv("ARGUS_API_KEY"))
 
 
 

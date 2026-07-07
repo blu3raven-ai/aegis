@@ -7,7 +7,6 @@ against the OSV mirror — the runner produces SBOMs only.
 """
 from __future__ import annotations
 
-import concurrent.futures
 import dataclasses
 import json
 import logging
@@ -23,8 +22,6 @@ from runner.scanners.dependencies.declared_ranges import (
 )
 from runner.scanners._shared import (
     BaseScanConfig,
-    GitCloneError,
-    InsecureURLError,
     JobEnv,
     ProgressEmitter,
     ScannerConfigError,
@@ -33,17 +30,13 @@ from runner.scanners._shared import (
     TIMEOUT_SYFT_REPO,
     clone_repo,
     derive_html_url,
-    log_finished,
-    log_scanning,
+    log,
     parse_repos,
     register_output,
     repo_name_from_url,
+    run_per_repo,
 )
-from runner.scanners._subprocess import (
-    CANCELLED_EXIT_CODE,
-    ScannerTimeoutError,
-    run_tool,
-)
+from runner.scanners._subprocess import run_tool
 from runner.scanners.base import ExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -55,11 +48,6 @@ _SBOM_TOOL_DROP_ENV = ("GIT_TOKEN",)
 
 SCAN_MODE_FULL = "full"
 SCAN_MODE_SBOM_ONLY = "sbom_only"
-SUPPORTED_SCAN_MODES = {
-    SCAN_MODE_FULL,
-    SCAN_MODE_SBOM_ONLY,
-}
-DEFERRED_SCAN_MODES: set[str] = set()
 _UNSUPPORTED_MODE_EXIT_CODE = 2
 
 
@@ -73,11 +61,10 @@ class DependenciesScanConfig(BaseScanConfig):
     def from_job(cls, job: dict[str, Any]) -> "DependenciesScanConfig":
         env = JobEnv(job)
         scan_mode = env.get("SCAN_MODE", SCAN_MODE_FULL).lower()
-        if scan_mode not in SUPPORTED_SCAN_MODES:
+        if scan_mode not in (SCAN_MODE_FULL, SCAN_MODE_SBOM_ONLY):
             raise ScannerConfigError(
                 f"[!] SCAN_MODE={scan_mode!r} is not implemented in the "
-                f"embedded scanner. Supported: {sorted(SUPPORTED_SCAN_MODES)}. "
-                f"Deferred: {sorted(DEFERRED_SCAN_MODES)}."
+                f"embedded scanner. Supported: {[SCAN_MODE_FULL, SCAN_MODE_SBOM_ONLY]}."
             )
         return cls(
             org_label=env.get("ORG_LABEL", "default"),
@@ -146,65 +133,22 @@ class DependenciesScanner:
         """Per-repo clone + SBOM build + register. No findings.jsonl is written."""
         emitter = ProgressEmitter(on_progress, expected=len(repos))
 
-        if cancel_event is not None and cancel_event.is_set():
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=CANCELLED_EXIT_CODE,
-                job_dir=out_dir,
-                log_tail=log_tail,
-            )
-
-        if not repos:
-            log_tail.append("[!] No GIT_REPOS specified - nothing to scan")
-            emitter.done()
-            write_done_marker(out_dir)
-            return ExecutionResult(
-                exit_code=0, job_dir=out_dir, log_tail=log_tail
-            )
-
-        emitter.starting()
-
         def _scan_one(repo_url: str) -> None:
-            if cancel_event is not None and cancel_event.is_set():
-                return
-            repo_name = repo_name_from_url(repo_url)
-            emitter.scanning(repo_name)
-            try:
-                self._scan_repo(
-                    repo_url,
-                    out_dir,
-                    git_token=git_token,
-                    cancel_event=cancel_event,
-                )
-            except InsecureURLError as e:
-                log_tail.append(f"[!] {e}")
-            except GitCloneError as e:
-                log_tail.append(f"[!] {e}")
-            except ScannerTimeoutError as e:
-                log_tail.append(f"[!] Timeout scanning {repo_url}: {e}")
-            except Exception as e:  # noqa: BLE001
-                log_tail.append(f"[!] Repo {repo_url} failed: {e}")
-                logger.exception("[!] Repo %s failed", repo_url)
-            finally:
-                emitter.finished(repo_name)
+            self._scan_repo(
+                repo_url,
+                out_dir,
+                git_token=git_token,
+                cancel_event=cancel_event,
+            )
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=concurrency
-        ) as pool:
-            list(pool.map(_scan_one, repos))
-
-        emitter.normalizing()
-        write_done_marker(out_dir)
-        emitter.done()
-
-        exit_code = (
-            CANCELLED_EXIT_CODE
-            if (cancel_event is not None and cancel_event.is_set())
-            else 0
-        )
-        return ExecutionResult(
-            exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
+        return run_per_repo(
+            items=repos,
+            out_dir=out_dir,
+            emitter=emitter,
+            concurrency=concurrency,
+            cancel_event=cancel_event,
+            log_tail=log_tail,
+            scan_one=_scan_one,
         )
 
     # ------------------------------------------------------------------
@@ -222,7 +166,7 @@ class DependenciesScanner:
         repo_name = repo_name_from_url(repo_url)
         repo_out = out_dir / repo_name
         repo_out.mkdir(parents=True, exist_ok=True)
-        log_scanning(repo_name)
+        log("scanning", repo_name)
 
         clone_dir = repo_out / "_checkout"
         clone_repo(repo_url, clone_dir, token=git_token, timeout=TIMEOUT_CLONE)
@@ -251,7 +195,7 @@ class DependenciesScanner:
             logger.warning(
                 "[!] Both SBOM generators failed for %s - skipping", repo_name
             )
-            log_finished(repo_name)
+            log("done", repo_name)
             shutil.rmtree(clone_dir, ignore_errors=True)
             return
 
@@ -277,7 +221,7 @@ class DependenciesScanner:
 
         register_output(out_dir, merged_sbom, repo_name)
 
-        log_finished(repo_name)
+        log("done", repo_name)
         shutil.rmtree(clone_dir, ignore_errors=True)
 
     def _read_head_sha(

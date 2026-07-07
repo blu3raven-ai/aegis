@@ -50,6 +50,43 @@ async def users_with_asset_access(db: AsyncSession, asset_id: str) -> set[str]:
     return {str(x) for x in active}
 
 
+async def assignable_user_ids(db: AsyncSession, ctx: dict) -> set[str]:
+    """Active users the caller may offer as finding assignees.
+
+    A valid assignee is someone who can see the assets the caller can see, so
+    the set is the co-grantees on the caller's accessible assets, always
+    including admins/owners (who can act on any finding the caller sees).
+    Asset visibility is resolved through :func:`get_user_asset_ids` — the
+    single asset boundary — so this inherits the same rules without branching
+    on role names here. An empty set means the caller has no asset scope, so
+    there is no one to assign to.
+    """
+    from src.authz.roles.service import ADMIN_ROLE_IDS
+
+    asset_ids = await get_user_asset_ids(db, ctx)
+    if not asset_ids:
+        return set()
+
+    admin_stmt = select(User.id).where(User.role_id.in_(ADMIN_ROLE_IDS))
+    direct_stmt = select(Grant.subject_id).where(
+        Grant.asset_id.in_(asset_ids), Grant.subject_type == "user"
+    )
+    team_stmt = (
+        select(TeamMember.user_id)
+        .join(Grant, (Grant.subject_type == "team") & (Grant.subject_id == TeamMember.team_id))
+        .where(Grant.asset_id.in_(asset_ids))
+    )
+    admins = (await db.execute(admin_stmt)).scalars().all()
+    direct = (await db.execute(direct_stmt)).scalars().all()
+    team = (await db.execute(team_stmt)).scalars().all()
+    candidates = {str(x) for x in [*admins, *direct, *team]}
+    if not candidates:
+        return set()
+    active_stmt = select(User.id).where(User.id.in_(candidates), User.status == "active")
+    active = (await db.execute(active_stmt)).scalars().all()
+    return {str(x) for x in active}
+
+
 async def get_user_asset_ids(db: AsyncSession, ctx: dict) -> list[str]:
     """Return asset ids the request is allowed to read.
 

@@ -17,7 +17,7 @@ from src.runner.storage import (
     validate_registration_token,
     write_runner,
 )
-from src.shared.paths import now_iso
+from src.shared.paths import now_iso, parse_iso_utc
 
 
 import logging
@@ -63,20 +63,29 @@ def register_runner(
 
     raw_auth, auth_hash = generate_auth_token()
 
-    # For compose runners: idempotent by name — reuse existing runner on restart
+    # Idempotent by name for compose runners that restart, but a re-registration
+    # cannot prove it is the same runner. Only reuse a record that is not yet
+    # trusted (pending/stale). If an already-approved runner owns this name, a
+    # new registration is treated as a distinct, untrusted runner: the trusted
+    # record — its token, job assignments and approval — is left untouched, and
+    # the newcomer starts pending until an admin approves it.
+    name_taken_by_approved = False
     if is_local and name:
         existing = _find_runner_by_name(name)
         if existing:
-            existing["authTokenHash"] = auth_hash
-            existing["status"] = "pending_approval"
-            existing["approvedAt"] = None
-            existing["lastHeartbeatAt"] = now_iso()
-            if os_name:
-                existing["os"] = os_name
-            if arch:
-                existing["arch"] = arch
-            write_runner(existing)
-            return existing, raw_auth, None
+            if existing.get("status") == "approved":
+                name_taken_by_approved = True
+            else:
+                existing["authTokenHash"] = auth_hash
+                existing["status"] = "pending_approval"
+                existing["approvedAt"] = None
+                existing["lastHeartbeatAt"] = now_iso()
+                if os_name:
+                    existing["os"] = os_name
+                if arch:
+                    existing["arch"] = arch
+                write_runner(existing)
+                return existing, raw_auth, None
 
     runner_id = f"runner-{secrets.token_hex(8)}"
 
@@ -93,8 +102,10 @@ def register_runner(
         "authTokenHash": auth_hash,
         "orgId": None,
     }
-    # Auto-approve compose runners (token matches RUNNER_REGISTRATION_TOKEN env var)
-    if is_local:
+    # Auto-approve compose runners, except when the name is already held by an
+    # approved runner — auto-approving there would hand a caller who knows the
+    # shared token an approved runner under another runner's name.
+    if is_local and not name_taken_by_approved:
         runner["status"] = "approved"
         runner["approvedAt"] = now_iso()
 
@@ -198,7 +209,7 @@ def compute_runner_status(runner: dict[str, Any]) -> str:
         return "offline"
 
     try:
-        hb_time = datetime.fromisoformat(last_hb.replace("Z", "+00:00"))
+        hb_time = parse_iso_utc(last_hb)
         elapsed = (datetime.now(timezone.utc) - hb_time).total_seconds()
     except (ValueError, TypeError):
         return "offline"
@@ -218,7 +229,7 @@ def list_runners_with_status() -> list[dict[str, Any]]:
 
         registered = runner.get("registeredAt", "")
         try:
-            reg_time = datetime.fromisoformat(registered.replace("Z", "+00:00"))
+            reg_time = parse_iso_utc(registered)
             uptime_minutes = min(60, (datetime.now(timezone.utc) - reg_time).total_seconds() / 60)
         except (ValueError, TypeError):
             uptime_minutes = 60

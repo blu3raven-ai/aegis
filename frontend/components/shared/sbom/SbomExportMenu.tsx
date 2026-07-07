@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { SbomFormat } from "@/lib/client/sbom-api"
 import { Button } from "@/components/ui/Button"
-import { nextRovingIndex } from "@/lib/ui/menu-nav"
+import { handleRovingKeyDown } from "@/components/ui/roving"
 
 const FORMAT_LABELS: Record<SbomFormat, string> = {
   "cyclonedx-json": "CycloneDX JSON",
@@ -92,11 +92,12 @@ export function SbomExportMenu({
       closeMenu(false)
       return
     }
-    const target = nextRovingIndex(e.key, activeIndex, FORMATS.length)
-    if (target !== null) {
-      e.preventDefault()
-      setActiveIndex(target)
-    }
+    handleRovingKeyDown(e, {
+      index: activeIndex,
+      count: FORMATS.length,
+      orientation: "vertical",
+      onMove: setActiveIndex,
+    })
   }
 
   return (

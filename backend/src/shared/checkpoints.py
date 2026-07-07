@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.helpers import run_db
 from src.db.models import Asset, ScanCheckpoint
-from src.shared.paths import now_iso
+from src.shared.paths import now_iso, parse_iso_utc
 
 
 def write_checkpoint(
@@ -106,7 +106,7 @@ def compute_coverage_gaps(
         last_scanned = cp.get("lastScannedAt")
         if last_scanned:
             try:
-                scanned_dt = datetime.fromisoformat(last_scanned.replace("Z", "+00:00"))
+                scanned_dt = parse_iso_utc(last_scanned)
                 if scanned_dt < stale_cutoff:
                     gaps.append({
                         "assetId": asset_id,

@@ -1,11 +1,11 @@
 """Secret scanning pool (deduplication) and checkpoint management — PostgreSQL backed."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from src.db.helpers import run_db
+from src.shared.paths import parse_iso_utc
 from src.db.models import ScanCheckpoint, Finding
 from src.secrets.store import build_secret_identity
 
@@ -78,7 +78,7 @@ def _detected_at_sort_key(value: Any) -> tuple[int, Any]:
     if not detected_at:
         return (0, "")
     try:
-        return (1, datetime.fromisoformat(detected_at.replace("Z", "+00:00")))
+        return (1, parse_iso_utc(detected_at))
     except ValueError:
         return (0, detected_at)
 

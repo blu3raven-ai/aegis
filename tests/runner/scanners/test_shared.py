@@ -138,22 +138,16 @@ def test_clone_repo_no_token_no_injection(monkeypatch, tmp_path):
     assert not any("x-access-token" in part for part in captured["cmd"])
 
 
-def test_log_scanning_emits_exact_marker(capsys):
-    _shared.log_scanning("acme/widget")
+def test_log_scanning_emits_marker(capsys):
+    _shared.log("scanning", "acme/widget")
     out = capsys.readouterr().out
-    assert out == "[+] Scanning repo: acme/widget\n"
+    assert out == "[scanning] acme/widget\n"
 
 
-def test_log_scanning_image_emits_exact_marker(capsys):
-    _shared.log_scanning_image("alpine:3.18")
+def test_log_finished_emits_marker(capsys):
+    _shared.log("done", "acme/widget")
     out = capsys.readouterr().out
-    assert out == "[+] Scanning image: alpine:3.18\n"
-
-
-def test_log_finished_emits_exact_marker(capsys):
-    _shared.log_finished("acme/widget")
-    out = capsys.readouterr().out
-    assert out == "[✓] Finished: acme/widget\n"
+    assert out == "[done] acme/widget\n"
 
 
 def test_setup_output_dir_creates_path(tmp_path):

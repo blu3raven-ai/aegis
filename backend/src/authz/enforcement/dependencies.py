@@ -15,6 +15,7 @@ even when the override and the route construct separate instances.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -22,19 +23,26 @@ from fastapi import HTTPException, Request
 from src.authz.permissions.service import has_role_permission
 
 
+@dataclass(frozen=True, slots=True)
 class Permission:
     """Permission guard usable as a FastAPI dependency.
 
     `Permission(A, B)` requires *all* listed permissions (AND semantics).
     For OR semantics, write a small custom guard at the call site.
+
+    Frozen so instances are hashable — two guards built from the same
+    permissions compare and hash equal, which is what makes
+    `app.dependency_overrides[Permission(PERM)]` match every route declared
+    with `Depends(Permission(PERM))`. The varargs constructor keeps the
+    `Permission(A, B)` call shape, so `__init__` is defined explicitly.
     """
 
-    __slots__ = ("_permissions",)
+    _permissions: tuple[str, ...]
 
     def __init__(self, *permissions: str) -> None:
         if not permissions:
             raise ValueError("Permission requires at least one permission name")
-        self._permissions: tuple[str, ...] = tuple(permissions)
+        object.__setattr__(self, "_permissions", tuple(permissions))
 
     def __call__(self, request: Request) -> None:
         role = getattr(request.state, "user_role", None)
@@ -45,17 +53,6 @@ class Permission:
                     status_code=403,
                     detail=f"Permission denied: {permission}",
                 )
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Permission):
-            return NotImplemented
-        return self._permissions == other._permissions
-
-    def __hash__(self) -> int:
-        return hash(self._permissions)
-
-    def __repr__(self) -> str:
-        return f"Permission({', '.join(self._permissions)})"
 
 
 def caller_context(request: Request) -> dict[str, Any]:

@@ -40,10 +40,15 @@ def test_get_assignable_users_returns_envelope_with_user_rows():
         {"id": "u-1", "username": "alice", "email": "alice@example.test"},
         {"id": "u-2", "username": "bob", "email": "bob@example.test"},
     ]
+    scope = {"u-1", "u-2"}
     with (
         patch(
             "src.findings.router.get_session",
             return_value=_NullSession(),
+        ),
+        patch(
+            "src.findings.router.assignable_user_ids",
+            new=AsyncMock(return_value=scope),
         ),
         patch(
             "src.findings.router.list_assignable_users",
@@ -56,14 +61,21 @@ def test_get_assignable_users_returns_envelope_with_user_rows():
     assert resp.status_code == 200
     assert resp.json() == {"users": seeded}
     mock_list.assert_awaited_once()
-    assert mock_list.await_args.kwargs == {"q": None, "limit": 20}
+    # The caller's shared-asset scope is forwarded so the service never
+    # enumerates users outside it.
+    assert mock_list.await_args.kwargs == {"q": None, "limit": 20, "allowed_user_ids": scope}
 
 
 def test_get_assignable_users_forwards_q_filter_to_service():
+    scope = {"viewer-1"}
     with (
         patch(
             "src.findings.router.get_session",
             return_value=_NullSession(),
+        ),
+        patch(
+            "src.findings.router.assignable_user_ids",
+            new=AsyncMock(return_value=scope),
         ),
         patch(
             "src.findings.router.list_assignable_users",
@@ -75,13 +87,13 @@ def test_get_assignable_users_forwards_q_filter_to_service():
 
     assert resp.status_code == 200
     assert resp.json() == {"users": []}
-    assert mock_list.await_args.kwargs == {"q": "ali", "limit": 5}
+    assert mock_list.await_args.kwargs == {"q": "ali", "limit": 5, "allowed_user_ids": scope}
 
 
 def test_get_assignable_users_passes_oversized_limit_unmodified_for_service_clamping():
     captured: dict[str, object] = {}
 
-    async def fake_list_assignable_users(session, *, q, limit):
+    async def fake_list_assignable_users(session, *, q, limit, allowed_user_ids=None):
         captured["q"] = q
         captured["limit"] = limit
         # Mimic the real service capping the response at MAX_ASSIGNABLE_USERS_LIMIT
@@ -95,6 +107,10 @@ def test_get_assignable_users_passes_oversized_limit_unmodified_for_service_clam
         patch(
             "src.findings.router.get_session",
             return_value=_NullSession(),
+        ),
+        patch(
+            "src.findings.router.assignable_user_ids",
+            new=AsyncMock(return_value={"viewer-1"}),
         ),
         patch(
             "src.findings.router.list_assignable_users",

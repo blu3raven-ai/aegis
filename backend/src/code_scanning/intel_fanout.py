@@ -31,15 +31,9 @@ def _distinct_repo_ids(cache: FileFindingCache) -> list[str]:
         return [row[0] for row in result.fetchall()]
 
     keys = run_db(_query)
-    # cache_key format: '{repo_id}|{file_path}|{sha256}'
-    repo_ids: list[str] = []
-    seen: set[str] = set()
-    for key in keys:
-        repo_id = key.split("|", 1)[0]
-        if repo_id not in seen:
-            seen.add(repo_id)
-            repo_ids.append(repo_id)
-    return repo_ids
+    # cache_key format: '{repo_id}|{file_path}|{sha256}'; dict.fromkeys keeps
+    # first-seen order while deduping.
+    return list(dict.fromkeys(key.split("|", 1)[0] for key in keys))
 
 
 def dispatch_rule_pack_update_fanout(

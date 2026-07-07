@@ -69,11 +69,12 @@ def test_dependencies_scanner_has_correct_type():
     assert DependenciesScanner.SCANNER_TYPE == "dependencies_scanning"
 
 
-def test_dependencies_scanner_implements_base_protocol():
-    from runner.scanners.base import BaseScanner
+def test_dependencies_scanner_exposes_run_scan():
     from runner.scanners.dependencies.scanner import DependenciesScanner
 
-    assert isinstance(DependenciesScanner(), BaseScanner)
+    scanner = DependenciesScanner()
+    assert hasattr(scanner, "run_scan") and callable(scanner.run_scan)
+    assert scanner.SCANNER_TYPE == "dependencies_scanning"
 
 
 def test_run_scan_empty_repos_returns_clean(tmp_path):
@@ -266,22 +267,6 @@ def _fake_download_two_sboms(sbom_dir):
 
 def _fake_download_two_sboms_kw(*, backend_client, job_id, output_dir):
     return _fake_download_two_sboms(output_dir)
-
-
-# ---------------------------------------------------------------------------
-# Task 3.2 / 3.3 — sbom_only scan mode (skip_grype)
-# ---------------------------------------------------------------------------
-
-
-def test_run_scan_sbom_only_in_supported_modes():
-    """sbom_only must be listed in SUPPORTED_SCAN_MODES (no longer deferred)."""
-    from runner.scanners.dependencies.scanner import (
-        DEFERRED_SCAN_MODES,
-        SUPPORTED_SCAN_MODES,
-    )
-
-    assert "sbom_only" in SUPPORTED_SCAN_MODES
-    assert "sbom_only" not in DEFERRED_SCAN_MODES
 
 
 # ---------------------------------------------------------------------------

@@ -107,8 +107,8 @@ class CorrelationEngine:
         self._stream_cfg = stream_config
         self._redis_cfg = redis_config
         self._consumer_name = consumer_name
-        # When no connector is supplied, default to NullArgusConnector so rules
-        # always receive a working connector with heuristic fallbacks.
+        # When no connector is supplied, build one from env so rules always
+        # receive a working connector with heuristic fallbacks.
         self._argus: ArgusConnector = argus if argus is not None else get_argus_connector()
 
         self._event_stream = EventStream(stream_config)

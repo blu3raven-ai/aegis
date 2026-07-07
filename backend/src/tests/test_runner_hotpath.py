@@ -176,19 +176,47 @@ def test_register_with_local_env_token_auto_approves(mem, monkeypatch):
     assert runner["approvedAt"] is not None
 
 
-def test_register_compose_runner_is_idempotent_on_restart(mem, monkeypatch):
-    """A compose runner restarting must reuse its existing record (matched by
-    name) rather than spawn a duplicate row."""
+def test_register_reuses_pending_record_by_name(mem, monkeypatch):
+    """A not-yet-approved runner registered again by the same name is reused
+    (id preserved, token rotated) rather than spawning a duplicate pending row."""
+    monkeypatch.setenv("RUNNER_REGISTRATION_TOKEN", "compose-token")
+    monkeypatch.setattr(
+        "src.runner.registry.validate_registration_token",
+        lambda t: {"tokenHash": "x", "used": True} if t == "vrt_db" else None,
+    )
+
+    # First registration via a one-time DB token creates a PENDING runner.
+    r1, _, _ = registry.register_runner(raw_token="vrt_db", name="worker-1")
+    assert r1["status"] == "pending_approval"
+    first_id = r1["id"]
+
+    # Re-registration (shared env token) reuses the still-untrusted record and
+    # rotates its auth token so an old token can't be replayed.
+    r2, _, _ = registry.register_runner(raw_token="compose-token", name="worker-1")
+    assert r2["id"] == first_id
+    assert r2["authTokenHash"] != r1["authTokenHash"]
+
+
+def test_register_does_not_hijack_approved_runner_by_name(mem, monkeypatch):
+    """Re-registering a name already owned by an APPROVED runner must not
+    overwrite it: the trusted record keeps its token, approval and identity,
+    and the newcomer starts as a distinct pending runner."""
     monkeypatch.setenv("RUNNER_REGISTRATION_TOKEN", "compose-token")
     monkeypatch.setattr("src.runner.registry.validate_registration_token", lambda _t: None)
 
     r1, _, _ = registry.register_runner(raw_token="compose-token", name="worker-1")
-    first_id = r1["id"]
+    assert r1["status"] == "approved"
+    original_id = r1["id"]
+    original_hash = r1["authTokenHash"]
+
     r2, _, _ = registry.register_runner(raw_token="compose-token", name="worker-1")
-    assert r2["id"] == first_id
-    # The auth token hash must have been rotated on re-register so an old
-    # auth token can't be replayed after restart.
-    assert r2["authTokenHash"] != r1["authTokenHash"]
+    # Newcomer is a distinct, untrusted runner.
+    assert r2["id"] != original_id
+    assert r2["status"] == "pending_approval"
+    # The approved runner is left completely untouched.
+    still = mem.read_runner(original_id)
+    assert still["status"] == "approved"
+    assert still["authTokenHash"] == original_hash
 
 
 # Registry: authentication

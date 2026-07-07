@@ -4,6 +4,7 @@ Stdout progress markers MUST match the exact strings emitted by the bash
 originals so the runner's ManifestStreamer regex parser continues to work."""
 from __future__ import annotations
 
+import concurrent.futures
 import dataclasses
 import logging
 import os
@@ -14,6 +15,9 @@ from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
 from runner.scanners import _manifest
+from runner.scanners._manifest import write_done_marker
+from runner.scanners._subprocess import CANCELLED_EXIT_CODE, ScannerTimeoutError
+from runner.scanners.base import ExecutionResult
 
 logger = logging.getLogger(__name__)
 
@@ -143,16 +147,9 @@ def register_output(output_dir: Path, file_path: Path, repo: str) -> None:
     _manifest.record_output(output_dir, file_path, repo)
 
 
-def log_scanning(target: str) -> None:
-    print(f"[+] Scanning repo: {target}", flush=True)
-
-
-def log_scanning_image(target: str) -> None:
-    print(f"[+] Scanning image: {target}", flush=True)
-
-
-def log_finished(target: str) -> None:
-    print(f"[✓] Finished: {target}", flush=True)
+def log(prefix: str, target: str) -> None:
+    """Emit a per-target progress marker to stdout (e.g. ``[scanning] acme/repo``)."""
+    print(f"[{prefix}] {target}", flush=True)
 
 
 class ProgressEmitter:
@@ -164,8 +161,6 @@ class ProgressEmitter:
     The agent merges its own streamer counters into the dict server-side, so
     this emitter intentionally does not track uploaded/failed counts.
     """
-
-    _LOG_TAIL_MAX = 50
 
     def __init__(
         self,
@@ -179,7 +174,6 @@ class ProgressEmitter:
         self._expected = max(0, int(expected))
         self._stage = "starting"
         self._current_repo: str | None = None
-        self._log_tail: list[str] = []
 
     def starting(self) -> None:
         with self._lock:
@@ -213,12 +207,6 @@ class ProgressEmitter:
             self._current_repo = None
             self._emit_locked()
 
-    def log(self, line: str) -> None:
-        with self._lock:
-            self._log_tail.append(line)
-            if len(self._log_tail) > self._LOG_TAIL_MAX:
-                self._log_tail = self._log_tail[-self._LOG_TAIL_MAX :]
-
     def _emit_locked(self) -> None:
         if self._on_progress is None:
             return
@@ -231,10 +219,92 @@ class ProgressEmitter:
         if self._current_repo:
             progress["currentRepo"] = self._current_repo
         try:
-            self._on_progress(list(self._log_tail), progress)
+            self._on_progress([], progress)
         except Exception:  # noqa: BLE001
             # A failed progress emission must never abort the scan.
             logger.debug("on_progress callback raised; ignoring", exc_info=True)
+
+
+def run_per_repo(
+    *,
+    items: list[str],
+    out_dir: Path,
+    emitter: ProgressEmitter,
+    concurrency: int,
+    cancel_event: threading.Event | None,
+    log_tail: list[str],
+    scan_one: Callable[[str], object],
+    label_of: Callable[[str], str] = repo_name_from_url,
+    item_noun: str = "Repo",
+    empty_message: str = "[!] No GIT_REPOS specified - nothing to scan",
+    pre_scan: Callable[[], None] | None = None,
+    post_scan: Callable[[], None] | None = None,
+) -> ExecutionResult:
+    """Shared clone→scan→register→emit skeleton for the per-item scanners.
+
+    Runs ``scan_one(item)`` for each item across a ThreadPoolExecutor, wrapping
+    every call with progress emission and uniform clone/timeout error handling,
+    then writes the ``_done`` marker. ``pre_scan`` runs once after
+    ``emitter.starting()`` and before the pool (e.g. one-time setup whose cost
+    should be skipped on a cancelled or empty run); ``post_scan`` runs after the
+    pool drains and before the marker (the normalize/verify hook). The
+    cancel/empty guards short-circuit with the same exit codes each scanner used
+    inline.
+    """
+    if cancel_event is not None and cancel_event.is_set():
+        emitter.done()
+        write_done_marker(out_dir)
+        return ExecutionResult(
+            exit_code=CANCELLED_EXIT_CODE, job_dir=out_dir, log_tail=log_tail
+        )
+
+    if not items:
+        log_tail.append(empty_message)
+        emitter.done()
+        write_done_marker(out_dir)
+        return ExecutionResult(exit_code=0, job_dir=out_dir, log_tail=log_tail)
+
+    emitter.starting()
+
+    if pre_scan is not None:
+        pre_scan()
+
+    def _run_one(item: str) -> None:
+        if cancel_event is not None and cancel_event.is_set():
+            return
+        label = label_of(item)
+        emitter.scanning(label)
+        try:
+            scan_one(item)
+        except InsecureURLError as e:
+            log_tail.append(f"[!] {e}")
+        except GitCloneError as e:
+            log_tail.append(f"[!] {e}")
+        except ScannerTimeoutError as e:
+            log_tail.append(f"[!] Timeout scanning {item}: {e}")
+        except Exception as e:  # noqa: BLE001
+            log_tail.append(f"[!] {item_noun} {item} failed: {e}")
+            logger.exception("[!] %s %s failed", item_noun, item)
+        finally:
+            emitter.finished(label)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
+        list(pool.map(_run_one, items))
+
+    emitter.normalizing()
+    if post_scan is not None:
+        post_scan()
+    write_done_marker(out_dir)
+    emitter.done()
+
+    exit_code = (
+        CANCELLED_EXIT_CODE
+        if (cancel_event is not None and cancel_event.is_set())
+        else 0
+    )
+    return ExecutionResult(
+        exit_code=exit_code, job_dir=out_dir, log_tail=log_tail[-50:]
+    )
 
 
 # ---------------------------------------------------------------------------

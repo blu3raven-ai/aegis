@@ -25,12 +25,9 @@ def _get_lock(output_dir: Path) -> threading.Lock:
 
 
 def sha256_file(path: Path) -> str:
-    """Compute sha256 in chunks to avoid loading large files into memory."""
-    h = hashlib.sha256()
+    """Compute sha256 without loading the whole file into memory."""
     with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(8192), b""):
-            h.update(chunk)
-    return h.hexdigest()
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def _now_iso() -> str:
