@@ -1,5 +1,7 @@
 /** Client for the global search surface. Supports AbortSignal-based cancellation. */
 
+import { readCsrfCookie } from "./csrf.ts"
+
 export interface SearchHit {
   type: string
   id: string
@@ -35,17 +37,6 @@ interface GlobalSearchResponse {
       destinations: SearchHit[]
     }
   }
-}
-
-const CSRF_COOKIE_NAME = "__Host-csrf"
-
-function readCsrfCookie(): string | null {
-  if (typeof document === "undefined") return null
-  for (const pair of document.cookie.split(";").map((p) => p.trim())) {
-    const [k, ...rest] = pair.split("=")
-    if (k === CSRF_COOKIE_NAME) return rest.join("=")
-  }
-  return null
 }
 
 const QUERY = `query GlobalSearch($q: String!, $scopes: [String!], $limit: Int!) {
