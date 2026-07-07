@@ -83,9 +83,9 @@ def _create_job_inner(
     return job_id
 
 
-def _assign_next_job_inner(*, runner_id: str) -> dict[str, Any] | None:
+def _assign_next_job_inner(*, runner_id: str, org: str | None = None) -> dict[str, Any] | None:
     with _assign_lock:
-        queued = list_jobs(status="queued")
+        queued = list_jobs(status="queued", org=org)
         if not queued:
             return None
         job = queued[0]
@@ -154,9 +154,9 @@ def create_job(
     return read_job(job_id) or {"id": job_id}
 
 
-def assign_next_job(runner_id: str) -> dict[str, Any] | None:
+def assign_next_job(runner_id: str, org: str | None = None) -> dict[str, Any] | None:
     """Module-level API — preserved for backward compat. Delegates to _inner."""
-    return _assign_next_job_inner(runner_id=runner_id)
+    return _assign_next_job_inner(runner_id=runner_id, org=org)
 
 
 def update_job_status(job_id: str, status: str, **kwargs: Any) -> dict[str, Any] | None:

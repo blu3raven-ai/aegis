@@ -216,6 +216,7 @@ class SourceConnection(Base):
     next_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    org_id: Mapped[str] = mapped_column(String(255), nullable=False, server_default="default")
 
     __table_args__ = (
         sa.CheckConstraint(
@@ -309,6 +310,7 @@ class Runner(Base):
     disk_total_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
     cores: Mapped[int | None] = mapped_column(Integer, nullable=True)
     jobs_completed: Mapped[int] = mapped_column(Integer, default=0)
+    org_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     __table_args__ = (
         sa.CheckConstraint(
@@ -419,6 +421,7 @@ class AuditEvent(Base):
     changes: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=utcnow)
+    org_id: Mapped[str] = mapped_column(String(255), nullable=False, server_default="default")
 
     __table_args__ = (
         sa.Index("ix_audit_event_created", "created_at"),
@@ -868,6 +871,7 @@ class ApiKey(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     allowed_source_ids: Mapped[dict | list | None] = mapped_column(JSONB, nullable=True)
+    org_id: Mapped[str] = mapped_column(String(255), nullable=False, server_default="default")
 
     __table_args__ = (
         sa.Index("ix_api_keys_revoked_at", "revoked_at"),

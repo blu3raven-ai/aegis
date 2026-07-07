@@ -90,6 +90,7 @@ async def list_audit_events(
     if os.getenv("AEGIS_AUDIT_LOG_ENABLED", "true").lower() == "false":
         raise HTTPException(status_code=409, detail="audit log is disabled")
 
+    org_id = getattr(request.state, "user_org", "default")
     clamped_limit = max(1, min(limit, MAX_LIMIT))
     clamped_offset = max(0, offset)
 
@@ -99,6 +100,7 @@ async def list_audit_events(
     search_term = q.strip() if q else None
 
     def _apply_filters(stmt):
+        stmt = stmt.where(AuditEvent.org_id == org_id)
         if action:
             stmt = stmt.where(AuditEvent.action == action)
         if actor_id:
@@ -152,9 +154,12 @@ async def audit_facets(
     if os.getenv("AEGIS_AUDIT_LOG_ENABLED", "true").lower() == "false":
         raise HTTPException(status_code=409, detail="audit log is disabled")
 
+    org_id = getattr(request.state, "user_org", "default")
+
     async def _distinct(session, column) -> list[str]:
         stmt = (
             select(column)
+            .where(AuditEvent.org_id == org_id)
             .where(column.is_not(None))
             .distinct()
             .order_by(column)

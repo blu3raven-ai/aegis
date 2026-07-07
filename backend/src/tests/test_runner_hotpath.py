@@ -67,10 +67,12 @@ class _MemStorage:
     def write_job(self, job):
         self.jobs[job["id"]] = dict(job)
 
-    def list_jobs(self, status=None):
+    def list_jobs(self, status=None, org=None):
         rows = [dict(j) for j in self.jobs.values()]
         if status is not None:
             rows = [r for r in rows if r.get("status") == status]
+        if org is not None:
+            rows = [r for r in rows if r.get("org") == org]
         rows.sort(key=lambda r: r.get("createdAt", ""))
         return rows
 

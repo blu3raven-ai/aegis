@@ -159,7 +159,7 @@ async def poll_next_job(request: Request, wait: int = 0) -> JSONResponse:
     deadline = time.monotonic() + wait
 
     while True:
-        job = assign_next_job(runner["id"])
+        job = assign_next_job(runner["id"], org=runner.get("orgId"))
         if job:
             # Transition scan run from "queued" to "running" now that runner claimed the job
             _transition_run_to_running(job)
