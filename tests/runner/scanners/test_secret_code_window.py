@@ -40,7 +40,10 @@ def test_secret_code_window_redacts_every_value(tmp_path):
         # BOTH detected secrets masked in EVERY window — not just the finding's own.
         assert secret_a not in window
         assert secret_b not in window
-        assert "redacted-secret" in window
+        # TruffleHog's own Redacted form (a genuine partial) is shown so an
+        # analyst can identify the secret without seeing the full value.
+        assert "AKIA...MPLE" in window
+        assert "sk-...9999" in window
         # surrounding non-secret context is preserved.
         assert "DEBUG=true" in window
 

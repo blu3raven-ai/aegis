@@ -111,7 +111,8 @@ function CodeLines({
   highlightStart?: number
   highlightEnd?: number
   firstHighlightRef?: React.Ref<HTMLSpanElement>
-  /** Blur the highlighted line's content (secret preview: the raw value is never surfaced in-app). */
+  /** Blur the highlighted line's content. Off for secrets now that the runner
+   *  masks them to a safe partial before storage (nothing full to hide). */
   blurHighlighted?: boolean
 }) {
   const base = startLine ?? 1
@@ -203,9 +204,10 @@ export function CodePreviewSection({
   const useCodeLines = !isSecret || secretShowsWindow
   const anchor = useCodeLines ? startLine ?? parseStartLine(filePath) : null
   const showGutter = useCodeLines && (lines.length > 1 || anchor != null)
-  // The flagged line stays blurred: the raw secret is never surfaced in-app, so
-  // it can't be shoulder-surfed from the window view.
-  const blurHighlighted = isSecret
+  // No blur: the runner masks the secret to a short prefix before it is stored,
+  // so the flagged line only ever shows a safe partial (e.g. "ghp_a1b2••••") —
+  // enough to identify the secret, never enough to use it.
+  const blurHighlighted = false
 
   // Centre the highlighted line within the height-capped inline view.
   useEffect(() => {
@@ -371,7 +373,7 @@ export function CodePreviewSection({
 
       {isSecret && (
         <p className="mt-1.5 text-[11px] text-[var(--color-text-tertiary)]">
-          The raw value isn&apos;t stored — open it at the source to view or rotate it.
+          Only a short prefix is shown — the full secret is never stored. Open it at the source to view or rotate it.
         </p>
       )}
 
