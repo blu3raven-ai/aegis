@@ -38,7 +38,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
   { id: "general", title: "General", subtitle: "Name, branding, and authentication policy", group: "organization", detailComponent: GeneralDetail },
   { id: "sso", title: "SSO / SAML", subtitle: "Single sign-on, SCIM, and audit streaming", group: "organization", detailComponent: SsoDetail },
   { id: "audit", title: "Audit Log", subtitle: "Org-wide activity and admin actions", group: "organization", detailComponent: AuditDetail },
-  { id: "runners", title: "Runners", subtitle: "Scan execution mode and runner fleet", group: "organization", detailComponent: RunnersDetail },
+  { id: "runners", title: "Runners", subtitle: "Self-hosted scan runners and concurrency", group: "organization", detailComponent: RunnersDetail },
   { id: "llm", title: "LLM verification", subtitle: "Verify findings and cut false positives with your own model", group: "add-ons", detailComponent: LlmDetail },
   { id: "advisory-data", title: "Advisory Data", subtitle: "Vulnerability feeds, advisory sources, and threat-intel add-ons", group: "add-ons", detailComponent: AdvisoryDataDetail },
   { id: "license", title: "License", subtitle: "Plan, seats, and entitlements", group: "add-ons", detailComponent: LicenseDetail },

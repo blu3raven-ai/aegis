@@ -64,13 +64,6 @@ export async function generateRunnerToken(): Promise<{ token: string; expiresAt:
   })
 }
 
-export async function setRunnerMode(mode: "local" | "remote"): Promise<void> {
-  await apiClient<{ ok: boolean; mode: string }>("/api/v1/runners/mode", {
-    method: "POST",
-    body: { mode },
-  })
-}
-
 export async function saveRunnerSettings(
   runnerId: string,
   settings: { maxConcurrent?: number; name?: string },
