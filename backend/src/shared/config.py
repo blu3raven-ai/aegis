@@ -28,24 +28,25 @@ def get_session_secret() -> str:
     return secret
 
 
-def get_allowed_hosts() -> list[str]:
-    """Hosts the app is willing to serve. Configure via ALLOWED_HOSTS env var.
+# Loopback and the internal compose service name are deployment-topology
+# constants: local access and service-to-service traffic (the runner reaching
+# the backend at http://aegis:3000) always rely on them. They are trusted
+# unconditionally so operators only ever configure their *public* hostname(s)
+# via ALLOWED_HOSTS — the internal name can never be accidentally dropped.
+_BASELINE_HOSTS = ("localhost", "127.0.0.1", "aegis")
 
-    Required in every environment. Set to a comma-separated list of hostnames
-    (e.g. ``aegis.example.com,api.aegis.example.com``). For local dev/tests,
-    set ``ALLOWED_HOSTS=localhost,127.0.0.1,testserver``.
+
+def get_allowed_hosts() -> list[str]:
+    """Hosts the app is willing to serve.
+
+    Always trusts loopback and the internal service name (see ``_BASELINE_HOSTS``).
+    Set ``ALLOWED_HOSTS`` to a comma-separated list to additionally trust public
+    hostnames (e.g. ``scan.example.com``); those are merged onto the baseline.
     """
-    raw = os.getenv("ALLOWED_HOSTS")
-    if not raw:
-        raise RuntimeError(
-            "ALLOWED_HOSTS environment variable is required. "
-            "Comma-separated list of permitted host headers. "
-            "Local dev/tests: ALLOWED_HOSTS=localhost,127.0.0.1,testserver"
-        )
-    hosts = [h.strip() for h in raw.split(",") if h.strip()]
-    if not hosts:
-        raise RuntimeError("ALLOWED_HOSTS must contain at least one non-empty host entry.")
-    return hosts
+    raw = os.getenv("ALLOWED_HOSTS", "")
+    extra = [h.strip() for h in raw.split(",") if h.strip()]
+    # Dedup while preserving order, baseline first.
+    return list(dict.fromkeys([*_BASELINE_HOSTS, *extra]))
 
 ENV_PATH = repo_root() / ".env.local"
 

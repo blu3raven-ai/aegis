@@ -91,7 +91,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env}
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,aegis}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
       FASTAPI_ENV: production
     deploy:
       resources:
