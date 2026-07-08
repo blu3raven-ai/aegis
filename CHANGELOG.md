@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 
 ---
 
+## v2.7.0 — 2026-07-08
+
+### Security
+
+- Detected secrets show only a short masked prefix — enough to identify the token type, never enough to use it — and the raw value is never stored in the portal
+- Notification links are restricted to internal paths and external links open with `noopener`/`noreferrer`, closing scheme-injection and reverse-tabnabbing gaps
+
+### Added
+
+- Fresh installs seed default SLA tiers and a baseline scanner-coverage rule requiring every scanner, so policies are enforced out of the box
+- Webhook, CI/CD, and remote-runner setup warns when the portal URL points at localhost, which external providers and off-box runners can't reach
+- Agent-security findings include a source code preview in the finding drawer
+
+### Fixed
+
+- Dashboards and list views load reliably again; GraphQL requests carry an operation name so the observability guard no longer rejects them
+- The packaged runner registers out of the box; loopback and the internal service name are always trusted for host-header validation
+- View-in-repository links to the exact file and line for GitHub, GitLab, Gitea, and Bitbucket, including self-hosted instances
+- Finding detail loads even when a scanner records evidence in a non-array shape
+- The Runners settings page shows a single runner-fleet view instead of a Local/Remote toggle that had no effect
+- Quick Start docs corrected: log in with the configured admin password, required environment values are called out, and MinIO credential minimums are documented
+- Dependency security updates: python-multipart ≥ 0.0.32, pydantic-settings ≥ 2.14.2
+
+---
+
 ## v2.6.1 — 2026-07-08
 
 ### Security
