@@ -10,10 +10,10 @@
  * opens the full window in a wide sheet. When no snippet was captured, a small
  * empty state names the location instead of rendering nothing.
  *
- * Secrets render as a single masked value with an eye toggle that fetches the
- * raw value on demand — the plaintext secret is never in the list/detail
- * payload; the reveal is permission-gated and audited server side, and the
- * revealed value lives only in local state (dropped on unmount).
+ * Secrets render as a single masked value. The raw secret is deliberately not
+ * persisted — a security portal must not become a centralized plaintext-secret
+ * store — so there is no in-app reveal; the redacted match confirms the finding
+ * and "View in repository" links to the value at its source for remediation.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -21,8 +21,6 @@ import { Button } from "@/components/ui/Button"
 import { LinkButton } from "@/components/ui/LinkButton"
 import { Sheet } from "@/components/ui/Sheet"
 import { cn } from "@/lib/shared/utils"
-import { revealSecretValue } from "@/lib/client/findings-api"
-import { useHasPermission } from "@/lib/client/use-permission"
 
 interface CodePreviewSectionProps {
   snippet: string | undefined
@@ -63,16 +61,6 @@ function dedent(text: string): string {
   }
   if (!Number.isFinite(min) || min === 0) return text
   return lines.map((line) => line.slice(min)).join("\n")
-}
-
-function EyeIcon({ off }: { off?: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3.5 w-3.5">
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-      {off && <path d="M3 3l18 18" />}
-    </svg>
-  )
 }
 
 function ExpandIcon() {
@@ -123,7 +111,7 @@ function CodeLines({
   highlightStart?: number
   highlightEnd?: number
   firstHighlightRef?: React.Ref<HTMLSpanElement>
-  /** Blur the highlighted line's content (secret preview: hide the value until revealed). */
+  /** Blur the highlighted line's content (secret preview: the raw value is never surfaced in-app). */
   blurHighlighted?: boolean
 }) {
   const base = startLine ?? 1
@@ -162,7 +150,7 @@ function CodeLines({
                 "whitespace-pre",
                 highlighted && blurHighlighted && "select-none blur-[5px]",
               )}
-              title={highlighted && blurHighlighted ? "Hidden — use Reveal to view the secret" : undefined}
+              title={highlighted && blurHighlighted ? "Redacted — open in the repository to view the value" : undefined}
             >
               {line || " "}
             </span>
@@ -186,27 +174,13 @@ export function CodePreviewSection({
   scanner,
 }: CodePreviewSectionProps) {
   const isSecret = Boolean(secretFindingId)
-  // Revealing the raw secret is gated on the same workspace permission the
-  // backend enforces (reveal_secret — a dedicated, more-sensitive grant than
-  // triage; review_findings does NOT imply it). Without it, the reveal
-  // affordance is hidden entirely — the redacted window still shows, the value
-  // just can't be unmasked. The server re-checks on every reveal; this only
-  // hides the button.
-  const { allowed: canReveal } = useHasPermission("reveal_secret")
   const [copied, setCopied] = useState(false)
-  const [revealed, setRevealed] = useState(false)
-  const [rawValue, setRawValue] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const timerRef = useRef<number | null>(null)
   const preRef = useRef<HTMLPreElement>(null)
   const hlRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
-    setRevealed(false)
-    setRawValue(null)
-    setError(null)
     setExpanded(false)
   }, [secretFindingId, snippet])
 
@@ -218,20 +192,20 @@ export function CodePreviewSection({
   )
 
   const trimmed = snippet?.replace(/\s+$/, "")
-  const shown = revealed && rawValue != null ? rawValue : trimmed ?? ""
+  const shown = trimmed ?? ""
   const display = isSecret ? shown : dedent(shown)
   const lines = display.split("\n")
   // A secret with a real (multi-line) redacted window shows it in file context
   // with the offending line highlighted, exactly like other findings. The bare
-  // masked value and the revealed raw value stay a plain block — there's no
-  // surrounding code to number or anchor a highlight against.
-  const secretShowsWindow = isSecret && !revealed && lines.length > 1
+  // masked value stays a plain block — there's no surrounding code to number or
+  // anchor a highlight against.
+  const secretShowsWindow = isSecret && lines.length > 1
   const useCodeLines = !isSecret || secretShowsWindow
   const anchor = useCodeLines ? startLine ?? parseStartLine(filePath) : null
   const showGutter = useCodeLines && (lines.length > 1 || anchor != null)
-  // Blur the flagged line's value until the analyst explicitly reveals it, so
-  // the full secret isn't shoulder-surfable in the window view.
-  const blurHighlighted = isSecret && !revealed
+  // The flagged line stays blurred: the raw secret is never surfaced in-app, so
+  // it can't be shoulder-surfed from the window view.
+  const blurHighlighted = isSecret
 
   // Centre the highlighted line within the height-capped inline view.
   useEffect(() => {
@@ -241,29 +215,6 @@ export function CodePreviewSection({
       pre.scrollTop = Math.max(0, hl.offsetTop - pre.clientHeight / 2 + hl.clientHeight / 2)
     }
   }, [display, anchor, highlightStart])
-
-  const handleToggleReveal = useCallback(async () => {
-    if (!secretFindingId) return
-    if (revealed) {
-      setRevealed(false)
-      return
-    }
-    if (rawValue != null) {
-      setRevealed(true)
-      return
-    }
-    setLoading(true)
-    setError(null)
-    try {
-      const value = await revealSecretValue(secretFindingId)
-      setRawValue(value)
-      setRevealed(true)
-    } catch {
-      setError("Couldn't reveal — you may not have permission.")
-    } finally {
-      setLoading(false)
-    }
-  }, [secretFindingId, revealed, rawValue])
 
   const handleCopy = useCallback(async () => {
     if (!display) return
@@ -371,27 +322,17 @@ export function CodePreviewSection({
               </Button>
             )
           )}
-          {isSecret && canReveal && (
+          {!isSecret && (
             <Button
               variant="secondary"
               size="xs"
-              onClick={handleToggleReveal}
-              isLoading={loading}
-              leadingIcon={<EyeIcon off={revealed} />}
-              aria-label={revealed ? "Hide secret value" : "Reveal secret value"}
+              onClick={handleCopy}
+              aria-label="Copy to clipboard"
+              aria-live="polite"
             >
-              {revealed ? "Hide" : "Reveal"}
+              {copied ? "Copied" : "Copy"}
             </Button>
           )}
-          <Button
-            variant="secondary"
-            size="xs"
-            onClick={handleCopy}
-            aria-label="Copy to clipboard"
-            aria-live="polite"
-          >
-            {copied ? "Copied" : "Copy"}
-          </Button>
         </div>
       </div>
 
@@ -423,19 +364,14 @@ export function CodePreviewSection({
               display ? "text-[var(--color-text-primary)]" : "text-[var(--color-text-tertiary)]",
             )}
           >
-            {display || (canReveal ? "•••••••••••• (hidden — Reveal to view)" : "•••••••••••• (hidden)")}
+            {display || "•••••••••••• (redacted)"}
           </code>
         </div>
       )}
 
-      {isSecret && revealed && (
-        <p className="mt-1.5 text-[11px] text-[var(--color-severity-medium-text)]">
-          Showing the raw secret. This view is recorded in the audit log.
-        </p>
-      )}
-      {error && (
-        <p className="mt-1.5 text-[11px] text-[var(--color-severity-high-text)]" role="alert">
-          {error}
+      {isSecret && (
+        <p className="mt-1.5 text-[11px] text-[var(--color-text-tertiary)]">
+          The raw value isn&apos;t stored — open it at the source to view or rotate it.
         </p>
       )}
 

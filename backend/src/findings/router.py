@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
 from src.db.engine import get_session
-from src.db.models import Finding, FindingEvent, User
+from src.db.models import Asset, Finding, FindingEvent, User
 from src.findings.service import (
     FIXED_WINDOW_DAYS,
     _finding_to_dict,
@@ -448,12 +448,20 @@ async def get_finding_detail(finding_id: int, request: Request) -> dict[str, Any
     """
     require_permission(request, VIEW_FINDINGS)
     finding = await _load_scoped_finding(finding_id, request)
-    # hydrate=True: the drawer needs the code window / snippet / code flows /
-    # manifest snippet, which live in the fat blob, not the lean list row.
-    data = _finding_to_dict(finding, hydrate=True)
     # Blast radius: other in-scope assets sharing this CVE/package.
     asset_ids = await resolve_asset_ids_from_request(request)
     async with get_session() as session:
+        # Resolve the repo ref (Asset.display_name, e.g. "github:acme/api") so the
+        # detail carries the provider prefix — the list path does this too, and
+        # without it the view-in-repo deep-link loses its file+line anchor.
+        repo = None
+        if finding.asset_id:
+            repo = await session.scalar(
+                select(Asset.display_name).where(Asset.id == finding.asset_id)
+            )
+        # hydrate=True: the drawer needs the code window / snippet / code flows /
+        # manifest snippet, which live in the fat blob, not the lean list row.
+        data = _finding_to_dict(finding, repo=repo, hydrate=True)
         data["also_affects_repos"] = await count_related_repos(finding, asset_ids, session)
         img = data.get("container_image")
         if isinstance(img, dict):

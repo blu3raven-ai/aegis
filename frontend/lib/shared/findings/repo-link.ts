@@ -35,6 +35,18 @@ const CANONICAL_HOST: Record<string, string> = {
   gitea: "gitea.com",
 }
 
+// Reverse of CANONICAL_HOST: infer the provider from a known cloud host when the
+// finding carries a concrete repo URL but no parsed `<provider>:<owner>/<name>`
+// ref (secret/agent findings arrive this way). Lets us still emit a precise
+// file+line deep-link instead of falling back to the repo root.
+const HOST_TO_PROVIDER: Record<string, string> = Object.fromEntries(
+  Object.entries(CANONICAL_HOST).map(([provider, host]) => [host, provider]),
+)
+
+function providerFromHost(host: string | null): string | undefined {
+  return host ? HOST_TO_PROVIDER[host] : undefined
+}
+
 /**
  * Provider file-path suffix appended to a repo root, or "" to link to the root
  * (no precise file view available). `baseHost` distinguishes Bitbucket Cloud
@@ -193,8 +205,11 @@ export function buildRepoFileUrl({ repo, filePath, commit, repoHtmlUrl }: RepoFi
   const rel = repoRelativePath(path)
   if (!rel) return base
 
-  // Precise file link when we model the provider's path shape; else repo root.
+  // Precise file link when we can name the provider's path shape — either from
+  // the parsed ref or inferred from the concrete URL's host — else repo root.
+  const host = hostOf(base)
+  const provider = ref?.provider ?? providerFromHost(host)
   const gitRef = commit?.trim() || "HEAD"
-  const suffix = ref ? fileSuffix(ref.provider, hostOf(base), gitRef, encodePath(rel), line) : ""
+  const suffix = provider ? fileSuffix(provider, host, gitRef, encodePath(rel), line) : ""
   return base + suffix
 }

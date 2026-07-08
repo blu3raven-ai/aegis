@@ -360,17 +360,6 @@ export async function getFindingRelated(findingId: number): Promise<FindingRelat
   }
 }
 
-/**
- * Reveal the raw value of a secret finding. Sensitive and audited server-side
- * — gated on review_findings and the caller's asset scope; fetched on demand
- * so the plaintext secret never rides along in list/detail payloads.
- */
-export async function revealSecretValue(findingId: string): Promise<string> {
-  const res = await apiClient<{ value: string }>(
-    `/api/v1/findings/${encodeURIComponent(findingId)}/secret-value`,
-  )
-  return res.value
-}
 
 /** Reasons accepted by the backend. Keep in sync with backend/src/shared/lifecycle.VALID_DISMISS_REASONS. */
 export const DISMISS_REASONS = [

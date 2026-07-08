@@ -59,6 +59,8 @@ class _Session:
             return result
 
         session.execute = AsyncMock(side_effect=_execute)
+        # Detail path resolves Asset.display_name via scalar() for the repo ref.
+        session.scalar = AsyncMock(return_value="github:acme/api")
         session.add = MagicMock()
         session.commit = AsyncMock()
         session.refresh = AsyncMock()
