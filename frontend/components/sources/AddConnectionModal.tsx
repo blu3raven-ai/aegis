@@ -24,6 +24,7 @@ import {
 } from "@/lib/client/webhook-endpoints-api"
 import { createApiKey } from "@/lib/client/api-keys-api"
 import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
+import { HostReachabilityNote } from "@/components/shared/HostReachabilityNote"
 import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
@@ -643,6 +644,11 @@ export function AddConnectionModal({
                 webhook below in your {providerLabel} repository (or organisation) settings.
               </p>
 
+              <HostReachabilityNote
+                origin={typeof window !== "undefined" ? window.location.origin : ""}
+                audience={providerLabel}
+              />
+
               <ol className="space-y-4">
                 <Step n={1}>
                   In {providerLabel}, open{" "}
@@ -710,6 +716,8 @@ export function AddConnectionModal({
                   Run the Aegis scanner inside your {providerLabel} pipeline. It scans each build and reports findings
                   back to Aegis — no webhook required.
                 </p>
+
+                <HostReachabilityNote origin={aegisUrl} audience={`your ${providerLabel} pipeline`} />
 
                 <ol className="space-y-4">
                   <Step n={1}>

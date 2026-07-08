@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { generateRunnerToken } from "@/lib/client/settings/use-runners"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Sheet } from "@/components/ui/Sheet"
+import { HostReachabilityNote } from "@/components/shared/HostReachabilityNote"
 
 interface Props {
   open: boolean
@@ -108,6 +109,8 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
               { id: "macos", label: "macOS" },
             ]}
           />
+
+          <HostReachabilityNote origin={portalUrl} audience="the runner machine" />
 
           <CopyableBlock
             label="1. Install dependencies"
