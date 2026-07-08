@@ -1,0 +1,101 @@
+name: e2e-smoke
+
+# Whole-app smoke against the real, built production image. Runs on every push
+# to a release branch and every PR so a change that breaks the app (bad build,
+# broken query, crashing page) is caught before it reaches prod.
+on:
+  pull_request:
+  push:
+    branches: [main-v2, main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-smoke:
+    name: e2e-smoke
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate .env
+        run: |
+          gen() { openssl rand -hex "$1"; }
+          ADMIN_PW=$(gen 16)
+          cat > .env <<EOF
+          SESSION_SECRET=$(gen 32)
+          APP_SECRET=$(gen 32)
+          RUNNER_REGISTRATION_TOKEN=$(gen 32)
+          APP_PORT=127.0.0.1:3000
+          ADMIN_PASSWORD=$ADMIN_PW
+          ADMIN_USERNAME=admin
+          ADMIN_EMAIL=admin@example.com
+          POSTGRES_DB=aegis
+          POSTGRES_USER=aegis
+          POSTGRES_PASSWORD=$(gen 24)
+          POSTGRES_PORT=127.0.0.1:5432
+          MINIO_ROOT_USER=aegisadmin
+          MINIO_ROOT_PASSWORD=$(gen 24)
+          MINIO_PORT=127.0.0.1:9000
+          MINIO_CONSOLE_PORT=127.0.0.1:9001
+          RUNNER_NAME=ci-runner
+          EOF
+          # Expose the admin password to later steps as the e2e login credential.
+          echo "E2E_PASSWORD=$ADMIN_PW" >> "$GITHUB_ENV"
+
+      - name: Build and start the stack
+        # Builds the combined production image and starts it with its postgres +
+        # minio dependencies. The runner service isn't needed for a page smoke.
+        run: docker compose up -d --build aegis
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then
+              echo "app healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "app never became healthy"; docker compose logs --no-color; exit 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps and Playwright
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run whole-app smoke
+        working-directory: frontend
+        env:
+          E2E_USERNAME: admin
+          # E2E_PASSWORD comes from the generated .env via GITHUB_ENV.
+        run: npm run test:e2e:smoke
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-smoke-report
+          path: tests/e2e/playwright-report-smoke
+          retention-days: 7
+
+      - name: Dump stack logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

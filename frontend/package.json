@@ -12,6 +12,7 @@
     "test:e2e": "npx playwright test --config ../tests/e2e/playwright.config.ts",
     "test:e2e:mocked": "npx playwright test --config ../tests/e2e/playwright.config.ts --project=ui --project=settings",
     "test:e2e:critical": "npx playwright test --config ../tests/e2e/playwright.config.ts --project=critical",
+    "test:e2e:smoke": "NODE_PATH=\"$PWD/node_modules\" npx playwright test --config ../tests/e2e/playwright.smoke.config.ts",
     "test:backend": "cd ../backend && python -m pytest ../tests/backend/ -v --rootdir=."
   },
   "dependencies": {
