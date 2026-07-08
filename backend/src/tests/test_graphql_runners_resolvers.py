@@ -92,11 +92,9 @@ def test_runner_heartbeats_requires_permission(mock_perm):
 # ── runners() query ─────────────────────────────────────────────────────────
 
 @patch("src.runner.resolvers.has_permission", return_value=True)
-@patch("src.runner.resolvers.get_runner_mode", return_value="remote")
 @patch("src.runner.resolvers.list_runners_with_status", return_value=[_RUNNER_RECORD])
-def test_runners_returns_list(mock_list, mock_mode, mock_perm):
+def test_runners_returns_list(mock_list, mock_perm):
     result = runners(info_context=_ctx_allow())
-    assert result.mode == "remote"
     assert len(result.runners) == 1
     r = result.runners[0]
     assert r.id == "runner-abc123"
@@ -105,11 +103,10 @@ def test_runners_returns_list(mock_list, mock_mode, mock_perm):
 
 
 @patch("src.runner.resolvers.has_permission", return_value=True)
-@patch("src.runner.resolvers.get_runner_mode", return_value="local")
 @patch("src.runner.resolvers.list_runners_with_status", return_value=[
     {**_RUNNER_RECORD, "computedStatus": "archived"},
 ])
-def test_runners_excludes_archived(mock_list, mock_mode, mock_perm):
+def test_runners_excludes_archived(mock_list, mock_perm):
     result = runners(info_context=_ctx_allow())
     assert result.runners == []
 
