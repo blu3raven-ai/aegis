@@ -33,11 +33,27 @@ from runner.scanners.agent.injection_markers import scan_injection
 from runner.scanners.agent.skill_bundle import scan_skill_bundles
 from runner.scanners.agent.targets import iter_target_files
 from runner.scanners.agent.unicode_smuggling import scan_text
+from runner.scanners._context import read_code_window
 
 logger = logging.getLogger(__name__)
 
 # Backstop so a pathological repo can't produce an unbounded findings.jsonl.
 _MAX_FINDINGS = 5000
+
+
+def _attach_code_window(finding: dict, repo_root: str) -> dict:
+    """Capture the source window around the finding so the drawer can show a
+    Code preview. Agent detectors record only file+line; read the surrounding
+    lines here (the clone still exists) with the same helper the other scanners
+    use. No-op if a window is already present or the location can't be read."""
+    if finding.get("code_window") or not finding.get("file") or not finding.get("line"):
+        return finding
+    window, start = read_code_window(repo_root, finding["file"], finding["line"])
+    if window is not None:
+        finding["code_window"] = window
+        finding["code_window_start_line"] = start
+    return finding
+
 
 # Each detector takes (rel_path, text) and returns a list of finding dicts.
 _DETECTORS = (
@@ -57,10 +73,11 @@ _REPO_PASSES = (
 )
 
 
-def _finalize(findings: list[dict]) -> list[dict]:
-    """Cap, then attach per-rule advisory text so each finding carries the
-    analyst-facing *why it matters* and *what to do* (see advisory.py)."""
-    return [enrich(f) for f in findings[:_MAX_FINDINGS]]
+def _finalize(findings: list[dict], repo_root: str) -> list[dict]:
+    """Cap, attach the source window for the Code preview, then attach per-rule
+    advisory text so each finding carries the analyst-facing *why it matters*
+    and *what to do* (see advisory.py)."""
+    return [_attach_code_window(enrich(f), repo_root) for f in findings[:_MAX_FINDINGS]]
 
 
 def scan_repo(repo_root: str) -> list[dict]:
@@ -79,7 +96,7 @@ def scan_repo(repo_root: str) -> list[dict]:
                 logger.exception("[!] agent %s detector failed for %s", name, rel_path)
         if len(findings) >= _MAX_FINDINGS:
             logger.warning("[!] agent scan hit findings cap (%d)", _MAX_FINDINGS)
-            return _finalize(findings)
+            return _finalize(findings, repo_root)
 
     # Repo-level passes over non-instruction files (skill scripts, auto-exec
     # config, and source-comment injection/exfil).
@@ -89,5 +106,5 @@ def scan_repo(repo_root: str) -> list[dict]:
         except Exception:  # noqa: BLE001
             logger.exception("[!] agent %s pass failed", name)
         if len(findings) >= _MAX_FINDINGS:
-            return _finalize(findings)
-    return _finalize(findings)
+            return _finalize(findings, repo_root)
+    return _finalize(findings, repo_root)
