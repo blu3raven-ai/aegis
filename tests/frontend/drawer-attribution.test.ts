@@ -222,14 +222,17 @@ test("renders nothing when all fields are undefined", () => {
 
 // ── Scenario 5: PR link href and target ──────────────────────────────────────
 
-test("PR link opens in a new tab with noreferrer rel", () => {
+test("PR link opens in a new tab with noopener noreferrer rel", () => {
   const source = readFileSync(COMPONENT_PATH, "utf8")
   assert.ok(
     /href=\{introduced_by_pr_url\}/.test(source),
     "anchor must bind href to introduced_by_pr_url",
   )
   assert.ok(/target="_blank"/.test(source), 'anchor must set target="_blank"')
-  assert.ok(/rel="noreferrer"/.test(source), 'anchor must set rel="noreferrer"')
+  assert.ok(
+    /rel="noopener noreferrer"/.test(source),
+    'anchor must set rel="noopener noreferrer"',
+  )
 })
 
 test("PR label derives from URL — GitHub /pull/<id> format", () => {
