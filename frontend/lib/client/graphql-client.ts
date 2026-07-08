@@ -33,10 +33,12 @@ export async function gqlQuery<T>(query: string, variables?: Record<string, unkn
   const csrf = readCsrfCookie()
   if (csrf !== null) headers["X-CSRF-Token"] = csrf
 
+  const operationName = query.match(/(?:query|mutation|subscription)\s+(\w+)/)?.[1]
+
   const res = await fetch("/api/v1/graphql", {
     method: "POST",
     headers,
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({ query, variables, operationName }),
     credentials: "include",
   })
   const body = (await res.json()) as {
