@@ -106,10 +106,14 @@ Whether you're a solo developer running your first security scan or an enterpris
 git clone https://github.com/blu3raven-ai/aegis.git
 cd aegis
 cp .env.example .env
+# Fill in .env before starting: generate each random secret with
+# `openssl rand -base64 32` (SESSION_SECRET, APP_SECRET,
+# RUNNER_REGISTRATION_TOKEN), set the POSTGRES_* and MINIO_* values
+# (MinIO password must be at least 8 characters), and set ADMIN_PASSWORD.
 docker compose up -d
 ```
 
-That's it. Open http://localhost:3000 and log in with `admin` / `admin`.
+Open http://localhost:3000 and log in as **admin** with the `ADMIN_PASSWORD` you set in `.env` (the username defaults to `admin`; override it with `ADMIN_USERNAME`).
 
 To start scanning, go to **Sources**, add a GitHub Personal Access Token (PAT), and Aegis will discover and scan all your repositories automatically.
 
