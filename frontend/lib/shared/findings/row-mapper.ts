@@ -288,7 +288,10 @@ export function normaliseReachability(
 function normaliseEvidence(
   raw: ApiFinding["evidence"],
 ): VerificationEvidence[] | undefined {
-  if (!raw || raw.length === 0) return undefined
+  // Some scanners (e.g. agent) persist evidence as a non-array JSONB object;
+  // guard on the array shape so an unexpected value is ignored rather than
+  // crashing the whole detail load on a non-iterable.
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
   const out: VerificationEvidence[] = []
   for (const e of raw) {
     if (!e || !e.snippet) continue
