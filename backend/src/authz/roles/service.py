@@ -17,7 +17,6 @@ BUILTIN_PERMISSION_IDS = {
     "view_dashboards",
     "view_findings",
     "review_findings",
-    "reveal_secret",
     "export_findings",
     "run_scans",
     "cancel_scans",

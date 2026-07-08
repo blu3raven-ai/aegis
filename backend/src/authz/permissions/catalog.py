@@ -27,9 +27,6 @@ CANCEL_SCANS = "cancel_scans"
 
 # Finding lifecycle
 REVIEW_FINDINGS = "review_findings"
-# Disclosing a finding's raw secret value is more sensitive than triage, so it
-# is its own permission — triage access (review_findings) does NOT imply it.
-REVEAL_SECRET = "reveal_secret"
 
 # Rule-category management (dynamic - selected by rule category at runtime)
 MANAGE_SLA_RULES = "manage_sla_rules"
@@ -54,7 +51,7 @@ ALL_PERMISSIONS = frozenset({
     MANAGE_SETTINGS, MANAGE_ORGANISATIONS, MANAGE_USERS, MANAGE_ROLES, MANAGE_SOURCES,
     MANAGE_ACCESS_SCOPE, MANAGE_RUNNERS,
     RUN_SCANS, CANCEL_SCANS,
-    REVIEW_FINDINGS, REVEAL_SECRET,
+    REVIEW_FINDINGS,
     MANAGE_SLA_RULES, MANAGE_SCANNER_COVERAGE_RULES, MANAGE_AUTO_DISMISS_RULES,
     MANAGE_DATA_RETENTION_RULES,
     MANAGE_OWNER_ROLE,

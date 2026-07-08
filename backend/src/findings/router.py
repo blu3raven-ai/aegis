@@ -42,7 +42,6 @@ from src.authz.enforcement import require_permission
 from src.authz.enforcement.dependencies import Permission
 from src.authz.teams.access import actor_user_id
 from src.authz.permissions.catalog import (
-    REVEAL_SECRET,
     REVIEW_FINDINGS,
     RUN_SCANS,
     VIEW_FINDINGS,
@@ -283,59 +282,6 @@ async def patch_finding(finding_id: int, request: Request) -> dict[str, Any]:
 
     return {"ok": True, "finding": payload}
 
-
-@router.get("/{finding_id}/secret-value")
-async def reveal_secret_value(finding_id: int, request: Request) -> dict[str, str]:
-    """Reveal the raw value of a secret finding — sensitive and audited.
-
-    List and detail payloads only ever carry the redacted match. The raw
-    secret is fetched here on demand: gated on REVEAL_SECRET (a dedicated,
-    more-sensitive permission than triage — review_findings does NOT imply it),
-    restricted to the caller's asset scope, and recorded to the audit log on
-    every reveal so a plaintext credential never ships to clients that shouldn't
-    see it and every disclosure leaves a trail.
-    """
-    require_permission(request, REVEAL_SECRET)
-
-    asset_ids = await resolve_asset_ids_from_request(request)
-    scope = set(asset_ids)
-
-    async with get_session() as session:
-        result = await session.execute(
-            select(Finding).where(Finding.id == finding_id, Finding.asset_id.in_(asset_ids))
-        )
-        finding = result.scalars().first()
-
-    # 404 (not 403) for missing / non-secret / out-of-scope so callers can't
-    # enumerate finding ids or probe which findings carry a secret.
-    if (
-        finding is None
-        or finding.tool != "secret_scanning"
-        or not finding.asset_id
-        or finding.asset_id not in scope
-    ):
-        raise HTTPException(status_code=404, detail="Finding not found")
-
-    detail = finding.detail or {}
-    raw_value = (
-        detail.get("secretSnippet")
-        or (detail.get("raw") or {}).get("Secret")
-        or ""
-    ).strip()
-    if not raw_value:
-        raise HTTPException(status_code=404, detail="No secret value on record")
-
-    record_event(
-        action="finding.secret_revealed",
-        actor_user_id=actor_user_id(request) or "unknown",
-        target=str(finding_id),
-        metadata={
-            "tool": finding.tool,
-            "asset_id": finding.asset_id,
-            "identity_key": finding.identity_key,
-        },
-    )
-    return {"value": raw_value}
 
 
 _MAX_COMMENT_LEN = 5000
