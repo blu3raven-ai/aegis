@@ -2302,7 +2302,7 @@ function CweValue({ cwe }: { cwe: string }) {
     <a
       href={`https://cwe.mitre.org/data/definitions/${m[1]}.html`}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       className="rounded-sm text-[var(--color-accent)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
     >
       {cwe}

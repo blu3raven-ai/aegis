@@ -119,7 +119,7 @@ export function DrawerHeader({
           </div>
         )}
         {repoUrl && (
-          <LinkButton href={repoUrl} target="_blank" rel="noreferrer" variant="secondary" size="sm">
+          <LinkButton href={repoUrl} target="_blank" rel="noopener noreferrer" variant="secondary" size="sm">
             View in repository
             <span className="sr-only"> (opens in new tab)</span>
           </LinkButton>

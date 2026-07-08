@@ -403,7 +403,7 @@ export function ReportsPageContent() {
                           href={report.download_url ?? undefined}
                           download
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           aria-disabled={!report.download_url}
                           className={`inline-flex h-7 items-center rounded-md px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] ${
                             report.download_url
