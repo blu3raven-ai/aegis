@@ -28,7 +28,12 @@ const SCANNER_OPTIONS: { value: ScannerType; label: string }[] = [
 
 export const REQUIRE_DEFAULT: RequireScannersAction = {
   type: "require_scanners",
-  required_scanners: ["dependencies_scanning", "code_scanning"],
+  required_scanners: [
+    "dependencies_scanning",
+    "code_scanning",
+    "container_scanning",
+    "secret_scanning",
+  ],
 }
 
 const STALE_DEFAULT: StaleAlertAction = {

@@ -129,12 +129,17 @@ _DEFAULT_RULES = [
     {
         "category": "scanner_coverage",
         "name": "Baseline scanning",
-        "description": "All repositories must run dependency and code scanning.",
+        "description": "All repositories must run every available scanner.",
         "priority": 100,
         "conditions": {},
         "action": {
             "type": "require_scanners",
-            "required_scanners": ["dependencies_scanning", "code_scanning"],
+            "required_scanners": [
+                "dependencies_scanning",
+                "code_scanning",
+                "container_scanning",
+                "secret_scanning",
+            ],
         },
     },
 ]
