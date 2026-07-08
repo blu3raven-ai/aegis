@@ -21,7 +21,6 @@ from src.runner.admin_service import (  # noqa: E402
     remove,
     revoke,
     rotate_token,
-    set_mode,
     update_settings,
 )
 
@@ -58,32 +57,6 @@ def test_generate_token(mock_create):
     result = generate_token()
     assert result["token"] == "raw-token-xyz"
     assert result["expiresAt"] == "2025-01-01T00:10:00+00:00"
-
-
-# ── set_mode ────────────────────────────────────────────────────────────────
-
-@patch("src.runner.admin_service.write_app_config")
-@patch("src.runner.admin_service.read_app_config", return_value={})
-def test_set_mode_local(mock_read, mock_write):
-    result = set_mode(_fake_request(), "local")
-    assert result == {"ok": True, "mode": "local"}
-    mock_write.assert_called_once()
-
-
-@patch("src.runner.admin_service.check_limit")
-@patch("src.runner.admin_service.write_app_config")
-@patch("src.runner.admin_service.read_app_config", return_value={})
-def test_set_mode_remote_checks_license(mock_read, mock_write, mock_check):
-    request = _fake_request()
-    result = set_mode(request, "remote")
-    assert result == {"ok": True, "mode": "remote"}
-    mock_check.assert_called_once_with(request, "max_remote_runners", 0)
-
-
-def test_set_mode_invalid_value():
-    with pytest.raises(HTTPException) as exc_info:
-        set_mode(_fake_request(), "cloud")
-    assert exc_info.value.status_code == 422
 
 
 # ── update_settings ─────────────────────────────────────────────────────────

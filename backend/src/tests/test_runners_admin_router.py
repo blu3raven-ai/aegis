@@ -1,8 +1,7 @@
 """Tests for the runner admin REST endpoints.
 
-Covers all 7 mutations migrated from GQL:
+Covers all 6 mutations migrated from GQL:
   POST /api/v1/runners/tokens
-  POST /api/v1/runners/mode
   PATCH /api/v1/runners/{runner_id}/settings
   POST /api/v1/runners/{runner_id}/approve
   POST /api/v1/runners/{runner_id}/revoke
@@ -90,61 +89,6 @@ def test_generate_token_happy_path():
         body = resp.json()
         assert body["token"] == "raw-token-xyz"
         assert body["expiresAt"] == _NOW
-
-
-# ---------------------------------------------------------------------------
-# POST /api/v1/runners/mode — set runner mode
-# ---------------------------------------------------------------------------
-
-def test_set_mode_403_without_permission():
-    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False):
-        client = TestClient(_make_app(allow_manage_runners=False))
-        resp = client.post("/api/v1/runners/mode", json={"mode": "remote"})
-        assert resp.status_code == 403
-
-
-def test_set_mode_happy_path_local():
-    fake_result = {"ok": True, "mode": "local"}
-
-    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_MANAGE_PERMS), \
-         patch("src.runner.admin_router.set_mode", return_value=fake_result):
-        client = TestClient(_make_app())
-        resp = client.post("/api/v1/runners/mode", json={"mode": "local"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["ok"] is True
-        assert body["mode"] == "local"
-
-
-def test_set_mode_happy_path_remote():
-    fake_result = {"ok": True, "mode": "remote"}
-
-    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_MANAGE_PERMS), \
-         patch("src.runner.admin_router.set_mode", return_value=fake_result):
-        client = TestClient(_make_app())
-        resp = client.post("/api/v1/runners/mode", json={"mode": "remote"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["ok"] is True
-        assert body["mode"] == "remote"
-
-
-def test_set_mode_remote_rejected_at_license_limit():
-    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_MANAGE_PERMS), \
-         patch("src.runner.admin_router.set_mode",
-               side_effect=HTTPException(status_code=403, detail="plan limit")):
-        client = TestClient(_make_app())
-        resp = client.post("/api/v1/runners/mode", json={"mode": "remote"})
-        assert resp.status_code == 403
-
-
-def test_set_mode_422_invalid_mode():
-    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_MANAGE_PERMS), \
-         patch("src.runner.admin_router.set_mode",
-               side_effect=HTTPException(status_code=422, detail="mode must be 'local' or 'remote'")):
-        client = TestClient(_make_app())
-        resp = client.post("/api/v1/runners/mode", json={"mode": "cloud"})
-        assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -408,19 +352,6 @@ def test_audit_generate_token_fires_runner_token_generated():
     assert calls[0]["action"] == "runner.token.generated"
     assert calls[0]["resource_type"] == "runner_registration_token"
     assert calls[0]["actor_user_id"] == "user-1"
-
-
-def test_audit_set_mode_fires_runner_mode_set():
-    calls, resp = _run_with_audit_capture({
-        "method": "POST", "path": "/api/v1/runners/mode",
-        "json": {"mode": "local"},
-        "patch_target": "src.runner.admin_router.set_mode",
-        "patch_return": {"ok": True, "mode": "local"},
-    })
-    assert resp.status_code == 200
-    assert any(c["action"] == "runner.mode.set"
-               and c["resource_type"] == "runners_config"
-               for c in calls)
 
 
 def test_audit_approve_records_runner_id_as_resource():

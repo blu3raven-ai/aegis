@@ -16,7 +16,6 @@ from src.runner.registry import (
     rotate_auth_token,
 )
 from src.runner.storage import update_runner_settings as _update_runner_settings
-from src.shared.config import read_app_config, write_app_config
 
 
 def _runner_to_dict(r: dict[str, Any]) -> dict[str, Any]:
@@ -40,17 +39,6 @@ def _runner_to_dict(r: dict[str, Any]) -> dict[str, Any]:
 def generate_token() -> dict[str, Any]:
     raw_token, record = create_registration_token()
     return {"token": raw_token, "expiresAt": record["expiresAt"]}
-
-
-def set_mode(request: Request, mode: str) -> dict[str, Any]:
-    if mode not in ("local", "remote"):
-        raise HTTPException(status_code=422, detail="mode must be 'local' or 'remote'")
-    if mode == "remote":
-        check_limit(request, "max_remote_runners", 0)
-    config = read_app_config()
-    config.setdefault("runners", {})["mode"] = mode
-    write_app_config(config, "settings.runners.mode.updated")
-    return {"ok": True, "mode": mode}
 
 
 def update_settings(

@@ -42,7 +42,6 @@ export const SECRETS_API = {
 export const RUNNERS_API = {
   list: "/api/v1/runners",
   tokens: "/api/v1/runners/tokens",
-  mode: "/api/v1/runners/mode",
   detail: (id: string) => `/api/v1/runners/${id}`,
   heartbeats: (id: string) => `/api/v1/runners/${id}/heartbeats`,
   settings: (id: string) => `/api/v1/runners/${id}/settings`,

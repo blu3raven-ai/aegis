@@ -21,7 +21,6 @@ from src.runner.storage import (
     list_jobs_for_runner,
     read_runner,
 )
-from src.shared.config import get_runner_mode
 
 
 def _require_manage_runners(ctx: dict) -> None:
@@ -92,7 +91,6 @@ class HeartbeatEntryGQL:
 
 @strawberry.type
 class RunnersListResult:
-    mode: str
     runners: list[RunnerGQL]
 
 
@@ -166,9 +164,7 @@ def _hb_dict_to_gql(h: dict) -> HeartbeatEntryGQL:
 def runners(*, info_context: dict) -> RunnersListResult:
     _require_manage_runners(info_context)
     all_runners = list_runners_with_status()
-    mode = get_runner_mode()
     return RunnersListResult(
-        mode=mode,
         runners=[
             _runner_dict_to_gql(r)
             for r in all_runners

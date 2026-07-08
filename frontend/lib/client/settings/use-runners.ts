@@ -19,9 +19,9 @@ const JOB_FIELDS = `
   id jobType org runId status createdAt startedAt completedAt
 `
 
-export async function fetchRunners(): Promise<{ mode: string; runners: Runner[] }> {
-  const data = await gqlQuery<{ runners: { items: { mode: string; runners: Runner[] } } }>(
-    `query ListRunners { runners { items { mode runners { ${RUNNER_FIELDS} } } } }`,
+export async function fetchRunners(): Promise<{ runners: Runner[] }> {
+  const data = await gqlQuery<{ runners: { items: { runners: Runner[] } } }>(
+    `query ListRunners { runners { items { runners { ${RUNNER_FIELDS} } } } }`,
   )
   return data.runners.items
 }

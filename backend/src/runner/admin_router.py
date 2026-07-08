@@ -23,7 +23,6 @@ from src.runner.admin_service import (
     remove,
     revoke,
     rotate_token,
-    set_mode,
     update_settings,
 )
 
@@ -34,10 +33,6 @@ _REQUIRE_MANAGE_RUNNERS = Depends(Permission(MANAGE_RUNNERS))
 # ---------------------------------------------------------------------------
 # Pydantic request bodies
 # ---------------------------------------------------------------------------
-
-class SetModeBody(BaseModel):
-    mode: str
-
 
 class UpdateSettingsBody(BaseModel):
     maxConcurrent: Optional[int] = None
@@ -54,14 +49,6 @@ def handle_generate_runner_token(
     request: Request, _: None = _REQUIRE_MANAGE_RUNNERS,
 ) -> JSONResponse:
     return JSONResponse(content=generate_token())
-
-
-@router.post("/mode")
-@audited(action="runner.mode.set", resource_type="runners_config")
-def handle_set_runner_mode(
-    body: SetModeBody, request: Request, _: None = _REQUIRE_MANAGE_RUNNERS,
-) -> JSONResponse:
-    return JSONResponse(content=set_mode(request, body.mode))
 
 
 @router.patch("/{runner_id}/settings")

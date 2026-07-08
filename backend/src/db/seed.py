@@ -234,7 +234,7 @@ async def seed_if_empty(session: AsyncSession) -> None:
     # Upsert app_config to avoid duplicate key on re-seed
     existing_config = await session.get(AppConfig, 1)
     if not existing_config:
-        session.add(AppConfig(id=1, config={"runners": {"mode": "remote"}}, updated_at=datetime.now(timezone.utc)))
+        session.add(AppConfig(id=1, config={}, updated_at=datetime.now(timezone.utc)))
 
     await session.flush()
     logger.info("Admin user '%s' seeded from ADMIN_PASSWORD env var.", username)

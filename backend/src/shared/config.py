@@ -240,10 +240,6 @@ def _normalize_config(value: dict[str, Any] | None, fallback: dict[str, Any]) ->
                 "enabled": iac_security.get("enabled", fallback["tools"]["iac_scanning"]["enabled"]),
             },
         },
-        # Runner config
-        "runners": {
-            "mode": (value.get("runners") or {}).get("mode", "local"),
-        },
     }
 
 
@@ -632,11 +628,5 @@ def get_code_scanning_scanner_config() -> dict[str, str]:
     return {
         "concurrency": concurrency,
     }
-
-
-def get_runner_mode() -> str:
-    """Return 'local' or 'remote'."""
-    config = read_app_config()
-    return (config.get("runners") or {}).get("mode", "local")
 
 
