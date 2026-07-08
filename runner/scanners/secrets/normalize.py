@@ -17,20 +17,60 @@ from runner.scanners.secrets.remediation import build_secret_runbook
 
 logger = logging.getLogger(__name__)
 
-_REDACTION = "•••redacted-secret•••"
+# Fixed-width tail so a secret's true length is never revealed by the mask.
+_MASK = "••••••••"
 
 
-def _redactor(secret_values: list[str]) -> Callable[[str], str]:
-    """Build a redactor that masks every detected secret value in a text blob.
+def _mask_value(value: str) -> str:
+    """Mask a secret to a short identifying prefix plus a fixed tail.
+
+    Shows enough leading characters for an analyst to correlate the secret with
+    their own vault (and recognise the token type, e.g. ``ghp_``), but never
+    enough to use it: at most 4 characters, and never more than a third of the
+    value. Short secrets reveal proportionally less; a 2-char value shows
+    nothing but the mask.
+    """
+    keep = min(4, len(value) // 3)
+    return value[:keep] + _MASK if keep else _MASK
+
+
+def _safe_display(value: str, raws: list[str], redacted: str) -> str:
+    """Safe display form for one detected secret value.
+
+    Prefer TruffleHog's own ``Redacted`` when it is genuinely a partial — present,
+    strictly shorter than the value, and containing no full raw value (some
+    detectors set ``Redacted`` to the raw secret itself). Otherwise fall back to
+    our deterministic prefix mask. Either way the result never contains the full
+    secret.
+    """
+    if redacted and len(redacted) < len(value) and all(rv not in redacted for rv in raws):
+        return redacted
+    return _mask_value(value)
+
+
+def _replacements_for(findings: list[dict[str, Any]]) -> dict[str, str]:
+    """Map each raw secret value to its safe display form (see ``_safe_display``)."""
+    repl: dict[str, str] = {}
+    for f in findings:
+        raws = [v for v in (f.get("Raw"), f.get("RawV2")) if v]
+        redacted = (f.get("Redacted") or "").strip()
+        for v in raws:
+            repl[v] = _safe_display(v, raws, redacted)
+    return repl
+
+
+def _redactor(replacements: dict[str, str]) -> Callable[[str], str]:
+    """Build a redactor that replaces every detected secret value with its safe
+    display form.
 
     Longest-first so a value that is a substring of another never leaves a
-    fragment behind. Only non-empty values are masked.
+    fragment behind — the full secret never survives into a stored window.
     """
-    ordered = sorted({v for v in secret_values if v}, key=len, reverse=True)
+    ordered = sorted((v for v in replacements if v), key=len, reverse=True)
 
     def _redact(text: str) -> str:
         for value in ordered:
-            text = text.replace(value, _REDACTION)
+            text = text.replace(value, replacements[value])
         return text
 
     return _redact
@@ -106,7 +146,7 @@ def capture_secret_windows(output_path: Path, clone_dir: Path) -> None:
     if not findings:
         return
 
-    redact = _redactor([v for f in findings for v in (f.get("Raw"), f.get("RawV2")) if v])
+    redact = _redactor(_replacements_for(findings))
     for finding in findings:
         src_file, line_no = _secret_location(finding)
         if not src_file:

@@ -22,10 +22,9 @@ describe("CodePreviewSection — secret window", () => {
     assert.match(src, /highlightStart=\{highlightStart\}/)
   })
 
-  it("keeps the flagged secret line blurred (raw value is never surfaced)", () => {
-    assert.match(src, /const blurHighlighted = isSecret/)
-    assert.match(src, /blurHighlighted=\{blurHighlighted\}/)
-    assert.match(src, /highlighted && blurHighlighted && "select-none blur-\[5px\]"/)
+  it("does not blur the flagged secret line (runner masks it to a safe partial)", () => {
+    assert.match(src, /const blurHighlighted = false/)
+    assert.match(src, /Only a short prefix is shown/)
   })
 })
 
@@ -40,6 +39,6 @@ describe("CodePreviewSection — no in-app secret reveal", () => {
 
   it("shows the masked value as redacted, not a broken reveal affordance", () => {
     assert.match(src, /•+ \(redacted\)/)
-    assert.match(src, /raw value isn&apos;t stored/)
+    assert.match(src, /the full secret is never stored/)
   })
 })
