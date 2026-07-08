@@ -97,7 +97,7 @@ function ViewInRepoButton({ url }: { url: string }) {
     <LinkButton
       href={url}
       target="_blank"
-      rel="noreferrer"
+      rel="noopener noreferrer"
       variant="secondary"
       size="xs"
       trailingIcon={<ExternalLinkIcon />}

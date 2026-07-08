@@ -65,7 +65,7 @@ export function DrawerAttribution({ fields }: { fields: AttributionFields }) {
           <a
             href={introduced_by_pr_url}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-accent)] underline underline-offset-2 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
           >
             {/* "→ PR" label derived from URL when possible */}

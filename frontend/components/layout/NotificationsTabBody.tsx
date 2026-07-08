@@ -114,6 +114,14 @@ export function NotificationsTabBody({ onNavigate }: NotificationsTabBodyProps) 
       <ul className="divide-y divide-[var(--color-border)]">
         {notifications.map((n) => {
           const unread = !n.readAt
+          // Only follow a notification link that is an internal absolute path.
+          // Rejecting protocol-relative and scheme-bearing values keeps a
+          // future data-derived link from turning into an off-site or
+          // javascript: navigation.
+          const safeLink =
+            n.link && n.link.startsWith("/") && !n.link.startsWith("//")
+              ? n.link
+              : null
           const body = (
             <div className="flex items-start gap-3 px-3 py-3">
               <span
@@ -135,11 +143,11 @@ export function NotificationsTabBody({ onNavigate }: NotificationsTabBodyProps) 
               </div>
             </div>
           )
-          if (n.link) {
+          if (safeLink) {
             return (
               <li key={n.id}>
                 <Link
-                  href={n.link}
+                  href={safeLink}
                   onClick={() => {
                     if (unread) handleMarkRead(n.id)
                     onNavigate()
