@@ -32,4 +32,9 @@ describe("CweContextSection", () => {
   it("uses the standard section heading scale", () => {
     assert.match(src, /text-base font-semibold text-\[var\(--color-text-primary\)\]/)
   })
+
+  it("shows the OWASP Top 10 2021 category for the CWE", () => {
+    assert.match(src, /owaspForCwe/)
+    assert.match(src, /OWASP Top 10 2021 category/)
+  })
 })

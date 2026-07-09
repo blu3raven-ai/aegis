@@ -112,6 +112,12 @@ export interface VerificationMetadata {
   escalated?: boolean
   latency_ms?: number
   /**
+   * Verifier-produced reproduction outline for a confirmed exploit chain — the
+   * concrete steps that demonstrate reachability. Descriptive, not a weaponised
+   * payload. Present only on confirmed findings once the verifier emits it.
+   */
+  reproduction?: string
+  /**
    * Why the verifier couldn't confirm a finding. `reason` is a single machine
    * code (e.g. `hunter_no_chain`, `package_not_imported`, `schema_invalid: …`);
    * the list keys carry the citations that failed grounding. Rendered as prose

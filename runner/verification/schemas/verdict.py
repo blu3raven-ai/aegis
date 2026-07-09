@@ -23,6 +23,10 @@ class HunterResponse(BaseModel):
 
     exploit_chain: str = ""
     evidence: list[Any] = Field(default_factory=list)
+    # A concise, descriptive reproduction outline for a confirmed chain — the
+    # steps that demonstrate reachability, not a weaponised payload. Optional;
+    # only surfaced when the model provides one.
+    reproduction: str = ""
 
 
 class SkepticResponse(BaseModel):

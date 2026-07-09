@@ -30,6 +30,40 @@ const KIND_COLOR: Record<VerificationEvidenceKind, string> = {
   gate: "text-[var(--color-status-ok-text)]",
 }
 
+/** DOM id for the nth evidence row, so a chain citation can scroll to it. */
+const evidenceRefId = (n: number) => `finding-evidence-r${n}`
+
+/**
+ * Render the exploit-chain narrative, turning `[R1]`-style citations into
+ * clickable chips that jump to the matching evidence row. Citations past the
+ * evidence count (the model over-cited) fall back to plain text, so a stray
+ * `[R9]` never produces a dead link.
+ */
+function renderChainWithRefs(chain: string, refCount: number): React.ReactNode {
+  return chain.split(/(\[R\d+\])/g).map((part, i) => {
+    const match = /^\[R(\d+)\]$/.exec(part)
+    const n = match ? Number(match[1]) : 0
+    if (n >= 1 && n <= refCount) {
+      return (
+        <a
+          key={i}
+          href={`#${evidenceRefId(n)}`}
+          onClick={(e) => {
+            e.preventDefault()
+            document
+              .getElementById(evidenceRefId(n))
+              ?.scrollIntoView({ behavior: "smooth", block: "center" })
+          }}
+          className="mx-0.5 inline-flex items-center rounded bg-[var(--color-surface-raised)] px-1 font-mono text-2xs font-semibold text-[var(--color-accent)] no-underline hover:bg-[var(--color-accent-subtle)]"
+        >
+          R{n}
+        </a>
+      )
+    }
+    return part
+  })
+}
+
 /**
  * The locked-preview copy differs by what the verifier actually does for that
  * scanner: SAST/IaC get an exploit-path pass; dependencies get a
@@ -120,6 +154,8 @@ export function EvidenceSection({
 }: Props) {
   const hasChain = Boolean(exploitChain)
   const hasEvidence = Boolean(evidence && evidence.length > 0)
+  const refCount = evidence?.length ?? 0
+  const reproduction = metadata?.reproduction?.trim()
   const ruledOut = metadata?.ruled_out_reason
   const rationale = verdictRationale(verdict, metadata)
   // A proposed mitigation whose citation failed grounding: the finding was NOT
@@ -165,7 +201,9 @@ export function EvidenceSection({
       )}
 
       {hasChain && (
-        <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{exploitChain}</p>
+        <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
+          {renderChainWithRefs(exploitChain!, refCount)}
+        </p>
       )}
 
       {hasEvidence && (
@@ -173,11 +211,17 @@ export function EvidenceSection({
           {evidence!.map((e, i) => (
             <li
               key={i}
-              className="rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2"
+              id={evidenceRefId(i + 1)}
+              className="scroll-mt-4 rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2 target:ring-1 target:ring-[var(--color-accent)]"
             >
               <div className="flex items-center justify-between gap-3 text-2xs font-semibold uppercase tracking-[0.14em]">
-                <span className={KIND_COLOR[e.kind] || "text-[var(--color-text-secondary)]"}>
-                  {e.kind}
+                <span className="flex items-center gap-1.5">
+                  <span className="rounded bg-[var(--color-surface-raised)] px-1 font-mono normal-case tracking-normal text-[var(--color-text-tertiary)]">
+                    R{i + 1}
+                  </span>
+                  <span className={KIND_COLOR[e.kind] || "text-[var(--color-text-secondary)]"}>
+                    {e.kind}
+                  </span>
                 </span>
                 <span
                   className="truncate text-[var(--color-text-secondary)]"
@@ -192,6 +236,17 @@ export function EvidenceSection({
             </li>
           ))}
         </ul>
+      )}
+
+      {reproduction && (
+        <div className="mt-3">
+          <h4 className="mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            Proof of concept
+          </h4>
+          <pre className="whitespace-pre-wrap break-words rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-xs leading-relaxed text-[var(--color-text-primary)]">
+            {reproduction}
+          </pre>
+        </div>
       )}
 
       {ruledOut && (ruledOut.reasoning || ruledOut.snippet) && (

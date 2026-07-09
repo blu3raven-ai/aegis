@@ -50,4 +50,15 @@ describe("EvidenceSection", () => {
   it("uses the 2xs uppercase micro-label style for evidence line labels", () => {
     assert.match(src, /text-2xs font-semibold uppercase tracking-\[0\.14em\]/)
   })
+
+  it("numbers evidence rows and cross-links [Rn] citations in the chain", () => {
+    assert.match(src, /renderChainWithRefs\(exploitChain!, refCount\)/)
+    assert.match(src, /id=\{evidenceRefId\(i \+ 1\)\}/)
+    assert.match(src, /scrollIntoView/)
+  })
+
+  it("renders a reproduction (proof-of-concept) block when present", () => {
+    assert.match(src, /metadata\?\.reproduction\?\.trim\(\)/)
+    assert.match(src, /Proof of concept/)
+  })
 })
