@@ -43,6 +43,12 @@ describe("FindingsBoardView filter bar additions", () => {
     assert.match(src, /repoOptions=\{repoOptions\}/)
   })
 
+  it("refetches the findings list when a scan completes (no manual reload)", () => {
+    // New findings only land at scan-ingest, so the board must refetch on the
+    // scan.completed SSE event or the list stays stale until a browser refresh.
+    assert.match(src, /useSSE\("scan\.completed",/)
+  })
+
   it("scopes scanner via the command-bar filter, not scanner NavTabs", () => {
     // The scanner tabs (#1014) are removed everywhere; scanner scoping now comes
     // from a command-bar filter (scanner={scannerFilter}) plus per-scanner-group
