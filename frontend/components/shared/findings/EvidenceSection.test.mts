@@ -73,4 +73,10 @@ describe("EvidenceSection", () => {
     assert.match(src, /metadata\?\.impact/)
     assert.match(src, /Impact/)
   })
+
+  it("renders the AI-authored fix as a diff", () => {
+    assert.match(src, /metadata\?\.fix/)
+    assert.match(src, /Suggested fix/)
+    assert.match(src, /diffLineClass/)
+  })
 })

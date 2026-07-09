@@ -29,3 +29,5 @@ def stash_confirmed_enrichment(metadata: dict[str, Any], hunter_model: Any) -> N
     ]
     if factors:
         metadata["mitigating_factors"] = factors
+    if getattr(hunter_model, "fix", "").strip():
+        metadata["fix"] = hunter_model.fix.strip()

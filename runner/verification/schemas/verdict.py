@@ -42,6 +42,11 @@ class HunterResponse(BaseModel):
     # What limits real-world exploitability (default bind, upstream auth, feature
     # gating). Calibrates severity and mirrors a real audit report's section.
     mitigating_factors: list[str] = Field(default_factory=list)
+    # A concrete remediation for the confirmed finding — a unified diff when the
+    # fix is small (--- a/file / +++ b/file / @@), else 1-3 sentences naming the
+    # exact change. Semgrep rarely ships a usable autofix for these, so the model
+    # writes one; rendered as a diff in the drawer.
+    fix: str = ""
 
 
 class SkepticResponse(BaseModel):

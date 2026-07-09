@@ -134,6 +134,12 @@ export interface VerificationMetadata {
    */
   mitigating_factors?: string[]
   /**
+   * Verifier-authored remediation — a unified diff when small, else concrete
+   * steps. Rendered as a diff in the drawer. Semgrep rarely ships a usable
+   * autofix for SAST/IaC, so the model writes one.
+   */
+  fix?: string
+  /**
    * Why the verifier couldn't confirm a finding. `reason` is a single machine
    * code (e.g. `hunter_no_chain`, `package_not_imported`, `schema_invalid: …`);
    * the list keys carry the citations that failed grounding. Rendered as prose
