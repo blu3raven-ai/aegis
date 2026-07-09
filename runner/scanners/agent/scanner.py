@@ -30,7 +30,7 @@ from runner.scanners._shared import (
     repo_name_from_url,
 )
 from runner.scanners._subprocess import CANCELLED_EXIT_CODE
-from runner.scanners.agent.detectors import scan_repo
+from runner.scanners.agent.detectors import attach_code_window, scan_repo
 from runner.scanners.agent.llm_judge import judge_prose_files
 from runner.scanners.base import ExecutionResult
 from runner.verification.budget import make_agent_budget
@@ -195,6 +195,12 @@ class AgentScanner:
                 # right asset (mirrors the other scanners' output).
                 f.setdefault("repo_full_name", repo_name)
                 f.setdefault("repo_html_url", html_url)
+                # Attach the source window here — the one point detector and
+                # LLM-judge findings converge while the clone still exists — so
+                # every agent finding gets a Code preview, not just detector ones
+                # (the judge path skips the detectors' _finalize). No-op when a
+                # window is already present.
+                attach_code_window(f, str(clone_dir))
             return findings, True
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
