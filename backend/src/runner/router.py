@@ -43,6 +43,34 @@ router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 # Upper bound on presigned upload URLs a single request may mint.
 _MAX_PRESIGN_FILES = 256
 
+# Upper bound on verification-cache hashes a single lookup may request.
+_MAX_CACHE_HASHES = 5000
+
+
+class VerificationCacheRequest(BaseModel):
+    tool: str
+    hashes: list[str]
+
+
+@router.post("/verification/cache-lookup")
+async def verification_cache_lookup(body: VerificationCacheRequest, request: Request) -> JSONResponse:
+    """Return prior LLM verification results for findings the runner is about to
+    verify, keyed by their verification-input hash — so the runner can replay a
+    stored verdict instead of re-spending tokens on unchanged findings."""
+    runner, err = _require_runner(request)
+    if err:
+        return err
+    rate_limit_by_runner(runner["id"], max_requests=200, window_seconds=60)
+    if len(body.hashes) > _MAX_CACHE_HASHES:
+        return JSONResponse({"error": "too many hashes"}, status_code=422)
+
+    from src.db.engine import get_session
+    from src.shared.finding_queries import lookup_verification_cache
+
+    async with get_session() as session:
+        results = await lookup_verification_cache(session, tool=body.tool, hashes=body.hashes)
+    return JSONResponse({"results": results})
+
 
 def _runner_from_request(request: Request) -> dict[str, Any] | None:
     """Extract and authenticate runner from Authorization header."""

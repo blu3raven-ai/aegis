@@ -368,7 +368,12 @@ class RunnerAgent:
 
         try:
             scanner = get_scanner(job_type)
-            result = scanner.run_scan(job, job_dir=job_dir, on_progress=on_progress, cancel_event=cancel_event)
+            run_kwargs: dict = {"job_dir": job_dir, "on_progress": on_progress, "cancel_event": cancel_event}
+            # Verifying scanners get the backend client so they can consult the
+            # verification cache (replay verdicts instead of re-spending tokens).
+            if job_type in ("code_scanning", "iac_scanning"):
+                run_kwargs["backend"] = self._backend
+            result = scanner.run_scan(job, **run_kwargs)
 
             streamer.done_event.set()
 

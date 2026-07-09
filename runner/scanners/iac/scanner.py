@@ -35,6 +35,7 @@ from runner.scanners.base import ExecutionResult
 from runner.scanners.iac.parse import parse_checkov_results
 from runner.scanners.iac.remediation import attach_iac_fixes
 from runner.verification.budget import ScanBudget, make_iac_budget
+from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
 from runner.verification.verifiers.iac import verify_iac_finding
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,9 @@ class IacScanner:
         job_dir: Path,
         on_progress: Callable[[list[str], dict], None] | None = None,
         cancel_event: threading.Event | None = None,
+        backend=None,
     ) -> ExecutionResult:
+        self._backend = backend
         out_dir = Path(job_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         log_tail: list[str] = []
@@ -251,8 +254,13 @@ class IacScanner:
         scan_budget: ScanBudget,
         cancel_event: threading.Event | None = None,
     ) -> list[dict]:
+        hashes = [verification_input_hash(f) for f in findings]
+        cache = (
+            lookup_cache(getattr(self, "_backend", None), tool="iac_scanning", hashes=hashes)
+            if llm is not None else {}
+        )
         out: list[dict] = []
-        for f in findings:
+        for f, input_hash in zip(findings, hashes):
             copy = dict(f)
             metadata: dict = copy.setdefault("verification_metadata", {})
 
@@ -279,6 +287,12 @@ class IacScanner:
                 out.append(copy)
                 continue
 
+            cached = cache.get(input_hash)
+            if cached is not None:
+                apply_cache_hit(copy, cached, input_hash)
+                out.append(copy)
+                continue
+
             if not scan_budget.allow():
                 copy["verdict"] = "possible"
                 metadata["skipped"] = scan_budget.skip_reason
@@ -296,7 +310,9 @@ class IacScanner:
                 copy["verdict"] = result.verdict
                 copy["evidence"] = result.evidence
                 copy["exploit_chain"] = result.exploit_chain
-                copy["verification_metadata"] = result.verification_metadata
+                meta = dict(result.verification_metadata or {})
+                meta["verification_input_hash"] = input_hash
+                copy["verification_metadata"] = meta
             except Exception as e:  # noqa: BLE001
                 copy["verdict"] = None
                 metadata["skipped"] = f"llm_error:{type(e).__name__}"

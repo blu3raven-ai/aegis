@@ -46,6 +46,7 @@ from runner.scanners.code_scanning import (
     reachability,
 )
 from runner.verification.budget import ScanBudget
+from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
 from runner.verification.pipeline import verify_finding
 
 logger = logging.getLogger(__name__)
@@ -65,9 +66,19 @@ def _build_scan_budget(env: JobEnv) -> ScanBudget:
 
 def _maybe_verify(
     *, findings: list[dict], repo_root: str, llm, escalation_llm=None, scan_budget: ScanBudget,
+    backend=None,
 ) -> list[dict]:
+    # Precompute each finding's cache key and, when verification is on, ask the
+    # backend which of those were already verified with identical input — those
+    # replay for free instead of re-spending tokens.
+    hashes = [verification_input_hash(f) for f in findings]
+    cache = (
+        lookup_cache(backend, tool="code_scanning", hashes=hashes)
+        if llm is not None else {}
+    )
+
     out: list[dict] = []
-    for f in findings:
+    for f, input_hash in zip(findings, hashes):
         copy = dict(f)
         sev = _SEVERITY_ORDER.get((f.get("severity") or "").lower(), 0)
 
@@ -80,6 +91,12 @@ def _maybe_verify(
         if sev < _MIN_VERIFY_SEVERITY:
             copy["verdict"] = None
             copy.setdefault("verification_metadata", {})["skipped"] = "below_severity"
+            out.append(copy)
+            continue
+
+        cached = cache.get(input_hash)
+        if cached is not None:
+            apply_cache_hit(copy, cached, input_hash)
             out.append(copy)
             continue
 
@@ -97,7 +114,10 @@ def _maybe_verify(
             copy["verdict"] = result.verdict
             copy["evidence"] = result.evidence
             copy["exploit_chain"] = result.exploit_chain
-            copy["verification_metadata"] = result.verification_metadata
+            meta = dict(result.verification_metadata or {})
+            # Stamp the key so the next scan can cache-hit this exact input.
+            meta["verification_input_hash"] = input_hash
+            copy["verification_metadata"] = meta
         except Exception as e:  # noqa: BLE001
             copy["verdict"] = None
             copy.setdefault("verification_metadata", {})["skipped"] = f"llm_error:{type(e).__name__}"
@@ -186,7 +206,9 @@ class CodeScanningScanner:
         job_dir: Path,
         on_progress: Callable[[list[str], dict], None] | None = None,
         cancel_event: threading.Event | None = None,
+        backend=None,
     ) -> ExecutionResult:
+        self._backend = backend
         cfg = CodeScanningConfig.from_job(job)
 
         out_dir = Path(job_dir)
@@ -276,6 +298,7 @@ class CodeScanningScanner:
             llm=build_llm_client(env),
             escalation_llm=build_escalation_llm_client(env),
             scan_budget=_build_scan_budget(env),
+            backend=getattr(self, "_backend", None),
         )
 
         with open(findings_file, "w") as f:
