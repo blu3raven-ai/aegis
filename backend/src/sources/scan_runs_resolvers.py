@@ -25,12 +25,12 @@ from src.sources.store import SourceNotFoundError
 from src.storage import _run_to_dict
 
 
-_SUPPORTED_TOOLS = frozenset({
-    "code_scanning",
-    "container_scanning",
-    "dependencies_scanning",
-    "secret_scanning",
-})
+# Every user-selectable scanner produces run records the Scans tab must show.
+# Derived from the canonical set (not a hand-maintained copy) so a newly added
+# scanner — iac, agent, and future ones — can't be silently dropped from the list.
+from src.scans.models import _VALID_SCANNERS
+
+_SUPPORTED_TOOLS = frozenset(_VALID_SCANNERS)
 
 
 @strawberry.type
