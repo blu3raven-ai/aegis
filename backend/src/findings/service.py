@@ -648,6 +648,11 @@ def _sast_title(finding: Finding, detail: dict) -> str:
     shows), then the rule name, before falling back to the raw title (which the
     frontend trims to a basename).
     """
+    # An AI-authored title (from a confirmed verification) names the actual vector
+    # — far more useful than semgrep's generic rule message — so prefer it.
+    ai_title = ((detail.get("verification_metadata") or {}).get("title") or "").strip()
+    if ai_title:
+        return _first_line(ai_title)
     message = (detail.get("message") or "").strip()
     if message:
         return _first_line(message)

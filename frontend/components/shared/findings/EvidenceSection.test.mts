@@ -68,4 +68,9 @@ describe("EvidenceSection", () => {
     assert.match(src, /metadata\?\.mitigating_factors/)
     assert.match(src, /Mitigating factors/)
   })
+
+  it("renders the AI-authored impact statement", () => {
+    assert.match(src, /metadata\?\.impact/)
+    assert.match(src, /Impact/)
+  })
 })

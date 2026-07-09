@@ -11,6 +11,10 @@ from typing import Any
 
 
 def stash_confirmed_enrichment(metadata: dict[str, Any], hunter_model: Any) -> None:
+    if getattr(hunter_model, "title", "").strip():
+        metadata["title"] = hunter_model.title.strip()
+    if getattr(hunter_model, "impact", "").strip():
+        metadata["impact"] = hunter_model.impact.strip()
     if hunter_model.reproduction.strip():
         metadata["reproduction"] = hunter_model.reproduction.strip()
     paths = [

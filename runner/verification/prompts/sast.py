@@ -24,6 +24,8 @@ exploitability on its own. `unknown` carries no signal.
 
 Respond ONLY with valid JSON in this exact shape:
 {
+  "title": "<a specific, human-readable title naming the vector — e.g. 'SQL injection in the report filter lets any user read other tenants' rows'. NOT the generic rule name. Empty string if not confirmed>",
+  "impact": "<one concrete sentence: what an attacker actually achieves. Empty string if not confirmed>",
   "exploit_chain": "<one-paragraph narrative; cite each evidence item inline as [R1], [R2], ... where the number is its 1-based position in the evidence array below>",
   "evidence": [
     {"file": "<path>", "line": <int>, "snippet": "<verbatim from code>", "kind": "source" | "sink" | "gate"}
