@@ -23,6 +23,13 @@ class HunterResponse(BaseModel):
 
     exploit_chain: str = ""
     evidence: list[Any] = Field(default_factory=list)
+    # A specific, human-readable title for the confirmed finding — the vector, not
+    # the generic rule name (e.g. "SSRF via x-forward-url header lets an attacker
+    # read cloud metadata"). Replaces semgrep's rule message in the UI when present.
+    title: str = ""
+    # One concrete sentence: what an attacker actually achieves (account takeover,
+    # read any tenant's data, key exfiltration). The "Impact" line of a real report.
+    impact: str = ""
     # A concise, descriptive reproduction outline for a confirmed chain — the
     # steps that demonstrate reachability, not a weaponised payload. Optional;
     # only surfaced when the model provides one.

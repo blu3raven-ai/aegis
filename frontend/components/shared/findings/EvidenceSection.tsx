@@ -155,6 +155,7 @@ export function EvidenceSection({
   const hasChain = Boolean(exploitChain)
   const hasEvidence = Boolean(evidence && evidence.length > 0)
   const refCount = evidence?.length ?? 0
+  const impact = metadata?.impact?.trim()
   const reproduction = metadata?.reproduction?.trim()
   const attackPaths = (metadata?.attack_paths ?? []).filter((p) => p?.steps?.trim())
   const mitigatingFactors = (metadata?.mitigating_factors ?? []).filter((f) => f?.trim())
@@ -199,6 +200,13 @@ export function EvidenceSection({
           }
         >
           {rationale.text}
+        </p>
+      )}
+
+      {impact && (
+        <p className="rounded-md border-l-2 border-[var(--color-severity-high)] bg-[var(--color-severity-high-subtle)] px-3 py-2 text-sm font-medium leading-relaxed text-[var(--color-text-primary)]">
+          <span className="mr-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-high-text)]">Impact</span>
+          {impact}
         </p>
       )}
 

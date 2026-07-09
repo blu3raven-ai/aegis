@@ -118,6 +118,11 @@ export interface VerificationMetadata {
    */
   reproduction?: string
   /**
+   * One concrete sentence on what an attacker achieves — the "Impact" line of an
+   * audit report. Verifier-authored, present on confirmed findings when supplied.
+   */
+  impact?: string
+  /**
    * Distinct routes an attacker can take to the same sink, each a named path
    * whose steps cite the evidence ([R1], ...). Present only when a confirmed
    * finding genuinely has more than one path.
