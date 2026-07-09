@@ -251,8 +251,14 @@ class CodeScanningScanner:
                 log_tail.append(f"[!] Normalization failed: {e}")
                 logger.exception("[!] Normalization failed")
 
+            findings_file = out_dir / "findings.jsonl"
+            # Surface the unverified findings before the slow verification pass so
+            # they appear in seconds; verdicts then stream in as verification runs.
+            # Only worth it when verification will actually run (LLM configured).
+            if JobEnv(job).get("LLM_API_KEY"):
+                self._preview_ingest_findings(findings_file, job)
+
             try:
-                findings_file = out_dir / "findings.jsonl"
                 self._verify_findings_file(findings_file, repo_root=str(out_dir), env=JobEnv(job))
             except Exception:  # noqa: BLE001
                 logger.exception("[!] _verify_findings_file failed (continuing)")
@@ -273,6 +279,24 @@ class CodeScanningScanner:
     # ------------------------------------------------------------------
     # internal helpers
     # ------------------------------------------------------------------
+
+    def _preview_ingest_findings(self, findings_file: Path, job: dict) -> None:
+        """Upload the normalized (unverified) findings and trigger a mid-scan
+        preview ingest so they surface before verification. Best-effort — any
+        failure just means the findings appear at completion instead of early."""
+        backend = getattr(self, "_backend", None)
+        job_id = job.get("jobId")
+        if backend is None or not job_id or not findings_file.exists():
+            return
+        try:
+            from runner.clients.uploader import post_to_url
+
+            spec = backend.presign_uploads(job_id, ["findings.jsonl"]).get("findings.jsonl")
+            if not spec or post_to_url(findings_file, spec["url"], spec["fields"]) != "ok":
+                return
+            backend.preview_ingest(job_id)
+        except Exception:  # noqa: BLE001
+            logger.warning("[!] preview ingest failed (continuing)", exc_info=True)
 
     def _verify_findings_file(self, findings_file: Path, *, repo_root: str, env: JobEnv) -> None:
         """Read findings.jsonl, run _maybe_verify, rewrite in place.

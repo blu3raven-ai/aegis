@@ -47,6 +47,11 @@ class BackendClient:
         body = self._request("GET", f"/jobs/{job_id}/sboms")
         return list(body.get("sboms", []))
 
+    def preview_ingest(self, job_id: str) -> None:
+        """Ask the backend to ingest the findings uploaded so far (unverified) so
+        they surface before verification. Best-effort — the caller ignores errors."""
+        self._request("POST", f"/jobs/{job_id}/preview-ingest")
+
     def verification_cache_lookup(self, *, tool: str, hashes: list[str]) -> dict[str, dict]:
         """Prior LLM verification results keyed by verification-input hash, so the
         runner can replay a verdict instead of re-spending tokens. Best-effort —

@@ -870,6 +870,13 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
   })
 
+  // Mid-scan preview ingest and verdict updates emit findings.updated (no
+  // completion semantics) — refetch on it too so unverified findings appear
+  // right after the scan phase and their verdicts stream in during verification.
+  useSSE("findings.updated", () => {
+    void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
+  })
+
   // LLM verification status drives the banner + the drawer's locked preview.
   // A 404 means no config exists → verification off. A 403 (no manage_settings)
   // leaves the fail-safe default (on) so viewers aren't nagged to set it up.
