@@ -28,6 +28,7 @@ const SCANNER_TO_COVERAGE: Record<ScannerType, CoverageScanner> = {
   container_scanning: "sca",
   iac_scanning: "iac",
   agent_scanning: "agent",
+  deep_audit: "audit",
 };
 
 // An empty `scanners` array means "all applicable to the category", so expand

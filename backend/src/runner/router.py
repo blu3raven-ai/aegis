@@ -287,6 +287,9 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
     elif job_type == "agent_scanning":
         from src.storage import update_agent_run, list_agent_runs
         current = next((r for r in list_agent_runs(org) if str(r.get("id", "")) == run_id), None)
+    elif job_type == "deep_audit":
+        from src.storage import update_deep_audit_run, list_deep_audit_runs
+        current = next((r for r in list_deep_audit_runs(org) if str(r.get("id", "")) == run_id), None)
 
     db = (current or {}).get("progress") or {}
 
@@ -316,6 +319,9 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
         update_iac_run(org, run_id, patch)
     elif job_type == "agent_scanning":
         update_agent_run(org, run_id, patch)
+    elif job_type == "deep_audit":
+        from src.storage import update_deep_audit_run
+        update_deep_audit_run(org, run_id, patch)
 
     # Publish SSE event
     tool_label = {
@@ -455,6 +461,9 @@ def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | No
     elif job_type == "agent_scanning":
         from src.agent_scanning.scanner import ingest_agent_from_minio
         ingest_agent_from_minio(org, run_id, source_type=source_type)
+    elif job_type == "deep_audit":
+        from src.deep_audit.scanner import ingest_deep_audit_from_minio
+        ingest_deep_audit_from_minio(org, run_id, source_type=source_type)
     elif job_type == "dependencies_reachability":
         import asyncio
 
@@ -574,6 +583,9 @@ def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, An
         elif job_type == "agent_scanning":
             from src.storage import update_agent_run
             update_agent_run(org, run_id, patch)
+        elif job_type == "deep_audit":
+            from src.storage import update_deep_audit_run
+            update_deep_audit_run(org, run_id, patch)
     except Exception:
         import logging
         logging.getLogger(__name__).warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)

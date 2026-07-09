@@ -27,6 +27,7 @@ _TOOL_TO_PUBLIC = {
     "secret_scanning": "secrets",
     "iac_scanning": "iac",
     "agent_scanning": "agent",
+    "deep_audit": "audit",
 }
 _PUBLIC_TO_TOOL = {v: k for k, v in _TOOL_TO_PUBLIC.items()}
 

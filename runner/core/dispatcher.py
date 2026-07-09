@@ -8,6 +8,7 @@ from __future__ import annotations
 from runner.scanners.agent.scanner import AgentScanner
 from runner.scanners.code_scanning.scanner import CodeScanningScanner
 from runner.scanners.container.scanner import ContainerScanner
+from runner.scanners.deep_audit.scanner import DeepAuditScanner
 from runner.scanners.dependencies.scanner import DependenciesScanner
 from runner.scanners.deps_reachability.scanner import DepsReachabilityScanner
 from runner.scanners.iac.scanner import IacScanner
@@ -20,6 +21,7 @@ _SCANNERS: dict[str, object] = {
     "code_scanning": CodeScanningScanner(),
     "iac_scanning": IacScanner(),
     "agent_scanning": AgentScanner(),
+    "deep_audit": DeepAuditScanner(),
     "dependencies_reachability": DepsReachabilityScanner(),
 }
 
