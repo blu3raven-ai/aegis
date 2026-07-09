@@ -87,6 +87,12 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
     if not discovered_items:
         raise ValueError("No repositories discovered yet — sync the connection first")
 
+    # Dedup: a manual scan is a no-op while one is already in flight for this
+    # source, so repeated "Scan" clicks can't stack duplicate runs.
+    from src.runner.jobs import has_active_jobs_for_org
+    if has_active_jobs_for_org(org):
+        raise ValueError("A scan is already in progress for this source — wait for it to finish before starting another.")
+
     scanner_types = SCANNERS_BY_CATEGORY.get(category)
     if not scanner_types:
         raise ValueError(f"Scan not supported for category: {category!r}")
