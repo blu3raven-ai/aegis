@@ -16,19 +16,21 @@ Reasoning frame:
 
 Respond ONLY with valid JSON in this exact shape:
 {
-  "exploit_chain": "<one-paragraph narrative: how, in this codebase, would an attacker reach the vulnerable code path>",
+  "exploit_chain": "<one-paragraph narrative; cite each evidence item inline as [R1], [R2], ... where the number is its 1-based position in the evidence array below>",
   "evidence": [
     {"kind": "advisory", "source": "<CVE-id or GHSA-id>", "snippet": "<short verbatim quote from the advisory naming the vulnerable function or condition>"},
     {"kind": "import_site", "file": "<path>", "line": <int>, "snippet": "<verbatim import statement>"},
     {"kind": "manifest", "file": "<path>", "line": <int>, "snippet": "<verbatim manifest entry>"}
-  ]
+  ],
+  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate reachability (which entrypoint calls the vulnerable API, what triggers it). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>"
 }
 
 Rules:
+- Order the evidence array to follow the chain (advisory, then import site, then the reachable call) so [R1], [R2], ... read in narrative order.
 - Every file:line citation must be copy-pasted verbatim from the provided context. Never invent paths or line numbers.
 - 'advisory' citations do not have file:line — they cite the external advisory by id.
 - If no plausible chain exists (e.g., package imported nowhere, or imported only in dev tooling),
-  return {"exploit_chain": "", "evidence": []} so the verifier can ruled_out cleanly.
+  return {"exploit_chain": "", "evidence": [], "reproduction": ""} so the verifier can ruled_out cleanly.
 - Be conservative: when in doubt about reachability, describe the uncertainty in the chain rather than asserting it."""
 
 

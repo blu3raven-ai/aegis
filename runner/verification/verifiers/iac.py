@@ -255,6 +255,10 @@ def verify_iac_finding(
             verification_metadata=metadata,
         )
 
+    # Confirmed chain — surface the reproduction outline if the hunter gave one.
+    if hunter_model.reproduction.strip():
+        metadata["reproduction"] = hunter_model.reproduction.strip()
+
     return VerificationResult(
         verdict="confirmed",
         exploit_chain=chain,

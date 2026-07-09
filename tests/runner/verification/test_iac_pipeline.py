@@ -120,6 +120,25 @@ def test_hunter_confirms_then_skeptic_disagrees_yields_confirmed(tmp_path):
     assert result.evidence[0]["kind"] == "resource"
 
 
+def test_confirmed_iac_finding_surfaces_reproduction(tmp_path):
+    finding = _seed_module(tmp_path)
+    llm = _StubLlm([
+        json.dumps({
+            "exploit_chain": "public bucket exposes objects [R1]",
+            "evidence": [{
+                "kind": "resource", "file": "infra/s3.tf", "line": 1,
+                "snippet": 'resource "aws_s3_bucket" "data"',
+            }],
+            "reproduction": "request the bucket's public URL to list objects",
+        }),
+        _skeptic_json(False, reasoning="none"),
+    ])
+
+    result = verify_iac_finding(finding=finding, repo_root=str(tmp_path), llm=llm)
+    assert result.verdict == "confirmed"
+    assert result.verification_metadata["reproduction"] == "request the bucket's public URL to list objects"
+
+
 def test_skeptic_finds_compensating_control_yields_ruled_out(tmp_path):
     finding = _seed_module(tmp_path)
     llm = _StubLlm([

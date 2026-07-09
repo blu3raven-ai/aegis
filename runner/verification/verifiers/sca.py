@@ -162,6 +162,10 @@ def verify_sca_finding(
     else:
         verdict = "confirmed"
 
+    # Only surface the reproduction outline once the chain is confirmed.
+    if verdict == "confirmed" and hunter_model.reproduction.strip():
+        metadata["reproduction"] = hunter_model.reproduction.strip()
+
     return VerificationResult(
         verdict=verdict,
         exploit_chain=chain,
