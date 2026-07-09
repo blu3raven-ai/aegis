@@ -35,7 +35,51 @@ def test_scan_repo_attaches_code_window_around_the_flagged_line(tmp_path):
 
 def test_scan_repo_no_window_when_line_missing(tmp_path):
     # A finding without a resolvable location just skips the window (no crash).
-    from runner.scanners.agent.detectors import _attach_code_window
+    from runner.scanners.agent.detectors import attach_code_window
 
-    out = _attach_code_window({"check_id": "X", "file": "nope.md"}, str(tmp_path))
+    out = attach_code_window({"check_id": "X", "file": "nope.md"}, str(tmp_path))
     assert "code_window" not in out
+
+
+def test_llm_judge_findings_also_get_a_code_window(tmp_path, monkeypatch):
+    # The LLM judge appends findings that skip the detectors' _finalize, so they
+    # arrive with only file+line. The scanner must still attach a window or their
+    # drawer shows no Code preview — the whole bug this covers.
+    from runner.scanners.agent import scanner as agent_scanner
+
+    _write(tmp_path, "GUIDE.md", "\n".join(f"row {i}" for i in range(1, 9)) + "\n")
+
+    monkeypatch.setattr(agent_scanner, "scan_repo", lambda _root: [])
+    monkeypatch.setattr(
+        agent_scanner,
+        "clone_repo",
+        lambda url, dst, **kw: Path(dst).mkdir(parents=True, exist_ok=True),
+    )
+    monkeypatch.setattr(
+        agent_scanner,
+        "judge_prose_files",
+        lambda *a, **kw: [{"check_id": "AGENT_LLM_INJECTION", "file": "GUIDE.md", "line": 3}],
+    )
+
+    # clone_repo stubs the checkout at <repo_out>/_checkout — write the file there.
+    def _clone(url, dst, **kw):
+        Path(dst).mkdir(parents=True, exist_ok=True)
+        (Path(dst) / "GUIDE.md").write_text(
+            "\n".join(f"row {i}" for i in range(1, 9)) + "\n", encoding="utf-8"
+        )
+
+    monkeypatch.setattr(agent_scanner, "clone_repo", _clone)
+
+    s = agent_scanner.AgentScanner()
+    findings, cloned = s._scan_one_repo(
+        "https://example.com/acme/repo.git", tmp_path, None,
+        llm=object(), escalation_llm=None, budget=None,
+        cancel_event=None, log_tail=[], emitter=_NullEmitter(),
+    )
+    assert cloned and len(findings) == 1
+    assert findings[0].get("code_window"), "judge finding must carry a code window"
+
+
+class _NullEmitter:
+    def scanning(self, *_): ...
+    def finished(self, *_): ...

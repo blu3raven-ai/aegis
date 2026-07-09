@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 _MAX_FINDINGS = 5000
 
 
-def _attach_code_window(finding: dict, repo_root: str) -> dict:
+def attach_code_window(finding: dict, repo_root: str) -> dict:
     """Capture the source window around the finding so the drawer can show a
     Code preview. Agent detectors record only file+line; read the surrounding
     lines here (the clone still exists) with the same helper the other scanners
@@ -77,7 +77,7 @@ def _finalize(findings: list[dict], repo_root: str) -> list[dict]:
     """Cap, attach the source window for the Code preview, then attach per-rule
     advisory text so each finding carries the analyst-facing *why it matters*
     and *what to do* (see advisory.py)."""
-    return [_attach_code_window(enrich(f), repo_root) for f in findings[:_MAX_FINDINGS]]
+    return [attach_code_window(enrich(f), repo_root) for f in findings[:_MAX_FINDINGS]]
 
 
 def scan_repo(repo_root: str) -> list[dict]:
