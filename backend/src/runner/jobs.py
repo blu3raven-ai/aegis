@@ -31,6 +31,7 @@ __all__ = [
     "STALE_JOB_SECONDS",
     "assign_next_job",
     "cancel_jobs_for_org",
+    "has_active_jobs_for_org",
     "cancel_jobs_for_scans",
     "cancel_stale_jobs",
     "complete_job",
@@ -226,6 +227,15 @@ def cancel_jobs_for_scans(scan_ids: list[str]) -> list[dict[str, Any]]:
         write_job(job)
         cancelled.append(job)
     return cancelled
+
+
+def has_active_jobs_for_org(org: str) -> bool:
+    """True if the org already has a queued/assigned/running scan job. Used to
+    dedup manual scans so repeated 'Scan' clicks don't stack duplicate runs."""
+    return any(
+        job.get("org") == org and job.get("status") in ("queued", "assigned", "running")
+        for job in list_jobs()
+    )
 
 
 def cancel_stale_jobs() -> int:

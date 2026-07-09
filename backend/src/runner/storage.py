@@ -56,6 +56,11 @@ def _job_to_dict(job: RunnerJob) -> dict[str, Any]:
 def read_runner(runner_id: str) -> dict[str, Any] | None:
     async def _query(session):
         runner = await session.get(Runner, runner_id)
+        # Runner ids are stored as "runner-<hash>". Some links pass the bare
+        # <hash> (the prefix gets stripped in the URL), so fall back to the
+        # prefixed form — otherwise the detail page reads "Runner not found".
+        if runner is None and not runner_id.startswith("runner-"):
+            runner = await session.get(Runner, f"runner-{runner_id}")
         return _runner_to_dict(runner) if runner else None
 
     return run_db(_query)
