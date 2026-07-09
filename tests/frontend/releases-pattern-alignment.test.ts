@@ -23,8 +23,8 @@ describe("/releases page wrapper", () => {
     assert.match(page, /<Suspense[^>]*>\s*<ReleasesPageClient\s*\/>\s*<\/Suspense>/)
   })
 
-  it("preserves the metadata export for the title", () => {
-    assert.match(page, /export const metadata = \{ title: "Releases" \}/)
+  it("does not override the document title (inherits the branded root title)", () => {
+    assert.doesNotMatch(page, /export const metadata/)
   })
 })
 
