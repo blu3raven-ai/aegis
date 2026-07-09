@@ -82,7 +82,7 @@ export function DismissPopover({
           ref={menuRef}
           role="menu"
           onKeyDown={handleKeyDown}
-          className={`absolute left-0 z-50 min-w-[16rem] max-w-[calc(100%-1rem)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg ${
+          className={`absolute right-0 z-50 min-w-[16rem] max-w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg ${
             placement === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
           }`}
         >
