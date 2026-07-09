@@ -2,8 +2,6 @@ import { PostureIcon } from "@/lib/shared/ui/page-icons"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { PosturePageContent } from "./PosturePageContent"
 
-export const metadata = { title: "Posture" }
-
 export default function PosturePage() {
   return (
     <>

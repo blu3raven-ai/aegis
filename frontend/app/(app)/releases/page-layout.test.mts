@@ -16,8 +16,8 @@ describe("Releases page — server entry", () => {
     assert.match(client, /title="Releases"/)
   })
 
-  it("exposes a 'Releases' document title via metadata", () => {
-    assert.match(page, /title:\s*"Releases"/)
+  it("inherits the branded document title (no per-page metadata override)", () => {
+    assert.doesNotMatch(page, /export const metadata/)
   })
 
   it("renders the ReleasesPageContent client component", () => {
