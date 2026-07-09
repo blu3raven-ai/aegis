@@ -94,6 +94,8 @@ services:
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      # Mounts the e2e fixture-seed endpoint. Empty (off) everywhere except CI e2e.
+      ENABLE_TEST_ENDPOINTS: ${ENABLE_TEST_ENDPOINTS:-}
       FASTAPI_ENV: production
     deploy:
       resources:

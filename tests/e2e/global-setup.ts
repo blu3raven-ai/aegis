@@ -6,6 +6,11 @@ const AUTH_DIR = path.join(__dirname, ".auth")
 const ADMIN_STATE = path.join(AUTH_DIR, "admin.json")
 const SEED_MANIFEST = path.join(AUTH_DIR, "seed-manifest.json")
 
+// The combined production image serves the API and the app on the same port, so
+// both default to :3000. A split dev stack can override E2E_API_URL (:8000).
+const APP = process.env.E2E_BASE_URL ?? "http://localhost:3000"
+const API = process.env.E2E_API_URL ?? "http://localhost:3000"
+
 async function globalSetup(config: FullConfig) {
   const projects = config.projects.map((p) => p.name)
   const needsBackend = projects.includes("critical")
@@ -28,13 +33,13 @@ async function globalSetup(config: FullConfig) {
     return
   }
 
-  // Health check — fail fast if backend isn't running
+  // Health check — fail fast if the stack isn't running
   try {
-    const res = await fetch("http://localhost:8000/health")
+    const res = await fetch(`${API}/health`)
     if (!res.ok) throw new Error(`Health check returned ${res.status}`)
   } catch (err) {
     throw new Error(
-      "Backend health check failed. Run `docker-compose up -d` before running critical e2e tests.\n" +
+      `Health check at ${API}/health failed. Bring the stack up (docker compose up -d) before the critical e2e tests.\n` +
         String(err)
     )
   }
@@ -49,11 +54,12 @@ async function globalSetup(config: FullConfig) {
     throw new Error("E2E_PASSWORD env var is required for critical e2e tests")
   }
 
-  await page.goto("http://localhost:3000/login")
-  await page.locator('input[placeholder="you@example.com or username"]').fill(username)
-  await page.locator('input[type="password"]').fill(password)
+  await page.goto(`${APP}/login`)
+  await page.locator("#email").fill(username)
+  await page.locator("#password").fill(password)
   await page.locator('button[type="submit"]').click()
-  await page.waitForURL("http://localhost:3000/", { timeout: 10_000 })
+  // Any authenticated landing page confirms the session cookie — just off /login.
+  await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 20_000 })
 
   await page.context().storageState({ path: ADMIN_STATE })
   await browser.close()
@@ -63,16 +69,12 @@ async function globalSetup(config: FullConfig) {
 }
 
 async function seedTestData() {
-  const adminState = JSON.parse(fs.readFileSync(ADMIN_STATE, "utf-8"))
-  const cookies = adminState.cookies ?? []
-  const cookieHeader = cookies.map((c: { name: string; value: string }) => `${c.name}=${c.value}`).join("; ")
-
-  const res = await fetch("http://localhost:8000/api/v1/test/seed", {
+  // The seed endpoint is public under its ENABLE_TEST_ENDPOINTS gate; send no
+  // cookie so the CSRF check (which only fires on an authenticated request) is
+  // skipped, matching the cookie-less teardown.
+  const res = await fetch(`${API}/api/v1/test/seed`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Cookie: cookieHeader,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "seed" }),
   })
 
@@ -90,7 +92,7 @@ async function cleanupSeedData() {
   if (!manifest?.seeded) return
 
   try {
-    await fetch("http://localhost:8000/api/v1/test/seed", {
+    await fetch(`${API}/api/v1/test/seed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "teardown", manifest }),
