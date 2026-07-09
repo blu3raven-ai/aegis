@@ -541,3 +541,42 @@ async def query_top_repositories(
         {"name": row.name, "open": row.open, "critical": row.critical, "high": row.high}
         for row in result.all()
     ]
+
+
+async def lookup_verification_cache(
+    session: AsyncSession, *, tool: str, hashes: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Return cached LLM verification results keyed by verification-input hash.
+
+    A finding carries its ``verification_input_hash`` inside verification_metadata
+    only when the runner actually verified it (never on a skip), so a match here
+    means the exact (rule + code window + reachability) was already analysed. The
+    runner replays the stored verdict instead of re-spending tokens.
+    """
+    if not hashes:
+        return {}
+    rows = (
+        await session.execute(
+            select(
+                Finding.verdict,
+                Finding.evidence,
+                Finding.exploit_chain,
+                Finding.verification_metadata,
+            ).where(
+                Finding.tool == tool,
+                Finding.verification_metadata["verification_input_hash"].astext.in_(hashes),
+            )
+        )
+    ).all()
+    out: dict[str, dict[str, Any]] = {}
+    for verdict, evidence, chain, meta in rows:
+        h = (meta or {}).get("verification_input_hash")
+        if not h or h in out:
+            continue
+        out[h] = {
+            "verdict": verdict,
+            "evidence": evidence,
+            "exploit_chain": chain,
+            "verification_metadata": meta,
+        }
+    return out

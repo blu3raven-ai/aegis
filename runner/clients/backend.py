@@ -47,6 +47,19 @@ class BackendClient:
         body = self._request("GET", f"/jobs/{job_id}/sboms")
         return list(body.get("sboms", []))
 
+    def verification_cache_lookup(self, *, tool: str, hashes: list[str]) -> dict[str, dict]:
+        """Prior LLM verification results keyed by verification-input hash, so the
+        runner can replay a verdict instead of re-spending tokens. Best-effort —
+        callers treat any failure as a cache miss."""
+        with httpx.Client(timeout=self._timeout) as client:
+            resp = client.post(
+                f"{self._base}/verification/cache-lookup",
+                headers=self._headers,
+                json={"tool": tool, "hashes": hashes},
+            )
+            resp.raise_for_status()
+            return resp.json().get("results", {}) or {}
+
     def _request(self, method: str, path: str, *, json: Any = None) -> dict[str, Any]:
         url = self._base + path
         last_exc: Exception | None = None
