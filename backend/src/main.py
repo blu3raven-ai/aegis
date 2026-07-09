@@ -528,6 +528,10 @@ async def require_jwt(request: Request, call_next):
             "/docs", "/docs/",
             "/openapi.json",
         })
+    # The e2e fixture-seed endpoint (only mounted under ENABLE_TEST_ENDPOINTS) is
+    # reached cookie-less during teardown; its env gate is the access control.
+    if os.getenv("ENABLE_TEST_ENDPOINTS", "").lower() == "true":
+        open_paths.add("/api/v1/test/seed")
 
     path = request.url.path
     if path in open_paths or (
@@ -658,6 +662,11 @@ app.include_router(enrichment_router)
 # GraphQL API
 _graphql_router = create_graphql_router()
 app.include_router(_graphql_router, prefix="/api/v1")
+
+# Test-only fixture seeding for the e2e suite — never registered in production.
+if os.getenv("ENABLE_TEST_ENDPOINTS", "").lower() == "true":
+    from src.e2e_seed.router import router as e2e_seed_router
+    app.include_router(e2e_seed_router, prefix="/api/v1")
 
 _STATIC_ROOT = Path(os.getenv("STATIC_ROOT", "/app/static"))
 

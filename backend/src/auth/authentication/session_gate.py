@@ -18,6 +18,7 @@ in PR 3 cutover when the BFF auth is deleted.
 """
 from __future__ import annotations
 
+import os
 from typing import Awaitable, Callable, Protocol
 
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -51,6 +52,13 @@ PUBLIC_PREFIXES = (
     "/integrations/",
     "/scim/v2/",
 )
+
+# The e2e fixture-seed endpoint (only mounted when ENABLE_TEST_ENDPOINTS=true)
+# is reached both with and without a cookie (teardown runs cookie-less), so it
+# is public when present. Its env gate is the only access control — the router
+# does not exist in any real deployment.
+if os.getenv("ENABLE_TEST_ENDPOINTS", "").lower() == "true":
+    PUBLIC_PATHS = PUBLIC_PATHS | {"/api/v1/test/seed"}
 
 API_PATHS = frozenset({"/graphql"})
 API_PREFIXES = ("/api/", "/graphql/")
