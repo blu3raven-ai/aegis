@@ -277,11 +277,16 @@ def test_per_finding_exception_does_not_poison_others(tmp_path):
             )
 
     scanner = IacScanner()
+    # max_workers=1 so "the first chat() call raises" deterministically hits the
+    # first finding; verification is concurrent now, so which finding sees the
+    # transient error is otherwise nondeterministic. The isolation property under
+    # test (one finding's exception doesn't poison others) holds either way.
     verified = scanner._maybe_verify_iac(
         findings=[bad, good],
         repo_root=str(tmp_path),
         llm=_PartiallyExplodingLlm(),
         scan_budget=_unlimited_budget(),
+        max_workers=1,
     )
     assert verified[0]["verdict"] is None
     assert "llm_error" in verified[0]["verification_metadata"]["skipped"]
@@ -360,12 +365,17 @@ def test_cancel_event_set_midway_short_circuits_remaining(tmp_path):
     findings = [_seed_repo(tmp_path) for _ in range(3)]
 
     scanner = IacScanner()
+    # max_workers=1 so the cancel short-circuit is deterministic: verification
+    # now runs concurrently, and a cancel can't stop already-in-flight workers —
+    # only ones that haven't started. Serialising isolates the per-worker cancel
+    # check this test targets.
     verified = scanner._maybe_verify_iac(
         findings=findings,
         repo_root=str(tmp_path),
         llm=llm,
         scan_budget=_unlimited_budget(),
         cancel_event=cancel,
+        max_workers=1,
     )
     assert verified[0]["verdict"] == "possible"
     assert verified[0]["verification_metadata"].get("reason") == "hunter_no_chain"

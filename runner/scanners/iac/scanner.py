@@ -4,6 +4,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import concurrent.futures
 import shutil
 import subprocess
 import threading
@@ -34,7 +35,7 @@ from runner.scanners._subprocess import (
 from runner.scanners.base import ExecutionResult
 from runner.scanners.iac.parse import parse_checkov_results
 from runner.scanners.iac.remediation import attach_iac_fixes
-from runner.verification.budget import ScanBudget, make_iac_budget
+from runner.verification.budget import DEFAULT_VERIFY_WORKERS, ScanBudget, make_iac_budget, verify_concurrency
 from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
 from runner.verification.verifiers.iac import verify_iac_finding
 
@@ -56,6 +57,7 @@ class IacScanConfig:
     # so post-filter is the simplest correct path.
     base_sha: str | None
     scan_scope: str
+    verify_workers: int = DEFAULT_VERIFY_WORKERS
 
     @classmethod
     def from_job(cls, job: dict[str, Any]) -> "IacScanConfig":
@@ -65,6 +67,7 @@ class IacScanConfig:
             git_token=env.get("GIT_TOKEN") or None,
             base_sha=env.get("BASE_SHA") or None,
             scan_scope=env.get("SCAN_SCOPE", "full_tree"),
+            verify_workers=verify_concurrency(env),
         )
 
 
@@ -226,6 +229,7 @@ class IacScanner:
                 escalation_llm=escalation_llm,
                 scan_budget=budget,
                 cancel_event=cancel_event,
+                max_workers=cfg.verify_workers,
             )
 
             # Deterministic config-hardening patches for pattern-clear checks.
@@ -253,60 +257,54 @@ class IacScanner:
         escalation_llm=None,
         scan_budget: ScanBudget,
         cancel_event: threading.Event | None = None,
+        max_workers: int = DEFAULT_VERIFY_WORKERS,
     ) -> list[dict]:
         hashes = [verification_input_hash(f) for f in findings]
         cache = (
             lookup_cache(getattr(self, "_backend", None), tool="iac_scanning", hashes=hashes)
             if llm is not None else {}
         )
-        out: list[dict] = []
-        for f, input_hash in zip(findings, hashes):
-            copy = dict(f)
+
+        # Resolve the cheap cases inline and verify the rest concurrently — each
+        # finding owns its slot in `out`, so workers share only the locked budget.
+        out: list[dict] = [dict(f) for f in findings]
+        pending: list[int] = []
+        for i, (f, input_hash) in enumerate(zip(findings, hashes)):
+            copy = out[i]
             metadata: dict = copy.setdefault("verification_metadata", {})
 
-            # Honour the outer cancel signal between findings. The verifier
-            # itself can spend tens of seconds on LLM round-trips per finding,
-            # so a long backlog otherwise ignores the cancel until the whole
-            # loop drains.
             if cancel_event is not None and cancel_event.is_set():
                 copy["verdict"] = "possible"
                 metadata["skipped"] = "cancelled"
-                out.append(copy)
-                continue
-
-            if llm is None:
+            elif llm is None:
                 copy["verdict"] = None
                 metadata["skipped"] = "llm_disabled"
-                out.append(copy)
-                continue
-
-            sev = (copy.get("severity") or "").lower()
-            if sev not in _IAC_VERIFY_SEVERITIES:
+            elif (copy.get("severity") or "").lower() not in _IAC_VERIFY_SEVERITIES:
                 copy["verdict"] = None
                 metadata["skipped"] = "below_severity"
-                out.append(copy)
-                continue
-
-            cached = cache.get(input_hash)
-            if cached is not None:
+            elif (cached := cache.get(input_hash)) is not None:
                 apply_cache_hit(copy, cached, input_hash)
-                out.append(copy)
-                continue
+            else:
+                pending.append(i)
 
+        def _verify_one(i: int) -> None:
+            copy, input_hash = out[i], hashes[i]
+            metadata = copy.setdefault("verification_metadata", {})
+            # Re-check cancel per worker so a long backlog stops promptly.
+            if cancel_event is not None and cancel_event.is_set():
+                copy["verdict"] = "possible"
+                metadata["skipped"] = "cancelled"
+                return
             if not scan_budget.allow():
                 copy["verdict"] = "possible"
                 metadata["skipped"] = scan_budget.skip_reason
-                out.append(copy)
-                continue
-
+                return
             try:
                 result = verify_iac_finding(
                     finding=copy, repo_root=repo_root, llm=llm,
                     escalation_llm=escalation_llm,
                 )
-                scan_budget.record(
-                    tokens_in=result.tokens_in, tokens_out=result.tokens_out
-                )
+                scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
                 copy["verdict"] = result.verdict
                 copy["evidence"] = result.evidence
                 copy["exploit_chain"] = result.exploit_chain
@@ -316,11 +314,12 @@ class IacScanner:
             except Exception as e:  # noqa: BLE001
                 copy["verdict"] = None
                 metadata["skipped"] = f"llm_error:{type(e).__name__}"
-                logger.exception(
-                    "[!] iac verification failed for %s", copy.get("check_id")
-                )
+                logger.exception("[!] iac verification failed for %s", copy.get("check_id"))
 
-            out.append(copy)
+        if pending:
+            workers = max(1, min(max_workers, len(pending)))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+                list(pool.map(_verify_one, pending))
         return out
 
 
