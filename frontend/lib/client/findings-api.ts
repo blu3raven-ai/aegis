@@ -15,7 +15,6 @@ export type FindingScanner =
   | "secret_scanning"
   | "iac_scanning"
   | "agent_scanning"
-  | "deep_audit"
 
 // The findings API returns the public shorthand (deps/sast/secrets/container);
 // the rest of the UI keys off the internal scanner names, so normalise on read.
@@ -26,7 +25,6 @@ const SCANNER_SHORTHAND_TO_NAME: Record<string, FindingScanner> = {
   container: "container_scanning",
   iac: "iac_scanning",
   agent: "agent_scanning",
-  audit: "deep_audit",
 }
 
 function normalizeScanner(scanner: string): string {

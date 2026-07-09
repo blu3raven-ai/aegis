@@ -116,18 +116,6 @@ def test_dispatch_honours_subset_selection(monkeypatch):
     assert _scanner_types(queued) == {"secret_scanning"}
 
 
-def test_deep_audit_is_opt_in_but_selectable(monkeypatch):
-    _patch_dispatch_sinks(monkeypatch)
-    # Not run on the default (empty-selection) scan...
-    default_queued = triggers.dispatch_source_scan(_code_connection([]), run_prefix="manual")
-    assert "deep_audit" not in _scanner_types(default_queued)
-    # ...but dispatched when explicitly selected.
-    picked = triggers.dispatch_source_scan(
-        _code_connection(["deep_audit"]), run_prefix="manual"
-    )
-    assert _scanner_types(picked) == {"deep_audit"}
-
-
 def test_dispatch_preserves_canonical_scanner_order(monkeypatch):
     _patch_dispatch_sinks(monkeypatch)
     # Selection given out of order; dispatch must follow SCANNERS_BY_CATEGORY order.
