@@ -42,6 +42,9 @@ interface ScanRunningBannerProps {
   /** When set, renders an inline Cancel control so the scan can be stopped
    *  from anywhere the banner is shown, not only the source detail page. */
   onCancel?: () => void
+  /** Hide this banner without stopping the scan — an always-available escape
+   *  hatch so a lingering or unwanted banner can be closed. */
+  onDismiss?: () => void
   isCancelling?: boolean
 }
 
@@ -73,8 +76,8 @@ function elapsedSeconds(startedAt: string | null, nowMs: number): number {
 const DEFAULT_STAGES: Record<string, string> = {
   queued: "Queued",
   scanning: "Scanning",
-  ingesting: "Ingesting scanner output",
-  classifying: "Classifying findings",
+  ingesting: "Saving results",
+  classifying: "Analysing findings",
 }
 
 type Tone = "running" | "queued" | "failed"
@@ -117,6 +120,7 @@ export function ScanRunningBanner({
   runCounts,
   activeScannerLabel,
   onCancel,
+  onDismiss,
   isCancelling,
 }: ScanRunningBannerProps) {
   const highestProgressRef = useRef<number>(0)
@@ -235,6 +239,17 @@ export function ScanRunningBanner({
               className="text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
             />
           )}
+          {onDismiss && (
+            <Button
+              variant="ghost"
+              size="xs"
+              iconOnly
+              aria-label="Dismiss"
+              onClick={onDismiss}
+              leadingIcon={<X className="h-3.5 w-3.5" />}
+              className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+            />
+          )}
         </div>
       </Card>
     )
@@ -268,17 +283,30 @@ export function ScanRunningBanner({
               {headline}
             </p>
           </div>
-          {isActive && (
-            <Button
-              variant="ghost"
-              size="xs"
-              iconOnly
-              aria-label="Minimize scan progress"
-              onClick={() => setMinimized(true)}
-              leadingIcon={<Minus className="h-3.5 w-3.5" />}
-              className="-mr-1 -mt-1 shrink-0 text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
-            />
-          )}
+          <div className="-mr-1 -mt-1 flex shrink-0 items-center">
+            {isActive && (
+              <Button
+                variant="ghost"
+                size="xs"
+                iconOnly
+                aria-label="Minimize scan progress"
+                onClick={() => setMinimized(true)}
+                leadingIcon={<Minus className="h-3.5 w-3.5" />}
+                className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+              />
+            )}
+            {onDismiss && (
+              <Button
+                variant="ghost"
+                size="xs"
+                iconOnly
+                aria-label="Dismiss"
+                onClick={onDismiss}
+                leadingIcon={<X className="h-3.5 w-3.5" />}
+                className="text-[var(--color-text-tertiary)] hover:text-[var(--color-text-primary)]"
+              />
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">

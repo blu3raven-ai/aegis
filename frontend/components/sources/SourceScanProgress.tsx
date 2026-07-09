@@ -31,6 +31,7 @@ interface SourceScanProgressProps {
   org: string
   runIds: string[]
   onDone?: () => void
+  onDismiss?: () => void
   onCancel?: () => void
   isCancelling?: boolean
 }
@@ -67,7 +68,7 @@ function buildScanLabel(runs: ActiveRun[]): string {
   return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]} scan`
 }
 
-export function SourceScanProgress({ connectionId, org, runIds, onDone, onCancel, isCancelling }: SourceScanProgressProps) {
+export function SourceScanProgress({ connectionId, org, runIds, onDone, onDismiss, onCancel, isCancelling }: SourceScanProgressProps) {
   const now = Date.now()
   const [runs, setRuns] = useState<ActiveRun[]>(() =>
     runIds.map((runId) => ({
@@ -188,17 +189,28 @@ export function SourceScanProgress({ connectionId, org, runIds, onDone, onCancel
   const aggRun = visibleRuns.reduce((best, r) =>
     (STATUS_PRIORITY[r.status] ?? 0) > (STATUS_PRIORITY[best.status] ?? 0) ? r : best,
   )
-  const avgPercent =
-    visibleRuns.reduce((sum, r) => sum + (r.progress?.percent ?? 0), 0) / visibleRuns.length
   const latestLogTail =
     visibleRuns.find((r) => r.logTail.length > 0)?.logTail ?? []
   const startedAt =
     visibleRuns.map((r) => r.startedAt).filter(Boolean).sort()[0] ?? null
   const createdAt =
     visibleRuns.map((r) => r.createdAt).sort()[0] ?? new Date().toISOString()
+  // Honest overall progress: each finished scanner counts fully, each in-flight
+  // scanner counts its own fraction, and queued scanners count zero — so the bar
+  // tracks real completion of the whole run. (Averaging every scanner's percent
+  // made it lurch and read as near-done while scanners were still queued.)
+  const finishedCount = runs.filter(
+    (r) => TERMINAL_STATUSES.has(r.status) && r.status !== "failed",
+  ).length
+  const activeFractionSum = runs
+    .filter((r) => !TERMINAL_STATUSES.has(r.status))
+    .reduce((sum, r) => sum + (r.progress?.percent ?? 0) / 100, 0)
+  const overallPercent = runs.length
+    ? Math.min(100, Math.round(((finishedCount + activeFractionSum) / runs.length) * 100))
+    : 0
   const aggProgress: RunProgress = {
     ...aggRun.progress,
-    percent: Math.round(avgPercent),
+    percent: overallPercent,
   }
   const scanLabel = buildScanLabel(visibleRuns)
 
@@ -234,6 +246,7 @@ export function SourceScanProgress({ connectionId, org, runIds, onDone, onCancel
         runCounts={runCounts}
         activeScannerLabel={SCANNER_SHORT[aggRun.scannerType]}
         onCancel={onCancel}
+        onDismiss={onDismiss}
         isCancelling={isCancelling}
       />
     </div>
