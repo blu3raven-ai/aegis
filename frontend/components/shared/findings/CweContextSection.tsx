@@ -1,6 +1,6 @@
 "use client"
 
-import { cweInfo, type CweLikelihood } from "@/lib/shared/findings/cwe-catalog"
+import { cweInfo, owaspForCwe, type CweLikelihood } from "@/lib/shared/findings/cwe-catalog"
 
 const LIKELIHOOD_TONE: Record<CweLikelihood, string> = {
   High: "border-[color-mix(in_srgb,var(--color-severity-critical)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-critical)_12%,transparent)] text-[var(--color-severity-critical-text)]",
@@ -21,6 +21,7 @@ export function CweContextSection({ cwe }: { cwe: string | undefined }) {
 
   const id = (cwe ?? "").toUpperCase()
   const num = id.replace(/^CWE-/, "")
+  const owasp = owaspForCwe(cwe)
 
   return (
     <section>
@@ -40,6 +41,14 @@ export function CweContextSection({ cwe }: { cwe: string | undefined }) {
           <span className="text-sm font-semibold text-[var(--color-text-primary)]">
             {info.name}
           </span>
+          {owasp && (
+            <span
+              className="inline-flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-text-secondary)]"
+              title="OWASP Top 10 2021 category"
+            >
+              {owasp}
+            </span>
+          )}
           {info.likelihood && (
             <span
               className={`ml-auto inline-flex items-center rounded-md border px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] ${LIKELIHOOD_TONE[info.likelihood]}`}

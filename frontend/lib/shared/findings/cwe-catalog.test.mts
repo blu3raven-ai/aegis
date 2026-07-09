@@ -1,6 +1,6 @@
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { cweInfo } from "./cwe-catalog.ts"
+import { cweInfo, owaspForCwe } from "./cwe-catalog.ts"
 
 describe("cweInfo", () => {
   it("returns curated context for a known CWE", () => {
@@ -31,5 +31,13 @@ describe("cweInfo", () => {
       const info = cweInfo(id)
       assert.ok(info && info.name.length > 0 && info.description.length > 0, `${id} should be populated`)
     }
+  })
+
+  it("maps CWEs to their OWASP Top 10 2021 category (authoritative, not the ticket's A06 slip)", () => {
+    assert.equal(owaspForCwe("CWE-94"), "A03:2021 Injection")
+    assert.equal(owaspForCwe("CWE-502"), "A08:2021 Software and Data Integrity Failures")
+    assert.equal(owaspForCwe("CWE-918: SSRF"), "A10:2021 Server-Side Request Forgery")
+    assert.equal(owaspForCwe("CWE-99999"), undefined)
+    assert.equal(owaspForCwe(undefined), undefined)
   })
 })

@@ -219,6 +219,11 @@ def verify_finding(
     else:
         verdict = "confirmed"
 
+    # Only surface the reproduction outline once the chain is confirmed — showing
+    # repro steps for an unverified finding would overstate confidence.
+    if verdict == "confirmed" and hunter_model.reproduction.strip():
+        metadata["reproduction"] = hunter_model.reproduction.strip()
+
     return VerificationResult(
         verdict=verdict, exploit_chain=chain, evidence=evidence,
         tokens_in=tokens_in_total, tokens_out=tokens_out_total,

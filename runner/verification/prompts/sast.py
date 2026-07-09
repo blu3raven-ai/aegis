@@ -24,14 +24,16 @@ exploitability on its own. `unknown` carries no signal.
 
 Respond ONLY with valid JSON in this exact shape:
 {
-  "exploit_chain": "<one-paragraph narrative of how an attacker reaches the sink>",
+  "exploit_chain": "<one-paragraph narrative; cite each evidence item inline as [R1], [R2], ... where the number is its 1-based position in the evidence array below>",
   "evidence": [
     {"file": "<path>", "line": <int>, "snippet": "<verbatim from code>", "kind": "source" | "sink" | "gate"}
-  ]
+  ],
+  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate reachability (which endpoint/input, what shape of payload). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>"
 }
 
+Order the evidence array to follow the chain (source first, then gates, then sink) so [R1], [R2], ... read in narrative order.
 Every snippet must be copy-pasted verbatim from the code. Never invent file paths or line numbers.
-If you cannot construct a concrete chain, return {"exploit_chain": "", "evidence": []}."""
+If you cannot construct a concrete chain, return {"exploit_chain": "", "evidence": [], "reproduction": ""}."""
 
 SKEPTIC_SYSTEM = """You are a skeptical reviewer of the hunter's exploit chain.
 

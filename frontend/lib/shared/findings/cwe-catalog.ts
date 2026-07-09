@@ -206,3 +206,39 @@ export function cweInfo(cwe: string | null | undefined): CweInfo | null {
   if (!m) return null
   return CATALOG[`CWE-${m[1]}`] ?? null
 }
+
+/**
+ * OWASP Top 10 2021 category for a CWE, per OWASP's official CWE→category
+ * mappings (not exhaustive — the classes we commonly surface). Returns
+ * undefined for CWEs we don't map, so the badge is simply omitted.
+ */
+const OWASP_2021: Record<string, string> = {
+  "CWE-22": "A01:2021 Broken Access Control",
+  "CWE-284": "A01:2021 Broken Access Control",
+  "CWE-639": "A01:2021 Broken Access Control",
+  "CWE-862": "A01:2021 Broken Access Control",
+  "CWE-863": "A01:2021 Broken Access Control",
+  "CWE-327": "A02:2021 Cryptographic Failures",
+  "CWE-328": "A02:2021 Cryptographic Failures",
+  "CWE-798": "A02:2021 Cryptographic Failures",
+  "CWE-77": "A03:2021 Injection",
+  "CWE-78": "A03:2021 Injection",
+  "CWE-79": "A03:2021 Injection",
+  "CWE-89": "A03:2021 Injection",
+  "CWE-94": "A03:2021 Injection",
+  "CWE-434": "A04:2021 Insecure Design",
+  "CWE-611": "A05:2021 Security Misconfiguration",
+  "CWE-1104": "A06:2021 Vulnerable and Outdated Components",
+  "CWE-287": "A07:2021 Identification and Authentication Failures",
+  "CWE-384": "A07:2021 Identification and Authentication Failures",
+  "CWE-502": "A08:2021 Software and Data Integrity Failures",
+  "CWE-918": "A10:2021 Server-Side Request Forgery",
+}
+
+/** OWASP Top 10 2021 category label for a CWE string, or undefined. */
+export function owaspForCwe(cwe: string | null | undefined): string | undefined {
+  if (!cwe) return undefined
+  const m = cwe.trim().match(/(?:CWE-)?(\d+)/i)
+  if (!m) return undefined
+  return OWASP_2021[`CWE-${m[1]}`]
+}

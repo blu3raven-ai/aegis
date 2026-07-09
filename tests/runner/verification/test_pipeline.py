@@ -39,6 +39,38 @@ def test_hunter_confirms_then_skeptic_agrees_yields_confirmed():
     assert result.tokens_out == 100
 
 
+def test_confirmed_finding_surfaces_reproduction_from_hunter():
+    llm = _StubLlm([
+        '{"exploit_chain":"x reaches y [R1]","evidence":[{"file":"a.py","line":1,"snippet":"x","kind":"source"}],'
+        '"reproduction":"POST /x with a crafted body"}',
+        '{"mitigation_found":false,"reasoning":"none"}',
+    ])
+    result = verify_finding(
+        finding={"file": "a.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"},
+        repo_root="/x", llm=llm,
+        critic=lambda ev, root: ([], []),
+    )
+    assert result.verdict == "confirmed"
+    assert result.verification_metadata["reproduction"] == "POST /x with a crafted body"
+
+
+def test_non_confirmed_finding_omits_reproduction():
+    # needs_verify (unverified citation) must not carry repro steps — that would
+    # overstate confidence in an unconfirmed chain.
+    llm = _StubLlm([
+        '{"exploit_chain":"x [R1]","evidence":[{"file":"a.py","line":1,"snippet":"x","kind":"source"}],'
+        '"reproduction":"do the thing"}',
+        '{"mitigation_found":false,"reasoning":"none"}',
+    ])
+    result = verify_finding(
+        finding={"file": "a.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"},
+        repo_root="/x", llm=llm,
+        critic=lambda ev, root: (["a.py:1"], []),  # unverified citation → needs_verify
+    )
+    assert result.verdict == "needs_verify"
+    assert "reproduction" not in result.verification_metadata
+
+
 def test_skeptic_finds_mitigation_yields_ruled_out():
     llm = _StubLlm([
         '{"exploit_chain":"x","evidence":[{"file":"a.py","line":1,"snippet":"x","kind":"source"}]}',
