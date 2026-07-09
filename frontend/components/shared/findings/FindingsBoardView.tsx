@@ -860,6 +860,16 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
   }, [sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, moreFilters, verdictFilter, page, scannerPages, groupBy, load])
 
+  // New findings land when a scan finishes ingesting, so refetch on scan
+  // completion — otherwise the list sits stale until a manual reload. Each
+  // scanner job completes independently, so the board fills in scanner-by-
+  // scanner as the run progresses. load() keeps the current rows on screen
+  // during the refetch (no skeleton flash), and useSSE always invokes the
+  // latest closure so the current filters/page are used.
+  useSSE("scan.completed", () => {
+    void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
+  })
+
   // LLM verification status drives the banner + the drawer's locked preview.
   // A 404 means no config exists → verification off. A 403 (no manage_settings)
   // leaves the fail-safe default (on) so viewers aren't nagged to set it up.
