@@ -43,6 +43,9 @@ interface ScanProgressValue {
   register: (scan: ActiveScan) => void
   unregister: (connectionId: string) => void
   cancel: (connectionId: string) => Promise<void>
+  /** Hide the banner without stopping the scan; stays hidden until this
+   *  connection's current run finishes, so a later scan shows again. */
+  dismiss: (connectionId: string) => void
 }
 
 const ScanProgressContext = createContext<ScanProgressValue | null>(null)
@@ -71,9 +74,18 @@ export function ScanProgressProvider({ children }: { children: React.ReactNode }
   // Mirror of `scans` so cancel() reads the latest run IDs without re-creating.
   const scansRef = useRef<ActiveScan[]>([])
   scansRef.current = scans
+  // Connections the user manually dismissed. The discovery poll skips these so
+  // a dismissed banner can't pop back; an entry clears once the connection has
+  // no active runs, so the next scan is free to show a fresh banner.
+  const dismissedRef = useRef<Set<string>>(new Set())
 
   const register = useCallback((scan: ActiveScan) => {
     setScans((prev) => [...prev.filter((s) => s.connectionId !== scan.connectionId), scan])
+  }, [])
+
+  const dismiss = useCallback((connectionId: string) => {
+    dismissedRef.current.add(connectionId)
+    setScans((prev) => prev.filter((s) => s.connectionId !== connectionId))
   }, [])
 
   const unregister = useCallback((connectionId: string) => {
@@ -162,8 +174,16 @@ export function ScanProgressProvider({ children }: { children: React.ReactNode }
     async function discover() {
       const result = await getAllActiveSourceScans()
       if (cancelled || !result.ok) return
+      // A dismissal only holds while that connection is still scanning; once it
+      // drops out of the active set, clear it so its next scan can show.
+      const activeIds = new Set(result.data.scans.map((s) => s.connectionId))
+      for (const id of [...dismissedRef.current]) {
+        if (!activeIds.has(id)) dismissedRef.current.delete(id)
+      }
       for (const scan of result.data.scans) {
         if (scan.runIds.length === 0) continue
+        // Honour a manual dismissal — don't re-summon a banner the user closed.
+        if (dismissedRef.current.has(scan.connectionId)) continue
         // Skip re-registering an unchanged scan so the 10s poll doesn't churn
         // state for banners that are already showing.
         const existing = scansRef.current.find((s) => s.connectionId === scan.connectionId)
@@ -193,8 +213,8 @@ export function ScanProgressProvider({ children }: { children: React.ReactNode }
   )
 
   const value = useMemo<ScanProgressValue>(
-    () => ({ isScanning, isCancelling, register, unregister, cancel }),
-    [isScanning, isCancelling, register, unregister, cancel],
+    () => ({ isScanning, isCancelling, register, unregister, cancel, dismiss }),
+    [isScanning, isCancelling, register, unregister, cancel, dismiss],
   )
 
   const hasOverflow = scans.length > VISIBLE_LIMIT
@@ -223,6 +243,7 @@ export function ScanProgressProvider({ children }: { children: React.ReactNode }
               org={scan.org}
               runIds={scan.runIds}
               onDone={() => unregister(scan.connectionId)}
+              onDismiss={() => dismiss(scan.connectionId)}
               onCancel={canCancel ? () => void cancel(scan.connectionId) : undefined}
               isCancelling={isCancelling(scan.connectionId)}
             />
