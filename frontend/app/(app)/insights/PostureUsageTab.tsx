@@ -62,6 +62,35 @@ export function PostureUsageTab() {
     }
   }, [days, refreshKey])
 
+  // Live refresh: verification usage is written when a scan finishes ingesting,
+  // so poll in the background (and on tab focus) to surface new spend without a
+  // manual reload. Silent by design — it updates the numbers in place and never
+  // flips the tab back to skeletons. No immediate fetch here; the effect above
+  // owns the initial load, so mount doesn't double-fetch.
+  useEffect(() => {
+    let active = true
+    const refresh = () => {
+      if (typeof document !== "undefined" && document.hidden) return
+      getLlmUsage(Number(days))
+        .then((u) => {
+          if (active) {
+            setUsage(u)
+            setState("ok")
+          }
+        })
+        .catch(() => {
+          // Keep the last good window on a transient failure.
+        })
+    }
+    const id = window.setInterval(refresh, 15000)
+    window.addEventListener("focus", refresh)
+    return () => {
+      active = false
+      window.clearInterval(id)
+      window.removeEventListener("focus", refresh)
+    }
+  }, [days])
+
   const retry = () => setRefreshKey((k) => k + 1)
 
   const totals = useMemo(() => {

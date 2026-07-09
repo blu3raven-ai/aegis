@@ -25,4 +25,12 @@ describe("PostureUsageTab", () => {
     assert.match(src, /\}, \[days, refreshKey\]\)/)
     assert.doesNotMatch(src, /window\.location\.reload/)
   })
+
+  it("polls in the background and refetches on focus so usage stays live", () => {
+    // Verification usage only lands when a scan finishes ingesting, so the tab
+    // must refresh itself rather than show a stale 0 until a manual reload.
+    assert.match(src, /window\.setInterval\(refresh, 15000\)/)
+    assert.match(src, /window\.addEventListener\("focus", refresh\)/)
+    assert.match(src, /window\.removeEventListener\("focus", refresh\)/)
+  })
 })
