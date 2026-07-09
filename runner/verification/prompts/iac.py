@@ -39,20 +39,22 @@ view to be exploitable.
 
 Respond ONLY with valid JSON in this exact shape:
 {
-  "exploit_chain": "<one-paragraph narrative: how, in this deployment, would an attacker abuse the misconfiguration>",
+  "exploit_chain": "<one-paragraph narrative; cite each evidence item inline as [R1], [R2], ... where the number is its 1-based position in the evidence array below>",
   "evidence": [
     {"kind": "resource", "file": "<path>", "line": <int>, "snippet": "<verbatim from the resource block>"},
     {"kind": "context", "file": "<path>", "line": <int>, "snippet": "<verbatim from sibling context>"}
-  ]
+  ],
+  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate the exposure (what an attacker would reach and how). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>"
 }
 
 Rules:
+- Order the evidence array to follow the chain (offending resource first, then supporting context) so [R1], [R2], ... read in narrative order.
 - Every file:line citation must be copy-pasted verbatim from the provided context. Never invent
   paths or line numbers.
 - 'resource' citations cite the offending resource block. 'context' citations cite sibling IaC
   evidence that supports the chain (attachments, boundaries, listener rules, data classifiers).
 - If no plausible exploit chain exists (resource is a library example, controls are satisfied
-  at a higher scope, the literal is a placeholder), return {"exploit_chain": "", "evidence": []}
+  at a higher scope, the literal is a placeholder), return {"exploit_chain": "", "evidence": [], "reproduction": ""}
   so the verifier can resolve cleanly.
 - Be conservative: when context is too thin to decide, describe the uncertainty in the chain
   rather than asserting exploitability."""
