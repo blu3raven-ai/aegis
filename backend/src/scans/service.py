@@ -51,8 +51,7 @@ def _dispatch_scanner_jobs(
     """
     from src.audit_log.recorder import ActorInfo, get_recorder
     from src.runner.jobs import create_job
-    from src.settings.llm.service import fetch_llm_config
-    from src.settings.llm.usage import daily_remaining
+    from src.settings.llm.service import build_llm_scan_env
     from src.shared.config import get_token_for_org
 
     token = get_token_for_org(org) or ""
@@ -61,28 +60,16 @@ def _dispatch_scanner_jobs(
     # Argus (threat-intel enrichment) and the BYO LLM (finding verification) are
     # independent concerns — either, both, or neither may be enabled, and neither
     # suppresses the other. A scan can ship both: Argus enriches, the LLM verifies.
-    _CONFIG_KEY = "default"
 
     # BYO LLM — the verification engine that tightens scanner precision (fewer FPs).
-    llm_cfg = fetch_llm_config(_CONFIG_KEY)
-    llm_env: dict[str, str] = {}
-    if llm_cfg and llm_cfg.enabled:
-        llm_env = {
-            "LLM_API_KEY":               llm_cfg.api_key,
-            "LLM_API_BASE_URL":          llm_cfg.api_base_url,
-            "LLM_API_MODEL":             llm_cfg.model,
-            "LLM_TOKEN_BUDGET_PER_SCAN": str(llm_cfg.scan_token_budget),
-            "LLM_DAILY_REMAINING":       str(daily_remaining(
-                org_id=_CONFIG_KEY,
-                daily_budget=llm_cfg.daily_token_budget,
-            )),
-        }
+    llm_env = build_llm_scan_env()
+    if llm_env:
         get_recorder().record(
             action="scan.verification_started",
             resource_type="scan_run",
             resource_id=scan_id,
             actor=ActorInfo(user_id="system:scan_dispatch"),
-            metadata={"model": llm_cfg.model, "scanners": scanners},
+            metadata={"model": llm_env["LLM_API_MODEL"], "scanners": scanners},
         )
 
     # Argus threat-intel enrichment runs backend-side (osv/argus_match.py), which

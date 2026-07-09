@@ -110,9 +110,10 @@ def test_backend_llm_env_keys_match_runner_read_keys():
     side surfaces here instead of silently disabling agentic verification.
     """
     import inspect
-    from src.scans.service import _dispatch_scanner_jobs
+    from src.settings.llm.service import build_llm_scan_env
 
-    # Keys the backend writes into job['envVars'] for verification.
+    # Keys the backend writes into job['envVars'] for verification. Both scan
+    # dispatch paths inject these via build_llm_scan_env, so assert against it.
     expected_keys = {
         "LLM_API_KEY",
         "LLM_API_BASE_URL",
@@ -120,7 +121,7 @@ def test_backend_llm_env_keys_match_runner_read_keys():
         "LLM_TOKEN_BUDGET_PER_SCAN",
         "LLM_DAILY_REMAINING",
     }
-    backend_src = inspect.getsource(_dispatch_scanner_jobs)
+    backend_src = inspect.getsource(build_llm_scan_env)
     for key in expected_keys:
         assert f'"{key}"' in backend_src, (
             f"backend dispatcher no longer emits the {key!r} env var. "

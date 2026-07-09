@@ -123,3 +123,32 @@ def delete_llm_config(org_id: str) -> bool:
         return True
 
     return run_db(_q)
+
+
+# Config key for the single-tenant BYO LLM verification settings.
+LLM_CONFIG_KEY = "default"
+
+
+def build_llm_scan_env() -> dict[str, str]:
+    """Env vars that carry the BYO LLM verification config to a scan job.
+
+    Returns ``{}`` when verification is disabled or unconfigured. BOTH scan
+    dispatch paths — single-repo (scans.service) and source-connection
+    (sources.triggers) — must inject this, or verification runs for one and
+    silently no-ops for the other.
+    """
+    from src.settings.llm.usage import daily_remaining
+
+    cfg = fetch_llm_config(LLM_CONFIG_KEY)
+    if not (cfg and cfg.enabled):
+        return {}
+    return {
+        "LLM_API_KEY":               cfg.api_key,
+        "LLM_API_BASE_URL":          cfg.api_base_url,
+        "LLM_API_MODEL":             cfg.model,
+        "LLM_TOKEN_BUDGET_PER_SCAN": str(cfg.scan_token_budget),
+        "LLM_DAILY_REMAINING":       str(daily_remaining(
+            org_id=LLM_CONFIG_KEY,
+            daily_budget=cfg.daily_token_budget,
+        )),
+    }
