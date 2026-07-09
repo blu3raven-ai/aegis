@@ -142,6 +142,7 @@ DEFAULT_REGISTRY_RULESETS = (
     "p/sql-injection",
     "p/xss",
     "p/command-injection",
+    "p/ssrf",
     "p/owasp-top-ten",
     "p/cwe-top-25",
     "p/insecure-transport",

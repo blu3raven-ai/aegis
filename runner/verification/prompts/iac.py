@@ -44,7 +44,9 @@ Respond ONLY with valid JSON in this exact shape:
     {"kind": "resource", "file": "<path>", "line": <int>, "snippet": "<verbatim from the resource block>"},
     {"kind": "context", "file": "<path>", "line": <int>, "snippet": "<verbatim from sibling context>"}
   ],
-  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate the exposure (what an attacker would reach and how). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>"
+  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate the exposure (what an attacker would reach and how). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>",
+  "attack_paths": [{"name": "<short route name>", "steps": "<how the exposure is reached; cite [R1], [R2]>"}],
+  "mitigating_factors": ["<a factor that limits real-world exploitability>"]
 }
 
 Rules:

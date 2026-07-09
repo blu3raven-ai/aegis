@@ -22,7 +22,9 @@ Respond ONLY with valid JSON in this exact shape:
     {"kind": "import_site", "file": "<path>", "line": <int>, "snippet": "<verbatim import statement>"},
     {"kind": "manifest", "file": "<path>", "line": <int>, "snippet": "<verbatim manifest entry>"}
   ],
-  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate reachability (which entrypoint calls the vulnerable API, what triggers it). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>"
+  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate reachability (which entrypoint calls the vulnerable API, what triggers it). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>",
+  "attack_paths": [{"name": "<short route name>", "steps": "<reach the sink on this route; cite [R1], [R2]>"}],
+  "mitigating_factors": ["<a factor that limits real-world exploitability>"]
 }
 
 Rules:

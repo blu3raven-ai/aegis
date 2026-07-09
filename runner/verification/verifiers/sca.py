@@ -162,9 +162,10 @@ def verify_sca_finding(
     else:
         verdict = "confirmed"
 
-    # Only surface the reproduction outline once the chain is confirmed.
-    if verdict == "confirmed" and hunter_model.reproduction.strip():
-        metadata["reproduction"] = hunter_model.reproduction.strip()
+    # Only surface the enriched detail once the chain is confirmed.
+    if verdict == "confirmed":
+        from runner.verification.enrich import stash_confirmed_enrichment
+        stash_confirmed_enrichment(metadata, hunter_model)
 
     return VerificationResult(
         verdict=verdict,
