@@ -18,6 +18,14 @@ describe("FindingsBoardView filter bar additions", () => {
     assert.match(src, /q \? \{ q \}/)
   })
 
+  it("derives the accepted scanner filter set from SCANNER_ORDER so no scanner is dropped", () => {
+    // Regression: a hand-maintained VALID_SCANNERS once omitted agent_scanning,
+    // so the URL-sync silently reset that filter to "all" and the agent view
+    // showed nothing. Deriving from SCANNER_ORDER makes that drift impossible.
+    assert.match(src, /const VALID_SCANNERS = new Set<ScannerFilter>\(\["all", \.\.\.SCANNER_ORDER\]\)/)
+    assert.match(src, /const SCANNER_ORDER: Scanner\[\] = \[[^\]]*"agent_scanning"[^\]]*\]/)
+  })
+
   it("debounces the search input before triggering a fetch", () => {
     assert.match(src, /SEARCH_DEBOUNCE_MS/)
     assert.match(src, /setTimeout\(\(\) => setSearchQuery\(/)

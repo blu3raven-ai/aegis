@@ -479,14 +479,9 @@ function initialStateFromProp(initial: FindingState[] | undefined): StateFilter 
 
 const VALID_SEVERITIES = new Set<Severity | "all">(["all", "critical", "high", "medium", "low"])
 // Saved-view serialization uses the canonical wire-level scanner names.
-const VALID_SCANNERS = new Set<ScannerFilter>([
-  "all",
-  "dependencies_scanning",
-  "code_scanning",
-  "container_scanning",
-  "secret_scanning",
-  "iac_scanning",
-])
+// Derived from SCANNER_ORDER so a newly added scanner (e.g. agent_scanning) can
+// never be silently dropped from the accepted filter set again.
+const VALID_SCANNERS = new Set<ScannerFilter>(["all", ...SCANNER_ORDER])
 const VALID_STATES = new Set<StateFilter>(["all", "open", "closed", "fixed", "dismissed", "deferred"])
 const VALID_SORT_KEYS = new Set<SortKey>(["severity_age", "epss", "action_band", "newest", "oldest"])
 const VALID_AGE_PRESETS = new Set<AgePresetKey>(["any", "24h", "7d", "30d", "90d"])
