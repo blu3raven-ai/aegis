@@ -219,10 +219,11 @@ def verify_finding(
     else:
         verdict = "confirmed"
 
-    # Only surface the reproduction outline once the chain is confirmed — showing
-    # repro steps for an unverified finding would overstate confidence.
-    if verdict == "confirmed" and hunter_model.reproduction.strip():
-        metadata["reproduction"] = hunter_model.reproduction.strip()
+    # Enriched audit-report detail (repro, attack paths, mitigating factors) only
+    # once the chain is confirmed — surfacing it on an unverified finding overstates it.
+    if verdict == "confirmed":
+        from runner.verification.enrich import stash_confirmed_enrichment
+        stash_confirmed_enrichment(metadata, hunter_model)
 
     return VerificationResult(
         verdict=verdict, exploit_chain=chain, evidence=evidence,

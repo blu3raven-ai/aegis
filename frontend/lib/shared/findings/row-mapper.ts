@@ -118,6 +118,17 @@ export interface VerificationMetadata {
    */
   reproduction?: string
   /**
+   * Distinct routes an attacker can take to the same sink, each a named path
+   * whose steps cite the evidence ([R1], ...). Present only when a confirmed
+   * finding genuinely has more than one path.
+   */
+  attack_paths?: { name?: string; steps: string }[]
+  /**
+   * What limits real-world exploitability (default bind, upstream auth, feature
+   * gating) — calibrates severity. Present on confirmed findings when supplied.
+   */
+  mitigating_factors?: string[]
+  /**
    * Why the verifier couldn't confirm a finding. `reason` is a single machine
    * code (e.g. `hunter_no_chain`, `package_not_imported`, `schema_invalid: …`);
    * the list keys carry the citations that failed grounding. Rendered as prose

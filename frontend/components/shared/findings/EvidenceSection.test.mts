@@ -61,4 +61,11 @@ describe("EvidenceSection", () => {
     assert.match(src, /metadata\?\.reproduction\?\.trim\(\)/)
     assert.match(src, /Proof of concept/)
   })
+
+  it("renders attack paths and mitigating factors from metadata", () => {
+    assert.match(src, /metadata\?\.attack_paths/)
+    assert.match(src, /Attack paths/)
+    assert.match(src, /metadata\?\.mitigating_factors/)
+    assert.match(src, /Mitigating factors/)
+  })
 })

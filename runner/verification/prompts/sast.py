@@ -28,9 +28,14 @@ Respond ONLY with valid JSON in this exact shape:
   "evidence": [
     {"file": "<path>", "line": <int>, "snippet": "<verbatim from code>", "kind": "source" | "sink" | "gate"}
   ],
-  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate reachability (which endpoint/input, what shape of payload). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>"
+  "reproduction": "<optional: a short, high-level outline of the steps that demonstrate reachability (which endpoint/input, what shape of payload). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>",
+  "attack_paths": [
+    {"name": "<short name, e.g. 'Validated route' or 'Catch-all passthrough'>", "steps": "<how an attacker reaches the sink on THIS route; cite evidence inline as [R1], [R2]>"}
+  ],
+  "mitigating_factors": ["<a factor that limits real-world exploitability, e.g. 'default bind is localhost', 'requires an authenticated caller', 'feature off by default'>"]
 }
 
+Only include attack_paths when there are genuinely MULTIPLE distinct routes to the sink; for a single obvious path leave it [] (exploit_chain already covers it). Use mitigating_factors to state honestly what reduces severity. Both are optional — [] when not applicable.
 Order the evidence array to follow the chain (source first, then gates, then sink) so [R1], [R2], ... read in narrative order.
 Every snippet must be copy-pasted verbatim from the code. Never invent file paths or line numbers.
 If you cannot construct a concrete chain, return {"exploit_chain": "", "evidence": [], "reproduction": ""}."""

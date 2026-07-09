@@ -255,9 +255,9 @@ def verify_iac_finding(
             verification_metadata=metadata,
         )
 
-    # Confirmed chain — surface the reproduction outline if the hunter gave one.
-    if hunter_model.reproduction.strip():
-        metadata["reproduction"] = hunter_model.reproduction.strip()
+    # Confirmed chain — surface the enriched audit detail the hunter gave.
+    from runner.verification.enrich import stash_confirmed_enrichment
+    stash_confirmed_enrichment(metadata, hunter_model)
 
     return VerificationResult(
         verdict="confirmed",

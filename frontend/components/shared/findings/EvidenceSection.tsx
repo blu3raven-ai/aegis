@@ -156,6 +156,8 @@ export function EvidenceSection({
   const hasEvidence = Boolean(evidence && evidence.length > 0)
   const refCount = evidence?.length ?? 0
   const reproduction = metadata?.reproduction?.trim()
+  const attackPaths = (metadata?.attack_paths ?? []).filter((p) => p?.steps?.trim())
+  const mitigatingFactors = (metadata?.mitigating_factors ?? []).filter((f) => f?.trim())
   const ruledOut = metadata?.ruled_out_reason
   const rationale = verdictRationale(verdict, metadata)
   // A proposed mitigation whose citation failed grounding: the finding was NOT
@@ -204,6 +206,39 @@ export function EvidenceSection({
         <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
           {renderChainWithRefs(exploitChain!, refCount)}
         </p>
+      )}
+
+      {attackPaths.length > 0 && (
+        <div className="mt-3">
+          <h4 className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            Attack paths
+          </h4>
+          <ol className="space-y-2">
+            {attackPaths.map((p, i) => (
+              <li key={i} className="rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2">
+                {p.name && (
+                  <p className="mb-1 text-xs font-semibold text-[var(--color-text-primary)]">{p.name}</p>
+                )}
+                <p className="text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                  {renderChainWithRefs(p.steps, refCount)}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {mitigatingFactors.length > 0 && (
+        <div className="mt-3">
+          <h4 className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            Mitigating factors
+          </h4>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-[var(--color-text-secondary)]">
+            {mitigatingFactors.map((f, i) => (
+              <li key={i}>{f}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {hasEvidence && (

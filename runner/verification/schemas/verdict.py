@@ -27,6 +27,14 @@ class HunterResponse(BaseModel):
     # steps that demonstrate reachability, not a weaponised payload. Optional;
     # only surfaced when the model provides one.
     reproduction: str = ""
+    # Distinct routes an attacker can take to the same sink, each a
+    # {"name": ..., "steps": "... [R1] ..."} object citing the evidence. A single
+    # obvious path stays in exploit_chain; this is for the genuinely multi-path
+    # cases (e.g. a validated route AND an unvalidated passthrough).
+    attack_paths: list[Any] = Field(default_factory=list)
+    # What limits real-world exploitability (default bind, upstream auth, feature
+    # gating). Calibrates severity and mirrors a real audit report's section.
+    mitigating_factors: list[str] = Field(default_factory=list)
 
 
 class SkepticResponse(BaseModel):
