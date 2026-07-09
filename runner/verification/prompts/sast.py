@@ -34,7 +34,8 @@ Respond ONLY with valid JSON in this exact shape:
   "attack_paths": [
     {"name": "<short name, e.g. 'Validated route' or 'Catch-all passthrough'>", "steps": "<how an attacker reaches the sink on THIS route; cite evidence inline as [R1], [R2]>"}
   ],
-  "mitigating_factors": ["<a factor that limits real-world exploitability, e.g. 'default bind is localhost', 'requires an authenticated caller', 'feature off by default'>"]
+  "mitigating_factors": ["<a factor that limits real-world exploitability, e.g. 'default bind is localhost', 'requires an authenticated caller', 'feature off by default'>"],
+  "fix": "<a concrete remediation. When small, a unified diff (--- a/file / +++ b/file / @@) that fixes the ROOT cause. Otherwise 1-3 sentences naming the exact change and where. Empty string if not confirmed>"
 }
 
 Only include attack_paths when there are genuinely MULTIPLE distinct routes to the sink; for a single obvious path leave it [] (exploit_chain already covers it). Use mitigating_factors to state honestly what reduces severity. Both are optional — [] when not applicable.

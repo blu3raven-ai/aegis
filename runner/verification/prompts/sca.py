@@ -26,7 +26,8 @@ Respond ONLY with valid JSON in this exact shape:
   ],
   "reproduction": "<optional: a short, high-level outline of the steps that demonstrate reachability (which entrypoint calls the vulnerable API, what triggers it). Describe the steps; do NOT write a working weaponised payload. Empty string if not applicable>",
   "attack_paths": [{"name": "<short route name>", "steps": "<reach the sink on this route; cite [R1], [R2]>"}],
-  "mitigating_factors": ["<a factor that limits real-world exploitability>"]
+  "mitigating_factors": ["<a factor that limits real-world exploitability>"],
+  "fix": "<a concrete remediation. When small, a unified diff (--- a/file / +++ b/file / @@) that fixes the ROOT cause. Otherwise 1-3 sentences naming the exact change and where. Empty string if not confirmed>"
 }
 
 Rules:

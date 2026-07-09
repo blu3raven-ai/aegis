@@ -9,6 +9,7 @@ def _model(**kw):
         title=kw.get("title", ""),
         impact=kw.get("impact", ""),
         reproduction=kw.get("reproduction", ""),
+        fix=kw.get("fix", ""),
         attack_paths=kw.get("attack_paths", []),
         mitigating_factors=kw.get("mitigating_factors", []),
     )
@@ -20,12 +21,14 @@ def test_copies_all_three_fields():
         title="SSRF via header",
         impact="reads cloud metadata",
         reproduction="POST /x",
+        fix="--- a/x\n+++ b/x",
         attack_paths=[{"name": "A", "steps": "reach [R1]"}],
         mitigating_factors=["localhost only"],
     ))
     assert meta["title"] == "SSRF via header"
     assert meta["impact"] == "reads cloud metadata"
     assert meta["reproduction"] == "POST /x"
+    assert meta["fix"].startswith("--- a/x")
     assert meta["attack_paths"] == [{"name": "A", "steps": "reach [R1]"}]
     assert meta["mitigating_factors"] == ["localhost only"]
 

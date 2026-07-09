@@ -64,6 +64,14 @@ function renderChainWithRefs(chain: string, refCount: number): React.ReactNode {
   })
 }
 
+/** Tint a unified-diff line: additions green, removals red, hunk headers muted. */
+function diffLineClass(line: string): string {
+  if (line.startsWith("+") && !line.startsWith("+++")) return "text-[var(--color-severity-low-text)]"
+  if (line.startsWith("-") && !line.startsWith("---")) return "text-[var(--color-severity-critical-text)]"
+  if (line.startsWith("@@")) return "text-[var(--color-text-tertiary)]"
+  return "text-[var(--color-text-secondary)]"
+}
+
 /**
  * The locked-preview copy differs by what the verifier actually does for that
  * scanner: SAST/IaC get an exploit-path pass; dependencies get a
@@ -159,6 +167,8 @@ export function EvidenceSection({
   const reproduction = metadata?.reproduction?.trim()
   const attackPaths = (metadata?.attack_paths ?? []).filter((p) => p?.steps?.trim())
   const mitigatingFactors = (metadata?.mitigating_factors ?? []).filter((f) => f?.trim())
+  const fix = metadata?.fix?.trim()
+  const fixIsDiff = Boolean(fix && /^(---|\+\+\+|@@|[+-] )/m.test(fix))
   const ruledOut = metadata?.ruled_out_reason
   const rationale = verdictRationale(verdict, metadata)
   // A proposed mitigation whose citation failed grounding: the finding was NOT
@@ -246,6 +256,23 @@ export function EvidenceSection({
               <li key={i}>{f}</li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {fix && (
+        <div className="mt-3">
+          <h4 className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            Suggested fix
+          </h4>
+          {fixIsDiff ? (
+            <pre className="overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 font-[family-name:var(--font-jetbrains-mono)] text-[12px] leading-relaxed">
+              {fix.split("\n").map((line, i) => (
+                <div key={i} className={diffLineClass(line)}>{line || " "}</div>
+              ))}
+            </pre>
+          ) : (
+            <p className="text-sm leading-relaxed text-[var(--color-text-secondary)]">{fix}</p>
+          )}
         </div>
       )}
 
