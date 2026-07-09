@@ -109,6 +109,11 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
     run_ts = int(time.time() * 1000)
     queued: list[str] = []
 
+    # BYO LLM verification config — the same env every scan job needs so SAST/IaC
+    # findings get verified. Resolved once per dispatch; empty when disabled.
+    from src.settings.llm.service import build_llm_scan_env
+    llm_env = build_llm_scan_env()
+
     for scanner_type in scanner_types:
         run_id = f"{run_prefix}-{run_ts}-{scanner_type}"
         run_creators[scanner_type](org, run_id)
@@ -124,6 +129,7 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
             "COMMIT_SHA":  "",
             "CONCURRENCY": "4",
             "SCAN_SCOPE":  "full_tree",
+            **llm_env,
         }
 
         create_job(job_type=scanner_type, org=org, run_id=run_id, env_vars=env)

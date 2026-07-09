@@ -69,6 +69,33 @@ def _scanner_types(run_ids):
     return {rid.split("-", 2)[2] for rid in run_ids}
 
 
+def test_dispatch_injects_llm_verification_env(monkeypatch):
+    """A source-connection scan must carry the BYO LLM config into each job so
+    SAST/IaC findings get verified — the same as the single-repo path."""
+    jobs_seen: list[dict] = []
+    import src.runner.jobs as jobs
+    import src.storage as storage
+
+    monkeypatch.setattr(jobs, "create_job", lambda **kwargs: jobs_seen.append(kwargs))
+    for name in (
+        "create_dependencies_run", "create_code_scanning_run",
+        "create_container_scanning_run", "create_secret_run", "create_iac_run",
+    ):
+        monkeypatch.setattr(storage, name, lambda org, run_id: None)
+    # Pretend verification is enabled (dispatch imports the helper from here).
+    import src.settings.llm.service as llm_service
+    monkeypatch.setattr(
+        llm_service, "build_llm_scan_env",
+        lambda: {"LLM_API_KEY": "k", "LLM_API_MODEL": "m"},
+    )
+
+    triggers.dispatch_source_scan(_code_connection(["code_scanning"]), run_prefix="manual")
+
+    assert jobs_seen, "expected at least one dispatched job"
+    for job in jobs_seen:
+        assert job["env_vars"].get("LLM_API_KEY") == "k", "LLM env not injected into scan job"
+
+
 def test_dispatch_empty_selection_runs_all_applicable(monkeypatch):
     _patch_dispatch_sinks(monkeypatch)
     queued = triggers.dispatch_source_scan(_code_connection([]), run_prefix="manual")
