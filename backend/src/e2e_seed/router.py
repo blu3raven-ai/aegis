@@ -97,7 +97,6 @@ async def _seed() -> dict[str, Any]:
                 severity="medium",
                 file_path="app/handlers.py",
                 rule_name="python.sqli",
-                engine="semgrep",
                 detail={"seed": _SEED_TAG, "message": "Possible SQL injection", "startLine": 42},
             ),
             _finding(
