@@ -27,6 +27,7 @@ _SCANNER_JOB_TYPES: dict[str, str] = {
     "secret_scanning":       "secret_scanning",
     "iac_scanning":          "iac_scanning",
     "agent_scanning":        "agent_scanning",
+    "deep_audit":            "deep_audit",
 }
 
 
@@ -214,7 +215,7 @@ def _parse_submitted_at(meta: dict[str, Any]) -> datetime:
     return datetime.now(timezone.utc)
 
 
-_REPO_SCANNERS = frozenset({"dependencies_scanning", "code_scanning", "secret_scanning", "iac_scanning", "agent_scanning"})
+_REPO_SCANNERS = frozenset({"dependencies_scanning", "code_scanning", "secret_scanning", "iac_scanning", "agent_scanning", "deep_audit"})
 _IMAGE_SCANNERS = frozenset({"container_scanning"})
 _CLOUD_SCANNERS: frozenset[str] = frozenset()  # populated when cloud scanners exist
 

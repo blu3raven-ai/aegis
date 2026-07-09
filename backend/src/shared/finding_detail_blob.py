@@ -75,6 +75,14 @@ LEAN_KEYS: dict[str, set[str]] = {
         "guideline",
         "fingerprint",
     },
+    "deep_audit": {
+        "checkId",
+        "ruleName",
+        "startLine",
+        "resource",
+        "severity",
+        "fingerprint",
+    },
     "dependencies_scanning": {
         "ecosystem",
         "advisoryId",
