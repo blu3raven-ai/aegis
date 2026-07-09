@@ -383,6 +383,88 @@ async def complete_job_endpoint(job_id: str, body: CompleteRequest, request: Req
     return JSONResponse(response)
 
 
+@router.post("/jobs/{job_id}/preview-ingest")
+def preview_ingest_endpoint(job_id: str, request: Request) -> JSONResponse:
+    """Mid-scan preview: ingest the scanner's findings-so-far (unverified) so they
+    surface immediately, ahead of the slow verification pass. Idempotent — the
+    completion handler re-ingests the same run with verdicts filled in. Best-effort:
+    a failure here just means the findings appear at completion instead of early,
+    so it never fails the runner's scan."""
+    runner, err = _require_runner(request)
+    if err:
+        return err
+
+    job = read_job(job_id)
+    if not job:
+        return JSONResponse({"error": "Job not found"}, status_code=404)
+    if job.get("runnerId") != runner["id"]:
+        return JSONResponse({"error": "Not your job"}, status_code=403)
+    if job.get("status") in ("completed", "failed", "cancelled"):
+        return JSONResponse({"ok": True})
+
+    job_type = job.get("jobType", "")
+    # Only the verifying scanners have a slow tail worth previewing before.
+    if job_type not in ("code_scanning", "iac_scanning"):
+        return JSONResponse({"ok": True, "skipped": "not_a_verifying_scanner"})
+
+    org = job.get("org", "")
+    run_id = job.get("runId", "")
+    env_vars = job.get("envVars") or {}
+    source_type = env_vars.get("SOURCE_TYPE") or None
+    asset_id = env_vars.get("REPO_ID") or None
+
+    try:
+        _dispatch_ingest(job_type, org, run_id, source_type)
+    except Exception as e:  # noqa: BLE001
+        _logger.warning("[!] preview-ingest failed for %s %s/%s: %s", job_type, org, run_id, e)
+        return JSONResponse({"ok": False, "error": "ingest_failed"})
+
+    # Nudge open clients to refetch — no completion/notification semantics.
+    get_event_bus().publish_sync(Event(
+        event_type="findings.updated",
+        asset_id=asset_id,
+        data={"tool": job_type, "org": org, "runId": run_id, "preview": True},
+    ))
+    return JSONResponse({"ok": True})
+
+
+def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | None) -> None:
+    """Read the scanner's findings from MinIO and upsert them. Idempotent
+    (upsert by identity_key), so it is safe to call mid-scan for a preview and
+    again on completion. Shared by the completion handler and the preview-ingest
+    endpoint."""
+    if job_type == "dependencies_scanning":
+        from src.dependencies.scanner import ingest_dependencies_from_minio
+        ingest_dependencies_from_minio(org, run_id, source_type=source_type)
+    elif job_type == "secret_scanning":
+        from src.secrets.scanner import ingest_secrets_from_minio
+        ingest_secrets_from_minio(org, run_id, source_type=source_type)
+    elif job_type == "code_scanning":
+        from src.code_scanning.scanner import ingest_code_scanning_from_minio
+        ingest_code_scanning_from_minio(org, run_id, source_type=source_type)
+    elif job_type == "container_scanning":
+        # reco- runs are internal candidate SBOM scans for the base-image
+        # recommendation; their SBOM is consumed by the reco flow directly,
+        # never ingested as findings (would pollute inventory + recurse).
+        if not run_id.startswith("reco-"):
+            from src.containers.scanner import ingest_container_from_minio
+            ingest_container_from_minio(org, run_id, source_type=source_type)
+    elif job_type == "iac_scanning":
+        from src.iac.scanner import ingest_iac_from_minio
+        ingest_iac_from_minio(org, run_id, source_type=source_type)
+    elif job_type == "agent_scanning":
+        from src.agent_scanning.scanner import ingest_agent_from_minio
+        ingest_agent_from_minio(org, run_id, source_type=source_type)
+    elif job_type == "dependencies_reachability":
+        import asyncio
+
+        from src.dependencies.reachability_ingest import ingest_reachability_results
+        # ingest_reachability_results is async and opens its own session. Callers
+        # run as a bare background-thread target (no running loop), so asyncio.run
+        # owns a fresh loop here and never nests — the established bridge.
+        asyncio.run(ingest_reachability_results(org, run_id))
+
+
 def _ingest_from_minio(job: dict[str, Any]) -> None:
     """Ingest scan results from MinIO after runner uploads. Runs in background thread."""
     import logging
@@ -408,37 +490,7 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
     _update_run_status(job_type, org, run_id, {"status": "ingesting", "progress": {"stage": "ingesting"}})
 
     try:
-        if job_type == "dependencies_scanning":
-            from src.dependencies.scanner import ingest_dependencies_from_minio
-            ingest_dependencies_from_minio(org, run_id, source_type=source_type)
-        elif job_type == "secret_scanning":
-            from src.secrets.scanner import ingest_secrets_from_minio
-            ingest_secrets_from_minio(org, run_id, source_type=source_type)
-        elif job_type == "code_scanning":
-            from src.code_scanning.scanner import ingest_code_scanning_from_minio
-            ingest_code_scanning_from_minio(org, run_id, source_type=source_type)
-        elif job_type == "container_scanning":
-            # reco- runs are internal candidate SBOM scans for the base-image
-            # recommendation; their SBOM is consumed by the reco flow directly,
-            # never ingested as findings (would pollute inventory + recurse).
-            if not run_id.startswith("reco-"):
-                from src.containers.scanner import ingest_container_from_minio
-                ingest_container_from_minio(org, run_id, source_type=source_type)
-        elif job_type == "iac_scanning":
-            from src.iac.scanner import ingest_iac_from_minio
-            ingest_iac_from_minio(org, run_id, source_type=source_type)
-        elif job_type == "agent_scanning":
-            from src.agent_scanning.scanner import ingest_agent_from_minio
-            ingest_agent_from_minio(org, run_id, source_type=source_type)
-        elif job_type == "dependencies_reachability":
-            import asyncio
-
-            from src.dependencies.reachability_ingest import ingest_reachability_results
-            # ingest_reachability_results is async and opens its own session.
-            # _ingest_from_minio runs as a bare background-thread target (no
-            # running loop), so asyncio.run owns a fresh loop here and never
-            # nests — matching the established background-ingest bridge.
-            asyncio.run(ingest_reachability_results(org, run_id))
+        _dispatch_ingest(job_type, org, run_id, source_type)
         _logger.info("[✓] Ingestion completed for %s %s/%s", job_type, org, run_id)
         get_event_bus().publish_sync(Event(
             event_type="scan.completed",

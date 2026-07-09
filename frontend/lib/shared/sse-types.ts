@@ -62,6 +62,18 @@ export interface ArgusIntelPushEvent {
   chainIds?: string[]
 }
 
+/**
+ * A scanner's findings changed mid-run — emitted by the preview-ingest step so
+ * open views refetch and show findings before the slow verification pass, and
+ * again as verdicts land. Carries no completion/notification semantics.
+ */
+export interface FindingsUpdatedEvent {
+  tool: string
+  org: string
+  runId: string
+  preview?: boolean
+}
+
 export type SSEEventMap = {
   "scan.progress": ScanProgressEvent
   "scan.completed": ScanCompletedEvent
@@ -71,6 +83,7 @@ export type SSEEventMap = {
   "runner.status": RunnerStatusEvent
   "notification.new": NotificationNewEvent
   "argus.intel_push": ArgusIntelPushEvent
+  "findings.updated": FindingsUpdatedEvent
 }
 
 export type SSEEventType = keyof SSEEventMap

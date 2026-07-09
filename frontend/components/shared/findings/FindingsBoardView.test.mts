@@ -372,4 +372,8 @@ describe("FindingsBoardView URL sync", () => {
   it("preserves the open drawer in the URL as ?finding=<id>", () => {
     assert.match(src, /if \(selectedId != null\) params\.set\("finding", String\(selectedId\)\)/)
   })
+
+  it("refetches on findings.updated (mid-scan preview + streaming verdicts)", () => {
+    assert.match(src, /useSSE\("findings\.updated",/)
+  })
 })
