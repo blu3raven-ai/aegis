@@ -85,3 +85,30 @@ def test_cache_miss_verifies_and_stamps_the_hash(monkeypatch):
     assert meta.get("cache_hit") is None
     # The key is stamped so the next scan can cache-hit this exact input.
     assert meta["verification_input_hash"] == h
+
+
+def test_parallel_verify_preserves_per_finding_order(monkeypatch):
+    # With concurrent workers, each result must land on its own finding — a slot
+    # mix-up would attach the wrong verdict/evidence to a finding.
+    findings = [_finding(rule_id=f"r{i}", code_window=f"w{i}", severity="high") for i in range(6)]
+
+    class _R:
+        def __init__(self, rule_id):
+            self.verdict = f"verdict-{rule_id}"
+            self.evidence = [{"rule": rule_id}]
+            self.exploit_chain = f"chain-{rule_id}"
+            self.tokens_in = 1
+            self.tokens_out = 1
+            self.verification_metadata = {}
+
+    monkeypatch.setattr(sc, "verify_finding", lambda *, finding, **kw: _R(finding["rule_id"]))
+
+    out = sc._maybe_verify(
+        findings=findings, repo_root="/tmp", llm=object(),
+        scan_budget=sc._build_scan_budget(JobEnv({})), backend=None, max_workers=4,
+    )
+
+    assert len(out) == 6
+    for i, f in enumerate(out):
+        assert f["verdict"] == f"verdict-r{i}", f"finding {i} got the wrong result"
+        assert f["exploit_chain"] == f"chain-r{i}"

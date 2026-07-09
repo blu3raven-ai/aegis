@@ -8,6 +8,8 @@ so a shared os.environ would be a cross-job leak).
 """
 from __future__ import annotations
 
+import threading
+
 from runner.scanners._shared import JobEnv
 
 
@@ -19,26 +21,45 @@ DEFAULT_DAILY_REMAINING = 1_000_000
 
 
 class ScanBudget:
+    # Verification now runs findings concurrently, so allow()/record() are
+    # locked. The cap is soft: up to (worker count) findings may be in flight
+    # when the budget is hit, so total spend can overshoot by that much — an
+    # acceptable trade for the wall-clock win.
     def __init__(self, *, scan_budget: int, daily_remaining: int) -> None:
         self._scan_budget = scan_budget
         self._daily_remaining = daily_remaining
         self.total_tokens_in = 0
         self.total_tokens_out = 0
         self.skip_reason: str | None = None
+        self._lock = threading.Lock()
 
     def allow(self) -> bool:
-        if self._daily_remaining <= 0:
-            self.skip_reason = "org_daily_cap"
-            return False
-        used = self.total_tokens_in + self.total_tokens_out
-        if used >= self._scan_budget:
-            self.skip_reason = "scan_budget"
-            return False
-        return True
+        with self._lock:
+            if self._daily_remaining <= 0:
+                self.skip_reason = "org_daily_cap"
+                return False
+            used = self.total_tokens_in + self.total_tokens_out
+            if used >= self._scan_budget:
+                self.skip_reason = "scan_budget"
+                return False
+            return True
 
     def record(self, *, tokens_in: int, tokens_out: int) -> None:
-        self.total_tokens_in += tokens_in
-        self.total_tokens_out += tokens_out
+        with self._lock:
+            self.total_tokens_in += tokens_in
+            self.total_tokens_out += tokens_out
+
+
+# Verification is LLM-I/O-bound, so findings verify concurrently. The default is
+# modest to stay friendly to BYO model rate limits; raise LLM_VERIFY_CONCURRENCY
+# when the endpoint can take more.
+DEFAULT_VERIFY_WORKERS = 8
+
+
+def verify_concurrency(env: JobEnv) -> int:
+    """Worker count for concurrent verification, from LLM_VERIFY_CONCURRENCY
+    (clamped to 1..32), defaulting to DEFAULT_VERIFY_WORKERS."""
+    return max(1, min(32, env.get_int("LLM_VERIFY_CONCURRENCY", DEFAULT_VERIFY_WORKERS)))
 
 
 def make_sast_budget(env: JobEnv) -> ScanBudget:

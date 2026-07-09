@@ -11,7 +11,7 @@ from __future__ import annotations
 
 # The per-repo thread pool now lives in _shared.run_per_repo; this import is
 # retained as the module-local surface that lets the pool be swapped in tests.
-import concurrent.futures  # noqa: F401
+import concurrent.futures
 import dataclasses
 import json
 import logging
@@ -45,7 +45,7 @@ from runner.scanners.code_scanning import (
     normalize,
     reachability,
 )
-from runner.verification.budget import ScanBudget
+from runner.verification.budget import DEFAULT_VERIFY_WORKERS, ScanBudget, verify_concurrency
 from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
 from runner.verification.pipeline import verify_finding
 
@@ -66,7 +66,7 @@ def _build_scan_budget(env: JobEnv) -> ScanBudget:
 
 def _maybe_verify(
     *, findings: list[dict], repo_root: str, llm, escalation_llm=None, scan_budget: ScanBudget,
-    backend=None,
+    backend=None, max_workers: int = DEFAULT_VERIFY_WORKERS,
 ) -> list[dict]:
     # Precompute each finding's cache key and, when verification is on, ask the
     # backend which of those were already verified with identical input — those
@@ -77,35 +77,33 @@ def _maybe_verify(
         if llm is not None else {}
     )
 
-    out: list[dict] = []
-    for f, input_hash in zip(findings, hashes):
-        copy = dict(f)
+    # Resolve the cheap cases (disabled / below severity / cache hit) inline and
+    # collect the rest — the ones that need an LLM round-trip — to verify
+    # concurrently. Each finding owns its own slot in `out`, so workers never
+    # touch shared state except the (locked) scan_budget.
+    out: list[dict] = [dict(f) for f in findings]
+    pending: list[int] = []
+    for i, (f, input_hash) in enumerate(zip(findings, hashes)):
+        copy = out[i]
         sev = _SEVERITY_ORDER.get((f.get("severity") or "").lower(), 0)
 
         if llm is None:
             copy["verdict"] = None
             copy.setdefault("verification_metadata", {})["skipped"] = "llm_disabled"
-            out.append(copy)
-            continue
-
-        if sev < _MIN_VERIFY_SEVERITY:
+        elif sev < _MIN_VERIFY_SEVERITY:
             copy["verdict"] = None
             copy.setdefault("verification_metadata", {})["skipped"] = "below_severity"
-            out.append(copy)
-            continue
-
-        cached = cache.get(input_hash)
-        if cached is not None:
+        elif (cached := cache.get(input_hash)) is not None:
             apply_cache_hit(copy, cached, input_hash)
-            out.append(copy)
-            continue
+        else:
+            pending.append(i)
 
+    def _verify_one(i: int) -> None:
+        f, input_hash, copy = findings[i], hashes[i], out[i]
         if not scan_budget.allow():
             copy["verdict"] = "possible"
             copy.setdefault("verification_metadata", {})["skipped"] = scan_budget.skip_reason
-            out.append(copy)
-            continue
-
+            return
         try:
             result = verify_finding(
                 finding=f, repo_root=repo_root, llm=llm, escalation_llm=escalation_llm,
@@ -122,7 +120,11 @@ def _maybe_verify(
             copy["verdict"] = None
             copy.setdefault("verification_metadata", {})["skipped"] = f"llm_error:{type(e).__name__}"
 
-        out.append(copy)
+    if pending:
+        workers = max(1, min(max_workers, len(pending)))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(_verify_one, pending))
+
     return out
 
 
@@ -323,6 +325,7 @@ class CodeScanningScanner:
             escalation_llm=build_escalation_llm_client(env),
             scan_budget=_build_scan_budget(env),
             backend=getattr(self, "_backend", None),
+            max_workers=verify_concurrency(env),
         )
 
         with open(findings_file, "w") as f:
