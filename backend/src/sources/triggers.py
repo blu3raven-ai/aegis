@@ -16,15 +16,10 @@ _SCHEDULE_HOURS = {"1h": 1, "3h": 3, "6h": 6, "12h": 12, "24h": 24}
 
 # Which scanner job types run for each source category.
 SCANNERS_BY_CATEGORY: dict[str, list[str]] = {
-    "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning", "iac_scanning", "agent_scanning", "deep_audit"],
+    "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning", "iac_scanning", "agent_scanning"],
     "container-registry": ["container_scanning"],
     "container-images": ["container_scanning"],
 }
-
-# Selectable, but never run on the default (empty-selection) scan — a caller must
-# opt in explicitly. The reasoning audit is slow and token-heavy, so it stays off
-# the "scan everything" path.
-_OPT_IN_SCANNERS: frozenset[str] = frozenset({"deep_audit"})
 
 
 def _now_iso() -> str:
@@ -64,7 +59,6 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
     from src.runner.jobs import create_job
     from src.storage import (
         create_agent_run,
-        create_deep_audit_run,
         create_dependencies_run,
         create_code_scanning_run,
         create_container_scanning_run,
@@ -79,7 +73,6 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
         "container_scanning": create_container_scanning_run,
         "iac_scanning": create_iac_run,
         "agent_scanning": create_agent_run,
-        "deep_audit": create_deep_audit_run,
     }
 
     auth = connection.get("auth") or {}
@@ -112,10 +105,6 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
         scanner_types = [s for s in scanner_types if s in selected]
         if not scanner_types:
             raise ValueError("No applicable scanners are selected for this source.")
-    else:
-        # Opt-in scanners (the reasoning audit) run only when explicitly selected,
-        # never on the default "scan everything" path — they're slow and costly.
-        scanner_types = [s for s in scanner_types if s not in _OPT_IN_SCANNERS]
 
     instance_url = auth.get("instanceUrl") or ""
     repo_urls = build_repo_urls(source_type, instance_url, discovered_items)

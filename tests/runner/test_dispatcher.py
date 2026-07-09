@@ -40,6 +40,5 @@ def test_supported_types_lists_all_scanners():
         "code_scanning",
         "iac_scanning",
         "agent_scanning",
-        "deep_audit",
         "dependencies_reachability",
     }

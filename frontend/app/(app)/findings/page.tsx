@@ -15,7 +15,6 @@ const VALID_SCANNER_PARAMS = new Set<FindingScanner>([
   "secret_scanning",
   "iac_scanning",
   "agent_scanning",
-  "deep_audit",
 ])
 
 const VALID_STATE_PARAMS = new Set<FindingState>([
