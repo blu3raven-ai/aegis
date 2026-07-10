@@ -110,6 +110,7 @@ class ConnectionTestResult:
             "success": self.success,
             "message": self.message,
             "discovered_count": self.discovered_count,
+            "discovered_items": self.discovered_items or [],
         }
 
 
