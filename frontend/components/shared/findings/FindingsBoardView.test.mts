@@ -376,4 +376,8 @@ describe("FindingsBoardView URL sync", () => {
   it("refetches on findings.updated (mid-scan preview + streaming verdicts)", () => {
     assert.match(src, /useSSE\("findings\.updated",/)
   })
+
+  it("treats container findings as verifier-enriched", () => {
+    assert.match(src, /VERIFIABLE_SCANNERS = new Set[\s\S]*?"container_scanning"/)
+  })
 })

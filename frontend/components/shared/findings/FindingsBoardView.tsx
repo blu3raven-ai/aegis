@@ -238,8 +238,7 @@ function ActionBandBadge({ band }: { band: FindingActionBand }) {
 const SCANNER_ORDER: Scanner[] = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning", "agent_scanning"]
 
 // Scanners the LLM verifier runs its exploit-verification pass on. The drawer's
-// locked preview only nudges to enable verification for these (deps/container
-// verdicts are deterministic today).
+// locked preview only nudges to enable verification for these.
 // Secrets are deliberately excluded: they're verified by TruffleHog's live
 // provider check, never sent to an LLM, so the drawer must not offer an
 // "enable LLM verification" prompt for them.
@@ -247,6 +246,7 @@ const VERIFIABLE_SCANNERS = new Set<Scanner>([
   "code_scanning",
   "iac_scanning",
   "dependencies_scanning",
+  "container_scanning",
 ])
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"]
 
