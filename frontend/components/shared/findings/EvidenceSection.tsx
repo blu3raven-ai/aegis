@@ -64,6 +64,20 @@ function renderChainWithRefs(chain: string, refCount: number): React.ReactNode {
   })
 }
 
+/**
+ * The emphasized "Impact" callout — a red-bordered block with an inline IMPACT
+ * label. Shared so a scanner's curated advisory (e.g. the agent scanner) can be
+ * given the same visual weight as a verifier-authored impact statement.
+ */
+export function ImpactCallout({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="rounded-md border-l-2 border-[var(--color-severity-high)] bg-[var(--color-severity-high-subtle)] px-3 py-2 text-sm font-medium leading-relaxed text-[var(--color-text-primary)]">
+      <span className="mr-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-high-text)]">Impact</span>
+      {children}
+    </p>
+  )
+}
+
 /** Tint a unified-diff line: additions green, removals red, hunk headers muted. */
 function diffLineClass(line: string): string {
   if (line.startsWith("+") && !line.startsWith("+++")) return "text-[var(--color-severity-low-text)]"
@@ -213,12 +227,7 @@ export function EvidenceSection({
         </p>
       )}
 
-      {impact && (
-        <p className="rounded-md border-l-2 border-[var(--color-severity-high)] bg-[var(--color-severity-high-subtle)] px-3 py-2 text-sm font-medium leading-relaxed text-[var(--color-text-primary)]">
-          <span className="mr-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-high-text)]">Impact</span>
-          {impact}
-        </p>
-      )}
+      {impact && <ImpactCallout>{impact}</ImpactCallout>}
 
       {hasChain && (
         <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">

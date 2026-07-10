@@ -30,7 +30,7 @@ import { FindingOriginSection } from "@/components/shared/findings/FindingOrigin
 import { FindingAge } from "@/components/shared/findings/FindingAge"
 import { CodePreviewSection } from "@/components/shared/findings/CodePreviewSection"
 import { FindingDataFlowSection } from "@/components/shared/findings/FindingDataFlowSection"
-import { EvidenceSection } from "@/components/shared/findings/EvidenceSection"
+import { EvidenceSection, ImpactCallout } from "@/components/shared/findings/EvidenceSection"
 import { SecretVerificationSection } from "@/components/shared/findings/SecretVerificationSection"
 import { SecurityBriefSection } from "@/components/shared/findings/SecurityBriefSection"
 import { ContainerImageSection } from "@/components/shared/findings/ContainerImageSection"
@@ -1892,6 +1892,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               <FindingDescriptionSection
                 description={selectedFinding.description}
                 title={selectedFinding.title}
+                emphasized={selectedFinding.scanner === "agent_scanning"}
               />
 
               <FindingSignalRow finding={selectedFinding} />
@@ -2098,8 +2099,29 @@ const OK = "text-[var(--color-state-fixed-text)]"
 // The scanner's plain-language explanation of the issue — the first thing an
 // analyst needs to decide whether the finding is real. Hidden when it would
 // just repeat the title.
-function FindingDescriptionSection({ description, title }: { description?: string; title: string }) {
+function FindingDescriptionSection({
+  description,
+  title,
+  emphasized = false,
+}: {
+  description?: string
+  title: string
+  // Scanners without an LLM verifier (e.g. agent) carry a curated advisory that
+  // is itself an impact statement; render it with the same weight the verifier's
+  // Impact line gets rather than as a plain paragraph.
+  emphasized?: boolean
+}) {
   if (!description || description.trim() === title.trim()) return null
+  if (emphasized) {
+    return (
+      <section aria-labelledby="finding-description-title">
+        <h3 id="finding-description-title" className="sr-only">
+          Impact
+        </h3>
+        <ImpactCallout>{description}</ImpactCallout>
+      </section>
+    )
+  }
   return (
     <section aria-labelledby="finding-description-title">
       <h3 id="finding-description-title" className="text-base font-semibold text-[var(--color-text-primary)]">
