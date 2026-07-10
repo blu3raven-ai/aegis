@@ -216,6 +216,14 @@ describe("FindingsBoardView verification + reachability wiring", () => {
     assert.match(src, /verifiable=\{VERIFIABLE_SCANNERS\.has\(selectedFinding\.scanner\)\}/)
   })
 
+  it("gives agent-scanner findings the emphasized Impact treatment for their curated advisory", () => {
+    // Agent findings have no LLM verifier; their description IS the impact
+    // statement, so it renders via the shared ImpactCallout, not a plain paragraph.
+    assert.match(src, /emphasized=\{selectedFinding\.scanner === "agent_scanning"\}/)
+    assert.match(src, /if \(emphasized\) \{[\s\S]*?<ImpactCallout>\{description\}<\/ImpactCallout>/)
+    assert.match(src, /import \{ EvidenceSection, ImpactCallout \}/)
+  })
+
   it("derives the verification-enabled signal from the LLM config status", () => {
     assert.match(src, /fetch\("\/api\/v1\/settings\/llm"\)/)
     assert.match(src, /setVerificationEnabled\(Boolean\(data\.enabled\)\)/)
