@@ -158,6 +158,7 @@ export function AddConnectionModal({
       auth,
       scanScope: "all" as const,
       excludedItems: [],
+      includedItems: [],
       connectionMethods: ["pat"] as ConnectionMethod[],
       syncSchedule: "6h" as const,
       status: "not-synced" as const,
