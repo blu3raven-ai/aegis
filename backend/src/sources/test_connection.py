@@ -246,19 +246,22 @@ async def _test_github(auth: dict) -> ConnectionTestResult:
                     message=f"Token is missing required scopes: {', '.join(missing)}",
                 )
 
-            # 2. Collect repos — org repos or user's own repos
+            # 2. Collect repos — a specific org, or every repo the token can
+            #    reach across all orgs + personal when no org is given.
             if org:
                 url = f"https://api.github.com/orgs/{org}/repos"
                 target = f"organisation '{org}'"
+                params = {"per_page": 100}
             else:
                 url = "https://api.github.com/user/repos"
                 target = f"user '{username}'"
+                params = {"per_page": 100, "affiliation": "owner,organization_member"}
 
             items = await _paginate_github(
                 client,
                 url,
                 headers=headers,
-                params={"per_page": 100},
+                params=params,
                 name_key="full_name",
                 exclude_archived=True,
             )
