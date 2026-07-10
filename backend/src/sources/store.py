@@ -15,6 +15,15 @@ from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso, parse
 
 _logger = logging.getLogger(__name__)
 
+
+def _owner_of(item: str) -> str:
+    """Owner segment of an 'owner/repo' item (or clone-URL host)."""
+    if "://" in item:
+        from urllib.parse import urlparse
+        parts = [p for p in urlparse(item).path.split("/") if p]
+        return parts[0] if parts else (urlparse(item).hostname or "public")
+    return item.split("/", 1)[0] if "/" in item else item
+
 VALID_CATEGORIES = {"code-repositories", "container-images", "container-registry", "ci-systems"}
 VALID_SOURCE_TYPES = {
     "github", "gitlab", "bitbucket", "gitea", "azure_devops",
@@ -249,9 +258,23 @@ def list_connections(category: str | None = None, org_id: str = "default") -> li
                 bucket[severity] = cnt
 
         for conn, d in zip(conns, dicts):
-            org = ((conn.auth or {}).get("orgOrOwner") or "").strip().lower()
-            d["lastScanAt"] = _dt_to_iso(last_scan_by_org.get(org)) if org else None
-            d["findingCounts"] = counts_by_org.get(org) or {"critical": 0, "high": 0, "medium": 0, "low": 0}
+            if conn.scan_scope == "selected" and conn.included_items:
+                owners = {_owner_of(i) for i in conn.included_items}
+                agg = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+                latest = None
+                for o in owners:
+                    for sev, n in (counts_by_org.get(o) or {}).items():
+                        if sev in agg:
+                            agg[sev] += n
+                    ts = last_scan_by_org.get(o)
+                    if ts and (latest is None or ts > latest):
+                        latest = ts
+                d["findingCounts"] = agg
+                d["lastScanAt"] = _dt_to_iso(latest) if latest else None
+            else:
+                org = ((conn.auth or {}).get("orgOrOwner") or "").strip().lower()
+                d["lastScanAt"] = _dt_to_iso(last_scan_by_org.get(org)) if org else None
+                d["findingCounts"] = counts_by_org.get(org) or {"critical": 0, "high": 0, "medium": 0, "low": 0}
         return dicts
 
     return run_db(_query)

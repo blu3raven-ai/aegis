@@ -152,3 +152,75 @@ def test_legacy_all_scope_still_dispatches_discovered_items():
         mk.side_effect = lambda **kw: seen.append((kw["org"], kw["env_vars"]["GIT_REPOS"]))
         triggers.dispatch_source_scan(connection)
     assert {org for org, _ in seen} == {"acme"}
+
+
+# ---------------------------------------------------------------------------
+# Task 9: sources-list finding counts aggregate across cherry-pick owners
+# ---------------------------------------------------------------------------
+
+import datetime  # noqa: E402
+import secrets  # noqa: E402
+import uuid  # noqa: E402
+
+from sqlalchemy import delete as _sa_delete  # noqa: E402
+
+from src.db.models import Asset, Finding, SourceConnection  # noqa: E402
+
+
+@pytest.mark.asyncio
+async def test_selected_scope_aggregates_finding_counts(db_session):
+    """list_connections returns aggregated findingCounts for a cherry-pick connection."""
+    conn_id = f"src_{secrets.token_hex(8)}"
+    asset_id = str(uuid.uuid4())
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    # Cherry-pick connection: blank orgOrOwner, includedItems lists the repo.
+    db_session.add(SourceConnection(
+        id=conn_id,
+        category="code-repositories",
+        source_type="github",
+        name="acme cherry-pick",
+        auth={"orgOrOwner": "", "token": "x"},
+        scan_scope="selected",
+        excluded_items=[],
+        included_items=["acme/api"],
+        scanners=[],
+        connection_methods=["pat"],
+        sync_schedule="6h",
+        scan_auto_enabled=False,
+        scan_schedule_preset="6h",
+        status="not-synced",
+        org_id="default",
+        created_at=now,
+        updated_at=now,
+    ))
+    db_session.add(Asset(
+        id=asset_id,
+        type="repo",
+        source="source_connection",
+        external_ref="github:acme/api",
+        display_name="acme/api",
+    ))
+    db_session.add(Finding(
+        tool="code_scanning",
+        identity_key=f"k-{uuid.uuid4()}",
+        asset_id=asset_id,
+        state="open",
+        severity="critical",
+    ))
+    await db_session.commit()
+
+    try:
+        result = store.list_connections()
+        match = next((d for d in result if d["id"] == conn_id), None)
+        assert match is not None, "connection missing from list_connections result"
+        counts = match["findingCounts"]
+        assert counts["critical"] == 1, f"expected critical=1, got {counts}"
+        assert counts["high"] == 0
+        assert counts["medium"] == 0
+        assert counts["low"] == 0
+    finally:
+        await db_session.execute(_sa_delete(Finding).where(Finding.asset_id == asset_id))
+        await db_session.execute(_sa_delete(Asset).where(Asset.id == asset_id))
+        await db_session.execute(_sa_delete(SourceConnection).where(SourceConnection.id == conn_id))
+        await db_session.commit()
