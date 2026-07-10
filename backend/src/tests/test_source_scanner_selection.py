@@ -65,8 +65,9 @@ def _code_connection(scanners):
 
 
 def _scanner_types(run_ids):
-    # run_id format: "{prefix}-{ts}-{scanner_type}"
-    return {rid.split("-", 2)[2] for rid in run_ids}
+    # run_id format: "{prefix}-{ts}-{owner}-{scanner_type}"
+    # scanner_type uses underscores; split from right to tolerate hyphenated owners.
+    return {rid.rsplit("-", 1)[1] for rid in run_ids}
 
 
 def test_dispatch_injects_llm_verification_env(monkeypatch):
@@ -123,5 +124,5 @@ def test_dispatch_preserves_canonical_scanner_order(monkeypatch):
         _code_connection(["code_scanning", "dependencies_scanning"]),
         run_prefix="manual",
     )
-    ordered = [rid.split("-", 2)[2] for rid in queued]
+    ordered = [rid.rsplit("-", 1)[1] for rid in queued]
     assert ordered == ["dependencies_scanning", "code_scanning"]

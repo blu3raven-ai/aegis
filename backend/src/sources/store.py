@@ -15,6 +15,15 @@ from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso, parse
 
 _logger = logging.getLogger(__name__)
 
+
+def _owner_of(item: str) -> str:
+    """Owner segment of an 'owner/repo' item (or clone-URL host)."""
+    if "://" in item:
+        from urllib.parse import urlparse
+        parts = [p for p in urlparse(item).path.split("/") if p]
+        return parts[0] if parts else (urlparse(item).hostname or "public")
+    return item.split("/", 1)[0] if "/" in item else item
+
 VALID_CATEGORIES = {"code-repositories", "container-images", "container-registry", "ci-systems"}
 VALID_SOURCE_TYPES = {
     "github", "gitlab", "bitbucket", "gitea", "azure_devops",
@@ -22,7 +31,7 @@ VALID_SOURCE_TYPES = {
     "github-actions", "gitlab-ci",
     "jenkins",
 }
-VALID_SCAN_SCOPES = {"all", "all-except-excluded"}
+VALID_SCAN_SCOPES = {"all", "all-except-excluded", "selected"}
 VALID_SYNC_SCHEDULES = {"1h", "3h", "6h", "12h", "24h"}
 _SCHEDULE_HOURS = {"1h": 1, "3h": 3, "6h": 6, "12h": 12, "24h": 24}
 VALID_STATUSES = {"connected", "syncing", "error", "disconnected", "not-synced"}
@@ -181,6 +190,7 @@ def _conn_to_dict(conn: SourceConnection) -> dict[str, Any]:
         "auth": _mask_auth(conn.auth or {}),
         "scanScope": conn.scan_scope or "all",
         "excludedItems": conn.excluded_items or [],
+        "includedItems": conn.included_items or [],
         "scanners": conn.scanners or [],
         "connectionMethods": conn.connection_methods or ["pat"],
         "syncSchedule": conn.sync_schedule or "6h",
@@ -248,9 +258,23 @@ def list_connections(category: str | None = None, org_id: str = "default") -> li
                 bucket[severity] = cnt
 
         for conn, d in zip(conns, dicts):
-            org = ((conn.auth or {}).get("orgOrOwner") or "").strip().lower()
-            d["lastScanAt"] = _dt_to_iso(last_scan_by_org.get(org)) if org else None
-            d["findingCounts"] = counts_by_org.get(org) or {"critical": 0, "high": 0, "medium": 0, "low": 0}
+            if conn.scan_scope == "selected" and conn.included_items:
+                owners = {_owner_of(i) for i in conn.included_items}
+                agg = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+                latest = None
+                for o in owners:
+                    for sev, n in (counts_by_org.get(o) or {}).items():
+                        if sev in agg:
+                            agg[sev] += n
+                    ts = last_scan_by_org.get(o)
+                    if ts and (latest is None or ts > latest):
+                        latest = ts
+                d["findingCounts"] = agg
+                d["lastScanAt"] = _dt_to_iso(latest) if latest else None
+            else:
+                org = ((conn.auth or {}).get("orgOrOwner") or "").strip().lower()
+                d["lastScanAt"] = _dt_to_iso(last_scan_by_org.get(org)) if org else None
+                d["findingCounts"] = counts_by_org.get(org) or {"critical": 0, "high": 0, "medium": 0, "low": 0}
         return dicts
 
     return run_db(_query)
@@ -357,20 +381,21 @@ def create_connection(data: dict[str, Any], org_id: str = "default") -> dict[str
     instance_url = (data["auth"].get("instanceUrl") or "").strip().lower()
 
     async def _query(session):
-        # NEW: duplicate guard — same sourceType + orgOrOwner + instanceUrl
-        existing_result = await session.execute(
-            select(SourceConnection).where(SourceConnection.source_type == source_type)
-        )
-        for existing in existing_result.scalars().all():
-            if existing.source_type != source_type:
-                continue
-            ex_org = ((existing.auth or {}).get("orgOrOwner") or "").strip().lower()
-            ex_url = ((existing.auth or {}).get("instanceUrl") or "").strip().lower()
-            if ex_org == org_or_owner and ex_url == instance_url:
-                display_org = (data["auth"].get("orgOrOwner") or org_or_owner)
-                raise SourceValidationError(
-                    f"A {source_type} connection for '{display_org}' already exists."
-                )
+        # Duplicate guard — same sourceType + orgOrOwner + instanceUrl.
+        # Skip when orgOrOwner is blank: cherry-pick connections have no org
+        # and should not collide with each other.
+        if org_or_owner:
+            existing_result = await session.execute(
+                select(SourceConnection).where(SourceConnection.source_type == source_type)
+            )
+            for existing in existing_result.scalars().all():
+                ex_org = ((existing.auth or {}).get("orgOrOwner") or "").strip().lower()
+                ex_url = ((existing.auth or {}).get("instanceUrl") or "").strip().lower()
+                if ex_org == org_or_owner and ex_url == instance_url:
+                    display_org = (data["auth"].get("orgOrOwner") or org_or_owner)
+                    raise SourceValidationError(
+                        f"A {source_type} connection for '{display_org}' already exists."
+                    )
 
         now = datetime.now(timezone.utc)
         conn = SourceConnection(
@@ -381,6 +406,7 @@ def create_connection(data: dict[str, Any], org_id: str = "default") -> dict[str
             auth=_encrypt_auth(data["auth"]),
             scan_scope=data.get("scanScope", "all"),
             excluded_items=data.get("excludedItems", []),
+            included_items=data.get("includedItems", []),
             scanners=scanners,
             connection_methods=connection_methods,
             # New-source defaults: sync hourly and auto-scan every 6h out of the
@@ -441,6 +467,7 @@ def update_connection(connection_id: str, data: dict[str, Any], org_id: str = "d
             "auth": "auth",
             "scanScope": "scan_scope",
             "excludedItems": "excluded_items",
+            "includedItems": "included_items",
             "scanners": "scanners",
             "syncSchedule": "sync_schedule",
             "syncScheduleMode": "sync_schedule_mode",

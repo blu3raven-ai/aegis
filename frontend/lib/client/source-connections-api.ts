@@ -75,6 +75,7 @@ interface RestSourceConnection {
   auth: RestSourceAuth
   scanScope: string
   excludedItems: string[]
+  includedItems: string[]
   scanners: string[] | null
   connectionMethods: string[] | null
   syncSchedule: string | null
@@ -111,6 +112,7 @@ function restConnectionToTs(c: RestSourceConnection): SourceConnection {
     },
     scanScope: c.scanScope as SourceConnection["scanScope"],
     excludedItems: c.excludedItems,
+    includedItems: c.includedItems ?? [],
     scanners: (c.scanners ?? []) as ScannerType[],
     connectionMethods: (c.connectionMethods ?? ["pat"]) as ConnectionMethod[],
     syncSchedule: (c.syncSchedule ?? "6h") as SourceConnection["syncSchedule"],

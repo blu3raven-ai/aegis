@@ -1,0 +1,223 @@
+"use client"
+
+import { useMemo, useState } from "react"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+
+function ownerOf(item: string): string {
+  return item.includes("/") ? item.split("/")[0] : item
+}
+
+export interface RepoPickerProps {
+  discovered: string[]
+  initialSelected?: string[]
+  onConfirm: (included: string[]) => void
+  isSubmitting?: boolean
+}
+
+export function RepoPicker({
+  discovered,
+  initialSelected = [],
+  onConfirm,
+  isSubmitting = false,
+}: RepoPickerProps) {
+  const [query, setQuery] = useState("")
+  const [selected, setSelected] = useState<Set<string>>(new Set(initialSelected))
+  const [publicUrl, setPublicUrl] = useState("")
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+
+  const newAvailable = useMemo(
+    () => discovered.filter((r) => !initialSelected.includes(r)),
+    [discovered, initialSelected],
+  )
+
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const byOwner = new Map<string, string[]>()
+    for (const repo of discovered) {
+      if (q && !repo.toLowerCase().includes(q)) continue
+      const owner = ownerOf(repo)
+      const list = byOwner.get(owner) ?? []
+      list.push(repo)
+      byOwner.set(owner, list)
+    }
+    return [...byOwner.entries()].sort(([a], [b]) => a.localeCompare(b))
+  }, [discovered, query])
+
+  function toggle(repo: string) {
+    setSelected((prev) => {
+      const n = new Set(prev)
+      n.has(repo) ? n.delete(repo) : n.add(repo)
+      return n
+    })
+  }
+
+  function toggleGroup(repos: string[], on: boolean) {
+    setSelected((prev) => {
+      const n = new Set(prev)
+      for (const r of repos) on ? n.add(r) : n.delete(r)
+      return n
+    })
+  }
+
+  function toggleCollapse(owner: string) {
+    setCollapsed((prev) => {
+      const n = new Set(prev)
+      n.has(owner) ? n.delete(owner) : n.add(owner)
+      return n
+    })
+  }
+
+  function addPublicUrl() {
+    const url = publicUrl.trim()
+    if (!/^https:\/\/.+/.test(url)) return
+    setSelected((prev) => new Set(prev).add(url))
+    setPublicUrl("")
+  }
+
+  const ownersSelected = new Set([...selected].map(ownerOf)).size
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* search bar */}
+      <div className="shrink-0 border-b border-[var(--color-border)] px-4 py-3">
+        <Input
+          size="sm"
+          type="search"
+          placeholder="Search repositories…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+
+      {/* new repos available banner */}
+      {newAvailable.length > 0 && (
+        <div className="shrink-0 flex items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-4 py-2">
+          <p className="flex-1 text-xs text-[var(--color-text-secondary)]">
+            {newAvailable.length} new repos available since last sync
+          </p>
+          <Button
+            size="xs"
+            variant="secondary"
+            onClick={() =>
+              setSelected((prev) => {
+                const n = new Set(prev)
+                for (const r of newAvailable) n.add(r)
+                return n
+              })
+            }
+          >
+            Add all new
+          </Button>
+        </div>
+      )}
+
+      {/* scrollable groups */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {groups.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+            <p className="text-sm text-[var(--color-text-primary)]">No repositories found</p>
+            <p className="text-xs text-[var(--color-text-secondary)]">
+              The token may have no repo access — check its scopes.
+            </p>
+          </div>
+        ) : (
+          groups.map(([owner, repos]) => {
+            const allChecked = repos.every((r) => selected.has(r))
+            const isCollapsed = collapsed.has(owner)
+            return (
+              <div key={owner} className="border-b border-[var(--color-border)] last:border-b-0">
+                {/* group header */}
+                <div className="flex items-center gap-2 px-4 py-2">
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center gap-2 text-left"
+                    onClick={() => toggleCollapse(owner)}
+                  >
+                    <svg
+                      className={`h-3.5 w-3.5 shrink-0 text-[var(--color-text-tertiary)] transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
+                      viewBox="0 0 16 16"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="text-xs font-semibold text-[var(--color-text-primary)]">
+                      {owner}
+                    </span>
+                    <span className="text-2xs text-[var(--color-text-tertiary)]">
+                      {repos.length}
+                    </span>
+                  </button>
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    onClick={() => toggleGroup(repos, !allChecked)}
+                  >
+                    {allChecked ? "Clear all" : "Select all"}
+                  </Button>
+                </div>
+
+                {/* repo rows */}
+                {!isCollapsed && (
+                  <ul className="pb-1">
+                    {repos.map((repo) => (
+                      <li key={repo}>
+                        <label className="flex cursor-pointer items-center gap-3 px-6 py-1.5 hover:bg-[var(--color-bg-hover)]">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 accent-[var(--color-accent)]"
+                            checked={selected.has(repo)}
+                            onChange={() => toggle(repo)}
+                          />
+                          <span className="text-sm text-[var(--color-text-primary)]">{repo}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      {/* bottom bar */}
+      <div className="shrink-0 border-t border-[var(--color-border)] px-4 py-3 space-y-3">
+        {/* public URL input */}
+        <div className="flex items-center gap-2">
+          <Input
+            size="sm"
+            type="url"
+            placeholder="Add a public repo by https:// clone URL"
+            value={publicUrl}
+            onChange={(e) => setPublicUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addPublicUrl()}
+            className="flex-1"
+          />
+          <Button size="xs" variant="secondary" onClick={addPublicUrl}>
+            Add URL
+          </Button>
+        </div>
+
+        {/* count + confirm */}
+        <div className="flex items-center gap-3">
+          <p className="flex-1 text-xs text-[var(--color-text-secondary)]">
+            {selected.size > 0
+              ? `${selected.size} selected across ${ownersSelected} owner${ownersSelected !== 1 ? "s" : ""}`
+              : "No repositories selected"}
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            isLoading={isSubmitting}
+            disabled={selected.size === 0}
+            onClick={() => onConfirm([...selected])}
+          >
+            Add {selected.size} {selected.size === 1 ? "repository" : "repositories"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
