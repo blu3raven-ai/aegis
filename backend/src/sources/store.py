@@ -22,7 +22,7 @@ VALID_SOURCE_TYPES = {
     "github-actions", "gitlab-ci",
     "jenkins",
 }
-VALID_SCAN_SCOPES = {"all", "all-except-excluded"}
+VALID_SCAN_SCOPES = {"all", "all-except-excluded", "selected"}
 VALID_SYNC_SCHEDULES = {"1h", "3h", "6h", "12h", "24h"}
 _SCHEDULE_HOURS = {"1h": 1, "3h": 3, "6h": 6, "12h": 12, "24h": 24}
 VALID_STATUSES = {"connected", "syncing", "error", "disconnected", "not-synced"}
@@ -181,6 +181,7 @@ def _conn_to_dict(conn: SourceConnection) -> dict[str, Any]:
         "auth": _mask_auth(conn.auth or {}),
         "scanScope": conn.scan_scope or "all",
         "excludedItems": conn.excluded_items or [],
+        "includedItems": conn.included_items or [],
         "scanners": conn.scanners or [],
         "connectionMethods": conn.connection_methods or ["pat"],
         "syncSchedule": conn.sync_schedule or "6h",
@@ -357,20 +358,21 @@ def create_connection(data: dict[str, Any], org_id: str = "default") -> dict[str
     instance_url = (data["auth"].get("instanceUrl") or "").strip().lower()
 
     async def _query(session):
-        # NEW: duplicate guard — same sourceType + orgOrOwner + instanceUrl
-        existing_result = await session.execute(
-            select(SourceConnection).where(SourceConnection.source_type == source_type)
-        )
-        for existing in existing_result.scalars().all():
-            if existing.source_type != source_type:
-                continue
-            ex_org = ((existing.auth or {}).get("orgOrOwner") or "").strip().lower()
-            ex_url = ((existing.auth or {}).get("instanceUrl") or "").strip().lower()
-            if ex_org == org_or_owner and ex_url == instance_url:
-                display_org = (data["auth"].get("orgOrOwner") or org_or_owner)
-                raise SourceValidationError(
-                    f"A {source_type} connection for '{display_org}' already exists."
-                )
+        # Duplicate guard — same sourceType + orgOrOwner + instanceUrl.
+        # Skip when orgOrOwner is blank: cherry-pick connections have no org
+        # and should not collide with each other.
+        if org_or_owner:
+            existing_result = await session.execute(
+                select(SourceConnection).where(SourceConnection.source_type == source_type)
+            )
+            for existing in existing_result.scalars().all():
+                ex_org = ((existing.auth or {}).get("orgOrOwner") or "").strip().lower()
+                ex_url = ((existing.auth or {}).get("instanceUrl") or "").strip().lower()
+                if ex_org == org_or_owner and ex_url == instance_url:
+                    display_org = (data["auth"].get("orgOrOwner") or org_or_owner)
+                    raise SourceValidationError(
+                        f"A {source_type} connection for '{display_org}' already exists."
+                    )
 
         now = datetime.now(timezone.utc)
         conn = SourceConnection(
@@ -381,6 +383,7 @@ def create_connection(data: dict[str, Any], org_id: str = "default") -> dict[str
             auth=_encrypt_auth(data["auth"]),
             scan_scope=data.get("scanScope", "all"),
             excluded_items=data.get("excludedItems", []),
+            included_items=data.get("includedItems", []),
             scanners=scanners,
             connection_methods=connection_methods,
             # New-source defaults: sync hourly and auto-scan every 6h out of the
@@ -441,6 +444,7 @@ def update_connection(connection_id: str, data: dict[str, Any], org_id: str = "d
             "auth": "auth",
             "scanScope": "scan_scope",
             "excludedItems": "excluded_items",
+            "includedItems": "included_items",
             "scanners": "scanners",
             "syncSchedule": "sync_schedule",
             "syncScheduleMode": "sync_schedule_mode",
