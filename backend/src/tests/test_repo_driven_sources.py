@@ -104,3 +104,51 @@ async def test_github_no_org_sends_affiliation(monkeypatch):
     # Confirm affiliation param was sent on the repos call
     repos_call = next(c for c in client.calls if "user/repos" in c["url"])
     assert repos_call["params"].get("affiliation") == "owner,organization_member"
+
+
+# ---------------------------------------------------------------------------
+# Task 5: selected-scope dispatch groups by owner; legacy all-scope unchanged
+# ---------------------------------------------------------------------------
+
+from unittest.mock import patch  # noqa: E402
+from src.sources import triggers  # noqa: E402
+
+
+def test_selected_scope_dispatches_included_items_per_owner():
+    connection = {
+        "sourceType": "github", "category": "code-repositories",
+        "auth": {"token": "ghp_x", "orgOrOwner": ""},
+        "scanScope": "selected",
+        "includedItems": ["acme/api", "acme/web", "beta/payments"],
+        "discoveredItems": ["acme/api", "acme/web", "beta/payments", "acme/unpicked"],
+        "scanners": ["code_scanning"],
+    }
+    seen = []
+    with patch("src.runner.jobs.create_job") as mk, \
+         patch("src.runner.jobs.has_active_jobs_for_org", return_value=False), \
+         patch("src.storage.create_code_scanning_run"), \
+         patch("src.settings.llm.service.build_llm_scan_env", return_value={}):
+        mk.side_effect = lambda **kw: seen.append((kw["org"], kw["env_vars"]["GIT_REPOS"]))
+        triggers.dispatch_source_scan(connection)
+    owners = {org for org, _ in seen}
+    assert owners == {"acme", "beta"}
+    acme_repos = next(repos for org, repos in seen if org == "acme")
+    assert "unpicked" not in acme_repos  # only included items scanned
+
+
+def test_legacy_all_scope_still_dispatches_discovered_items():
+    connection = {
+        "sourceType": "github", "category": "code-repositories",
+        "auth": {"token": "ghp_x", "orgOrOwner": "acme"},
+        "scanScope": "all",
+        "discoveredItems": ["acme/api"],
+        "scanners": ["code_scanning"],
+    }
+    seen = []
+    with patch("src.runner.jobs.create_job") as mk, \
+         patch("src.runner.jobs.has_active_jobs_for_org", return_value=False), \
+         patch("src.storage.create_code_scanning_run"), \
+         patch("src.settings.llm.service.build_llm_scan_env", return_value={}):
+        mk.side_effect = lambda **kw: seen.append((kw["org"], kw["env_vars"]["GIT_REPOS"]))
+        triggers.dispatch_source_scan(connection)
+    assert {org for org, _ in seen} == {"acme"}

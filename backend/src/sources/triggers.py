@@ -49,8 +49,21 @@ def build_repo_urls(source_type: str, instance_url: str, repos: list[str]) -> li
     return [r if r.startswith("http") else f"{base}/{r}" for r in repos]
 
 
+def _owner_of(item: str) -> str:
+    """Owner segment of an 'owner/repo' item, or the host for a clone URL."""
+    if "://" in item:
+        from urllib.parse import urlparse
+        parts = [p for p in urlparse(item).path.split("/") if p]
+        return parts[0] if parts else (urlparse(item).hostname or "public")
+    return item.split("/", 1)[0] if "/" in item else item
+
+
 def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> list[str]:
-    """Dispatch runner jobs to scan every discovered item for a connection.
+    """Dispatch runner jobs to scan items for a connection.
+
+    For `scanScope == "selected"` connections, scans only `includedItems` grouped
+    by owner so each runner job gets a real ORG_LABEL. Legacy `all` / other scope
+    values scan `discoveredItems` as before.
 
     `connection` must be the unmasked dict (carrying the real auth token).
     Returns the queued run IDs. Raises ValueError with a user-facing message
@@ -76,22 +89,27 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
     }
 
     auth = connection.get("auth") or {}
-    org = (auth.get("orgOrOwner") or "").strip()
     token = auth.get("token") or ""
     source_type = connection.get("sourceType") or ""
     category = connection.get("category") or ""
-    discovered_items: list[str] = list(connection.get("discoveredItems") or [])
+    scan_scope = connection.get("scanScope") or "all"
 
-    if not org:
-        raise ValueError("Source has no configured org — cannot dispatch scan")
-    if not discovered_items:
-        raise ValueError("No repositories discovered yet — sync the connection first")
+    if scan_scope == "selected":
+        items = list(connection.get("includedItems") or [])
+    else:
+        items = list(connection.get("discoveredItems") or [])
+    if not items:
+        raise ValueError("No repositories selected yet — pick repos or sync first")
 
-    # Dedup: a manual scan is a no-op while one is already in flight for this
-    # source, so repeated "Scan" clicks can't stack duplicate runs.
+    from collections import defaultdict
+    by_owner: dict[str, list[str]] = defaultdict(list)
+    for it in items:
+        by_owner[_owner_of(it)].append(it)
+
     from src.runner.jobs import has_active_jobs_for_org
-    if has_active_jobs_for_org(org):
-        raise ValueError("A scan is already in progress for this source — wait for it to finish before starting another.")
+    for owner in by_owner:
+        if has_active_jobs_for_org(owner):
+            raise ValueError("A scan is already in progress for this source — wait for it to finish before starting another.")
 
     scanner_types = SCANNERS_BY_CATEGORY.get(category)
     if not scanner_types:
@@ -107,39 +125,38 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
             raise ValueError("No applicable scanners are selected for this source.")
 
     instance_url = auth.get("instanceUrl") or ""
-    repo_urls = build_repo_urls(source_type, instance_url, discovered_items)
-    if not repo_urls and category == "code-repositories":
-        raise ValueError(f"Source type {source_type!r} is not supported for scan dispatch")
 
-    git_repos_str = ",".join(repo_urls)
+    # BYO LLM verification config — resolved once per dispatch; empty when disabled.
+    from src.settings.llm.service import build_llm_scan_env
+    llm_env = build_llm_scan_env()
     run_ts = int(time.time() * 1000)
     queued: list[str] = []
 
-    # BYO LLM verification config — the same env every scan job needs so SAST/IaC
-    # findings get verified. Resolved once per dispatch; empty when disabled.
-    from src.settings.llm.service import build_llm_scan_env
-    llm_env = build_llm_scan_env()
+    for owner, owner_items in by_owner.items():
+        repo_urls = build_repo_urls(source_type, instance_url, owner_items)
+        if not repo_urls and category == "code-repositories":
+            raise ValueError(f"Source type {source_type!r} is not supported for scan dispatch")
+        git_repos_str = ",".join(repo_urls)
+        for scanner_type in scanner_types:
+            run_id = f"{run_prefix}-{run_ts}-{owner}-{scanner_type}"
+            run_creators[scanner_type](owner, run_id)
 
-    for scanner_type in scanner_types:
-        run_id = f"{run_prefix}-{run_ts}-{scanner_type}"
-        run_creators[scanner_type](org, run_id)
+            env: dict[str, str] = {
+                "GIT_TOKEN":   token,
+                "GIT_REPOS":   git_repos_str,
+                "ORG_LABEL":   owner,
+                "RUN_ID":      run_id,
+                # Carried through env_vars (which persists) so ingest can resolve
+                # each finding's repo asset — alongside ORG_LABEL / RUN_ID.
+                "SOURCE_TYPE": source_type,
+                "COMMIT_SHA":  "",
+                "CONCURRENCY": "4",
+                "SCAN_SCOPE":  "full_tree",
+                **llm_env,
+            }
 
-        env: dict[str, str] = {
-            "GIT_TOKEN":   token,
-            "GIT_REPOS":   git_repos_str,
-            "ORG_LABEL":   org,
-            "RUN_ID":      run_id,
-            # Carried through env_vars (which persists) so ingest can resolve
-            # each finding's repo asset — alongside ORG_LABEL / RUN_ID.
-            "SOURCE_TYPE": source_type,
-            "COMMIT_SHA":  "",
-            "CONCURRENCY": "4",
-            "SCAN_SCOPE":  "full_tree",
-            **llm_env,
-        }
-
-        create_job(job_type=scanner_type, org=org, run_id=run_id, env_vars=env)
-        queued.append(run_id)
+            create_job(job_type=scanner_type, org=owner, run_id=run_id, env_vars=env)
+            queued.append(run_id)
 
     return queued
 
