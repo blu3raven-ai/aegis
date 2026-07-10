@@ -20,7 +20,7 @@ export type SourceType =
   | "gitlab-registry"
   | "jenkins"
 
-export type ScanScope = "all" | "all-except-excluded"
+export type ScanScope = "all" | "all-except-excluded" | "selected"
 
 export type ScannerType =
   | "dependencies_scanning"
@@ -56,6 +56,8 @@ export interface SourceConnection {
   auth: SourceConnectionAuth
   scanScope: ScanScope
   excludedItems: string[]
+  /** Cherry-pick allow-list of "owner/repo" (or clone URL) when scanScope === "selected". */
+  includedItems: string[]
   /** Scanners to run on Scan Now. Empty = all applicable to the category. */
   scanners: ScannerType[]
   /** How the source was connected — PAT, webhook, CI/CD, or a combination. */
@@ -231,10 +233,10 @@ export const SOURCE_TYPE_FIELDS: Record<SourceType, SourceTypeFieldConfig[]> = {
   github: [
     {
       key: "orgOrOwner",
-      label: "Organization or owner",
+      label: "Organization or owner (optional)",
       type: "text",
-      placeholder: "my-org",
-      helperText: "Repos under this org or user will be discovered.",
+      placeholder: "leave blank to see all your repos",
+      helperText: "Leave blank to discover every repo your token can access, then cherry-pick.",
     },
     {
       key: "token",

@@ -36,6 +36,7 @@ class CreateConnectionRequest(BaseModel):
     auth: dict
     scanScope: str = "all"
     excludedItems: list[str] = []
+    includedItems: list[str] = []
     scanners: list[str] = []
     connectionMethods: list[str] = []
     syncSchedule: str = "1h"
@@ -45,6 +46,7 @@ class UpdateConnectionRequest(BaseModel):
     auth: dict | None = None
     scanScope: str | None = None
     excludedItems: list[str] | None = None
+    includedItems: list[str] | None = None
     scanners: list[str] | None = None
     syncSchedule: str | None = None
     syncScheduleMode: str | None = None
@@ -84,6 +86,7 @@ def _serialize_connection(c: dict[str, Any]) -> dict[str, Any]:
         },
         "scanScope": str(c.get("scanScope", "all") or "all"),
         "excludedItems": list(c.get("excludedItems") or []),
+        "includedItems": list(c.get("includedItems") or []),
         "syncSchedule": c.get("syncSchedule"),
         "statusMessage": c.get("statusMessage"),
         "lastSyncedAt": c.get("lastSyncedAt"),
