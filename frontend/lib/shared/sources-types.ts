@@ -91,6 +91,7 @@ export interface ConnectionTestResult {
   success: boolean
   message: string
   discoveredCount?: number
+  discovered_items?: string[]
 }
 
 export interface CategoryCounts {

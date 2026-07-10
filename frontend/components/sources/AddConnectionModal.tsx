@@ -16,6 +16,7 @@ import {
   testNewSourceConnection,
   syncSourceConnection,
 } from "@/lib/client/source-connections-api"
+import { RepoPicker } from "@/components/sources/RepoPicker"
 import {
   createWebhookEndpoint,
   rotateWebhookEndpoint,
@@ -189,7 +190,7 @@ export function AddConnectionModal({
   const dialogRef = useRef<HTMLDivElement>(null)
   useDialogA11y(dialogRef, onClose)
 
-  const [screen, setScreen] = useState<"provider" | "method" | "settings">("provider")
+  const [screen, setScreen] = useState<"provider" | "method" | "settings" | "pick-repos">("provider")
   const [selectedType, setSelectedType] = useState<SourceType | null>(null)
   const [method, setMethod] = useState<ConnectMethod>("pat")
   const [auth, setAuth] = useState<SourceConnectionAuth>({})
@@ -197,6 +198,8 @@ export function AddConnectionModal({
   const [testing, setTesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({})
+
+  const [discoveredRepos, setDiscoveredRepos] = useState<string[]>([])
 
   // Webhook-method state
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null)
@@ -357,16 +360,9 @@ export function AddConnectionModal({
       return
     }
 
-    const createResult = await createSourceConnection(payload)
     setTesting(false)
-    if (!createResult.ok) {
-      setError(createResult.error)
-      return
-    }
-
-    void syncSourceConnection(createResult.data.connection.id)
-    onCreated()
-    onClose()
+    setDiscoveredRepos(testResult.data.discovered_items ?? [])
+    setScreen("pick-repos")
   }
 
   const providerLabel = selectedType ? SOURCE_TYPE_LABELS[selectedType] : ""
@@ -376,13 +372,15 @@ export function AddConnectionModal({
   const title =
     screen === "provider"
       ? "Add a Source"
-      : screen === "method"
-        ? `Connect ${providerLabel}`
-        : method === "webhook"
-          ? `${providerLabel} Webhook`
-          : method === "cicd"
-            ? `${providerLabel} CI/CD`
-            : `Connect to ${providerLabel}`
+      : screen === "pick-repos"
+        ? `Select Repositories`
+        : screen === "method"
+          ? `Connect ${providerLabel}`
+          : method === "webhook"
+            ? `${providerLabel} Webhook`
+            : method === "cicd"
+              ? `${providerLabel} CI/CD`
+              : `Connect to ${providerLabel}`
 
   return (
     <div
@@ -422,7 +420,7 @@ export function AddConnectionModal({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${screen === "pick-repos" ? "" : "px-6 py-5"}`}>
           {/* Screen 1: provider selection */}
           {screen === "provider" && (
             <div>
@@ -762,9 +760,38 @@ export function AddConnectionModal({
               </div>
             )
           })()}
+          {/* Screen 4: repo cherry-pick picker */}
+          {screen === "pick-repos" && selectedType && (
+            <RepoPicker
+              discovered={discoveredRepos}
+              isSubmitting={testing}
+              onConfirm={async (included) => {
+                setTesting(true)
+                const payload = {
+                  category: category!,
+                  sourceType: selectedType,
+                  name: name.trim() || SOURCE_TYPE_LABELS[selectedType],
+                  auth,
+                  scanScope: "selected" as const,
+                  excludedItems: [],
+                  includedItems: included,
+                  connectionMethods: [method],
+                  syncSchedule: "1h" as const,
+                  status: "not-synced" as const,
+                }
+                const createResult = await createSourceConnection(payload)
+                setTesting(false)
+                if (!createResult.ok) { setError(createResult.error); return }
+                void syncSourceConnection(createResult.data.connection.id)
+                onCreated()
+                onClose()
+              }}
+            />
+          )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — hidden on the repo-picker screen (picker has its own confirm bar) */}
+        {screen !== "pick-repos" && (
         <div className="flex shrink-0 items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
           {screen === "provider" ? (
             <>
@@ -787,6 +814,7 @@ export function AddConnectionModal({
             </>
           )}
         </div>
+        )}
       </div>
     </div>
   )
