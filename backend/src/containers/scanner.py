@@ -361,6 +361,56 @@ def ingest_container_from_minio(org: str, run_id: str, source_type: str | None =
                     source_component="containers.scanner",
                 )
 
+        # Enqueue container enrichment verification for the CVE-bearing findings just
+        # persisted. Best-effort — a failure must never fail the scan ingest;
+        # enqueue_container_verify_jobs is a no-op when BYO LLM is disabled.
+        try:
+            from sqlalchemy import select
+            from src.db.models import Finding
+            from src.containers.verify_dispatch import (
+                ContainerVerifyFinding,
+                enqueue_container_verify_jobs,
+            )
+            from src.shared.finding_detail_blob import hydrate_detail
+
+            async def _load_container_candidates(session) -> list[ContainerVerifyFinding]:
+                out: list[ContainerVerifyFinding] = []
+                for asset_id, external_ref in assets.items():
+                    rows = (
+                        await session.execute(
+                            select(Finding).where(
+                                Finding.tool == "container_scanning",
+                                Finding.asset_id == asset_id,
+                                Finding.cve_id.isnot(None),
+                            )
+                        )
+                    ).scalars().all()
+                    for f in rows:
+                        d = hydrate_detail(f)
+                        out.append(ContainerVerifyFinding(
+                            finding_id=str(f.id),
+                            asset_id=asset_id,
+                            external_ref=external_ref,
+                            package=f.package_name or "",
+                            version=f.package_version or "",
+                            cve=f.cve_id,
+                            image_name=d.get("imageName", "") or "",
+                            image_tag=d.get("imageTag", "") or "",
+                        ))
+                return out
+
+            candidates = run_db(_load_container_candidates) if assets else []
+            job_ids = enqueue_container_verify_jobs(org=org, run_id=run_id, findings=candidates)
+            if job_ids:
+                logger.info(
+                    "Enqueued %d container verify job(s) for %s/%s",
+                    len(job_ids), org, run_id,
+                )
+        except Exception:
+            logger.warning(
+                "Container verify enqueue failed for %s/%s", org, run_id, exc_info=True
+            )
+
     # Opt-in: prove a newer base tag has fewer vulns by rescanning candidates.
     # Never runs for a candidate (reco-) scan's own ingest — those don't reach
     # here (the runner callback skips ingest for reco- runs).

@@ -41,4 +41,5 @@ def test_supported_types_lists_all_scanners():
         "iac_scanning",
         "agent_scanning",
         "dependencies_reachability",
+        "container_verification",
     }

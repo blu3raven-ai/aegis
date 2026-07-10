@@ -463,6 +463,11 @@ def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | No
         # run as a bare background-thread target (no running loop), so asyncio.run
         # owns a fresh loop here and never nests — the established bridge.
         asyncio.run(ingest_reachability_results(org, run_id))
+    elif job_type == "container_verification":
+        import asyncio
+
+        from src.containers.verify_ingest import ingest_container_verify_results
+        asyncio.run(ingest_container_verify_results(org, run_id))
 
 
 def _ingest_from_minio(job: dict[str, Any]) -> None:
