@@ -191,6 +191,12 @@ class SourceConnection(Base):
     auth: Mapped[dict] = mapped_column(JSONB, default=dict)
     scan_scope: Mapped[str] = mapped_column(String(50), default="all")
     excluded_items: Mapped[list] = mapped_column(JSONB, default=list)
+    # Explicit cherry-pick allow-list of "owner/repo" (or clone URL for public
+    # sources) used when scan_scope == "selected". Empty for legacy all/exclude
+    # connections.
+    included_items: Mapped[list] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     # Which scanner job types to run for this source. Empty = all scanners
     # applicable to the category (see SCANNERS_BY_CATEGORY).
     scanners: Mapped[list] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
@@ -224,7 +230,7 @@ class SourceConnection(Base):
             name="ck_source_connections_status",
         ),
         sa.CheckConstraint(
-            "scan_scope IN ('all', 'all-except-excluded')",
+            "scan_scope IN ('all', 'all-except-excluded', 'selected')",
             name="ck_source_connections_scan_scope",
         ),
         sa.CheckConstraint(
