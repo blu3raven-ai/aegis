@@ -493,15 +493,22 @@ def get_scan_sources_for_org(org: str) -> list[ScanSource]:
 
         source_type = conn.get("sourceType", "")
         scan_scope = conn.get("scanScope", "all")
-        discovered = conn.get("discoveredItems") or []
-        excluded = set(conn.get("excludedItems") or []) if scan_scope == "all-except-excluded" else set()
+        # Respect the connection's scope: a cherry-pick ("selected") connection
+        # covers only includedItems; "all-except-excluded" drops excludedItems;
+        # anything else covers everything discovered.
+        if scan_scope == "selected":
+            source_items = conn.get("includedItems") or []
+            excluded: set[str] = set()
+        else:
+            source_items = conn.get("discoveredItems") or []
+            excluded = set(conn.get("excludedItems") or []) if scan_scope == "all-except-excluded" else set()
 
         repo_urls: list[str] = []
         container_images: list[str] = []
         registry_token = ""
         instance_url = (auth.get("instanceUrl") or "").rstrip("/")
 
-        for item in discovered:
+        for item in source_items:
             if not isinstance(item, str) or not item.strip() or item in excluded:
                 continue
             name = item.strip()

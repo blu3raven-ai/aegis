@@ -85,3 +85,15 @@ def test_get_scan_sources_skips_unknown_source_type(_patch_connections):
     assert sources == []
 
 
+
+
+def test_get_scan_sources_selected_scope_uses_included_items(_patch_connections):
+    """A cherry-pick connection resolves only its included repos, not all discovered."""
+    from src.shared.config import get_scan_sources_for_org
+    conn = _conn("github", "code-repositories", discovered=["acme/foo", "acme/bar"])
+    conn["scanScope"] = "selected"
+    conn["includedItems"] = ["acme/foo"]
+    _patch_connections([conn])
+    sources = get_scan_sources_for_org("acme")
+    assert len(sources) == 1
+    assert sources[0].repo_urls == ["https://github.com/acme/foo.git"]
