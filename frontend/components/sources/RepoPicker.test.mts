@@ -26,3 +26,11 @@ describe("RepoPicker", () => {
     assert.match(src, /disabled=\{selected\.size === 0\}/)
   })
 })
+
+describe("RepoPicker public-URL validation", () => {
+  it("verifies a GitHub repo exists before adding it", () => {
+    assert.match(src, /api\.github\.com\/repos/)
+    assert.match(src, /doesn't exist or is private/)
+    assert.match(src, /setUrlError/)
+  })
+})

@@ -24,6 +24,8 @@ export function RepoPicker({
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set(initialSelected))
   const [publicUrl, setPublicUrl] = useState("")
+  const [urlError, setUrlError] = useState<string | null>(null)
+  const [checkingUrl, setCheckingUrl] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const newAvailable = useMemo(
@@ -68,9 +70,35 @@ export function RepoPicker({
     })
   }
 
-  function addPublicUrl() {
+  async function addPublicUrl() {
     const url = publicUrl.trim()
-    if (!/^https:\/\/.+/.test(url)) return
+    setUrlError(null)
+    if (!/^https:\/\/.+/.test(url)) {
+      setUrlError("Enter a full https:// clone URL.")
+      return
+    }
+    // Verify a GitHub repo exists (public API, no auth) before adding, so a typo
+    // or private/nonexistent repo is caught here. Other hosts pass on format.
+    const gh = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/)
+    if (gh) {
+      setCheckingUrl(true)
+      try {
+        const res = await fetch(`https://api.github.com/repos/${gh[1]}/${gh[2]}`)
+        if (res.status === 404) {
+          setUrlError("That GitHub repository doesn't exist or is private.")
+          return
+        }
+        if (!res.ok && res.status !== 403) {
+          setUrlError("Couldn't verify that repository — check the URL.")
+          return
+        }
+        // 403 == rate-limited; don't block, fall through and add.
+      } catch {
+        // Transient network error — don't block the add on it.
+      } finally {
+        setCheckingUrl(false)
+      }
+    }
     setSelected((prev) => new Set(prev).add(url))
     setPublicUrl("")
   }
@@ -185,19 +213,34 @@ export function RepoPicker({
       {/* bottom bar */}
       <div className="shrink-0 border-t border-[var(--color-border)] px-4 py-3 space-y-3">
         {/* public URL input */}
-        <div className="flex items-center gap-2">
-          <Input
-            size="sm"
-            type="url"
-            placeholder="Add a public repo by https:// clone URL"
-            value={publicUrl}
-            onChange={(e) => setPublicUrl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addPublicUrl()}
-            className="flex-1"
-          />
-          <Button size="xs" variant="secondary" onClick={addPublicUrl}>
-            Add URL
-          </Button>
+        <div>
+          <div className="flex items-center gap-2">
+            <Input
+              size="sm"
+              type="url"
+              placeholder="Add a public repo by https:// clone URL"
+              value={publicUrl}
+              onChange={(e) => {
+                setPublicUrl(e.target.value)
+                if (urlError) setUrlError(null)
+              }}
+              onKeyDown={(e) => e.key === "Enter" && void addPublicUrl()}
+              className="flex-1"
+              aria-invalid={urlError ? true : undefined}
+            />
+            <Button
+              size="xs"
+              variant="secondary"
+              isLoading={checkingUrl}
+              disabled={checkingUrl}
+              onClick={() => void addPublicUrl()}
+            >
+              Add URL
+            </Button>
+          </div>
+          {urlError && (
+            <p className="mt-1 text-xs text-[var(--color-severity-critical-text)]">{urlError}</p>
+          )}
         </div>
 
         {/* count + confirm */}
