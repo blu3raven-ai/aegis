@@ -232,13 +232,8 @@ export interface SourceTypeFieldConfig {
 
 export const SOURCE_TYPE_FIELDS: Record<SourceType, SourceTypeFieldConfig[]> = {
   github: [
-    {
-      key: "orgOrOwner",
-      label: "Organization or owner (optional)",
-      type: "text",
-      placeholder: "leave blank to see all your repos",
-      helperText: "Leave blank to discover every repo your token can access, then cherry-pick.",
-    },
+    // No org/owner field: the token discovers every repo it can access and the
+    // user cherry-picks from the list, so scoping to one org is unnecessary.
     {
       key: "token",
       label: "Personal Access Token",
