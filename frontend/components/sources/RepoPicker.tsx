@@ -8,6 +8,18 @@ function ownerOf(item: string): string {
   return item.includes("/") ? item.split("/")[0] : item
 }
 
+// Public existence-check API for the major git hosts — all CORS-enabled and need
+// no auth for public repos, so the check runs client-side (no backend SSRF
+// surface). Self-hosted / other hosts return null and pass on URL format alone.
+function existenceApi(url: string): string | null {
+  const m = url.match(/^https:\/\/(github\.com|gitlab\.com|bitbucket\.org)\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/)
+  if (!m) return null
+  const [, host, owner, repo] = m
+  if (host === "github.com") return `https://api.github.com/repos/${owner}/${repo}`
+  if (host === "gitlab.com") return `https://gitlab.com/api/v4/projects/${encodeURIComponent(`${owner}/${repo}`)}`
+  return `https://api.bitbucket.org/2.0/repositories/${owner}/${repo}`
+}
+
 export interface RepoPickerProps {
   discovered: string[]
   initialSelected?: string[]
@@ -79,22 +91,22 @@ export function RepoPicker({
       setUrlError("Enter a full https:// clone URL.")
       return
     }
-    // Verify a GitHub repo exists (public API, no auth) before adding, so a typo
-    // or private/nonexistent repo is caught here. Other hosts pass on format.
-    const gh = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/)
-    if (gh) {
+    // Verify the repo exists on a known host (public API, no auth) before adding,
+    // so a typo or private/nonexistent repo is caught. Other hosts pass on format.
+    const api = existenceApi(url)
+    if (api) {
       setCheckingUrl(true)
       try {
-        const res = await fetch(`https://api.github.com/repos/${gh[1]}/${gh[2]}`)
+        const res = await fetch(api)
         if (res.status === 404) {
-          setUrlError("That GitHub repository doesn't exist or is private.")
+          setUrlError("That repository doesn't exist or is private.")
           return
         }
-        if (!res.ok && res.status !== 403) {
+        if (!res.ok && res.status !== 403 && res.status !== 429) {
           setUrlError("Couldn't verify that repository — check the URL.")
           return
         }
-        // 403 == rate-limited; don't block, fall through and add.
+        // 403 / 429 == rate-limited; don't block, fall through and add.
       } catch {
         // Transient network error — don't block the add on it.
       } finally {
