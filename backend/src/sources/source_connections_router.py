@@ -66,6 +66,10 @@ class CancelScanRequest(BaseModel):
     run_ids: list[str]
 
 
+class ValidateRepoUrlRequest(BaseModel):
+    url: str
+
+
 # Helpers
 
 
@@ -120,6 +124,22 @@ async def post_test_new_connection(
         return _json_error(exc, status_code=400)
     except SourceStoreError as exc:
         return _json_error(exc, status_code=500)
+
+
+@source_connections_router.post("/connections/validate-repo-url")
+async def post_validate_repo_url(
+    body: ValidateRepoUrlRequest,
+    request: Request,
+    _: None = Depends(Permission(MANAGE_SOURCES)),
+) -> JSONResponse:
+    """Existence check for a self-hosted repo URL (SSRF-hardened; admin only)."""
+    from src.sources.repo_url_check import repo_url_exists
+
+    try:
+        exists = await repo_url_exists(body.url)
+        return JSONResponse({"exists": exists})
+    except SourceValidationError as exc:
+        return _json_error(exc, status_code=400)
 
 
 @source_connections_router.post("/connections", status_code=201)
