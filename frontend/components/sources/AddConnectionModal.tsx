@@ -190,7 +190,7 @@ export function AddConnectionModal({
   const dialogRef = useRef<HTMLDivElement>(null)
   useDialogA11y(dialogRef, onClose)
 
-  const [screen, setScreen] = useState<"provider" | "method" | "settings" | "pick-repos">("provider")
+  const [screen, setScreen] = useState<"provider" | "method" | "settings">("provider")
   const [selectedType, setSelectedType] = useState<SourceType | null>(null)
   const [method, setMethod] = useState<ConnectMethod>("pat")
   const [auth, setAuth] = useState<SourceConnectionAuth>({})
@@ -200,6 +200,9 @@ export function AddConnectionModal({
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({})
 
   const [discoveredRepos, setDiscoveredRepos] = useState<string[]>([])
+  // For git-repo sources, discovery loads the picker inline on the same screen
+  // as the token field (so the token stays editable and can reload the list).
+  const [hasDiscovered, setHasDiscovered] = useState(false)
 
   // Webhook-method state
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null)
@@ -254,6 +257,10 @@ export function AddConnectionModal({
 
   function handleBack() {
     setError(null)
+    // Leaving the settings screen drops any loaded repo list so a re-entry
+    // starts clean.
+    setHasDiscovered(false)
+    setDiscoveredRepos([])
     if (screen === "settings" && hasMethodStep) setScreen("method")
     else setScreen("provider")
   }
@@ -321,6 +328,54 @@ export function AddConnectionModal({
     }
   }
 
+  function _testPayload() {
+    return {
+      category: category as SourceCategory,
+      sourceType: selectedType as SourceType,
+      name: name.trim() || (selectedType ? SOURCE_TYPE_LABELS[selectedType] : ""),
+      auth,
+      scanScope: "all" as const,
+      excludedItems: [],
+      includedItems: [],
+      connectionMethods: [method],
+      syncSchedule: "1h" as const,
+      status: "not-synced" as const,
+    }
+  }
+
+  // Discover repos for a git source and populate the picker on the right. Both
+  // callers (the reload button after field validation, and the token blur below)
+  // guarantee a token is present, so this just guards against a missing token /
+  // in-flight request defensively.
+  const lastDiscoveredToken = useRef<string | null>(null)
+  async function discover() {
+    if (!selectedType || category !== "code-repositories") return
+    const token = (auth["token"] ?? "").trim()
+    if (!token || testing) return
+    lastDiscoveredToken.current = token
+    setTesting(true)
+    setError(null)
+    const testResult = await testNewSourceConnection(_testPayload())
+    setTesting(false)
+    if (!testResult.ok) {
+      setError(testResult.error)
+      return
+    }
+    if (!testResult.data.success) {
+      setError(testResult.data.message)
+      return
+    }
+    setDiscoveredRepos(testResult.data.discovered_items ?? [])
+    setHasDiscovered(true)
+  }
+
+  // Auto-load on token blur — skips a re-fetch when the token is unchanged so
+  // clicking from the field into the picker doesn't reload the list.
+  function handleTokenBlur() {
+    if (category !== "code-repositories") return
+    if ((auth["token"] ?? "").trim() !== lastDiscoveredToken.current) void discover()
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedType || !category) return
@@ -333,23 +388,16 @@ export function AddConnectionModal({
       }
     }
 
-    setTesting(true)
-    setError(null)
-
-    const payload = {
-      category,
-      sourceType: selectedType,
-      name: name.trim() || SOURCE_TYPE_LABELS[selectedType],
-      auth,
-      scanScope: "all" as const,
-      excludedItems: [],
-      includedItems: [],
-      connectionMethods: [method],
-      syncSchedule: "1h" as const,
-      status: "not-synced" as const,
+    // Git sources load the picker (pick-then-add); other categories test and
+    // create directly.
+    if (category === "code-repositories") {
+      await discover()
+      return
     }
 
-    const testResult = await testNewSourceConnection(payload)
+    setTesting(true)
+    setError(null)
+    const testResult = await testNewSourceConnection(_testPayload())
     if (!testResult.ok) {
       setTesting(false)
       setError(testResult.error)
@@ -360,28 +408,63 @@ export function AddConnectionModal({
       setError(testResult.data.message)
       return
     }
+    await finishCreate("all", [])
+  }
 
+  // Shared create → sync → close, used by both the direct (non-repo) path and
+  // the repo cherry-pick picker's confirm.
+  async function finishCreate(
+    scanScope: "all" | "selected",
+    includedItems: string[],
+  ) {
+    if (!selectedType || !category) return
+    setTesting(true)
+    const payload = {
+      category,
+      sourceType: selectedType,
+      name: name.trim() || SOURCE_TYPE_LABELS[selectedType],
+      auth,
+      scanScope,
+      excludedItems: [],
+      includedItems,
+      connectionMethods: [method],
+      syncSchedule: "1h" as const,
+      status: "not-synced" as const,
+    }
+    const createResult = await createSourceConnection(payload)
     setTesting(false)
-    setDiscoveredRepos(testResult.data.discovered_items ?? [])
-    setScreen("pick-repos")
+    if (!createResult.ok) {
+      setError(createResult.error)
+      return
+    }
+    void syncSourceConnection(createResult.data.connection.id)
+    onCreated()
+    onClose()
   }
 
   const providerLabel = selectedType ? SOURCE_TYPE_LABELS[selectedType] : ""
   const totalSteps = hasMethodStep ? 3 : 2
   const stepNumber = screen === "provider" ? 1 : screen === "method" ? 2 : totalSteps
 
+  // Git sources use a two-pane layout for the whole settings step: the token
+  // form stays editable on the left while the repo picker fills the right. The
+  // list auto-loads as soon as a token is entered, so there is no separate
+  // "test, then pick" step — you just pick and add.
+  const splitView =
+    screen === "settings" &&
+    method === "pat" &&
+    category === "code-repositories"
+
   const title =
     screen === "provider"
       ? "Add a Source"
-      : screen === "pick-repos"
-        ? `Select Repositories`
-        : screen === "method"
-          ? `Connect ${providerLabel}`
-          : method === "webhook"
-            ? `${providerLabel} Webhook`
-            : method === "cicd"
-              ? `${providerLabel} CI/CD`
-              : `Connect to ${providerLabel}`
+      : screen === "method"
+        ? `Connect ${providerLabel}`
+        : method === "webhook"
+          ? `${providerLabel} Webhook`
+          : method === "cicd"
+            ? `${providerLabel} CI/CD`
+            : `Connect to ${providerLabel}`
 
   return (
     <div
@@ -393,7 +476,7 @@ export function AddConnectionModal({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)] focus:outline-none"
+        className={`relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)] focus:outline-none transition-[max-width] duration-200 ${splitView ? "max-w-4xl h-[85dvh]" : "max-w-lg"}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -421,7 +504,7 @@ export function AddConnectionModal({
         </div>
 
         {/* Body */}
-        <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${screen === "pick-repos" ? "" : "px-6 py-5"}`}>
+        <div className={`flex min-h-0 flex-1 ${splitView ? "flex-row" : "flex-col overflow-y-auto px-6 py-5"}`}>
           {/* Screen 1: provider selection */}
           {screen === "provider" && (
             <div>
@@ -537,7 +620,12 @@ export function AddConnectionModal({
 
           {/* Screen 3a: PAT settings */}
           {screen === "settings" && selectedType && method === "pat" && (
-            <form onSubmit={handleSubmit} id="add-connection-form">
+            <>
+            <form
+              onSubmit={handleSubmit}
+              id="add-connection-form"
+              className={splitView ? "w-[380px] shrink-0 overflow-y-auto border-r border-[var(--color-border)] px-6 py-5" : undefined}
+            >
               {(() => {
                 const guide = SOURCE_TYPE_SETUP_GUIDES[selectedType]
                 return (
@@ -604,6 +692,9 @@ export function AddConnectionModal({
                         value={auth[field.key] ?? ""}
                         placeholder={field.placeholder}
                         onChange={(e) => setAuth((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                        // The PAT field auto-loads the repo list on commit so no
+                        // separate "test" click is needed before picking.
+                        onBlur={field.key === "token" ? handleTokenBlur : undefined}
                         className={isPassword ? "pr-14" : ""}
                       />
                       {isPassword && (
@@ -632,7 +723,63 @@ export function AddConnectionModal({
                   </div>
                 </div>
               )}
+
+              {/* Two-pane view: the form owns Back and a reload fallback (the
+                  list auto-loads on token blur); the right pane's "Add
+                  repositories" bar is the single primary action. */}
+              {splitView && (
+                <div className="mt-6 flex items-center gap-2 border-t border-[var(--color-border)] pt-4">
+                  <Button type="button" variant="ghost" size="sm" onClick={handleBack}>
+                    Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    form="add-connection-form"
+                    variant={hasDiscovered ? "secondary" : "primary"}
+                    size="sm"
+                    isLoading={testing}
+                    disabled={testing}
+                  >
+                    {testing
+                      ? hasDiscovered ? "Reloading…" : "Loading…"
+                      : hasDiscovered ? "Reload repositories" : "Load repositories"}
+                  </Button>
+                </div>
+              )}
             </form>
+
+            {/* Right pane: repos auto-load here as the token is entered; before
+                that, a prompt keeps the two-pane balanced. */}
+            {splitView && (
+              <div className="min-h-0 flex-1">
+                {hasDiscovered ? (
+                  <RepoPicker
+                    discovered={discoveredRepos}
+                    isSubmitting={testing}
+                    onConfirm={(included) => finishCreate("selected", included)}
+                  />
+                ) : (
+                  <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+                    <div className="grid h-11 w-11 place-items-center rounded-full bg-[var(--color-bg-subtle)] text-[var(--color-text-tertiary)]">
+                      {testing ? (
+                        <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+                      ) : (
+                        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                      {testing ? "Loading your repositories…" : "Your repositories will appear here"}
+                    </p>
+                    <p className="max-w-xs text-xs leading-relaxed text-[var(--color-text-secondary)]">
+                      {testing
+                        ? "Discovering every repo your token can access."
+                        : "Enter your Personal Access Token on the left — every repo it can access loads here to cherry-pick."}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+            </>
           )}
 
           {/* Screen 3b: Webhook setup */}
@@ -761,38 +908,11 @@ export function AddConnectionModal({
               </div>
             )
           })()}
-          {/* Screen 4: repo cherry-pick picker */}
-          {screen === "pick-repos" && selectedType && (
-            <RepoPicker
-              discovered={discoveredRepos}
-              isSubmitting={testing}
-              onConfirm={async (included) => {
-                setTesting(true)
-                const payload = {
-                  category: category!,
-                  sourceType: selectedType,
-                  name: name.trim() || SOURCE_TYPE_LABELS[selectedType],
-                  auth,
-                  scanScope: "selected" as const,
-                  excludedItems: [],
-                  includedItems: included,
-                  connectionMethods: [method],
-                  syncSchedule: "1h" as const,
-                  status: "not-synced" as const,
-                }
-                const createResult = await createSourceConnection(payload)
-                setTesting(false)
-                if (!createResult.ok) { setError(createResult.error); return }
-                void syncSourceConnection(createResult.data.connection.id)
-                onCreated()
-                onClose()
-              }}
-            />
-          )}
         </div>
 
-        {/* Footer — hidden on the repo-picker screen (picker has its own confirm bar) */}
-        {screen !== "pick-repos" && (
+        {/* Global footer — hidden in the two-pane git-repo view, where the left
+            form owns Back/Reload and the right pane owns "Add repositories". */}
+        {!splitView && (
         <div className="flex shrink-0 items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
           {screen === "provider" ? (
             <>

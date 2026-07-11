@@ -241,6 +241,7 @@ export function ScopeConfigContent({
   // ── Editable state ──
   const [scanScope, setScanScope] = useState<ScanScope>("all")
   const [excludedItems, setExcludedItems] = useState<string[]>([])
+  const [includedItems, setIncludedItems] = useState<string[]>([])
   const [scanners, setScanners] = useState<ScannerType[]>(applicableScanners)
   const [syncSchedule, setSyncSchedule] = useState<SyncSchedule>("6h")
   const [syncScheduleMode, setSyncScheduleMode] = useState<ScheduleMode>("preset")
@@ -260,6 +261,7 @@ export function ScopeConfigContent({
   function hydrate(conn: SourceConnection) {
     setScanScope(conn.scanScope)
     setExcludedItems(conn.excludedItems)
+    setIncludedItems(conn.includedItems ?? [])
     // Empty stored selection means "all applicable" — reflect that as all checked.
     setScanners(conn.scanners.length ? conn.scanners : applicableScanners)
     setSyncSchedule(conn.syncSchedule)
@@ -324,7 +326,8 @@ export function ScopeConfigContent({
       scanSchedulePreset !== (loaded.scanSchedulePreset ?? "24h") ||
       scanScheduleCron !== (loaded.scanScheduleCron ?? "") ||
       showTokenInput ||
-      JSON.stringify(excludedItems) !== JSON.stringify(loaded.excludedItems))
+      JSON.stringify(excludedItems) !== JSON.stringify(loaded.excludedItems) ||
+      JSON.stringify(includedItems) !== JSON.stringify(loaded.includedItems ?? []))
 
   // ── Save handler ──
   async function handleSave() {
@@ -335,6 +338,7 @@ export function ScopeConfigContent({
     const payload: Parameters<typeof updateSourceConnection>[1] = {
       scanScope,
       excludedItems,
+      includedItems,
       ...(showScannerSelect ? { scanners } : {}),
       syncSchedule,
       syncScheduleMode,
@@ -499,6 +503,8 @@ export function ScopeConfigContent({
           availableItems={loaded.discoveredItems ?? []}
           scanScope={scanScope}
           excludedItems={excludedItems}
+          includedItems={includedItems}
+          onIncludedChange={setIncludedItems}
           onScopeChange={setScanScope}
           onExcludedChange={setExcludedItems}
         />

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from src.shared.paths import repo_root
+from src.shared.repo_owner import owner_of
 from src.shared.providers.base import (
     UnknownProvider,
     get_image_registry,
@@ -485,23 +486,37 @@ def get_scan_sources_for_org(org: str) -> list[ScanSource]:
             continue
         auth = conn.get("auth") if isinstance(conn.get("auth"), dict) else {}
         conn_org = (auth.get("orgOrOwner") or "").strip()
-        if not conn_org or conn_org.lower() != key:
-            continue
         token = str(auth.get("token") or "")
         if not token:
             continue
 
         source_type = conn.get("sourceType", "")
         scan_scope = conn.get("scanScope", "all")
-        discovered = conn.get("discoveredItems") or []
-        excluded = set(conn.get("excludedItems") or []) if scan_scope == "all-except-excluded" else set()
+        # Respect the connection's scope. A cherry-pick ("selected") connection
+        # has no single org — it belongs to every owner in its picks, so match
+        # this org key against the included items' owners (an org-scoped
+        # connection instead matches on its orgOrOwner). "all-except-excluded"
+        # drops excludedItems; anything else covers everything discovered.
+        if scan_scope == "selected":
+            source_items = [
+                i for i in (conn.get("includedItems") or [])
+                if isinstance(i, str) and owner_of(i).lower() == key
+            ]
+            if not source_items:
+                continue
+            excluded: set[str] = set()
+        else:
+            if not conn_org or conn_org.lower() != key:
+                continue
+            source_items = conn.get("discoveredItems") or []
+            excluded = set(conn.get("excludedItems") or []) if scan_scope == "all-except-excluded" else set()
 
         repo_urls: list[str] = []
         container_images: list[str] = []
         registry_token = ""
         instance_url = (auth.get("instanceUrl") or "").rstrip("/")
 
-        for item in discovered:
+        for item in source_items:
             if not isinstance(item, str) or not item.strip() or item in excluded:
                 continue
             name = item.strip()

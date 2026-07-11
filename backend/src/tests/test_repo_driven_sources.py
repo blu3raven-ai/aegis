@@ -224,3 +224,24 @@ async def test_selected_scope_aggregates_finding_counts(db_session):
         await db_session.execute(_sa_delete(Asset).where(Asset.id == asset_id))
         await db_session.execute(_sa_delete(SourceConnection).where(SourceConnection.id == conn_id))
         await db_session.commit()
+
+
+def test_all_except_excluded_scope_drops_excluded_items():
+    connection = {
+        "sourceType": "github", "category": "code-repositories",
+        "auth": {"token": "ghp_x", "orgOrOwner": "acme"},
+        "scanScope": "all-except-excluded",
+        "discoveredItems": ["acme/a", "acme/b", "acme/c"],
+        "excludedItems": ["acme/b"],
+        "scanners": ["code_scanning"],
+    }
+    seen = []
+    with patch("src.runner.jobs.create_job") as mk, \
+         patch("src.runner.jobs.has_active_jobs_for_org", return_value=False), \
+         patch("src.storage.create_code_scanning_run"), \
+         patch("src.settings.llm.service.build_llm_scan_env", return_value={}):
+        mk.side_effect = lambda **kw: seen.append(kw["env_vars"]["GIT_REPOS"])
+        triggers.dispatch_source_scan(connection)
+    repos = " ".join(seen)
+    assert "acme/a" in repos and "acme/c" in repos
+    assert "acme/b" not in repos

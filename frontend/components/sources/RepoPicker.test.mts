@@ -26,3 +26,18 @@ describe("RepoPicker", () => {
     assert.match(src, /disabled=\{selected\.size === 0\}/)
   })
 })
+
+describe("RepoPicker public-URL validation", () => {
+  it("verifies a GitHub repo exists before adding it", () => {
+    assert.match(src, /api\.github\.com\/repos/)
+    assert.match(src, /doesn't exist or is private/)
+    assert.match(src, /setUrlError/)
+  })
+})
+
+describe("RepoPicker URL rows", () => {
+  it("shows added-by-URL items (selected but not discovered) as rows", () => {
+    assert.match(src, /Added by URL/)
+    assert.match(src, /!discoveredSet\.has\(item\)/)
+  })
+})

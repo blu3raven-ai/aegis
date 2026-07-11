@@ -12,17 +12,10 @@ from src.db.helpers import run_db
 from src.db.models import SourceConnection
 from src.shared.encryption import decrypt_string, encrypt_string, is_encrypted
 from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso, parse_iso_utc
+from src.shared.repo_owner import owner_of
 
 _logger = logging.getLogger(__name__)
 
-
-def _owner_of(item: str) -> str:
-    """Owner segment of an 'owner/repo' item (or clone-URL host)."""
-    if "://" in item:
-        from urllib.parse import urlparse
-        parts = [p for p in urlparse(item).path.split("/") if p]
-        return parts[0] if parts else (urlparse(item).hostname or "public")
-    return item.split("/", 1)[0] if "/" in item else item
 
 VALID_CATEGORIES = {"code-repositories", "container-images", "container-registry", "ci-systems"}
 VALID_SOURCE_TYPES = {
@@ -151,19 +144,21 @@ def _mask_auth(auth: dict[str, Any]) -> dict[str, Any]:
 
 
 def _scope_refs(conn: SourceConnection) -> list[str]:
-    """Canonical asset identifiers for the connection's discovered items.
+    """Canonical asset identifiers for the items this connection actually covers.
 
-    ``discovered_items`` are the raw provider names ("owner/repo", or
-    "registry/image:tag"). The findings list scopes by the asset's
-    ``display_name``, which the ingestion lifecycle sets to the canonical
-    ``external_ref`` (e.g. "github:owner/repo"). So map each discovered item
-    through the same ``repo_ref``/``image_ref`` helper that produced those refs,
-    rather than passing the raw provider names — which is why the per-source
-    findings list came up empty. Unconvertible items are skipped.
+    A cherry-pick ("selected") connection covers only ``included_items`` — the
+    repos the user picked and that scan dispatch actually runs — not the full
+    ``discovered_items``. Any other scope covers everything discovered. Raw
+    provider names ("owner/repo" or "registry/image:tag") are mapped through the
+    same ``repo_ref``/``image_ref`` helper that named the assets, so the
+    per-source findings list scopes correctly. Unconvertible items are skipped.
     """
     st = (conn.source_type or "").strip().lower()
+    scope = getattr(conn, "scan_scope", None)
+    included = getattr(conn, "included_items", None)
+    source_items = (included if scope == "selected" and included else conn.discovered_items) or []
     out: list[str] = []
-    for item in conn.discovered_items or []:
+    for item in source_items:
         if not isinstance(item, str) or not item.strip():
             continue
         try:
@@ -259,7 +254,7 @@ def list_connections(category: str | None = None, org_id: str = "default") -> li
 
         for conn, d in zip(conns, dicts):
             if conn.scan_scope == "selected" and conn.included_items:
-                owners = {_owner_of(i) for i in conn.included_items}
+                owners = {owner_of(i) for i in conn.included_items}
                 agg = {"critical": 0, "high": 0, "medium": 0, "low": 0}
                 latest = None
                 for o in owners:
