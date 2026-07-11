@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { validateRepoUrl } from "@/lib/client/source-connections-api"
 
 function ownerOf(item: string): string {
   return item.includes("/") ? item.split("/")[0] : item
@@ -39,6 +40,11 @@ export function RepoPicker({
   const [urlError, setUrlError] = useState<string | null>(null)
   const [checkingUrl, setCheckingUrl] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // URLs added by hand (or pre-selected on re-open) live here so their row stays
+  // visible even when unchecked — otherwise it'd vanish and couldn't be re-checked.
+  const [addedUrls, setAddedUrls] = useState<string[]>(
+    () => initialSelected.filter((r) => !discovered.includes(r)),
+  )
 
   const newAvailable = useMemo(
     () => discovered.filter((r) => !initialSelected.includes(r)),
@@ -54,11 +60,11 @@ export function RepoPicker({
       byOwner.set(owner, [...(byOwner.get(owner) ?? []), item])
     }
     for (const repo of discovered) push(repo, ownerOf(repo))
-    // Items added by URL (or pre-selected on re-open) aren't in `discovered` —
-    // surface them so they render as rows the user can see and uncheck.
-    for (const item of selected) if (!discoveredSet.has(item)) push(item, "Added by URL")
+    // Hand-added URLs aren't in `discovered`; render them as their own group so
+    // they stay visible (checked or not) and can be toggled.
+    for (const item of addedUrls) if (!discoveredSet.has(item)) push(item, "Added by URL")
     return [...byOwner.entries()].sort(([a], [b]) => a.localeCompare(b))
-  }, [discovered, selected, query])
+  }, [discovered, addedUrls, query])
 
   function toggle(repo: string) {
     setSelected((prev) => {
@@ -112,7 +118,25 @@ export function RepoPicker({
       } finally {
         setCheckingUrl(false)
       }
+    } else {
+      // Self-hosted / other host — can't be checked cross-origin, so validate
+      // via the SSRF-hardened backend endpoint.
+      setCheckingUrl(true)
+      try {
+        const res = await validateRepoUrl(url)
+        if (res.ok && !res.data.exists) {
+          setUrlError("That repository doesn't exist or isn't reachable.")
+          return
+        }
+        if (!res.ok) {
+          setUrlError(res.error || "Couldn't verify that repository.")
+          return
+        }
+      } finally {
+        setCheckingUrl(false)
+      }
     }
+    setAddedUrls((prev) => (prev.includes(url) ? prev : [...prev, url]))
     setSelected((prev) => new Set(prev).add(url))
     setPublicUrl("")
   }

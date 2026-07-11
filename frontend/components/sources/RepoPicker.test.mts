@@ -43,3 +43,13 @@ describe("RepoPicker URL rows", () => {
     assert.match(src, /!discoveredSet\.has\(item\)/)
   })
 })
+
+describe("RepoPicker self-hosted + URL rows", () => {
+  it("validates self-hosted URLs via the backend", () => {
+    assert.match(src, /validateRepoUrl/)
+  })
+  it("keeps added URLs in their own state so unchecking does not remove the row", () => {
+    assert.match(src, /addedUrls/)
+    assert.match(src, /Added by URL/)
+  })
+})

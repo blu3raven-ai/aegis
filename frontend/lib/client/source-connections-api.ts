@@ -312,3 +312,13 @@ export async function testNewSourceConnection(
     body: data,
   })
 }
+
+/** Existence check for a self-hosted repo URL (SSRF-hardened; admin only). */
+export async function validateRepoUrl(
+  url: string,
+): Promise<ApiResult<{ exists: boolean }>> {
+  return sourcesRequest<{ exists: boolean }>("/connections/validate-repo-url", {
+    method: "POST",
+    body: { url },
+  })
+}
