@@ -10,8 +10,10 @@ interface ScopeConfiguratorProps {
   totalCount: number | null
   scanScope: ScanScope
   excludedItems: string[]
+  includedItems: string[]
   onScopeChange: (scope: ScanScope) => void
   onExcludedChange: (excluded: string[]) => void
+  onIncludedChange: (included: string[]) => void
   availableItems?: string[]
 }
 
@@ -21,8 +23,10 @@ export function ScopeConfigurator({
   totalCount,
   scanScope,
   excludedItems,
+  includedItems,
   onScopeChange,
   onExcludedChange,
+  onIncludedChange,
   availableItems,
 }: ScopeConfiguratorProps) {
   const [search, setSearch] = useState("")
@@ -50,6 +54,14 @@ export function ScopeConfigurator({
 
   function removeExcluded(item: string) {
     onExcludedChange(excludedItems.filter((i) => i !== item))
+  }
+
+  function toggleIncluded(item: string) {
+    if (includedItems.includes(item)) {
+      onIncludedChange(includedItems.filter((i) => i !== item))
+    } else {
+      onIncludedChange([...includedItems, item])
+    }
   }
 
   const hasItems = (availableItems?.length ?? 0) > 0
@@ -102,11 +114,35 @@ export function ScopeConfigurator({
               </p>
             </div>
           </label>
+
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="radio"
+              name="scan-scope"
+              value="selected"
+              checked={scanScope === "selected"}
+              onChange={() => onScopeChange("selected")}
+              className="mt-0.5 accent-[var(--color-accent)]"
+            />
+            <div>
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                Scan only selected {itemLabel}
+                {includedItems.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-[var(--color-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--color-accent)]">
+                    {includedItems.length} selected
+                  </span>
+                )}
+              </span>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                Cherry-pick the exact {itemLabel} to scan — nothing else is pulled.
+              </p>
+            </div>
+          </label>
         </div>
       </fieldset>
 
-      {/* Item selector — only shown when "all-except-excluded" is selected */}
-      {scanScope === "all-except-excluded" && (
+      {/* Item selector — shown for the exclude and cherry-pick modes. */}
+      {(scanScope === "all-except-excluded" || scanScope === "selected") && (
         <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
           {/* Search */}
           <div className="border-b border-[var(--color-border)] px-3 py-2">
@@ -138,32 +174,41 @@ export function ScopeConfigurator({
             ) : (
               <ul>
                 {filteredItems.map((item) => {
-                  const isExcluded = excludedItems.includes(item)
+                  // Cherry-pick mode: checked == included (accent). Exclude mode:
+                  // checked == excluded (danger + strikethrough). Same list shell.
+                  const selectMode = scanScope === "selected"
+                  const active = selectMode
+                    ? includedItems.includes(item)
+                    : excludedItems.includes(item)
                   return (
                     <li
                       key={item}
                       className={`flex items-center gap-2.5 border-b border-[var(--color-border)] px-3 py-2 transition-colors last:border-b-0 ${
-                        isExcluded ? "bg-[var(--color-severity-critical-subtle)]" : ""
+                        active
+                          ? selectMode
+                            ? "bg-[var(--color-accent-subtle)]"
+                            : "bg-[var(--color-severity-critical-subtle)]"
+                          : ""
                       }`}
                     >
                       <input
-                        id={`exclude-${item}`}
+                        id={`scope-${item}`}
                         type="checkbox"
-                        checked={isExcluded}
-                        onChange={() => toggleExcluded(item)}
-                        className="shrink-0 accent-[var(--color-severity-critical)]"
+                        checked={active}
+                        onChange={() => (selectMode ? toggleIncluded(item) : toggleExcluded(item))}
+                        className={`shrink-0 ${selectMode ? "accent-[var(--color-accent)]" : "accent-[var(--color-severity-critical)]"}`}
                       />
                       <label
-                        htmlFor={`exclude-${item}`}
+                        htmlFor={`scope-${item}`}
                         className={`flex-1 cursor-pointer select-none truncate text-sm ${
-                          isExcluded
+                          active && !selectMode
                             ? "text-[var(--color-severity-critical-text)] line-through"
                             : "text-[var(--color-text-primary)]"
                         }`}
                       >
                         {item}
                       </label>
-                      {isExcluded && (
+                      {!selectMode && active && (
                         <Button
                           variant="link"
                           size="xs"
