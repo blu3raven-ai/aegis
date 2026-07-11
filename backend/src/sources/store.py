@@ -151,19 +151,21 @@ def _mask_auth(auth: dict[str, Any]) -> dict[str, Any]:
 
 
 def _scope_refs(conn: SourceConnection) -> list[str]:
-    """Canonical asset identifiers for the connection's discovered items.
+    """Canonical asset identifiers for the items this connection actually covers.
 
-    ``discovered_items`` are the raw provider names ("owner/repo", or
-    "registry/image:tag"). The findings list scopes by the asset's
-    ``display_name``, which the ingestion lifecycle sets to the canonical
-    ``external_ref`` (e.g. "github:owner/repo"). So map each discovered item
-    through the same ``repo_ref``/``image_ref`` helper that produced those refs,
-    rather than passing the raw provider names — which is why the per-source
-    findings list came up empty. Unconvertible items are skipped.
+    A cherry-pick ("selected") connection covers only ``included_items`` — the
+    repos the user picked and that scan dispatch actually runs — not the full
+    ``discovered_items``. Any other scope covers everything discovered. Raw
+    provider names ("owner/repo" or "registry/image:tag") are mapped through the
+    same ``repo_ref``/``image_ref`` helper that named the assets, so the
+    per-source findings list scopes correctly. Unconvertible items are skipped.
     """
     st = (conn.source_type or "").strip().lower()
+    scope = getattr(conn, "scan_scope", None)
+    included = getattr(conn, "included_items", None)
+    source_items = (included if scope == "selected" and included else conn.discovered_items) or []
     out: list[str] = []
-    for item in conn.discovered_items or []:
+    for item in source_items:
         if not isinstance(item, str) or not item.strip():
             continue
         try:

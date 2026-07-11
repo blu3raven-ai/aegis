@@ -44,3 +44,24 @@ def test_unconvertible_and_empty_items_are_skipped():
 def test_unknown_source_type_skips_repo_items_rather_than_raising():
     # repo_ref raises on an unknown source_type; _scope_refs must swallow it.
     assert _scope_refs(_conn("mystery", ["acme/foo"])) == []
+
+
+def test_selected_scope_covers_only_included_items():
+    """A cherry-pick connection scopes to included_items, not all discovered."""
+    conn = SimpleNamespace(
+        source_type="github",
+        scan_scope="selected",
+        included_items=["acme/api"],
+        discovered_items=["acme/api", "acme/web", "beta/payments"],
+    )
+    assert _scope_refs(conn) == ["github:acme/api"]
+
+
+def test_all_scope_still_covers_everything_discovered():
+    conn = SimpleNamespace(
+        source_type="github",
+        scan_scope="all",
+        included_items=[],
+        discovered_items=["acme/api", "acme/web"],
+    )
+    assert _scope_refs(conn) == ["github:acme/api", "github:acme/web"]
