@@ -4,7 +4,7 @@ import { useState } from "react"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ReposIcon } from "@/lib/shared/ui/page-icons"
 import { RepositoriesPanel } from "@/app/(app)/sources/_components/RepositoriesPanel"
-import { AddConnectionModal } from "@/app/(app)/settings/sources/_components/AddConnectionModal"
+import { AddConnectionModal } from "@/components/sources/AddConnectionModal"
 
 export function ReposPageClient() {
   const [count, setCount] = useState<number | null>(null)
@@ -36,7 +36,7 @@ export function ReposPageClient() {
       <RepositoriesPanel key={reloadKey} onCountChange={setCount} />
       {showAddModal && (
         <AddConnectionModal
-          category="code-repositories"
+          lockedCategory="code-repositories"
           onClose={() => setShowAddModal(false)}
           onCreated={() => {
             setShowAddModal(false)

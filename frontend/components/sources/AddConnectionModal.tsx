@@ -361,9 +361,47 @@ export function AddConnectionModal({
       return
     }
 
+    // Only git-repo sources get the cherry-pick picker; other categories
+    // (container registries, etc.) discover images/artifacts, not repos, so they
+    // create directly on a successful test.
+    if (category === "code-repositories") {
+      setTesting(false)
+      setDiscoveredRepos(testResult.data.discovered_items ?? [])
+      setScreen("pick-repos")
+    } else {
+      await finishCreate("all", [])
+    }
+  }
+
+  // Shared create → sync → close, used by both the direct (non-repo) path and
+  // the repo cherry-pick picker's confirm.
+  async function finishCreate(
+    scanScope: "all" | "selected",
+    includedItems: string[],
+  ) {
+    if (!selectedType || !category) return
+    setTesting(true)
+    const payload = {
+      category,
+      sourceType: selectedType,
+      name: name.trim() || SOURCE_TYPE_LABELS[selectedType],
+      auth,
+      scanScope,
+      excludedItems: [],
+      includedItems,
+      connectionMethods: [method],
+      syncSchedule: "1h" as const,
+      status: "not-synced" as const,
+    }
+    const createResult = await createSourceConnection(payload)
     setTesting(false)
-    setDiscoveredRepos(testResult.data.discovered_items ?? [])
-    setScreen("pick-repos")
+    if (!createResult.ok) {
+      setError(createResult.error)
+      return
+    }
+    void syncSourceConnection(createResult.data.connection.id)
+    onCreated()
+    onClose()
   }
 
   const providerLabel = selectedType ? SOURCE_TYPE_LABELS[selectedType] : ""
@@ -766,27 +804,7 @@ export function AddConnectionModal({
             <RepoPicker
               discovered={discoveredRepos}
               isSubmitting={testing}
-              onConfirm={async (included) => {
-                setTesting(true)
-                const payload = {
-                  category: category!,
-                  sourceType: selectedType,
-                  name: name.trim() || SOURCE_TYPE_LABELS[selectedType],
-                  auth,
-                  scanScope: "selected" as const,
-                  excludedItems: [],
-                  includedItems: included,
-                  connectionMethods: [method],
-                  syncSchedule: "1h" as const,
-                  status: "not-synced" as const,
-                }
-                const createResult = await createSourceConnection(payload)
-                setTesting(false)
-                if (!createResult.ok) { setError(createResult.error); return }
-                void syncSourceConnection(createResult.data.connection.id)
-                onCreated()
-                onClose()
-              }}
+              onConfirm={(included) => finishCreate("selected", included)}
             />
           )}
         </div>

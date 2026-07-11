@@ -4,7 +4,7 @@ import { useState } from "react"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ImagesIcon } from "@/lib/shared/ui/page-icons"
 import { ImagesInventoryPanel } from "./ImagesInventoryPanel"
-import { AddConnectionModal } from "@/app/(app)/settings/sources/_components/AddConnectionModal"
+import { AddConnectionModal } from "@/components/sources/AddConnectionModal"
 
 export function ImagesPageClient() {
   const [count, setCount] = useState<number | null>(null)
@@ -36,7 +36,7 @@ export function ImagesPageClient() {
       <ImagesInventoryPanel key={reloadKey} onCountChange={setCount} />
       {showAddModal && (
         <AddConnectionModal
-          category="container-registry"
+          lockedCategory="container-registry"
           onClose={() => setShowAddModal(false)}
           onCreated={() => {
             setShowAddModal(false)
