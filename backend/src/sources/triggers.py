@@ -96,6 +96,9 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
 
     if scan_scope == "selected":
         items = list(connection.get("includedItems") or [])
+    elif scan_scope == "all-except-excluded":
+        excluded = set(connection.get("excludedItems") or [])
+        items = [r for r in (connection.get("discoveredItems") or []) if r not in excluded]
     else:
         items = list(connection.get("discoveredItems") or [])
     if not items:
