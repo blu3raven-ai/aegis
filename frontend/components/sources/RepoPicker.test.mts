@@ -31,6 +31,8 @@ describe("RepoPicker public-URL validation", () => {
   it("verifies a GitHub repo exists before adding it", () => {
     assert.match(src, /api\.github\.com\/repos/)
     assert.match(src, /doesn't exist or is private/)
+    assert.match(src, /gitlab\.com\/api\/v4/)
+    assert.match(src, /api\.bitbucket\.org/)
     assert.match(src, /setUrlError/)
   })
 })
