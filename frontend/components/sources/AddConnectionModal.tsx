@@ -343,19 +343,15 @@ export function AddConnectionModal({
     }
   }
 
-  // Discover repos for a git source and populate the picker on the right. Called
-  // both when the token field is committed (auto-load, low friction) and by the
-  // explicit "load/reload" button. `silent` skips the required-field error so
-  // auto-load doesn't nag before the user has typed a token.
+  // Discover repos for a git source and populate the picker on the right. Both
+  // callers (the reload button after field validation, and the token blur below)
+  // guarantee a token is present, so this just guards against a missing token /
+  // in-flight request defensively.
   const lastDiscoveredToken = useRef<string | null>(null)
-  async function discover({ silent = false }: { silent?: boolean } = {}) {
+  async function discover() {
     if (!selectedType || category !== "code-repositories") return
     const token = (auth["token"] ?? "").trim()
-    if (!token) {
-      if (!silent) setError("Personal Access Token is required.")
-      return
-    }
-    if (testing) return
+    if (!token || testing) return
     lastDiscoveredToken.current = token
     setTesting(true)
     setError(null)
@@ -373,14 +369,11 @@ export function AddConnectionModal({
     setHasDiscovered(true)
   }
 
-  // Fires when the token field is committed (blur). Auto-loads the list so the
-  // user never needs a separate "test" click before picking repos.
+  // Auto-load on token blur — skips a re-fetch when the token is unchanged so
+  // clicking from the field into the picker doesn't reload the list.
   function handleTokenBlur() {
     if (category !== "code-repositories") return
-    const token = (auth["token"] ?? "").trim()
-    if (!token || testing) return
-    if (token === lastDiscoveredToken.current) return
-    void discover({ silent: true })
+    if ((auth["token"] ?? "").trim() !== lastDiscoveredToken.current) void discover()
   }
 
   async function handleSubmit(e: React.FormEvent) {
