@@ -35,16 +35,18 @@ export function RepoPicker({
 
   const groups = useMemo(() => {
     const q = query.trim().toLowerCase()
+    const discoveredSet = new Set(discovered)
     const byOwner = new Map<string, string[]>()
-    for (const repo of discovered) {
-      if (q && !repo.toLowerCase().includes(q)) continue
-      const owner = ownerOf(repo)
-      const list = byOwner.get(owner) ?? []
-      list.push(repo)
-      byOwner.set(owner, list)
+    const push = (item: string, owner: string) => {
+      if (q && !item.toLowerCase().includes(q)) return
+      byOwner.set(owner, [...(byOwner.get(owner) ?? []), item])
     }
+    for (const repo of discovered) push(repo, ownerOf(repo))
+    // Items added by URL (or pre-selected on re-open) aren't in `discovered` —
+    // surface them so they render as rows the user can see and uncheck.
+    for (const item of selected) if (!discoveredSet.has(item)) push(item, "Added by URL")
     return [...byOwner.entries()].sort(([a], [b]) => a.localeCompare(b))
-  }, [discovered, query])
+  }, [discovered, selected, query])
 
   function toggle(repo: string) {
     setSelected((prev) => {

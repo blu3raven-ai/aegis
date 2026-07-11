@@ -34,3 +34,10 @@ describe("RepoPicker public-URL validation", () => {
     assert.match(src, /setUrlError/)
   })
 })
+
+describe("RepoPicker URL rows", () => {
+  it("shows added-by-URL items (selected but not discovered) as rows", () => {
+    assert.match(src, /Added by URL/)
+    assert.match(src, /!discoveredSet\.has\(item\)/)
+  })
+})
