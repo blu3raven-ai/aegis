@@ -190,7 +190,7 @@ export function AddConnectionModal({
   const dialogRef = useRef<HTMLDivElement>(null)
   useDialogA11y(dialogRef, onClose)
 
-  const [screen, setScreen] = useState<"provider" | "method" | "settings" | "pick-repos">("provider")
+  const [screen, setScreen] = useState<"provider" | "method" | "settings">("provider")
   const [selectedType, setSelectedType] = useState<SourceType | null>(null)
   const [method, setMethod] = useState<ConnectMethod>("pat")
   const [auth, setAuth] = useState<SourceConnectionAuth>({})
@@ -200,6 +200,9 @@ export function AddConnectionModal({
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({})
 
   const [discoveredRepos, setDiscoveredRepos] = useState<string[]>([])
+  // For git-repo sources, discovery loads the picker inline on the same screen
+  // as the token field (so the token stays editable and can reload the list).
+  const [hasDiscovered, setHasDiscovered] = useState(false)
 
   // Webhook-method state
   const [webhookSecret, setWebhookSecret] = useState<string | null>(null)
@@ -254,6 +257,10 @@ export function AddConnectionModal({
 
   function handleBack() {
     setError(null)
+    // Leaving the settings screen drops any loaded repo list so a re-entry
+    // starts clean.
+    setHasDiscovered(false)
+    setDiscoveredRepos([])
     if (screen === "settings" && hasMethodStep) setScreen("method")
     else setScreen("provider")
   }
@@ -367,7 +374,7 @@ export function AddConnectionModal({
     if (category === "code-repositories") {
       setTesting(false)
       setDiscoveredRepos(testResult.data.discovered_items ?? [])
-      setScreen("pick-repos")
+      setHasDiscovered(true)
     } else {
       await finishCreate("all", [])
     }
@@ -411,15 +418,13 @@ export function AddConnectionModal({
   const title =
     screen === "provider"
       ? "Add a Source"
-      : screen === "pick-repos"
-        ? `Select Repositories`
-        : screen === "method"
-          ? `Connect ${providerLabel}`
-          : method === "webhook"
-            ? `${providerLabel} Webhook`
-            : method === "cicd"
-              ? `${providerLabel} CI/CD`
-              : `Connect to ${providerLabel}`
+      : screen === "method"
+        ? `Connect ${providerLabel}`
+        : method === "webhook"
+          ? `${providerLabel} Webhook`
+          : method === "cicd"
+            ? `${providerLabel} CI/CD`
+            : `Connect to ${providerLabel}`
 
   return (
     <div
@@ -459,7 +464,7 @@ export function AddConnectionModal({
         </div>
 
         {/* Body */}
-        <div className={`flex min-h-0 flex-1 flex-col overflow-y-auto ${screen === "pick-repos" ? "" : "px-6 py-5"}`}>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6 py-5">
           {/* Screen 1: provider selection */}
           {screen === "provider" && (
             <div>
@@ -575,6 +580,7 @@ export function AddConnectionModal({
 
           {/* Screen 3a: PAT settings */}
           {screen === "settings" && selectedType && method === "pat" && (
+            <>
             <form onSubmit={handleSubmit} id="add-connection-form">
               {(() => {
                 const guide = SOURCE_TYPE_SETUP_GUIDES[selectedType]
@@ -671,6 +677,19 @@ export function AddConnectionModal({
                 </div>
               )}
             </form>
+
+            {/* Discovered repos load inline on this same screen so the token
+                above stays editable and can reload the list. */}
+            {category === "code-repositories" && hasDiscovered && (
+              <div className="mt-6 h-[440px] overflow-hidden rounded-2xl border border-[var(--color-border)]">
+                <RepoPicker
+                  discovered={discoveredRepos}
+                  isSubmitting={testing}
+                  onConfirm={(included) => finishCreate("selected", included)}
+                />
+              </div>
+            )}
+            </>
           )}
 
           {/* Screen 3b: Webhook setup */}
@@ -799,18 +818,8 @@ export function AddConnectionModal({
               </div>
             )
           })()}
-          {/* Screen 4: repo cherry-pick picker */}
-          {screen === "pick-repos" && selectedType && (
-            <RepoPicker
-              discovered={discoveredRepos}
-              isSubmitting={testing}
-              onConfirm={(included) => finishCreate("selected", included)}
-            />
-          )}
         </div>
 
-        {/* Footer — hidden on the repo-picker screen (picker has its own confirm bar) */}
-        {screen !== "pick-repos" && (
         <div className="flex shrink-0 items-center justify-between border-t border-[var(--color-border)] px-6 py-4">
           {screen === "provider" ? (
             <>
@@ -822,8 +831,15 @@ export function AddConnectionModal({
           ) : method === "pat" ? (
             <>
               <Button variant="ghost" size="md" onClick={handleBack}>Back</Button>
+              {/* For git repos this button loads/reloads the repo list inline
+                  (the picker below has its own "Add repositories" confirm); for
+                  other categories it tests and creates directly. */}
               <Button type="submit" form="add-connection-form" variant="primary" size="md" disabled={testing} isLoading={testing}>
-                {testing ? "Testing…" : "Test & Connect"}
+                {testing
+                  ? "Testing…"
+                  : category === "code-repositories"
+                    ? hasDiscovered ? "Reload repositories" : "Test & load repositories"
+                    : "Test & Connect"}
               </Button>
             </>
           ) : (
@@ -833,7 +849,6 @@ export function AddConnectionModal({
             </>
           )}
         </div>
-        )}
       </div>
     </div>
   )
