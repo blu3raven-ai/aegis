@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timedelta, timezone
 
+from src.shared.repo_owner import owner_of
 from src.sources import store as sources_store
 from src.sources.test_connection import test_connection
 
@@ -47,15 +48,6 @@ def build_repo_urls(source_type: str, instance_url: str, repos: list[str]) -> li
     if not base:
         return []
     return [r if r.startswith("http") else f"{base}/{r}" for r in repos]
-
-
-def _owner_of(item: str) -> str:
-    """Owner segment of an 'owner/repo' item, or the host for a clone URL."""
-    if "://" in item:
-        from urllib.parse import urlparse
-        parts = [p for p in urlparse(item).path.split("/") if p]
-        return parts[0] if parts else (urlparse(item).hostname or "public")
-    return item.split("/", 1)[0] if "/" in item else item
 
 
 def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> list[str]:
@@ -107,7 +99,7 @@ def dispatch_source_scan(connection: dict, *, run_prefix: str = "manual") -> lis
     from collections import defaultdict
     by_owner: dict[str, list[str]] = defaultdict(list)
     for it in items:
-        by_owner[_owner_of(it)].append(it)
+        by_owner[owner_of(it)].append(it)
 
     from src.runner.jobs import has_active_jobs_for_org
     for owner in by_owner:

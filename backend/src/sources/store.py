@@ -12,17 +12,10 @@ from src.db.helpers import run_db
 from src.db.models import SourceConnection
 from src.shared.encryption import decrypt_string, encrypt_string, is_encrypted
 from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso, parse_iso_utc
+from src.shared.repo_owner import owner_of
 
 _logger = logging.getLogger(__name__)
 
-
-def _owner_of(item: str) -> str:
-    """Owner segment of an 'owner/repo' item (or clone-URL host)."""
-    if "://" in item:
-        from urllib.parse import urlparse
-        parts = [p for p in urlparse(item).path.split("/") if p]
-        return parts[0] if parts else (urlparse(item).hostname or "public")
-    return item.split("/", 1)[0] if "/" in item else item
 
 VALID_CATEGORIES = {"code-repositories", "container-images", "container-registry", "ci-systems"}
 VALID_SOURCE_TYPES = {
@@ -261,7 +254,7 @@ def list_connections(category: str | None = None, org_id: str = "default") -> li
 
         for conn, d in zip(conns, dicts):
             if conn.scan_scope == "selected" and conn.included_items:
-                owners = {_owner_of(i) for i in conn.included_items}
+                owners = {owner_of(i) for i in conn.included_items}
                 agg = {"critical": 0, "high": 0, "medium": 0, "low": 0}
                 latest = None
                 for o in owners:
