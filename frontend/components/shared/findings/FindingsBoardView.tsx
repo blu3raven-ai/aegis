@@ -2183,14 +2183,20 @@ function FindingDescriptionSection({
   // Impact line gets rather than as a plain paragraph.
   emphasized?: boolean
 }) {
-  if (!description || description.trim() === title.trim()) return null
+  // The title is often the first sentence of the description. Drop that lead so
+  // "What's wrong" adds context instead of repeating the headline; hide entirely
+  // when nothing remains.
+  const t = title.trim()
+  const desc = (description ?? "").trim()
+  const body = desc === t ? "" : desc.startsWith(t) ? desc.slice(t.length).trim() : desc
+  if (!body) return null
   if (emphasized) {
     return (
       <section aria-labelledby="finding-description-title">
         <h3 id="finding-description-title" className="sr-only">
           Impact
         </h3>
-        <ImpactCallout>{description}</ImpactCallout>
+        <ImpactCallout>{body}</ImpactCallout>
       </section>
     )
   }
@@ -2200,7 +2206,7 @@ function FindingDescriptionSection({
         What&rsquo;s wrong
       </h3>
       <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-secondary)]">
-        {description}
+        {body}
       </p>
     </section>
   )
