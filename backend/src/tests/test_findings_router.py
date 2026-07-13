@@ -848,3 +848,21 @@ def test_generate_poc_route_409_when_llm_not_configured():
         client = TestClient(_make_app())
         resp = client.post("/api/v1/findings/42/poc/generate")
     assert resp.status_code == 409
+
+
+def test_generate_poc_route_forwards_instruction():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    poc = {"poc_script": "x", "poc_filename": "p.py", "poc_language": "python"}
+    gen = AsyncMock(return_value=poc)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict", return_value=dict(_ADVISORY_DICT)), \
+         patch("src.findings.router.fetch_llm_config", return_value=_llm_cfg()), \
+         patch("src.findings.router.generate_poc", new=gen), \
+         patch("src.findings.router._persist_finding_poc", new=AsyncMock()):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/poc/generate", json={"instruction": "use a curl one-liner"})
+    assert resp.status_code == 200
+    assert gen.await_args.kwargs["instruction"] == "use a curl one-liner"

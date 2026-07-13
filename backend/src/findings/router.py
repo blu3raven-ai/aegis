@@ -546,12 +546,20 @@ async def generate_finding_poc(finding_id: int, request: Request) -> dict[str, A
     The result is persisted so the download route serves it afterwards."""
     require_permission(request, RUN_SCANS)
     finding = await _scoped_finding_dict(finding_id, request)
+    # Optional free-text guidance to steer the PoC (capped). The benign hard-rules
+    # live in the system prompt, so guidance can direct but never weaponize.
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    instruction = (str(body.get("instruction") or "").strip()[:500] or None) if isinstance(body, dict) else None
     cfg = fetch_llm_config(_resolve_org_id())
     if cfg is None or not cfg.enabled or not cfg.api_key:
         raise HTTPException(status_code=409, detail="LLM is not configured")
     try:
         poc = await generate_poc(
-            finding, api_key=cfg.api_key, base_url=cfg.api_base_url, model=cfg.model
+            finding, api_key=cfg.api_key, base_url=cfg.api_base_url, model=cfg.model,
+            instruction=instruction,
         )
     except PocGenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

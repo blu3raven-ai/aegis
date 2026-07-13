@@ -58,8 +58,6 @@ import {
   listFindingsSummary,
   findingReportUrl,
   findingReportPdfUrl,
-  findingPocUrl,
-  generateFindingPoc,
   type DismissReason,
   type FindingScanner,
   type FindingState,
@@ -68,6 +66,7 @@ import {
   type VerdictCounts,
 } from "@/lib/client/findings-api"
 import { AdvisoryHeader } from "@/components/shared/findings/AdvisoryHeader"
+import { FindingPocSection } from "@/components/shared/findings/FindingPocSection"
 import { buttonClassName } from "@/components/ui/Button"
 import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
@@ -973,16 +972,10 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   const [deferring, setDeferring] = useState(false)
   const [reopening, setReopening] = useState(false)
   const [dismissError, setDismissError] = useState<string | null>(null)
-  const [pocGenerating, setPocGenerating] = useState(false)
-  const [pocError, setPocError] = useState<string | null>(null)
-  const handleGeneratePoc = useCallback(async () => {
-    if (!selectedFinding) return
-    setPocGenerating(true)
-    setPocError(null)
-    try {
-      const poc = await generateFindingPoc(Number(selectedFinding.id))
+  const handlePocGenerated = useCallback(
+    (poc: { poc_script: string; poc_filename: string; poc_language: string }) => {
       setSelectedFinding((curr) =>
-        curr && curr.id === selectedFinding.id
+        curr
           ? {
               ...curr,
               verificationMetadata: {
@@ -994,12 +987,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
             }
           : curr,
       )
-    } catch (err) {
-      setPocError(err instanceof Error ? err.message : "Failed to generate PoC")
-    } finally {
-      setPocGenerating(false)
-    }
-  }, [selectedFinding])
+    },
+    [],
+  )
   const [lastDismissed, setLastDismissed] = useState<{ finding: Finding; index: number; verb: string } | null>(null)
   // A `?finding=<id>` deep link that resolved to nothing (deleted or out of scope).
   const [deepLinkMissing, setDeepLinkMissing] = useState(false)
@@ -1963,33 +1953,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 >
                   Download PDF
                 </a>
-                {selectedFinding.verificationMetadata?.poc_script ? (
-                  <a
-                    href={findingPocUrl(selectedFinding.id)}
-                    download
-                    className={buttonClassName({ variant: "secondary", size: "sm" })}
-                  >
-                    Download PoC
-                  </a>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleGeneratePoc}
-                    isLoading={pocGenerating}
-                    title="Generate a benign proof-of-concept using the configured LLM"
-                  >
-                    {pocGenerating ? "Generating…" : "Generate PoC"}
-                  </Button>
-                )}
-                {pocError ? (
-                  <span
-                    role="alert"
-                    className="self-center text-xs text-[var(--color-severity-critical-text)]"
-                  >
-                    {pocError}
-                  </span>
-                ) : null}
               </div>
 
               <EvidenceSection
@@ -2035,6 +1998,14 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               />
 
               <FindingDataFlowSection steps={selectedFinding.codeFlows} />
+
+              <FindingPocSection
+                findingId={Number(selectedFinding.id)}
+                pocScript={selectedFinding.verificationMetadata?.poc_script}
+                pocFilename={selectedFinding.verificationMetadata?.poc_filename}
+                pocLanguage={selectedFinding.verificationMetadata?.poc_language}
+                onGenerated={handlePocGenerated}
+              />
 
               {selectedFinding.verificationMetadata?.distinctness ? (
                 <section className="space-y-2">
