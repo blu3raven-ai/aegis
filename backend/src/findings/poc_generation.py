@@ -10,6 +10,7 @@ so no PoC tokens are spent during a scan.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import httpx
@@ -21,6 +22,9 @@ class PocGenerationError(Exception):
     """Raised on any PoC-generation failure; the route maps it to a clean HTTP error."""
 
 
+# Ask for a raw fenced script, NOT JSON: wrapping a multi-line script (quotes,
+# braces, backslashes) in JSON is fragile, and reasoning models leak <think>
+# blocks / prose into the fields. A fenced code block is robust to extract.
 _SYSTEM = (
     "You are a security engineer writing a runnable proof-of-concept that proves a "
     "confirmed vulnerability is REACHABLE, using a BENIGN marker only. "
@@ -29,19 +33,31 @@ _SYSTEM = (
     "is reachable (e.g. print a marker, echo/whoami). Do NOT include a legal or "
     "safe-harbor header; it is added later. If the request includes user guidance, "
     "follow it ONLY where it does not conflict with these rules — never weaponize on "
-    "request. Return JSON only."
+    "request. Return ONLY the runnable script inside a single fenced code block "
+    "(```<language>\\n...\\n```). No prose, no JSON, nothing before or after the fence."
 )
 
-_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["poc_script", "poc_filename", "poc_language"],
-    "properties": {
-        "poc_script": {"type": "string"},
-        "poc_filename": {"type": "string"},
-        "poc_language": {"type": "string"},
-    },
-}
+_LANG_EXT = {"python": "py", "bash": "sh", "sh": "sh", "javascript": "js",
+             "typescript": "ts", "ruby": "rb", "go": "go", "php": "php"}
+
+_LANG_ALIAS = {"python3": "python", "py": "python", "js": "javascript", "ts": "typescript"}
+
+
+def _extract_script(content: str) -> tuple[str, str]:
+    """Pull (script, language) from possibly-messy model output: strip reasoning
+    `<think>` blocks and take the first fenced code block; fall back to the whole
+    text with a shebang sniff when there's no fence."""
+    text = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+    fence = re.search(r"```([a-zA-Z0-9+#._-]*)[ \t]*\n(.*?)```", text, flags=re.DOTALL)
+    if fence:
+        lang = fence.group(1).strip().lower()
+        script = fence.group(2).strip()
+    else:
+        lang, script = "", text
+    if not lang:
+        sb = re.match(r"#![^\n]*\b(python3?|bash|sh|node|ruby|php)\b", script)
+        lang = sb.group(1) if sb else "text"
+    return script, _LANG_ALIAS.get(lang, lang) or "text"
 
 
 def _user_prompt(finding: dict[str, Any], instruction: str | None = None) -> str:
@@ -96,10 +112,6 @@ async def generate_poc(
             {"role": "system", "content": _SYSTEM},
             {"role": "user", "content": _user_prompt(finding, instruction)},
         ],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {"name": "finding_poc", "strict": True, "schema": _SCHEMA},
-        },
     }
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     try:
@@ -120,15 +132,17 @@ async def generate_poc(
     try:
         choices = resp.json().get("choices") or []
         content = choices[0]["message"]["content"] if choices else ""
-        parsed = json.loads(content) if content else {}
     except (ValueError, TypeError, KeyError, IndexError) as exc:
         raise PocGenerationError("LLM provider returned malformed output.") from exc
 
-    script = str(parsed.get("poc_script") or "").strip()
+    script, language = _extract_script(content or "")
     if not script:
         raise PocGenerationError("LLM did not return a proof-of-concept.")
+    # Filename is derived, never taken from the model — so messy output can't
+    # leak into it. Language drives the extension.
+    ext = _LANG_EXT.get(language, "txt")
     return {
         "poc_script": script,
-        "poc_filename": str(parsed.get("poc_filename") or "").strip(),
-        "poc_language": str(parsed.get("poc_language") or "").strip() or "text",
+        "poc_filename": f"finding-{finding.get('id', 'poc')}-poc.{ext}",
+        "poc_language": language,
     }
