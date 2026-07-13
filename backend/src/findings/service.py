@@ -47,14 +47,14 @@ VALID_VERDICTS = frozenset({"confirmed", "needs_verify", "possible", "ruled_out"
 # (findings ingested before LLM verification ran); "all" disables the filter.
 _VALID_VERDICT_FILTERS = VALID_VERDICTS | frozenset({"legacy", "all"})
 VALID_SORTS = frozenset(
-    {"severity", "severity_age", "epss", "risk_score", "action_band", "newest", "oldest", "created_at", "updated_at"}
+    {"severity", "severity_age", "epss", "cvss", "risk_score", "action_band", "newest", "oldest", "created_at", "updated_at"}
 )
 
 # Sorts paginated by page number (offset), not keyset cursor. They never emit a
 # next_cursor, and _cursor_predicate must not build a keyset clause for them — a
 # stray/stale cursor under one of these would otherwise key on the wrong column.
 _DEFERRED_CURSOR_SORTS = frozenset(
-    {"severity_age", "epss", "risk_score", "action_band", "newest", "oldest"}
+    {"severity_age", "epss", "cvss", "risk_score", "action_band", "newest", "oldest"}
 )
 
 # Ordering value used to sort severities — higher = more severe.
@@ -278,6 +278,15 @@ def _sort_columns(sort: str, direction: str):
             Finding.risk_score.desc().nullslast()
             if desc
             else Finding.risk_score.asc().nullslast()
+        )
+        return [primary, Finding.id.desc() if desc else Finding.id.asc()]
+    if sort == "cvss":
+        # NULLs last regardless of direction so unscored findings don't crowd
+        # the top of a "CVSS (high to low)" view.
+        primary = (
+            Finding.cvss_score.desc().nullslast()
+            if desc
+            else Finding.cvss_score.asc().nullslast()
         )
         return [primary, Finding.id.desc() if desc else Finding.id.asc()]
     if sort == "action_band":
@@ -798,6 +807,7 @@ def _finding_to_dict(
         ),
         "epss_percentile": (epss_lookup or {}).get(finding.cve_id) if finding.cve_id else None,
         "risk_score": finding.risk_score,
+        "cvss_score": finding.cvss_score,
         "action_band": action_band(
             finding.severity,
             kev_listed=lookup.is_kev(finding.cve_id),

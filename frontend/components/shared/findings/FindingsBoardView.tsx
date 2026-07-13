@@ -488,7 +488,7 @@ const VALID_SEVERITIES = new Set<Severity | "all">(["all", "critical", "high", "
 // never be silently dropped from the accepted filter set again.
 const VALID_SCANNERS = new Set<ScannerFilter>(["all", ...SCANNER_ORDER])
 const VALID_STATES = new Set<StateFilter>(["all", "open", "closed", "fixed", "dismissed", "deferred"])
-const VALID_SORT_KEYS = new Set<SortKey>(["severity_age", "epss", "action_band", "newest", "oldest"])
+const VALID_SORT_KEYS = new Set<SortKey>(["severity_age", "epss", "cvss", "action_band", "newest", "oldest"])
 const VALID_AGE_PRESETS = new Set<AgePresetKey>(["any", "24h", "7d", "30d", "90d"])
 
 const SEARCH_DEBOUNCE_MS = 250
@@ -1597,6 +1597,12 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                     direction={sortKey === "action_band" ? "descending" : "none"}
                     onClick={() => setSortKey("action_band")}
                   />
+                  <SortableTh
+                    label="CVSS"
+                    className="w-[5rem] px-3 py-2.5 text-right hidden sm:table-cell [&>button]:justify-end [&>button]:w-full"
+                    direction={sortKey === "cvss" ? "descending" : "none"}
+                    onClick={() => setSortKey("cvss")}
+                  />
                   <Th className="w-[7rem] px-3 py-2.5 text-right hidden sm:table-cell">Confidence</Th>
                   <SortableTh
                     label="Age"
@@ -1615,7 +1621,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               {groups.map((group) => (
                 <Tbody key={`${groupBy}:${group.key}`}>
                   <Tr className="bg-[var(--color-bg-section)]">
-                    <Td colSpan={7} className="px-0 py-0">
+                    <Td colSpan={8} className="px-0 py-0">
                       <FindingsGroupHeader
                         label={group.label}
                         severityCounts={groupSeverityCounts(group.rows)}
@@ -1743,6 +1749,16 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                             </Td>
 
                             <Td className="px-3 py-3 text-right hidden sm:table-cell">
+                              {typeof finding.cvssScore === "number" ? (
+                                <span className="text-xs font-semibold tabular-nums text-[var(--color-text-primary)]">
+                                  {finding.cvssScore.toFixed(1)}
+                                </span>
+                              ) : (
+                                <span className="text-[var(--color-text-tertiary)] text-xs">—</span>
+                              )}
+                            </Td>
+
+                            <Td className="px-3 py-3 text-right hidden sm:table-cell">
                               {finding.verdict ? (
                                 <span className="inline-flex justify-end">
                                   <VerdictBadge verdict={finding.verdict} />
@@ -1759,7 +1775,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                         ))}
                         {perScannerMode ? (
                           <Tr>
-                            <Td colSpan={7} className="p-0">
+                            <Td colSpan={8} className="p-0">
                               <FindingsPagination
                                 page={scannerPages[group.key] ?? 1}
                                 pageSize={PAGE_SIZE}
@@ -1770,7 +1786,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                           </Tr>
                         ) : !expanded && hiddenCount > 0 ? (
                           <Tr>
-                            <Td colSpan={7} className="p-0">
+                            <Td colSpan={8} className="p-0">
                               <Button
                                 variant="link"
                                 className="w-full justify-center py-2 text-xs text-[var(--color-text-secondary)]"

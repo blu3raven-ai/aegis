@@ -2,11 +2,12 @@
 
 import { Select } from "@/components/ui/Select"
 
-export type SortKey = "severity_age" | "epss" | "action_band" | "newest" | "oldest"
+export type SortKey = "severity_age" | "epss" | "cvss" | "action_band" | "newest" | "oldest"
 
 export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "severity_age", label: "Severity → Age" },
   { value: "epss",         label: "EPSS (high → low)" },
+  { value: "cvss",         label: "CVSS (high → low)" },
   { value: "action_band",  label: "Exploitability" },
   { value: "newest",       label: "Newest" },
   { value: "oldest",       label: "Oldest" },

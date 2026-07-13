@@ -176,6 +176,10 @@ async def upsert_finding(
     v_chain = detail.get("exploit_chain")
     v_meta = detail.get("verification_metadata")
     v_fix = detail.get("recommended_fix")
+    # Promote the CVSS base score out of the JSONB so it can be sorted in SQL.
+    v_cvss = None
+    if isinstance(v_meta, dict) and isinstance(v_meta.get("cvss_score"), (int, float)):
+        v_cvss = float(v_meta["cvss_score"])
 
     # Recall-safety gate: an LLM `ruled_out` verdict may only HIDE a finding when
     # it is grounded in a real code citation (a file in the evidence, or in the
@@ -232,6 +236,7 @@ async def upsert_finding(
             existing.exploit_chain = v_chain
         if v_meta is not None:
             existing.verification_metadata = v_meta
+            existing.cvss_score = v_cvss
         if v_fix is not None:
             existing.recommended_fix = v_fix
         if v_verdict is not None and old_verdict != v_verdict:
@@ -276,6 +281,7 @@ async def upsert_finding(
             evidence=v_evidence,
             exploit_chain=v_chain,
             verification_metadata=v_meta,
+            cvss_score=v_cvss,
             recommended_fix=v_fix,
             first_seen_at=first_seen_at or now,
             last_seen_at=now,

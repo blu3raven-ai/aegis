@@ -209,6 +209,8 @@ export interface FindingRow {
   filePath?: string
   age: string
   riskScore?: number
+  /** CVSS 3.1 base score (0.0–10.0), promoted from verification metadata. */
+  cvssScore?: number
   /** SSVC-style triage band derived from KEV + reachability + severity. */
   actionBand?: FindingActionBand
   /** EPSS percentile in [0.0, 1.0] from the FIRST.org feed (Phase 50). */
@@ -434,6 +436,7 @@ export function mapApiFinding(api: ApiFinding): FindingRow {
     malicious: api.malicious ?? undefined,
     cwe: api.cwe ?? undefined,
     riskScore: api.risk_score ?? undefined,
+    cvssScore: api.cvss_score ?? undefined,
     actionBand: normaliseActionBand(api.action_band),
     assigneeUserId: api.assignee_user_id ?? undefined,
     verdict: api.verdict ?? undefined,

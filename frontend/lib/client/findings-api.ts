@@ -39,6 +39,7 @@ export type FindingSort =
   | "updated_at"
   | "severity_age"
   | "epss"
+  | "cvss"
   | "risk_score"
   | "action_band"
   | "newest"
@@ -69,6 +70,8 @@ export interface Finding {
   /** First CWE id (e.g. "CWE-502") from KEV metadata. */
   cwe?: string | null
   risk_score?: number | null
+  /** CVSS 3.1 base score (0.0–10.0), promoted from verification metadata. */
+  cvss_score?: number | null
   /** SSVC-style triage band derived from KEV + reachability + severity. */
   action_band?: string | null
   assignee_user_id?: string | null
@@ -191,6 +194,7 @@ interface GqlFindingRow {
   kev: boolean | null
   cwe: string | null
   riskScore: number | null
+  cvssScore: number | null
   actionBand: string | null
   assigneeUserId: string | null
   verdict: FindingVerdict | null
@@ -264,6 +268,7 @@ function fromGqlRow(row: GqlFindingRow): Finding {
     kev: row.kev,
     cwe: row.cwe,
     risk_score: row.riskScore,
+    cvss_score: row.cvssScore,
     action_band: row.actionBand,
     assignee_user_id: row.assigneeUserId,
     verdict: row.verdict,
@@ -517,7 +522,7 @@ const FINDINGS_SEARCH_QUERY = `query FindingsSearch(
       findings {
         id scanner severity state title cve package filePath line
         repo orgId createdAt updatedAt epssPercentile kev cwe
-        riskScore actionBand assigneeUserId verdict ruledOutReason
+        riskScore cvssScore actionBand assigneeUserId verdict ruledOutReason
       }
       nextCursor
       totalCount
