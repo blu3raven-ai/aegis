@@ -1939,24 +1939,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 />
               )}
 
-              <RecommendedFixSection fix={selectedFinding.recommendedFix} />
-
-              {selectedFinding.verificationMetadata?.distinctness ? (
-                <section className="space-y-2">
-                  <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Distinctness</h3>
-                  <p className="text-sm text-[var(--color-text-secondary)]">
-                    {selectedFinding.verificationMetadata.distinctness}
-                  </p>
-                </section>
-              ) : null}
-
-              {/* Fall back to the scanner's own remediation text only when there
-                  is no structured fix, so the "Recommended fix" heading never
-                  renders twice. */}
-              {!selectedFinding.recommendedFix && (
-                <FindingRemediationSection remediation={selectedFinding.remediation} />
-              )}
-
+              {/* Advisory reading order: technical detail (code window) and the
+                  verified call path come first, then distinctness, then the
+                  remediation — so the drawer reads top-to-bottom like the report. */}
               <CodePreviewSection
                 snippet={selectedFinding.codeSnippet}
                 filePath={selectedFinding.filePath}
@@ -1980,6 +1965,24 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               />
 
               <FindingDataFlowSection steps={selectedFinding.codeFlows} />
+
+              {selectedFinding.verificationMetadata?.distinctness ? (
+                <section className="space-y-2">
+                  <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Distinctness</h3>
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    {selectedFinding.verificationMetadata.distinctness}
+                  </p>
+                </section>
+              ) : null}
+
+              <RecommendedFixSection fix={selectedFinding.recommendedFix} />
+
+              {/* Fall back to the scanner's own remediation text only when there
+                  is no structured fix, so the "Recommended fix" heading never
+                  renders twice. */}
+              {!selectedFinding.recommendedFix && (
+                <FindingRemediationSection remediation={selectedFinding.remediation} />
+              )}
 
               {/* Reference & context: the weakness class, advisory brief, and
                   cross-repo blast radius sit below the decision surface. */}
