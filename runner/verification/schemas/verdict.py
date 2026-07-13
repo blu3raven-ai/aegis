@@ -47,6 +47,23 @@ class HunterResponse(BaseModel):
     # exact change. Semgrep rarely ships a usable autofix for these, so the model
     # writes one; rendered as a diff in the drawer.
     fix: str = ""
+    # Eight CVSS 3.1 base metrics, each a single-letter enum. The model
+    # CLASSIFIES the axes; it never emits a score — the score is computed
+    # deterministically downstream. Empty dict when the model can't classify.
+    #   AV: N|A|L|P  AC: L|H  PR: N|L|H  UI: N|R
+    #   S:  U|C      C:  N|L|H  I: N|L|H  A: N|L|H
+    cvss_metrics: dict[str, str] = Field(default_factory=dict)
+    # Why this confirmed finding is materially distinct from any published
+    # CVE/GHSA it resembles (different sink / trigger / component). Optional.
+    distinctness: str = ""
+    # Numbered defense-in-depth remediation steps beyond the primary `fix` diff.
+    remediation: list[Any] = Field(default_factory=list)
+    # Runnable benign proof-of-concept that drives the REAL vulnerable path with
+    # a benign marker (no weaponisation). Body only — the safe-harbor header is
+    # templated server-side at download time.
+    poc_script: str = ""
+    poc_filename: str = ""
+    poc_language: str = ""
 
 
 class SkepticResponse(BaseModel):

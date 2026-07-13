@@ -127,3 +127,21 @@ def test_invalid_sast_skeptic_schema_falls_back_to_hunter_verdict():
     )
     # Skeptic fails → mitigation_found defaults False → critic passes → confirmed
     assert result.verdict == "confirmed"
+
+
+def test_hunter_response_accepts_cvss_metrics():
+    from runner.verification.schemas.verdict import HunterResponse
+
+    resp = HunterResponse.model_validate({
+        "title": "x",
+        "cvss_metrics": {"AV": "L", "AC": "L", "PR": "N", "UI": "R",
+                         "S": "U", "C": "H", "I": "H", "A": "H"},
+    })
+    assert resp.cvss_metrics["AV"] == "L"
+
+
+def test_hunter_response_cvss_metrics_defaults_empty():
+    from runner.verification.schemas.verdict import HunterResponse
+
+    resp = HunterResponse.model_validate({"title": "x"})
+    assert resp.cvss_metrics == {}
