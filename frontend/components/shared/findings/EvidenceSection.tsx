@@ -235,6 +235,41 @@ export function EvidenceSection({
         </p>
       )}
 
+      {/* Technical detail (the cited evidence) sits right after the summary,
+          before the attack scenario — advisory reading order. Citation anchors
+          (evidenceRefId) are unchanged, so [R1] links still resolve. */}
+      {hasEvidence && (
+        <ul className="mt-3 space-y-2">
+          {evidence!.map((e, i) => (
+            <li
+              key={i}
+              id={evidenceRefId(i + 1)}
+              className="scroll-mt-4 rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2 target:ring-1 target:ring-[var(--color-accent)]"
+            >
+              <div className="flex items-center justify-between gap-3 text-2xs font-semibold uppercase tracking-[0.14em]">
+                <span className="flex items-center gap-1.5">
+                  <span className="rounded bg-[var(--color-surface-raised)] px-1 font-mono normal-case tracking-normal text-[var(--color-text-tertiary)]">
+                    R{i + 1}
+                  </span>
+                  <span className={KIND_COLOR[e.kind] || "text-[var(--color-text-secondary)]"}>
+                    {e.kind}
+                  </span>
+                </span>
+                <span
+                  className="truncate text-[var(--color-text-secondary)]"
+                  title={`${e.file}:${e.line}`}
+                >
+                  {e.file}:{e.line}
+                </span>
+              </div>
+              <pre className="mt-1 whitespace-pre-wrap break-all rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-xs leading-relaxed">
+                {e.snippet}
+              </pre>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {attackPaths.length > 0 && (
         <div className="mt-3">
           <h4 className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
@@ -283,38 +318,6 @@ export function EvidenceSection({
             <p className="text-sm leading-relaxed text-[var(--color-text-secondary)]">{fix}</p>
           )}
         </div>
-      )}
-
-      {hasEvidence && (
-        <ul className="mt-3 space-y-2">
-          {evidence!.map((e, i) => (
-            <li
-              key={i}
-              id={evidenceRefId(i + 1)}
-              className="scroll-mt-4 rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2 target:ring-1 target:ring-[var(--color-accent)]"
-            >
-              <div className="flex items-center justify-between gap-3 text-2xs font-semibold uppercase tracking-[0.14em]">
-                <span className="flex items-center gap-1.5">
-                  <span className="rounded bg-[var(--color-surface-raised)] px-1 font-mono normal-case tracking-normal text-[var(--color-text-tertiary)]">
-                    R{i + 1}
-                  </span>
-                  <span className={KIND_COLOR[e.kind] || "text-[var(--color-text-secondary)]"}>
-                    {e.kind}
-                  </span>
-                </span>
-                <span
-                  className="truncate text-[var(--color-text-secondary)]"
-                  title={`${e.file}:${e.line}`}
-                >
-                  {e.file}:{e.line}
-                </span>
-              </div>
-              <pre className="mt-1 whitespace-pre-wrap break-all rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-xs leading-relaxed">
-                {e.snippet}
-              </pre>
-            </li>
-          ))}
-        </ul>
       )}
 
       {reproduction && (
