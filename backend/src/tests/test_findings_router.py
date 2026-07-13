@@ -802,3 +802,49 @@ def test_download_report_pdf_404_when_out_of_scope():
         client = TestClient(_make_app())
         resp = client.get("/api/v1/findings/42/report.pdf")
     assert resp.status_code == 404
+
+
+def _llm_cfg(enabled=True):
+    cfg = SimpleNamespace(enabled=enabled, api_key="k", api_base_url="https://api.openai.com/v1", model="m")
+    return cfg
+
+
+def test_generate_poc_route_returns_poc_when_in_scope():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    poc = {"poc_script": "print('pwned')", "poc_filename": "poc.py", "poc_language": "python"}
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict", return_value=dict(_ADVISORY_DICT)), \
+         patch("src.findings.router.fetch_llm_config", return_value=_llm_cfg()), \
+         patch("src.findings.router.generate_poc", new=AsyncMock(return_value=poc)), \
+         patch("src.findings.router._persist_finding_poc", new=AsyncMock()):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/poc/generate")
+    assert resp.status_code == 200
+    assert resp.json() == {"poc": poc}
+
+
+def test_generate_poc_route_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/poc/generate")
+    assert resp.status_code == 404
+
+
+def test_generate_poc_route_409_when_llm_not_configured():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict", return_value=dict(_ADVISORY_DICT)), \
+         patch("src.findings.router.fetch_llm_config", return_value=None):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/poc/generate")
+    assert resp.status_code == 409

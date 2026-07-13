@@ -421,6 +421,19 @@ export async function addFindingComment(findingId: number, comment: string): Pro
   return res.comment
 }
 
+/** Generate a benign PoC for a finding on demand (LLM-backed; spends tokens). */
+export async function generateFindingPoc(
+  findingId: number,
+): Promise<{ poc_script: string; poc_filename: string; poc_language: string }> {
+  const res = await apiClient<{
+    poc: { poc_script: string; poc_filename: string; poc_language: string }
+  }>(`/api/v1/findings/${findingId}/poc/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  })
+  return res.poc
+}
+
 /** Defer (snooze) a finding — drops it from the open queue until reopened. */
 export async function deferFinding(findingId: number): Promise<{ ok: true }> {
   return apiClient<{ ok: true }>(`/api/v1/findings/${findingId}`, {

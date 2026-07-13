@@ -59,6 +59,7 @@ import {
   findingReportUrl,
   findingReportPdfUrl,
   findingPocUrl,
+  generateFindingPoc,
   type DismissReason,
   type FindingScanner,
   type FindingState,
@@ -972,6 +973,33 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
   const [deferring, setDeferring] = useState(false)
   const [reopening, setReopening] = useState(false)
   const [dismissError, setDismissError] = useState<string | null>(null)
+  const [pocGenerating, setPocGenerating] = useState(false)
+  const [pocError, setPocError] = useState<string | null>(null)
+  const handleGeneratePoc = useCallback(async () => {
+    if (!selectedFinding) return
+    setPocGenerating(true)
+    setPocError(null)
+    try {
+      const poc = await generateFindingPoc(Number(selectedFinding.id))
+      setSelectedFinding((curr) =>
+        curr && curr.id === selectedFinding.id
+          ? {
+              ...curr,
+              verificationMetadata: {
+                ...(curr.verificationMetadata ?? {}),
+                poc_script: poc.poc_script,
+                poc_filename: poc.poc_filename,
+                poc_language: poc.poc_language,
+              },
+            }
+          : curr,
+      )
+    } catch (err) {
+      setPocError(err instanceof Error ? err.message : "Failed to generate PoC")
+    } finally {
+      setPocGenerating(false)
+    }
+  }, [selectedFinding])
   const [lastDismissed, setLastDismissed] = useState<{ finding: Finding; index: number; verb: string } | null>(null)
   // A `?finding=<id>` deep link that resolved to nothing (deleted or out of scope).
   const [deepLinkMissing, setDeepLinkMissing] = useState(false)
@@ -1943,6 +1971,20 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   >
                     Download PoC
                   </a>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleGeneratePoc}
+                    isLoading={pocGenerating}
+                  >
+                    Generate PoC
+                  </Button>
+                )}
+                {pocError ? (
+                  <span className="self-center text-2xs text-[var(--color-severity-critical-text)]">
+                    {pocError}
+                  </span>
                 ) : null}
               </div>
 
