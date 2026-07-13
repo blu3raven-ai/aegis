@@ -4,6 +4,32 @@ All notable changes to this project are documented here.
 
 ---
 
+## v2.8.0 — 2026-07-13
+
+### Security
+- Self-hosted repository URLs are validated through an SSRF-hardened path that blocks private, loopback, and cloud-metadata addresses
+- Removed an unused endpoint that could return raw secret values, shrinking the secret-exposure surface
+
+### Added
+- Confirmed findings render and export as a security-advisory report — a structured header with a deterministically-scored CVSS 3.1 vector, verified call path, distinctness, and remediation — downloadable as Markdown
+- Confirmed findings ship a downloadable, benign proof-of-concept that demonstrates reachability without weaponization
+- Verified findings carry a reference-linked exploit chain, reproduction outline, mitigating factors, and OWASP mapping across code, dependency, IaC, and container scanners
+- Confirmed findings get an AI-authored title, impact statement, and a suggested fix rendered as a diff
+- Container CVE findings are verified and enriched to the same grade as the other scanners
+- Sources can be added by cherry-picking individual repositories across multiple owners, personal accounts, and public repos in a single flow
+- Public repositories can be added by URL with existence validation across GitHub, GitLab, and Bitbucket
+- Code findings stream in mid-scan before verification completes, and the findings list refreshes automatically when a scan finishes
+- Findings are verified concurrently, and unchanged findings are served from a verification cache to cut scan time
+- A live panel shows LLM verification usage while a scan runs
+
+### Fixed
+- Agent-scanning findings appear in the findings table, with a code-window preview attached to LLM-judge results
+- IaC and agent runs show in the source's Scans tab
+- Manual scans no longer duplicate, and runner detail resolves by bare id
+- Source-connection scans use the configured LLM verification settings
+- The scan-progress banner is clearer and dismissable, and the dismiss-reason menu stays within the viewport
+- Browser tab titles are consistent across every page
+
 ## v2.7.0 — 2026-07-08
 
 ### Security
