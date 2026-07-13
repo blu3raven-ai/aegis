@@ -30,7 +30,15 @@ import { FindingOriginSection } from "@/components/shared/findings/FindingOrigin
 import { FindingAge } from "@/components/shared/findings/FindingAge"
 import { CodePreviewSection } from "@/components/shared/findings/CodePreviewSection"
 import { FindingDataFlowSection } from "@/components/shared/findings/FindingDataFlowSection"
-import { EvidenceSection, ImpactCallout } from "@/components/shared/findings/EvidenceSection"
+import { ImpactCallout } from "@/components/shared/findings/EvidenceSection"
+import {
+  SummarySection,
+  TechnicalDetailSection,
+  AttackScenarioSection,
+  ImpactSection,
+  DistinctnessSection,
+  NotesVerificationSection,
+} from "@/components/shared/findings/FindingReportSections"
 import { SecretVerificationSection } from "@/components/shared/findings/SecretVerificationSection"
 import { SecurityBriefSection } from "@/components/shared/findings/SecurityBriefSection"
 import { ContainerImageSection } from "@/components/shared/findings/ContainerImageSection"
@@ -240,17 +248,6 @@ function ActionBandBadge({ band }: { band: FindingActionBand }) {
 // Stable ordering per group key keeps the visual scan rhythm consistent.
 const SCANNER_ORDER: Scanner[] = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning", "agent_scanning"]
 
-// Scanners the LLM verifier runs its exploit-verification pass on. The drawer's
-// locked preview only nudges to enable verification for these.
-// Secrets are deliberately excluded: they're verified by TruffleHog's live
-// provider check, never sent to an LLM, so the drawer must not offer an
-// "enable LLM verification" prompt for them.
-const VERIFIABLE_SCANNERS = new Set<Scanner>([
-  "code_scanning",
-  "iac_scanning",
-  "dependencies_scanning",
-  "container_scanning",
-])
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"]
 
 const INITIAL_ROWS_PER_GROUP = 5
@@ -1936,15 +1933,12 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="analysis" label="Analysis">
-              <EvidenceSection
-                verdict={selectedFinding.verdict}
-                evidence={selectedFinding.evidence}
-                exploitChain={selectedFinding.exploitChain}
-                metadata={selectedFinding.verificationMetadata}
-                verificationEnabled={verificationEnabled}
-                verifiable={VERIFIABLE_SCANNERS.has(selectedFinding.scanner)}
-                scanner={selectedFinding.scanner}
+              <SummarySection
+                chain={selectedFinding.exploitChain ?? undefined}
+                refCount={selectedFinding.evidence?.length ?? 0}
               />
+
+              <TechnicalDetailSection evidence={selectedFinding.evidence} />
 
               {selectedFinding.scanner === "secret_scanning" && (
                 <SecretVerificationSection
@@ -1953,9 +1947,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 />
               )}
 
-              {/* Advisory reading order: technical detail (code window) and the
-                  verified call path come first, then distinctness, then the
-                  remediation — so the drawer reads top-to-bottom like the report. */}
               <CodePreviewSection
                 snippet={selectedFinding.codeSnippet}
                 filePath={selectedFinding.filePath}
@@ -1978,7 +1969,26 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 })}
               />
 
-              <FindingDataFlowSection steps={selectedFinding.codeFlows} />
+              {selectedFinding.codeFlows && selectedFinding.codeFlows.length > 0 ? (
+                <FindingDataFlowSection steps={selectedFinding.codeFlows} />
+              ) : (
+                <section className="space-y-2">
+                  <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Call path (verified)</h3>
+                  <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
+                    No verified call path — verify this finding to trace source → sink.
+                  </p>
+                </section>
+              )}
+
+              <AttackScenarioSection
+                reproduction={selectedFinding.verificationMetadata?.reproduction}
+                attackPaths={selectedFinding.verificationMetadata?.attack_paths}
+                refCount={selectedFinding.evidence?.length ?? 0}
+              />
+
+              <ImpactSection impact={selectedFinding.verificationMetadata?.impact} />
+
+              <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
 
               <FindingPocSection
                 findingId={Number(selectedFinding.id)}
@@ -1988,14 +1998,10 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 onGenerated={handlePocGenerated}
               />
 
-              {selectedFinding.verificationMetadata?.distinctness ? (
-                <section className="space-y-2">
-                  <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Distinctness</h3>
-                  <p className="text-sm text-[var(--color-text-secondary)]">
-                    {selectedFinding.verificationMetadata.distinctness}
-                  </p>
-                </section>
-              ) : null}
+              <NotesVerificationSection
+                verdict={selectedFinding.verdict}
+                metadata={selectedFinding.verificationMetadata}
+              />
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="remediation" label="Remediation">

@@ -206,14 +206,12 @@ describe("FindingsBoardView verification + reachability wiring", () => {
     assert.match(src, /reachability: d\.reachability \?\? curr\.reachability/)
   })
 
-  it("renders the EvidenceSection with the verification props + gating", () => {
-    assert.match(src, /<EvidenceSection/)
-    assert.match(src, /verdict=\{selectedFinding\.verdict\}/)
-    assert.match(src, /evidence=\{selectedFinding\.evidence\}/)
-    assert.match(src, /exploitChain=\{selectedFinding\.exploitChain\}/)
-    assert.match(src, /metadata=\{selectedFinding\.verificationMetadata\}/)
-    assert.match(src, /verificationEnabled=\{verificationEnabled\}/)
-    assert.match(src, /verifiable=\{VERIFIABLE_SCANNERS\.has\(selectedFinding\.scanner\)\}/)
+  it("renders the discrete report sections in the analysis group", () => {
+    assert.match(src, /<SummarySection/)
+    assert.match(src, /<TechnicalDetailSection evidence=\{selectedFinding\.evidence\}/)
+    assert.match(src, /<AttackScenarioSection/)
+    assert.match(src, /<ImpactSection impact=/)
+    assert.match(src, /<NotesVerificationSection/)
   })
 
   it("gives agent-scanner findings the emphasized Impact treatment for their curated advisory", () => {
@@ -221,7 +219,7 @@ describe("FindingsBoardView verification + reachability wiring", () => {
     // statement, so it renders via the shared ImpactCallout, not a plain paragraph.
     assert.match(src, /emphasized=\{selectedFinding\.scanner === "agent_scanning"\}/)
     assert.match(src, /if \(emphasized\) \{[\s\S]*?<ImpactCallout>\{body\}<\/ImpactCallout>/)
-    assert.match(src, /import \{ EvidenceSection, ImpactCallout \}/)
+    assert.match(src, /import \{ ImpactCallout \}/)
   })
 
   it("strips the title lead from the description so 'What's wrong' doesn't repeat the headline", () => {
@@ -387,10 +385,6 @@ describe("FindingsBoardView URL sync", () => {
 
   it("refetches on findings.updated (mid-scan preview + streaming verdicts)", () => {
     assert.match(src, /useSSE\("findings\.updated",/)
-  })
-
-  it("treats container findings as verifier-enriched", () => {
-    assert.match(src, /VERIFIABLE_SCANNERS = new Set[\s\S]*?"container_scanning"/)
   })
 
   it("suppresses raw scanner metavar templates in the remediation section", () => {
