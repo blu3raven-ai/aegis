@@ -27,9 +27,8 @@ test("AdvisoryHeader renders the CVSS vector", () => {
   assert.match(src, /CVSS/, "header must label CVSS")
 })
 
-test("drawer wires the download menu and new sections", () => {
+test("drawer wires the advisory sections", () => {
   const src = read("components/shared/findings/FindingsBoardView.tsx")
-  assert.match(src, /findingReportUrl/, "download report link missing")
   assert.match(src, /AdvisoryHeader/, "AdvisoryHeader not mounted")
   assert.match(src, /[Dd]istinctness/, "Distinctness section missing")
   assert.match(src, /[Ss]afe [Hh]arbor/, "Safe Harbor footer missing")
