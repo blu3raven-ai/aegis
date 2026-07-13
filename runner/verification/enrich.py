@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from runner.verification.cvss import score as cvss_score
+
 
 def stash_confirmed_enrichment(metadata: dict[str, Any], hunter_model: Any) -> None:
     if getattr(hunter_model, "title", "").strip():
@@ -31,3 +33,29 @@ def stash_confirmed_enrichment(metadata: dict[str, Any], hunter_model: Any) -> N
         metadata["mitigating_factors"] = factors
     if getattr(hunter_model, "fix", "").strip():
         metadata["fix"] = hunter_model.fix.strip()
+
+    metrics = getattr(hunter_model, "cvss_metrics", {}) or {}
+    scored = cvss_score(metrics) if isinstance(metrics, dict) else None
+    if scored is not None:
+        vector, base = scored
+        metadata["cvss_metrics"] = {k: str(metrics[k]).strip().upper()
+                                    for k in ("AV", "AC", "PR", "UI", "S", "C", "I", "A")}
+        metadata["cvss_vector"] = vector
+        metadata["cvss_score"] = base
+
+    if getattr(hunter_model, "distinctness", "").strip():
+        metadata["distinctness"] = hunter_model.distinctness.strip()
+
+    steps = [s.strip() for s in (getattr(hunter_model, "remediation", []) or [])
+             if isinstance(s, str) and s.strip()]
+    if steps:
+        metadata["remediation"] = steps
+
+    if getattr(hunter_model, "poc_script", "").strip():
+        metadata["poc_script"] = hunter_model.poc_script.strip()
+        name = (getattr(hunter_model, "poc_filename", "") or "").strip()
+        lang = (getattr(hunter_model, "poc_language", "") or "").strip()
+        if name:
+            metadata["poc_filename"] = name
+        if lang:
+            metadata["poc_language"] = lang
