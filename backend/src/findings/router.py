@@ -60,6 +60,9 @@ from src.findings.advisory import (
     compose_advisory_markdown,
     poc_artifact,
 )
+from src.findings.poc_generation import PocGenerationError, generate_poc
+from src.settings.llm.router import _resolve_org_id
+from src.settings.llm.service import fetch_llm_config
 from src.authz.enforcement.scope import assignable_user_ids, resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/findings", tags=["findings"])
@@ -517,6 +520,43 @@ async def download_finding_poc(finding_id: int, request: Request) -> Response:
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+async def _persist_finding_poc(finding_id: int, poc: dict[str, str]) -> None:
+    """Merge a generated PoC into the finding's verification_metadata so the
+    download route and subsequent drawer opens serve it without regenerating."""
+    async with get_session() as session:
+        finding = await session.get(Finding, finding_id)
+        if finding is None:
+            return
+        meta = dict(finding.verification_metadata or {})
+        meta["poc_script"] = poc["poc_script"]
+        if poc.get("poc_filename"):
+            meta["poc_filename"] = poc["poc_filename"]
+        if poc.get("poc_language"):
+            meta["poc_language"] = poc["poc_language"]
+        finding.verification_metadata = meta
+        await session.commit()
+
+
+@router.post("/{finding_id}/poc/generate")
+async def generate_finding_poc(finding_id: int, request: Request) -> dict[str, Any]:
+    """Generate a benign PoC for a finding on demand. Gated by run_scans because
+    it spends LLM tokens; scoped like the other finding reads (404 out of scope).
+    The result is persisted so the download route serves it afterwards."""
+    require_permission(request, RUN_SCANS)
+    finding = await _scoped_finding_dict(finding_id, request)
+    cfg = fetch_llm_config(_resolve_org_id())
+    if cfg is None or not cfg.enabled or not cfg.api_key:
+        raise HTTPException(status_code=409, detail="LLM is not configured")
+    try:
+        poc = await generate_poc(
+            finding, api_key=cfg.api_key, base_url=cfg.api_base_url, model=cfg.model
+        )
+    except PocGenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    await _persist_finding_poc(finding_id, poc)
+    return {"poc": poc}
 
 
 @router.patch("")
