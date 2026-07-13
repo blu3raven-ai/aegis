@@ -388,4 +388,10 @@ describe("FindingsBoardView URL sync", () => {
   it("treats container findings as verifier-enriched", () => {
     assert.match(src, /VERIFIABLE_SCANNERS = new Set[\s\S]*?"container_scanning"/)
   })
+
+  it("suppresses raw scanner metavar templates in the remediation section", () => {
+    // A `$FUNC`-style token means the scanner sent its rule template, not a fix.
+    assert.match(src, /\/\\\$\[A-Z\]\[A-Z0-9_\]\*\/\.test\(remediation\)/)
+    assert.match(src, /No automated fix yet — verify this finding to generate one\./)
+  })
 })

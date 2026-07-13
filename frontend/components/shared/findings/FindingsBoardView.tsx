@@ -2207,15 +2207,25 @@ function FindingDescriptionSection({
 }
 
 function FindingRemediationSection({ remediation }: { remediation?: string }) {
-  if (!remediation) return null
+  // ponytail: a `$FUNC`-style token means the scanner handed us its raw rule
+  // template, not a usable fix — show the empty state instead of echoing it.
+  // Ceiling: also suppresses a real fix literally containing `$UPPER`; scanner
+  // remediation text rarely does, so fine until it bites.
+  const usable = remediation ? !/\$[A-Z][A-Z0-9_]*/.test(remediation) : false
   return (
     <section aria-labelledby="finding-remediation-title">
       <h3 id="finding-remediation-title" className="text-base font-semibold text-[var(--color-text-primary)]">
         Recommended fix
       </h3>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-primary)]">
-        {remediation}
-      </p>
+      {usable ? (
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-primary)]">
+          {remediation}
+        </p>
+      ) : (
+        <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-tertiary)]">
+          No automated fix yet — verify this finding to generate one.
+        </p>
+      )}
     </section>
   )
 }
