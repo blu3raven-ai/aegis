@@ -80,3 +80,17 @@ def test_poc_artifact_default_filename():
     f["verification_metadata"] = {"poc_script": "echo hi", "poc_language": "bash"}
     name, _ = poc_artifact(f)
     assert name == "finding-42-poc.sh"  # derived when no filename supplied
+
+
+def test_poc_artifact_sanitizes_malicious_filename():
+    # A model-supplied filename with quotes / path / control chars must not be
+    # able to break out of the quoted Content-Disposition value.
+    f = _finding()
+    f["verification_metadata"] = {
+        "poc_script": "echo hi",
+        "poc_language": "bash",
+        "poc_filename": 'p"; drop=1\n../../etc.py',
+    }
+    name, _ = poc_artifact(f)
+    assert '"' not in name and "/" not in name and "\n" not in name
+    assert name  # never empty (falls back if nothing usable remains)

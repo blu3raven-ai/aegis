@@ -4,10 +4,10 @@ import type { VerificationMetadata } from "@/lib/shared/findings/row-mapper"
 /** Minimal finding shape the advisory header reads — a camelCase structural
  *  subset of `Finding`, so the drawer can pass `selectedFinding` directly. */
 export interface AdvisoryHeaderFinding {
-  severity: string | null
-  repo: string | null
+  severity?: string | null
+  repo?: string | null
   cwe?: string | null
-  cve: string | null
+  cve?: string | null
   verificationMetadata?: VerificationMetadata
 }
 

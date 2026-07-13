@@ -9,8 +9,6 @@ never model-authored.
 """
 from __future__ import annotations
 
-from typing import Any
-
 _LANG_EXT = {"python": "py", "bash": "sh", "sh": "sh", "javascript": "js",
              "typescript": "ts", "ruby": "rb", "go": "go", "php": "php"}
 
@@ -36,6 +34,14 @@ _POC_HEADER_TMPL = (
 def _meta(finding: dict) -> dict:
     m = finding.get("verification_metadata")
     return m if isinstance(m, dict) else {}
+
+
+def _safe_filename(name: str, fallback: str) -> str:
+    """Header-safe download filename: keep only alnum / dot / dash / underscore
+    so a model-supplied poc_filename can't break out of the quoted
+    Content-Disposition value. Falls back when nothing usable remains."""
+    cleaned = "".join(c if (c.isalnum() or c in "._-") else "-" for c in name).strip("-.")
+    return cleaned or fallback
 
 
 def compose_advisory_markdown(finding: dict) -> str:
@@ -130,10 +136,11 @@ def poc_artifact(finding: dict) -> tuple[str, str] | None:
     if not script:
         return None
     lang = (m.get("poc_language") or "").strip().lower()
-    name = (m.get("poc_filename") or "").strip()
-    if not name:
-        ext = _LANG_EXT.get(lang, "txt")
-        name = f"finding-{finding.get('id', 'x')}-poc.{ext}"
+    ext = _LANG_EXT.get(lang, "txt")
+    fallback = f"finding-{finding.get('id', 'x')}-poc.{ext}"
+    # Model-supplied filename is untrusted output; keep only chars that can't
+    # break out of the quoted Content-Disposition header value.
+    name = _safe_filename((m.get("poc_filename") or "").strip(), fallback)
     comment = "#" if lang in ("python", "bash", "sh", "ruby", "php", "") else "//"
     header = _POC_HEADER_TMPL.format(
         comment=comment,
