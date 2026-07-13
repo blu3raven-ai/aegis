@@ -123,7 +123,7 @@ describe("FindingsBoardView filter bar additions", () => {
   })
 
   it("registers the action_band sort key in VALID_SORT_KEYS without the retired risk_score key", () => {
-    assert.match(src, /new Set<SortKey>\(\["severity_age", "epss", "action_band", "newest", "oldest"\]\)/)
+    assert.match(src, /new Set<SortKey>\(\["severity_age", "epss", "cvss", "action_band", "newest", "oldest"\]\)/)
   })
 
   it("sorts the Exploitability column header by action_band", () => {

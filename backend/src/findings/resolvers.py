@@ -38,6 +38,7 @@ class FindingRow:
     malicious: Optional[bool] = None
     cwe: Optional[str] = None
     risk_score: Optional[int] = None
+    cvss_score: Optional[float] = None
     action_band: Optional[str] = None
     assignee_user_id: Optional[str] = None
     verdict: Optional[str] = None
@@ -111,6 +112,7 @@ def _row_from_dict(d: dict[str, Any]) -> FindingRow:
         malicious=d.get("malicious"),
         cwe=d.get("cwe"),
         risk_score=d.get("risk_score"),
+        cvss_score=d.get("cvss_score"),
         action_band=d.get("action_band"),
         assignee_user_id=d.get("assignee_user_id"),
         verdict=d.get("verdict"),

@@ -121,6 +121,7 @@ def test_finding_dict_epss_percentile_none_when_finding_has_no_cve():
 def test_valid_sorts_includes_new_options():
     assert "severity_age" in VALID_SORTS
     assert "epss" in VALID_SORTS
+    assert "cvss" in VALID_SORTS
     assert "risk_score" in VALID_SORTS
     assert "newest" in VALID_SORTS
     assert "oldest" in VALID_SORTS
@@ -1048,6 +1049,36 @@ async def test_upsert_finding_promotes_recommended_fix_from_detail(
         detail={"recommended_fix": fix},
     )
     assert f.recommended_fix == fix
+
+
+@pytest.mark.asyncio
+async def test_upsert_finding_promotes_cvss_score_from_metadata(
+    db_session, _isolated_upsert_finding
+):
+    from src.shared.finding_queries import upsert_finding
+
+    f = await upsert_finding(
+        db_session, tool="code_scanning", asset_id=None,
+        org="acme", repo=None,
+        identity_key=f"ut-cvss-{uuid4()}", state="open", severity="high",
+        detail={"verification_metadata": {"cvss_score": 7.8}},
+    )
+    assert f.cvss_score == 7.8
+
+
+@pytest.mark.asyncio
+async def test_upsert_finding_cvss_score_none_when_absent(
+    db_session, _isolated_upsert_finding
+):
+    from src.shared.finding_queries import upsert_finding
+
+    f = await upsert_finding(
+        db_session, tool="code_scanning", asset_id=None,
+        org="acme", repo=None,
+        identity_key=f"ut-nocvss-{uuid4()}", state="open", severity="high",
+        detail={"verification_metadata": {"impact": "x"}},
+    )
+    assert f.cvss_score is None
 
 
 # Verdict filter normalization

@@ -548,6 +548,9 @@ class Finding(Base):
     # SBOM component version OSV matched). Lets vuln counts be attributed per
     # version, not just per package name. NULL when the source didn't resolve one.
     package_version: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # CVSS 3.1 base score (0.0–10.0), promoted from verification_metadata so it
+    # can be sorted/filtered in SQL. NULL when the finding has no scored vector.
+    cvss_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
     # Populated at ingest time from git blame; NULL when checkout is unavailable.
