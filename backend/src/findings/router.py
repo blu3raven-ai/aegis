@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 
 from src.db.engine import get_session
@@ -54,6 +54,7 @@ from src.shared.lifecycle import (
     reopen_finding,
 )
 from src.shared.home_views_refresher import request_home_views_refresh
+from src.findings.advisory import compose_advisory_markdown, poc_artifact
 from src.authz.enforcement.scope import assignable_user_ids, resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/findings", tags=["findings"])
@@ -446,6 +447,57 @@ async def get_finding_related(finding_id: int, request: Request) -> dict[str, An
     async with get_session() as session:
         related = await list_related_findings(finding, asset_ids, session)
     return {"related": related}
+
+
+def _safe_slug(finding: dict[str, Any]) -> str:
+    """Filesystem-safe stem for the report filename."""
+    raw = (finding.get("title") or f"finding-{finding.get('id', 'x')}").lower()
+    slug = "".join(c if c.isalnum() else "-" for c in raw).strip("-")
+    return (slug or "finding")[:60]
+
+
+async def _scoped_finding_dict(finding_id: int, request: Request) -> dict[str, Any]:
+    """Load a scoped finding and hydrate it to the same dict the detail route
+    returns. 404s out of scope via _load_scoped_finding."""
+    finding = await _load_scoped_finding(finding_id, request)
+    repo = None
+    if finding.asset_id:
+        async with get_session() as session:
+            repo = await session.scalar(
+                select(Asset.display_name).where(Asset.id == finding.asset_id)
+            )
+    return _finding_to_dict(finding, repo=repo, hydrate=True)
+
+
+@router.get("/{finding_id}/report.md")
+async def download_finding_report(finding_id: int, request: Request) -> Response:
+    """Download the finding as a security-advisory Markdown document. Out-of-scope
+    or unknown ids 404 via the scoped load (no id enumeration)."""
+    require_permission(request, VIEW_FINDINGS)
+    finding = await _scoped_finding_dict(finding_id, request)
+    markdown = compose_advisory_markdown(finding)
+    return Response(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{_safe_slug(finding)}.md"'},
+    )
+
+
+@router.get("/{finding_id}/poc")
+async def download_finding_poc(finding_id: int, request: Request) -> Response:
+    """Download the finding's runnable benign PoC script (safe-harbor header
+    prepended). 404 when the finding has no PoC."""
+    require_permission(request, VIEW_FINDINGS)
+    finding = await _scoped_finding_dict(finding_id, request)
+    artifact = poc_artifact(finding)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="No proof-of-concept for this finding")
+    filename, body = artifact
+    return Response(
+        content=body,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.patch("")

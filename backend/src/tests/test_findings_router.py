@@ -686,3 +686,89 @@ def test_get_advisory_returns_brief_with_epss_and_kev_for_scoped_finding():
     assert adv["fixed_version"] == "0.11.0"
     assert adv["epss_percentile"] == 0.97
     assert adv["kev"] is True
+
+
+# ---------------------------------------------------------------------------
+# GET /findings/{id}/report.md  and  /findings/{id}/poc — advisory downloads
+# ---------------------------------------------------------------------------
+
+_ADVISORY_DICT = {
+    "id": 42, "title": "Pickle RCE on default path", "severity": "high",
+    "verdict": "confirmed", "cve": None, "cwe": "CWE-502",
+    "repo": "github:acme/example-repo", "exploit_chain": "chain [R1]",
+    "evidence": [{"file": "a/x.py", "line": 1, "snippet": "pickle.load(f)", "kind": "sink"}],
+    "verification_metadata": {
+        "impact": "Arbitrary code execution.",
+        "cvss_vector": "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H",
+        "cvss_score": 7.8,
+        "poc_script": "print('pwned')", "poc_filename": "poc.py", "poc_language": "python",
+    },
+}
+
+
+def test_download_report_returns_markdown_when_in_scope():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict", return_value=dict(_ADVISORY_DICT)):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/report.md")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/markdown")
+    assert "attachment" in resp.headers["content-disposition"]
+    assert resp.text.startswith("# ")
+    assert "## Testing & Safe Harbor" in resp.text
+
+
+def test_download_report_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/report.md")
+    assert resp.status_code == 404
+
+
+def test_download_poc_returns_attachment_when_in_scope():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict", return_value=dict(_ADVISORY_DICT)):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/poc")
+    assert resp.status_code == 200
+    assert "attachment" in resp.headers["content-disposition"]
+    assert "poc.py" in resp.headers["content-disposition"]
+    assert "SAFE HARBOR" in resp.text.upper()
+    assert "print('pwned')" in resp.text
+
+
+def test_download_poc_404_when_finding_has_no_poc():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    no_poc = dict(_ADVISORY_DICT)
+    no_poc["verification_metadata"] = {"impact": "x"}  # no poc_script
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict", return_value=no_poc):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/poc")
+    assert resp.status_code == 404
+
+
+def test_download_poc_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/poc")
+    assert resp.status_code == 404
