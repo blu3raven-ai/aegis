@@ -67,6 +67,7 @@ import {
 } from "@/lib/client/findings-api"
 import { AdvisoryHeader } from "@/components/shared/findings/AdvisoryHeader"
 import { FindingPocSection } from "@/components/shared/findings/FindingPocSection"
+import { FindingDrawerGroup } from "@/components/shared/findings/FindingDrawerGroup"
 import { buttonClassName } from "@/components/ui/Button"
 import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
@@ -1910,11 +1911,11 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                     })}
               />
 
-              <div className="flex-1 overflow-y-auto pb-10 divide-y divide-[var(--color-border-divider)] [&>*]:px-5 [&>*]:py-4">
+              <div className="flex-1 overflow-y-auto pb-10 divide-y divide-[var(--color-border-divider)]">
               {detailError && (
                 <div
                   role="alert"
-                  className="border-l-2 border-[var(--color-severity-critical)] bg-[color-mix(in_srgb,var(--color-severity-critical)_8%,transparent)] text-sm text-[var(--color-severity-critical-text)]"
+                  className="border-l-2 border-[var(--color-severity-critical)] bg-[color-mix(in_srgb,var(--color-severity-critical)_8%,transparent)] px-5 py-4 text-sm text-[var(--color-severity-critical-text)]"
                 >
                   <p className="font-semibold">Couldn&apos;t load the full detail for this finding.</p>
                   <p className="mt-1 break-words text-[var(--color-text-secondary)]">
@@ -1923,9 +1924,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   <p className="mt-1 break-words font-mono text-2xs text-[var(--color-text-tertiary)]">{detailError}</p>
                 </div>
               )}
-              {/* Decision-first story: headline → what it is → how bad →
-                  is it real & why → what to do → the proof → reference
-                  metadata. The triage-critical read sits above the fold. */}
+              <FindingDrawerGroup id="overview" label="Overview">
               <TriageBanner finding={selectedFinding} />
 
               <FindingDescriptionSection
@@ -1954,7 +1953,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   Download PDF
                 </a>
               </div>
+              </FindingDrawerGroup>
 
+              <FindingDrawerGroup id="analysis" label="Analysis">
               <EvidenceSection
                 verdict={selectedFinding.verdict}
                 evidence={selectedFinding.evidence}
@@ -2015,7 +2016,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   </p>
                 </section>
               ) : null}
+              </FindingDrawerGroup>
 
+              <FindingDrawerGroup id="remediation" label="Remediation">
               <RecommendedFixSection fix={selectedFinding.recommendedFix} />
 
               {/* Fall back to the scanner's own remediation text only when there
@@ -2024,9 +2027,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               {!selectedFinding.recommendedFix && (
                 <FindingRemediationSection remediation={selectedFinding.remediation} />
               )}
+              </FindingDrawerGroup>
 
-              {/* Reference & context: the weakness class, advisory brief, and
-                  cross-repo blast radius sit below the decision surface. */}
+              <FindingDrawerGroup id="context" label="Context" defaultOpen={false}>
               <CweContextSection cwe={selectedFinding.cwe} />
 
               <SecurityBriefSection advisory={advisory} />
@@ -2052,17 +2055,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 scannerLabel={SCANNER_LABEL[selectedFinding.scanner]}
               />
 
-              <section className="space-y-2">
-                <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Testing &amp; Safe Harbor</h3>
-                <p className="text-xs text-[var(--color-text-secondary)]">
-                  Findings are verified locally against source with benign proof-of-concept payloads;
-                  no production systems or user data are accessed. Reports are confidential pending a fix.
-                </p>
-              </section>
-
-              {/* Reference metadata sits below the decision surface: severity and
-                  scanner already lead the header, so this grid carries the rule,
-                  weakness id, and repository for classification. */}
+              {/* Reference metadata: rule, weakness id, package, repository. */}
               <section aria-labelledby="finding-details-title">
                 <h3 id="finding-details-title" className="text-base font-semibold text-[var(--color-text-primary)]">
                   Details
@@ -2123,8 +2116,21 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 cwe={selectedFinding.cwe}
                 advisoryReferences={advisory?.references}
               />
+              </FindingDrawerGroup>
 
+              <FindingDrawerGroup id="activity" label="Activity" defaultOpen={false}>
               <ActivityTimelineSection key={selectedFinding.id} finding={selectedFinding} scannerLabel={SCANNER_LABEL[selectedFinding.scanner]} />
+              </FindingDrawerGroup>
+
+              <div className="px-5 py-4">
+                <section className="space-y-2">
+                  <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Testing &amp; Safe Harbor</h3>
+                  <p className="text-xs text-[var(--color-text-secondary)]">
+                    Findings are verified locally against source with benign proof-of-concept payloads;
+                    no production systems or user data are accessed. Reports are confidential pending a fix.
+                  </p>
+                </section>
+              </div>
               </div>
             </>
           )}
