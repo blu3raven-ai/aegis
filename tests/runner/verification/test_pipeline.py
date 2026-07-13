@@ -54,6 +54,53 @@ def test_confirmed_finding_surfaces_reproduction_from_hunter():
     assert result.verification_metadata["reproduction"] == "POST /x with a crafted body"
 
 
+def test_confirmed_finding_surfaces_cvss_distinctness_and_poc_from_hunter():
+    # End-to-end proof that an LLM-shaped hunter response carrying the advisory
+    # enrichment flows through the whole pipeline: the model CLASSIFIES the CVSS
+    # base metrics and the score is computed deterministically here; distinctness
+    # and the benign PoC ride along into verification_metadata.
+    llm = _StubLlm([
+        '{"exploit_chain":"x reaches y [R1]",'
+        '"evidence":[{"file":"a.py","line":1,"snippet":"x","kind":"source"}],'
+        '"cvss_metrics":{"AV":"L","AC":"L","PR":"N","UI":"R","S":"U","C":"H","I":"H","A":"H"},'
+        '"distinctness":"Different sink than the known advisory.",'
+        '"poc_script":"print(\'pwned\')","poc_filename":"poc.py","poc_language":"python"}',
+        '{"mitigation_found":false,"reasoning":"none"}',
+    ])
+    result = verify_finding(
+        finding={"file": "a.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"},
+        repo_root="/x", llm=llm,
+        critic=lambda ev, root: ([], []),
+    )
+    assert result.verdict == "confirmed"
+    meta = result.verification_metadata
+    assert meta["cvss_vector"] == "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H"
+    assert meta["cvss_score"] == 7.8
+    assert meta["distinctness"] == "Different sink than the known advisory."
+    assert meta["poc_script"] == "print('pwned')"
+    assert meta["poc_filename"] == "poc.py"
+
+
+def test_non_confirmed_finding_omits_cvss_and_poc():
+    # A non-confirmed verdict must not carry the advisory enrichment — surfacing
+    # a CVSS score or PoC on an unconfirmed chain would overstate confidence.
+    llm = _StubLlm([
+        '{"exploit_chain":"x [R1]",'
+        '"evidence":[{"file":"a.py","line":1,"snippet":"x","kind":"source"}],'
+        '"cvss_metrics":{"AV":"L","AC":"L","PR":"N","UI":"R","S":"U","C":"H","I":"H","A":"H"},'
+        '"poc_script":"print(\'pwned\')"}',
+        '{"mitigation_found":false,"reasoning":"none"}',
+    ])
+    result = verify_finding(
+        finding={"file": "a.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"},
+        repo_root="/x", llm=llm,
+        critic=lambda ev, root: (["a.py:1"], []),  # unverified citation → needs_verify
+    )
+    assert result.verdict == "needs_verify"
+    assert "cvss_score" not in result.verification_metadata
+    assert "poc_script" not in result.verification_metadata
+
+
 def test_non_confirmed_finding_omits_reproduction():
     # needs_verify (unverified citation) must not carry repro steps — that would
     # overstate confidence in an unconfirmed chain.
