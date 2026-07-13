@@ -1,7 +1,6 @@
 """Unit tests for on-demand PoC generation (LLM call mocked — no network)."""
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -31,16 +30,36 @@ def _chat(content: str) -> MagicMock:
     return _resp(200, {"choices": [{"message": {"content": content}}]})
 
 
-_OK = json.dumps({"poc_script": "print('pwned')", "poc_filename": "poc.py", "poc_language": "python"})
+_OK = "```python\nprint('pwned')\n```"
 
 
 @pytest.mark.asyncio
 async def test_generate_poc_returns_parsed_script():
     with patch("src.findings.poc_generation.assert_sendable_url"), \
          patch("src.findings.poc_generation.httpx.AsyncClient", return_value=_client(_chat(_OK))):
-        out = await generate_poc({"title": "x"}, api_key="k",
+        out = await generate_poc({"id": 42, "title": "x"}, api_key="k",
                                  base_url="https://api.openai.com/v1", model="m")
-    assert out == {"poc_script": "print('pwned')", "poc_filename": "poc.py", "poc_language": "python"}
+    assert out == {"poc_script": "print('pwned')", "poc_filename": "finding-42-poc.py", "poc_language": "python"}
+
+
+@pytest.mark.asyncio
+async def test_generate_poc_extracts_from_messy_reasoning_output():
+    # Reasoning models wrap the script in <think> blocks + prose; the filename
+    # must be derived (never leak the model's junk) and the script clean.
+    messy = (
+        "<think>planning the poc, json5 blah</think>\n"
+        "Here is the script:\n"
+        "```python3\n#!/usr/bin/env python3\nprint('marker')\n```\n"
+        "Done. Final response ready."
+    )
+    with patch("src.findings.poc_generation.assert_sendable_url"), \
+         patch("src.findings.poc_generation.httpx.AsyncClient", return_value=_client(_chat(messy))):
+        out = await generate_poc({"id": 7, "title": "x"}, api_key="k",
+                                 base_url="https://api.openai.com/v1", model="m")
+    assert out["poc_language"] == "python"
+    assert out["poc_filename"] == "finding-7-poc.py"
+    assert out["poc_script"].startswith("#!/usr/bin/env python3")
+    assert "<think>" not in out["poc_script"] and "Final response" not in out["poc_script"]
 
 
 @pytest.mark.asyncio
@@ -96,7 +115,7 @@ async def test_generate_poc_auth_rejected_maps_to_error():
 
 @pytest.mark.asyncio
 async def test_generate_poc_empty_script_errors():
-    empty = json.dumps({"poc_script": "   ", "poc_filename": "", "poc_language": ""})
+    empty = "```python\n   \n```"
     with patch("src.findings.poc_generation.assert_sendable_url"), \
          patch("src.findings.poc_generation.httpx.AsyncClient", return_value=_client(_chat(empty))):
         with pytest.raises(PocGenerationError):
