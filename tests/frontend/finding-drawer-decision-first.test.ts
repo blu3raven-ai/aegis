@@ -27,7 +27,7 @@ function at(haystack: string, needle: string): number {
 }
 
 test("verdict and fix precede reference metadata", () => {
-  const verdict = at(board, "<EvidenceSection")
+  const verdict = at(board, "<NotesVerificationSection")
   const fix = at(board, "<RecommendedFixSection")
   const details = at(board, 'id="finding-details-title"')
   const origin = at(board, "<FindingOriginSection")
