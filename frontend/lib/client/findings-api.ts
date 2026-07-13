@@ -471,6 +471,11 @@ export function findingReportUrl(findingId: number | string): string {
   return `/api/v1/findings/${findingId}/report.md`
 }
 
+/** Absolute URL for downloading a finding's advisory report as a PDF. */
+export function findingReportPdfUrl(findingId: number | string): string {
+  return `/api/v1/findings/${findingId}/report.pdf`
+}
+
 /** Absolute URL for downloading a finding's benign proof-of-concept script. */
 export function findingPocUrl(findingId: number | string): string {
   return `/api/v1/findings/${findingId}/poc`

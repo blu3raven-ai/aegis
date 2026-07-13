@@ -1,7 +1,11 @@
 """Unit tests for the advisory Markdown composer and PoC artifact builder."""
 from __future__ import annotations
 
-from src.findings.advisory import compose_advisory_markdown, poc_artifact
+from src.findings.advisory import (
+    compose_advisory_html,
+    compose_advisory_markdown,
+    poc_artifact,
+)
 
 
 def _finding(**kw) -> dict:
@@ -94,3 +98,33 @@ def test_poc_artifact_sanitizes_malicious_filename():
     name, _ = poc_artifact(f)
     assert '"' not in name and "/" not in name and "\n" not in name
     assert name  # never empty (falls back if nothing usable remains)
+
+
+def test_compose_advisory_html_structures_and_always_has_safe_harbor():
+    doc = compose_advisory_html(_finding())
+    assert doc.startswith("<!DOCTYPE html>")
+    assert "<h1>" in doc
+    assert "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H" in doc
+    assert "<h2>Technical Detail</h2>" in doc
+    assert "<h2>Distinctness</h2>" in doc
+    assert "<h2>Remediation</h2>" in doc
+    assert "Testing &amp; Safe Harbor" in doc
+
+
+def test_compose_advisory_html_escapes_untrusted_content():
+    # Title and evidence snippet are model/scanner-derived — they must be
+    # HTML-escaped so they can't inject markup into the rendered PDF.
+    f = _finding(title="SQLi in <report> filter & bypass")
+    f["evidence"] = [{"file": "a.py", "line": 1, "snippet": "q = '<b>' + x", "kind": "sink"}]
+    doc = compose_advisory_html(f)
+    assert "&lt;report&gt;" in doc
+    assert "<report>" not in doc          # raw title markup must not leak
+    assert "&lt;b&gt;" in doc
+    assert "'<b>'" not in doc             # raw snippet markup must not leak
+
+
+def test_compose_advisory_html_omits_absent_sections():
+    doc = compose_advisory_html(_finding(cwe=None, verification_metadata={"impact": "x"}))
+    assert "CVSS:3.1" not in doc
+    assert "<h2>Distinctness</h2>" not in doc
+    assert "Testing &amp; Safe Harbor" in doc  # always present

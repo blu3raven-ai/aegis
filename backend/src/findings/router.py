@@ -54,7 +54,12 @@ from src.shared.lifecycle import (
     reopen_finding,
 )
 from src.shared.home_views_refresher import request_home_views_refresh
-from src.findings.advisory import compose_advisory_markdown, poc_artifact
+from src.exports.pdf import render_pdf
+from src.findings.advisory import (
+    compose_advisory_html,
+    compose_advisory_markdown,
+    poc_artifact,
+)
 from src.authz.enforcement.scope import assignable_user_ids, resolve_asset_ids_from_request
 
 router = APIRouter(prefix="/api/v1/findings", tags=["findings"])
@@ -480,6 +485,20 @@ async def download_finding_report(finding_id: int, request: Request) -> Response
         content=markdown,
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{_safe_slug(finding)}.md"'},
+    )
+
+
+@router.get("/{finding_id}/report.pdf")
+async def download_finding_report_pdf(finding_id: int, request: Request) -> Response:
+    """Download the finding advisory as a PDF. Same scope gating as the Markdown
+    report; out-of-scope or unknown ids 404 via the scoped load."""
+    require_permission(request, VIEW_FINDINGS)
+    finding = await _scoped_finding_dict(finding_id, request)
+    pdf = render_pdf(compose_advisory_html(finding))
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{_safe_slug(finding)}.pdf"'},
     )
 
 
