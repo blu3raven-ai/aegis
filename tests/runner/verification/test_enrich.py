@@ -41,3 +41,54 @@ def test_drops_empty_and_malformed():
         mitigating_factors=["", "  "],
     ))
     assert meta == {}  # nothing worth surfacing
+
+
+def _hunter(**kw):
+    base = dict(
+        title="", impact="", reproduction="", attack_paths=[],
+        mitigating_factors=[], fix="", cvss_metrics={}, distinctness="",
+        remediation=[], poc_script="", poc_filename="", poc_language="",
+    )
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
+def test_valid_cvss_metrics_compute_vector_and_score():
+    meta: dict = {}
+    stash_confirmed_enrichment(meta, _hunter(cvss_metrics={
+        "AV": "L", "AC": "L", "PR": "N", "UI": "R",
+        "S": "U", "C": "H", "I": "H", "A": "H"}))
+    assert meta["cvss_vector"] == "CVSS:3.1/AV:L/AC:L/PR:N/UI:R/S:U/C:H/I:H/A:H"
+    assert meta["cvss_score"] == 7.8
+    assert meta["cvss_metrics"]["AV"] == "L"
+
+
+def test_partial_cvss_metrics_dropped():
+    meta: dict = {}
+    stash_confirmed_enrichment(meta, _hunter(cvss_metrics={"AV": "L"}))
+    assert "cvss_vector" not in meta
+    assert "cvss_score" not in meta
+    assert "cvss_metrics" not in meta
+
+
+def test_distinctness_and_remediation_stashed():
+    meta: dict = {}
+    stash_confirmed_enrichment(meta, _hunter(
+        distinctness="Different sink than CVE-2026-1.",
+        remediation=["Use JSON.", " ", "Gate behind a flag."],
+    ))
+    assert meta["distinctness"] == "Different sink than CVE-2026-1."
+    assert meta["remediation"] == ["Use JSON.", "Gate behind a flag."]
+
+
+def test_poc_stashed_only_when_script_present():
+    meta: dict = {}
+    stash_confirmed_enrichment(meta, _hunter(
+        poc_script="print('pwned')", poc_filename="poc.py", poc_language="python"))
+    assert meta["poc_script"] == "print('pwned')"
+    assert meta["poc_filename"] == "poc.py"
+    assert meta["poc_language"] == "python"
+
+    empty: dict = {}
+    stash_confirmed_enrichment(empty, _hunter(poc_script="   "))
+    assert "poc_script" not in empty

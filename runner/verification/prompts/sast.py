@@ -35,12 +35,19 @@ Respond ONLY with valid JSON in this exact shape:
     {"name": "<short name, e.g. 'Validated route' or 'Catch-all passthrough'>", "steps": "<how an attacker reaches the sink on THIS route; cite evidence inline as [R1], [R2]>"}
   ],
   "mitigating_factors": ["<a factor that limits real-world exploitability, e.g. 'default bind is localhost', 'requires an authenticated caller', 'feature off by default'>"],
-  "fix": "<a concrete remediation. When small, a unified diff (--- a/file / +++ b/file / @@) that fixes the ROOT cause. Otherwise 1-3 sentences naming the exact change and where. Empty string if not confirmed>"
+  "fix": "<a concrete remediation. When small, a unified diff (--- a/file / +++ b/file / @@) that fixes the ROOT cause. Otherwise 1-3 sentences naming the exact change and where. Empty string if not confirmed>",
+  "cvss_metrics": {"AV": "N|A|L|P", "AC": "L|H", "PR": "N|L|H", "UI": "N|R", "S": "U|C", "C": "N|L|H", "I": "N|L|H", "A": "N|L|H"},
+  "distinctness": "<if this resembles a published CVE/GHSA but is materially distinct (different sink/trigger/component), one short paragraph explaining the distinction; else empty string>",
+  "remediation": ["<numbered defense-in-depth step beyond the primary fix, e.g. 'Gate the load behind an explicit opt-in flag'>"],
+  "poc_script": "<a runnable script that PROVES REACHABILITY by driving the real code path with a BENIGN marker (e.g. echo/whoami). Hard rules: no reverse shell, no network exfiltration, no destructive or credential-accessing actions. Do NOT add a legal/safe-harbor header — it is added later. Empty string if a runnable PoC is not applicable>",
+  "poc_filename": "<suggested filename for the PoC, e.g. finding_poc.py. Empty string if no PoC>",
+  "poc_language": "<language of the PoC: python | bash | javascript | ... Empty string if no PoC>"
 }
 
 Only include attack_paths when there are genuinely MULTIPLE distinct routes to the sink; for a single obvious path leave it [] (exploit_chain already covers it). Use mitigating_factors to state honestly what reduces severity. Both are optional — [] when not applicable.
 Order the evidence array to follow the chain (source first, then gates, then sink) so [R1], [R2], ... read in narrative order.
 Every snippet must be copy-pasted verbatim from the code. Never invent file paths or line numbers.
+For cvss_metrics, CLASSIFY each of the eight CVSS 3.1 base metrics for the confirmed vector — output the enum letter only, never a numeric score (the score is computed downstream). Leave cvss_metrics {} only if you truly cannot classify the finding.
 If you cannot construct a concrete chain, return {"exploit_chain": "", "evidence": [], "reproduction": ""}."""
 
 SKEPTIC_SYSTEM = """You are a skeptical reviewer of the hunter's exploit chain.

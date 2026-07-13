@@ -56,6 +56,8 @@ import {
   getFindingAdvisory,
   listFindings,
   listFindingsSummary,
+  findingReportUrl,
+  findingPocUrl,
   type DismissReason,
   type FindingScanner,
   type FindingState,
@@ -63,6 +65,8 @@ import {
   type ListFindingsParams,
   type VerdictCounts,
 } from "@/lib/client/findings-api"
+import { AdvisoryHeader } from "@/components/shared/findings/AdvisoryHeader"
+import { buttonClassName } from "@/components/ui/Button"
 import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { EnableVerificationBanner } from "@/components/shared/findings/EnableVerificationBanner"
@@ -1897,6 +1901,27 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
               <FindingSignalRow finding={selectedFinding} />
 
+              <AdvisoryHeader finding={selectedFinding} />
+
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={findingReportUrl(selectedFinding.id)}
+                  download
+                  className={buttonClassName({ variant: "secondary", size: "sm" })}
+                >
+                  Download report
+                </a>
+                {selectedFinding.verificationMetadata?.poc_script ? (
+                  <a
+                    href={findingPocUrl(selectedFinding.id)}
+                    download
+                    className={buttonClassName({ variant: "secondary", size: "sm" })}
+                  >
+                    Download PoC
+                  </a>
+                ) : null}
+              </div>
+
               <EvidenceSection
                 verdict={selectedFinding.verdict}
                 evidence={selectedFinding.evidence}
@@ -1915,6 +1940,15 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               )}
 
               <RecommendedFixSection fix={selectedFinding.recommendedFix} />
+
+              {selectedFinding.verificationMetadata?.distinctness ? (
+                <section className="space-y-2">
+                  <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Distinctness</h3>
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    {selectedFinding.verificationMetadata.distinctness}
+                  </p>
+                </section>
+              ) : null}
 
               {/* Fall back to the scanner's own remediation text only when there
                   is no structured fix, so the "Recommended fix" heading never
@@ -1973,6 +2007,14 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 finding={selectedFinding}
                 scannerLabel={SCANNER_LABEL[selectedFinding.scanner]}
               />
+
+              <section className="space-y-2">
+                <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Testing &amp; Safe Harbor</h3>
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  Findings are verified locally against source with benign proof-of-concept payloads;
+                  no production systems or user data are accessed. Reports are confidential pending a fix.
+                </p>
+              </section>
 
               {/* Reference metadata sits below the decision surface: severity and
                   scanner already lead the header, so this grid carries the rule,
