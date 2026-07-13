@@ -400,7 +400,7 @@ function fileLabel(api: ApiFinding): string | undefined {
  * fall back to a file-location label from the structured fields.
  */
 function buildTitle(api: ApiFinding): string {
-  const raw = api.title ?? api.cve ?? ""
+  const raw = (api.title ?? api.cve ?? "").trim()
   const loc = fileLabel(api)
   if (loc && raw.includes("/workspace/job-")) {
     return loc
@@ -408,7 +408,17 @@ function buildTitle(api: ApiFinding): string {
   if (loc && normaliseScanner(api.scanner) === "secret_scanning" && /^[0-9a-f]{16,}$/i.test(raw)) {
     return `Secret in ${loc}`
   }
-  return raw || "Untitled finding"
+  if (!raw) return "Untitled finding"
+  // Long scanner messages (e.g. a semgrep rule sentence) make a poor header:
+  // use the first sentence as a clean headline so it doesn't truncate mid-word,
+  // and let the full text live in "What's wrong". Falls back to a word-boundary
+  // cut when there's no sentence break.
+  if (raw.length > 100) {
+    const firstSentence = raw.match(/^.*?[.!?](?=\s|$)/)?.[0]
+    if (firstSentence && firstSentence.length <= 160) return firstSentence
+    return raw.slice(0, 100).replace(/\s+\S*$/, "") + "…"
+  }
+  return raw
 }
 
 function buildAge(api: ApiFinding): string {

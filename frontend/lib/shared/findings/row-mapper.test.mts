@@ -36,6 +36,21 @@ describe("normaliseReachability", () => {
   })
 })
 
+describe("mapApiFinding — title", () => {
+  it("uses the first sentence of a long scanner message as the headline", () => {
+    const msg =
+      "Detected subprocess function 'Popen' without a static string. If this data can be controlled by a malicious actor, it may be command injection."
+    assert.equal(
+      mapApiFinding(apiFinding({ title: msg })).title,
+      "Detected subprocess function 'Popen' without a static string.",
+    )
+  })
+
+  it("keeps short titles as-is", () => {
+    assert.equal(mapApiFinding(apiFinding({ title: "SQL injection" })).title, "SQL injection")
+  })
+})
+
 describe("mapApiFinding — verification fields", () => {
   it("maps exploit_chain, verification_metadata, and reachability", () => {
     const meta = { model: "argus", tokens_in: 100, tokens_out: 20 }

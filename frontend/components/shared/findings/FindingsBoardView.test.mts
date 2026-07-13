@@ -220,8 +220,12 @@ describe("FindingsBoardView verification + reachability wiring", () => {
     // Agent findings have no LLM verifier; their description IS the impact
     // statement, so it renders via the shared ImpactCallout, not a plain paragraph.
     assert.match(src, /emphasized=\{selectedFinding\.scanner === "agent_scanning"\}/)
-    assert.match(src, /if \(emphasized\) \{[\s\S]*?<ImpactCallout>\{description\}<\/ImpactCallout>/)
+    assert.match(src, /if \(emphasized\) \{[\s\S]*?<ImpactCallout>\{body\}<\/ImpactCallout>/)
     assert.match(src, /import \{ EvidenceSection, ImpactCallout \}/)
+  })
+
+  it("strips the title lead from the description so 'What's wrong' doesn't repeat the headline", () => {
+    assert.match(src, /desc\.startsWith\(t\) \? desc\.slice\(t\.length\)\.trim\(\)/)
   })
 
   it("derives the verification-enabled signal from the LLM config status", () => {
