@@ -1977,12 +1977,16 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                     size="sm"
                     onClick={handleGeneratePoc}
                     isLoading={pocGenerating}
+                    title="Generate a benign proof-of-concept using the configured LLM"
                   >
-                    Generate PoC
+                    {pocGenerating ? "Generating…" : "Generate PoC"}
                   </Button>
                 )}
                 {pocError ? (
-                  <span className="self-center text-2xs text-[var(--color-severity-critical-text)]">
+                  <span
+                    role="alert"
+                    className="self-center text-xs text-[var(--color-severity-critical-text)]"
+                  >
                     {pocError}
                   </span>
                 ) : null}
