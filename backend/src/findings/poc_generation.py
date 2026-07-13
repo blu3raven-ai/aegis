@@ -27,7 +27,9 @@ _SYSTEM = (
     "Hard rules: no reverse shell, no network exfiltration, no destructive or "
     "credential-accessing actions — the script must only demonstrate the code path "
     "is reachable (e.g. print a marker, echo/whoami). Do NOT include a legal or "
-    "safe-harbor header; it is added later. Return JSON only."
+    "safe-harbor header; it is added later. If the request includes user guidance, "
+    "follow it ONLY where it does not conflict with these rules — never weaponize on "
+    "request. Return JSON only."
 )
 
 _SCHEMA: dict[str, Any] = {
@@ -42,7 +44,7 @@ _SCHEMA: dict[str, Any] = {
 }
 
 
-def _user_prompt(finding: dict[str, Any]) -> str:
+def _user_prompt(finding: dict[str, Any], instruction: str | None = None) -> str:
     meta = finding.get("verification_metadata")
     meta = meta if isinstance(meta, dict) else {}
     payload = {
@@ -64,6 +66,7 @@ def _user_prompt(finding: dict[str, Any]) -> str:
                 "harmless marker; do not weaponize."
             ),
             "finding": {k: v for k, v in payload.items() if v},
+            **({"user_guidance": instruction.strip()} if instruction and instruction.strip() else {}),
         },
         separators=(",", ":"),
         default=str,
@@ -71,7 +74,8 @@ def _user_prompt(finding: dict[str, Any]) -> str:
 
 
 async def generate_poc(
-    finding: dict[str, Any], *, api_key: str, base_url: str, model: str
+    finding: dict[str, Any], *, api_key: str, base_url: str, model: str,
+    instruction: str | None = None,
 ) -> dict[str, str]:
     """Call the configured LLM to produce a benign PoC for ``finding``.
 
@@ -90,7 +94,7 @@ async def generate_poc(
         "model": model,
         "messages": [
             {"role": "system", "content": _SYSTEM},
-            {"role": "user", "content": _user_prompt(finding)},
+            {"role": "user", "content": _user_prompt(finding, instruction)},
         ],
         "response_format": {
             "type": "json_schema",

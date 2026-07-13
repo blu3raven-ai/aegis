@@ -421,15 +421,18 @@ export async function addFindingComment(findingId: number, comment: string): Pro
   return res.comment
 }
 
-/** Generate a benign PoC for a finding on demand (LLM-backed; spends tokens). */
+/** Generate a benign PoC for a finding on demand (LLM-backed; spends tokens).
+ *  `instruction` optionally steers the PoC; `signal` allows the caller to cancel. */
 export async function generateFindingPoc(
   findingId: number,
+  opts: { instruction?: string; signal?: AbortSignal } = {},
 ): Promise<{ poc_script: string; poc_filename: string; poc_language: string }> {
   const res = await apiClient<{
     poc: { poc_script: string; poc_filename: string; poc_language: string }
   }>(`/api/v1/findings/${findingId}/poc/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    body: opts.instruction ? { instruction: opts.instruction } : {},
+    signal: opts.signal,
   })
   return res.poc
 }

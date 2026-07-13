@@ -44,6 +44,33 @@ async def test_generate_poc_returns_parsed_script():
 
 
 @pytest.mark.asyncio
+async def test_generate_poc_forwards_user_guidance():
+    client = _client(_chat(_OK))
+    with patch("src.findings.poc_generation.assert_sendable_url"), \
+         patch("src.findings.poc_generation.httpx.AsyncClient", return_value=client):
+        await generate_poc({"title": "x"}, api_key="k",
+                           base_url="https://api.openai.com/v1", model="m",
+                           instruction="target the /admin route")
+    inner = client.__aenter__.return_value
+    sent = inner.post.call_args.kwargs["json"]
+    user_msg = sent["messages"][1]["content"]
+    assert "user_guidance" in user_msg
+    assert "target the /admin route" in user_msg
+
+
+@pytest.mark.asyncio
+async def test_generate_poc_omits_guidance_when_absent():
+    client = _client(_chat(_OK))
+    with patch("src.findings.poc_generation.assert_sendable_url"), \
+         patch("src.findings.poc_generation.httpx.AsyncClient", return_value=client):
+        await generate_poc({"title": "x"}, api_key="k",
+                           base_url="https://api.openai.com/v1", model="m")
+    inner = client.__aenter__.return_value
+    sent = inner.post.call_args.kwargs["json"]
+    assert "user_guidance" not in sent["messages"][1]["content"]
+
+
+@pytest.mark.asyncio
 async def test_generate_poc_requires_api_key():
     with pytest.raises(PocGenerationError):
         await generate_poc({"title": "x"}, api_key="", base_url="https://api.openai.com/v1", model="m")
