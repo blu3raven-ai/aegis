@@ -140,6 +140,23 @@ export interface VerificationMetadata {
    */
   fix?: string
   /**
+   * CVSS 3.1 base metrics the verifier classified (enum letters only). Present
+   * on confirmed findings when the model could classify all eight axes.
+   */
+  cvss_metrics?: Record<string, string>
+  /** Canonical CVSS 3.1 vector string, computed deterministically from the metrics. */
+  cvss_vector?: string
+  /** CVSS 3.1 base score (0.0–10.0), computed — never model-authored. */
+  cvss_score?: number
+  /** Why this finding is materially distinct from a published CVE/GHSA it resembles. */
+  distinctness?: string
+  /** Numbered defense-in-depth remediation steps beyond the primary `fix` diff. */
+  remediation?: string[]
+  /** Suggested filename for the downloadable benign PoC, when one exists. */
+  poc_filename?: string
+  /** Language of the PoC (drives syntax highlight + download extension). */
+  poc_language?: string
+  /**
    * Why the verifier couldn't confirm a finding. `reason` is a single machine
    * code (e.g. `hunter_no_chain`, `package_not_imported`, `schema_invalid: …`);
    * the list keys carry the citations that failed grounding. Rendered as prose

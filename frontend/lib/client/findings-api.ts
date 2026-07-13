@@ -466,6 +466,16 @@ export interface AssignableUser {
   email: string
 }
 
+/** Absolute URL for downloading a finding's advisory report (Markdown). */
+export function findingReportUrl(findingId: number | string): string {
+  return `/api/v1/findings/${findingId}/report.md`
+}
+
+/** Absolute URL for downloading a finding's benign proof-of-concept script. */
+export function findingPocUrl(findingId: number | string): string {
+  return `/api/v1/findings/${findingId}/poc`
+}
+
 /** Search active users for the finding-assignee picker. Empty/null query returns the first `limit`. */
 export async function listAssignableUsers(
   q: string | null = null,
