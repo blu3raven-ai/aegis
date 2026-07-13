@@ -56,8 +56,6 @@ import {
   getFindingAdvisory,
   listFindings,
   listFindingsSummary,
-  findingReportUrl,
-  findingReportPdfUrl,
   type DismissReason,
   type FindingScanner,
   type FindingState,
@@ -68,7 +66,6 @@ import {
 import { AdvisoryHeader } from "@/components/shared/findings/AdvisoryHeader"
 import { FindingPocSection } from "@/components/shared/findings/FindingPocSection"
 import { FindingDrawerGroup } from "@/components/shared/findings/FindingDrawerGroup"
-import { buttonClassName } from "@/components/ui/Button"
 import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { EnableVerificationBanner } from "@/components/shared/findings/EnableVerificationBanner"
@@ -1936,23 +1933,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               <FindingSignalRow finding={selectedFinding} />
 
               <AdvisoryHeader finding={selectedFinding} />
-
-              <div className="flex flex-wrap gap-2">
-                <a
-                  href={findingReportUrl(selectedFinding.id)}
-                  download
-                  className={buttonClassName({ variant: "secondary", size: "sm" })}
-                >
-                  Download report
-                </a>
-                <a
-                  href={findingReportPdfUrl(selectedFinding.id)}
-                  download
-                  className={buttonClassName({ variant: "secondary", size: "sm" })}
-                >
-                  Download PDF
-                </a>
-              </div>
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="analysis" label="Analysis">
