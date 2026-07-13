@@ -772,3 +772,33 @@ def test_download_poc_404_when_out_of_scope():
         client = TestClient(_make_app())
         resp = client.get("/api/v1/findings/42/poc")
     assert resp.status_code == 404
+
+
+def test_download_report_pdf_returns_pdf_when_in_scope():
+    # render_pdf is mocked so WeasyPrint never runs (it segfaults on macOS in
+    # tests); the route wiring + scope gating is what this asserts.
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict", return_value=dict(_ADVISORY_DICT)), \
+         patch("src.findings.router.render_pdf", return_value=b"%PDF-1.7 fake") as rp:
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/report.pdf")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert "attachment" in resp.headers["content-disposition"]
+    assert resp.content == b"%PDF-1.7 fake"
+    rp.assert_called_once()
+
+
+def test_download_report_pdf_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/42/report.pdf")
+    assert resp.status_code == 404

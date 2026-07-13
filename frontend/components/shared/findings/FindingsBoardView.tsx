@@ -57,6 +57,7 @@ import {
   listFindings,
   listFindingsSummary,
   findingReportUrl,
+  findingReportPdfUrl,
   findingPocUrl,
   type DismissReason,
   type FindingScanner,
@@ -1910,6 +1911,13 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   className={buttonClassName({ variant: "secondary", size: "sm" })}
                 >
                   Download report
+                </a>
+                <a
+                  href={findingReportPdfUrl(selectedFinding.id)}
+                  download
+                  className={buttonClassName({ variant: "secondary", size: "sm" })}
+                >
+                  Download PDF
                 </a>
                 {selectedFinding.verificationMetadata?.poc_script ? (
                   <a
