@@ -39,6 +39,7 @@ import {
   DistinctnessSection,
   NotesVerificationSection,
 } from "@/components/shared/findings/FindingReportSections"
+import { FindingAcceptRiskAction } from "@/components/shared/findings/FindingAcceptRiskAction"
 import { SecretVerificationSection } from "@/components/shared/findings/SecretVerificationSection"
 import { SecurityBriefSection } from "@/components/shared/findings/SecurityBriefSection"
 import { ContainerImageSection } from "@/components/shared/findings/ContainerImageSection"
@@ -2002,6 +2003,8 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 verdict={selectedFinding.verdict}
                 metadata={selectedFinding.verificationMetadata}
               />
+
+              <FindingAcceptRiskAction finding={selectedFinding} />
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="remediation" label="Remediation">

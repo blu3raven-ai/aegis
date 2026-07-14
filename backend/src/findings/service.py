@@ -769,6 +769,12 @@ def _finding_to_dict(
 
     return {
         "id": str(finding.id),
+        # The finding's own asset + raw scanner rule id — surfaced so the drawer's
+        # "accept as intended risk" action can create a carve-out scoped to exactly
+        # this asset and rule. The finding is already caller-scoped, so echoing its
+        # asset_id is not a disclosure. rule_id is the matcher key the runner sees.
+        "asset_id": finding.asset_id,
+        "rule_id": (detail.get("ruleId") or "").strip() or rule,
         "scanner": _TOOL_TO_PUBLIC.get(finding.tool, finding.tool),
         "severity": (finding.severity or "").lower() or None,
         "state": finding.state,

@@ -205,6 +205,10 @@ export interface FindingContainerImage {
 
 export interface FindingRow {
   id: string
+  /** The finding's asset id — used to scope an "accept as intended risk" carve-out. */
+  assetId?: string
+  /** Raw scanner rule id — scopes an "accept risk" carve-out to this rule class. */
+  ruleId?: string
   title: string
   cve?: string
   /** Affected package as `name@version` (dependency/container findings). */
@@ -465,6 +469,8 @@ export function mapApiFinding(api: ApiFinding): FindingRow {
     highlightEnd: api.code_highlight_end ?? undefined,
     description: api.description ?? undefined,
     rule: api.rule ?? undefined,
+    assetId: api.asset_id ?? undefined,
+    ruleId: api.rule_id ?? undefined,
     remediation: api.remediation ?? undefined,
     confidence: api.confidence ?? undefined,
     secretDetector: api.secret_detector ?? undefined,
