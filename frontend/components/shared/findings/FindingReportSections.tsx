@@ -218,13 +218,22 @@ export function NotesVerificationSection({
         {rationale ? (
           <p className="text-sm leading-relaxed text-[var(--color-text-secondary)]">{rationale.text}</p>
         ) : null}
-        {ruledOut && (ruledOut.reasoning || ruledOut.snippet) ? (
+        {ruledOut?.source === "accepted_risk" && ruledOut.statement ? (
+          <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
+            Ruled out — accepted risk: {ruledOut.statement}
+          </p>
+        ) : ruledOut && (ruledOut.reasoning || ruledOut.snippet) ? (
           <div className="border-l-2 border-[var(--color-status-ok-border)] pl-3">
             <p className="mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]">
               Mitigation found
             </p>
             {ruledOut.reasoning ? <p className="text-sm leading-relaxed">{ruledOut.reasoning}</p> : null}
           </div>
+        ) : null}
+        {metadata?.carve_out_source === "baseline" ? (
+          <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
+            Downgraded — matches baseline: {metadata.carve_out_ref}
+          </p>
         ) : null}
         {metadata?.model ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs tabular-nums text-[var(--color-text-secondary)]">
