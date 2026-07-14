@@ -1357,6 +1357,29 @@ class Asset(Base):
     )
 
 
+class AcceptedRisk(Base):
+    """A maintainer-declared 'accepted by design' carve-out. When it scope-matches
+    a finding and the verifier confirms it applies, the finding is ruled out."""
+
+    __tablename__ = "accepted_risk"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    asset_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False), ForeignKey("assets.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    source_connection_id: Mapped[str | None] = mapped_column(
+        String(255), ForeignKey("source_connections.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    statement: Mapped[str] = mapped_column(Text, nullable=False)
+    path_glob: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    rule_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    scanner: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("true"))
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+    )
+
 
 class PostureSnapshot(Base):
     """Daily severity snapshot per asset.
