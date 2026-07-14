@@ -24,8 +24,14 @@ def _make_resp(content: str) -> LlmResponse:
 
 
 def _mock_llm(*responses: str) -> MagicMock:
+    from runner.verification.llm_client import LlmClient
+
     llm = MagicMock()
     llm.chat.side_effect = [_make_resp(r) for r in responses]
+    # A bare MagicMock's chat_json is opaque and never consumes chat.side_effect,
+    # so the JSON responses would be ignored. Delegate to the real chat_json so the
+    # mock exercises the actual parse path off the stubbed chat() responses.
+    llm.chat_json.side_effect = lambda *a, **kw: LlmClient.chat_json(llm, *a, **kw)
     return llm
 
 
