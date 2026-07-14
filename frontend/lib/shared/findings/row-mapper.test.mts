@@ -186,6 +186,18 @@ describe("mapApiFinding — filePath cleaning", () => {
   })
 })
 
+describe("mapApiFinding — carve-out scope fields", () => {
+  it("maps asset_id and rule_id for an accept-risk carve-out", () => {
+    const row = mapApiFinding(
+      apiFinding({ asset_id: "asset-1", rule_id: "python.lang.security.eval" }),
+    )
+    assert.equal(row.assetId, "asset-1")
+    assert.equal(row.ruleId, "python.lang.security.eval")
+    assert.equal(mapApiFinding(apiFinding()).assetId, undefined)
+    assert.equal(mapApiFinding(apiFinding()).ruleId, undefined)
+  })
+})
+
 describe("normaliseScanner", () => {
   it("maps the canonical long scanner names to themselves", () => {
     assert.equal(normaliseScanner("secret_scanning"), "secret_scanning")
