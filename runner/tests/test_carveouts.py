@@ -125,3 +125,69 @@ def test_skeptic_message_omits_blocks_when_empty() -> None:
     msg = skeptic_user_message({"file": "a", "line": 1, "rule": "r"}, "chain", "ctx")
     assert "Declared accepted-risks" not in msg
     assert "Baseline references" not in msg
+
+
+from runner.verification.pipeline import verify_finding
+
+_CARVE_FINDING = {"title": "eval RCE", "severity": "high", "file": "app/plugin.py", "line": 5, "detail": {}}
+_HUNTER = json.dumps({"exploit_chain": "user input reaches eval()", "evidence": []})
+
+
+def _skeptic(**kw) -> str:
+    base = {"mitigation_found": False, "mitigation_file": None, "mitigation_line": None,
+            "mitigation_snippet": None, "reasoning": "n/a",
+            "carve_out_matched": False, "carve_out_ref": None, "carve_out_source": None}
+    base.update(kw)
+    return json.dumps(base)
+
+
+def test_user_declared_carveout_rules_out() -> None:
+    risks = [{"id": "r-1", "statement": "eval is a sandboxed plugin loader"}]
+    with tempfile.TemporaryDirectory() as repo_root:
+        (Path(repo_root) / "app").mkdir()
+        (Path(repo_root) / "app" / "plugin.py").write_text("x=1\n" * 10)
+        llm = _mock_llm(_HUNTER, _skeptic(carve_out_matched=True, carve_out_ref="r-1", carve_out_source="accepted_risk"))
+        result = verify_finding(finding=_CARVE_FINDING, repo_root=repo_root, llm=llm, accepted_risks=risks)
+    assert result.verdict == "ruled_out"
+    assert result.verification_metadata["ruled_out_reason"]["source"] == "accepted_risk"
+    assert result.verification_metadata["ruled_out_reason"]["risk_id"] == "r-1"
+
+
+def test_llm_cannot_invent_undeclared_accepted_risk() -> None:
+    with tempfile.TemporaryDirectory() as repo_root:
+        (Path(repo_root) / "app").mkdir()
+        (Path(repo_root) / "app" / "plugin.py").write_text("x=1\n" * 10)
+        llm = _mock_llm(_HUNTER, _skeptic(carve_out_matched=True, carve_out_ref="ghost", carve_out_source="accepted_risk"))
+        result = verify_finding(finding=_CARVE_FINDING, repo_root=repo_root, llm=llm, accepted_risks=[])
+    assert result.verdict == "confirmed"
+
+
+def test_grounded_baseline_downgrades_confirmed_to_needs_verify() -> None:
+    with tempfile.TemporaryDirectory() as repo_root:
+        (Path(repo_root) / "app").mkdir()
+        base = Path(repo_root) / "app" / "auth.py"
+        lines = [f"# line {i+1}\n" for i in range(10)]
+        lines[2] = "enforce_auth(request)  # gateway\n"
+        base.write_text("".join(lines))
+        (Path(repo_root) / "app" / "plugin.py").write_text("x=1\n" * 10)
+        gt = GroundTruth(baseline_refs=[{"file": "app/auth.py", "line": 3, "why": "gateway"}])
+        llm = _mock_llm(_HUNTER, _skeptic(
+            carve_out_matched=True, carve_out_ref="app/auth.py:3", carve_out_source="baseline",
+            mitigation_found=True, mitigation_file="app/auth.py", mitigation_line=3,
+            mitigation_snippet="enforce_auth(request)  # gateway"))
+        result = verify_finding(finding=_CARVE_FINDING, repo_root=repo_root, llm=llm, ground_truth=gt)
+    assert result.verdict == "needs_verify"
+    assert result.verification_metadata["carve_out_source"] == "baseline"
+
+
+def test_ungrounded_baseline_leaves_finding_unchanged() -> None:
+    with tempfile.TemporaryDirectory() as repo_root:
+        (Path(repo_root) / "app").mkdir()
+        (Path(repo_root) / "app" / "plugin.py").write_text("x=1\n" * 10)
+        gt = GroundTruth(baseline_refs=[{"file": "app/ghost.py", "line": 9, "why": "nope"}])
+        llm = _mock_llm(_HUNTER, _skeptic(
+            carve_out_matched=True, carve_out_ref="app/ghost.py:9", carve_out_source="baseline",
+            mitigation_found=True, mitigation_file="app/ghost.py", mitigation_line=9,
+            mitigation_snippet="not in repo"))
+        result = verify_finding(finding=_CARVE_FINDING, repo_root=repo_root, llm=llm, ground_truth=gt)
+    assert result.verdict == "confirmed"
