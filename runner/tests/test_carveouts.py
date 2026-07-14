@@ -191,3 +191,29 @@ def test_ungrounded_baseline_leaves_finding_unchanged() -> None:
             mitigation_snippet="not in repo"))
         result = verify_finding(finding=_CARVE_FINDING, repo_root=repo_root, llm=llm, ground_truth=gt)
     assert result.verdict == "confirmed"
+
+
+from runner.scanners.code_scanning.scanner import _maybe_verify
+
+
+def test_maybe_verify_passes_accepted_risks_through() -> None:
+    risks = [{"id": "r-1", "statement": "eval sandboxed", "path_glob": "app/*.py"}]
+    with tempfile.TemporaryDirectory() as repo_root:
+        (Path(repo_root) / "app").mkdir()
+        (Path(repo_root) / "app" / "plugin.py").write_text("x=1\n" * 10)
+        findings = [{"title": "eval", "severity": "high", "file": "app/plugin.py",
+                     "line": 5, "scanner": "code_scanning", "detail": {}}]
+
+        class _Budget:
+            skip_reason = "budget"
+            def allow(self): return True
+            def record(self, **kw): pass
+
+        gt = json.dumps({"baseline_refs": [], "accepted_behaviors": []})
+        skeptic = _skeptic(carve_out_matched=True, carve_out_ref="r-1", carve_out_source="accepted_risk")
+        llm = _mock_llm(gt, _HUNTER, skeptic)
+        out = _maybe_verify(
+            findings=findings, repo_root=repo_root, llm=llm, scan_budget=_Budget(),
+            accepted_risks=risks, max_workers=1,
+        )
+    assert out[0]["verdict"] == "ruled_out"
