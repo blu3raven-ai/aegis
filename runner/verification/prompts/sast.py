@@ -53,17 +53,31 @@ Given the hunter's chain and the same code fragment, look for any upstream mitig
 neutralises the bug: input validation, sanitization, an auth gate, a framework guarantee,
 a type narrowing, or a feature flag on the path between source and sink.
 
+You may also be given TWO kinds of ground truth:
+- "Declared accepted-risks": statements the maintainers assert are intended-by-design.
+  If one genuinely explains this finding as accepted behavior, set carve_out_matched=true,
+  carve_out_source="accepted_risk", and carve_out_ref to that risk's id. Only confirm a
+  risk that is actually listed — never invent one.
+- "Baseline references": known-good locations to diff against. If this finding is
+  equivalent to a baseline pattern, set carve_out_matched=true, carve_out_source="baseline",
+  and carve_out_ref to the baseline "file:line". Cite the baseline in mitigation_file /
+  mitigation_line / mitigation_snippet so it can be verified.
+
 Respond ONLY with valid JSON in this exact shape:
 {
   "mitigation_found": <bool>,
   "mitigation_file": "<path or null>",
   "mitigation_line": <int or null>,
   "mitigation_snippet": "<verbatim from code, or null>",
-  "reasoning": "<one sentence>"
+  "reasoning": "<one sentence>",
+  "carve_out_matched": <bool>,
+  "carve_out_ref": "<accepted-risk id, or baseline 'file:line', or null>",
+  "carve_out_source": "accepted_risk" | "baseline" | null
 }
 
 mitigation_found=true requires POSITIVE evidence (you found a concrete mitigation). Absence of
-evidence is NOT evidence of mitigation — when in doubt, return mitigation_found=false."""
+evidence is NOT evidence of mitigation — when in doubt, return mitigation_found=false and
+carve_out_matched=false."""
 
 
 def hunter_user_message(
@@ -92,14 +106,30 @@ def hunter_user_message(
     return "".join(parts)
 
 
-def skeptic_user_message(finding: dict, hunter_chain: str, code_context: str) -> str:
-    return (
+def skeptic_user_message(
+    finding: dict,
+    hunter_chain: str,
+    code_context: str,
+    accepted_risks: list | None = None,
+    ground_truth=None,
+) -> str:
+    parts = [
         f"Finding: {finding.get('file')}:{finding.get('line')} ({finding.get('rule', '')})\n"
         f"\n"
         f"Hunter's exploit chain:\n{hunter_chain}\n"
         f"\n"
         f"Code context:\n```\n{code_context}\n```\n"
-    )
+    ]
+    if accepted_risks:
+        parts.append("\nDeclared accepted-risks (maintainer-asserted intended behavior):\n")
+        for r in accepted_risks:
+            parts.append(f"  - id={r.get('id')}: {r.get('statement')}\n")
+    refs = getattr(ground_truth, "baseline_refs", None) if ground_truth else None
+    if refs:
+        parts.append("\nBaseline references (known-good patterns to diff against):\n")
+        for ref in refs:
+            parts.append(f"  - {ref.get('file')}:{ref.get('line')} — {ref.get('why')}\n")
+    return "".join(parts)
 
 
 GROUND_TRUTH_SYSTEM = """You are profiling a codebase to build an ADVISORY baseline for a security review.

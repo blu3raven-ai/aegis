@@ -103,3 +103,25 @@ def test_build_ground_truth_fails_open_on_llm_error() -> None:
 
 def test_build_ground_truth_none_when_llm_disabled() -> None:
     assert build_ground_truth(repo_root="/tmp", findings=[], llm=None) is None
+
+
+from runner.verification.prompts.sast import skeptic_user_message
+
+
+def test_skeptic_message_includes_accepted_risks_and_baseline() -> None:
+    msg = skeptic_user_message(
+        {"file": "app/x.py", "line": 5, "rule": "r"},
+        "hunter chain here",
+        "code context here",
+        accepted_risks=[{"id": "r-1", "statement": "auth at gateway"}],
+        ground_truth=GroundTruth(baseline_refs=[{"file": "app/auth.py", "line": 3, "why": "central auth"}]),
+    )
+    assert "auth at gateway" in msg
+    assert "r-1" in msg
+    assert "app/auth.py" in msg
+
+
+def test_skeptic_message_omits_blocks_when_empty() -> None:
+    msg = skeptic_user_message({"file": "a", "line": 1, "rule": "r"}, "chain", "ctx")
+    assert "Declared accepted-risks" not in msg
+    assert "Baseline references" not in msg
