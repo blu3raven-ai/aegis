@@ -94,6 +94,16 @@ def test_finding_dict_without_lookup_returns_kev_false_and_cwe_none():
     assert out["epss_percentile"] is None
 
 
+def test_finding_dict_exposes_asset_id_and_rule_id_for_accept_risk():
+    """The drawer's accept-as-intended-risk action needs the finding's asset id
+    and the raw rule id to scope a carve-out to exactly this asset + rule."""
+    f = make_finding(detail={"ruleId": "python.lang.eval"})
+    f.asset_id = "11111111-1111-1111-1111-111111111111"
+    out = _finding_to_dict(f)
+    assert out["asset_id"] == "11111111-1111-1111-1111-111111111111"
+    assert out["rule_id"] == "python.lang.eval"
+
+
 def test_finding_dict_includes_epss_percentile_when_cve_in_lookup():
     out = _finding_to_dict(
         make_finding(cve_id="CVE-2021-44228"),

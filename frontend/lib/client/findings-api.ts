@@ -89,6 +89,10 @@ export interface Finding {
   description?: string | null
   /** Rule that fired (name or id). */
   rule?: string | null
+  /** The finding's asset id — lets the drawer scope an "accept risk" carve-out to this repo. */
+  asset_id?: string | null
+  /** Raw scanner rule id (matcher key) — scopes an "accept risk" carve-out to this rule. */
+  rule_id?: string | null
   /** Remediation guidance (how to fix). */
   remediation?: string | null
   /** Scanner confidence (e.g. "high"). */
