@@ -49,8 +49,12 @@ async def create_accepted_risk(
     body: AcceptedRiskCreate,
     _: None = Depends(Permission(MANAGE_SOURCES)),
 ) -> dict:
+    # A carve-out MUST target an asset the caller is scoped to. asset_id is
+    # required (there is no safe source-wide carve-out) and must be in scope —
+    # otherwise a manage_sources holder could suppress findings on a repo they
+    # can't see. Unknown/out-of-scope asset → 404 (object-level, never 403).
     asset_ids = await resolve_asset_ids_from_request(request)
-    if body.asset_id is not None and body.asset_id not in asset_ids:
+    if not body.asset_id or body.asset_id not in asset_ids:
         raise HTTPException(status_code=404, detail="Asset not found")
     async with get_session() as session:
         created = await svc.create(

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models import AcceptedRisk
@@ -24,30 +24,23 @@ def _to_dict(r: AcceptedRisk) -> dict[str, Any]:
 
 
 async def list_for_assets(session: AsyncSession, asset_ids: list[str]) -> list[dict[str, Any]]:
-    # In-scope asset risks PLUS source-wide (asset_id IS NULL) risks — the latter
-    # apply to every repo on a source and are managed by manage_sources holders,
-    # so a source-wide carve-out must remain listable/manageable (not just applied
-    # silently at scan time by matched_for_repo).
+    # Strictly asset-scoped. A carve-out only ever affects the specific asset it
+    # targets — the data model has no reliable asset→source link, so there is no
+    # safe "source-wide" query (a null-asset row would suppress findings on every
+    # source). Every risk MUST carry an asset_id in the caller's scope.
     if not asset_ids:
         return []
     rows = (
-        await session.execute(
-            select(AcceptedRisk).where(
-                or_(AcceptedRisk.asset_id.in_(asset_ids), AcceptedRisk.asset_id.is_(None))
-            )
-        )
+        await session.execute(select(AcceptedRisk).where(AcceptedRisk.asset_id.in_(asset_ids)))
     ).scalars().all()
     return [_to_dict(r) for r in rows]
 
 
 def matched_for_repo(rows: list[dict[str, Any]], *, asset_id: str) -> list[dict[str, Any]]:
-    """Enabled risks that apply to this repo: asset-scoped to it, or source-wide
-    (asset_id is None). Pure — used when assembling the runner job payload."""
-    return [
-        r
-        for r in rows
-        if r.get("enabled") and (r.get("asset_id") in (None, asset_id))
-    ]
+    """Enabled risks that target exactly this asset. Pure — used when assembling
+    the runner job payload. Only the asset's OWN risks apply; a risk never leaks
+    onto a different asset (or source)."""
+    return [r for r in rows if r.get("enabled") and r.get("asset_id") == asset_id]
 
 
 async def create(
@@ -72,14 +65,14 @@ async def create(
 async def get_scoped(
     session: AsyncSession, risk_id: int, asset_ids: list[str]
 ) -> AcceptedRisk | None:
-    """Fetch a risk only if its asset is in the caller's scope, or it is source-wide
-    (asset_id IS NULL). Returns None (→ 404) when out of scope or unknown."""
+    """Fetch a risk only if its asset is in the caller's scope. Returns None (→ 404)
+    when out of scope or unknown."""
     if not asset_ids:
         return None
     return await session.scalar(
         select(AcceptedRisk).where(
             AcceptedRisk.id == risk_id,
-            or_(AcceptedRisk.asset_id.in_(asset_ids), AcceptedRisk.asset_id.is_(None)),
+            AcceptedRisk.asset_id.in_(asset_ids),
         )
     )
 

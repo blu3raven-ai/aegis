@@ -82,10 +82,6 @@ def _maybe_verify(
     # collect the rest — the ones that need an LLM round-trip — to verify
     # concurrently. Each finding owns its own slot in `out`, so workers never
     # touch shared state except the (locked) scan_budget.
-    # Advisory ground truth: one recon pass over the findings' files, reused for
-    # every finding this scan. Fail-open — None means "verify without baseline hints".
-    ground_truth = build_ground_truth(repo_root=repo_root, findings=findings, llm=llm)
-
     out: list[dict] = [dict(f) for f in findings]
     pending: list[int] = []
     for i, (f, input_hash) in enumerate(zip(findings, hashes)):
@@ -102,6 +98,13 @@ def _maybe_verify(
             apply_cache_hit(copy, cached, input_hash)
         else:
             pending.append(i)
+
+    # Advisory ground truth: one recon pass over the findings' files, reused for
+    # every pending finding. Skip the round-trip entirely when nothing needs
+    # verifying (all cached / below severity). Fail-open — None means "no hints".
+    ground_truth = (
+        build_ground_truth(repo_root=repo_root, findings=findings, llm=llm) if pending else None
+    )
 
     def _verify_one(i: int) -> None:
         f, input_hash, copy = findings[i], hashes[i], out[i]

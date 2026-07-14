@@ -21,7 +21,6 @@ import {
 import { getSourceConnection, updateSourceConnection } from "@/lib/client/source-connections-api"
 import { ConnectionStatusBadge } from "./ConnectionStatusBadge"
 import { ScopeConfigurator } from "./ScopeConfigurator"
-import { AcceptedRisksSection } from "./AcceptedRisksSection"
 import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
 import { Card } from "@/components/ui/Card"
 import { Skeleton } from "@/components/ui/Skeleton"
@@ -510,8 +509,6 @@ export function ScopeConfigContent({
           onExcludedChange={setExcludedItems}
         />
       </SettingsCard>
-
-      <AcceptedRisksSection connectionId={connectionId} />
 
       {/* Schedule */}
       <SettingsCard
