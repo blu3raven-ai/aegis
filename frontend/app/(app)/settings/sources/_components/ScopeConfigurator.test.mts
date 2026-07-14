@@ -24,4 +24,11 @@ describe("ScopeConfigurator", () => {
     assert.match(src, /toggleExcluded/)
     assert.match(src, /scanScope === "all-except-excluded" \|\| scanScope === "selected"/)
   })
+
+  it("renders selections not in the discovered list (e.g. added by URL)", () => {
+    // The list must union availableItems with included/excluded so a URL-added
+    // repo that isn't among the discovered items still gets a checkable row.
+    assert.match(src, /new Set\(\[\.\.\.\(availableItems \?\? \[\]\), \.\.\.includedItems, \.\.\.excludedItems\]\)/)
+    assert.match(src, /const hasItems = sortedItems\.length > 0/)
+  })
 })

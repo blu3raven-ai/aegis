@@ -277,7 +277,9 @@ export function SourceOverviewPageContent() {
             <DetailRow label="Scan scope">
               {connection.scanScope === "all-except-excluded"
                 ? `All except ${connection.excludedItems.length} excluded`
-                : `All ${itemNoun}`}
+                : connection.scanScope === "selected"
+                  ? `${connection.includedItems.length} selected`
+                  : `All ${itemNoun}`}
             </DetailRow>
             <DetailRow label="Sync schedule">{SYNC_SCHEDULE_LABELS[connection.syncSchedule]}</DetailRow>
             <DetailRow label="Scan schedule">
