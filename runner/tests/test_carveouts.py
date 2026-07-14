@@ -15,8 +15,10 @@ def _make_resp(content: str) -> LlmResponse:
 
 
 def _mock_llm(*responses: str) -> MagicMock:
+    from runner.verification.llm_client import LlmClient
     llm = MagicMock()
     llm.chat.side_effect = [_make_resp(r) for r in responses]
+    llm.chat_json.side_effect = lambda *a, **kw: LlmClient.chat_json(llm, *a, **kw)
     return llm
 
 
@@ -71,3 +73,33 @@ def test_unscoped_risk_matches_everything() -> None:
     f = {"file": "whatever.py", "rule": "y", "scanner": "code_scanning"}
     ids = {r["id"] for r in accepted_risks_for_finding(f, _RISKS)}
     assert "r-all" in ids
+
+
+from runner.verification.ground_truth import build_ground_truth
+
+
+_GT_JSON = json.dumps({
+    "baseline_refs": [{"file": "app/auth.py", "line": 3, "why": "central auth"}],
+    "accepted_behaviors": [{"statement": "health endpoint is public by design", "anchor": "app/health.py"}],
+})
+
+
+def test_build_ground_truth_parses_recon() -> None:
+    with tempfile.TemporaryDirectory() as repo_root:
+        (Path(repo_root) / "app").mkdir()
+        (Path(repo_root) / "app" / "auth.py").write_text("def auth(): ...\n")
+        gt = build_ground_truth(repo_root=repo_root, findings=[{"file": "app/auth.py", "line": 3}], llm=_mock_llm(_GT_JSON))
+    assert gt is not None
+    assert gt.baseline_refs[0]["file"] == "app/auth.py"
+
+
+def test_build_ground_truth_fails_open_on_llm_error() -> None:
+    llm = MagicMock()
+    llm.chat.side_effect = RuntimeError("provider down")
+    with tempfile.TemporaryDirectory() as repo_root:
+        gt = build_ground_truth(repo_root=repo_root, findings=[{"file": "x.py", "line": 1}], llm=llm)
+    assert gt is None  # fail-open — recon failure must not raise
+
+
+def test_build_ground_truth_none_when_llm_disabled() -> None:
+    assert build_ground_truth(repo_root="/tmp", findings=[], llm=None) is None

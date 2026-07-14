@@ -100,3 +100,30 @@ def skeptic_user_message(finding: dict, hunter_chain: str, code_context: str) ->
         f"\n"
         f"Code context:\n```\n{code_context}\n```\n"
     )
+
+
+GROUND_TRUTH_SYSTEM = """You are profiling a codebase to build an ADVISORY baseline for a security review.
+
+You are given a small sample of files that findings were raised in. Identify:
+- baseline_refs: locations that represent the project's KNOWN-GOOD security pattern
+  (e.g. the one place auth is centrally enforced), so a reviewer can diff suspicious
+  code against them.
+- accepted_behaviors: behaviors that are intended-by-design (a health endpoint left
+  public, a CLI that shells out to git on trusted local input), each anchored to a file.
+
+Be conservative. Only include something you can point at in the provided code. This is
+a HINT for a later step, never a verdict — do not mark anything as safe.
+
+Respond ONLY with valid JSON:
+{
+  "baseline_refs": [{"file": "<path>", "line": <int>, "why": "<one phrase>"}],
+  "accepted_behaviors": [{"statement": "<one sentence>", "anchor": "<path>"}]
+}
+Return {"baseline_refs": [], "accepted_behaviors": []} if nothing is clearly baseline."""
+
+
+def ground_truth_user_message(file_samples: list[tuple[str, str]]) -> str:
+    parts = ["Sampled files:\n"]
+    for path, body in file_samples:
+        parts.append(f"\n--- {path} ---\n```\n{body}\n```\n")
+    return "".join(parts)
