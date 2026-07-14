@@ -125,6 +125,9 @@ def compose_advisory_markdown(finding: dict) -> str:
     verdict = (finding.get("verdict") or "").strip()
     if verdict:
         parts.append(f"## Notes\n\nVerification verdict: **{verdict}**.\n")
+    ro = (m.get("ruled_out_reason") or {})
+    if ro.get("source") == "accepted_risk":
+        parts.append(f"Ruled out — accepted risk: {ro.get('statement')}\n")
 
     parts.append(_SAFE_HARBOR)
     return "\n".join(parts)
@@ -235,6 +238,9 @@ def compose_advisory_html(finding: dict) -> str:
     verdict = (finding.get("verdict") or "").strip()
     if verdict:
         body.append(f"<h2>Notes</h2><p>Verification verdict: <strong>{_esc(verdict)}</strong>.</p>")
+    ro = (m.get("ruled_out_reason") or {})
+    if ro.get("source") == "accepted_risk":
+        body.append(f"<p>Ruled out — accepted risk: {_esc(ro.get('statement') or '')}</p>")
 
     body.append(
         "<h2>Testing &amp; Safe Harbor</h2>"

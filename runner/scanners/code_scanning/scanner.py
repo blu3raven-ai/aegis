@@ -47,6 +47,7 @@ from runner.scanners.code_scanning import (
 )
 from runner.verification.budget import DEFAULT_VERIFY_WORKERS, ScanBudget, verify_concurrency
 from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
+from runner.verification.ground_truth import build_ground_truth
 from runner.verification.pipeline import verify_finding
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ def _build_scan_budget(env: JobEnv) -> ScanBudget:
 
 def _maybe_verify(
     *, findings: list[dict], repo_root: str, llm, escalation_llm=None, scan_budget: ScanBudget,
-    backend=None, max_workers: int = DEFAULT_VERIFY_WORKERS,
+    backend=None, max_workers: int = DEFAULT_VERIFY_WORKERS, accepted_risks: list | None = None,
 ) -> list[dict]:
     # Precompute each finding's cache key and, when verification is on, ask the
     # backend which of those were already verified with identical input — those
@@ -98,6 +99,13 @@ def _maybe_verify(
         else:
             pending.append(i)
 
+    # Advisory ground truth: one recon pass over the findings' files, reused for
+    # every pending finding. Skip the round-trip entirely when nothing needs
+    # verifying (all cached / below severity). Fail-open — None means "no hints".
+    ground_truth = (
+        build_ground_truth(repo_root=repo_root, findings=findings, llm=llm) if pending else None
+    )
+
     def _verify_one(i: int) -> None:
         f, input_hash, copy = findings[i], hashes[i], out[i]
         if not scan_budget.allow():
@@ -107,6 +115,7 @@ def _maybe_verify(
         try:
             result = verify_finding(
                 finding=f, repo_root=repo_root, llm=llm, escalation_llm=escalation_llm,
+                accepted_risks=accepted_risks, ground_truth=ground_truth,
             )
             scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
             copy["verdict"] = result.verdict
@@ -319,6 +328,15 @@ class CodeScanningScanner:
             except json.JSONDecodeError:
                 logger.warning("[!] skip non-JSON line in %s", findings_file)
 
+        # Accepted-risk carve-outs the backend stamps into the job env as a JSON
+        # array. Malformed input falls open to "no carve-outs" rather than aborting.
+        try:
+            accepted_risks = json.loads(env.get("ACCEPTED_RISKS") or "[]")
+        except (TypeError, ValueError):
+            accepted_risks = []
+        if not isinstance(accepted_risks, list):
+            accepted_risks = []
+
         verified = _maybe_verify(
             findings=raw_findings,
             repo_root=repo_root,
@@ -327,6 +345,7 @@ class CodeScanningScanner:
             scan_budget=_build_scan_budget(env),
             backend=getattr(self, "_backend", None),
             max_workers=verify_concurrency(env),
+            accepted_risks=accepted_risks,
         )
 
         with open(findings_file, "w") as f:

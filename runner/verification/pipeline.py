@@ -78,18 +78,19 @@ def run_tp_reasoning(finding: dict, code_context: str, reachability, *, llm):
     )
 
 
-def run_fp_detection(finding: dict, chain: str, code_context: str, *, llm):
-    """FP-detection chain (skeptic): look for a grounded upstream mitigation.
-
-    Returns the raw ``llm.chat_json`` result (parsed ``SkepticResponse`` or ``None``
-    on schema failure, plus token counts and prompt hashes). Standalone so the
-    false-positive check can be tested — and later model-tiered — independently of
-    the reasoning chain.
-    """
+def run_fp_detection(
+    finding: dict, chain: str, code_context: str, *, llm,
+    accepted_risks: list | None = None, ground_truth=None,
+):
+    """FP-detection chain (skeptic): look for a grounded upstream mitigation, and
+    match the finding against declared accepted-risks / baseline ground truth."""
     return llm.chat_json(
         [
             {"role": "system", "content": SKEPTIC_SYSTEM},
-            {"role": "user", "content": skeptic_user_message(finding, chain, code_context)},
+            {"role": "user", "content": skeptic_user_message(
+                finding, chain, code_context,
+                accepted_risks=accepted_risks, ground_truth=ground_truth,
+            )},
         ],
         SkepticResponse,
         temperature=0.0, max_tokens=400,
@@ -102,6 +103,8 @@ def verify_finding(
     repo_root: str,
     llm,
     escalation_llm=None,
+    accepted_risks: list | None = None,
+    ground_truth=None,
     critic: Callable[[list[dict], str], tuple[list[str], list[str]]] = verify_citations,
 ) -> VerificationResult:
     """Verify one finding on the default model, escalating to a frontier model
@@ -119,6 +122,10 @@ def verify_finding(
         "prompt_hashes": [],
         "tier": "default",
     }
+
+    from runner.verification.carveouts import accepted_risks_for_finding
+    matched_risks = accepted_risks_for_finding(finding, accepted_risks)
+    declared_ids = {str(r.get("id")) for r in matched_risks}
 
     code_context = _read_code_context(
         finding.get("file", ""), int(finding.get("line", 1)), repo_root,
@@ -171,7 +178,10 @@ def verify_finding(
         )
 
     # FP-detection chain: is there a grounded mitigation that neutralises it?
-    skeptic_result = run_fp_detection(finding, chain, code_context, llm=active_llm)
+    skeptic_result = run_fp_detection(
+        finding, chain, code_context, llm=active_llm,
+        accepted_risks=matched_risks, ground_truth=ground_truth,
+    )
     tokens_in_total += skeptic_result.tokens_in
     tokens_out_total += skeptic_result.tokens_out
     metadata["prompt_hashes"].extend(skeptic_result.prompt_hashes)
@@ -184,6 +194,46 @@ def verify_finding(
         skeptic = SkepticResponse()  # all-default: mitigation_found=False
     else:
         skeptic = skeptic_result.parsed
+
+    # Tiered ground-truth carve-out. User-declared is authoritative but only for a
+    # risk that was actually provided (the LLM can confirm, not invent). Baseline is
+    # advisory: it can only downgrade, and only once its citation is grounded.
+    if skeptic.carve_out_matched and skeptic.carve_out_source == "accepted_risk" \
+            and str(skeptic.carve_out_ref) in declared_ids:
+        risk = next(r for r in matched_risks if str(r.get("id")) == str(skeptic.carve_out_ref))
+        metadata["ruled_out_reason"] = {
+            "source": "accepted_risk",
+            "risk_id": str(risk.get("id")),
+            "statement": risk.get("statement"),
+            "reasoning": skeptic.reasoning,
+        }
+        return VerificationResult(
+            verdict="ruled_out", exploit_chain=chain, evidence=evidence,
+            tokens_in=tokens_in_total, tokens_out=tokens_out_total,
+            verification_metadata=metadata,
+        )
+
+    if skeptic.carve_out_matched and skeptic.carve_out_source == "baseline":
+        baseline_evidence = [{
+            "kind": "code",
+            "file": skeptic.mitigation_file or "",
+            "line": skeptic.mitigation_line or 0,
+            "snippet": skeptic.mitigation_snippet or "",
+        }]
+        unverified, _ = critic(baseline_evidence, repo_root)
+        if not unverified:
+            metadata["carve_out_source"] = "baseline"
+            metadata["carve_out_ref"] = skeptic.carve_out_ref
+            metadata["suppression_downgraded"] = ["baseline_match"]
+            return VerificationResult(
+                verdict="needs_verify", exploit_chain=chain, evidence=evidence,
+                tokens_in=tokens_in_total, tokens_out=tokens_out_total,
+                verification_metadata=metadata,
+            )
+        # Ungrounded baseline claim → discard it entirely. The skeptic's mitigation
+        # fields ARE the ungrounded baseline citation, so don't let the mitigation
+        # block re-consume them — fall through to the normal (confirmed) flow.
+        skeptic.mitigation_found = False
 
     if skeptic.mitigation_found:
         metadata["ruled_out_reason"] = {

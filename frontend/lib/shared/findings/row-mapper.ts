@@ -90,6 +90,10 @@ export interface VerificationRuledOutReason {
   line?: number | null
   snippet?: string | null
   reasoning?: string | null
+  /** Present when a user-declared carve-out ruled the finding out. */
+  source?: string | null
+  risk_id?: string | null
+  statement?: string | null
 }
 
 /**
@@ -102,6 +106,10 @@ export interface VerificationMetadata {
   tokens_in?: number
   tokens_out?: number
   ruled_out_reason?: VerificationRuledOutReason
+  /** Set to `"baseline"` when an auto-extracted baseline downgraded this finding. */
+  carve_out_source?: string | null
+  /** File+line reference of the baseline entry that triggered the downgrade. */
+  carve_out_ref?: string | null
   skipped?: string
   /**
    * Provenance the verifier records when it runs. `tier`/`escalated` are

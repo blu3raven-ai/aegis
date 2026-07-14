@@ -76,6 +76,27 @@ class SkepticResponse(BaseModel):
     mitigation_line: int | None = None
     mitigation_snippet: str | None = None
     reasoning: str = ""
+    # Ground-truth carve-out: the skeptic matched the finding to a declared
+    # accepted-risk or an auto-extracted baseline reference. `carve_out_source`
+    # is "accepted_risk" (authoritative → ruled_out) or "baseline" (advisory →
+    # downgrade only, after citation grounding). `carve_out_ref` is the declared
+    # risk id, or the "file:line" of the baseline reference.
+    carve_out_matched: bool = False
+    carve_out_ref: str | None = None
+    carve_out_source: str | None = None
+
+
+class GroundTruth(BaseModel):
+    """Auto-extracted, ADVISORY repo baseline. Every entry is an unverified claim
+    until the skeptic cites it and the citation critic grounds it against the repo.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    # Known-good sibling references the skeptic can diff a finding against.
+    baseline_refs: list[dict[str, Any]] = Field(default_factory=list)
+    # Accepted-by-design behaviors the model inferred from the code/docs.
+    accepted_behaviors: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class DepsReachabilityResponse(BaseModel):
