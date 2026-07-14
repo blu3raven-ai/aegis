@@ -18,9 +18,16 @@ def _fake_get_session():
     empty result so submit_ci_scan's asset lookup resolves to None (dispatch then
     falls back without a provider-resolved source type / clone URL).
     """
+    class _Scalars:
+        def all(self):
+            return []
+
     class _Result:
         def scalar_one_or_none(self):
             return None
+
+        def scalars(self):
+            return _Scalars()
 
     class _Session:
         def add(self, _row):
@@ -46,7 +53,7 @@ async def test_pr_triggered_scan_resolves_base_sha_and_marks_diff_scoped():
 
     captured: dict = {}
 
-    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None):
+    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None, accepted_risks_json="[]"):
         captured["base_sha"] = base_sha
         captured["scan_scope"] = scan_scope
 
@@ -75,7 +82,7 @@ async def test_non_pr_scan_uses_full_tree():
 
     captured: dict = {}
 
-    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None):
+    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None, accepted_risks_json="[]"):
         captured["base_sha"] = base_sha
         captured["scan_scope"] = scan_scope
 
@@ -102,7 +109,7 @@ async def test_pr_scan_falls_back_to_full_tree_when_base_sha_unresolvable():
 
     captured: dict = {}
 
-    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None):
+    def fake_dispatch(scan_id, source_id, commit_sha, scanners, org, *, base_sha, scan_scope, source_type=None, repo_url=None, accepted_risks_json="[]"):
         captured["base_sha"] = base_sha
         captured["scan_scope"] = scan_scope
 

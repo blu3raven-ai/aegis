@@ -41,6 +41,7 @@ def _dispatch_scanner_jobs(
     scan_scope: str = "full_tree",
     source_type: str | None = None,
     repo_url: str | None = None,
+    accepted_risks_json: str = "[]",
 ) -> None:
     """Create one runner job per scanner type after the ScanRun row is committed.
 
@@ -94,6 +95,7 @@ def _dispatch_scanner_jobs(
             "SCAN_SCOPE":  scan_scope,
             **llm_env,
         }
+        env["ACCEPTED_RISKS"] = accepted_risks_json
         if source_type:
             env["SOURCE_TYPE"] = source_type
         if base_sha:
@@ -101,6 +103,21 @@ def _dispatch_scanner_jobs(
 
         create_job(job_type=job_type, org=org, run_id=run_id, env_vars=env)
         logger.info("Dispatched %s runner job for scan %s (repo %s)", scanner, scan_id, repo_id)
+
+
+async def _accepted_risks_json(session, asset_id: str) -> str:
+    """Scope-matched, enabled accepted-risks for `asset_id` as a JSON string for
+    the runner's ACCEPTED_RISKS env. Empty list ("[]") when none apply."""
+    import json
+    from src.sources.accepted_risks_service import list_for_assets, matched_for_repo
+
+    rows = await list_for_assets(session, [asset_id])
+    matched = matched_for_repo(rows, asset_id=asset_id)
+    return json.dumps([
+        {"id": r["id"], "statement": r["statement"], "path_glob": r["path_glob"],
+         "rule_id": r["rule_id"], "scanner": r["scanner"]}
+        for r in matched
+    ])
 
 
 def _resolve_repo_dispatch_target(external_ref: str) -> tuple[str, str, str, str]:
@@ -327,9 +344,11 @@ async def _submit_repo_scan(
     )
     session.add(row)
     await session.commit()
+    accepted_risks_json = await _accepted_risks_json(session, asset_row.id)
     _dispatch_scanner_jobs(
         scan_id, repo_id, commit_sha, scanners, org,
         source_type=scm_type, repo_url=repo_url,
+        accepted_risks_json=accepted_risks_json,
     )
 
     return ScanSubmission(
@@ -530,6 +549,7 @@ async def submit_ci_scan(
         )
         session.add(run)
         await session.commit()
+        accepted_risks_json = await _accepted_risks_json(session, source_id)
 
     # Carry the asset's source type + a provider-correct clone URL to the runner
     # so it clones the right repo and ingest can attach findings to the asset.
@@ -549,6 +569,7 @@ async def submit_ci_scan(
             scan_scope=scan_scope,
             source_type=source_type,
             repo_url=repo_url,
+            accepted_risks_json=accepted_risks_json,
         )
     except Exception:
         # The ScanRun row is already committed in 'queued'. Surface the orphan
