@@ -41,3 +41,33 @@ def test_ground_truth_model_shape() -> None:
     )
     assert gt.baseline_refs[0]["file"] == "app/auth.py"
     assert gt.accepted_behaviors[0]["statement"].startswith("debug")
+
+
+from runner.verification.carveouts import accepted_risks_for_finding
+
+
+_RISKS = [
+    {"id": "r-glob", "statement": "handlers validate at gateway", "path_glob": "app/handlers/*.py"},
+    {"id": "r-rule", "statement": "eval is a sandboxed plugin loader", "rule_id": "python.lang.eval"},
+    {"id": "r-scanner", "statement": "iac public buckets are intentional", "scanner": "iac_scanning"},
+    {"id": "r-all", "statement": "applies everywhere"},
+]
+
+
+def test_scope_match_by_path_glob() -> None:
+    f = {"file": "app/handlers/user.py", "rule": "x", "scanner": "code_scanning"}
+    ids = {r["id"] for r in accepted_risks_for_finding(f, _RISKS)}
+    assert "r-glob" in ids and "r-rule" not in ids
+
+
+def test_scope_match_by_rule_and_scanner() -> None:
+    f = {"file": "app/x.py", "rule": "python.lang.eval", "scanner": "iac_scanning"}
+    ids = {r["id"] for r in accepted_risks_for_finding(f, _RISKS)}
+    assert {"r-rule", "r-scanner", "r-all"} <= ids
+    assert "r-glob" not in ids
+
+
+def test_unscoped_risk_matches_everything() -> None:
+    f = {"file": "whatever.py", "rule": "y", "scanner": "code_scanning"}
+    ids = {r["id"] for r in accepted_risks_for_finding(f, _RISKS)}
+    assert "r-all" in ids
