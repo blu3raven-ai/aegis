@@ -35,9 +35,12 @@ export function ScopeConfigurator({
     totalCount != null ? ` (${totalCount.toLocaleString()})` : ""
 
   const sortedItems = useMemo(() => {
-    const all = availableItems ?? []
+    // Include persisted selections that aren't in the discovered list (e.g. a repo
+    // added by URL): otherwise its row never renders and the "N selected" badge
+    // points at something the user can't see or un-check.
+    const all = new Set([...(availableItems ?? []), ...includedItems, ...excludedItems])
     return [...all].sort((a, b) => a.localeCompare(b))
-  }, [availableItems])
+  }, [availableItems, includedItems, excludedItems])
 
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -64,7 +67,7 @@ export function ScopeConfigurator({
     }
   }
 
-  const hasItems = (availableItems?.length ?? 0) > 0
+  const hasItems = sortedItems.length > 0
 
   return (
     <div className="flex flex-col gap-4">
