@@ -36,6 +36,7 @@ from src.settings.llm.usage_router import router as llm_usage_router
 from src.settings.general.router import router as settings_router
 from src.settings.organisations.router import router as organisations_router
 from src.sources.source_connections_router import source_connections_router
+from src.sources.accepted_risks_router import router as accepted_risks_router
 from src.license.router import router as license_router
 from src.runner.router import router as runner_router
 from src.runner.admin_router import router as runner_admin_router
@@ -644,6 +645,7 @@ app.include_router(health_router)
 app.include_router(sla_router)
 app.include_router(rules_router)
 app.include_router(sources_router)
+app.include_router(accepted_risks_router)
 app.include_router(scans_router)
 app.include_router(scans_manual_router)
 app.include_router(scans_ci_router)
