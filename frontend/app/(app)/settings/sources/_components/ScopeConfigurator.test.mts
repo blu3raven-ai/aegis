@@ -31,4 +31,11 @@ describe("ScopeConfigurator", () => {
     assert.match(src, /new Set\(\[\.\.\.\(availableItems \?\? \[\]\), \.\.\.includedItems, \.\.\.excludedItems\]\)/)
     assert.match(src, /const hasItems = sortedItems\.length > 0/)
   })
+
+  it("pins added-by-URL items above the discovered list", () => {
+    // Sort ranks non-discovered items first (rank < 0) so a URL-added repo floats
+    // to the top instead of alphabetising into the middle of the discovered list.
+    assert.match(src, /const rank = Number\(discovered\.has\(a\)\) - Number\(discovered\.has\(b\)\)/)
+    assert.match(src, /rank !== 0 \? rank : a\.localeCompare\(b\)/)
+  })
 })

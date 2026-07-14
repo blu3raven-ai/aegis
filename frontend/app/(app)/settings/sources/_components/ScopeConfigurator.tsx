@@ -38,8 +38,14 @@ export function ScopeConfigurator({
     // Include persisted selections that aren't in the discovered list (e.g. a repo
     // added by URL): otherwise its row never renders and the "N selected" badge
     // points at something the user can't see or un-check.
+    const discovered = new Set(availableItems ?? [])
     const all = new Set([...(availableItems ?? []), ...includedItems, ...excludedItems])
-    return [...all].sort((a, b) => a.localeCompare(b))
+    // Pin the added-by-URL items to the top so they're immediately visible rather
+    // than sorted into the middle of a long discovered list; alpha within groups.
+    return [...all].sort((a, b) => {
+      const rank = Number(discovered.has(a)) - Number(discovered.has(b))
+      return rank !== 0 ? rank : a.localeCompare(b)
+    })
   }, [availableItems, includedItems, excludedItems])
 
   const filteredItems = useMemo(() => {
