@@ -41,7 +41,7 @@ def test_budget_exhausted_marks_remaining_possible(monkeypatch):
         {"file": "b.py", "line": 1, "tool": "sast", "rule": "y", "severity": "high"},
     ]
 
-    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None):
+    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None, **kwargs):
         return type("R", (), {
             "verdict": "confirmed", "exploit_chain": "x", "evidence": [],
             "tokens_in": 60, "tokens_out": 60, "verification_metadata": {},
@@ -73,7 +73,7 @@ def test_verify_findings_file_rewrites_with_verdict(tmp_path, monkeypatch):
         "engine": "semgrep",
     }) + "\n")
 
-    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None):
+    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None, **kwargs):
         return type("R", (), {
             "verdict": "confirmed",
             "exploit_chain": "http_request -> eval",
