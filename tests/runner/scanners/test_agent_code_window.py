@@ -71,10 +71,12 @@ def test_llm_judge_findings_also_get_a_code_window(tmp_path, monkeypatch):
     monkeypatch.setattr(agent_scanner, "clone_repo", _clone)
 
     s = agent_scanner.AgentScanner()
+    from runner.scanners._shared import JobEnv
+
     findings, cloned = s._scan_one_repo(
         "https://example.com/acme/repo.git", tmp_path, None,
         llm=object(), escalation_llm=None, budget=None,
-        cancel_event=None, log_tail=[], emitter=_NullEmitter(),
+        env=JobEnv({}), cancel_event=None, log_tail=[], emitter=_NullEmitter(),
     )
     assert cloned and len(findings) == 1
     assert findings[0].get("code_window"), "judge finding must carry a code window"
