@@ -11,6 +11,7 @@ export type FindingScanner =
   | "secret_scanning"
   | "iac_scanning"
   | "agent_scanning"
+  | "deep_audit"
 
 /** One step in a secret-rotation runbook (secrets `rotation` fix). */
 export interface FindingRecommendedFixStep {
@@ -309,6 +310,8 @@ const SCANNER_MAP: Record<string, FindingScanner> = {
   secret_scanning: "secret_scanning",
   iac_scanning: "iac_scanning",
   agent_scanning: "agent_scanning",
+  deep_audit: "deep_audit",
+  audit: "deep_audit",
   // The REST detail endpoint returns the backend's public shorthand (see
   // _TOOL_TO_PUBLIC), so a finding opened via getFindingDetail arrives with
   // these. Map them too — otherwise the shorthand fell through to the

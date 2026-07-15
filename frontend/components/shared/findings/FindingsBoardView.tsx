@@ -125,6 +125,7 @@ const SCANNER_LABEL: Record<Scanner, string> = {
   secret_scanning: "SEC",
   iac_scanning: "IaC",
   agent_scanning: "AGT",
+  deep_audit: "AUD",
 }
 
 // Drive the scanner badge palette from the registered theme tokens (which carry
@@ -137,6 +138,7 @@ const SCANNER_BG: Record<Scanner, string> = {
   secret_scanning: "var(--color-scanner-secrets-bg)",
   iac_scanning: "var(--color-scanner-iac-bg)",
   agent_scanning: "var(--color-scanner-agent-bg)",
+  deep_audit: "var(--color-scanner-audit-bg)",
 }
 
 const SCANNER_FG: Record<Scanner, string> = {
@@ -146,6 +148,7 @@ const SCANNER_FG: Record<Scanner, string> = {
   secret_scanning: "var(--color-scanner-secrets-fg)",
   iac_scanning: "var(--color-scanner-iac-fg)",
   agent_scanning: "var(--color-scanner-agent-fg)",
+  deep_audit: "var(--color-scanner-audit-fg)",
 }
 
 const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
@@ -155,6 +158,7 @@ const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
   secret_scanning: "Secrets",
   iac_scanning: "Infrastructure as Code",
   agent_scanning: "Agent Security",
+  deep_audit: "Deep Audit",
 }
 
 const SEVERITY_GROUP_LABEL: Record<Severity, string> = {
@@ -249,7 +253,7 @@ function ActionBandBadge({ band }: { band: FindingActionBand }) {
 }
 
 // Stable ordering per group key keeps the visual scan rhythm consistent.
-const SCANNER_ORDER: Scanner[] = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning", "agent_scanning"]
+const SCANNER_ORDER: Scanner[] = ["dependencies_scanning", "code_scanning", "secret_scanning", "container_scanning", "iac_scanning", "agent_scanning", "deep_audit"]
 
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low"]
 
