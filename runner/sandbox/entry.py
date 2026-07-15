@@ -1,0 +1,67 @@
+"""Find the runnable entry a coding agent would autonomously execute during setup.
+
+Detonation needs *something to run*. This detects the highest-signal auto-run
+triggers — the ones an agent (or ``npm install``) fires without a human deciding
+to — and returns the command to detonate, or None to skip. It does NOT try to run
+arbitrary code paths: only entries that are, by their own convention, executed as
+part of setup. No match → skip (detonation is opt-in and never guesses).
+
+Pure and table-tested; the caller feeds the returned command to ``detonate``.
+"""
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+# npm lifecycle scripts that run automatically on `npm install` — the classic
+# supply-chain execution point, and exactly the "agent runs setup" scenario.
+_NPM_AUTO_SCRIPTS = ("preinstall", "install", "postinstall", "prepare")
+# Conventionally-named setup scripts an agent is told to run.
+_SETUP_SCRIPTS = ("setup.sh", "install.sh", "bootstrap.sh")
+
+
+@dataclass(frozen=True)
+class DetonationEntry:
+    """A runnable setup entry worth detonating."""
+
+    cmd: tuple[str, ...]  # argv to run in the sandbox
+    ecosystem: str        # "npm" | "shell" — hints the base image to build
+    source: str           # where it was found, for the finding's evidence
+
+
+def _npm_entry(repo_root: Path) -> DetonationEntry | None:
+    pkg = repo_root / "package.json"
+    if not pkg.is_file():
+        return None
+    try:
+        scripts = json.loads(pkg.read_text(encoding="utf-8", errors="replace")).get("scripts") or {}
+    except (ValueError, OSError):
+        return None
+    if not isinstance(scripts, dict):
+        return None
+    for name in _NPM_AUTO_SCRIPTS:
+        if isinstance(scripts.get(name), str) and scripts[name].strip():
+            return DetonationEntry(
+                cmd=("npm", "run", name, "--silent"),
+                ecosystem="npm",
+                source=f"package.json:scripts.{name}",
+            )
+    return None
+
+
+def _script_entry(repo_root: Path) -> DetonationEntry | None:
+    for name in _SETUP_SCRIPTS:
+        p = repo_root / name
+        if p.is_file():
+            return DetonationEntry(cmd=("sh", name), ecosystem="shell", source=name)
+    return None
+
+
+def detect_entry(repo_root: str) -> DetonationEntry | None:
+    """The setup entry to detonate, or None. npm lifecycle scripts first (they
+    auto-run on install), then a conventional setup script."""
+    root = Path(repo_root)
+    if not root.is_dir():
+        return None
+    return _npm_entry(root) or _script_entry(root)
