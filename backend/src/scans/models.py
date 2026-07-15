@@ -80,6 +80,7 @@ class FindingCounts(BaseModel):
 class VerificationSummary(BaseModel):
     """Aggregate LLM verification telemetry for a scan."""
     confirmed: int = 0
+    needs_runtime_verification: int = 0
     needs_verify: int = 0
     possible: int = 0
     ruled_out: int = 0
