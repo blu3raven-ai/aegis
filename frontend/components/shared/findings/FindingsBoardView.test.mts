@@ -392,4 +392,10 @@ describe("FindingsBoardView URL sync", () => {
     assert.match(src, /\/\\\$\[A-Z\]\[A-Z0-9_\]\*\/\.test\(remediation\)/)
     assert.match(src, /No automated fix yet — verify this finding to generate one\./)
   })
+
+  it("badges a fix that provably applies (positive-only, gated on fix_verified)", () => {
+    assert.match(src, /verificationMetadata\?\.fix_verified/)
+    assert.match(src, /applies cleanly to the current code/)
+    assert.match(mapperSrc, /fix_verified\?: boolean/)
+  })
 })

@@ -2009,6 +2009,14 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
               <FindingDrawerGroup id="remediation" label="Remediation">
               <RecommendedFixSection fix={selectedFinding.recommendedFix} />
+              {selectedFinding.recommendedFix && selectedFinding.verificationMetadata?.fix_verified && (
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-[var(--color-state-fixed-subtle)] px-2 py-1 text-2xs font-medium text-[var(--color-state-fixed-text)]">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3 w-3">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                  Fix verified — applies cleanly to the current code
+                </p>
+              )}
 
               {/* Fall back to the scanner's own remediation text only when there
                   is no structured fix, so the "Recommended fix" heading never
