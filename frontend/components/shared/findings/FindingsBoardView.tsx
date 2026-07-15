@@ -320,6 +320,7 @@ function mergeVerdictCounts(
   return {
     total: a.total + b.total,
     confirmed: a.confirmed + b.confirmed,
+    needs_runtime_verification: a.needs_runtime_verification + b.needs_runtime_verification,
     needs_verify: a.needs_verify + b.needs_verify,
     possible: a.possible + b.possible,
     ruled_out: a.ruled_out + b.ruled_out,

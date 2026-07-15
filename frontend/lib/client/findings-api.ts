@@ -172,6 +172,7 @@ export interface ListFindingsParams {
 export interface VerdictCounts {
   total: number
   confirmed: number
+  needs_runtime_verification: number
   needs_verify: number
   possible: number
   ruled_out: number
