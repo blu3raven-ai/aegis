@@ -7,12 +7,11 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.secrets.periodic_sweep import (  # noqa: E402
     should_run_periodic_sweep,
@@ -82,11 +81,12 @@ def test_enqueue_dispatches_one_job_per_source():
     assert mock_create.call_count == 2
 
 
-def test_enqueue_uses_deep_scan_depth():
-    """Full sweep must use SCAN_DEPTH=deep regardless of config scan depth."""
+def test_enqueue_omits_start_date_for_full_history():
+    """A full sweep omits SCAN_START_DATE so the runner scans the entire git
+    history (secret scans always run full git history)."""
     source = _make_source("acme-org", ["https://github.com/acme-org/repo.git"])
     config = {"image": "aegis/scanner-secrets:latest", "concurrency": "4",
-              "scanStartDate": "2024-01-01", "scanDepth": "light"}
+              "scanStartDate": "2024-01-01"}
 
     captured_env: dict = {}
 
@@ -99,7 +99,6 @@ def test_enqueue_uses_deep_scan_depth():
          patch("src.secrets.periodic_sweep.get_secret_scanner_config", return_value=config):
         enqueue_full_history_scan("acme-org/0")
 
-    assert captured_env.get("SCAN_DEPTH") == "deep"
     # SCAN_START_DATE must not be set for a full history sweep
     assert "SCAN_START_DATE" not in captured_env
 
@@ -179,7 +178,7 @@ def test_enqueue_skips_sources_without_repos():
 
 
 def test_enqueue_job_type_is_secrets():
-    """The dispatched job must be of type 'secrets'."""
+    """The dispatched job must be of the secret-scanning job type."""
     source = _make_source("acme-org", ["https://github.com/acme-org/repo.git"])
     config = {"image": "aegis/scanner-secrets:latest", "concurrency": "4",
               "scanStartDate": "", "scanDepth": "light"}
@@ -191,7 +190,7 @@ def test_enqueue_job_type_is_secrets():
         enqueue_full_history_scan("acme-org/0")
 
     _, kwargs = mock_create.call_args
-    assert kwargs.get("job_type") == "secrets"
+    assert kwargs.get("job_type") == "secret_scanning"
 
 
 def test_enqueue_org_label_set_correctly():

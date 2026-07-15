@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from datetime import date
 
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +43,7 @@ def test_upsert_returns_new_count():
     service = KevService()
     entries = _sample_entries(3, prefix="A")
     new_count = service.upsert_catalog(entries)
-    assert new_count == 3
+    assert len(new_count) == 3
 
 
 def test_upsert_idempotent():
@@ -54,7 +53,7 @@ def test_upsert_idempotent():
     entries = _sample_entries(2, prefix="B")
     service.upsert_catalog(entries)
     new_count = service.upsert_catalog(entries)
-    assert new_count == 0
+    assert new_count == []
 
 
 def test_upsert_updates_existing_fields():
@@ -90,7 +89,7 @@ def test_upsert_empty_list_returns_zero():
     from src.kev.service import KevService
     service = KevService()
     count = service.upsert_catalog([])
-    assert count == 0
+    assert count == []
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +177,7 @@ def test_exposure_summary_structure_empty_org():
     """Returns the expected keys with zero counts for an org with no findings."""
     from src.kev.service import KevService
     service = KevService()
-    summary = service.get_exposure_summary("kev-test-empty-org-xyz")
+    summary = service.get_exposure_summary(asset_ids=[])
 
     assert "open_findings_total" in summary
     assert "open_findings_in_kev" in summary

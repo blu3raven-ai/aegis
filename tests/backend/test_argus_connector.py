@@ -1,19 +1,13 @@
 """Tests for ArgusConnector — HTTP calls, fallback on failure, auth header."""
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 from unittest.mock import MagicMock, patch
 
 import httpx
-import pytest
 
 from src.argus.connector import (
     ArgusConnector,
-    Decision,
     Explanation,
-    NullArgusConnector,
     RiskScore,
     _ArgusError,
     get_argus_connector,
@@ -107,32 +101,6 @@ def test_score_finding_safe_payload_excludes_secret_values():
 
     assert "secret_value" not in captured
     assert "raw_source_code" not in captured
-
-
-# ── decide_go_no_go ───────────────────────────────────────────────────────────
-
-
-def test_decide_go_no_go_success():
-    connector = _connector()
-    resp = {"decision": "block", "blockers": ["f-1"], "rationale_id": "pol-999"}
-
-    with patch.object(connector, "_post", return_value=resp):
-        result = connector.decide_go_no_go("svc-a", [{"severity": "critical", "id": "f-1"}])
-
-    assert isinstance(result, Decision)
-    assert result.decision == "block"
-    assert result.source == "argus"
-    assert result.rationale_id == "pol-999"
-
-
-def test_decide_go_no_go_falls_back_on_error():
-    connector = _connector()
-
-    with patch.object(connector, "_post", side_effect=_ArgusError("no argus")):
-        result = connector.decide_go_no_go("svc-b", [{"id": "f-2", "severity": "high"}])
-
-    assert result.source == "heuristic"
-    assert result.decision in ("allow", "warn", "block")
 
 
 # ── explain_chain ─────────────────────────────────────────────────────────────
@@ -241,23 +209,110 @@ def test_auth_header_present_in_request():
 # ── get_argus_connector factory ───────────────────────────────────────────────
 
 
-def test_factory_returns_null_when_env_unset(monkeypatch):
+def test_factory_returns_disabled_when_env_unset(monkeypatch):
     monkeypatch.delenv("ARGUS_ENDPOINT", raising=False)
     monkeypatch.delenv("ARGUS_API_KEY", raising=False)
     connector = get_argus_connector()
-    assert isinstance(connector, NullArgusConnector)
+    assert isinstance(connector, ArgusConnector)
+    assert connector._enabled is False
 
 
-def test_factory_returns_real_when_env_set(monkeypatch):
+def test_factory_returns_enabled_when_env_set(monkeypatch):
     monkeypatch.setenv("ARGUS_ENDPOINT", "https://argus.example.com")
     monkeypatch.setenv("ARGUS_API_KEY", "test-key")
     connector = get_argus_connector()
     assert isinstance(connector, ArgusConnector)
-    assert not isinstance(connector, NullArgusConnector)
+    assert connector._enabled is True
 
 
-def test_factory_returns_null_when_only_endpoint_set(monkeypatch):
+def test_factory_returns_disabled_when_only_endpoint_set(monkeypatch):
     monkeypatch.setenv("ARGUS_ENDPOINT", "https://argus.example.com")
     monkeypatch.delenv("ARGUS_API_KEY", raising=False)
     connector = get_argus_connector()
-    assert isinstance(connector, NullArgusConnector)
+    assert isinstance(connector, ArgusConnector)
+    assert connector._enabled is False
+
+
+# ── disabled mode (unconfigured — always heuristic, no network) ────────────────
+#
+# An ArgusConnector built without endpoint/api_key runs in disabled mode: every
+# method returns the heuristic fallback and makes no network calls.
+
+
+def _disabled() -> ArgusConnector:
+    return ArgusConnector()
+
+
+def test_disabled_instantiates_without_args():
+    connector = ArgusConnector()
+    assert connector is not None
+    assert connector._enabled is False
+
+
+def test_disabled_score_finding_returns_risk_score():
+    result = _disabled().score_finding(
+        {"cve_id": "CVE-2024-0001", "severity": "high", "epss_score": 0.3}
+    )
+    assert isinstance(result, RiskScore)
+    assert result.source == "heuristic"
+    assert 0 <= result.score <= 100
+    assert result.rationale_id is None
+
+
+def test_disabled_score_finding_no_network_calls():
+    connector = _disabled()
+    with patch("httpx.Client") as mock_client:
+        connector.score_finding({"severity": "medium"})
+    mock_client.assert_not_called()
+
+
+def test_disabled_score_finding_critical_higher_than_low():
+    connector = _disabled()
+    high_score = connector.score_finding({"severity": "critical"}).score
+    low_score = connector.score_finding({"severity": "low"}).score
+    assert high_score > low_score
+
+
+def test_disabled_score_finding_reachable_bonus():
+    connector = _disabled()
+    base = connector.score_finding({"severity": "medium"}).score
+    boosted = connector.score_finding({"severity": "medium", "reachable": True}).score
+    assert boosted > base
+
+
+def test_disabled_score_finding_chain_bonus():
+    connector = _disabled()
+    base = connector.score_finding({"severity": "medium"}).score
+    boosted = connector.score_finding({"severity": "medium", "in_chain": True}).score
+    assert boosted > base
+
+
+def test_disabled_explain_chain_returns_explanation():
+    chain = {"chain_type": "cve_to_secret", "findings": [{"id": 1}], "edges": []}
+    result = _disabled().explain_chain(chain)
+    assert isinstance(result, Explanation)
+    assert result.source == "heuristic"
+    assert len(result.markdown) > 0
+    assert result.fix_suggestions == []
+
+
+def test_disabled_explain_chain_no_network_calls():
+    connector = _disabled()
+    with patch("httpx.Client") as mock_client:
+        connector.explain_chain({})
+    mock_client.assert_not_called()
+
+
+def test_disabled_fetch_premium_rule_pack_returns_empty():
+    assert _disabled().fetch_premium_rule_pack() == {}
+
+
+def test_disabled_fetch_premium_rule_pack_no_network_calls():
+    connector = _disabled()
+    with patch("httpx.Client") as mock_client:
+        connector.fetch_premium_rule_pack(since="2026-01-01")
+    mock_client.assert_not_called()
+
+
+def test_disabled_get_rule_packs_returns_empty():
+    assert _disabled().get_rule_packs() == []

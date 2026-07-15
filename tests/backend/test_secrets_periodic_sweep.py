@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-import pytest
 
 from src.secrets.periodic_sweep import should_run_periodic_sweep, enqueue_full_history_scan
 

@@ -30,7 +30,6 @@ async def test_sse_stream_receives_event(monkeypatch):
     the streaming body ourselves — this is the correct approach for SSE tests.
     """
     from unittest.mock import MagicMock
-    import src.history.events_router as er
     from src.history.events_router import sse_stream
 
     bus = get_event_bus()
@@ -40,18 +39,6 @@ async def test_sse_stream_receives_event(monkeypatch):
     mock_request.state.user_sub = "user-sse-1"
     mock_request.state.user_role = "admin"
 
-    # Patch _get_user_context so we don't need real source connections
-    monkeypatch.setattr(er, "_get_user_context", lambda req: {
-        "user_id": "user-sse-1",
-        "role": "admin",
-        "orgs": ["test-org"],
-    })
-
-    # Patch require_permission so we don't need real role DB lookups
-    monkeypatch.setattr(er, "require_permission", lambda req, perm: None)
-
-    # Simulate disconnect after we've read enough data
-    disconnect_after = 4  # stop after collecting 4 non-empty lines
     call_count = 0
 
     async def mock_is_disconnected():
@@ -84,7 +71,6 @@ async def test_sse_stream_receives_event(monkeypatch):
         bus.publish(Event(
             event_type="scan.progress",
             data={"tool": "dependencies", "org": "test-org", "percent": 42},
-            org="test-org",
         ))
 
     await asyncio.wait_for(

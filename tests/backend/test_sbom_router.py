@@ -1,311 +1,359 @@
-"""Tests for SBOM export REST endpoints — Phase 18.
+"""Smoke tests for the SBOM REST router — auth + asset-scope enforcement.
 
-Uses a minimal FastAPI app with only the sbom export router.  SBOMs are seeded
-directly into MinIO at the runner-owned paths and served back through the
-rewired router.  Exercises a real testcontainer Postgres + MinIO round-trip.
+Mocks the MinIO and DB layers so we can verify each endpoint gates on
+view_findings and rejects out-of-scope repo_ids and image digests.
 """
 from __future__ import annotations
 
-import json
+import os
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from src.shared.object_store import upload_bytes, get_s3_client
-from src.containers.sbom_store import upsert_sbom as container_upsert_sbom
-from src.sbom.router import router as sbom_export_router
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
+os.environ.setdefault("APP_SECRET", "0" * 64)
+
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
+from src.sbom.router import router as sbom_router  # noqa: E402
+
+_FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+_OTHER_ASSET_ID = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+_REPO_ID = "acme/api"
+_DIGEST = "sha256:" + "a" * 64
+_DIGEST_2 = "sha256:" + "b" * 64
+_VIEWER_PERMS = {"view_findings"}
+
+_FAKE_SBOM = {"bomFormat": "CycloneDX", "specVersion": "1.5", "components": []}
 
 
-SAMPLE_SBOM: dict = {
-    "bomFormat": "CycloneDX",
-    "specVersion": "1.4",
-    "version": 1,
-    "metadata": {
-        "timestamp": "2025-01-01T00:00:00Z",
-        "tools": [{"name": "syft", "version": "1.2.0"}],
-    },
-    "components": [
-        {
-            "type": "library",
-            "bom-ref": "pkg:npm/axios@1.6.0",
-            "name": "axios",
-            "version": "1.6.0",
-            "purl": "pkg:npm/axios@1.6.0",
-            "licenses": [{"license": {"id": "MIT"}}],
-        }
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
+    app = FastAPI()
+    app.include_router(sbom_router)
+
+    @app.middleware("http")
+    async def inject_user(request: Request, call_next):
+        request.state.user_sub = "viewer-1"
+        request.state.user_role = "viewer"
+        request.state.user_role_id = None
+        # /download uses the declarative Depends(Permission(VIEW_FINDINGS))
+        # gate; bypass it here for happy/scope-mocked paths so we can mock
+        # the asset-scope and MinIO layers in isolation.
+        return await call_next(request)
+
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
+    return app
+
+
+
+
+def test_export_repo_returns_sbom_when_in_scope():
+    # Latest snapshot resolved from the scoped Sbom index, then served.
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value="auto-1"), \
+         patch("src.sbom.router.download_json", return_value=_FAKE_SBOM):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/vnd.cyclonedx+json")
+
+
+@pytest.mark.parametrize(
+    "fmt,content_type",
+    [
+        ("cyclonedx-json", "application/vnd.cyclonedx+json"),
+        ("cyclonedx-xml", "application/xml"),
+        ("spdx-json", "application/spdx+json"),
+        ("spdx-tag-value", "text/plain"),
     ],
-    "dependencies": [],
-}
+)
+def test_export_repo_sets_content_type_per_format(fmt, content_type):
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value="auto-1"), \
+         patch("src.sbom.router.download_json", return_value=_FAKE_SBOM):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}&format={fmt}")
 
-ORG = "example-org"
-REPO = "payments-api"
-REPO_ID = f"{ORG}/{REPO}"
-REPO_URL = f"/api/v1/sboms/repo/{REPO_ID}"
-HISTORY_URL = f"/api/v1/sboms/repo/{REPO_ID}/history"
-
-RUN_ID_V1 = "auto-1748700000000"
-RUN_ID_V2 = "auto-1748800000000"  # higher → newer
-
-IMAGE_DIGEST = "sha256:deadbeef" + "0" * 55
-IMAGE_REF = "registry.example.com/myapp:latest"
-
-
-def _dep_key(org: str, run_id: str, repo: str) -> str:
-    """Runner-owned MinIO key for a dependency SBOM."""
-    return f"dependencies/{org}/{run_id}/{repo}/sbom.cdx.json"
-
-
-def _upload_dep_sbom(org: str, run_id: str, repo: str, sbom: dict) -> str:
-    """Upload a dependency SBOM at the runner-owned path; returns the key."""
-    key = _dep_key(org, run_id, repo)
-    upload_bytes(key, json.dumps(sbom).encode(), content_type="application/json")
-    return key
-
-
-@pytest.fixture(autouse=True)
-def _clean_minio():
-    """Delete test objects and Sbom rows before each test for isolation."""
-    import os
-    from src.db.helpers import run_db
-    from src.db.models import Sbom
-    from sqlalchemy import delete
-
-    # Remove Sbom rows for test image digest so container lookups start clean
-    async def _del_sboms(session):
-        await session.execute(
-            delete(Sbom).where(Sbom.commit_sha == IMAGE_DIGEST)
-        )
-
-    run_db(_del_sboms)
-
-    s3 = get_s3_client()
-    bucket = os.environ.get("S3_BUCKET", "scans")
-    for run_id in (RUN_ID_V1, RUN_ID_V2):
-        try:
-            s3.delete_object(Bucket=bucket, Key=_dep_key(ORG, run_id, REPO))
-        except Exception:
-            pass
-    yield
-
-
-@pytest.fixture
-def client() -> TestClient:
-    mini = FastAPI()
-    mini.include_router(sbom_export_router)
-    return TestClient(mini, raise_server_exceptions=True)
-
-
-# ── /repo/{repo_id} ───────────────────────────────────────────────────────────
-
-def test_export_repo_sbom_not_found(client: TestClient):
-    resp = client.get("/api/v1/sboms/repo/example-org/nonexistent-repo")
-    assert resp.status_code == 404
-
-
-def test_export_repo_sbom_cyclonedx_json(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(REPO_URL, params={"format": "cyclonedx-json"})
     assert resp.status_code == 200
-    assert "application/vnd.cyclonedx+json" in resp.headers["content-type"]
-    data = resp.json()
-    assert data["bomFormat"] == "CycloneDX"
-    assert data["components"][0]["name"] == "axios"
-
-
-def test_export_repo_sbom_spdx_json(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(REPO_URL, params={"format": "spdx-json"})
-    assert resp.status_code == 200
-    assert "spdx" in resp.headers["content-type"]
-    data = json.loads(resp.content)
-    assert data["spdxVersion"] == "SPDX-2.3"
-
-
-def test_export_repo_sbom_cyclonedx_xml(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(REPO_URL, params={"format": "cyclonedx-xml"})
-    assert resp.status_code == 200
-    assert "xml" in resp.headers["content-type"]
-    assert b"axios" in resp.content
-
-
-def test_export_repo_sbom_spdx_tag_value(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(REPO_URL, params={"format": "spdx-tag-value"})
-    assert resp.status_code == 200
-    assert "text/plain" in resp.headers["content-type"]
-    assert b"SPDXVersion" in resp.content
-
-
-def test_export_repo_sbom_default_format_is_cyclonedx_json(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["bomFormat"] == "CycloneDX"
-
-
-def test_export_repo_sbom_unknown_format_returns_400(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}", params={"format": "csv"})
-    assert resp.status_code == 400
-
-
-def test_export_repo_sbom_returns_latest_when_multiple(client: TestClient):
-    sbom_v1 = dict(SAMPLE_SBOM)
-    sbom_v1["metadata"] = dict(SAMPLE_SBOM["metadata"])
-    sbom_v1["metadata"]["timestamp"] = "2025-01-01T00:00:00Z"
-
-    sbom_v2 = dict(SAMPLE_SBOM)
-    sbom_v2["metadata"] = dict(SAMPLE_SBOM["metadata"])
-    sbom_v2["metadata"]["timestamp"] = "2025-06-01T00:00:00Z"
-
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, sbom_v1)
-    _upload_dep_sbom(ORG, RUN_ID_V2, REPO, sbom_v2)
-
-    resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}")
-    assert resp.status_code == 200
-    # RUN_ID_V2 sorts higher → should return the v2 SBOM
-    data = resp.json()
-    assert data["metadata"]["timestamp"] == "2025-06-01T00:00:00Z"
-
-
-def test_export_repo_sbom_content_disposition_header(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}")
-    assert "content-disposition" in resp.headers
+    assert resp.headers["content-type"].startswith(content_type)
     assert "attachment" in resp.headers["content-disposition"]
 
 
-# ── /image/{image_digest} ─────────────────────────────────────────────────────
+def test_export_unknown_format_is_400():
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}&format=bogus")
+    assert resp.status_code == 400
 
-def test_export_image_sbom_not_found(client: TestClient):
-    resp = client.get("/api/v1/sboms/image/sha256:nonexistent")
+
+def test_export_repo_404_when_asset_has_no_indexed_run():
+    # No scoped run in the index → 404. There is no unscoped MinIO-prefix
+    # fallback that could otherwise serve a display_name-colliding asset's blob.
+    downloaded = {"v": False}
+
+    def fake_download(key):
+        downloaded["v"] = True
+        return _FAKE_SBOM
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value=None), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}")
+
     assert resp.status_code == 404
-    # No DB row for this digest
-    assert "No SBOM found" in resp.json()["detail"]
+    assert downloaded["v"] is False
 
 
-def test_export_image_sbom_blob_missing(client: TestClient):
-    """Test when DB row exists but MinIO blob is missing."""
-    from src.db.helpers import run_db
-    from src.db.models import Sbom
+def test_export_repo_latest_uses_sbom_index():
+    captured = {"key": None}
 
-    # Create a DB row pointing to a non-existent MinIO key
-    missing_s3_key = "container_scanning/example-org/auto-1748700000000/app/sbom.cdx.json"
+    def fake_download(key):
+        captured["key"] = key
+        return _FAKE_SBOM
 
-    async def _insert_sbom(session):
-        session.add(Sbom(
-            org="example-org",
-            repo=IMAGE_REF,
-            commit_sha=IMAGE_DIGEST,
-            s3_key=missing_s3_key,
-            run_id=RUN_ID_V1,
-        ))
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value="auto-7"), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}")
 
-    run_db(_insert_sbom)
+    assert resp.status_code == 200
+    # Latest key built from the scoped index run id.
+    assert captured["key"] == "dependencies_scanning/acme/auto-7/api/sbom.cdx.json"
 
-    resp = client.get(f"/api/v1/sboms/image/{IMAGE_DIGEST}")
+
+def test_export_repo_with_run_id_fetches_that_snapshot():
+    captured = {"key": None}
+    latest_called = {"v": False}
+
+    def fake_download(key):
+        captured["key"] = key
+        return _FAKE_SBOM
+
+    def fake_latest(*args, **kwargs):
+        latest_called["v"] = True
+        return "auto-LATEST"
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._asset_owns_run", return_value=True), \
+         patch("src.sbom.router._latest_run_id_for_asset", side_effect=fake_latest), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}?run_id=auto-2")
+
+    assert resp.status_code == 200
+    # The caller-supplied snapshot is served only after being bound to the
+    # asset's own runs; the latest-run resolver is not consulted.
+    assert captured["key"] == "dependencies_scanning/acme/auto-2/api/sbom.cdx.json"
+    assert latest_called["v"] is False
+
+
+def test_export_repo_run_id_not_owned_by_asset_is_404():
+    # BOLA regression: a run id that is valid-looking and passes the
+    # display_name scope check but is NOT one of this asset's runs (e.g. a
+    # display_name-colliding sibling's snapshot) must 404 without a fetch.
+    downloaded = {"v": False}
+
+    def fake_download(key):
+        downloaded["v"] = True
+        return _FAKE_SBOM
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router._asset_owns_run", return_value=False), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}?run_id=auto-OTHER")
+
     assert resp.status_code == 404
-    # DB row exists but blob is missing
-    assert "SBOM blob not found" in resp.json()["detail"]
+    assert downloaded["v"] is False
 
 
-def test_export_image_sbom_cyclonedx_json(client: TestClient):
-    container_upsert_sbom(ORG, IMAGE_REF, IMAGE_DIGEST, SAMPLE_SBOM, RUN_ID_V1)
+def test_export_repo_rejects_unsafe_run_id():
+    minio_called = {"v": False}
 
-    resp = client.get(
-        f"/api/v1/sboms/image/{IMAGE_DIGEST}",
-        params={"format": "cyclonedx-json"},
-    )
+    def fake_download(key):
+        minio_called["v"] = True
+        return _FAKE_SBOM
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=True), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}?run_id=../secret")
+
+    assert resp.status_code == 404
+    assert minio_called["v"] is False
+
+
+def test_export_repo_returns_404_when_out_of_scope():
+    called = {"latest": False}
+
+    def fake_latest(*args, **kwargs):
+        called["latest"] = True
+        return "auto-1"
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_OTHER_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=False), \
+         patch("src.sbom.router._latest_run_id_for_asset", side_effect=fake_latest):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}")
+
+    assert resp.status_code == 404
+    # Out-of-scope short-circuits before any run resolution.
+    assert called["latest"] is False
+
+
+def test_export_repo_returns_403_without_permission():
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])):
+        client = TestClient(_make_app(allow_view_findings=False))
+        resp = client.get(f"/api/v1/sboms/export?repo={_REPO_ID}")
+    assert resp.status_code == 403
+
+
+
+
+def test_export_image_returns_sbom_when_in_scope():
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._fetch_container_sbom_by_digest",
+               return_value=(_FAKE_SBOM, None, _FAKE_ASSET_ID)):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?image={_DIGEST}")
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["bomFormat"] == "CycloneDX"
 
 
-def test_export_image_sbom_spdx_json(client: TestClient):
-    container_upsert_sbom(ORG, IMAGE_REF, IMAGE_DIGEST, SAMPLE_SBOM, RUN_ID_V1)
+def test_export_image_returns_404_when_out_of_scope():
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._fetch_container_sbom_by_digest",
+               return_value=(_FAKE_SBOM, None, _OTHER_ASSET_ID)):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/export?image={_DIGEST}")
+    assert resp.status_code == 404
 
-    resp = client.get(
-        f"/api/v1/sboms/image/{IMAGE_DIGEST}",
-        params={"format": "spdx-json"},
-    )
+
+
+
+def test_path_repo_export_returns_404_when_out_of_scope():
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_OTHER_ASSET_ID])), \
+         patch("src.sbom.router._repo_in_scope", return_value=False):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/repo/{_REPO_ID}")
+    assert resp.status_code == 404
+
+
+def test_path_image_export_returns_404_when_out_of_scope():
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._fetch_container_sbom_by_digest",
+               return_value=(_FAKE_SBOM, None, _OTHER_ASSET_ID)):
+        client = TestClient(_make_app())
+        resp = client.get(f"/api/v1/sboms/image/{_DIGEST}")
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# /download — legacy SBOM endpoint, now scoped via resolve_asset_ids +
+# _repo_in_scope (replaces the old require_orgs?org= query-param gate that
+# never intersected with the caller's actual team grants).
+# ---------------------------------------------------------------------------
+
+
+def test_download_returns_sbom_when_repo_in_scope():
+    captured = {"key": None}
+
+    def fake_download(key):
+        captured["key"] = key
+        return _FAKE_SBOM
+
+    with patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value="auto-9"), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/sboms/download?org=acme&repo=api")
     assert resp.status_code == 200
-    data = json.loads(resp.content)
-    assert data["spdxVersion"] == "SPDX-2.3"
+    assert "attachment" in resp.headers["content-disposition"]
+    # Served from the scoped asset's own run, not the shared canonical key.
+    assert captured["key"] == "dependencies_scanning/acme/auto-9/api/sbom.cdx.json"
 
 
-# ── /repo/{repo_id}/history ───────────────────────────────────────────────────
+def test_download_returns_404_when_repo_out_of_scope():
+    """BOLA test: a viewer with VIEW_FINDINGS but no team grant on acme/api
+    must not get the SBOM, and MinIO must not even be queried. _latest_run_id_for_asset
+    returns None for an out-of-scope repo (scope is enforced inside it)."""
+    called = {"minio": False}
 
-def test_history_empty_when_no_entries(client: TestClient):
-    resp = client.get("/api/v1/sboms/repo/example-org/nonexistent-repo/history")
-    assert resp.status_code == 200
-    assert resp.json() == []
+    def fake_download(*args, **kwargs):
+        called["minio"] = True
+        return _FAKE_SBOM
 
-
-def test_history_returns_entries(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}/history")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data) == 1
-    assert data[0]["run_id"] == RUN_ID_V1
-    assert data[0]["key"] == _dep_key(ORG, RUN_ID_V1, REPO)
-    assert "created_at" in data[0]
-    # Regression guard: old field names must not appear
-    assert "manifest_set_hash" not in data[0]
-    assert "blob_pointer" not in data[0]
-    assert "content_hash" not in data[0]
-    assert "tool_version" not in data[0]
+    with patch("src.sbom.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_OTHER_ASSET_ID])), \
+         patch("src.sbom.router._latest_run_id_for_asset", return_value=None), \
+         patch("src.sbom.router.download_json", side_effect=fake_download):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/sboms/download?org=acme&repo=api")
+    assert resp.status_code == 404
+    assert called["minio"] is False
 
 
-def test_history_multiple_versions(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-    _upload_dep_sbom(ORG, RUN_ID_V2, REPO, SAMPLE_SBOM)
+def test_download_returns_403_without_view_findings():
+    """Permission gate fires before scope resolution or MinIO is touched."""
+    called = {"scope": False, "minio": False}
 
-    resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}/history")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data) == 2
-    # Most recent run_id first (lex-sort descending)
-    assert data[0]["run_id"] == RUN_ID_V2
-    assert data[1]["run_id"] == RUN_ID_V1
+    async def fake_scope(*args, **kwargs):
+        called["scope"] = True
+        return [_FAKE_ASSET_ID]
 
+    def fake_minio(*args, **kwargs):
+        called["minio"] = True
+        return _FAKE_SBOM
 
-def test_history_respects_limit(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-    _upload_dep_sbom(ORG, RUN_ID_V2, REPO, SAMPLE_SBOM)
-
-    resp = client.get(
-        f"/api/v1/sboms/repo/{REPO_ID}/history",
-        params={"limit": "1"},
-    )
-    assert resp.status_code == 200
-    assert len(resp.json()) == 1
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False), \
+         patch("src.sbom.router.resolve_asset_ids_from_request", side_effect=fake_scope), \
+         patch("src.sbom.router.download_json", side_effect=fake_minio):
+        client = TestClient(_make_app(allow_view_findings=False))
+        resp = client.get("/api/v1/sboms/download?org=acme&repo=api")
+    assert resp.status_code == 403
+    assert called["scope"] is False
+    assert called["minio"] is False
 
 
-def test_history_limit_out_of_range_returns_422(client: TestClient):
-    resp = client.get(
-        f"/api/v1/sboms/repo/{REPO_ID}/history",
-        params={"limit": "200"},
-    )
-    assert resp.status_code == 422
-
-
-def test_history_entry_has_all_expected_fields(client: TestClient):
-    _upload_dep_sbom(ORG, RUN_ID_V1, REPO, SAMPLE_SBOM)
-
-    resp = client.get(f"/api/v1/sboms/repo/{REPO_ID}/history")
-    data = resp.json()
-    entry = data[0]
-    for field in ("run_id", "created_at", "key"):
-        assert field in entry, f"Field '{field}' missing from history entry"

@@ -3,9 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
 
 from src.sla.policy import SlaPolicy
 from src.sla.service import SlaService
@@ -111,7 +110,7 @@ class TestRecomputeOrg:
                 return None
 
             mock_run_db.side_effect = side_effect
-            count = svc.recompute_org("acme-org")
+            count = svc.recompute(asset_ids=["asset-1"])
             assert count == 2
 
 
@@ -127,7 +126,7 @@ class TestGetBreachSummary:
         ]
 
         with patch("src.sla.service.run_db", return_value=fake_rows):
-            summary = svc.get_breach_summary("acme-org")
+            summary = svc.get_breach_summary(asset_ids=["asset-1"])
 
         assert summary["critical"]["open"] == 2
         assert summary["critical"]["breached"] == 1
@@ -140,6 +139,6 @@ class TestGetBreachSummary:
     def test_breach_pct_zero_when_no_open(self):
         svc = SlaService()
         with patch("src.sla.service.run_db", return_value=[]):
-            summary = svc.get_breach_summary("acme-org")
+            summary = svc.get_breach_summary(asset_ids=["asset-1"])
         for sev in ("critical", "high", "medium", "low"):
             assert summary[sev]["breached_pct"] == 0.0

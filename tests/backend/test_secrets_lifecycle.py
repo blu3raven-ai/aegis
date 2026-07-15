@@ -1,147 +1,151 @@
-"""Tests for secrets pool merge and lifecycle hooks."""
+"""Contract tests for the secret-scanning lifecycle hooks.
+
+Secrets are org-scoped but each finding is keyed per-repo so it inherits that
+repo's grants, while the repo-independent secretIdentity stays in detail for
+UI grouping. These tests lock the identity keying, detail mapping, and the
+repo-scoped canonical_external_ref.
+"""
 from __future__ import annotations
 
-import pytest
+from src.assets.refs import repo_ref
+from src.secrets import lifecycle as lifecycle_mod
+from src.secrets.lifecycle import SecretsHooks
+from src.shared.lifecycle import ScanContext
 
-from src.secrets.pool import merge_pool
-
-
-def _make_finding(*, secret_identity: str, repo: str, fingerprint: str, run_id: str = "run-1") -> dict:
-    return {
-        "secretIdentity": secret_identity,
-        "fingerprint": fingerprint,
-        "organization": "acme",
-        "repository": repo,
-        "source": "trufflehog",
-        "detector": "generic-api-key",
-        "filePath": "src/config.py",
-        "line": 10,
-        "commit": "abc123",
-        "detectedAt": "2026-05-01T00:00:00Z",
-        "classificationHistory": [{"runId": run_id, "scannedAt": "2026-05-01T00:00:00Z"}],
-        "reviewStatus": "new",
-    }
+hooks = SecretsHooks()
 
 
-def test_merge_pool_splits_same_secret_across_repos():
-    # Same secret in two repos → one finding per repo (each scoped to its repo
-    # asset), sharing secretIdentity so the UI can group them.
-    findings = [
-        _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-a1"),
-        _make_finding(secret_identity="sha-aaa", repo="repo-b", fingerprint="fp-a2"),
-    ]
-    result = merge_pool(findings, [])
-    assert len(result) == 2
-    by_repo = {f["repository"]: f for f in result}
-    assert set(by_repo) == {"repo-a", "repo-b"}
-    assert all(f["secretIdentity"] == "sha-aaa" for f in result)
-    # Each finding's locations stay within its own repo.
-    for repo, f in by_repo.items():
-        assert {loc["repository"] for loc in f["locations"]} == {repo}
+# ----- compute_identity_key -------------------------------------------------
+
+def test_identity_key_appends_repo():
+    assert hooks.compute_identity_key({"secretIdentity": "abc", "repository": "acme/api"}) == "abc::acme/api"
 
 
-def test_merge_pool_aggregates_same_secret_same_repo():
-    # Same secret, same repo, different files → one finding with both locations.
-    findings = [
-        _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-1"),
-        _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-2"),
-    ]
-    result = merge_pool(findings, [])
-    assert len(result) == 1
-    assert len(result[0]["locations"]) == 2
+def test_identity_key_bare_when_no_repo():
+    assert hooks.compute_identity_key({"secretIdentity": "abc"}) == "abc"
+    assert hooks.compute_identity_key({"secretIdentity": "abc", "repository": "  "}) == "abc"
 
 
-def test_merge_pool_different_secrets_stay_separate():
-    findings = [
-        _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-a"),
-        _make_finding(secret_identity="sha-bbb", repo="repo-b", fingerprint="fp-b"),
-    ]
-    result = merge_pool(findings, [])
-    assert len(result) == 2
+def test_identity_key_strips_repo_whitespace():
+    assert hooks.compute_identity_key({"secretIdentity": "abc", "repository": "  acme/api  "}) == "abc::acme/api"
 
 
-def test_merge_pool_carries_forward_classification_history():
-    previous = [
-        {
-            "secretIdentity": "sha-aaa",
-            "repository": "repo-a",
-            "classificationHistory": [{"runId": "run-old", "scannedAt": "2026-04-01T00:00:00Z"}],
-            "locations": [{"repository": "repo-a"}],
-        }
-    ]
-    current = [
-        _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-a", run_id="run-new"),
-    ]
-    result = merge_pool(current, previous)
-    assert len(result) == 1
-    history = result[0]["classificationHistory"]
-    run_ids = {e["runId"] for e in history}
-    assert "run-old" in run_ids
-    assert "run-new" in run_ids
+def test_identity_key_empty_when_unidentifiable():
+    # No secretIdentity and build_secret_identity can't derive one (no org).
+    assert hooks.compute_identity_key({"repository": "acme/api"}) == ""
 
 
-def test_merge_pool_deduplicates_classification_by_run_id():
-    previous = [
-        {
-            "secretIdentity": "sha-aaa",
-            "classificationHistory": [{"runId": "run-1", "scannedAt": "2026-04-01T00:00:00Z"}],
-            "locations": [],
-        }
-    ]
-    current = [
-        _make_finding(secret_identity="sha-aaa", repo="repo-a", fingerprint="fp-a", run_id="run-1"),
-    ]
-    result = merge_pool(current, previous)
-    history = result[0]["classificationHistory"]
-    assert len(history) == 1  # Not duplicated
+def test_identity_key_falls_back_to_build(monkeypatch):
+    monkeypatch.setattr(lifecycle_mod, "build_secret_identity", lambda raw: "BUILT")
+    assert hooks.compute_identity_key({"repository": "acme/api"}) == "BUILT::acme/api"
 
 
-def test_merge_pool_empty_inputs():
-    assert merge_pool([], []) == []
+# ----- simple hooks ---------------------------------------------------------
+
+def test_initial_state_open():
+    assert hooks.initial_state({}) == "open"
 
 
-from src.secrets.lifecycle import secrets_hooks
+def test_should_mark_fixed_never():
+    # Secrets are never auto-resolved by absence from a later scan.
+    assert hooks.should_mark_fixed("abc::acme/api", {}) is False
 
 
-def test_secrets_hooks_identity_key_no_org_prefix():
-    raw = {"secretIdentity": "sha256_abc123", "organization": "acme"}
-    key = secrets_hooks.compute_identity_key(raw)
-    assert key == "sha256_abc123"
-    assert "::" not in key  # No org prefix
+def test_extract_repo():
+    assert hooks.extract_repo({"repository": "acme/api"}) == "acme/api"
+    assert hooks.extract_repo({"repository": "  acme/api  "}) == "acme/api"
+    assert hooks.extract_repo({"repository": ""}) is None
+    assert hooks.extract_repo({}) is None
 
 
-def test_secrets_hooks_initial_state():
-    assert secrets_hooks.initial_state({}) == "open"
+def test_extract_severity_defaults_high():
+    assert hooks.extract_severity({"severity": "low"}) == "low"
+    assert hooks.extract_severity({}) == "high"
 
 
-def test_secrets_hooks_extract_repo_returns_repo():
-    assert secrets_hooks.extract_repo({"repository": "some-repo"}) == "some-repo"
-    assert secrets_hooks.extract_repo({}) is None
+# ----- extract_detail -------------------------------------------------------
 
-
-def test_secrets_hooks_extract_detail_includes_locations():
+def test_extract_detail_maps_fields_and_detector_fallback():
     raw = {
-        "secretIdentity": "sha-aaa",
-        "fingerprint": "fp-1",
-        "detector": "generic-api-key",
-        "source": "trufflehog",
-        "locations": [{"repository": "repo-a"}],
-        "classificationHistory": [{"runId": "r1"}],
-        "repository": "repo-a",
-        "filePath": "config.py",
-        "line": 5,
-        "commit": "abc",
+        "organization": "acme", "secretIdentity": "abc", "fingerprint": "fp",
+        "ruleID": "aws-access-key",  # detector missing -> falls back to ruleID
+        "source": "github", "locations": [{"file": "x"}], "repository": "acme/api",
+        "filePath": "config.env", "line": 12, "detectedAt": "2026-06-28T00:00:00Z",
+        "secretSnippet": "AKIA…",
     }
-    detail = secrets_hooks.extract_detail(raw)
-    assert detail["secretIdentity"] == "sha-aaa"
-    assert detail["locations"] == [{"repository": "repo-a"}]
-    assert detail["repository"] == "repo-a"
-    assert detail["filePath"] == "config.py"
+    d = hooks.extract_detail(raw)
+    assert d["detector"] == "aws-access-key"
+    assert d["secretIdentity"] == "abc"
+    assert d["repository"] == "acme/api"
+    assert d["line"] == 12
+    assert d["locations"] == [{"file": "x"}]
+    # Defaults for absent optionals.
+    assert d["commit"] == ""
+    assert d["raw"] == {}
+    assert d["aiReasoning"] is None
 
 
-def test_secrets_hooks_should_mark_fixed_returns_false():
-    assert secrets_hooks.should_mark_fixed("any-key", {}) is False
+def test_extract_detail_carries_repo_html_url():
+    d = hooks.extract_detail({"detector": "x", "repo_html_url": "https://gitlab.acme-corp.internal/acme/api"})
+    assert d["repoHtmlUrl"] == "https://gitlab.acme-corp.internal/acme/api"
+    # Absent -> empty string (renders no view-in-repo link).
+    assert hooks.extract_detail({"detector": "x"})["repoHtmlUrl"] == ""
 
 
-def test_secrets_hooks_should_mark_fixed_ignores_kwargs():
-    assert secrets_hooks.should_mark_fixed("any-key", {"filePath": "x"}, org="acme", run_id="r1") is False
+def test_extract_detail_prefers_detector_over_rule_id():
+    d = hooks.extract_detail({"detector": "trufflehog-aws", "ruleID": "aws-access-key"})
+    assert d["detector"] == "trufflehog-aws"
+
+
+def test_extract_detail_carries_verification_fields_when_present():
+    # The runner verifier writes a verdict + rotation runbook onto the raw
+    # finding; these must survive extract_detail so upsert_finding can promote
+    # them to the typed columns (they were previously dropped by the allowlist).
+    raw = {
+        "secretIdentity": "abc", "repository": "acme/api",
+        "verdict": "confirmed",
+        "evidence": {"why": "key is live"},
+        "exploit_chain": ["step1", "step2"],
+        "verification_metadata": {"model": "argus"},
+        "recommended_fix": {
+            "kind": "rotation",
+            "title": "Rotate the AWS key",
+            "steps": ["Revoke the key", "Issue a new key"],
+        },
+    }
+    d = hooks.extract_detail(raw)
+    assert d["verdict"] == "confirmed"
+    assert d["evidence"] == {"why": "key is live"}
+    assert d["exploit_chain"] == ["step1", "step2"]
+    assert d["verification_metadata"] == {"model": "argus"}
+    assert d["recommended_fix"]["kind"] == "rotation"
+    assert d["recommended_fix"]["title"] == "Rotate the AWS key"
+
+
+def test_extract_detail_omits_verification_fields_when_absent():
+    # Unverified findings keep a clean detail — no null verification keys.
+    d = hooks.extract_detail({"secretIdentity": "abc", "repository": "acme/api"})
+    for key in ("verdict", "evidence", "exploit_chain", "verification_metadata", "recommended_fix"):
+        assert key not in d
+
+
+# ----- canonical_external_ref ----------------------------------------------
+
+def _ctx(source_type):
+    return ScanContext(tool="secret_scanning", org="acme", run_id="r1", source_type=source_type)
+
+
+def test_external_ref_scopes_to_repo():
+    ctx = _ctx("github")
+    ref, kind = hooks.canonical_external_ref(ctx, {"repository": "acme/api"})
+    # name drops the owner prefix; org comes from the (normalized) context.
+    assert ref == repo_ref("github", ctx.org, "api")
+    assert kind == "repo"
+
+
+def test_external_ref_none_without_repo():
+    assert hooks.canonical_external_ref(_ctx("github"), {"repository": ""}) is None
+
+
+def test_external_ref_none_without_source_type():
+    assert hooks.canonical_external_ref(_ctx(None), {"repository": "acme/api"}) is None

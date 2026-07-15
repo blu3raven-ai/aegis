@@ -103,7 +103,7 @@ Copy `.env.example` to `.env` and configure:
 ### Backend
 
 ```bash
-cd backend && python -m pytest src/tests/ -v
+cd backend && python -m pytest ../tests/backend/ -v
 ```
 
 ### Frontend
@@ -210,7 +210,7 @@ aegis/
 2. **Backend ingest** — `backend/src/<name>/` with `ingest.py`, `lifecycle.py`, `scanner.py` (orchestration), and a REST router
 3. **Frontend pages** — `frontend/app/(app)/<name>/` with the findings table and scanner detail views
 4. **GraphQL** — add a resolver inside the relevant namespace type in `backend/src/graphql/schema.py` or the bounded-context resolver file
-5. **Tests** — `backend/src/tests/test_<name>*.py` and frontend tests alongside the components
+5. **Tests** — `tests/backend/test_<name>*.py` and frontend tests alongside the components
 
 ### Resetting the database
 

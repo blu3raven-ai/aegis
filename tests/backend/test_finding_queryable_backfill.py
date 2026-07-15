@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import patch
 
-import pytest
 from sqlalchemy import delete as sa_delete, select
 
 from src.db.helpers import run_db
@@ -82,26 +81,29 @@ _NO_QUERYABLE_DETAIL = {
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _clean(org: str) -> None:
+# Findings carry no org/repo column; tests isolate their rows by namespacing
+# the identity_key (``<ns>::<key>``) instead.
+def _clean(ns: str) -> None:
     async def _del(session):
         await session.execute(
-            sa_delete(Finding).where(Finding.tool == _TOOL, Finding.org == org)
+            sa_delete(Finding).where(
+                Finding.tool == _TOOL,
+                Finding.identity_key.like(f"{ns}::%"),
+            )
         )
     run_db(_del)
 
 
-def _seed(org: str, identity_key: str, detail: dict) -> Finding:
+def _seed(ns: str, identity_key: str, detail: dict) -> Finding:
     """Insert a Finding directly, bypassing upsert_finding, to simulate legacy data."""
     async def _q(session):
         f = Finding(
             tool=_TOOL,
-            org=org,
-            repo="acme-org/repo",
-            identity_key=identity_key,
+            identity_key=f"{ns}::{identity_key}",
             state="open",
             severity="high",
             detail=detail,
-            # All 5 typed columns intentionally left NULL
+            # All typed columns intentionally left NULL
         )
         session.add(f)
         await session.flush()
@@ -109,24 +111,23 @@ def _seed(org: str, identity_key: str, detail: dict) -> Finding:
     return run_db(_q)
 
 
-def _fetch(org: str, identity_key: str) -> Finding | None:
+def _fetch(ns: str, identity_key: str) -> Finding | None:
     async def _q(session):
         result = await session.execute(
             select(Finding).where(
                 Finding.tool == _TOOL,
-                Finding.org == org,
-                Finding.identity_key == identity_key,
+                Finding.identity_key == f"{ns}::{identity_key}",
             )
         )
         return result.scalars().first()
     return run_db(_q)
 
 
-def _fetch_all(org: str) -> list[Finding]:
+def _fetch_all(ns: str) -> list[Finding]:
     async def _q(session):
         result = await session.execute(
             select(Finding)
-            .where(Finding.tool == _TOOL, Finding.org == org)
+            .where(Finding.tool == _TOOL, Finding.identity_key.like(f"{ns}::%"))
             .order_by(Finding.id)
         )
         return list(result.scalars().all())
@@ -223,7 +224,7 @@ def test_idempotency_second_run_skips_populated():
         _seed(org, f"idem-{i}", _CODE_SCANNING_DETAIL)
 
     # First run.
-    stats1 = _run_backfill()
+    _run_backfill()
 
     rows_after_first = _fetch_all(org)
     assert len(rows_after_first) == 3
@@ -318,9 +319,6 @@ def test_dry_run_no_writes():
 
     for i in range(3):
         _seed(org, f"dry-{i}", _CODE_SCANNING_DETAIL)
-
-    rows_before = _fetch_all(org)
-    ids = [r.id for r in rows_before]
 
     stats = _run_backfill(dry_run=True)
 

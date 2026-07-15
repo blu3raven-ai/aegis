@@ -26,32 +26,7 @@ def test_read_checkpoints_returns_empty_when_no_data():
     assert isinstance(result, dict)
 
 
-def test_write_checkpoint_for_repo_writes_repo_checkpoint():
-    from src.secrets.pool import read_checkpoints, write_checkpoint_for_repo
 
-    write_checkpoint_for_repo("my-repo", "abc123", "2026-04-01T00:00:00Z", org="testorg")
-
-    checkpoints = read_checkpoints()
-    assert checkpoints["my-repo"]["lastCommitSha"] == "abc123"
-    assert checkpoints["my-repo"]["lastScannedAt"] == "2026-04-01T00:00:00Z"
-
-
-def test_write_checkpoint_for_repo_merges_existing_repos():
-    from src.secrets.pool import read_checkpoints, write_checkpoint_for_repo
-
-    write_checkpoint_for_repo("repo-a", "aaa", "2026-04-01T00:00:00Z", org="testorg")
-    write_checkpoint_for_repo("repo-b", "bbb", "2026-04-02T00:00:00Z", org="testorg")
-
-    checkpoints = read_checkpoints()
-    assert "repo-a" in checkpoints
-    assert "repo-b" in checkpoints
-
-
-def test_reset_checkpoints():
-    from src.secrets.pool import reset_checkpoints
-
-    # DB-backed: should not raise
-    reset_checkpoints(org="testorg")
 
 
 def test_get_scan_start_date_returns_earliest_date():

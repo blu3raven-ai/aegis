@@ -12,7 +12,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.kev.fetcher import (
-    CISA_KEV_JSON_URL,
     _normalise_entry,
     _parse_date,
     _parse_ransomware,

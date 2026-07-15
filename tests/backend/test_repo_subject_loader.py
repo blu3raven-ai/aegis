@@ -1,160 +1,126 @@
-"""Unit tests for the rules repo subject loader."""
+"""DB-backed coverage for the scanner-coverage subject loader.
+
+`load_repo_subject` builds the RuleRepoSubject the scanner-coverage evaluator
+consumes. It derives per-tool coverage from the most-recent *completed* ScanRun
+per tool, a single deterministic `last_scan_age_days` from the injected clock,
+and the human-readable repo_id. These are the exact inputs a coverage rule fires
+on, so a regression here silently mis-evaluates coverage.
+"""
 from __future__ import annotations
 
+import os
+import uuid
 from datetime import datetime, timedelta, timezone
 
+os.environ.setdefault("APP_SECRET", "0" * 64)
+
 import pytest
+import pytest_asyncio
 from sqlalchemy import delete
 
-from src.db.helpers import run_db
-from src.db.models import Repo, ScanRun
+from src.db.models import Asset, ScanRun
 from src.rules.repo_subject_loader import load_repo_subject
 
-
-_ORG = "org-loader-a"
-_REPO = "repo-1"
+_NOW = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 
-@pytest.fixture(autouse=True)
-def _clean_tables():
-    async def _del(session):
-        await session.execute(delete(ScanRun))
-        await session.execute(delete(Repo))
-
-    run_db(_del)
-    yield
-    run_db(_del)
-
-
-def _seed_repo(
-    *,
-    org: str = _ORG,
-    repo: str = _REPO,
-    tier: str | None = "production",
-    archived: bool = False,
-    labels: list[str] | None = None,
-    image_registry: str | None = "ghcr.io",
-) -> int:
-    async def _insert(session):
-        r = Repo(
-            org=org,
-            repo=repo,
-            tier=tier,
-            archived=archived,
-            labels=labels,
-            image_registry=image_registry,
+@pytest_asyncio.fixture
+async def asset(db_session):
+    asset_id = str(uuid.uuid4())
+    db_session.add(
+        Asset(
+            id=asset_id,
+            type="repo",
+            source="source_connection",
+            external_ref=f"github:acme-org/{asset_id}",
+            display_name="acme-org/widgets",
+            labels=["team-core"],
+            tier="production",
         )
-        session.add(r)
-        await session.flush()
-        return r.id
+    )
+    await db_session.commit()
+    yield asset_id
+    await db_session.execute(delete(ScanRun).where(ScanRun.asset_id == asset_id))
+    await db_session.execute(delete(Asset).where(Asset.id == asset_id))
+    await db_session.commit()
 
-    return run_db(_insert)
 
-
-def _seed_scan_run(
-    *,
-    scan_id: str,
-    tool: str,
-    org: str = _ORG,
-    status: str = "completed",
-    finished_at: datetime | None = None,
-) -> None:
-    async def _insert(session):
-        session.add(ScanRun(
-            id=scan_id,
+async def _add_run(db_session, asset_id, *, tool, status, finished_at):
+    db_session.add(
+        ScanRun(
+            id=f"run-{uuid.uuid4()}",
             tool=tool,
-            org=org,
+            asset_id=asset_id,
             status=status,
             finished_at=finished_at,
-        ))
-
-    run_db(_insert)
-
-
-def _load(repo_id: int, *, now: datetime | None = None):
-    snapshot_now = now if now is not None else datetime.now(timezone.utc)
-
-    async def _run(session):
-        repo_row = await session.get(Repo, repo_id)
-        return await load_repo_subject(repo_row, session, now=snapshot_now)
-
-    return run_db(_run)
-
-
-def test_load_repo_subject_populates_all_fields_from_repo():
-    repo_id = _seed_repo(
-        tier="production",
-        labels=["foo"],
-        archived=False,
-        image_registry="ghcr.io",
+        )
     )
-    now = datetime.now(timezone.utc)
-    ts_deps = now - timedelta(hours=2)
-    ts_secrets = now - timedelta(hours=1)
-    _seed_scan_run(scan_id="sr-deps", tool="dependencies_scanning", finished_at=ts_deps)
-    _seed_scan_run(scan_id="sr-secrets", tool="secret_scanning", finished_at=ts_secrets)
-
-    subject = _load(repo_id, now=now)
-
-    assert subject.repo_id == f"{_ORG}/{_REPO}"
-    assert subject.repo_labels == ["foo"]
-    assert subject.tier == "production"
-    assert subject.archived is False
-    assert subject.image_registry == "ghcr.io"
-    # Ordering matches _SCANNER_TYPES ordering (dependencies before secrets).
-    assert subject.scanners_with_coverage == ["dependencies_scanning", "secret_scanning"]
-    assert subject.last_scanned_at is not None
-    assert abs((subject.last_scanned_at - ts_secrets).total_seconds()) < 1
-    # Last scan was an hour ago — fewer than 1 day, so .days == 0.
-    assert subject.last_scan_age_days == 0
+    await db_session.commit()
 
 
-def test_load_repo_subject_no_scans():
-    repo_id = _seed_repo()
-
-    subject = _load(repo_id)
-
-    assert subject.scanners_with_coverage == []
-    assert subject.last_scanned_at is None
-    assert subject.last_scan_age_days is None
-
-
-def test_load_repo_subject_archived_repo():
-    repo_id = _seed_repo(archived=True)
-
-    subject = _load(repo_id)
-
-    assert subject.archived is True
-
-
-def test_load_repo_subject_ignores_failed_scans():
-    repo_id = _seed_repo()
-    _seed_scan_run(
-        scan_id="sr-failed",
-        tool="dependencies_scanning",
-        status="failed",
-        finished_at=datetime.now(timezone.utc),
+@pytest.mark.asyncio
+async def test_no_completed_runs_yields_empty_coverage(db_session, asset):
+    subj = await load_repo_subject(
+        (await db_session.get(Asset, asset)), db_session, now=_NOW
     )
-    _seed_scan_run(
-        scan_id="sr-running",
-        tool="code_scanning",
-        status="running",
+    assert subj.repo_id == "acme-org/widgets"
+    assert subj.repo_labels == ["team-core"]
+    assert subj.tier == "production"
+    assert subj.scanners_with_coverage == []
+    assert subj.last_scanned_at is None
+    assert subj.last_scan_age_days is None
+
+
+@pytest.mark.asyncio
+async def test_completed_runs_populate_coverage_and_age(db_session, asset):
+    await _add_run(
+        db_session, asset, tool="dependencies_scanning", status="completed",
+        finished_at=_NOW - timedelta(days=3),
+    )
+    await _add_run(
+        db_session, asset, tool="secret_scanning", status="completed",
+        finished_at=_NOW - timedelta(days=10),
+    )
+    subj = await load_repo_subject(
+        (await db_session.get(Asset, asset)), db_session, now=_NOW
+    )
+    assert set(subj.scanners_with_coverage) == {"dependencies_scanning", "secret_scanning"}
+    # last_scanned_at is the most-recent finish across tools (3 days ago).
+    assert subj.last_scanned_at == _NOW - timedelta(days=3)
+    assert subj.last_scan_age_days == 3
+
+
+@pytest.mark.asyncio
+async def test_non_completed_runs_do_not_count_as_coverage(db_session, asset):
+    await _add_run(
+        db_session, asset, tool="code_scanning", status="running",
         finished_at=None,
     )
+    await _add_run(
+        db_session, asset, tool="container_scanning", status="failed",
+        finished_at=_NOW - timedelta(days=1),
+    )
+    subj = await load_repo_subject(
+        (await db_session.get(Asset, asset)), db_session, now=_NOW
+    )
+    # Neither a running nor a failed run grants coverage.
+    assert subj.scanners_with_coverage == []
+    assert subj.last_scanned_at is None
 
-    subject = _load(repo_id)
 
-    assert subject.scanners_with_coverage == []
-    assert subject.last_scanned_at is None
-    assert subject.last_scan_age_days is None
-
-
-def test_load_repo_subject_last_scan_age_days_computed_from_now():
-    repo_id = _seed_repo()
-    now = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
-    ts = now - timedelta(days=10, hours=3)
-    _seed_scan_run(scan_id="sr-deps", tool="dependencies_scanning", finished_at=ts)
-
-    subject = _load(repo_id, now=now)
-
-    assert subject.last_scan_age_days == 10
+@pytest.mark.asyncio
+async def test_most_recent_completed_run_per_tool_wins(db_session, asset):
+    await _add_run(
+        db_session, asset, tool="dependencies_scanning", status="completed",
+        finished_at=_NOW - timedelta(days=20),
+    )
+    await _add_run(
+        db_session, asset, tool="dependencies_scanning", status="completed",
+        finished_at=_NOW - timedelta(days=2),
+    )
+    subj = await load_repo_subject(
+        (await db_session.get(Asset, asset)), db_session, now=_NOW
+    )
+    assert subj.scanners_with_coverage == ["dependencies_scanning"]
+    # The newer of the two completed runs drives the age.
+    assert subj.last_scan_age_days == 2

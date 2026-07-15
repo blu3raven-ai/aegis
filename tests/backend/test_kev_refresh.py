@@ -22,8 +22,9 @@ class TestRefreshKevCatalog:
         mock_resp.json.return_value = payload
         mock_http_client_cls.return_value.__enter__.return_value.get.return_value = mock_resp
 
-        # Mock the service so we don't need a real DB connection
-        with patch("src.kev.service.run_db", return_value=1):
+        # Mock the service so we don't need a real DB connection. upsert_catalog
+        # returns the list of newly-added CVE IDs, so the mock returns a list.
+        with patch("src.kev.service.run_db", return_value=["CVE-2024-99999"]):
             result = refresh_kev_catalog()
 
         assert result["fetched"] == 1
@@ -60,10 +61,11 @@ class TestRefreshKevCatalog:
         mock_resp.json.return_value = payload
         mock_http_client_cls.return_value.__enter__.return_value.get.return_value = mock_resp
 
-        with patch("src.kev.service.run_db", return_value=0):
+        with patch("src.kev.service.run_db", return_value=[]):
             result = refresh_kev_catalog()
 
-        assert result == {"fetched": 2, "new": 0}
+        assert result["fetched"] == 2
+        assert result["new"] == 0
 
     @patch("src.kev.fetcher.httpx.Client")
     def test_empty_catalog_handled(self, mock_http_client_cls):
@@ -76,7 +78,8 @@ class TestRefreshKevCatalog:
         mock_resp.json.return_value = payload
         mock_http_client_cls.return_value.__enter__.return_value.get.return_value = mock_resp
 
-        with patch("src.kev.service.run_db", return_value=0):
+        with patch("src.kev.service.run_db", return_value=[]):
             result = refresh_kev_catalog()
 
-        assert result == {"fetched": 0, "new": 0}
+        assert result["fetched"] == 0
+        assert result["new"] == 0

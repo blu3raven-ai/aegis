@@ -8,7 +8,7 @@ Tests 4-7: verify that the 4 lifecycle write paths call
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import delete as sa_delete
@@ -48,28 +48,36 @@ class _MinimalHooks(LifecycleHooks):
     def extract_detail(self, raw: dict) -> dict:
         return raw.get("detail", {})
 
+    def canonical_external_ref(self, ctx, raw) -> tuple[str, str] | None:
+        # Org-scoped path: findings keep asset_id NULL, so apply_lifecycle
+        # resolves them via the unconditional asset_id-IS-NULL prefetch.
+        return None
+
 
 _HOOKS = _MinimalHooks()
 _TOOL = "code_scanning"
 
 
-def _clean(org: str) -> None:
+def _clean(keys: list[str]) -> None:
     async def _del(session):
         await session.execute(
-            sa_delete(Finding).where(Finding.tool == _TOOL, Finding.org == org)
+            sa_delete(Finding).where(
+                Finding.tool == _TOOL, Finding.identity_key.in_(keys)
+            )
         )
         await session.execute(
-            sa_delete(Decision).where(Decision.tool == _TOOL, Decision.org == org)
+            sa_delete(Decision).where(
+                Decision.tool == _TOOL, Decision.identity_key.in_(keys)
+            )
         )
     run_db(_del)
 
 
-def _seed_open_finding(org: str, key: str) -> None:
+def _seed_open_finding(key: str) -> None:
     async def _q(session):
         f = Finding(
             tool=_TOOL,
-            org=org,
-            repo="acme-org/api",
+            asset_id=None,
             identity_key=key,
             state="open",
             severity="high",
@@ -79,12 +87,11 @@ def _seed_open_finding(org: str, key: str) -> None:
     run_db(_q)
 
 
-def _seed_dismissed_finding(org: str, key: str) -> None:
+def _seed_dismissed_finding(key: str) -> None:
     async def _q(session):
         f = Finding(
             tool=_TOOL,
-            org=org,
-            repo="acme-org/api",
+            asset_id=None,
             identity_key=key,
             state="dismissed",
             severity="high",
@@ -93,7 +100,7 @@ def _seed_dismissed_finding(org: str, key: str) -> None:
         session.add(f)
         await session.flush()
         await upsert_decision(
-            session, tool=_TOOL, org=org, identity_key=key,
+            session, tool=_TOOL, asset_id=None, identity_key=key,
             status="dismissed", reason="Risk is tolerable", decided_by="tester",
         )
     run_db(_q)
@@ -216,16 +223,18 @@ def test_apply_lifecycle_triggers_refresh():
     """apply_lifecycle calls request_home_views_refresh after DB work."""
     org = "refresh-apply-lifecycle"
     key = "lifecycle-k1"
-    _clean(org)
+    _clean([key])
     # Seed an existing finding so apply_lifecycle takes the update path,
     # avoiding the upsert_finding → compliance auto-mapper code path
     # (which queries compliance_control_mappings, absent in the test schema).
-    _seed_open_finding(org, key)
+    _seed_open_finding(key)
 
     with patch(
         "src.shared.lifecycle.request_home_views_refresh"
     ) as mock_refresh:
-        ctx = ScanContext(tool=_TOOL, org=org, run_id="run-test")
+        ctx = ScanContext(
+            tool=_TOOL, org=org, run_id="run-test", source_type="source_connection"
+        )
         apply_lifecycle(_HOOKS, ctx, [{"key": key}])
 
     mock_refresh.assert_called_once()
@@ -235,8 +244,8 @@ def test_dismiss_finding_triggers_refresh():
     """dismiss_finding calls request_home_views_refresh after DB work."""
     org = "refresh-dismiss"
     key = "dismiss-key"
-    _clean(org)
-    _seed_open_finding(org, key)
+    _clean([key])
+    _seed_open_finding(key)
 
     with patch(
         "src.shared.lifecycle.request_home_views_refresh"
@@ -256,8 +265,8 @@ def test_reopen_finding_triggers_refresh():
     """reopen_finding calls request_home_views_refresh after DB work."""
     org = "refresh-reopen"
     key = "reopen-key"
-    _clean(org)
-    _seed_dismissed_finding(org, key)
+    _clean([key])
+    _seed_dismissed_finding(key)
 
     with patch(
         "src.shared.lifecycle.request_home_views_refresh"
@@ -271,9 +280,9 @@ def test_bulk_dismiss_triggers_refresh():
     """bulk_dismiss calls request_home_views_refresh after DB work."""
     org = "refresh-bulk-dismiss"
     keys = ["bulk-k1", "bulk-k2"]
-    _clean(org)
+    _clean(keys)
     for k in keys:
-        _seed_open_finding(org, k)
+        _seed_open_finding(k)
 
     with patch(
         "src.shared.lifecycle.request_home_views_refresh"

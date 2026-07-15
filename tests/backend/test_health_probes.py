@@ -10,7 +10,6 @@ from src.health.probes import (
     ProbeResult,
     probe_argus,
     probe_connected_runners,
-    probe_correlation_engine,
     probe_minio,
     probe_postgres,
     probe_recent_scans,
@@ -167,53 +166,6 @@ class TestProbeRecentScans:
         assert "table missing" in result.error
 
 
-class TestProbeCorrelationEngine:
-    @pytest.mark.asyncio
-    async def test_skipped_when_disabled(self, monkeypatch):
-        monkeypatch.delenv("AEGIS_CORRELATION_ENABLED", raising=False)
-        result = await probe_correlation_engine()
-        assert result.status == "skipped"
-
-    @pytest.mark.asyncio
-    async def test_ok_when_engine_running(self, monkeypatch):
-        monkeypatch.setenv("AEGIS_CORRELATION_ENABLED", "true")
-        mock_engine = MagicMock()
-        mock_engine.is_running = True
-        mock_app = MagicMock()
-        mock_app.state.correlation_engine = mock_engine
-        mock_main_module = MagicMock()
-        mock_main_module.app = mock_app
-        with patch.dict("sys.modules", {"src.main": mock_main_module}):
-            result = await probe_correlation_engine()
-        assert result.status == "ok"
-        assert result.details["is_running"] is True
-
-    @pytest.mark.asyncio
-    async def test_degraded_when_engine_stopped(self, monkeypatch):
-        monkeypatch.setenv("AEGIS_CORRELATION_ENABLED", "true")
-        mock_engine = MagicMock()
-        mock_engine.is_running = False
-        mock_app = MagicMock()
-        mock_app.state.correlation_engine = mock_engine
-        mock_main_module = MagicMock()
-        mock_main_module.app = mock_app
-        with patch.dict("sys.modules", {"src.main": mock_main_module}):
-            result = await probe_correlation_engine()
-        assert result.status == "degraded"
-
-    @pytest.mark.asyncio
-    async def test_degraded_when_engine_not_in_app_state(self, monkeypatch):
-        monkeypatch.setenv("AEGIS_CORRELATION_ENABLED", "true")
-        mock_state = MagicMock(spec=[])
-        mock_app = MagicMock()
-        mock_app.state = mock_state
-        mock_main_module = MagicMock()
-        mock_main_module.app = mock_app
-        with patch.dict("sys.modules", {"src.main": mock_main_module}):
-            result = await probe_correlation_engine()
-        assert result.status == "degraded"
-
-
 class TestProbeArgus:
     @pytest.mark.asyncio
     async def test_skipped_when_no_endpoint(self, monkeypatch):
@@ -276,17 +228,16 @@ class TestProbeArgus:
 
 class TestRunAllProbes:
     @pytest.mark.asyncio
-    async def test_returns_all_six_probes(self):
+    async def test_returns_all_probes(self):
         ok = ProbeResult(name="x", status="ok", duration_ms=1, details={})
         async def _ok(*_): return ok
         with patch("src.health.probes.probe_postgres", _ok), \
              patch("src.health.probes.probe_minio", _ok), \
              patch("src.health.probes.probe_connected_runners", _ok), \
              patch("src.health.probes.probe_recent_scans", _ok), \
-             patch("src.health.probes.probe_correlation_engine", _ok), \
              patch("src.health.probes.probe_argus", _ok):
             results = await run_all_probes()
-        assert len(results) == 6
+        assert len(results) == 5
         assert all(isinstance(r, ProbeResult) for r in results)
 
     @pytest.mark.asyncio
@@ -298,10 +249,9 @@ class TestRunAllProbes:
              patch("src.health.probes.probe_minio", _ok), \
              patch("src.health.probes.probe_connected_runners", _ok), \
              patch("src.health.probes.probe_recent_scans", _ok), \
-             patch("src.health.probes.probe_correlation_engine", _ok), \
              patch("src.health.probes.probe_argus", _ok):
             results = await run_all_probes()
-        assert len(results) == 6
+        assert len(results) == 5
         postgres_result = next(r for r in results if r.name == "postgres")
         assert postgres_result.status == "fail"
         assert "kaboom" in (postgres_result.error or "")
@@ -323,7 +273,6 @@ class TestRunAllProbes:
                  patch("src.health.probes.probe_minio", _ok), \
                  patch("src.health.probes.probe_connected_runners", _ok), \
                  patch("src.health.probes.probe_recent_scans", _ok), \
-                 patch("src.health.probes.probe_correlation_engine", _ok), \
                  patch("src.health.probes.probe_argus", _ok):
                 results = await run_all_probes()
         postgres_result = next(r for r in results if r.name == "postgres")

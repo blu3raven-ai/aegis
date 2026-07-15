@@ -1,197 +1,87 @@
-"""Unit tests for the rule-based compliance mapper."""
+"""Contract tests for the rule-based compliance mapper.
+
+map_finding is fed Finding.tool / Finding.severity / Finding.detail by
+auto_mapper, so the scanner_type guards must match the *canonical* tool values
+(dependencies_scanning, container_scanning, code_scanning, secret_scanning,
+iac_scanning). These tests lock each rule and guard against the guards drifting
+back to non-canonical strings (which silently produced no mappings).
+"""
 from __future__ import annotations
 
-from src.compliance.mapper import map_finding, map_chain, _MappingDraft
+from src.compliance.mapper import map_finding
 
 
-def _index(drafts: list[_MappingDraft]) -> dict[tuple[str, str], _MappingDraft]:
-    return {(d.framework, d.control_id): d for d in drafts}
+def _ctrls(scanner_type, severity=None, metadata=None):
+    return {
+        (d.framework, d.control_id)
+        for d in map_finding(scanner_type=scanner_type, severity=severity, metadata=metadata)
+    }
 
 
-def _assert_contains(drafts: list[_MappingDraft], framework: str, control_id: str) -> _MappingDraft:
-    idx = _index(drafts)
-    key = (framework, control_id)
-    assert key in idx, f"Expected ({framework}, {control_id}); got {list(idx)}"
-    return idx[key]
+def test_dependencies_high_impact_maps_vuln_and_monitoring():
+    assert _ctrls("dependencies_scanning", "critical") == {
+        ("soc2", "CC6.8"), ("iso27001", "A.8.8"), ("pci-dss", "6.3.3"),
+        ("pci-dss", "6.3.1"), ("soc2", "CC7.1"), ("soc2", "CC7.2"),
+    }
 
 
-def _assert_not_contains(drafts: list[_MappingDraft], framework: str, control_id: str) -> None:
-    idx = _index(drafts)
-    assert (framework, control_id) not in idx, f"Did NOT expect ({framework}, {control_id})"
+def test_dependencies_low_severity_only_monitoring():
+    # Rule 1 (vuln) is high-impact only; Rule 2 (monitoring) fires at any severity.
+    assert _ctrls("dependencies_scanning", "low") == {("soc2", "CC7.1")}
 
 
-def _assert_confidence_valid(drafts: list[_MappingDraft]) -> None:
-    for d in drafts:
-        assert 0.0 <= d.confidence <= 1.0, f"Confidence {d.confidence} out of range"
+def test_container_high_impact_matches_dependencies():
+    assert _ctrls("container_scanning", "critical") == {
+        ("soc2", "CC6.8"), ("iso27001", "A.8.8"), ("pci-dss", "6.3.3"),
+        ("pci-dss", "6.3.1"), ("soc2", "CC7.1"), ("soc2", "CC7.2"),
+    }
 
 
-# Rule 1: vulnerable components
+def test_secrets_map_access_and_crypto_controls():
+    assert _ctrls("secret_scanning", "medium") == {
+        ("soc2", "CC6.1"), ("iso27001", "A.9.4"), ("pci-dss", "8.3.6"),
+    }
 
-def test_dep_critical_maps_cc6_8():
-    m = _assert_contains(map_finding(scanner_type="dependencies_scanning", severity="critical", metadata={}), "soc2", "CC6.8")
-    assert m.confidence >= 0.85
 
+def test_sast_sensitive_data():
+    assert _ctrls("code_scanning", "medium", {"handles_sensitive_data": True}) == {
+        ("soc2", "CC6.7"), ("pci-dss", "6.2.4"),
+    }
 
-def test_dep_critical_maps_a8_8():
-    _assert_contains(map_finding(scanner_type="dependencies_scanning", severity="critical", metadata={}), "iso27001", "A.8.8")
 
+def test_sast_without_sensitive_flag_maps_nothing():
+    assert _ctrls("code_scanning", "low", {}) == set()
 
-def test_dep_critical_maps_pci_6_3_3():
-    m = _assert_contains(map_finding(scanner_type="dependencies_scanning", severity="critical", metadata={}), "pci-dss", "6.3.3")
-    assert m.confidence >= 0.8
 
+def test_iac_base_and_escalation():
+    assert _ctrls("iac_scanning", "medium") == {("iso27001", "A.8.9"), ("soc2", "CC6.6")}
+    # High severity adds the cloud-config-weakness control + incident-response.
+    assert _ctrls("iac_scanning", "high") == {
+        ("iso27001", "A.8.9"), ("soc2", "CC6.6"), ("iso27001", "A.5.23"), ("soc2", "CC7.2"),
+    }
 
-def test_container_high_maps_three_frameworks():
-    drafts = map_finding(scanner_type="containers", severity="high", metadata={})
-    _assert_contains(drafts, "soc2", "CC6.8")
-    _assert_contains(drafts, "iso27001", "A.8.8")
-    _assert_contains(drafts, "pci-dss", "6.3.3")
 
+def test_agent_scanning_maps_malicious_software_and_vuln_mgmt():
+    assert _ctrls("agent_scanning", "medium") == {("soc2", "CC6.8"), ("iso27001", "A.8.8")}
+    # High severity also pulls in incident-response readiness (Rule 7).
+    assert _ctrls("agent_scanning", "critical") == {
+        ("soc2", "CC6.8"), ("iso27001", "A.8.8"), ("soc2", "CC7.2"),
+    }
 
-def test_dep_low_does_not_map_cc6_8():
-    drafts = map_finding(scanner_type="dependencies_scanning", severity="low", metadata={})
-    _assert_not_contains(drafts, "soc2", "CC6.8")
-    _assert_contains(drafts, "soc2", "CC7.1")
 
+def test_public_facing_dedup_keeps_single_cc66():
+    # Rule 5 and Rule 6 both emit soc2/CC6.6 — the dedup must collapse them.
+    drafts = map_finding(
+        scanner_type="iac_scanning", severity="medium", metadata={"is_public_facing": True}
+    )
+    cc66 = [d for d in drafts if (d.framework, d.control_id) == ("soc2", "CC6.6")]
+    assert len(cc66) == 1
+    assert ("iso27001", "A.5.23") in {(d.framework, d.control_id) for d in drafts}  # public-facing escalation
 
-# Rule 3: secrets
 
-def test_secrets_maps_cc6_1():
-    m = _assert_contains(map_finding(scanner_type="secret_scanning", severity="critical", metadata={}), "soc2", "CC6.1")
-    assert m.confidence >= 0.9
-
-
-def test_secrets_maps_a9_4():
-    _assert_contains(map_finding(scanner_type="secret_scanning", severity="high", metadata={}), "iso27001", "A.9.4")
-
-
-def test_secrets_maps_pci_8_3_6():
-    _assert_contains(map_finding(scanner_type="secret_scanning", severity="medium", metadata={}), "pci-dss", "8.3.6")
-
-
-def test_secrets_low_severity_still_maps():
-    drafts = map_finding(scanner_type="secret_scanning", severity="low", metadata={})
-    _assert_contains(drafts, "soc2", "CC6.1")
-    _assert_contains(drafts, "iso27001", "A.9.4")
-    _assert_contains(drafts, "pci-dss", "8.3.6")
-
-
-# Rule 4: SAST + sensitive data
-
-def test_sast_sensitive_data_maps_cc6_7():
-    drafts = map_finding(scanner_type="sast", severity="high", metadata={"handles_sensitive_data": True})
-    _assert_contains(drafts, "soc2", "CC6.7")
-    _assert_contains(drafts, "pci-dss", "6.2.4")
-
-
-def test_sast_without_sensitive_data_does_not_map_cc6_7():
-    _assert_not_contains(map_finding(scanner_type="sast", severity="high", metadata={}), "soc2", "CC6.7")
-
-
-def test_code_scanning_alias_works():
-    drafts = map_finding(scanner_type="code_scanning", severity="critical", metadata={"handles_sensitive_data": True})
-    _assert_contains(drafts, "soc2", "CC6.7")
-
-
-# Rule 5: public-facing
-
-def test_public_facing_maps_cc6_6():
-    _assert_contains(map_finding(scanner_type="sast", severity="medium", metadata={"is_public_facing": True}), "soc2", "CC6.6")
-
-
-def test_public_facing_high_maps_pci_11_3_1():
-    drafts = map_finding(scanner_type="dependencies_scanning", severity="critical", metadata={"is_public_facing": True})
-    _assert_contains(drafts, "pci-dss", "11.3.1")
-
-
-# Rule 6: IaC
-
-def test_iac_maps_a8_9():
-    drafts = map_finding(scanner_type="iac_scanning", severity="medium", metadata={})
-    _assert_contains(drafts, "iso27001", "A.8.9")
-    _assert_contains(drafts, "soc2", "CC6.6")
-
-
-def test_iac_public_facing_maps_a5_23():
-    drafts = map_finding(scanner_type="iac_scanning", severity="high", metadata={"is_public_facing": True})
-    _assert_contains(drafts, "iso27001", "A.5.23")
-
-
-# Rule 7: CC7.2
-
-def test_critical_maps_cc7_2():
-    _assert_contains(map_finding(scanner_type="secret_scanning", severity="critical", metadata={}), "soc2", "CC7.2")
-
-
-def test_medium_does_not_map_cc7_2():
-    _assert_not_contains(map_finding(scanner_type="sast", severity="medium", metadata={}), "soc2", "CC7.2")
-
-
-# Confidence validity
-
-def test_all_confidences_in_range_secrets():
-    _assert_confidence_valid(map_finding(scanner_type="secret_scanning", severity="critical", metadata={}))
-
-
-def test_all_confidences_in_range_dep():
-    _assert_confidence_valid(map_finding(scanner_type="dependencies_scanning", severity="high", metadata={}))
-
-
-def test_all_confidences_in_range_iac():
-    _assert_confidence_valid(map_finding(scanner_type="iac_scanning", severity="medium", metadata={}))
-
-
-# Deduplication
-
-def test_no_duplicate_mappings():
-    drafts = map_finding(scanner_type="dependencies_scanning", severity="critical", metadata={"is_public_facing": True})
-    keys = [(d.framework, d.control_id) for d in drafts]
-    assert len(keys) == len(set(keys)), "Duplicate (framework, control_id) found"
-
-
-# map_chain
-
-def test_chain_always_maps_cc7_2():
-    _assert_contains(map_chain(chain_type="multi_step_exploit", severity="high"), "soc2", "CC7.2")
-
-
-def test_chain_high_maps_a8_8():
-    _assert_contains(map_chain(chain_type="vuln_chain", severity="high"), "iso27001", "A.8.8")
-
-
-def test_chain_secret_type_maps_a9_4():
-    drafts = map_chain(chain_type="secret_to_resource", severity="critical")
-    _assert_contains(drafts, "iso27001", "A.9.4")
-    _assert_contains(drafts, "pci-dss", "8.3.6")
-
-
-def test_chain_injection_type_maps_pci_6_2_4():
-    _assert_contains(map_chain(chain_type="injection_to_rce", severity="critical"), "pci-dss", "6.2.4")
-
-
-def test_chain_low_severity_excludes_a8_8():
-    _assert_not_contains(map_chain(chain_type="low_chain", severity="low"), "iso27001", "A.8.8")
-
-
-def test_chain_no_duplicates():
-    drafts = map_chain(chain_type="secret_to_resource_injection_rce", severity="critical")
-    keys = [(d.framework, d.control_id) for d in drafts]
-    assert len(keys) == len(set(keys)), "Duplicate in chain mappings"
-
-
-def test_chain_confidence_valid():
-    _assert_confidence_valid(map_chain(chain_type="multi_step", severity="critical"))
-
-
-# Edge cases
-
-def test_unknown_scanner_no_crash():
-    _assert_confidence_valid(map_finding(scanner_type="unknown_tool", severity="medium", metadata={}))
-
-
-def test_none_severity_no_crash():
-    _assert_contains(map_finding(scanner_type="secret_scanning", severity=None, metadata={}), "soc2", "CC6.1")
-
-
-def test_none_metadata_no_crash():
-    _assert_contains(map_finding(scanner_type="iac_scanning", severity="high", metadata=None), "iso27001", "A.8.9")
+def test_non_canonical_tool_names_do_not_fire_scanner_rules():
+    # Regression guard: the scanner_type guards require canonical Finding.tool
+    # values. A non-canonical string yields only severity-based mappings.
+    assert _ctrls("dependencies", "critical") == {("soc2", "CC7.2")}  # Rule 7 only
+    assert _ctrls("iac", "medium") == set()
+    assert _ctrls("containers", "low") == set()

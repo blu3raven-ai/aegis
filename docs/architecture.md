@@ -30,7 +30,7 @@ The backend and runner have strict, non-overlapping responsibilities.
 - **Runner parses tool output into the canonical Finding schema.** Tool-specific JSON shapes never leave the runner. The runner uploads only normalised findings to MinIO.
 - **Backend stores normalised findings and exposes query/triage APIs.** Its job is read-and-serve over data the runner produced.
 - **Backend never knows about tool-specific output shapes.** No fields named `semgrep_rule_id`, `grype_match`, `syft_artifact`, etc., in backend models or transforms.
-- **Backend never executes scanner tools.** Enforced by `backend/src/tests/test_no_scanner_execution.py`; violations fail CI.
+- **Backend never executes scanner tools.** Enforced by `tests/backend/test_no_scanner_execution.py`; violations fail CI.
 
 This boundary lets the runner be replaced or sharded without touching backend code, and lets the backend be queried, replicated, or migrated without re-running scans.
 
