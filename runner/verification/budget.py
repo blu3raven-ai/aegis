@@ -17,6 +17,7 @@ DEFAULT_SAST_BUDGET = 200_000
 DEFAULT_SECRETS_BUDGET = 150_000
 DEFAULT_IAC_BUDGET = 100_000
 DEFAULT_AGENT_BUDGET = 80_000
+DEFAULT_DEEP_AUDIT_BUDGET = 400_000
 DEFAULT_DAILY_REMAINING = 1_000_000
 
 
@@ -87,4 +88,11 @@ def make_agent_budget(env: JobEnv) -> ScanBudget:
     return ScanBudget(
         scan_budget=env.get_int("LLM_TOKEN_BUDGET_PER_SCAN_AGENT", DEFAULT_AGENT_BUDGET),
         daily_remaining=env.get_int("LLM_DAILY_REMAINING", DEFAULT_DAILY_REMAINING),
+    )
+
+
+def make_deep_audit_budget(env: JobEnv) -> ScanBudget:
+    return ScanBudget(
+        scan_budget=env.get_int("LLM_TOKEN_BUDGET_PER_SCAN_DEEP_AUDIT", DEFAULT_DEEP_AUDIT_BUDGET),
+        daily_remaining=env.get_int("LLM_DAILY_REMAINING", 1_000_000),
     )

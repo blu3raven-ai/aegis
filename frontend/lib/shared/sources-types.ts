@@ -29,6 +29,7 @@ export type ScannerType =
   | "container_scanning"
   | "iac_scanning"
   | "agent_scanning"
+  | "deep_audit"
 
 export type ConnectionMethod = "pat" | "webhook" | "cicd"
 
@@ -127,7 +128,7 @@ export const CATEGORY_SOURCE_TYPES: Record<SourceCategory, SourceType[]> = {
 // Scanner job types that run for each source category. Mirrors the backend's
 // SCANNERS_BY_CATEGORY — keep the two in sync.
 export const CATEGORY_SCANNERS: Record<SourceCategory, ScannerType[]> = {
-  "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning", "iac_scanning", "agent_scanning"],
+  "code-repositories": ["dependencies_scanning", "secret_scanning", "code_scanning", "iac_scanning", "agent_scanning", "deep_audit"],
   "container-registry": ["container_scanning"],
   "cloud-infrastructure": [],
   "ci-systems": [],
@@ -140,6 +141,7 @@ export const SCANNER_LABELS: Record<ScannerType, string> = {
   container_scanning: "Container Scanning",
   iac_scanning: "IaC Scanning",
   agent_scanning: "Agent Security",
+  deep_audit: "Deep Audit",
 }
 
 export const SCANNER_DESCRIPTIONS: Record<ScannerType, string> = {
@@ -149,6 +151,7 @@ export const SCANNER_DESCRIPTIONS: Record<ScannerType, string> = {
   container_scanning: "Inspects your container images for known vulnerabilities in their software.",
   iac_scanning: "Checks your infrastructure-as-code (Terraform, Kubernetes, Dockerfiles) for misconfigurations and security gaps.",
   agent_scanning: "Scans AI-agent files (CLAUDE.md, .cursorrules, MCP configs, skills) for hidden or malicious instructions that could hijack a coding assistant.",
+  deep_audit: "AI-reasoning audit for broken access control (IDOR / missing authorization) and other logic bugs pattern scanners miss. LLM-based and opt-in — slower and more thorough.",
 }
 
 export const CONNECTION_METHOD_LABELS: Record<ConnectionMethod, string> = {
