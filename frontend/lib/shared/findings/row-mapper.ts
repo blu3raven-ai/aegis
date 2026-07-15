@@ -110,6 +110,8 @@ export interface VerificationMetadata {
   carve_out_source?: string | null
   /** File+line reference of the baseline entry that triggered the downgrade. */
   carve_out_ref?: string | null
+  /** True when the AI-authored fix diff provably applies cleanly to the checkout. */
+  fix_verified?: boolean
   skipped?: string
   /**
    * Provenance the verifier records when it runs. `tier`/`escalated` are

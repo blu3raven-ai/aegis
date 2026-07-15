@@ -12,7 +12,9 @@ from typing import Any
 from runner.verification.cvss import score as cvss_score
 
 
-def stash_confirmed_enrichment(metadata: dict[str, Any], hunter_model: Any) -> None:
+def stash_confirmed_enrichment(
+    metadata: dict[str, Any], hunter_model: Any, repo_root: str | None = None
+) -> None:
     if getattr(hunter_model, "title", "").strip():
         metadata["title"] = hunter_model.title.strip()
     if getattr(hunter_model, "impact", "").strip():
@@ -33,6 +35,13 @@ def stash_confirmed_enrichment(metadata: dict[str, Any], hunter_model: Any) -> N
         metadata["mitigating_factors"] = factors
     if getattr(hunter_model, "fix", "").strip():
         metadata["fix"] = hunter_model.fix.strip()
+        # Positive-only: badge the fix ONLY when the diff provably applies to the
+        # checkout, so an AI-authored patch that references the wrong lines can't
+        # be pasted as if it were verified. Unverifiable → simply no badge.
+        if repo_root:
+            from runner.verification.fix_check import fix_applies
+
+            metadata["fix_verified"] = fix_applies(metadata["fix"], repo_root)
 
     metrics = getattr(hunter_model, "cvss_metrics", {}) or {}
     scored = cvss_score(metrics) if isinstance(metrics, dict) else None
