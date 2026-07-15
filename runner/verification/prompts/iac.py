@@ -89,18 +89,32 @@ look for POSITIVE evidence of a compensating control that NEUTRALISES the findin
 - The flagged container capability is required by a recognised system workload (kube-proxy,
   cni driver, log shipper) co-located in the same manifest.
 
+You may also be given TWO kinds of ground truth:
+- "Declared accepted-risks": statements the maintainers assert are accepted-by-design infra
+  config. If one genuinely explains this finding as intended behavior, set carve_out_matched=true,
+  carve_out_source="accepted_risk", and carve_out_ref to that risk's id. Only confirm a risk that
+  is actually listed — never invent one.
+- "Baseline references": known-good baseline-module locations to diff against. If this finding is
+  equivalent to a baseline pattern, set carve_out_matched=true, carve_out_source="baseline", and
+  carve_out_ref to the baseline "file:line". Cite the baseline in mitigation_file / mitigation_line
+  / mitigation_snippet so it can be verified.
+
 Respond ONLY with valid JSON in this exact shape:
 {
   "mitigation_found": <bool>,
   "mitigation_file": "<path or null>",
   "mitigation_line": <int or null>,
   "mitigation_snippet": "<verbatim from provided context, or null>",
-  "reasoning": "<one sentence stating the specific compensating control>"
+  "reasoning": "<one sentence stating the specific compensating control>",
+  "carve_out_matched": <bool>,
+  "carve_out_ref": "<accepted-risk id, or baseline 'file:line', or null>",
+  "carve_out_source": "accepted_risk" | "baseline" | null
 }
 
 mitigation_found=true requires POSITIVE evidence — a concrete attachment, boundary, listener,
 trail, or placeholder marker present in the provided context. Absence of evidence is NOT a
-mitigation; when in doubt return false. Cited snippets must be verbatim."""
+mitigation; when in doubt return mitigation_found=false and carve_out_matched=false. Cited
+snippets must be verbatim."""
 
 
 def _read_resource_excerpt(repo_root: str, file_path: str, line: int, window: int = 50) -> str:
@@ -156,6 +170,8 @@ def skeptic_iac_user_message(
     hunter_chain: str,
     resource_excerpt: str = "",
     sibling_excerpt: str = "",
+    accepted_risks: list | None = None,
+    ground_truth=None,
 ) -> str:
     parts = [
         f"Check: {finding.get('check_id', '')} — {finding.get('title', '')}",
@@ -170,4 +186,15 @@ def skeptic_iac_user_message(
         "Sibling IaC context:",
         f"```\n{sibling_excerpt or '-'}\n```",
     ]
+    if accepted_risks:
+        parts.append("")
+        parts.append("Declared accepted-risks (maintainer-asserted intended config):")
+        for r in accepted_risks:
+            parts.append(f"  - id={r.get('id')}: {r.get('statement')}")
+    refs = getattr(ground_truth, "baseline_refs", None) if ground_truth else None
+    if refs:
+        parts.append("")
+        parts.append("Baseline references (known-good patterns to diff against):")
+        for ref in refs:
+            parts.append(f"  - {ref.get('file')}:{ref.get('line')} — {ref.get('why')}")
     return "\n".join(parts) + "\n"

@@ -95,6 +95,8 @@ def verify_iac_finding(
     repo_root: str,
     llm,
     escalation_llm=None,
+    accepted_risks: list | None = None,
+    ground_truth=None,
 ) -> VerificationResult:
     """Hunter -> Skeptic for a single IaC (checkov) misconfiguration finding.
 
@@ -202,7 +204,8 @@ def verify_iac_finding(
             {
                 "role": "user",
                 "content": skeptic_iac_user_message(
-                    finding, chain, resource_excerpt, sibling_excerpt
+                    finding, chain, resource_excerpt, sibling_excerpt,
+                    accepted_risks=accepted_risks, ground_truth=ground_truth,
                 ),
             },
         ],
@@ -228,6 +231,17 @@ def verify_iac_finding(
             verification_metadata={**metadata, "reason": f"skeptic_schema_invalid: {skeptic_result.error}"},
         )
     skeptic_model = skeptic_result.parsed
+
+    from runner.verification.carveouts import carveout_verdict
+    from runner.verification.critic import verify_citations
+    _cv = carveout_verdict(
+        finding, skeptic_model, accepted_risks=accepted_risks,
+        chain=chain, evidence=evidence, metadata=metadata,
+        critic=verify_citations, repo_root=repo_root,
+        tokens_in=tokens_in, tokens_out=tokens_out,
+    )
+    if _cv is not None:
+        return _cv
 
     if skeptic_model.mitigation_found:
         metadata["ruled_out_reason"] = {

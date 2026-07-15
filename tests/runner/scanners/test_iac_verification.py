@@ -51,6 +51,12 @@ def _unlimited_budget():
     return ScanBudget(scan_budget=1_000_000, daily_remaining=1_000_000)
 
 
+# When any finding is pending verification, the scanner runs one advisory
+# ground-truth recon pass over the findings' files before per-finding hunter /
+# skeptic. Scripted-LLM tests must supply this leading response.
+_GROUND_TRUTH = json.dumps({"baseline_refs": [], "accepted_behaviors": []})
+
+
 # ---------------------------------------------------------------------------
 # LLM-disabled path
 # ---------------------------------------------------------------------------
@@ -117,7 +123,9 @@ def test_budget_exhausted_yields_possible(tmp_path):
     exhausted = ScanBudget(scan_budget=0, daily_remaining=10_000)
 
     scanner = IacScanner()
-    llm = _StubLlm([])
+    # Only the advisory ground-truth recon call fires; the per-finding budget
+    # check then short-circuits before any hunter / skeptic round-trip.
+    llm = _StubLlm([_GROUND_TRUTH])
 
     verified = scanner._maybe_verify_iac(
         findings=[finding],
@@ -127,7 +135,7 @@ def test_budget_exhausted_yields_possible(tmp_path):
     )
     assert verified[0]["verdict"] == "possible"
     assert verified[0]["verification_metadata"]["skipped"] == "scan_budget"
-    assert llm.calls == []
+    assert len(llm.calls) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +148,7 @@ def test_full_verify_invokes_llm_for_high_severity(tmp_path):
 
     scanner = IacScanner()
     llm = _StubLlm([
+        _GROUND_TRUTH,
         json.dumps({
             "exploit_chain": "bucket holds PII without encryption",
             "evidence": [
@@ -162,7 +171,7 @@ def test_full_verify_invokes_llm_for_high_severity(tmp_path):
     )
     assert verified[0]["verdict"] == "confirmed"
     assert verified[0]["exploit_chain"]
-    assert len(llm.calls) == 2  # Hunter + Skeptic
+    assert len(llm.calls) == 3  # Ground truth + Hunter + Skeptic
 
 
 def test_full_verify_invokes_llm_for_critical(tmp_path):
@@ -171,6 +180,7 @@ def test_full_verify_invokes_llm_for_critical(tmp_path):
 
     scanner = IacScanner()
     llm = _StubLlm([
+        _GROUND_TRUTH,
         json.dumps({"exploit_chain": "", "evidence": []}),
     ])
 
@@ -196,6 +206,7 @@ def test_skeptic_mitigation_yields_ruled_out(tmp_path):
 
     scanner = IacScanner()
     llm = _StubLlm([
+        _GROUND_TRUTH,
         json.dumps({
             "exploit_chain": "bucket unencrypted",
             "evidence": [
@@ -267,7 +278,15 @@ def test_per_finding_exception_does_not_poison_others(tmp_path):
 
         def chat(self, *a, **kw):
             self.call_count += 1
+            # Call 1 is the scan-level ground-truth recon (must succeed so the
+            # per-finding path runs); call 2 is the first finding's hunter and
+            # raises transiently.
             if self.call_count == 1:
+                return LlmResponse(
+                    content=json.dumps({"baseline_refs": [], "accepted_behaviors": []}),
+                    tokens_in=10, tokens_out=5, prompt_hash="gt",
+                )
+            if self.call_count == 2:
                 raise RuntimeError("transient")
             return LlmResponse(
                 content=json.dumps({"exploit_chain": "", "evidence": []}),
@@ -277,8 +296,8 @@ def test_per_finding_exception_does_not_poison_others(tmp_path):
             )
 
     scanner = IacScanner()
-    # max_workers=1 so "the first chat() call raises" deterministically hits the
-    # first finding; verification is concurrent now, so which finding sees the
+    # max_workers=1 so the raising chat() call deterministically hits the first
+    # finding; verification is concurrent now, so which finding sees the
     # transient error is otherwise nondeterministic. The isolation property under
     # test (one finding's exception doesn't poison others) holds either way.
     verified = scanner._maybe_verify_iac(
@@ -352,6 +371,14 @@ def test_cancel_event_set_midway_short_circuits_remaining(tmp_path):
 
         def chat(self, *a, **kw):
             self.calls += 1
+            # Call 1 is the scan-level ground-truth recon; let it pass. Cancel
+            # from the first finding's hunter (call 2) onward so the remaining
+            # findings short-circuit before starting.
+            if self.calls == 1:
+                return LlmResponse(
+                    content=json.dumps({"baseline_refs": [], "accepted_behaviors": []}),
+                    tokens_in=10, tokens_out=5, prompt_hash="gt",
+                )
             self._cancel.set()
             return LlmResponse(
                 content=json.dumps({"exploit_chain": "", "evidence": []}),
@@ -382,13 +409,14 @@ def test_cancel_event_set_midway_short_circuits_remaining(tmp_path):
     for f in verified[1:]:
         assert f["verdict"] == "possible"
         assert f["verification_metadata"]["skipped"] == "cancelled"
-    assert llm.calls == 1
+    assert llm.calls == 2  # Ground truth + first finding's hunter
 
 
 def test_cancel_event_none_runs_full_loop(tmp_path):
     finding = _seed_repo(tmp_path)
     scanner = IacScanner()
     llm = _StubLlm([
+        _GROUND_TRUTH,
         json.dumps({"exploit_chain": "", "evidence": []}),
     ])
 
