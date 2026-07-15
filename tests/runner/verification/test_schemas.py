@@ -151,9 +151,9 @@ def test_coerce_evidence_list_drops_malformed_items():
 
 
 def test_verdict_enum_values_match_finding_db_constraint():
-    """The Finding DB column constraint allows exactly these four values."""
+    """The Finding DB column constraint must allow exactly these values."""
     assert {v.value for v in Verdict} == {
-        "confirmed", "needs_verify", "possible", "ruled_out",
+        "confirmed", "needs_verify", "needs_runtime_verification", "possible", "ruled_out",
     }
 
 

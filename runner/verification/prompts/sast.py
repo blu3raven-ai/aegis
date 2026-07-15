@@ -38,8 +38,12 @@ Respond ONLY with valid JSON in this exact shape:
   "fix": "<a concrete remediation. When small, a unified diff (--- a/file / +++ b/file / @@) that fixes the ROOT cause. Otherwise 1-3 sentences naming the exact change and where. Empty string if not confirmed>",
   "cvss_metrics": {"AV": "N|A|L|P", "AC": "L|H", "PR": "N|L|H", "UI": "N|R", "S": "U|C", "C": "N|L|H", "I": "N|L|H", "A": "N|L|H"},
   "distinctness": "<if this resembles a published CVE/GHSA but is materially distinct (different sink/trigger/component), one short paragraph explaining the distinction; else empty string>",
-  "remediation": ["<numbered defense-in-depth step beyond the primary fix, e.g. 'Gate the load behind an explicit opt-in flag'>"]
+  "remediation": ["<numbered defense-in-depth step beyond the primary fix, e.g. 'Gate the load behind an explicit opt-in flag'>"],
+  "needs_runtime": <bool>,
+  "runtime_question": "<one concrete runtime check, or empty string>"
 }
+
+Set needs_runtime=true with a single concrete runtime_question ONLY when the chain is real but its exploitability depends on a runtime/deployment fact you cannot verify from the code (e.g. whether a route is authenticated in production, whether a feature flag is enabled). Phrase runtime_question as ONE check starting "Confirm that ...". Otherwise needs_runtime=false and runtime_question="".
 
 Only include attack_paths when there are genuinely MULTIPLE distinct routes to the sink; for a single obvious path leave it [] (exploit_chain already covers it). Use mitigating_factors to state honestly what reduces severity. Both are optional — [] when not applicable.
 Order the evidence array to follow the chain (source first, then gates, then sink) so [R1], [R2], ... read in narrative order.

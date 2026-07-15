@@ -275,6 +275,15 @@ def verify_finding(
         from runner.verification.enrich import stash_confirmed_enrichment
         stash_confirmed_enrichment(metadata, hunter_model)
 
+        # "confirmed IF <question>": a grounded chain that hinges on a runtime fact
+        # the model couldn't check statically. Carry the exact check instead of a
+        # flat confirmed. Enrichment above still applies — it's a real finding.
+        question = (getattr(hunter_model, "runtime_question", "") or "").strip()
+        if getattr(hunter_model, "needs_runtime", False) and question:
+            verdict = "needs_runtime_verification"
+            metadata["runtime_question"] = question
+            evidence = [*evidence, {"kind": "runtime_log", "snippet": question, "source": "runtime_check"}]
+
     return VerificationResult(
         verdict=verdict, exploit_chain=chain, evidence=evidence,
         tokens_in=tokens_in_total, tokens_out=tokens_out_total,
