@@ -10,7 +10,7 @@ from __future__ import annotations
 import threading
 from contextlib import contextmanager
 
-from runner.sandbox.harness import docker_cli_env
+from runner.sandbox.harness import container_cli, docker_cli_env
 from runner.scanners._subprocess import run_tool
 
 _NET_TIMEOUT_S = 30.0
@@ -18,7 +18,7 @@ _NET_TIMEOUT_S = 30.0
 
 def create_internal_network(name: str, *, cancel_event: threading.Event | None = None) -> bool:
     code, _out, _err = run_tool(
-        ["docker", "network", "create", "--internal", name],
+        [container_cli(), "network", "create", "--internal", name],
         timeout=_NET_TIMEOUT_S, env=docker_cli_env(), cancel_event=cancel_event,
     )
     return code == 0
@@ -26,7 +26,7 @@ def create_internal_network(name: str, *, cancel_event: threading.Event | None =
 
 def remove_network(name: str) -> None:
     """Best-effort teardown — never raises, so cleanup always runs."""
-    run_tool(["docker", "network", "rm", name], timeout=_NET_TIMEOUT_S, env=docker_cli_env())
+    run_tool([container_cli(), "network", "rm", name], timeout=_NET_TIMEOUT_S, env=docker_cli_env())
 
 
 @contextmanager

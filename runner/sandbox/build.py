@@ -15,7 +15,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from runner.sandbox.harness import docker_cli_env
+from runner.sandbox.harness import container_cli, docker_cli_env
 from runner.scanners._subprocess import run_tool
 
 _DOCKERFILE_NAMES = ("Dockerfile", "dockerfile")
@@ -41,7 +41,7 @@ def detect_recipe(repo_root: str) -> BuildRecipe | None:
 def build_image_args(recipe: BuildRecipe, tag: str) -> list[str]:
     """The ``docker build`` argv. No secrets are passed (no --build-arg/--secret);
     network is intentionally NOT disabled here (deps must fetch)."""
-    return ["docker", "build", "--file", recipe.dockerfile, "--tag", tag, recipe.context]
+    return [container_cli(), "build", "--file", recipe.dockerfile, "--tag", tag, recipe.context]
 
 
 def build_image(
