@@ -48,6 +48,7 @@ from runner.scanners.code_scanning import (
 from runner.verification.budget import DEFAULT_VERIFY_WORKERS, ScanBudget, verify_concurrency
 from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
 from runner.verification.ground_truth import build_ground_truth
+from runner.sandbox.orchestrator import verify_findings_at_runtime
 from runner.verification.pipeline import verify_finding
 
 logger = logging.getLogger(__name__)
@@ -310,7 +311,10 @@ class CodeScanningScanner:
         except Exception:  # noqa: BLE001
             logger.warning("[!] preview ingest failed (continuing)", exc_info=True)
 
-    def _verify_findings_file(self, findings_file: Path, *, repo_root: str, env: JobEnv) -> None:
+    def _verify_findings_file(
+        self, findings_file: Path, *, repo_root: str, env: JobEnv,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
         """Read findings.jsonl, run _maybe_verify, rewrite in place.
 
         No-op when the file is missing. When the LLM client can't be built
@@ -346,6 +350,13 @@ class CodeScanningScanner:
             backend=getattr(self, "_backend", None),
             max_workers=verify_concurrency(env),
             accepted_risks=accepted_risks,
+        )
+
+        # Opt-in runtime pass (RUNTIME_VERIFY): actually run the target to resolve
+        # any "confirmed IF <question>" findings. Graceful no-op otherwise.
+        verified = verify_findings_at_runtime(
+            verified, repo_root, env=env, llm=build_llm_client(env),
+            cancel_event=cancel_event,
         )
 
         with open(findings_file, "w") as f:
