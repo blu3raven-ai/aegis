@@ -38,7 +38,7 @@ mkdir -p "$OUT_DIR"
 run_one() {
   local label="$1" repo="$2" sha="$3" pr_arg="$4" out="$5"
   echo "=== running $label ==="
-  python backend/tests/scripts/benchmark_ci_scan.py \
+  python scripts/benchmarks/benchmark_ci_scan.py \
     --aegis-url "$AEGIS_URL" \
     --api-key "$AEGIS_API_KEY" \
     --source-id "$repo" \
