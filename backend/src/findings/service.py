@@ -1247,6 +1247,7 @@ async def _verdict_counts_for_filters(
     out = {
         "total": 0,
         "confirmed": 0,
+        "needs_runtime_verification": 0,
         "needs_verify": 0,
         "possible": 0,
         "ruled_out": 0,

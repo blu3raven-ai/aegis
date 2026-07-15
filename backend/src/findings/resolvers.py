@@ -56,6 +56,7 @@ class FindingsVerdictCounts:
     possible: int
     ruled_out: int
     legacy: int
+    needs_runtime_verification: int = 0
 
 
 @strawberry.type

@@ -213,6 +213,7 @@ interface GqlFindingRow {
 interface GqlVerdictCounts {
   total: number
   confirmed: number
+  needsRuntimeVerification: number
   needsVerify: number
   possible: number
   ruledOut: number
@@ -551,7 +552,7 @@ const FINDINGS_SEARCH_QUERY = `query FindingsSearch(
       }
       nextCursor
       totalCount
-      verdictCounts { total confirmed needsVerify possible ruledOut legacy }
+      verdictCounts { total confirmed needsRuntimeVerification needsVerify possible ruledOut legacy }
     }
   }
 }`
@@ -596,6 +597,7 @@ export async function listFindings(
     ? {
         total: vc.total,
         confirmed: vc.confirmed,
+        needs_runtime_verification: vc.needsRuntimeVerification,
         needs_verify: vc.needsVerify,
         possible: vc.possible,
         ruled_out: vc.ruledOut,
