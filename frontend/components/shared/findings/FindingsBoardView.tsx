@@ -36,7 +36,9 @@ import {
   TechnicalDetailSection,
   AttackScenarioSection,
   ImpactSection,
+  MitigatingFactorsSection,
   DistinctnessSection,
+  RemediationStepsSection,
   NotesVerificationSection,
 } from "@/components/shared/findings/FindingReportSections"
 import { FindingAcceptRiskAction } from "@/components/shared/findings/FindingAcceptRiskAction"
@@ -1989,6 +1991,8 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
               <ImpactSection impact={selectedFinding.verificationMetadata?.impact} />
 
+              <MitigatingFactorsSection factors={selectedFinding.verificationMetadata?.mitigating_factors} />
+
               <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
 
               <FindingPocSection
@@ -2024,6 +2028,8 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               {!selectedFinding.recommendedFix && (
                 <FindingRemediationSection remediation={selectedFinding.remediation} />
               )}
+
+              <RemediationStepsSection steps={selectedFinding.verificationMetadata?.remediation} />
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="context" label="Context" defaultOpen={false}>

@@ -196,6 +196,40 @@ export function DistinctnessSection({ distinctness }: { distinctness?: string })
   )
 }
 
+// Supplementary context — render only when the verifier supplied it, rather than
+// an always-visible empty state (these calibrate a confirmed finding, they aren't
+// core report structure).
+
+export function MitigatingFactorsSection({ factors }: { factors?: string[] }) {
+  const items = (factors ?? []).map((f) => f?.trim()).filter(Boolean) as string[]
+  if (items.length === 0) return null
+  return (
+    <section className="space-y-2">
+      <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Mitigating factors</h3>
+      <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+        {items.map((f, i) => (
+          <li key={i}>{f}</li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+export function RemediationStepsSection({ steps }: { steps?: string[] }) {
+  const items = (steps ?? []).map((s) => s?.trim()).filter(Boolean) as string[]
+  if (items.length === 0) return null
+  return (
+    <section className="space-y-2">
+      <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Defense in depth</h3>
+      <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+        {items.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
 export function NotesVerificationSection({
   verdict,
   metadata,

@@ -21,3 +21,10 @@ test("NotesVerificationSection surfaces the runtime-check question", () => {
   assert.match(src, /runtime_question/)
   assert.match(src, /runtime check/i)
 })
+
+test("MitigatingFactorsSection + RemediationStepsSection render supplementary verifier context", () => {
+  assert.match(src, /export function MitigatingFactorsSection/)
+  assert.match(src, /Mitigating factors/)
+  assert.match(src, /export function RemediationStepsSection/)
+  assert.match(src, /Defense in depth/)
+})
