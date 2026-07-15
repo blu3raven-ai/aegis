@@ -37,6 +37,7 @@ from runner.scanners.iac.parse import parse_checkov_results
 from runner.scanners.iac.remediation import attach_iac_fixes
 from runner.verification.budget import DEFAULT_VERIFY_WORKERS, ScanBudget, make_iac_budget, verify_concurrency
 from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
+from runner.verification.ground_truth import build_ground_truth
 from runner.verification.verifiers.iac import verify_iac_finding
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,15 @@ class IacScanner:
         escalation_llm = build_escalation_llm_client(env)
         budget = make_iac_budget(env)
 
+        # Accepted-risk carve-outs the backend stamps into the job env as a JSON
+        # array. Malformed input falls open to "no carve-outs" rather than aborting.
+        try:
+            accepted_risks = json.loads(env.get("ACCEPTED_RISKS") or "[]")
+        except (TypeError, ValueError):
+            accepted_risks = []
+        if not isinstance(accepted_risks, list):
+            accepted_risks = []
+
         all_findings: list[dict] = []
         any_clone_failed = False
         for repo_url in repos:
@@ -121,7 +131,7 @@ class IacScanner:
                 break
             findings, cloned = self._scan_one_repo(
                 repo_url, out_dir, cfg, llm, escalation_llm, budget,
-                cancel_event, log_tail, emitter,
+                cancel_event, log_tail, emitter, accepted_risks,
             )
             any_clone_failed = any_clone_failed or not cloned
             all_findings.extend(findings)
@@ -162,6 +172,7 @@ class IacScanner:
         cancel_event: threading.Event | None,
         log_tail: list[str],
         emitter: ProgressEmitter,
+        accepted_risks: list | None = None,
     ) -> tuple[list[dict], bool]:
         """Clone + checkov-scan a single repo. Returns (stamped findings, cloned_ok).
 
@@ -230,6 +241,7 @@ class IacScanner:
                 scan_budget=budget,
                 cancel_event=cancel_event,
                 max_workers=cfg.verify_workers,
+                accepted_risks=accepted_risks,
             )
 
             # Deterministic config-hardening patches for pattern-clear checks.
@@ -258,6 +270,7 @@ class IacScanner:
         scan_budget: ScanBudget,
         cancel_event: threading.Event | None = None,
         max_workers: int = DEFAULT_VERIFY_WORKERS,
+        accepted_risks: list | None = None,
     ) -> list[dict]:
         hashes = [verification_input_hash(f) for f in findings]
         cache = (
@@ -287,6 +300,14 @@ class IacScanner:
             else:
                 pending.append(i)
 
+        # Advisory ground truth: one recon pass over the findings' files, reused
+        # for every pending finding. Skip the round-trip when nothing needs
+        # verifying. Fail-open — None means "no hints".
+        ground_truth = (
+            build_ground_truth(repo_root=repo_root, findings=findings, llm=llm)
+            if pending else None
+        )
+
         def _verify_one(i: int) -> None:
             copy, input_hash = out[i], hashes[i]
             metadata = copy.setdefault("verification_metadata", {})
@@ -303,6 +324,7 @@ class IacScanner:
                 result = verify_iac_finding(
                     finding=copy, repo_root=repo_root, llm=llm,
                     escalation_llm=escalation_llm,
+                    accepted_risks=accepted_risks, ground_truth=ground_truth,
                 )
                 scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
                 copy["verdict"] = result.verdict
