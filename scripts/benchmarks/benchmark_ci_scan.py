@@ -4,7 +4,7 @@ Submits a scan via /api/v1/scans/ci and polls the scan run until terminal
 status, measuring wall-clock time across submit / queued / running / completed.
 
 Usage:
-    python backend/tests/scripts/benchmark_ci_scan.py \
+    python scripts/benchmarks/benchmark_ci_scan.py \
         --aegis-url http://localhost:8000 \
         --api-key <scan:trigger key> \
         --source-id acme/repo \
