@@ -7,6 +7,7 @@ import type { VerdictFilter } from "@/lib/shared/findings/verdicts"
 type Counts = {
   total: number
   confirmed: number
+  needs_runtime_verification?: number
   needs_verify: number
   possible: number
   ruled_out: number
@@ -56,6 +57,7 @@ const GlyphCheck = ({ className }: { className: string }) => (
 const CHIPS: Chip[] = [
   { value: null, label: "All open" },
   { value: "confirmed", label: "Confirmed", glyph: <GlyphDot className="text-[var(--color-severity-critical-text)]" /> },
+  { value: "needs_runtime_verification", label: "Needs runtime check", glyph: <GlyphDot className="text-[var(--color-severity-high-text)]" /> },
   { value: "needs_verify", label: "Needs verify", glyph: <GlyphDot className="text-[var(--color-severity-medium-text)]" /> },
   { value: "possible", label: "Possible", glyph: <GlyphRing className="text-[var(--color-text-tertiary)]" /> },
   { value: "legacy", label: "Legacy", glyph: <GlyphBolt className="text-[var(--color-state-deferred)]" /> },
@@ -67,6 +69,7 @@ function countFor(c: Counts | undefined, v: VerdictFilter): number {
   if (v === null) {
     return (
       (c.confirmed ?? 0) +
+      (c.needs_runtime_verification ?? 0) +
       (c.needs_verify ?? 0) +
       (c.possible ?? 0) +
       (c.legacy ?? 0)

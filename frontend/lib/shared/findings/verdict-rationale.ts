@@ -27,7 +27,14 @@ export function verdictRationale(
   metadata: VerificationMetadata | null | undefined,
 ): VerdictRationale | null {
   if (!metadata) return null
-  if (verdict === "confirmed" || verdict === "ruled_out") return null
+  // needs_runtime_verification carries its own concrete question, surfaced
+  // separately in the Notes section — no generic FP rationale applies.
+  if (
+    verdict === "confirmed" ||
+    verdict === "ruled_out" ||
+    verdict === "needs_runtime_verification"
+  )
+    return null
 
   const reason = typeof metadata.reason === "string" ? metadata.reason : ""
 

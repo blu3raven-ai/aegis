@@ -31,7 +31,12 @@ function normalizeScanner(scanner: string): string {
   return SCANNER_SHORTHAND_TO_NAME[scanner] ?? scanner
 }
 export type FindingState = "open" | "closed" | "dismissed" | "fixed" | "deferred"
-export type FindingVerdict = "confirmed" | "needs_verify" | "possible" | "ruled_out"
+export type FindingVerdict =
+  | "confirmed"
+  | "needs_runtime_verification"
+  | "needs_verify"
+  | "possible"
+  | "ruled_out"
 export type FindingVerdictFilter = FindingVerdict | "legacy" | "all"
 export type FindingSort =
   | "severity"
