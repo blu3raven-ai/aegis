@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -81,7 +81,9 @@ async def test_snapshot_excludes_archived_findings(db_session):
     from src.posture.service import compute_and_store_daily_snapshots
 
     asset_id = str(uuid.uuid4())
-    today = date.today()
+    # Match the service's own clock: snapshot_date and created_at are both UTC, so
+    # deriving today from local time flakes across the UTC/local midnight boundary.
+    today = datetime.now(timezone.utc).date()
 
     db_session.add(Asset(
         id=asset_id, type="repo", source="source_connection",
@@ -140,16 +142,16 @@ async def test_snapshot_records_new_findings_for_discover_and_resolve_asset(db_s
     """An asset whose only same-day finding was created AND already closed must
     still record its new_findings (discovery velocity), even with zero open
     findings — otherwise a discover-and-resolve day is silently dropped."""
-    from datetime import datetime, timezone
-
     from sqlalchemy import delete, select as sa_select
 
     from src.db.models import Asset, Finding, PostureSnapshot
     from src.posture.service import compute_and_store_daily_snapshots
 
     asset_id = str(uuid.uuid4())
-    today = date.today()
+    # Single UTC clock for both today and created_at — see the archived-findings
+    # test: a local date.today() flakes at the UTC/local midnight boundary.
     now = datetime.now(timezone.utc)
+    today = now.date()
 
     db_session.add(Asset(
         id=asset_id, type="repo", source="source_connection",
