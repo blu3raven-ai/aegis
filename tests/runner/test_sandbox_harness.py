@@ -83,13 +83,16 @@ def test_custom_limits_flow_through():
     assert "--memory=512m" in a and "--cpus=0.5" in a and "--pids-limit=64" in a
 
 
-def test_run_in_sandbox_launches_with_empty_env_and_timeout():
+def test_run_in_sandbox_launches_with_minimal_cli_env_and_timeout():
     lim = SandboxLimits(timeout_s=42.0)
-    with patch("runner.sandbox.harness.run_tool", return_value=(0, "ok", "")) as rt:
+    with patch.dict("os.environ", {"PATH": "/usr/bin", "AWS_SECRET_ACCESS_KEY": "x"}, clear=True), \
+         patch("runner.sandbox.harness.run_tool", return_value=(0, "ok", "")) as rt:
         code, out, err = run_in_sandbox("t", ["x"], limits=lim)
     assert code == 0
     _, kwargs = rt.call_args
-    assert kwargs["env"] == {}           # docker CLI sees no host secrets
+    # The CLI gets PATH (so docker runs) but NO secret from the host env.
+    assert kwargs["env"].get("PATH") == "/usr/bin"
+    assert "AWS_SECRET_ACCESS_KEY" not in kwargs["env"]
     assert kwargs["timeout"] == 42.0     # hard wall-clock cap enforced
     passed_args = rt.call_args[0][0]
     assert "--network=none" in passed_args  # the hardened argv is what ran

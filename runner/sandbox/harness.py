@@ -9,11 +9,25 @@ Docker floor and upgrades to a microVM by config with no code change.
 """
 from __future__ import annotations
 
+import os
 import threading
 from dataclasses import dataclass, field
 from typing import Sequence
 
 from runner.scanners._subprocess import run_tool
+
+# Minimal env the docker CLI itself needs to find its binary and reach the daemon.
+# Deliberately EXCLUDES every secret — and it does NOT weaken container isolation,
+# because the container's env is controlled separately (we pass no `-e`, so the
+# container gets a clean env regardless of what the CLI process can see).
+_DOCKER_CLI_ENV_KEYS = (
+    "PATH", "HOME", "DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CERT_PATH", "DOCKER_TLS_VERIFY",
+)
+
+
+def docker_cli_env() -> dict[str, str]:
+    """Allowlisted env for the docker CLI subprocess (no secrets)."""
+    return {k: os.environ[k] for k in _DOCKER_CLI_ENV_KEYS if k in os.environ}
 
 
 @dataclass(frozen=True)
@@ -97,4 +111,6 @@ def run_in_sandbox(
     default)."""
     lim = limits or SandboxLimits()
     args = build_run_args(image, cmd, runtime=runtime, limits=lim, env_allow=env_allow)
-    return run_tool(args, timeout=lim.timeout_s, env={}, cancel_event=cancel_event)
+    # The CLI needs PATH/DOCKER_HOST to run at all; the CONTAINER still gets a clean
+    # env (no -e passed), so secrets can't reach the untrusted workload.
+    return run_tool(args, timeout=lim.timeout_s, env=docker_cli_env(), cancel_event=cancel_event)
