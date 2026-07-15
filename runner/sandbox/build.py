@@ -1,7 +1,7 @@
 """Best-effort image build for runtime verification. Dockerfile-first: if the repo
 has no Dockerfile we return None and the caller GRACEFULLY SKIPS (the finding stays
-needs_runtime_verification — no false confidence). Honest and bounded, mirroring
-Argo's 'launcher recipe or skip'.
+needs_runtime_verification — no false confidence). Honest and bounded: we build
+only what we can build reproducibly, and skip the rest rather than guess.
 
 Trust boundary: a build must fetch dependencies, so it CANNOT run with
 ``--network=none`` (unlike the run phase). The untrusted Dockerfile RUN steps
