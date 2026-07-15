@@ -36,6 +36,11 @@ def test_runs_as_non_root():
     assert "--user=65534:65534" in _args()
 
 
+def test_dns_flag_only_when_requested():
+    assert not any(x.startswith("--dns=") for x in _args())
+    assert "--dns=10.0.0.2" in _args(network="net", dns="10.0.0.2")
+
+
 def test_resource_caps_present():
     a = _args()
     assert any(x.startswith("--memory=") for x in a)
