@@ -74,7 +74,9 @@ def target_run_args(
 
 def container_ip(name: str, network: str, *, cancel_event: threading.Event | None = None) -> str:
     """The container's address on ``network`` (empty string if not resolvable)."""
-    fmt = "{{.NetworkSettings.Networks." + network + ".IPAddress}}"
+    # `index` (not dot access) because our network names contain hyphens, which a
+    # Go template cannot address as a map key with `.Networks.<name>`.
+    fmt = '{{(index .NetworkSettings.Networks "' + network + '").IPAddress}}'
     try:
         code, out, _err = run_tool(
             [container_cli(), "inspect", "-f", fmt, name],

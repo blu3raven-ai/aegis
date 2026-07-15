@@ -51,6 +51,23 @@ def test_container_ip_empty_when_inspect_fails():
         assert det.container_ip("hp", "net") == ""
 
 
+def test_container_ip_uses_index_for_hyphenated_network_names():
+    # Our networks are named aegis-deto-net-<id>; a Go template can't dot-access a
+    # map key with hyphens, so the inspect format MUST use `index`. (A live run
+    # caught this; the stub can't see the template, so assert its shape here.)
+    captured = {}
+
+    def fake(args, **kw):
+        captured["args"] = args
+        return (0, "10.0.0.2", "")
+
+    with patch("runner.sandbox.detonation.run_tool", side_effect=fake):
+        assert det.container_ip("hp", "aegis-deto-net-abc") == "10.0.0.2"
+    fmt = captured["args"][captured["args"].index("-f") + 1]
+    assert "index" in fmt and '"aegis-deto-net-abc"' in fmt
+    assert ".Networks.aegis-deto-net-abc" not in fmt  # the broken dot form is gone
+
+
 def test_honeypot_image_env_override():
     assert det.honeypot_image()
     with patch.dict("os.environ", {"HONEYPOT_IMAGE": "mirror.local/hp:2"}):
