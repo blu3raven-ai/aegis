@@ -81,6 +81,7 @@ def build_run_args(
     env_allow: dict[str, str] | None = None,
     name: str | None = None,
     network: str = "none",
+    dns: str | None = None,
 ) -> list[str]:
     """The hardened ``docker run`` argv. Every control below is MANDATORY:
 
@@ -108,6 +109,11 @@ def build_run_args(
     ]
     if runtime:
         args.append(f"--runtime={runtime}")
+    if dns:
+        # Point name resolution at the detonation honeypot so external lookups
+        # resolve to it (and outbound TCP lands on its catch-all) instead of the
+        # internet. Only meaningful on an --internal network, which has no egress.
+        args.append(f"--dns={dns}")
     for mount in lim.tmpfs:
         args.append(f"--tmpfs={mount}")
     for key, value in (env_allow or {}).items():
