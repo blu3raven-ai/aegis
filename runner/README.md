@@ -36,7 +36,7 @@ runner/
     schemas/                  pydantic data contracts (Evidence, Verdict)
     prompts/                  per-role prompt library (sast / secrets / sca / correlator)
     verifiers/                per-scanner verify_<type>_finding orchestrations
-    helpers/                  pure utilities (import_sites, prefilter)
+    helpers/                  pure utilities (import_sites)
     agents/                   tool-using investigator loop
     tools/                    grep_repo, read_file_range, fetch_advisory
     pipelines/                multi-scanner correlator, orchestrator, dedupe
