@@ -751,6 +751,7 @@ async def _verification_summary_for_scan(session, scan_id: str) -> dict[str, Any
 
     counts = {
         "confirmed": 0,
+        "needs_runtime_verification": 0,
         "needs_verify": 0,
         "possible": 0,
         "ruled_out": 0,
