@@ -18,6 +18,7 @@ export type TriageSummary = {
 
 const VERDICT_HEADLINE: Record<Verdict, string> = {
   confirmed: "Confirmed",
+  needs_runtime_verification: "Needs runtime check",
   needs_verify: "Needs review",
   possible: "Unconfirmed",
   ruled_out: "Ruled out",
