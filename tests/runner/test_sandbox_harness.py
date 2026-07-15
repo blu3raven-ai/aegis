@@ -96,3 +96,40 @@ def test_run_in_sandbox_launches_with_minimal_cli_env_and_timeout():
     assert kwargs["timeout"] == 42.0     # hard wall-clock cap enforced
     passed_args = rt.call_args[0][0]
     assert "--network=none" in passed_args  # the hardened argv is what ran
+
+
+# --- self-hosted portability: configurable CLI + availability detection ---
+
+def test_container_cli_defaults_to_docker():
+    with patch.dict("os.environ", {}, clear=True):
+        from runner.sandbox.harness import container_cli
+        assert container_cli() == "docker"
+
+
+def test_container_cli_honors_env_override():
+    from runner.sandbox.harness import container_cli
+    with patch.dict("os.environ", {"CONTAINER_CLI": "podman"}, clear=True):
+        assert container_cli() == "podman"
+    with patch.dict("os.environ", {"CONTAINER_CLI": "  "}, clear=True):
+        assert container_cli() == "docker"  # blank falls back
+
+
+def test_build_run_args_uses_configured_cli():
+    from runner.sandbox.harness import build_run_args
+    with patch.dict("os.environ", {"CONTAINER_CLI": "podman"}, clear=True):
+        a = build_run_args("img", ["c"])
+    assert a[0] == "podman" and a[1] == "run"
+
+
+def test_runtime_available_true_when_version_succeeds():
+    from runner.sandbox.harness import runtime_available
+    with patch("runner.sandbox.harness.run_tool", return_value=(0, "Docker 27", "")):
+        assert runtime_available() is True
+
+
+def test_runtime_available_false_when_cli_missing_or_daemon_down():
+    from runner.sandbox.harness import runtime_available
+    with patch("runner.sandbox.harness.run_tool", side_effect=FileNotFoundError):
+        assert runtime_available() is False   # binary not on PATH (self-hosted w/o docker)
+    with patch("runner.sandbox.harness.run_tool", return_value=(1, "", "cannot connect")):
+        assert runtime_available() is False   # daemon down / not permitted

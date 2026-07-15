@@ -30,6 +30,27 @@ def docker_cli_env() -> dict[str, str]:
     return {k: os.environ[k] for k in _DOCKER_CLI_ENV_KEYS if k in os.environ}
 
 
+def container_cli() -> str:
+    """The container CLI binary. Defaults to ``docker`` but is overridable via
+    ``CONTAINER_CLI`` (e.g. ``podman``) — self-hosted runners on a separate env may
+    run Podman/rootless, and Podman is CLI-compatible (run/build/network create
+    --internal all work). Keeps runtime verification portable off our own infra."""
+    return (os.environ.get("CONTAINER_CLI") or "docker").strip() or "docker"
+
+
+def runtime_available(cli: str | None = None) -> bool:
+    """True iff a usable container runtime is present (CLI resolvable + daemon
+    reachable). Feeds the graceful-skip matrix so runtime verification NEVER fails
+    a scan on a self-hosted runner that can't (or is not allowed to) sandbox — it
+    just stays needs_runtime_verification."""
+    binary = cli or container_cli()
+    try:
+        code, _out, _err = run_tool([binary, "version"], timeout=15.0, env=docker_cli_env())
+    except Exception:  # noqa: BLE001 — binary missing / daemon down → not available
+        return False
+    return code == 0
+
+
 @dataclass(frozen=True)
 class SandboxLimits:
     """Anti-DoS caps. Conservative defaults; a build/probe needs little."""
@@ -75,7 +96,7 @@ def build_run_args(
     """
     lim = limits or SandboxLimits()
     args: list[str] = [
-        "docker", "run", "--rm",
+        container_cli(), "run", "--rm",
         f"--network={network}",
         "--read-only",
         "--cap-drop=ALL",
