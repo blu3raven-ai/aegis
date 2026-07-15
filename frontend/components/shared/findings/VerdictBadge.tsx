@@ -9,6 +9,7 @@ import { VERDICT_LABEL } from "@/lib/shared/findings/verdicts"
  */
 const VERDICT_COLOR: Record<Verdict, string> = {
   confirmed: "var(--color-severity-critical)",
+  needs_runtime_verification: "var(--color-severity-high)",
   needs_verify: "var(--color-severity-medium)",
   possible: "var(--color-text-tertiary)",
   ruled_out: "var(--color-status-ok)",
