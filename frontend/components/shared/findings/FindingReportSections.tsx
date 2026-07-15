@@ -230,6 +230,11 @@ export function NotesVerificationSection({
             {ruledOut.reasoning ? <p className="text-sm leading-relaxed">{ruledOut.reasoning}</p> : null}
           </div>
         ) : null}
+        {metadata?.runtime_question ? (
+          <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
+            Needs runtime check: {metadata.runtime_question}
+          </p>
+        ) : null}
         {metadata?.carve_out_source === "baseline" ? (
           <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
             Downgraded — matches baseline: {metadata.carve_out_ref}

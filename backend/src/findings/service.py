@@ -41,7 +41,7 @@ VALID_SEVERITIES = frozenset({"critical", "high", "medium", "low"})
 VALID_STATES = frozenset({"open", "closed", "dismissed", "fixed", "deferred"})
 
 # Concrete verdict values stored in Finding.verdict.
-VALID_VERDICTS = frozenset({"confirmed", "needs_verify", "possible", "ruled_out"})
+VALID_VERDICTS = frozenset({"confirmed", "needs_verify", "needs_runtime_verification", "possible", "ruled_out"})
 
 # Accepted ?verdict= filter values. "legacy" matches verdict IS NULL
 # (findings ingested before LLM verification ran); "all" disables the filter.

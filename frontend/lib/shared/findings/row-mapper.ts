@@ -160,6 +160,11 @@ export interface VerificationMetadata {
   distinctness?: string
   /** Numbered defense-in-depth remediation steps beyond the primary `fix` diff. */
   remediation?: string[]
+  /**
+   * The concrete question the verifier needs answered at runtime to confirm or
+   * rule out this finding. Present only on `needs_runtime_verification` verdicts.
+   */
+  runtime_question?: string | null
   /** The benign PoC body, when one exists. The drawer only checks its presence
    *  (to show the download link); the script is fetched as a file, not inlined. */
   poc_script?: string

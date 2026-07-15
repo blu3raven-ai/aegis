@@ -16,3 +16,8 @@ test("NotesVerificationSection surfaces a baseline downgrade", () => {
   assert.match(src, /carve_out_source|carveOutSource/)
   assert.match(src, /baseline/i)
 })
+
+test("NotesVerificationSection surfaces the runtime-check question", () => {
+  assert.match(src, /runtime_question/)
+  assert.match(src, /runtime check/i)
+})

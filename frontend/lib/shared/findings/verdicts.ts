@@ -4,11 +4,12 @@
  * (src/findings/service.VALID_VERDICTS + the legacy/all filter aliases).
  */
 
-export type Verdict = "confirmed" | "needs_verify" | "possible" | "ruled_out"
+export type Verdict = "confirmed" | "needs_runtime_verification" | "needs_verify" | "possible" | "ruled_out"
 export type VerdictFilter = Verdict | "legacy" | "all" | null
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
   confirmed: "Confirmed",
+  needs_runtime_verification: "Needs runtime check",
   needs_verify: "Needs verify",
   possible: "Possible",
   ruled_out: "Ruled out",
@@ -16,6 +17,7 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
 
 export const VERDICT_EMOJI: Record<Verdict, string> = {
   confirmed: "🔴",
+  needs_runtime_verification: "🟠",
   needs_verify: "🟡",
   possible: "⚪",
   ruled_out: "✓",
@@ -24,9 +26,10 @@ export const VERDICT_EMOJI: Record<Verdict, string> = {
 /** Highest concern first — useful for sorting groups. */
 export const VERDICT_ORDER: Record<Verdict, number> = {
   confirmed: 0,
-  needs_verify: 1,
-  possible: 2,
-  ruled_out: 3,
+  needs_runtime_verification: 1,
+  needs_verify: 2,
+  possible: 3,
+  ruled_out: 4,
 }
 
 /**
@@ -35,7 +38,7 @@ export const VERDICT_ORDER: Record<Verdict, number> = {
  * Mirrors the backend `_VALID_VERDICT_FILTERS`.
  */
 export const VALID_VERDICT_FILTERS = new Set<string>([
-  "confirmed", "needs_verify", "possible", "ruled_out", "legacy", "all",
+  "confirmed", "needs_runtime_verification", "needs_verify", "possible", "ruled_out", "legacy", "all",
 ])
 
 /** Parse a raw URL/state token into a VerdictFilter, or null if absent/invalid. */

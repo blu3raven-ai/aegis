@@ -125,6 +125,8 @@ def compose_advisory_markdown(finding: dict) -> str:
     verdict = (finding.get("verdict") or "").strip()
     if verdict:
         parts.append(f"## Notes\n\nVerification verdict: **{verdict}**.\n")
+    if m.get("runtime_question"):
+        parts.append(f"Needs runtime verification: {m.get('runtime_question')}")
     ro = (m.get("ruled_out_reason") or {})
     if ro.get("source") == "accepted_risk":
         parts.append(f"Ruled out — accepted risk: {ro.get('statement')}\n")
@@ -238,6 +240,8 @@ def compose_advisory_html(finding: dict) -> str:
     verdict = (finding.get("verdict") or "").strip()
     if verdict:
         body.append(f"<h2>Notes</h2><p>Verification verdict: <strong>{_esc(verdict)}</strong>.</p>")
+    if m.get("runtime_question"):
+        body.append(f"<p>Needs runtime verification: {_esc(m.get('runtime_question') or '')}</p>")
     ro = (m.get("ruled_out_reason") or {})
     if ro.get("source") == "accepted_risk":
         body.append(f"<p>Ruled out — accepted risk: {_esc(ro.get('statement') or '')}</p>")

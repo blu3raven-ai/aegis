@@ -12,6 +12,7 @@ from runner.verification.schemas.evidence import Evidence
 class Verdict(str, Enum):
     CONFIRMED = "confirmed"
     NEEDS_VERIFY = "needs_verify"
+    NEEDS_RUNTIME_VERIFICATION = "needs_runtime_verification"
     POSSIBLE = "possible"
     RULED_OUT = "ruled_out"
 
@@ -64,6 +65,11 @@ class HunterResponse(BaseModel):
     poc_script: str = ""
     poc_filename: str = ""
     poc_language: str = ""
+    # Set when a grounded chain's exploitability hinges on a runtime fact the
+    # model can't confirm statically (auth actually enforced? route mounted?
+    # flag on in prod?). runtime_question is the ONE concrete check to run.
+    needs_runtime: bool = False
+    runtime_question: str = ""
 
 
 class SkepticResponse(BaseModel):

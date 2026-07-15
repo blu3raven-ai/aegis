@@ -592,7 +592,7 @@ class Finding(Base):
             name="ck_findings_state",
         ),
         sa.CheckConstraint(
-            "verdict IS NULL OR verdict IN ('confirmed','needs_verify','possible','ruled_out')",
+            "verdict IS NULL OR verdict IN ('confirmed','needs_verify','needs_runtime_verification','possible','ruled_out')",
             name="ck_findings_verdict",
         ),
         sa.CheckConstraint(
