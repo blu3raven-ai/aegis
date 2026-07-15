@@ -273,7 +273,7 @@ def verify_finding(
     # once the chain is confirmed — surfacing it on an unverified finding overstates it.
     if verdict == "confirmed":
         from runner.verification.enrich import stash_confirmed_enrichment
-        stash_confirmed_enrichment(metadata, hunter_model)
+        stash_confirmed_enrichment(metadata, hunter_model, repo_root=repo_root)
 
         # "confirmed IF <question>": a grounded chain that hinges on a runtime fact
         # the model couldn't check statically. Carry the exact check instead of a

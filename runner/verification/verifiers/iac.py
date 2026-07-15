@@ -271,7 +271,7 @@ def verify_iac_finding(
 
     # Confirmed chain — surface the enriched audit detail the hunter gave.
     from runner.verification.enrich import stash_confirmed_enrichment
-    stash_confirmed_enrichment(metadata, hunter_model)
+    stash_confirmed_enrichment(metadata, hunter_model, repo_root=repo_root)
 
     return VerificationResult(
         verdict="confirmed",

@@ -165,7 +165,7 @@ def verify_sca_finding(
     # Only surface the enriched detail once the chain is confirmed.
     if verdict == "confirmed":
         from runner.verification.enrich import stash_confirmed_enrichment
-        stash_confirmed_enrichment(metadata, hunter_model)
+        stash_confirmed_enrichment(metadata, hunter_model, repo_root=repo_root)
 
     return VerificationResult(
         verdict=verdict,
