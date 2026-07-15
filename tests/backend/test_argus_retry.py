@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
 
 from src.argus.connector import (
     ArgusConnector,
@@ -150,7 +149,7 @@ def test_score_finding_does_not_retry_on_422():
 
     with patch.object(connector, "_post", side_effect=unprocessable):
         with patch("time.sleep") as mock_sleep:
-            result = connector.score_finding({"severity": "medium"})
+            connector.score_finding({"severity": "medium"})
 
     assert call_count[0] == 1
     mock_sleep.assert_not_called()
@@ -207,24 +206,6 @@ def test_retry_budget_prevents_extra_attempts():
 
 
 # ── other methods also retry ──────────────────────────────────────────────────
-
-
-def test_decide_go_no_go_retries_on_503():
-    connector = _connector()
-    attempts = [0]
-
-    def flaky(path, body):
-        attempts[0] += 1
-        if attempts[0] == 1:
-            raise _http_error(503)
-        return {"decision": "allow", "blockers": []}
-
-    with patch.object(connector, "_post", side_effect=flaky):
-        with patch("time.sleep"):
-            result = connector.decide_go_no_go("svc-1", [])
-
-    assert result.source == "argus"
-    assert attempts[0] == 2
 
 
 def test_fetch_premium_rule_pack_retries_on_network_error():

@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'backend/**'
+      - 'tests/backend/**'
       - '.github/workflows/backend-tests.yml'
   push:
     branches: [main-v2, main]
     paths:
       - 'backend/**'
+      - 'tests/backend/**'
       - '.github/workflows/backend-tests.yml'
   workflow_dispatch:
 
@@ -75,4 +77,4 @@ jobs:
       - name: Run backend tests
         run: |
           cd backend
-          uv run pytest src/tests/ -q --tb=short
+          uv run pytest ../tests/backend/ -q --tb=short

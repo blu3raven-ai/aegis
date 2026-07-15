@@ -1,123 +1,106 @@
-"""Tests for the EPSS API router endpoint shapes.
+"""Permission and asset-scope tests for /api/v1/sla/epss.
 
-Mounts only the EPSS router on a minimal FastAPI app (no JWT middleware) so
-tests are fast, isolated from auth, and free of DB dependencies.
+The /top endpoint scopes by the caller's accessible asset_ids; the legacy
+``?org_id=`` query-param fallback was a BOLA vector and has been removed.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-from unittest.mock import patch
+import os
+from unittest.mock import AsyncMock, patch
 
-import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from src.db.models import EpssScore
-from src.epss.router import router as epss_router
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
+os.environ.setdefault("APP_SECRET", "0" * 64)
+
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
+from src.epss.router import router as epss_router  # noqa: E402
+
+_FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 
-def _make_app() -> FastAPI:
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(epss_router)
+
+    @app.middleware("http")
+    async def inject_user(request: Request, call_next):
+        request.state.user_sub = "user-1"
+        request.state.user_role = "viewer"
+        request.state.user_role_id = None
+        return await call_next(request)
+
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
     return app
 
 
-def _make_score(**kwargs) -> EpssScore:
-    s = EpssScore()
-    s.cve = kwargs.get("cve", "CVE-2024-12345")
-    s.score = kwargs.get("score", 0.85)
-    s.percentile = kwargs.get("percentile", 0.95)
-    s.scored_date = kwargs.get("scored_date", date(2024, 5, 13))
-    s.fetched_at = kwargs.get("fetched_at", datetime(2024, 5, 13, 12, 0, tzinfo=timezone.utc))
-    return s
+def test_top_requires_view_findings():
+    """Caller without view_findings gets 403 before any scope lookup runs."""
+    called = {"scope": False}
+
+    async def fake_scope(*args, **kwargs):
+        called["scope"] = True
+        return [_FAKE_ASSET_ID]
+
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False), \
+         patch("src.epss.router.resolve_asset_ids_from_request", side_effect=fake_scope):
+        client = TestClient(_make_app(allow_view_findings=False))
+        resp = client.get("/api/v1/sla/epss/top")
+        assert resp.status_code == 403
+        assert called["scope"] is False
 
 
-@patch("src.epss.router._service")
-def test_get_score_found(mock_svc):
-    mock_svc.get_score.return_value = _make_score()
-    client = TestClient(_make_app(), raise_server_exceptions=True)
-    resp = client.get("/api/v1/epss/scores/CVE-2024-12345")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["cve"] == "CVE-2024-12345"
-    assert data["score"] == pytest.approx(0.85)
-    assert data["percentile"] == pytest.approx(0.95)
-    assert data["scored_date"] == "2024-05-13"
+def test_top_uses_caller_scoped_asset_ids():
+    """The service is invoked with the caller's resolved asset_ids — not any
+    client-supplied org_id (the query-param fallback has been removed)."""
+    captured: dict = {}
+
+    def _fake_top(asset_ids, limit):
+        captured["asset_ids"] = asset_ids
+        captured["limit"] = limit
+        return []
+
+    with patch("src.epss.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.epss.router._service.top_findings_by_epss", side_effect=_fake_top):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/sla/epss/top")
+        assert resp.status_code == 200
+        assert captured["asset_ids"] == [_FAKE_ASSET_ID]
+        assert captured["limit"] == 20
 
 
-@patch("src.epss.router._service")
-def test_get_score_not_found(mock_svc):
-    mock_svc.get_score.return_value = None
-    client = TestClient(_make_app(), raise_server_exceptions=True)
-    resp = client.get("/api/v1/epss/scores/CVE-9999-00000")
-    assert resp.status_code == 404
-    assert "EPSS feed" in resp.json()["detail"]
+def test_top_ignores_legacy_org_id_query_param():
+    """The legacy ?org_id= query string used to widen scope; today it is
+    silently ignored and the response is scoped to the caller's grants."""
+    captured: dict = {}
+
+    def _fake_top(asset_ids, limit):
+        captured["asset_ids"] = asset_ids
+        return []
+
+    with patch("src.epss.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.epss.router._service.top_findings_by_epss", side_effect=_fake_top):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/sla/epss/top?org_id=evil-org")
+        assert resp.status_code == 200
+        assert captured["asset_ids"] == [_FAKE_ASSET_ID]
 
 
-@patch("src.epss.router._service")
-def test_top_findings(mock_svc):
-    mock_svc.top_findings_by_epss.return_value = [
-        {
-            "finding_id": 1,
-            "tool": "deps",
-            "repo": "example/repo",
-            "severity": "high",
-            "identity_key": "abc",
-            "cve": "CVE-2024-1234",
-            "epss_score": 0.95,
-            "epss_percentile": 0.99,
-            "scored_date": "2024-05-13",
-        }
-    ]
-    client = TestClient(_make_app(), raise_server_exceptions=True)
-    resp = client.get("/api/v1/epss/top?org_id=example-org&limit=5")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["count"] == 1
-    assert data["findings"][0]["cve"] == "CVE-2024-1234"
-    mock_svc.top_findings_by_epss.assert_called_once_with("example-org", limit=5)
-
-
-@patch("src.epss.router._service")
-def test_top_missing_org(mock_svc):
-    """org_id query parameter is required — 422 if missing."""
-    client = TestClient(_make_app(), raise_server_exceptions=True)
-    resp = client.get("/api/v1/epss/top")
-    assert resp.status_code == 422
-
-
-@patch("src.epss.router._service")
-def test_top_limit_out_of_range_rejected(mock_svc):
-    client = TestClient(_make_app(), raise_server_exceptions=True)
-    resp = client.get("/api/v1/epss/top?org_id=x&limit=0")
-    assert resp.status_code == 422
-    resp = client.get("/api/v1/epss/top?org_id=x&limit=500")
-    assert resp.status_code == 422
-
-
-@patch("src.jobs.epss_refresh.refresh_epss_scores")
-def test_refresh_endpoint_success(mock_refresh):
-    mock_refresh.return_value = {"fetched": 100, "new": 5}
-    client = TestClient(_make_app(), raise_server_exceptions=True)
-    resp = client.post("/api/v1/epss/refresh")
-    assert resp.status_code == 200
-    assert resp.json() == {"fetched": 100, "new": 5}
-
-
-@patch("src.jobs.epss_refresh.refresh_epss_scores")
-def test_refresh_endpoint_failure(mock_refresh):
-    mock_refresh.side_effect = RuntimeError("upstream down")
-    client = TestClient(_make_app(), raise_server_exceptions=False)
-    resp = client.post("/api/v1/epss/refresh")
-    assert resp.status_code == 502
-    assert "EPSS refresh failed" in resp.json()["detail"]
-
-
-@patch("src.epss.router._service")
-def test_score_fields_serialized(mock_svc):
-    mock_svc.get_score.return_value = _make_score()
-    client = TestClient(_make_app(), raise_server_exceptions=True)
-    resp = client.get("/api/v1/epss/scores/CVE-2024-12345")
-    data = resp.json()
-    for field in ("cve", "score", "percentile", "scored_date", "fetched_at"):
-        assert field in data, f"Missing field: {field}"
+def test_top_empty_scope_returns_empty_list():
+    """Caller with no asset access gets a clean empty response — the service
+    isn't even invoked (avoids running the SQL query for a known-empty
+    result)."""
+    with patch("src.epss.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[])), \
+         patch("src.epss.router._service.top_findings_by_epss") as mock_top:
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/sla/epss/top")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body == {"findings": [], "count": 0}
+        mock_top.assert_not_called()

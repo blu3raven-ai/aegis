@@ -1,279 +1,179 @@
-"""Integration tests for the rate alarm guardrail.
+"""Coverage for the auto-dismiss rate-alarm guardrail.
 
-Exercises ``should_rate_alarm_block`` against the test-container Postgres
-because the threshold is a SQL ratio over FindingEvent rows that joins to
-Finding, and the numerator query depends on actor-string formatting.
+This guardrail trips when an auto-dismiss rule dismisses too large a share of
+new findings in a window, and can auto-disable a runaway rule. A bug here
+either lets a runaway rule keep silently swallowing findings or wrongly
+disables a healthy rule, so the threshold maths and actor/window isolation
+matter. The numerator counts dismissals by *this rule's* actor; the
+denominator counts all new (open) scan events in the window.
 """
 from __future__ import annotations
 
+import os
+import types
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
 import pytest
-from sqlalchemy import delete, select
+import pytest_asyncio
+from sqlalchemy import delete
 
-from src.db.helpers import run_db
-from src.db.models import Finding, FindingEvent, Rule
+from src.db.models import Finding, FindingEvent
+from src.rules import rate_alarm
 from src.rules.rate_alarm import (
+    AUTO_DISMISS_EVENT_ACTOR_PREFIX,
+    AUTO_DISMISS_EVENT_TRIGGERED_BY,
     auto_disable_rule,
     auto_dismiss_event_actor,
     dispatch_rate_alarm,
     should_rate_alarm_block,
 )
 
-
-_ORG = "acme-rate-alarm-org"
-_TOOL = "dependencies"
-_RULE_ID = "rule-rate-alarm-test"
+_RULE_ID = "rule-rate-alarm"
+_ACTOR = auto_dismiss_event_actor(_RULE_ID)
 
 
-# ── Cleanup ───────────────────────────────────────────────────────────────────
+def _rule(pct=50, window=60):
+    return types.SimpleNamespace(
+        id=_RULE_ID,
+        name="Runaway rule",
+        enabled=True,
+        last_evaluated_at=None,
+        action={"rate_alarm_pct": pct, "rate_alarm_window_minutes": window},
+    )
 
 
-@pytest.fixture(autouse=True)
-def _clean_tables():
-    async def _del(session):
-        await session.execute(delete(FindingEvent).where(FindingEvent.org == _ORG))
-        await session.execute(delete(Finding).where(Finding.org == _ORG))
-        await session.execute(delete(Rule).where(Rule.org_id == _ORG))
+# ── pure helpers ─────────────────────────────────────────────────────────────
 
-    run_db(_del)
-    yield
-    run_db(_del)
+def test_actor_helper_and_constants():
+    assert AUTO_DISMISS_EVENT_TRIGGERED_BY == "scan"
+    assert AUTO_DISMISS_EVENT_ACTOR_PREFIX == "auto-rule:"
+    assert auto_dismiss_event_actor("abc") == "auto-rule:abc"
 
 
-# ── Seeding helpers ───────────────────────────────────────────────────────────
+class _FakeBus:
+    def __init__(self):
+        self.published = []
+
+    def publish_sync(self, event):
+        self.published.append(event)
 
 
-def _seed_rule(
-    *,
-    rule_id: str = _RULE_ID,
-    rate_alarm_pct: float = 50.0,
-    rate_alarm_window_minutes: int = 60,
-    enabled: bool = True,
-) -> Rule:
-    """Insert a rule and return a detached SQLA instance for direct evaluator calls."""
-    now = datetime.now(timezone.utc)
-
-    async def _insert(session):
-        rule = Rule(
-            id=rule_id,
-            org_id=_ORG,
-            category="auto_dismiss",
-            name="rate-alarm-test",
-            description=None,
-            enabled=enabled,
-            priority=100,
-            conditions={"all": []},
-            action={
-                "reason": "test",
-                "rate_alarm_pct": rate_alarm_pct,
-                "rate_alarm_window_minutes": rate_alarm_window_minutes,
-            },
-            created_by="usr-test",
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(rule)
-        await session.flush()
-        session.expunge(rule)
-        return rule
-
-    return run_db(_insert)
+def test_dispatch_rate_alarm_publishes_event(monkeypatch):
+    bus = _FakeBus()
+    monkeypatch.setattr(rate_alarm, "get_event_bus", lambda: bus)
+    dispatch_rate_alarm(_rule(pct=40, window=30))
+    assert len(bus.published) == 1
+    ev = bus.published[0]
+    assert ev.event_type == "rule.auto_dismiss.rate_alarm"
+    assert ev.data["rule_id"] == _RULE_ID
+    assert ev.data["rate_alarm_pct"] == 40
+    assert ev.data["rate_alarm_window_minutes"] == 30
 
 
-def _seed_finding(*, identity_key: str) -> int:
-    now = datetime.now(timezone.utc)
-
-    async def _insert(session):
-        f = Finding(
-            tool=_TOOL,
-            org=_ORG,
-            repo="repo-1",
-            identity_key=identity_key,
-            state="open",
-            severity="high",
-            first_seen_at=now,
-            last_seen_at=now,
-            detail={},
-            created_at=now,
-            updated_at=now,
-        )
-        session.add(f)
-        await session.flush()
-        return f.id
-
-    return run_db(_insert)
+def test_auto_disable_rule_mutates_and_publishes(monkeypatch):
+    bus = _FakeBus()
+    monkeypatch.setattr(rate_alarm, "get_event_bus", lambda: bus)
+    rule = _rule()
+    auto_disable_rule(None, rule, reason="rate alarm tripped")
+    assert rule.enabled is False
+    assert rule.last_evaluated_at is not None
+    assert len(bus.published) == 1
+    ev = bus.published[0]
+    assert ev.event_type == "rule.auto_dismiss.auto_disabled"
+    assert ev.data["reason"] == "rate alarm tripped"
 
 
-def _seed_event(
-    *,
-    finding_id: int,
-    to_state: str,
-    triggered_by: str = "scan",
-    actor: str | None = None,
-    created_at: datetime | None = None,
-    identity_key: str = "key-evt",
-) -> None:
-    when = created_at or datetime.now(timezone.utc)
+# ── should_rate_alarm_block (DB-backed) ──────────────────────────────────────
 
-    async def _insert(session):
-        session.add(FindingEvent(
+@pytest_asyncio.fixture
+async def finding(db_session):
+    # The denominator counts open events across all findings, so wipe the event
+    # log first to keep the share deterministic regardless of other modules.
+    await db_session.execute(delete(FindingEvent))
+    f = Finding(tool="dependencies_scanning", identity_key=f"k-{_RULE_ID}")
+    db_session.add(f)
+    await db_session.commit()
+    await db_session.refresh(f)
+    yield f.id
+    await db_session.execute(delete(FindingEvent).where(FindingEvent.finding_id == f.id))
+    await db_session.execute(delete(Finding).where(Finding.id == f.id))
+    await db_session.commit()
+
+
+async def _event(db, finding_id, *, to_state, actor, triggered_by="scan", minutes_ago=5):
+    db.add(
+        FindingEvent(
             finding_id=finding_id,
-            tool=_TOOL,
-            org=_ORG,
-            identity_key=identity_key,
-            from_state=None,
+            from_state="open",
             to_state=to_state,
             triggered_by=triggered_by,
             actor=actor,
-            metadata_json={},
-            created_at=when,
-        ))
-
-    run_db(_insert)
-
-
-def _seed_event_pairs(
-    *,
-    rule_id: str,
-    new_open_count: int,
-    auto_dismissed_count: int,
-    created_at: datetime | None = None,
-) -> None:
-    """Seed N open events and M auto-rule-dismissed events for the same rule."""
-    actor = auto_dismiss_event_actor(rule_id)
-    for i in range(new_open_count):
-        fid = _seed_finding(identity_key=f"open-{i}-{(created_at or datetime.now(timezone.utc)).timestamp()}")
-        _seed_event(finding_id=fid, to_state="open", triggered_by="scan",
-                    actor=None, created_at=created_at, identity_key=f"open-{i}")
-    for i in range(auto_dismissed_count):
-        fid = _seed_finding(identity_key=f"dism-{i}-{(created_at or datetime.now(timezone.utc)).timestamp()}")
-        _seed_event(finding_id=fid, to_state="dismissed", triggered_by="scan",
-                    actor=actor, created_at=created_at, identity_key=f"dism-{i}")
-
-
-def _call_should_rate_alarm_block(rule: Rule) -> bool:
-    async def _call(session):
-        # Re-attach the rule to a fresh session — should_rate_alarm_block only
-        # reads attributes off the dataclass-like Rule, no DB access via the row.
-        return await should_rate_alarm_block(session, rule)
-
-    return run_db(_call)
-
-
-def _get_rule(rule_id: str) -> Rule | None:
-    async def _q(session):
-        row = (
-            await session.execute(select(Rule).where(Rule.id == rule_id))
-        ).scalars().first()
-        if row is not None:
-            session.expunge(row)
-        return row
-
-    return run_db(_q)
-
-
-# ── Tests ─────────────────────────────────────────────────────────────────────
-
-
-def test_rate_alarm_does_not_fire_below_threshold():
-    rule = _seed_rule(rate_alarm_pct=50.0, rate_alarm_window_minutes=60)
-    # 10 newly-opened findings (denominator), 3 auto-dismissed (numerator)
-    # 30% < 50% threshold.
-    _seed_event_pairs(rule_id=rule.id, new_open_count=10, auto_dismissed_count=3)
-
-    assert _call_should_rate_alarm_block(rule) is False
-
-
-def test_rate_alarm_fires_when_threshold_crossed():
-    rule = _seed_rule(rate_alarm_pct=50.0, rate_alarm_window_minutes=60)
-    # 10 opens, 6 dismissals → 60% > 50%.
-    _seed_event_pairs(rule_id=rule.id, new_open_count=10, auto_dismissed_count=6)
-
-    assert _call_should_rate_alarm_block(rule) is True
-
-
-def test_rate_alarm_auto_disables_rule_and_dispatches_notification():
-    rule = _seed_rule()
-
-    # auto_disable_rule operates on the attached SQLA instance — call inside
-    # a session and verify the persisted row flips to enabled=False.
-    async def _do_disable(session):
-        attached = (
-            await session.execute(select(Rule).where(Rule.id == rule.id))
-        ).scalars().first()
-        mock_bus = MagicMock()
-        with patch("src.rules.rate_alarm.get_event_bus", return_value=mock_bus):
-            auto_disable_rule(session, attached, reason="rate_alarm_triggered")
-        return mock_bus
-
-    bus = run_db(_do_disable)
-
-    refreshed = _get_rule(rule.id)
-    assert refreshed.enabled is False
-    assert refreshed.last_evaluated_at is not None
-    delta = datetime.now(timezone.utc) - refreshed.last_evaluated_at.replace(tzinfo=timezone.utc) \
-        if refreshed.last_evaluated_at.tzinfo is None else \
-        datetime.now(timezone.utc) - refreshed.last_evaluated_at
-    assert abs(delta.total_seconds()) < 60
-
-    # auto_disable_rule publishes a "rule.auto_dismiss.auto_disabled" event.
-    assert bus.publish_sync.call_count == 1
-    event = bus.publish_sync.call_args.args[0]
-    assert event.event_type == "rule.auto_dismiss.auto_disabled"
-    assert event.data["rule_id"] == rule.id
-    assert event.data["reason"] == "rate_alarm_triggered"
-
-    # dispatch_rate_alarm publishes "rule.auto_dismiss.rate_alarm" with the
-    # threshold + window config.
-    mock_bus2 = MagicMock()
-    with patch("src.rules.rate_alarm.get_event_bus", return_value=mock_bus2):
-        dispatch_rate_alarm(refreshed, org_id=_ORG)
-
-    assert mock_bus2.publish_sync.call_count == 1
-    alarm_event = mock_bus2.publish_sync.call_args.args[0]
-    assert alarm_event.event_type == "rule.auto_dismiss.rate_alarm"
-    assert alarm_event.org == _ORG
-    assert alarm_event.data["rule_id"] == rule.id
-    assert alarm_event.data["rate_alarm_pct"] == 50.0
-    assert alarm_event.data["rate_alarm_window_minutes"] == 60
-
-
-def test_rate_alarm_window_respects_minutes_config():
-    rule = _seed_rule(rate_alarm_pct=50.0, rate_alarm_window_minutes=60)
-
-    # In-window events: 4 opens, 3 dismissals → 75% inside the window alone
-    # would trip; we'll add fake outside-window events that should be ignored.
-    _seed_event_pairs(rule_id=rule.id, new_open_count=4, auto_dismissed_count=3)
-
-    # Outside-window noise: 100 opens 2h ago — if the window query was wrong
-    # and counted these, the ratio would crash and we'd see False.
-    two_hours_ago = datetime.now(timezone.utc) - timedelta(hours=2)
-    _seed_event_pairs(
-        rule_id=rule.id,
-        new_open_count=100,
-        auto_dismissed_count=0,
-        created_at=two_hours_ago,
+            created_at=datetime.now(timezone.utc) - timedelta(minutes=minutes_ago),
+        )
     )
 
-    # 3/4 = 75% > 50% → True; if the window was ignored, denominator would
-    # be 104 (3/104 = 2.9%) and we'd see False. This pins the window.
-    assert _call_should_rate_alarm_block(rule) is True
+
+@pytest.mark.asyncio
+async def test_blocks_when_dismissed_share_exceeds_pct(db_session, finding):
+    for _ in range(3):
+        await _event(db_session, finding, to_state="dismissed", actor=_ACTOR)
+    for _ in range(2):
+        await _event(db_session, finding, to_state="open", actor="scanner")
+    await db_session.commit()
+    # 3 dismissed / 2 new = 150% > 50%.
+    assert await should_rate_alarm_block(db_session, _rule(pct=50)) is True
 
 
-def test_rate_alarm_with_zero_findings_returns_false():
-    rule = _seed_rule()
+@pytest.mark.asyncio
+async def test_no_block_when_share_at_or_below_pct(db_session, finding):
+    await _event(db_session, finding, to_state="dismissed", actor=_ACTOR)
+    for _ in range(10):
+        await _event(db_session, finding, to_state="open", actor="scanner")
+    await db_session.commit()
+    # 1 / 10 = 10% <= 50%.
+    assert await should_rate_alarm_block(db_session, _rule(pct=50)) is False
 
-    # No FindingEvents at all → denominator is zero.
-    assert _call_should_rate_alarm_block(rule) is False
 
-    # Same result if only outside-window events exist.
-    two_hours_ago = datetime.now(timezone.utc) - timedelta(hours=2)
-    _seed_event_pairs(
-        rule_id=rule.id,
-        new_open_count=5,
-        auto_dismissed_count=5,
-        created_at=two_hours_ago,
-    )
-    assert _call_should_rate_alarm_block(rule) is False
+@pytest.mark.asyncio
+async def test_zero_new_findings_does_not_block(db_session, finding):
+    for _ in range(5):
+        await _event(db_session, finding, to_state="dismissed", actor=_ACTOR)
+    await db_session.commit()
+    # No open events → denominator 0 → never blocks (no div-by-zero).
+    assert await should_rate_alarm_block(db_session, _rule(pct=50)) is False
+
+
+@pytest.mark.asyncio
+async def test_dismissals_by_other_actor_are_not_counted(db_session, finding):
+    other = auto_dismiss_event_actor("some-other-rule")
+    for _ in range(5):
+        await _event(db_session, finding, to_state="dismissed", actor=other)
+    for _ in range(2):
+        await _event(db_session, finding, to_state="open", actor="scanner")
+    await db_session.commit()
+    # This rule dismissed nothing → 0% → no block.
+    assert await should_rate_alarm_block(db_session, _rule(pct=50)) is False
+
+
+@pytest.mark.asyncio
+async def test_dismissals_outside_window_are_not_counted(db_session, finding):
+    for _ in range(5):
+        await _event(db_session, finding, to_state="dismissed", actor=_ACTOR, minutes_ago=120)
+    for _ in range(2):
+        await _event(db_session, finding, to_state="open", actor="scanner")
+    await db_session.commit()
+    # Dismissals are 2h old but the window is 60m → not counted.
+    assert await should_rate_alarm_block(db_session, _rule(pct=50, window=60)) is False
+
+
+@pytest.mark.asyncio
+async def test_non_scan_triggered_dismissals_are_not_counted(db_session, finding):
+    for _ in range(5):
+        await _event(db_session, finding, to_state="dismissed", actor=_ACTOR, triggered_by="manual")
+    for _ in range(2):
+        await _event(db_session, finding, to_state="open", actor="scanner")
+    await db_session.commit()
+    # Manual dismissals don't count toward the auto-dismiss rate.
+    assert await should_rate_alarm_block(db_session, _rule(pct=50)) is False

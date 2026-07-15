@@ -1,7 +1,8 @@
-"""Integration tests for POST /api/v1/decisions/go-no-go.
+"""Permission and asset-scope tests for /api/v1/findings/decisions.
 
-Patches the service entry point so we focus on HTTP concerns: request
-parsing, validation status codes, and the response envelope.
+The endpoint scopes by the caller's accessible asset_ids (team grants +
+direct grants), NOT by a client-supplied org_id. The legacy ``payload.
+org_id`` fallback was a BOLA vector and has been removed.
 """
 from __future__ import annotations
 
@@ -12,185 +13,109 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
-os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "0" * 64)
+os.environ.setdefault("APP_SECRET", "0" * 64)
 
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
 from src.decisions.router import router as decisions_router  # noqa: E402
 
+_FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
-def _make_app() -> TestClient:
+
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(decisions_router)
 
     @app.middleware("http")
-    async def inject_state(request: Request, call_next):
-        request.state.user_sub = "test-user"
-        request.state.user_role = "owner"
+    async def inject_user(request: Request, call_next):
+        request.state.user_sub = "user-1"
+        request.state.user_role = "viewer"
+        request.state.user_role_id = None
         return await call_next(request)
 
-    return TestClient(app, raise_server_exceptions=True)
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
+    return app
 
 
-def _allow_response() -> dict:
-    return {
-        "decision": "allow",
-        "blockers": [],
-        "rationale": "No open findings at severity: critical.",
-        "source": "backend",
-    }
+def test_decisions_requires_view_findings():
+    """Caller without view_findings gets 403 before any scope lookup runs."""
+    called = {"scope": False}
+
+    async def fake_scope(*args, **kwargs):
+        called["scope"] = True
+        return [_FAKE_ASSET_ID]
+
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False), \
+         patch("src.decisions.router.resolve_asset_ids_from_request", side_effect=fake_scope):
+        client = TestClient(_make_app(allow_view_findings=False))
+        resp = client.post("/api/v1/findings/decisions", json={})
+        assert resp.status_code == 403
+        assert "view_findings" in resp.json()["detail"]
+        assert called["scope"] is False
 
 
-def _block_response() -> dict:
-    return {
-        "decision": "block",
-        "blockers": [
-            {
-                "id": "1",
-                "tool": "dependencies",
-                "severity": "critical",
-                "state": "open",
-                "repo": "acme-org/api",
-                "identity_key": "key-1",
-                "title": "log4j RCE",
-                "cve": "CVE-2021-44228",
-            }
-        ],
-        "rationale": "1 open finding(s) at or above required severity (critical).",
-        "source": "backend",
-    }
-
-
-# ---------------------------------------------------------------------------
-# Happy path
-# ---------------------------------------------------------------------------
-
-
-def test_go_no_go_returns_200_allow_envelope():
-    client = _make_app()
-    with patch(
-        "src.decisions.router._service.evaluate", new_callable=AsyncMock
-    ) as svc:
-        svc.return_value = _allow_response()
-        resp = client.post(
-            "/api/v1/decisions/go-no-go",
-            json={"org_id": "acme-org"},
-        )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["decision"] == "allow"
-    assert body["blockers"] == []
-    assert body["source"] == "backend"
-
-
-def test_go_no_go_returns_200_block_envelope():
-    client = _make_app()
-    with patch(
-        "src.decisions.router._service.evaluate", new_callable=AsyncMock
-    ) as svc:
-        svc.return_value = _block_response()
-        resp = client.post(
-            "/api/v1/decisions/go-no-go",
-            json={"org_id": "acme-org", "repo": "acme-org/api"},
-        )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["decision"] == "block"
-    assert len(body["blockers"]) == 1
-    assert body["blockers"][0]["severity"] == "critical"
-
-
-# ---------------------------------------------------------------------------
-# Request parsing
-# ---------------------------------------------------------------------------
-
-
-def test_repo_optional_defaults_to_none():
-    client = _make_app()
+def test_decisions_uses_caller_scoped_asset_ids():
+    """The service is invoked with the caller's resolved asset_ids — not any
+    client-supplied org_id (which is no longer a body field)."""
     captured: dict = {}
 
-    async def _capture(*, org_id, repo, policy, session):
-        captured["org_id"] = org_id
+    async def _fake_evaluate(*, asset_ids, repo, policy, session):
+        captured["asset_ids"] = asset_ids
         captured["repo"] = repo
-        return _allow_response()
+        return {"verdict": "go"}
 
-    with patch(
-        "src.decisions.router._service.evaluate", side_effect=_capture
-    ):
+    with patch("src.decisions.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.decisions.router._service.evaluate", new=AsyncMock(side_effect=_fake_evaluate)), \
+         patch("src.decisions.router.get_session") as mock_session:
+        mock_session.return_value.__aenter__ = AsyncMock(return_value=object())
+        mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+        client = TestClient(_make_app())
         resp = client.post(
-            "/api/v1/decisions/go-no-go",
-            json={"org_id": "acme-org"},
+            "/api/v1/findings/decisions",
+            json={"repo": "acme/api"},
         )
-    assert resp.status_code == 200
-    assert captured["org_id"] == "acme-org"
-    assert captured["repo"] is None
+        assert resp.status_code == 200
+        assert captured["asset_ids"] == [_FAKE_ASSET_ID]
+        assert captured["repo"] == "acme/api"
 
 
-def test_policy_block_on_pass_through():
-    client = _make_app()
+def test_decisions_ignores_legacy_body_org_id():
+    """The legacy ``org_id`` body field used to widen scope; today it is
+    silently ignored (Pydantic extra-field policy) and the verdict is still
+    computed against the caller's actual asset_ids."""
     captured: dict = {}
 
-    async def _capture(*, org_id, repo, policy, session):
-        captured["policy"] = policy
-        return _allow_response()
+    async def _fake_evaluate(*, asset_ids, repo, policy, session):
+        captured["asset_ids"] = asset_ids
+        return {"verdict": "go"}
 
-    with patch(
-        "src.decisions.router._service.evaluate", side_effect=_capture
-    ):
+    with patch("src.decisions.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.decisions.router._service.evaluate", new=AsyncMock(side_effect=_fake_evaluate)), \
+         patch("src.decisions.router.get_session") as mock_session:
+        mock_session.return_value.__aenter__ = AsyncMock(return_value=object())
+        mock_session.return_value.__aexit__ = AsyncMock(return_value=False)
+        client = TestClient(_make_app())
         resp = client.post(
-            "/api/v1/decisions/go-no-go",
-            json={
-                "org_id": "acme-org",
-                "policy": {"block_on": ["critical", "high"]},
-            },
+            "/api/v1/findings/decisions",
+            json={"org_id": "evil-org", "repo": "acme/api"},
         )
-    assert resp.status_code == 200
-    assert captured["policy"].block_on == ("critical", "high")
+        assert resp.status_code == 200
+        # Caller's real scope wins; the body's org_id has no effect.
+        assert captured["asset_ids"] == [_FAKE_ASSET_ID]
 
 
-# ---------------------------------------------------------------------------
-# Validation — missing org_id → 422, bad policy → 400
-# ---------------------------------------------------------------------------
-
-
-def test_missing_org_id_returns_422():
-    client = _make_app()
-    resp = client.post("/api/v1/decisions/go-no-go", json={})
-    assert resp.status_code == 422
-
-
-def test_empty_org_id_returns_422():
-    client = _make_app()
-    resp = client.post("/api/v1/decisions/go-no-go", json={"org_id": ""})
-    assert resp.status_code == 422
-
-
-def test_bad_policy_shape_returns_400():
-    client = _make_app()
-    resp = client.post(
-        "/api/v1/decisions/go-no-go",
-        json={"org_id": "acme-org", "policy": {"block_on": ["bogus-severity"]}},
-    )
-    assert resp.status_code == 400
-    assert "severity" in resp.json()["detail"].lower()
-
-
-def test_bad_policy_type_returns_422():
-    """policy must be an object — FastAPI rejects non-object before service runs."""
-    client = _make_app()
-    resp = client.post(
-        "/api/v1/decisions/go-no-go",
-        json={"org_id": "acme-org", "policy": "critical"},
-    )
-    assert resp.status_code == 422
-
-
-def test_service_value_error_returns_400():
-    client = _make_app()
-    with patch(
-        "src.decisions.router._service.evaluate", new_callable=AsyncMock
-    ) as svc:
-        svc.side_effect = ValueError("org_id is required")
-        resp = client.post(
-            "/api/v1/decisions/go-no-go",
-            json={"org_id": "acme-org"},
-        )
-    assert resp.status_code == 400
+def test_decisions_empty_scope_returns_403():
+    """Caller has VIEW_FINDINGS but no asset access — 403 (fail-closed) so
+    an unauthorized caller cannot fish for a 'pass' verdict against an
+    empty finding set."""
+    with patch("src.decisions.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[])), \
+         patch("src.decisions.router._service.evaluate") as mock_evaluate:
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/decisions", json={})
+        assert resp.status_code == 403
+        # Service must not be touched when the caller has no scope.
+        mock_evaluate.assert_not_called()

@@ -47,9 +47,14 @@ def _auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _mint_upload_post(key, *, max_bytes, expires_in, external):
+    return {"url": f"https://minio.example/{key}?sig=xyz", "fields": {"key": key, "policy": "p"}}
+
+
 def test_upload_presign_happy_path(client, approved_runner, running_job):
-    with patch("src.runner.router.generate_upload_url") as mock_mint:
-        mock_mint.side_effect = lambda key, expires_in, external: f"https://minio.example/{key}?sig=xyz"
+    from src.shared.object_store import MAX_OBJECT_BYTES
+
+    with patch("src.runner.router.generate_upload_post", side_effect=_mint_upload_post) as mock_mint:
         resp = client.post(
             f"/api/v1/agent/jobs/{running_job['id']}/uploads/presign",
             headers=_auth(approved_runner["token"]),
@@ -60,10 +65,14 @@ def test_upload_presign_happy_path(client, approved_runner, running_job):
     body = resp.json()
     assert body["expiresIn"] == 300
     assert len(body["urls"]) == 2
-    files = {u["file"]: u["url"] for u in body["urls"]}
+    files = {u["file"]: u for u in body["urls"]}
     assert "findings.json" in files
     assert "sbom.cdx.json" in files
-    assert "dependencies/acme/run-abc/findings.json" in files["findings.json"]
+    assert "dependencies_scanning/acme/run-abc/findings.json" in files["findings.json"]["url"]
+    # Each entry carries the policy fields the runner POSTs alongside the file.
+    assert files["findings.json"]["fields"]
+    # The size cap is enforced at issue-time via the POST policy.
+    assert mock_mint.call_args.kwargs["max_bytes"] == MAX_OBJECT_BYTES
 
 
 def test_upload_presign_rejects_missing_auth(client, running_job):
@@ -115,18 +124,18 @@ def test_upload_presign_rejects_unsafe_filenames(client, approved_runner, runnin
 def test_upload_presign_key_construction_uses_job_fields(client, approved_runner, running_job):
     captured_keys = []
 
-    def _capture(key, expires_in, external):
+    def _capture(key, *, max_bytes, expires_in, external):
         captured_keys.append(key)
-        return f"https://minio.example/{key}"
+        return {"url": f"https://minio.example/{key}", "fields": {"key": key}}
 
-    with patch("src.runner.router.generate_upload_url", side_effect=_capture):
+    with patch("src.runner.router.generate_upload_post", side_effect=_capture):
         client.post(
             f"/api/v1/agent/jobs/{running_job['id']}/uploads/presign",
             headers=_auth(approved_runner["token"]),
             json={"files": ["findings.json"]},
         )
 
-    assert captured_keys == ["dependencies/acme/run-abc/findings.json"]
+    assert captured_keys == ["dependencies_scanning/acme/run-abc/findings.json"]
 
 
 def test_sbom_list_happy_path(client, approved_runner, running_job):
@@ -195,13 +204,9 @@ def reset_rate_limit_buckets():
         rl._buckets.clear()
 
 
-def _mint_upload_url(key, expires_in, external):
-    return f"https://minio.example/{key}"
-
-
 def test_upload_presign_allows_up_to_limit(client, approved_runner, running_job, reset_rate_limit_buckets):
     """200 calls within the 60s window must all succeed."""
-    with patch("src.runner.router.generate_upload_url", side_effect=_mint_upload_url):
+    with patch("src.runner.router.generate_upload_post", side_effect=_mint_upload_post):
         for _ in range(200):
             resp = client.post(
                 f"/api/v1/agent/jobs/{running_job['id']}/uploads/presign",
@@ -213,7 +218,7 @@ def test_upload_presign_allows_up_to_limit(client, approved_runner, running_job,
 
 def test_upload_presign_rate_limits_above_threshold(client, approved_runner, running_job, reset_rate_limit_buckets):
     """The 201st call within the window must return 429."""
-    with patch("src.runner.router.generate_upload_url", side_effect=_mint_upload_url):
+    with patch("src.runner.router.generate_upload_post", side_effect=_mint_upload_post):
         for _ in range(200):
             resp = client.post(
                 f"/api/v1/agent/jobs/{running_job['id']}/uploads/presign",
@@ -239,7 +244,7 @@ def test_upload_presign_recovers_after_window_expires(client, approved_runner, r
 
     monkeypatch.setattr("src.shared.rate_limit.time.time", _now)
 
-    with patch("src.runner.router.generate_upload_url", side_effect=_mint_upload_url):
+    with patch("src.runner.router.generate_upload_post", side_effect=_mint_upload_post):
         for _ in range(200):
             resp = client.post(
                 f"/api/v1/agent/jobs/{running_job['id']}/uploads/presign",
@@ -286,7 +291,7 @@ def test_upload_presign_runners_have_independent_quotas(client, approved_runner,
     )
     update_job_status(other_job["id"], "running", runnerId=other["id"])
 
-    with patch("src.runner.router.generate_upload_url", side_effect=_mint_upload_url):
+    with patch("src.runner.router.generate_upload_post", side_effect=_mint_upload_post):
         for _ in range(200):
             resp = client.post(
                 f"/api/v1/agent/jobs/{running_job['id']}/uploads/presign",

@@ -2,7 +2,7 @@
  * Parity guard: the frontend license classifier (license-category.ts) must agree
  * with the authoritative backend classifier (backend/src/sbom/licenses.py) on a
  * shared fixture set. The Python side asserts the SAME fixtures
- * (backend/src/tests/test_license_classifier_parity.py), so if either
+ * (tests/backend/test_license_classifier_parity.py), so if either
  * implementation drifts, its own test fails — the per-repo table (client-parsed)
  * and the estate explorer (backend-classified) can't silently diverge.
  */

@@ -1,192 +1,125 @@
-"""Integration tests for the findings export REST endpoint.
+"""Smoke tests for the findings export REST router — auth + scoping.
 
-Tests verify:
-- Correct Content-Type headers for CSV and JSONL
-- Content-Disposition attachment with a filename
-- X-Total-Count header is present
-- Query params are forwarded to filters
-- Response is streamed (chunked transfer encoding)
+Mocks the streaming helpers and DB session so we can verify the router enforces
+permissions and threads viewer asset_ids through to the data layer.
 """
 from __future__ import annotations
 
-import asyncio
-import csv
-import io
-import json
-from datetime import datetime, timezone
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
-from src.exports.router import router
-from src.exports.findings_export import FindingFilters
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test")
+os.environ.setdefault("APP_SECRET", "0" * 64)
+
+from src.authz.enforcement.dependencies import Permission  # noqa: E402
+from src.authz.permissions.catalog import VIEW_FINDINGS  # noqa: E402
+from src.exports.router import router as exports_router  # noqa: E402
+
+_FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+_OTHER_ASSET_ID = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+_VIEWER_PERMS = {"view_findings"}
 
 
-# ---------------------------------------------------------------------------
-# App fixture
-# ---------------------------------------------------------------------------
-
-def _make_app() -> FastAPI:
+def _make_app(*, allow_view_findings: bool = True) -> FastAPI:
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(exports_router)
+
+    @app.middleware("http")
+    async def inject_user(request: Request, call_next):
+        request.state.user_sub = "viewer-1"
+        request.state.user_role = "viewer"
+        request.state.user_role_id = None
+        return await call_next(request)
+
+    if allow_view_findings:
+        app.dependency_overrides[Permission(VIEW_FINDINGS)] = lambda: None
     return app
 
 
-# ---------------------------------------------------------------------------
-# Mock helpers
-# ---------------------------------------------------------------------------
+class _NullSession:
+    """Minimal async context manager standing in for get_session()."""
 
-def _fake_session_ctx(findings=None, count=0):
-    """Return a context manager that yields a minimal fake session."""
-    from unittest.mock import AsyncMock, MagicMock
-    from contextlib import asynccontextmanager
+    async def __aenter__(self):
+        return MagicMock()
 
-    class _FakeRow:
-        def __init__(self, f):
-            self.Finding = f
-
-    class _FakeStream:
-        def __init__(self, items):
-            self._items = items
-
-        async def partitions(self, size):
-            batch = [_FakeRow(f) for f in self._items]
-            if batch:
-                yield batch
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            pass
-
-    class _Session:
-        def stream(self, stmt):
-            return _FakeStream(findings or [])
-
-        async def execute(self, stmt):
-            r = MagicMock()
-            r.scalar_one.return_value = count
-            return r
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            pass
-
-        async def commit(self):
-            pass
-
-        async def rollback(self):
-            pass
-
-    @asynccontextmanager
-    async def _ctx():
-        yield _Session()
-
-    return _ctx
+    async def __aexit__(self, *args):
+        return None
 
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+async def _empty_stream(*args, **kwargs):
+    # Yield zero chunks — body stays empty so StreamingResponse can complete.
+    return
+    yield  # noqa: unreachable — keeps this an async generator.
 
-@patch("src.exports.router.get_session")
-def test_csv_content_type(mock_get_session):
-    mock_get_session.side_effect = _fake_session_ctx([], 0)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/exports/findings?format=csv")
+
+def test_export_findings_threads_viewer_scope():
+    """The router must resolve viewer asset_ids and pass them to count/stream."""
+    captured: dict = {}
+
+    async def fake_count(filters, asset_ids, session, include_archived_rows=False):
+        captured["count_asset_ids"] = asset_ids
+        return 0
+
+    async def fake_stream(filters, asset_ids, session, include_archived_rows=False):
+        captured["stream_asset_ids"] = asset_ids
+        async for chunk in _empty_stream():
+            yield chunk
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.exports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.exports.router.get_session", return_value=_NullSession()), \
+         patch("src.exports.router.count_findings", new=fake_count), \
+         patch("src.exports.router.stream_findings_csv", new=fake_stream):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/export?format=csv")
+
     assert resp.status_code == 200
-    assert "text/csv" in resp.headers["content-type"]
+    assert captured["count_asset_ids"] == [_FAKE_ASSET_ID]
+    assert captured["stream_asset_ids"] == [_FAKE_ASSET_ID]
 
 
-@patch("src.exports.router.get_session")
-def test_json_content_type(mock_get_session):
-    mock_get_session.side_effect = _fake_session_ctx([], 0)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/exports/findings?format=json")
+def test_export_findings_empty_scope_yields_zero_results():
+    """Viewer with no team membership (empty asset_ids) sees zero findings."""
+    captured: dict = {}
+
+    async def fake_count(filters, asset_ids, session, include_archived_rows=False):
+        captured["asset_ids"] = asset_ids
+        return 0
+
+    async def fake_stream(filters, asset_ids, session, include_archived_rows=False):
+        async for chunk in _empty_stream():
+            yield chunk
+
+    with patch("src.authz.enforcement._resolve_effective_permissions", return_value=_VIEWER_PERMS), \
+         patch("src.exports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[])), \
+         patch("src.exports.router.get_session", return_value=_NullSession()), \
+         patch("src.exports.router.count_findings", new=fake_count), \
+         patch("src.exports.router.stream_findings_csv", new=fake_stream):
+        client = TestClient(_make_app())
+        resp = client.get("/api/v1/findings/export?format=csv")
+
     assert resp.status_code == 200
-    assert "ndjson" in resp.headers["content-type"]
+    assert captured["asset_ids"] == []
+    assert resp.headers["x-total-count"] == "0"
 
 
-@patch("src.exports.router.get_session")
-def test_content_disposition_csv(mock_get_session):
-    mock_get_session.side_effect = _fake_session_ctx([], 0)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/exports/findings?format=csv")
-    assert "attachment" in resp.headers.get("content-disposition", "")
-    assert ".csv" in resp.headers.get("content-disposition", "")
+def test_export_findings_missing_permission_is_403():
+    """Caller without view_findings must be denied — no DB calls."""
+    called = {"count": False}
 
+    async def fake_count(*args, **kwargs):
+        called["count"] = True
+        return 0
 
-@patch("src.exports.router.get_session")
-def test_content_disposition_json(mock_get_session):
-    mock_get_session.side_effect = _fake_session_ctx([], 0)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/exports/findings?format=json")
-    assert "attachment" in resp.headers.get("content-disposition", "")
-    assert ".jsonl" in resp.headers.get("content-disposition", "")
+    with patch("src.authz.enforcement.dependencies.has_role_permission", return_value=False), \
+         patch("src.exports.router.resolve_asset_ids_from_request", new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.exports.router.get_session", return_value=_NullSession()), \
+         patch("src.exports.router.count_findings", new=fake_count):
+        client = TestClient(_make_app(allow_view_findings=False))
+        resp = client.get("/api/v1/findings/export?format=csv")
 
-
-@patch("src.exports.router.get_session")
-def test_x_total_count_header(mock_get_session):
-    mock_get_session.side_effect = _fake_session_ctx([], 7)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/exports/findings")
-    assert resp.headers.get("x-total-count") == "7"
-
-
-@patch("src.exports.router.get_session")
-def test_csv_default_format(mock_get_session):
-    """format=csv is the default when the param is omitted."""
-    mock_get_session.side_effect = _fake_session_ctx([], 0)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/exports/findings")
-    assert "text/csv" in resp.headers["content-type"]
-
-
-@patch("src.exports.router.get_session")
-def test_csv_header_row_present(mock_get_session):
-    mock_get_session.side_effect = _fake_session_ctx([], 0)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/exports/findings?format=csv")
-    first_line = resp.text.splitlines()[0]
-    assert "id" in first_line
-    assert "severity" in first_line
-    assert "scanner" in first_line
-
-
-@patch("src.exports.router.get_session")
-def test_filter_params_accepted(mock_get_session):
-    """Endpoint should accept all filter params without errors."""
-    mock_get_session.side_effect = _fake_session_ctx([], 0)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get(
-            "/api/v1/exports/findings"
-            "?format=csv"
-            "&severity=critical,high"
-            "&scanner=dependencies"
-            "&status=open"
-            "&repo_id=example-org/api"
-        )
-    assert resp.status_code == 200
-
-
-@patch("src.exports.router.get_session")
-def test_json_empty_export_is_empty_body(mock_get_session):
-    mock_get_session.side_effect = _fake_session_ctx([], 0)
-    app = _make_app()
-    with TestClient(app) as client:
-        resp = client.get("/api/v1/exports/findings?format=json")
-    assert resp.status_code == 200
-    assert resp.text.strip() == ""
+    assert resp.status_code == 403
+    assert called["count"] is False

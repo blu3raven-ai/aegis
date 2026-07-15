@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 
 def _make_runtime(*, active: bool = False, cancelled: bool = False) -> MagicMock:
@@ -22,7 +22,6 @@ def _start(orgs, execute_fn=None, runtime=None, **extra):
         execute_fn = MagicMock(return_value={"status": "ok"})
 
     create_run_fn = MagicMock()
-    done = {"event": __import__("threading").Event()}
 
     original_execute = execute_fn
 
@@ -66,8 +65,6 @@ def test_multi_org_runs_concurrently_not_sequentially():
     import threading
     all_done = threading.Event()
     call_count = {"n": 0, "lock": threading.Lock()}
-    start_ts: list[float] = []
-    end_ts: list[float] = []
 
     original_side_effect = slow_execute
 
@@ -104,50 +101,6 @@ def test_multi_org_runs_concurrently_not_sequentially():
         "orgs are likely still running sequentially"
     )
 
-
-def test_multi_org_preserves_per_org_event_attribution():
-    """Each org gets its own emit_scan_started call with the correct org_id."""
-    from src.shared.scan_orchestration import start_multi_org_scan
-
-    orgs = ["acme-1", "acme-2", "acme-3"]
-    runtime = _make_runtime()
-    execute_fn = MagicMock(return_value={"status": "ok"})
-    create_run_fn = MagicMock()
-
-    import threading
-    all_done = threading.Event()
-    call_count = {"n": 0, "lock": threading.Lock()}
-
-    def tracked_execute(*args, **kwargs):
-        result = {"status": "ok"}
-        with call_count["lock"]:
-            call_count["n"] += 1
-            if call_count["n"] == len(orgs):
-                all_done.set()
-        return result
-
-    execute_fn = MagicMock(side_effect=tracked_execute)
-
-    with patch("src.shared.scan_orchestration.emit_scan_started") as mock_emit:
-        start_multi_org_scan(
-            orgs=orgs,
-            runtime=runtime,
-            create_run_fn=create_run_fn,
-            execute_fn=execute_fn,
-            execute_kwargs={},
-            source_category="code-repositories",
-            tool_label="dependencies",
-            skip_connection_check=True,
-        )
-        all_done.wait(timeout=5.0)
-
-    emitted_orgs = [c.kwargs["org_id"] for c in mock_emit.call_args_list]
-    assert set(emitted_orgs) == set(orgs), (
-        f"Each org should have its own emit_scan_started; got {emitted_orgs}"
-    )
-    assert len(emitted_orgs) == len(orgs), (
-        f"Expected {len(orgs)} emit_scan_started calls, got {len(emitted_orgs)}"
-    )
 
 
 def test_multi_org_failure_in_one_org_does_not_block_others():

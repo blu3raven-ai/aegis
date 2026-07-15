@@ -1,9 +1,8 @@
-"""Tests for the /health/deep endpoint — shape, status codes, probe reflection."""
+"""Tests for the /health endpoint — shape, status codes, probe reflection."""
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -30,7 +29,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=all_ok)):
             with TestClient(app) as c:
-                resp = c.get("/health/deep")
+                resp = c.get("/health")
         assert resp.status_code == 200
 
     def test_returns_200_even_when_probes_fail(self):
@@ -38,7 +37,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=mixed)):
             with TestClient(app) as c:
-                resp = c.get("/health/deep")
+                resp = c.get("/health")
         assert resp.status_code == 200
 
     def test_overall_status_ok_when_all_ok_or_skipped(self):
@@ -48,7 +47,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=results)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         assert data["status"] == "ok"
 
     def test_overall_status_degraded_when_some_degraded(self):
@@ -58,7 +57,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=results)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         assert data["status"] == "degraded"
 
     def test_overall_status_fail_when_any_critical_fails(self):
@@ -69,7 +68,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=results)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         assert data["status"] == "fail"
 
     def test_fail_takes_precedence_over_degraded(self):
@@ -80,7 +79,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=results)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         assert data["status"] == "fail"
 
     def test_response_shape_contains_required_keys(self):
@@ -88,7 +87,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=all_ok)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         assert "status" in data
         assert "timestamp" in data
         assert "probes" in data
@@ -99,7 +98,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=all_ok)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         returned_names = {p["name"] for p in data["probes"]}
         assert returned_names == set(PROBE_NAMES)
 
@@ -108,7 +107,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=all_ok)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         for probe in data["probes"]:
             assert "name" in probe and "status" in probe and "duration_ms" in probe
             assert "details" in probe and "error" in probe
@@ -119,7 +118,7 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=results)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         minio_probe = next(p for p in data["probes"] if p["name"] == "minio")
         assert minio_probe["status"] == "fail"
         assert minio_probe["error"] == "connection refused"
@@ -129,11 +128,5 @@ class TestDeepHealthEndpoint:
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=all_ok)):
             with TestClient(app) as c:
-                data = c.get("/health/deep").json()
+                data = c.get("/health").json()
         assert "T" in data["timestamp"]
-
-    def test_existing_shallow_endpoints_unaffected(self):
-        app = _make_app()
-        with TestClient(app) as c:
-            assert c.get("/health/ready").status_code == 200
-            assert c.get("/health/live").status_code == 200

@@ -10,14 +10,12 @@ import logging.handlers
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-import pytest
 
 from src.argus.connector import (
     ArgusConnector,
     _ArgusHttpError,
     _ArgusNetworkError,
 )
-from src.argus.circuit_breaker import CircuitOpenError
 
 ENDPOINT = "https://argus.example.com"
 API_KEY = "test-e2e-key"
@@ -65,13 +63,11 @@ def test_all_methods_fall_back_while_circuit_open():
     with patch.object(connector, "_post") as mock_post:
         with patch.object(connector, "_get") as mock_get:
             score = connector.score_finding({"severity": "medium"})
-            decision = connector.decide_go_no_go("svc-x", [])
             explanation = connector.explain_chain({"chain_type": "t", "findings": [], "edges": []})
             rule_pack = connector.fetch_premium_rule_pack()
             packs = connector.get_rule_packs()
 
     assert score.source == "heuristic"
-    assert decision.source == "heuristic"
     assert explanation.source == "heuristic"
     assert rule_pack == {}
     assert packs == []
@@ -144,7 +140,6 @@ def test_public_method_signatures_unchanged():
     """Constructor and all public methods accept the same args as before."""
     connector = ArgusConnector(endpoint=ENDPOINT, api_key=API_KEY)
     assert hasattr(connector, "score_finding")
-    assert hasattr(connector, "decide_go_no_go")
     assert hasattr(connector, "explain_chain")
     assert hasattr(connector, "fetch_premium_rule_pack")
     assert hasattr(connector, "get_rule_packs")

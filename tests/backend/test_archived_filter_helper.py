@@ -35,15 +35,15 @@ def test_exclude_archived_appends_filter_for_scan_run():
 
 
 def test_exclude_archived_preserves_existing_where_clauses():
-    stmt = select(Finding).where(Finding.org == "acme-org")
+    stmt = select(Finding).where(Finding.severity == "high")
     filtered = exclude_archived(stmt, Finding)
     sql = _render(filtered).lower()
-    assert "findings.org = 'acme-org'" in sql
+    assert "findings.severity = 'high'" in sql
     assert "findings.archived = false" in sql
 
 
 def test_include_archived_is_passthrough():
-    stmt = select(Finding).where(Finding.org == "acme-org")
+    stmt = select(Finding).where(Finding.severity == "high")
     marker = include_archived(stmt)
     assert marker is stmt
     # The marker must not append any predicate — the rendered WHERE clause
@@ -55,10 +55,10 @@ def test_include_archived_is_passthrough():
 
 
 def test_only_archived_appends_filter():
-    stmt = select(Finding).where(Finding.org == "acme-org")
+    stmt = select(Finding).where(Finding.severity == "high")
     filtered = only_archived(stmt, Finding)
     sql = _render(filtered).lower()
-    assert "findings.org = 'acme-org'" in sql
+    assert "findings.severity = 'high'" in sql
     assert "findings.archived = true" in sql
     # only_archived must NOT add the exclude predicate.
     assert "findings.archived = false" not in sql

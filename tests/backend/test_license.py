@@ -175,7 +175,7 @@ class TestDecodeLicense:
 # Middleware: resolve_current_tier
 # ---------------------------------------------------------------------------
 
-from src.license.middleware import resolve_current_tier
+from src.license.middleware import resolve_current_tier  # noqa: E402
 
 
 class TestResolveCurrentTier:
@@ -207,8 +207,8 @@ class TestResolveCurrentTier:
 # Guard: require_tier
 # ---------------------------------------------------------------------------
 
-from fastapi import HTTPException
-from src.license.guard import require_tier
+from fastapi import HTTPException  # noqa: E402
+from src.license.guard import require_tier  # noqa: E402
 
 
 class TestRequireTier:

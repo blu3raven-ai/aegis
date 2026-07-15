@@ -1,83 +1,72 @@
-"""Shared test fixtures — spins up Postgres and MinIO via testcontainers.
+"""Shared pytest fixtures and configuration for the backend test suite.
 
-Contributors only need Docker installed. Running `pytest` handles everything:
-containers start automatically, tables are created, env vars are set,
-and containers are torn down when tests finish.
+Most tests mock `run_db` and never touch the real DB, but they still trigger
+imports of `src.db.engine`, which raises at module level when `DATABASE_URL`
+is unset. The `trylast=True` hook below sets a placeholder URL so those imports
+succeed; DB-backed tests (test_auth_rate_limit, test_auth_session,
+test_auth_login_router) spin up their own testcontainer and overwrite it.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
-import asyncio
-
-# Ensure `backend/` is on sys.path so `from src.X import Y` resolves when
-# pytest is invoked from the project root (where backend/pyproject.toml's
-# pythonpath = ["."] is not in effect).
-_BACKEND_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "backend")
-if _BACKEND_DIR not in sys.path:
-    sys.path.insert(0, os.path.normpath(_BACKEND_DIR))
+from uuid import uuid4
 
 import pytest
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+# This suite lives at repo-root `tests/backend/`, so ensure `backend/` is on
+# sys.path for `from src.X import Y` to resolve regardless of the pytest rootdir.
+_BACKEND_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
+if _BACKEND_DIR not in sys.path:
+    sys.path.insert(0, _BACKEND_DIR)
+
+_PLACEHOLDER_URL = "postgresql+asyncpg://test:test@localhost:5432/test"
 
 
+# WeasyPrint can't locate Homebrew's gobject/cairo via ctypes on Apple Silicon
+# without this lookup hint. No-op on Linux/CI.
+if sys.platform == "darwin":
+    _HOMEBREW_LIB = "/opt/homebrew/lib"
+    if os.path.isdir(_HOMEBREW_LIB):
+        _existing = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+        if _HOMEBREW_LIB not in _existing.split(":"):
+            os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
+                f"{_HOMEBREW_LIB}:{_existing}" if _existing else _HOMEBREW_LIB
+            )
+
+
+@pytest.hookimpl(trylast=True)
 def pytest_configure(config):
-    """Set environment variables before ANY module imports.
-
-    This runs before test collection, so src.db.engine (which reads
-    DATABASE_URL at import time) sees the testcontainer URL.
-    """
-    # Provide a test-only SESSION_SECRET so the PR 3 middleware registrations
-    # don't raise RuntimeError during import. Must be set before src.main loads.
-    os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
-    # TrustedHostMiddleware fails loudly when ALLOWED_HOSTS is unset; the
-    # FastAPI TestClient drives requests with Host: testserver by default.
-    os.environ.setdefault("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
-
-    # Skip testcontainers if DATABASE_URL is already set (e.g., CI with external DB)
-    if os.environ.get("DATABASE_URL"):
+    existing = os.environ.get("DATABASE_URL", "")
+    if existing and existing != _PLACEHOLDER_URL:
+        # Outer conftest already provided a real URL — nothing to do.
+        os.environ.setdefault("APP_SECRET", "0" * 64)
+        os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
+        os.environ.setdefault("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
         return
 
-    from testcontainers.postgres import PostgresContainer
+    # Standalone run — try to spin up a testcontainer.
+    try:
+        from testcontainers.postgres import PostgresContainer
+        pg = PostgresContainer("postgres:16-alpine", driver="asyncpg")
+        pg.start()
+        os.environ["DATABASE_URL"] = pg.get_connection_url()
+        config._src_tests_pg = pg
+    except Exception:
+        # Docker unavailable — fall back to placeholder; DB-dependent tests
+        # will fail with a connection error.
+        os.environ.setdefault("DATABASE_URL", _PLACEHOLDER_URL)
 
-    # Start Postgres — kept alive for the entire test session
-    pg = PostgresContainer("postgres:16-alpine", driver="asyncpg")
-    pg.start()
-
-    db_url = pg.get_connection_url()
-    os.environ["DATABASE_URL"] = db_url
-
-    # Store reference so we can stop it later
-    config._pg_container = pg
-
-    # Also set up MinIO if not already configured
-    if not os.environ.get("S3_ENDPOINT"):
-        try:
-            from testcontainers.minio import MinioContainer
-
-            mc = MinioContainer()
-            mc.start()
-            config._minio_container = mc
-
-            host = mc.get_container_host_ip()
-            port = mc.get_exposed_port(9000)
-            os.environ["S3_ENDPOINT"] = f"http://{host}:{port}"
-            os.environ["S3_ACCESS_KEY"] = "minioadmin"
-            os.environ["S3_SECRET_KEY"] = "minioadmin"
-            os.environ["S3_BUCKET"] = "scans"
-        except ImportError:
-            pass
+    os.environ.setdefault("APP_SECRET", "0" * 64)
+    os.environ.setdefault("SESSION_SECRET", "test-only-session-secret-not-for-production")
+    os.environ.setdefault("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver")
 
 
 def pytest_unconfigure(config):
-    """Stop testcontainers after all tests finish."""
-    mc = getattr(config, "_minio_container", None)
-    if mc:
-        try:
-            mc.stop()
-        except Exception:
-            pass
-
-    pg = getattr(config, "_pg_container", None)
+    pg = getattr(config, "_src_tests_pg", None)
     if pg:
         try:
             pg.stop()
@@ -87,223 +76,107 @@ def pytest_unconfigure(config):
 
 @pytest.fixture(scope="session", autouse=True)
 def _create_tables():
-    """Create all DB tables once per test session."""
-    from src.db.engine import engine
-    from src.db.models import Base
+    """Create all DB tables once per test session.
+
+    Required for standalone runs where this conftest owns the testcontainer.
+    In integrated runs, the outer conftest's _create_tables runs first;
+    create_all is idempotent so running it again is safe.
+    """
+    from src.db.engine import DATABASE_URL as _url
+    if _url == _PLACEHOLDER_URL:
+        yield
+        return
+
+    _engine = create_async_engine(_url, echo=False)
 
     async def _setup():
-        async with engine.begin() as conn:
+        from src.db.models import Base
+        async with _engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        # Dispose the pool so TestClient requests don't reuse connections that
-        # were bound to this (now-closed) event loop. Fresh connections are
-        # created per-request in the TestClient's own event loop.
-        await engine.dispose()
+        await _engine.dispose()
 
     asyncio.run(_setup())
     yield
-    # No teardown needed — testcontainers destroy the DB container
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _seed_default_roles(_create_tables):
-    """Seed the four built-in roles once per test session.
+@pytest_asyncio.fixture
+async def db_session():
+    """Yield a real AsyncSession for each test.
 
-    Required by SessionAuthMiddleware's permission resolution path: when an
-    authenticated request arrives, the middleware sets request.state.user_role
-    from the session's user.role string (e.g. "owner"), and the permission
-    system resolves it via DB lookup. Without seeded roles the lookup raises
-    ValueError → empty permissions → 403 on every protected route.
-
-    Individual test files may also seed roles in their own fixtures; that's
-    fine — the insert is idempotent (checks for existing before add).
+    Creates a fresh engine per test so the asyncpg connection is always bound
+    to the current test's event loop — avoids 'connection belongs to a
+    different loop' errors when pytest-asyncio creates a new loop per test.
+    Rows are deleted via an explicit DELETE at teardown rather than rollback,
+    because SessionService commits mid-test (rollback after commit is a no-op
+    in SQLAlchemy's autobegin model).
     """
-    from datetime import datetime, timezone
-
-    from src.db.helpers import run_db
-    from src.db.models import Role
-    from src.db.seed import DEFAULT_ROLES
-
-    async def _insert(session):
-        for role_data in DEFAULT_ROLES:
-            existing = await session.get(Role, role_data["id"])
-            if not existing:
-                session.add(Role(
-                    id=role_data["id"],
-                    name=role_data["name"],
-                    description=role_data["description"],
-                    permissions=role_data["permissions"],
-                    protected=role_data["protected"],
-                    created_at=datetime.now(timezone.utc),
-                ))
-
-    run_db(_insert)
+    from src.db.engine import DATABASE_URL
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with factory() as session:
+        yield session
+    await engine.dispose()
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _seed_sso_config_singleton(_create_tables):
-    """Seed the SSO config singleton row once per test session.
+def _reload_connector_modules(*module_paths: str) -> None:
+    """Reset the connector registry and re-execute the given modules so their
+    @register_connector decorators run exactly once into the empty registry.
 
-    The production migration seeds this via INSERT, but tests use
-    create_all which bypasses migrations, so we mirror it here.
+    Imports run before the reset so any package-level __init__ imports (which
+    can register additional siblings as a side effect) populate sys.modules
+    first; then the reset wipes the registry and the reloads re-execute each
+    module body, registering the connectors fresh."""
+    import importlib
+    import sys
+
+    from src.connectors.registry import _reset_registry
+
+    # First, ensure every requested module is in sys.modules (which may
+    # trigger package __init__ imports that register siblings as a side effect).
+    for path in module_paths:
+        if path not in sys.modules:
+            importlib.import_module(path)
+
+    # Then wipe and reload — the reloads now re-execute clean module bodies
+    # into an empty registry.
+    _reset_registry()
+    for path in module_paths:
+        importlib.reload(sys.modules[path])
+
+
+@pytest.fixture
+def reset_and_reload_connectors():
+    """Fixture factory that returns the helper above. Tests opt in via:
+
+        @pytest.fixture(autouse=True)
+        def _setup(reset_and_reload_connectors):
+            reset_and_reload_connectors("src.notifications.senders.slack", ...)
+            yield
+
+    Or simply call the helper directly from a fixture body. Centralised here so
+    new test modules don't each reinvent the reset-and-reload pattern.
     """
-    from src.db.helpers import run_db
-    from src.db.models import SsoConfig
-
-    async def _insert(session):
-        existing = await session.get(SsoConfig, 1)
-        if not existing:
-            session.add(SsoConfig(id=1))
-
-    run_db(_insert)
+    return _reload_connector_modules
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _seed_scim_config_singleton(_create_tables):
-    """Seed the SCIM config singleton row once per test session.
+@pytest_asyncio.fixture
+async def seed_user(db_session):
+    """Insert a minimal User row; deleted at teardown."""
+    from src.db.models import User
 
-    Mirrors _seed_sso_config_singleton — create_all bypasses migrations so
-    the INSERT that normally runs in the alembic upgrade must be reproduced here.
-    """
-    from src.db.helpers import run_db
-    from src.db.models import ScimConfig
-
-    async def _insert(session):
-        existing = await session.get(ScimConfig, 1)
-        if not existing:
-            session.add(ScimConfig(id=1))
-
-    run_db(_insert)
-
-
-@pytest.fixture(scope="session", autouse=True)
-def _seed_audit_stream_config_singleton(_create_tables):
-    """Seed the audit-stream config singleton row once per test session.
-
-    Mirrors _seed_scim_config_singleton — create_all bypasses migrations so
-    the INSERT that normally runs in the alembic upgrade must be reproduced here.
-    """
-    from src.db.helpers import run_db
-    from src.db.models import AuditStreamConfig
-
-    async def _insert(session):
-        existing = await session.get(AuditStreamConfig, 1)
-        if not existing:
-            session.add(AuditStreamConfig(id=1))
-
-    run_db(_insert)
-
-
-@pytest.fixture(scope="session")
-def db_url():
-    """Return the test database URL."""
-    return os.environ["DATABASE_URL"]
-
-
-@pytest.fixture(scope="session")
-def s3_endpoint():
-    """Return the test MinIO endpoint, or skip if not available."""
-    endpoint = os.environ.get("S3_ENDPOINT")
-    if not endpoint:
-        pytest.skip("MinIO not available")
-    return endpoint
-
-
-def _make_test_session(user_id: str, role: str = "admin") -> str:
-    """Create a User + UserSession row in the test DB and return the session ID.
-
-    Called by make_authed_client so tests can exercise routes protected by
-    SessionAuthMiddleware without bypassing it.
-    """
-    from datetime import datetime, timedelta, timezone
-
-    from src.db.helpers import run_db
-    from src.db.models import User, UserSession
-
-    session_id = f"test-session-{user_id}"
-
-    async def _insert(session):
-        existing_user = await session.get(User, user_id)
-        if not existing_user:
-            now = datetime.now(timezone.utc)
-            # Map slug ("admin") to the seeded role PK ("role_admin") so
-            # SessionAuthMiddleware can resolve permissions via role_id FK.
-            role_id = f"role_{role}"
-            session.add(User(
-                id=user_id,
-                username=f"test-{user_id}",
-                email=f"{user_id}@test.example",
-                password_hash="",
-                role_id=role_id,
-                status="active",
-                created_at=now,
-                updated_at=now,
-            ))
-
-        existing_sess = await session.get(UserSession, session_id)
-        if not existing_sess:
-            now = datetime.now(timezone.utc)
-            session.add(UserSession(
-                id=session_id,
-                user_id=user_id,
-                created_at=now,
-                last_seen_at=now,
-                expires_at=now + timedelta(hours=8),
-                user_agent=None,
-                ip_address=None,
-            ))
-
-    run_db(_insert)
-    return session_id
-
-
-def make_authed_client(
-    role: str = "admin",
-    user_id: str | None = None,
-    extra_headers: dict | None = None,
-    raise_server_exceptions: bool = True,
-) -> "TestClient":
-    """Return a TestClient with a valid session cookie and CSRF token for the given role.
-
-    Creates a real User + UserSession row so SessionAuthMiddleware passes the
-    DB lookup. Sets both the session cookie and CSRF cookie, and includes the
-    X-CSRF-Token header by default so mutating requests (POST/PATCH/DELETE)
-    pass the CSRFMiddleware check without per-test modification.
-
-    Tests that previously relied on Bearer JWT (require_jwt) use this instead.
-    """
-    from fastapi.testclient import TestClient
-    from src.main import app
-    from src.auth.authentication.cookies import SESSION_COOKIE_NAME, CSRF_COOKIE_NAME
-    from src.auth.authentication.csrf import compute_csrf_token
-
-    uid = user_id or f"test-usr-{role}"
-    session_id = _make_test_session(uid, role=role)
-
-    # Compute the CSRF token so mutating requests pass CSRFMiddleware.
-    # Use the hardcoded test secret rather than os.environ: tests such as
-    # test_settings.py::test_patch_account_updates_username_and_password call
-    # sync_runtime_env_from_config() which permanently overwrites
-    # os.environ["SESSION_SECRET"] with a freshly-generated random value,
-    # causing CSRF mismatches for all tests that run afterward in the same
-    # session. CSRFMiddleware's self.secret is baked in at import time from
-    # the value set by pytest_configure (the constant below), so we must use
-    # the same constant here.
-    secret = "test-only-session-secret-not-for-production"
-    csrf_token = compute_csrf_token(session_id, secret=secret)
-
-    cookies = {
-        SESSION_COOKIE_NAME: session_id,
-        CSRF_COOKIE_NAME: csrf_token,
-    }
-    headers = {
-        # Include by default so POST/PATCH/DELETE tests don't need to add it manually
-        "X-CSRF-Token": csrf_token,
-        **(extra_headers or {}),
-    }
-    os.environ.setdefault("RUNNER_ENCRYPTION_KEY", "a" * 64)
-    return TestClient(
-        app,
-        cookies=cookies,
-        headers=headers,
-        raise_server_exceptions=raise_server_exceptions,
+    user = User(
+        id=f"test-{uuid4()}",
+        username=f"testuser-{uuid4()}",
+        email=f"test+{uuid4()}@example.com",
+        password_hash="",
+        status="active",
     )
+    db_session.add(user)
+    await db_session.commit()
+    yield user
+    # Clean up sessions and the user row created by this fixture
+    from sqlalchemy import delete
+    from src.db.models import UserSession
+    await db_session.execute(delete(UserSession).where(UserSession.user_id == user.id))
+    await db_session.execute(delete(User).where(User.id == user.id))
+    await db_session.commit()

@@ -64,7 +64,8 @@ class TestRefreshEpssScores:
         with patch("src.epss.service.run_db", return_value=0):
             result = refresh_epss_scores()
 
-        assert result == {"fetched": 5, "new": 0}
+        assert result["fetched"] == 5
+        assert result["new"] == 0
 
     @patch("src.epss.fetcher.httpx.Client")
     def test_non_gzip_body_raises(self, mock_http_client_cls):
@@ -93,4 +94,5 @@ class TestRefreshEpssScores:
         with patch("src.epss.service.run_db", return_value=0):
             result = refresh_epss_scores()
 
-        assert result == {"fetched": 0, "new": 0}
+        assert result["fetched"] == 0
+        assert result["new"] == 0
