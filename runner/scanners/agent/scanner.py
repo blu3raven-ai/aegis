@@ -11,6 +11,7 @@ import json
 import logging
 import shutil
 import threading
+import uuid
 from pathlib import Path
 from typing import Any, Callable
 
@@ -30,6 +31,7 @@ from runner.scanners._shared import (
     repo_name_from_url,
 )
 from runner.scanners._subprocess import CANCELLED_EXIT_CODE
+from runner.sandbox.detonation_orchestrator import detonate_repo
 from runner.scanners.agent.detectors import attach_code_window, scan_repo
 from runner.scanners.agent.llm_judge import judge_prose_files
 from runner.scanners.base import ExecutionResult
@@ -106,7 +108,7 @@ class AgentScanner:
                 break
             findings, cloned = self._scan_one_repo(
                 repo_url, out_dir, cfg.git_token, llm, escalation_llm, budget,
-                cancel_event, log_tail, emitter,
+                env, cancel_event, log_tail, emitter,
             )
             any_clone_failed = any_clone_failed or not cloned
             all_findings.extend(findings)
@@ -144,6 +146,7 @@ class AgentScanner:
         llm,
         escalation_llm,
         budget,
+        env: JobEnv,
         cancel_event: threading.Event | None,
         log_tail: list[str],
         emitter: ProgressEmitter,
@@ -188,6 +191,19 @@ class AgentScanner:
                 except Exception as e:  # noqa: BLE001
                     log_tail.append(f"[!] agent LLM judge error ({repo_name}): {e}")
                     logger.exception("[!] agent LLM judge error")
+
+            # Opt-in detonation (DETONATE): run the repo's setup entry in the
+            # egress-denied sandbox and flag any runtime egress — the packed or
+            # off-repo payloads the static detectors can't see. Graceful no-op
+            # unless opted in with a container runtime available.
+            try:
+                findings.extend(detonate_repo(
+                    str(clone_dir), env=env, run_id=uuid.uuid4().hex[:8],
+                    cancel_event=cancel_event,
+                ))
+            except Exception as e:  # noqa: BLE001
+                log_tail.append(f"[!] agent detonation error ({repo_name}): {e}")
+                logger.exception("[!] agent detonation error")
 
             html_url = derive_html_url(repo_url)
             for f in findings:
