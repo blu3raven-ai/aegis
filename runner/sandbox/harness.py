@@ -1,0 +1,100 @@
+"""Construct and run a HARDENED container invocation for untrusted code.
+
+Threat model: we build a target repo and run it to answer a runtime-verification
+question. The scary outcomes — exfiltration, persistence, DoS, lateral movement —
+are killed by cheap controls that cost no performance and are applied
+UNCONDITIONALLY here. The container-runtime choice (runc / runsc / kata) only
+hardens the residual escape risk and is a swappable flag, so v1 ships on the
+Docker floor and upgrades to a microVM by config with no code change.
+"""
+from __future__ import annotations
+
+import threading
+from dataclasses import dataclass, field
+from typing import Sequence
+
+from runner.scanners._subprocess import run_tool
+
+
+@dataclass(frozen=True)
+class SandboxLimits:
+    """Anti-DoS caps. Conservative defaults; a build/probe needs little."""
+
+    memory: str = "1g"
+    cpus: str = "1.0"
+    pids: int = 256
+    timeout_s: float = 120.0
+    # Writable scratch (rootfs is read-only). Apps that must write live here.
+    tmpfs: Sequence[str] = field(default_factory=lambda: ("/tmp",))
+
+
+def resolve_runtime(get) -> str | None:
+    """The container runtime for untrusted code, from ``SANDBOX_RUNTIME``:
+    "" → Docker default (runc); "runsc" → gVisor; "kata" → Kata/Firecracker.
+    v1 is an explicit opt-in; KVM/runtime auto-detection is a follow-up. Returns
+    None for the default runtime (no --runtime flag)."""
+    rt = (get("SANDBOX_RUNTIME") or "").strip()
+    return rt or None
+
+
+def build_run_args(
+    image: str,
+    cmd: Sequence[str],
+    *,
+    runtime: str | None = None,
+    limits: SandboxLimits | None = None,
+    env_allow: dict[str, str] | None = None,
+    name: str | None = None,
+) -> list[str]:
+    """The hardened ``docker run`` argv. Every control below is MANDATORY:
+
+    - ``--network=none``        no egress → cannot exfiltrate or call home
+    - ``--read-only``           rootfs immutable → cannot persist
+    - ``--cap-drop=ALL`` + ``--security-opt=no-new-privileges`` + non-root user
+    - ``--memory/--cpus/--pids-limit`` + caller timeout → cannot DoS the runner
+    - ``--rm``                  ephemeral
+    - NO host env is forwarded — only ``env_allow`` (empty by default) reaches the
+      container, so secrets cannot leak in.
+    """
+    lim = limits or SandboxLimits()
+    args: list[str] = [
+        "docker", "run", "--rm",
+        "--network=none",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--user=65534:65534",  # nobody:nogroup
+        f"--memory={lim.memory}",
+        f"--cpus={lim.cpus}",
+        f"--pids-limit={lim.pids}",
+    ]
+    if runtime:
+        args.append(f"--runtime={runtime}")
+    for mount in lim.tmpfs:
+        args.append(f"--tmpfs={mount}")
+    for key, value in (env_allow or {}).items():
+        args += ["--env", f"{key}={value}"]
+    if name:
+        args += ["--name", name]
+    args.append(image)
+    args.extend(cmd)
+    return args
+
+
+def run_in_sandbox(
+    image: str,
+    cmd: Sequence[str],
+    *,
+    runtime: str | None = None,
+    limits: SandboxLimits | None = None,
+    env_allow: dict[str, str] | None = None,
+    cancel_event: threading.Event | None = None,
+) -> tuple[int, str, str]:
+    """Run ``cmd`` in ``image`` under the hardened profile. Returns
+    ``(exit_code, stdout, stderr)``. The docker CLI itself runs with an EMPTY
+    environment so no host secret is even visible to the launch, and the
+    container env is whatever ``env_allow`` explicitly permits (nothing by
+    default)."""
+    lim = limits or SandboxLimits()
+    args = build_run_args(image, cmd, runtime=runtime, limits=lim, env_allow=env_allow)
+    return run_tool(args, timeout=lim.timeout_s, env={}, cancel_event=cancel_event)
