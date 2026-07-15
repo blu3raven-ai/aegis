@@ -59,10 +59,13 @@ def build_run_args(
     limits: SandboxLimits | None = None,
     env_allow: dict[str, str] | None = None,
     name: str | None = None,
+    network: str = "none",
 ) -> list[str]:
     """The hardened ``docker run`` argv. Every control below is MANDATORY:
 
-    - ``--network=none``        no egress → cannot exfiltrate or call home
+    - ``--network=<network>``   default ``none`` (no network). For a service that
+      must be probed, pass an ``--internal`` docker network name: still no route
+      off-box (no egress), but reachable by a sidecar prober on the same network.
     - ``--read-only``           rootfs immutable → cannot persist
     - ``--cap-drop=ALL`` + ``--security-opt=no-new-privileges`` + non-root user
     - ``--memory/--cpus/--pids-limit`` + caller timeout → cannot DoS the runner
@@ -73,7 +76,7 @@ def build_run_args(
     lim = limits or SandboxLimits()
     args: list[str] = [
         "docker", "run", "--rm",
-        "--network=none",
+        f"--network={network}",
         "--read-only",
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges",
