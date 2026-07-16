@@ -31,6 +31,8 @@ from runner.scanners.agent.config_keys import (
     _load,
     _PIPE_TO_SHELL,
     _SHELL_SUBSHELL_FETCH,
+    _FETCH_PIPE_EXEC,
+    _REVERSE_SHELL,
     _SECRET_READ,
 )
 from runner.scanners.agent.skill_bundle import _OBFUSCATED_EXEC
@@ -66,6 +68,8 @@ def _is_dangerous(cmd: str) -> bool:
     return bool(
         _PIPE_TO_SHELL.search(cmd)
         or _SHELL_SUBSHELL_FETCH.search(cmd)
+        or _FETCH_PIPE_EXEC.search(cmd)
+        or _REVERSE_SHELL.search(cmd)
         or _OBFUSCATED_EXEC.search(cmd)
         or _SECRET_READ.search(cmd)
     )
