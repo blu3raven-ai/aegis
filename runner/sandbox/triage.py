@@ -13,6 +13,15 @@ already fired on it, the entry is obfuscated, or an instruction file is oversize
 (the size-cap-padding evasion). A benign repo that merely has a postinstall is not
 detonated.
 
+Known residual (accepted trade-off): a repo whose setup entry looks clean —
+no skill markers, no static hit, not obfuscated, no oversized file — but fetches
+its payload only at runtime from an innocuous-looking host will NOT be detonated.
+Detonating every repo with a setup entry is the all-or-nothing cost we avoid; the
+mitigations are that the static detectors flag a malicious script's tell-tale
+strings (→ static_hit → detonate) and that DETONATE-off still emits a low-severity
+recommendation. Closing the residual fully would need runtime analysis of every
+setup entry, which the opt-in design deliberately doesn't do.
+
 Note: a 'high-entropy blob in .git/' signal was considered and rejected — git
 objects are legitimately compressed and high-entropy, so it fires on every repo.
 """

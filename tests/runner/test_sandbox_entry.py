@@ -59,3 +59,14 @@ def test_non_dict_scripts_is_skipped(tmp_path):
 
 def test_missing_repo_returns_none():
     assert detect_entry("/no/such/repo/here") is None
+
+
+def test_npm_entry_captures_script_body(tmp_path):
+    e = detect_entry(_pkg(tmp_path, {"postinstall": "node evil.js"}))
+    assert e.body == "node evil.js"
+
+
+def test_shell_entry_captures_script_body(tmp_path):
+    (tmp_path / "setup.sh").write_text("#!/bin/sh\neval $(echo x)\n")
+    e = detect_entry(str(tmp_path))
+    assert "eval" in e.body
