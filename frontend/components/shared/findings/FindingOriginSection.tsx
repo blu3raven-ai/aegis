@@ -86,9 +86,9 @@ export function FindingOriginSection({ finding, scannerLabel }: FindingOriginSec
             label="Introduced by commit"
             mono
             value={
-              finding.introducedByPrUrl ? (
+              finding.introducedByPrUrl && /^https?:\/\//i.test(finding.introducedByPrUrl.trim()) ? (
                 <a
-                  href={finding.introducedByPrUrl}
+                  href={finding.introducedByPrUrl.trim()}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[var(--color-accent)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
