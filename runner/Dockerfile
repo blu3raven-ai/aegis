@@ -91,9 +91,18 @@ ENV PYTHONUNBUFFERED=1 \
 #   libstdc++6 — cdxgen native bits
 #   libicu76   — cyclonedx-cli (.NET) globalization
 #   procps     — pgrep, used by the HEALTHCHECK below
+#   iptables   — the opt-in detonation honeypot uses this image as its own sidecar
+#                and needs iptables to redirect the target's outbound TCP
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates git libstdc++6 libicu76 procps \
+        ca-certificates git libstdc++6 libicu76 procps iptables \
     && rm -rf /var/lib/apt/lists/*
+
+# The runner image doubles as the detonation honeypot sidecar (it already carries
+# the runner package + python; iptables is added above). Baking the image's own
+# tag here lets detonation default HONEYPOT_IMAGE to itself, so enabling detonation
+# needs only DETONATE=1. CI passes the published tag via --build-arg RUNNER_IMAGE.
+ARG RUNNER_IMAGE=""
+ENV RUNNER_IMAGE=${RUNNER_IMAGE}
 
 # Scanner CLIs
 COPY --from=builder \
