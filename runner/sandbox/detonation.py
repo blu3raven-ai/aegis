@@ -41,9 +41,12 @@ _HONEYPOT_CMD = (
 
 
 def honeypot_image() -> str:
-    """The trusted honeypot image (has python + iptables + the logger). Overridable
-    via ``HONEYPOT_IMAGE`` for mirrors / pinned tags on self-hosted runners."""
-    return (os.environ.get("HONEYPOT_IMAGE") or "aegis-honeypot:latest").strip() or "aegis-honeypot:latest"
+    """The trusted honeypot image. Defaults to the runner's OWN image (baked as
+    ``RUNNER_IMAGE`` at build time) — it already carries the honeypot module,
+    python, and iptables, so no separate image is needed. ``HONEYPOT_IMAGE``
+    overrides for a mirror / pinned tag. Empty (neither set) → detonation
+    graceful-skips."""
+    return (os.environ.get("HONEYPOT_IMAGE") or os.environ.get("RUNNER_IMAGE") or "").strip()
 
 
 def honeypot_run_args(image: str, *, network: str, name: str) -> list[str]:
@@ -55,6 +58,8 @@ def honeypot_run_args(image: str, *, network: str, name: str) -> list[str]:
         f"--network={network}",
         "--cap-drop=ALL", "--cap-add=NET_ADMIN",  # only what the redirect needs
         "--security-opt=no-new-privileges",
+        "--user=0:0",  # root: iptables needs it (paired with NET_ADMIN). Trusted,
+                       # ephemeral, egress-denied — the TARGET stays non-root.
         "--name", name,
         image, *_HONEYPOT_CMD,
     ]
@@ -118,12 +123,15 @@ def detonate(
     an empty list means 'ran, observed no egress'."""
     if not runtime_available():
         return None
+    hp_image = honeypot_image()
+    if not hp_image:  # no honeypot image resolvable → cannot observe → skip
+        return None
     hp_name = f"aegis-deto-hp-{run_id}"
     tgt_name = f"aegis-deto-tgt-{run_id}"
     with internal_network(f"aegis-deto-net-{run_id}", cancel_event=cancel_event) as net:
         if net is None:
             return None
-        hp_args = honeypot_run_args(honeypot_image(), network=net, name=hp_name)
+        hp_args = honeypot_run_args(hp_image, network=net, name=hp_name)
         try:
             code, _out, _err = run_tool(hp_args, timeout=_START_TIMEOUT_S, env=docker_cli_env(), cancel_event=cancel_event)
             if code != 0:

@@ -15,6 +15,7 @@ def test_honeypot_run_args_detached_with_only_net_admin():
     assert "-d" in a and "--network=net" in a
     assert "--cap-drop=ALL" in a and "--cap-add=NET_ADMIN" in a  # trusted, minimal add
     assert "--security-opt=no-new-privileges" in a
+    assert "--user=0:0" in a  # root so iptables works (paired with NET_ADMIN)
     assert "REDIRECT" in " ".join(a)  # installs the TCP catch redirect
 
 
@@ -68,10 +69,22 @@ def test_container_ip_uses_index_for_hyphenated_network_names():
     assert ".Networks.aegis-deto-net-abc" not in fmt  # the broken dot form is gone
 
 
-def test_honeypot_image_env_override():
-    assert det.honeypot_image()
-    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "mirror.local/hp:2"}):
+def test_honeypot_image_prefers_explicit_then_runner_then_empty():
+    # HONEYPOT_IMAGE wins.
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "mirror.local/hp:2", "RUNNER_IMAGE": "runner:1"}):
         assert det.honeypot_image() == "mirror.local/hp:2"
+    # else the runner's own baked image (the turnkey default — no separate image).
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "", "RUNNER_IMAGE": "acme/runner:1"}, clear=False):
+        assert det.honeypot_image() == "acme/runner:1"
+    # neither set → empty → detonation graceful-skips.
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "", "RUNNER_IMAGE": ""}, clear=False):
+        assert det.honeypot_image() == ""
+
+
+def test_detonate_skips_when_no_honeypot_image():
+    with patch("runner.sandbox.detonation.runtime_available", return_value=True), \
+         patch("runner.sandbox.detonation.honeypot_image", return_value=""):
+        assert det.detonate("tgt:img", ["setup"], run_id="x") is None
 
 
 def test_detonate_skips_when_no_runtime():
@@ -95,6 +108,7 @@ def test_detonate_returns_events_and_tears_down():
 
     with patch("runner.sandbox.detonation.runtime_available", return_value=True), \
          patch("runner.sandbox.detonation.internal_network", fake_net), \
+         patch("runner.sandbox.detonation.honeypot_image", return_value="runner:test"), \
          patch("runner.sandbox.detonation.container_ip", return_value="10.9.0.2"), \
          patch("runner.sandbox.detonation.run_tool", side_effect=fake_run):
         events = det.detonate("tgt:img", ["setup"], run_id="x")
@@ -131,6 +145,7 @@ def test_detonate_collects_even_when_target_errors():
 
     with patch("runner.sandbox.detonation.runtime_available", return_value=True), \
          patch("runner.sandbox.detonation.internal_network", fake_net), \
+         patch("runner.sandbox.detonation.honeypot_image", return_value="runner:test"), \
          patch("runner.sandbox.detonation.container_ip", return_value="10.9.0.2"), \
          patch("runner.sandbox.detonation.run_tool", side_effect=fake_run):
         events = det.detonate("tgt:img", ["setup"], run_id="x")
