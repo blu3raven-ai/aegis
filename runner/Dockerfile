@@ -98,11 +98,12 @@ ENV PYTHONUNBUFFERED=1 \
 # to mount (that socket is host-root-equivalent, so avoiding it is a security win).
 #   podman crun     — daemonless, rootless OCI runtime
 #   fuse-overlayfs   — rootless overlay storage (falls back to vfs where unavailable)
-#   slirp4netns      — rootless container networking
+#   passt/slirp4netns — rootless container networking (podman prefers pasta, from
+#                       the passt package; slirp4netns kept as a fallback)
 #   uidmap           — newuidmap/newgidmap for the user-namespace setup
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git libstdc++6 libicu76 procps iptables \
-        podman crun fuse-overlayfs slirp4netns uidmap \
+        podman crun fuse-overlayfs passt slirp4netns uidmap \
     && rm -rf /var/lib/apt/lists/*
 
 # Default the runner to its embedded podman. The code default stays "docker" for
