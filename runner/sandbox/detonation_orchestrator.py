@@ -6,10 +6,14 @@ because the payload only exists at runtime (packed in a skipped dir, or off-repo
 DNS); this builds the repo, runs its setup entry in the egress-denied sandbox with
 the honeypot, and turns any observed egress into a runtime-confirmed finding.
 
-Strictly opt-in (``DETONATE``) — this is the only place we execute a repo's own
-setup code end to end. Graceful-skip on ANY missing precondition; never raises,
-never a false verdict. A malicious finding is only ever ADDED; static findings are
-untouched.
+Triage-gated: a fast static classifier decides whether a target is worth
+detonating (see ``triage.py``), so we run untrusted code selectively, not for
+every repo. Executing that code is still strictly opt-in (``DETONATE``) — the only
+place we run a repo's own setup end to end. When detonation is OFF but a target
+triages as risky, we emit a low-severity 'recommend detonation' finding instead of
+running anything, so operators see the signal without us executing code. Graceful-
+skip on ANY missing precondition; never raises, never a false verdict; only ever
+ADDs a finding — static findings are untouched.
 """
 from __future__ import annotations
 
@@ -23,10 +27,13 @@ from runner.sandbox.detonation import detonate
 from runner.sandbox.detonation_verdict import DetonationVerdict, verdict_from_egress
 from runner.sandbox.entry import DetonationEntry, detect_entry
 from runner.sandbox.harness import container_cli, docker_cli_env, runtime_available
+from runner.sandbox.triage import TriageResult, triage_target
 from runner.scanners._subprocess import run_tool
 
 _CHECK_ID = "AGENT_DETONATION_EGRESS"
 _GUIDELINE = "A setup/skill entry that phones home at runtime is malicious behavior."
+_RECOMMEND_ID = "AGENT_DETONATION_RECOMMENDED"
+_RECOMMEND_GUIDELINE = "This target's setup runs untrusted code and looks risky — detonate it to confirm."
 _BUILD_TIMEOUT_S = 600.0
 
 # Per-ecosystem detonation image. COPY . includes .git/ and oversize files on
@@ -69,6 +76,29 @@ def _finding(entry: DetonationEntry, verdict: DetonationVerdict) -> dict:
     }
 
 
+def _recommend_finding(triage: TriageResult) -> dict:
+    """A low-severity, verdict-less finding surfaced when detonation is OFF but the
+    target looks worth detonating — so operators see the signal without us running
+    any untrusted code."""
+    reasons = "; ".join(s.detail for s in triage.risk_signals)
+    fp = hashlib.sha1(f"agent:{_RECOMMEND_ID}:{reasons}".encode()).hexdigest()[:16]
+    return {
+        "check_id": _RECOMMEND_ID,
+        "title": "Setup entry warrants runtime detonation",
+        "severity": "low",
+        "file": "",
+        "line": 0,
+        "resource": _RECOMMEND_ID,
+        "guideline": _RECOMMEND_GUIDELINE,
+        "fingerprint": fp,
+        "verdict": None,  # a recommendation, not a runtime verdict
+        "evidence": {
+            "summary": triage.summary,
+            "signals": [{"kind": s.kind, "detail": s.detail} for s in triage.risk_signals],
+        },
+    }
+
+
 def _build(recipe: BuildRecipe, tag: str, cancel_event: threading.Event | None) -> bool:
     try:
         code, _out, _err = run_tool(
@@ -81,16 +111,26 @@ def _build(recipe: BuildRecipe, tag: str, cancel_event: threading.Event | None) 
 
 
 def detonate_repo(
-    repo_root: str, *, env, run_id: str, cancel_event: threading.Event | None = None,
+    repo_root: str, *, env, run_id: str, static_hits: int = 0,
+    cancel_event: threading.Event | None = None,
 ) -> list[dict]:
-    """Detonate the repo's setup entry, returning any runtime-confirmed findings.
-    A no-op (returns []) on every missing precondition — not opted in, no runtime,
-    no detectable entry, unsupported ecosystem, build fail, or detonation skip."""
-    if not _enabled(env.get) or not runtime_available():
-        return []
+    """Triage the target, then act on the verdict:
+
+    - not worth detonating (no entry, or benign) → [] (never runs code, never nags)
+    - worth detonating + DETONATE off → a 'recommend detonation' finding (the signal
+      without executing anything)
+    - worth detonating + DETONATE on → detonate that target and return the runtime
+      verdict.
+    """
     entry = detect_entry(repo_root)
-    if entry is None:
+    triage = triage_target(repo_root, has_entry=entry is not None, static_hits=static_hits)
+    if not triage.worth_detonating:
         return []
+    if not _enabled(env.get):
+        return [_recommend_finding(triage)]
+    if not runtime_available():
+        return []
+    # worth_detonating guarantees a runnable entry.
     body = dockerfile_body(entry.ecosystem)
     if body is None:
         return []

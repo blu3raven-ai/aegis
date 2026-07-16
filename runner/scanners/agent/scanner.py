@@ -199,6 +199,7 @@ class AgentScanner:
             try:
                 findings.extend(detonate_repo(
                     str(clone_dir), env=env, run_id=uuid.uuid4().hex[:8],
+                    static_hits=len(findings),  # detectors that already fired → a triage signal
                     cancel_event=cancel_event,
                 ))
             except Exception as e:  # noqa: BLE001
