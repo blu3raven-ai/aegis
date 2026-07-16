@@ -24,6 +24,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +65,19 @@ def _line_of(text: str, needle: str) -> int:
     return text.count("\n", 0, idx) + 1 if idx >= 0 else 1
 
 
+# Join shell line-continuations and collapse whitespace runs so a command split
+# across lines (the SkillCloak evasion — a flagged command broken over a newline)
+# still matches the single-line danger patterns below.
+_LINE_CONT = re.compile(r"\\\s*\n\s*")
+_WS = re.compile(r"\s+")
+
+
+def _normalize_cmd(cmd: str) -> str:
+    return _WS.sub(" ", _LINE_CONT.sub("", cmd))
+
+
 def _is_dangerous(cmd: str) -> bool:
+    cmd = _normalize_cmd(cmd)
     return bool(
         _PIPE_TO_SHELL.search(cmd)
         or _SHELL_SUBSHELL_FETCH.search(cmd)
