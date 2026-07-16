@@ -29,6 +29,7 @@ from runner.sandbox.entry import DetonationEntry, detect_entry
 from runner.sandbox.harness import container_cli, docker_cli_env, runtime_available
 from runner.sandbox.triage import TriageResult, triage_target
 from runner.scanners._subprocess import run_tool
+from runner.scanners.agent.skill_bundle import _OBFUSCATED_EXEC
 
 _CHECK_ID = "AGENT_DETONATION_EGRESS"
 _GUIDELINE = "A setup/skill entry that phones home at runtime is malicious behavior."
@@ -123,7 +124,11 @@ def detonate_repo(
       verdict.
     """
     entry = detect_entry(repo_root)
-    triage = triage_target(repo_root, has_entry=entry is not None, static_hits=static_hits)
+    obfuscated = bool(entry and entry.body and _OBFUSCATED_EXEC.search(entry.body))
+    triage = triage_target(
+        repo_root, has_entry=entry is not None,
+        entry_obfuscated=obfuscated, static_hits=static_hits,
+    )
     if not triage.worth_detonating:
         return []
     if not _enabled(env.get):

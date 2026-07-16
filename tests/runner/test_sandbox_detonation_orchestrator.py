@@ -103,3 +103,12 @@ def test_build_helper_maps_exit_code_and_never_raises():
         assert orch._build(recipe, "tag", None) is False
     with patch("runner.sandbox.detonation_orchestrator.run_tool", side_effect=OSError("boom")):
         assert orch._build(recipe, "tag", None) is False
+
+
+def test_obfuscated_entry_body_triages_as_worth_when_off():
+    # An obfuscated setup entry alone (no skill marker, no static hit) is now a
+    # risk signal — previously entry_obfuscated was wired nowhere.
+    obf = DetonationEntry(cmd=("sh", "setup.sh"), ecosystem="shell",
+                          source="setup.sh", body="eval(atob('cGF5bG9hZA=='))")
+    findings = _run(_Env(), static_hits=0, detect_entry=lambda root: obf)
+    assert len(findings) == 1 and findings[0]["check_id"] == "AGENT_DETONATION_RECOMMENDED"

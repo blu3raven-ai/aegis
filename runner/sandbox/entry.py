@@ -28,6 +28,8 @@ class DetonationEntry:
     cmd: tuple[str, ...]  # argv to run in the sandbox
     ecosystem: str        # "npm" | "shell" — hints the base image to build
     source: str           # where it was found, for the finding's evidence
+    body: str = ""        # the raw script text (npm script value / setup-script
+                          # contents), so triage can check it for obfuscation
 
 
 def _npm_entry(repo_root: Path) -> DetonationEntry | None:
@@ -46,15 +48,24 @@ def _npm_entry(repo_root: Path) -> DetonationEntry | None:
                 cmd=("npm", "run", name, "--silent"),
                 ecosystem="npm",
                 source=f"package.json:scripts.{name}",
+                body=scripts[name],
             )
     return None
+
+
+# Cap the script read — an obfuscation check needs the head, not a padded file.
+_MAX_BODY_BYTES = 64 * 1024
 
 
 def _script_entry(repo_root: Path) -> DetonationEntry | None:
     for name in _SETUP_SCRIPTS:
         p = repo_root / name
         if p.is_file():
-            return DetonationEntry(cmd=("sh", name), ecosystem="shell", source=name)
+            try:
+                body = p.read_text(encoding="utf-8", errors="replace")[:_MAX_BODY_BYTES]
+            except OSError:
+                body = ""
+            return DetonationEntry(cmd=("sh", name), ecosystem="shell", source=name, body=body)
     return None
 
 
