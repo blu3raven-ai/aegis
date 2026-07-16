@@ -85,7 +85,6 @@ EXEMPT_FILES: tuple[tuple[str, str], ...] = (
     ("iac/scanner.py", "module docstring names runner-side IaC tool"),
     # SBOM components carry a `source_tool` label (canonical schema field)
     ("containers/sbom_store.py", "label-only `source_tool` field on SBOM components"),
-    ("graphql/sbom_resolvers.py", "filter on canonical `source_tool` label"),
     ("sbom/resolvers.py", "filter on canonical `source_tool` label"),
     # BYO router accepts findings from any out-of-band scanner — the docstring
     # describes accepted formats but the router never executes any scanner.
