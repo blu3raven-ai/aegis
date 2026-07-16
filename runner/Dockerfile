@@ -93,9 +93,29 @@ ENV PYTHONUNBUFFERED=1 \
 #   procps     — pgrep, used by the HEALTHCHECK below
 #   iptables   — the opt-in detonation honeypot uses this image as its own sidecar
 #                and needs iptables to redirect the target's outbound TCP
+# podman + rootless deps let the runner run the sandbox (runtime verification /
+# detonation) self-contained — nested rootless containers, no host Docker socket
+# to mount (that socket is host-root-equivalent, so avoiding it is a security win).
+#   podman crun     — daemonless, rootless OCI runtime
+#   fuse-overlayfs   — rootless overlay storage (falls back to vfs where unavailable)
+#   slirp4netns      — rootless container networking
+#   uidmap           — newuidmap/newgidmap for the user-namespace setup
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git libstdc++6 libicu76 procps iptables \
+        podman crun fuse-overlayfs slirp4netns uidmap \
     && rm -rf /var/lib/apt/lists/*
+
+# Default the runner to its embedded podman. The code default stays "docker" for
+# anyone running outside this image; here we point at the bundled rootless runtime.
+ENV CONTAINER_CLI=podman
+
+# Rootless podman in a container: cgroupfs (no systemd), and vfs storage — the most
+# portable driver when /dev/fuse isn't present. A host that provides /dev/fuse can
+# switch to fuse-overlayfs for speed. If the kernel blocks nested user namespaces,
+# runtime_available() graceful-skips and the sandbox is simply not used.
+RUN mkdir -p /etc/containers && \
+    printf '[engine]\ncgroup_manager = "cgroupfs"\n[storage]\ndriver = "vfs"\n' > /etc/containers/containers.conf && \
+    printf '[storage]\ndriver = "vfs"\n' > /etc/containers/storage.conf
 
 # The runner image doubles as the detonation honeypot sidecar (it already carries
 # the runner package + python; iptables is added above). Baking the image's own
@@ -127,9 +147,12 @@ COPY --from=builder /install /usr/local
 WORKDIR /app
 COPY . /app/runner/
 
-# Non-root user
+# Non-root user. The subuid/subgid ranges are what rootless podman maps into a
+# nested container's user namespace — without them it cannot start one.
 RUN useradd --create-home --shell /bin/bash --uid 10001 aegis && \
     mkdir -p /workspace && \
+    echo "aegis:100000:65536" > /etc/subuid && \
+    echo "aegis:100000:65536" > /etc/subgid && \
     chown -R aegis:aegis /app /workspace /home/aegis
 USER aegis
 
