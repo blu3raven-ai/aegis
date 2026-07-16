@@ -52,6 +52,17 @@ def test_compute_diff_files_raises_on_missing_base(tmp_path):
         compute_diff_files(str(repo), "deadbeef", head)
 
 
+def test_compute_diff_files_rejects_non_hex_ref(tmp_path):
+    """Refs are interpolated into the git argv, so a value that could be parsed
+    as an option (or any non-sha) must be refused before git runs."""
+    repo = _init_repo(tmp_path)
+    head = _commit(repo, {"a.py": "1\n"}, "init")
+    with pytest.raises(ValueError):
+        compute_diff_files(str(repo), "--output=/tmp/x", head)
+    with pytest.raises(ValueError):
+        compute_diff_files(str(repo), head, "HEAD")
+
+
 def test_compute_diff_files_handles_nested_paths(tmp_path):
     repo = _init_repo(tmp_path)
     base = _commit(repo, {"src/a.py": "1\n"}, "init")

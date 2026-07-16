@@ -8,6 +8,7 @@ import concurrent.futures
 import dataclasses
 import logging
 import os
+import re
 import subprocess
 import threading
 from pathlib import Path
@@ -411,15 +412,23 @@ class BaseScanConfig:
     concurrency: int
 
 
+_COMMIT_SHA_RE = re.compile(r"\A[0-9a-fA-F]{7,64}\Z")
+
+
 def compute_diff_files(repo_root: str, base_sha: str, head_sha: str) -> list[str]:
     """Return relative paths of files changed between ``base_sha`` and ``head_sha``.
 
-    Raises ``ValueError`` if either commit is missing from the local clone or
-    if git itself errors. A 30s timeout guards against pathological histories.
+    Both refs must be hex commit shas — they are interpolated into the ``git``
+    argv, so a value that could begin with ``-`` would otherwise be parsed as an
+    option rather than a revision. Raises ``ValueError`` if either ref is not a
+    hex sha, if either commit is missing from the local clone, or if git itself
+    errors. A 30s timeout guards against pathological histories.
     """
+    if not _COMMIT_SHA_RE.match(base_sha) or not _COMMIT_SHA_RE.match(head_sha):
+        raise ValueError("compute_diff_files requires hex commit shas")
     try:
         out = subprocess.run(
-            ["git", "-C", repo_root, "diff", "--name-only", f"{base_sha}..{head_sha}"],
+            ["git", "-C", repo_root, "diff", "--name-only", f"{base_sha}..{head_sha}", "--"],
             capture_output=True, text=True, check=True, timeout=30,
         )
     except subprocess.CalledProcessError as e:
