@@ -2,6 +2,8 @@
 
 import { useState } from "react"
 
+import { Button } from "@/components/ui/Button"
+
 export type SignInProvider = "google" | "microsoft" | "github" | "okta" | "saml"
 
 interface SignInStepProps {
@@ -193,12 +195,9 @@ export function SignInStep({ onProviderClick, onMagicLinkRequest }: SignInStepPr
               className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] outline-none transition-colors placeholder:text-[var(--color-text-secondary)] focus:border-[var(--color-accent)]"
             />
           </label>
-          <button
-            type="submit"
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-[var(--color-accent-on)] transition-opacity hover:opacity-90"
-          >
+          <Button type="submit" variant="primary" size="md">
             Send magic link
-          </button>
+          </Button>
         </form>
 
         <div className="mt-7 flex flex-col gap-3 border-t border-[var(--color-border)] pt-5">

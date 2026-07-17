@@ -6,6 +6,7 @@ import Link from "next/link"
 import { createDestination, type NotificationDestination } from "@/lib/client/destinations-api"
 import { type ConnectorType } from "@/lib/client/integrations-catalog-api"
 import { Modal } from "@/app/(app)/settings/account/Modal"
+import { Button } from "@/components/ui/Button"
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
 
@@ -278,13 +279,14 @@ export function CatalogConnectorModal({
           >
             Cancel
           </button>
-          <button
+          <Button
             type="submit"
+            variant="primary"
+            size="sm"
             disabled={submitting}
-            className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
           >
             {submitting ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </div>
       </form>
     </Modal>

@@ -6,6 +6,7 @@ import {
   getScanStatus,
   type ScanDetail,
 } from "@/lib/client/repos-api"
+import { Button } from "@/components/ui/Button"
 
 interface PreReleaseScanPanelProps {
   repoId: string
@@ -154,15 +155,15 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
               placeholder="e.g. a1b2c3d"
               className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-mono"
             />
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="sm"
               disabled={submitDisabled}
-              className={`shrink-0 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] ${
-                submitDisabled ? "opacity-50 cursor-not-allowed" : ""
-              }`}
+              className="shrink-0"
             >
               {submitting ? "Submitting…" : "Run scan →"}
-            </button>
+            </Button>
           </div>
           {shaError && (
             <p className="mt-1.5 text-xs text-[var(--color-severity-critical)]">{shaError}</p>

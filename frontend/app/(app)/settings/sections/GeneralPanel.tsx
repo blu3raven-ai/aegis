@@ -122,7 +122,7 @@ export function GeneralDetail(_: DetailComponentProps) {
           ) : (
             <div
               aria-hidden="true"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-accent-deep)] text-xs font-bold text-white"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-[var(--color-accent)] text-xs font-bold text-white"
             >
               {initials}
             </div>

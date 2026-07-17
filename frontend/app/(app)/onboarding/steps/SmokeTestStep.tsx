@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { startDependenciesRuns, fetchDependenciesRuns } from "@/lib/client/dependencies-client"
+import { Button } from "@/components/ui/Button"
 import { StepLayout } from "@/components/shared/onboarding/StepLayout"
 import { WhileYouWaitCard } from "./WhileYouWaitCard"
 
@@ -86,13 +87,9 @@ export function SmokeTestStep({ onNext, onBack, onSkip, loading = false }: Smoke
               <p className="text-sm text-[var(--color-text-secondary)]">
                 Aegis will scan your connected repositories for known vulnerabilities in third-party dependencies. This usually takes 1–3 minutes.
               </p>
-              <button
-                type="button"
-                onClick={startScan}
-                className="rounded-lg bg-[var(--color-accent)] px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-              >
+              <Button variant="primary" size="sm" onClick={startScan}>
                 Start scan
-              </button>
+              </Button>
             </div>
           )}
 

@@ -68,7 +68,7 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
   const critShare = Math.round(((counts.critical + counts.high) / counts.total) * 100)
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
         Severity breakdown
       </h2>
@@ -121,7 +121,7 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
             <span className="text-2xl font-bold leading-none tabular-nums text-[var(--color-text-primary)]">
               {counts.total.toLocaleString()}
             </span>
-            <span className="mt-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <span className="mt-0.5 text-2xs font-mono font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               open
             </span>
           </span>
@@ -237,7 +237,7 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
 export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotResponse }) {
   const { repositoryCoverage: cov } = snap
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
         Affected repositories
       </h2>
@@ -246,7 +246,7 @@ export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotRespons
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {Math.round(cov.percentage)}%
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             of {cov.total} repos
           </p>
         </div>
@@ -254,7 +254,7 @@ export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotRespons
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {cov.affected}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             with open findings
           </p>
         </div>
@@ -262,7 +262,7 @@ export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotRespons
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {cov.unaffected}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             no open findings
           </p>
         </div>

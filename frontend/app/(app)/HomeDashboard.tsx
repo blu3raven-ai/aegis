@@ -518,10 +518,10 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
         </h2>
         <span className="text-xs text-[var(--color-text-tertiary)]">{rangeLabel}</span>
       </div>
-      <Card className="rounded-2xl">
+      <Card className="rounded-md">
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Introduced
             </p>
             <p className="mt-2 flex items-baseline text-3xl font-semibold tabular-nums leading-none text-[var(--color-severity-high-text)]">
@@ -531,7 +531,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
             <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
           </div>
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Fixed
             </p>
             <p className="mt-2 flex items-baseline text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">
@@ -541,7 +541,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
             <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
           </div>
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Net change
             </p>
             <p className={`mt-2 text-3xl font-semibold tabular-nums leading-none ${netClass}`}>

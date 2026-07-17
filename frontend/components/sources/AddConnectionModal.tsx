@@ -477,7 +477,7 @@ export function AddConnectionModal({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className={`relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)] focus:outline-none transition-[max-width] duration-200 ${splitView ? "max-w-4xl h-[85dvh]" : "max-w-lg"}`}
+        className={`relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] focus:outline-none transition-[max-width] duration-200 ${splitView ? "max-w-4xl h-[85dvh]" : "max-w-lg"}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

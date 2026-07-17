@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { ApiClientError } from "@/lib/client/api-client.types.ts"
 import { ssoLoginUrl, useSsoAvailability } from "@/lib/client/sso-availability"
+import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 
@@ -114,13 +115,15 @@ export function LoginForm() {
         </div>
       )}
 
-      <button
+      <Button
         type="submit"
+        variant="primary"
+        size="md"
         disabled={isPending || !email.trim() || !password}
-        className="w-full py-3 px-4 cursor-pointer bg-[var(--color-accent)] text-[var(--color-accent-on)] text-sm font-semibold rounded-lg hover:bg-[var(--color-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
+        className="w-full"
       >
         {isPending ? "Signing in…" : "Sign in"}
-      </button>
+      </Button>
     </form>
   )
 }

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import Link from "next/link"
+import { Button } from "@/components/ui/Button"
 
 export default function Error({
   error,
@@ -28,13 +29,9 @@ export default function Error({
         </p>
       </div>
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={reset}
-          className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent-on)] transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
-        >
+        <Button variant="primary" size="sm" onClick={reset}>
           Try again
-        </button>
+        </Button>
         <Link
           href="/"
           className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"

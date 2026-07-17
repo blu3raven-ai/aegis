@@ -454,7 +454,7 @@ export function ScopeConfigContent({
           </Link>
 
           {/* Connection header card */}
-          <Card className="flex items-center justify-between rounded-xl shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+          <Card className="flex items-center justify-between rounded-xl shadow-[var(--shadow-card)]">
             <div>
               <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
                 {loaded.name}

@@ -250,7 +250,7 @@ export function ScanProgressProvider({ children }: { children: React.ReactNode }
           ))}
         </div>
         {showFooter && (
-          <div className="pointer-events-auto flex w-[min(26rem,calc(100vw-2rem))] items-center justify-between gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5">
+          <div className="pointer-events-auto flex w-[min(26rem,calc(100vw-2rem))] items-center justify-between gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 shadow-[var(--shadow-nav)] ring-1 ring-black/5">
             {showCancelAll ? (
               <Button
                 variant="ghost"

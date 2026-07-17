@@ -194,20 +194,20 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
         </div>
-        <Card className="rounded-2xl">
+        <Card className="rounded-md">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Introduced</p>
+              <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Introduced</p>
               <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-severity-high-text)]">13</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
             </div>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Fixed</p>
+              <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Fixed</p>
               <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">18</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
             </div>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Net change</p>
+              <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Net change</p>
               <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">−5</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">in your repos</p>
             </div>

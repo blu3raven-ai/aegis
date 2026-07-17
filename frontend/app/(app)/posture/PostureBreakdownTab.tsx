@@ -183,7 +183,7 @@ function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
 function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
   const { repositoryCoverage: cov, remediation: rem } = snap
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Repository coverage
       </p>
@@ -192,7 +192,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {Math.round(cov.percentage)}%
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             of {cov.total} repos
           </p>
         </div>
@@ -200,7 +200,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {cov.affected}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             affected
           </p>
         </div>
@@ -208,7 +208,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {cov.unaffected}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             clean
           </p>
         </div>
@@ -224,7 +224,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {rem.totalFixed.toLocaleString()}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             total fixed
           </p>
         </div>
@@ -232,7 +232,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {rem.avgDays != null ? `${rem.avgDays}d` : "N/A"}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             avg days
           </p>
         </div>
@@ -240,7 +240,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {rem.medianDays != null ? `${rem.medianDays}d` : "N/A"}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             median days
           </p>
         </div>
@@ -248,7 +248,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {rem.fixedLast30d.toLocaleString()}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             last 30 days
           </p>
         </div>

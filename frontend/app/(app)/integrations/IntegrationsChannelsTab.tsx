@@ -7,6 +7,7 @@ import { DestinationForm } from "@/components/shared/notifications/DestinationFo
 import { EmptyDestinationsState } from "@/components/shared/notifications/EmptyDestinationsState"
 import { DrawerSection } from "@/components/shared/FindingDrawer/DrawerSection"
 import { KpiCard } from "@/components/shared/KpiCard"
+import { Button } from "@/components/ui/Button"
 import {
   type NotificationDestination,
   type CreateDestinationPayload,
@@ -124,13 +125,9 @@ export function IntegrationsChannelsTab({
       <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Destinations</h2>
-          <button
-            type="button"
-            onClick={onStartCreate}
-            className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
-          >
+          <Button variant="primary" size="sm" onClick={onStartCreate}>
             + Add destination
-          </button>
+          </Button>
         </div>
 
         {destsState === "loading" && <DestinationsLoadingSkeleton />}

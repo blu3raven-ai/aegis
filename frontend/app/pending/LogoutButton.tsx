@@ -1,6 +1,7 @@
 "use client"
 
 import { apiClient } from "@/lib/client/api-client.ts"
+import { Button } from "@/components/ui/Button"
 
 export function LogoutButton() {
   async function handleLogout() {
@@ -9,12 +10,8 @@ export function LogoutButton() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleLogout}
-      className="rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)]"
-    >
+    <Button variant="primary" size="sm" onClick={handleLogout}>
       Log out
-    </button>
+    </Button>
   )
 }

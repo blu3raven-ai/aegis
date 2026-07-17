@@ -434,9 +434,9 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
         <Link
           href={findingsHref({ kev: true, state: "open" })}
           aria-label={`View ${kevCount} KEV-exposed findings`}
-          className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          className="flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             KEV-exposed
           </p>
           <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-severity-critical-text)]">
@@ -452,8 +452,8 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
         </Link>
 
         {data == null ? (
-          <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <div className="flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left">
+            <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               High EPSS
             </p>
             <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-severity-high-text)]">
@@ -465,9 +465,9 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
           <Link
             href={findingsHref({ epssMin: 0.9, state: "open" })}
             aria-label={`View ${highEpssCount} high-EPSS findings`}
-            className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+            className="flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               High EPSS
             </p>
             <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-severity-high-text)]">

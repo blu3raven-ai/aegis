@@ -202,7 +202,7 @@ export function ScanRunningBanner({
         padding="none"
         role="status"
         aria-live="polite"
-        className="overflow-hidden rounded-2xl shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5"
+        className="overflow-hidden rounded-2xl shadow-[var(--shadow-nav)] ring-1 ring-black/5"
       >
         <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)]">
           <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg", chipClass)}>
@@ -261,7 +261,7 @@ export function ScanRunningBanner({
       padding="none"
       role="status"
       aria-live="polite"
-      className="overflow-hidden rounded-2xl shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5"
+      className="overflow-hidden rounded-2xl shadow-[var(--shadow-nav)] ring-1 ring-black/5"
     >
       <div className="space-y-4 p-4 text-sm text-[var(--color-text-primary)]">
         <div className="flex items-start gap-3">

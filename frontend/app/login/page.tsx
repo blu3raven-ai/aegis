@@ -21,7 +21,7 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--color-background)] px-4">
       <div className="w-full max-w-sm">
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
+        <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
           {/* Branding header — vendor identity when name is NULL; customer otherwise */}
           <div className="bg-[var(--color-accent-subtle)] px-8 pb-6 pt-8">
             <div className="flex items-center gap-4">

@@ -290,10 +290,10 @@ function KpiCard({
   const card = (
     <Card
       padding="none"
-      className={`h-full rounded-2xl px-5 py-3 ${href ? "transition-colors hover:border-[var(--color-accent)]/40" : ""}`}
+      className={`h-full rounded-md px-5 py-3 ${href ? "transition-colors hover:border-[var(--color-accent)]/40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           {label}
         </p>
         {delta && (
@@ -323,7 +323,7 @@ function KpiCard({
     <Link
       href={href}
       aria-label={`View ${label} in findings`}
-      className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+      className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
     >
       {card}
     </Link>
@@ -2035,7 +2035,7 @@ function SlaComplianceGauge({
   ].filter((s) => s.n > 0)
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
         SLA compliance
       </h2>
@@ -2062,7 +2062,7 @@ function SlaComplianceGauge({
             <span className="text-2xl font-bold leading-none tabular-nums" style={{ color: toneText }}>
               {compliancePct}%
             </span>
-            <span className="mt-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <span className="mt-0.5 text-2xs font-mono font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               within SLA
             </span>
           </span>

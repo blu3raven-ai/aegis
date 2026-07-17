@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { ApiClientError } from "@/lib/client/api-client.types.ts"
+import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 
@@ -81,13 +82,15 @@ export function VerifyForm() {
         </div>
       )}
 
-      <button
+      <Button
         type="submit"
+        variant="primary"
+        size="md"
         disabled={isPending || code.length !== 6}
-        className="w-full cursor-pointer rounded-lg bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
+        className="w-full"
       >
         {isPending ? "Verifying..." : "Verify"}
-      </button>
+      </Button>
 
       <p className="text-center text-xs text-[var(--color-text-secondary)]">
         <Link href="/login" className="hover:text-[var(--color-text-primary)]">

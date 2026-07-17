@@ -21,7 +21,7 @@ export function PageHeader({ icon, title, description, count, meta, controls }: 
             <h1 className="flex items-baseline gap-2 text-lg font-semibold tracking-tight text-[var(--color-text-primary)]">
               <span className="truncate">{title}</span>
               {showCount && (
-                <span className="shrink-0 rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs font-medium tabular-nums text-[var(--color-text-secondary)]">
+                <span className="shrink-0 rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 font-mono text-2xs font-semibold tabular-nums text-[var(--color-text-secondary)]">
                   {count.toLocaleString()}
                 </span>
               )}
