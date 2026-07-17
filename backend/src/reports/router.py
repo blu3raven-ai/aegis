@@ -1,6 +1,8 @@
 """REST endpoints for /api/v1/findings/reports."""
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from src.audit_log.recorder import ActorInfo, get_recorder
@@ -87,7 +89,10 @@ async def create_report(
     asset_ids = await resolve_asset_ids_from_request(request)
     filters_dict = body.filters.model_dump(exclude_none=True) if body.filters else None
     try:
-        row = generate_report(
+        # Offload to a worker thread: generation blocks on run_db + WeasyPrint,
+        # which would otherwise stall the request's event loop for every caller.
+        row = await asyncio.to_thread(
+            generate_report,
             report_type=body.report_type,
             fmt=body.format,
             title=body.title,
