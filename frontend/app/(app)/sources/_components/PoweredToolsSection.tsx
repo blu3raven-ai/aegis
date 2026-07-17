@@ -62,7 +62,7 @@ export function PoweredToolsSection({ category, hasConnections }: PoweredToolsSe
   if (tools.length === 0) return null
 
   return (
-    <Card className="rounded-xl shadow-[var(--shadow-card)]">
+    <Card className="rounded-md shadow-[var(--shadow-card)]">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Tools powered by this source
       </p>

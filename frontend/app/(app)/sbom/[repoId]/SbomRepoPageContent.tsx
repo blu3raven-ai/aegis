@@ -346,7 +346,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
                 repo={repoDisplayName ?? undefined}
               />
             ) : (
-              <div className="flex-1 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+              <div className="flex-1 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]">
                 <SbomDependencyTree
                   components={parsed?.components ?? []}
                   dependencies={parsed?.dependencies ?? []}

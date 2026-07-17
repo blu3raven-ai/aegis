@@ -144,7 +144,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
           <p className="mb-4 text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Connections
           </p>
-          <Card padding="none" className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl">
+          <Card padding="none" className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md">
             <SkeletonRow />
             <SkeletonRow />
           </Card>
@@ -183,7 +183,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
           <p className="mb-4 text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Connections
           </p>
-          <Card padding="none" className="divide-y divide-[var(--color-border)] overflow-hidden rounded-xl">
+          <Card padding="none" className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md">
             {connections.map((conn) => (
               <ConnectionCard
                 key={conn.id}

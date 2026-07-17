@@ -238,7 +238,7 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
   ])
 
   return (
-    <Card padding="none" className="flex flex-col gap-0 divide-y divide-[var(--color-border)] rounded-xl overflow-hidden">
+    <Card padding="none" className="flex flex-col gap-0 divide-y divide-[var(--color-border)] rounded-md overflow-hidden">
       {/* Summary bar */}
       <div className="flex flex-wrap items-center gap-4 px-4 py-3">
         <span className="text-xs text-[var(--color-text-secondary)]">

@@ -30,7 +30,7 @@ export function ControlDetailHero({
   const atRisk = findingCount > 0
 
   return (
-    <Card padding="lg" elevation="sm" className="rounded-xl">
+    <Card padding="lg" elevation="sm" className="rounded-md">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">

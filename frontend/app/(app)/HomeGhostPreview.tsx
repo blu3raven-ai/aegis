@@ -13,7 +13,7 @@ const SEV_BADGE_MED = "bg-[var(--color-severity-medium)]/10 text-[var(--color-se
 
 function FeaturedCard() {
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="flex items-start gap-3">
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${SEV_BADGE_CRIT}`}>
           <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
@@ -38,7 +38,7 @@ function FeaturedCard() {
 
 function CompactRow() {
   return (
-    <Card padding="none" className="flex items-center gap-3 rounded-xl px-4 py-3">
+    <Card padding="none" className="flex items-center gap-3 rounded-md px-4 py-3">
       <span className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${SEV_BADGE_HIGH}`}>
         <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
         high
@@ -59,7 +59,7 @@ function CompactRow() {
 function CveCard({ severity }: { severity: "critical" | "high" }) {
   const sevClass = severity === "critical" ? SEV_BADGE_CRIT : SEV_BADGE_HIGH
   return (
-    <Card className="rounded-xl">
+    <Card className="rounded-md">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide ${sevClass}`}>
           {severity}

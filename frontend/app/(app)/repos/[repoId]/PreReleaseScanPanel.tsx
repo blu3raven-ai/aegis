@@ -131,7 +131,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
       {/* Submission form */}
       <form
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+        className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
       >
         <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
           Trigger pre-release scan
@@ -228,7 +228,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
 
       {/* Active scan status card */}
       {activeScan && (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-[var(--color-text-primary)]">

@@ -29,7 +29,7 @@ function EmptyState({
   const itemLabel = CATEGORY_ITEM_LABELS[category]
   return (
     <div className="py-8">
-      <Card padding="none" className="rounded-2xl p-8 shadow-[var(--shadow-card)]">
+      <Card padding="none" className="rounded-md p-8 shadow-[var(--shadow-card)]">
         <div className="mx-auto max-w-md text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)]/10">
             {icon}

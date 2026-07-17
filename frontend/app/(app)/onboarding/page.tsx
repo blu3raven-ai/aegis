@@ -145,7 +145,7 @@ export default function OnboardingPage() {
         <StepIndicator currentStep={indicatorStep} completedSteps={completedSteps} />
       </div>
 
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-sm">
         {showSignIn && (
           <SignInStep
             onProviderClick={handleProviderClick}

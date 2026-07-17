@@ -62,7 +62,7 @@ function TrendChart() {
     .map((v, i) => `${i === 0 ? "M" : "L"} ${(slotW * i).toFixed(1)} ${(usable - (v / max) * usable).toFixed(1)}`)
     .join(" ")
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex items-baseline justify-between">
         <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Severity trend</h3>
         <span className="text-xs text-[var(--color-text-tertiary)]">last 30 days · preview</span>
@@ -80,7 +80,7 @@ function TrendChart() {
 
 function AttentionPanel() {
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex items-baseline justify-between">
         <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Needs attention</h3>
         <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>

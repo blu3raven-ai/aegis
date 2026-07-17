@@ -275,7 +275,7 @@ export default function CompliancePage() {
               {Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={i}
-                  className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3"
+                  className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3"
                 >
                   <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                     —
@@ -299,7 +299,7 @@ export default function CompliancePage() {
                 </Card>
               ))}
             </div>
-            <Card elevation="sm" className="rounded-xl">
+            <Card elevation="sm" className="rounded-md">
               <div className="flex items-center justify-center py-12 text-sm text-[var(--color-text-secondary)]">
                 Loading frameworks…
               </div>
@@ -308,7 +308,7 @@ export default function CompliancePage() {
         )}
 
         {loadState === "error" && (
-          <Card padding="none" className="flex flex-col items-center justify-center gap-3 rounded-xl px-8 py-16 text-center">
+          <Card padding="none" className="flex flex-col items-center justify-center gap-3 rounded-md px-8 py-16 text-center">
             <p className="text-base font-semibold text-[var(--color-text-primary)]">
               Couldn&apos;t load compliance frameworks
             </p>
@@ -324,7 +324,7 @@ export default function CompliancePage() {
         )}
 
         {loadState === "ok" && frameworks.length === 0 && (
-          <Card padding="none" className="flex flex-col items-center justify-center gap-4 rounded-xl py-20 text-center">
+          <Card padding="none" className="flex flex-col items-center justify-center gap-4 rounded-md py-20 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]">
               <svg
                 className="h-8 w-8"
@@ -370,7 +370,7 @@ export default function CompliancePage() {
             </div>
 
             {selected !== null && (
-              <Card elevation="sm" className="rounded-xl">
+              <Card elevation="sm" className="rounded-md">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <h2 className="min-w-0 break-words text-base font-semibold text-[var(--color-text-primary)]">
                     Controls · {selectedFw?.label ?? selected}

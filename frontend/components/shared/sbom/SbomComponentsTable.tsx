@@ -135,7 +135,7 @@ export function SbomComponentsTable({
   }
 
   return (
-    <Card padding="none" elevation="sm" className="flex flex-col overflow-hidden rounded-xl">
+    <Card padding="none" elevation="sm" className="flex flex-col overflow-hidden rounded-md">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
         <SearchInput

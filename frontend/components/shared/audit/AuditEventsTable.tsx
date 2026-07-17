@@ -70,7 +70,7 @@ export function AuditEventsTable({
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE))
 
   return (
-    <Card padding="none" elevation="sm" className="overflow-hidden rounded-2xl">
+    <Card padding="none" elevation="sm" className="overflow-hidden rounded-md">
       <Table>
         <Thead>
           <Tr>

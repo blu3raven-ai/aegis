@@ -116,7 +116,7 @@ export function PostureUsageTab() {
   if (state === "error" && usage === null) {
     return (
       <div className="space-y-5 px-6 py-5">
-        <Card padding="none" className="rounded-2xl px-6 py-12 text-center">
+        <Card padding="none" className="rounded-md px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">
             Could not load usage data
           </p>

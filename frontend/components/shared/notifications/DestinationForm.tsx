@@ -254,7 +254,7 @@ export function DestinationForm({
       )}
 
       {/* Event filter */}
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
         <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Event filter
         </p>

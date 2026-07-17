@@ -89,7 +89,7 @@ export function SetupChecklistCard() {
       </div>
 
       {/* Steps card */}
-      <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]">
         {tasks.map((task, i) => {
           const isDone = task.done
           const isActive = i === activeIndex

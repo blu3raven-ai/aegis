@@ -121,7 +121,7 @@ export function WhileYouWaitCard() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
         <div className="mb-4">
           <h3 className="text-base font-semibold text-[var(--color-text-primary)]">While you wait</h3>
           <p className="text-xs text-[var(--color-text-tertiary)]">Get more out of your first scan</p>

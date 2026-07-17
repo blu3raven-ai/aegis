@@ -101,8 +101,8 @@ export function ConnectorCard({
   const isComingSoon = connector.coming_soon === true
 
   const cardClass = isComingSoon
-    ? "group relative rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 opacity-60 cursor-not-allowed"
-    : "group relative rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-accent)]/30 hover:bg-[var(--color-surface-raised)]"
+    ? "group relative rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 opacity-60 cursor-not-allowed"
+    : "group relative rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-accent)]/30 hover:bg-[var(--color-surface-raised)]"
 
   return (
     <div className={cardClass} aria-disabled={isComingSoon || undefined}>

@@ -303,7 +303,7 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
       )}
 
       {/* Verification snippet expandable */}
-      <div className="rounded-xl border border-[var(--color-border)]">
+      <div className="rounded-md border border-[var(--color-border)]">
         <button
           type="button"
           onClick={() => setSnippetOpen((p) => !p)}

@@ -12,7 +12,7 @@ export function DrawerSection({
   children: React.ReactNode
 }) {
   return (
-    <Card as="section" padding="none" className="rounded-xl">
+    <Card as="section" padding="none" className="rounded-md">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           {label}

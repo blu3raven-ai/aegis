@@ -90,7 +90,7 @@ function RepoCard({ repo }: { repo: RepoSummary }) {
     <Link
       href={`/sbom/${encodeURIComponent(repo.repo_id)}`}
       aria-label={`View SBOM for ${repo.repo} — ${COVERAGE_LABEL[repo.coverage_status]}, ${findings.toLocaleString()} findings${worstLabel}`}
-      className="group flex flex-col gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+      className="group flex flex-col gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[var(--shadow-card)] transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-1">

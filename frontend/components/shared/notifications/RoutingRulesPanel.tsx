@@ -159,7 +159,7 @@ export function RoutingRulesPanel() {
 
       {/* Error state */}
       {loadError && (
-        <div className="rounded-2xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
+        <div className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
           <p className="text-sm font-semibold text-[var(--color-severity-critical-text)]">
             Couldn&apos;t load rules
           </p>
@@ -176,7 +176,7 @@ export function RoutingRulesPanel() {
       {!loadError && activeTab === "rules" && (
         <>
           {!loading && rules.length === 0 ? (
-            <Card padding="none" className="rounded-2xl p-10 text-center">
+            <Card padding="none" className="rounded-md p-10 text-center">
               <p className="text-sm font-semibold text-[var(--color-text-primary)]">No routing rules</p>
               <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                 All findings go to every enabled destination. Create a rule to route specific
@@ -189,7 +189,7 @@ export function RoutingRulesPanel() {
               </div>
             </Card>
           ) : (
-            <Card padding="none" className="overflow-hidden rounded-2xl">
+            <Card padding="none" className="overflow-hidden rounded-md">
               <Table>
                 <Thead>
                   <Tr>
@@ -290,7 +290,7 @@ export function RoutingRulesPanel() {
 
       {/* Preview tab */}
       {!loadError && activeTab === "preview" && (
-        <Card padding="lg" className="rounded-2xl">
+        <Card padding="lg" className="rounded-md">
           <RulePreview />
         </Card>
       )}

@@ -37,7 +37,7 @@ interface IntegrationsChannelsTabProps {
 
 function DestinationsLoadingSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--color-border)]">

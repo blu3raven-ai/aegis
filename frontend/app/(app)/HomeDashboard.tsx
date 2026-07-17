@@ -115,7 +115,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
     ? `also in ${card.otherRepos.slice(0, 2).join(", ")}${card.otherRepos.length > 2 ? ` +${card.otherRepos.length - 2}` : ""}`
     : null
   return (
-    <Card className="rounded-xl">
+    <Card className="rounded-md">
       {/* Tag row — mock inherited-tag-row */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide ${sevClass}`}>
@@ -210,7 +210,7 @@ function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
   return (
     <Link
       href={`/findings/${finding.id}`}
-      className={`block rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
+      className={`block rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
     >
       {/* Sev chip + title row */}
       <div className="flex items-start gap-3">
@@ -277,7 +277,7 @@ function CompactFindingRow({ finding }: { finding: ApiFinding }) {
   return (
     <Link
       href={`/findings/${finding.id}`}
-      className={`group flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
+      className={`group flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
     >
       <span
         className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${sevClass}`}
@@ -330,7 +330,7 @@ function JustIntroducedSection({ findings }: { findings: ApiFinding[] | null }) 
           {findings.length > 1 && <CompactFindingRow finding={findings[1]} />}
         </div>
       ) : (
-        <Card className="flex items-center gap-4 rounded-2xl">
+        <Card className="flex items-center gap-4 rounded-md">
           <span
             aria-hidden="true"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]"

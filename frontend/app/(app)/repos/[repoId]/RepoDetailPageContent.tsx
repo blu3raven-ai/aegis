@@ -291,7 +291,7 @@ export function RepoDetailPageContent() {
               )
             })}
           </div>
-          <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
+          <div className="overflow-auto rounded-md border border-[var(--color-border)]">
             {filteredFindings.length === 0 ? (
               <p className="py-10 text-center text-sm text-[var(--color-text-secondary)]">
                 {repo.active_findings.length === 0

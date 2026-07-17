@@ -121,7 +121,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
   const savedEvidenceLink = safeHttpUrl(savedEvidenceUrl)
 
   return (
-    <Card padding="none" elevation="sm" className="rounded-xl">
+    <Card padding="none" elevation="sm" className="rounded-md">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-5 py-3">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Attestation</h2>
         <div className="flex items-center gap-2">

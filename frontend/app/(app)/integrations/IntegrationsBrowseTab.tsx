@@ -34,7 +34,7 @@ function BrowseSkeleton() {
             {Array.from({ length: count }).map((_, ci) => (
               <div
                 key={ci}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
               >
                 <div className="flex items-start gap-3">
                   <div className="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-[var(--color-surface-raised)]" />

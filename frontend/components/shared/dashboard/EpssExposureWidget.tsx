@@ -26,7 +26,7 @@ export function EpssExposureWidget({ findings }: EpssExposureWidgetProps) {
   const hasData = findings.length > 0
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="flex items-start justify-between gap-4">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           EPSS Exposure

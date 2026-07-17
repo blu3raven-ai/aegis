@@ -351,7 +351,7 @@ function ChainCard({ chain }: { chain: MockChain }) {
 
   return (
     <article
-      className={`overflow-hidden rounded-xl border bg-[var(--color-surface)] ${
+      className={`overflow-hidden rounded-md border bg-[var(--color-surface)] ${
         isCritical ? "border-[var(--color-severity-critical-border)]" : "border-[var(--color-border)]"
       }`}
     >
@@ -457,7 +457,7 @@ function ChainNode({ node }: { node: MockNode }) {
 
   return (
     <div
-      className={`relative w-[200px] shrink-0 rounded-xl border p-3.5 ${cfg.border} ${cfg.bg ?? "bg-[var(--color-surface)]"} ${
+      className={`relative w-[200px] shrink-0 rounded-md border p-3.5 ${cfg.border} ${cfg.bg ?? "bg-[var(--color-surface)]"} ${
         node.weakest
           ? "shadow-[0_0_0_2px_var(--color-accent),0_0_0_4px_var(--color-accent-subtle)]"
           : ""

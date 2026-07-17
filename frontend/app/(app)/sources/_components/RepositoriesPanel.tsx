@@ -201,7 +201,7 @@ export function RepositoriesPanel({ onCountChange }: RepositoriesPanelProps = {}
       </div>
 
       <main className="flex w-full flex-col gap-6 px-6 py-8">
-      <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
+      <div className="overflow-auto rounded-md border border-[var(--color-border)]">
         <Table className="min-w-full">
           <Thead>
             <Tr>

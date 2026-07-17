@@ -116,7 +116,7 @@ export function PosturePageContent() {
   if (state === "error") {
     return (
       <div className="px-6 py-5">
-        <Card padding="none" className="rounded-2xl px-6 py-12 text-center">
+        <Card padding="none" className="rounded-md px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">
             Could not load posture data
           </p>

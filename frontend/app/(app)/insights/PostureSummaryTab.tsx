@@ -183,7 +183,7 @@ function RiskScoreHero({
   }
 
   return (
-    <div className={`rounded-2xl border ${border} ${bg} overflow-hidden`}>
+    <div className={`rounded-md border ${border} ${bg} overflow-hidden`}>
       <div className="px-6 pt-5 pb-4">
         <div className="flex items-center gap-1.5">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
@@ -635,7 +635,7 @@ function AttentionPanel({
   }
 
   return (
-    <Card padding="none" className="rounded-2xl">
+    <Card padding="none" className="rounded-md">
       <div className="px-5 pt-5 pb-3">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Needs attention</h2>
       </div>
@@ -738,7 +738,7 @@ function RiskTrendChart({
   const points = trend.points
   if (points.length < 2) {
     return (
-      <Card className="rounded-2xl">
+      <Card className="rounded-md">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Risk score over time
         </h2>
@@ -827,7 +827,7 @@ function RiskTrendChart({
   })()
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Risk score over time
@@ -1036,7 +1036,7 @@ function PostureTrendChart({
   const points = trend.points
   if (points.length < 2) {
     return (
-      <Card className="rounded-2xl">
+      <Card className="rounded-md">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Open findings by severity — last {RANGE_LABEL[rangeDays]}
         </h2>
@@ -1132,7 +1132,7 @@ function PostureTrendChart({
   })()
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Open findings by severity — last {RANGE_LABEL[rangeDays]}
@@ -1336,7 +1336,7 @@ function DiscoveryVelocityChart({
 
   if (!hasData) {
     return (
-      <Card className="rounded-2xl">
+      <Card className="rounded-md">
         <div className="mb-1 flex items-center gap-2">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
             Discovery velocity
@@ -1382,7 +1382,7 @@ function DiscoveryVelocityChart({
   const hov = hoverIdx !== null ? { ...derived[hoverIdx], date: points[hoverIdx].date, idx: hoverIdx } : null
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
@@ -1586,7 +1586,7 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
   }
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Risk by team
@@ -1694,7 +1694,7 @@ function ComplianceSnapshot({
           const controls = summaries[fw.id]
           if (!controls) {
             return (
-              <Card key={fw.id} padding="none" className="rounded-2xl px-5 py-4">
+              <Card key={fw.id} padding="none" className="rounded-md px-5 py-4">
                 <p className="text-xs font-semibold text-[var(--color-text-primary)]">{fw.label}</p>
                 <Skeleton className="mt-3 h-4 w-16" />
                 <Skeleton className="mt-2 h-3 w-24" />
@@ -1704,7 +1704,7 @@ function ComplianceSnapshot({
           const passing = controls.filter((c) => c.finding_count === 0).length
           const total = controls.length
           return (
-            <Card key={fw.id} padding="none" className="rounded-2xl px-5 py-4">
+            <Card key={fw.id} padding="none" className="rounded-md px-5 py-4">
               <p className="text-xs font-semibold text-[var(--color-text-primary)]">{fw.label}</p>
               <div className="mt-2">{statusBadge(controls)}</div>
               <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
@@ -1792,7 +1792,7 @@ function BacklogFlowChart({
     : null
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
@@ -1924,7 +1924,7 @@ function SeverityMixChart({
   const critHighPct = Math.round(((last.critical + last.high) / last.total) * 100)
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">

@@ -308,7 +308,7 @@ export function RiskyComponentsView() {
       {/* Keep the last results mounted through a transient refetch error (the
           banner above explains it) rather than blanking the whole table. */}
       {(data || loading) && (
-        <Card padding="none" className="overflow-hidden rounded-2xl">
+        <Card padding="none" className="overflow-hidden rounded-md">
           <div
             className={`overflow-x-auto transition-opacity ${loading && data ? "opacity-60" : ""}`}
             aria-busy={loading || undefined}

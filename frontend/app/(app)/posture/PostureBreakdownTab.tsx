@@ -42,7 +42,7 @@ function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
   }))
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Severity breakdown
       </p>
@@ -118,7 +118,7 @@ function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
   if (repos.length === 0) return null
   const maxOpen = Math.max(...repos.map((r) => r.open), 1)
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Top repositories by findings
       </p>
@@ -269,7 +269,7 @@ function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
     "var(--color-severity-critical)",
   ]
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Finding age distribution
       </p>

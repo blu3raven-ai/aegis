@@ -40,7 +40,7 @@ export function IntegrationCard({ i, onSelect }: IntegrationCardProps) {
         onSelect(i);
       }}
       className={cn(
-        "group relative flex h-full flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-left transition-all",
+        "group relative flex h-full flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-left transition-all",
         "hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] hover:shadow-md",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)]",
       )}

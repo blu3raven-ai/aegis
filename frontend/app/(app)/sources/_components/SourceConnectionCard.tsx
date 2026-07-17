@@ -141,7 +141,7 @@ export function SourceConnectionCard({
       <button
         type="button"
         onClick={() => onEdit?.()}
-        className={`flex w-full items-center gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-[var(--color-accent)]/30 ${FOCUS_RING}`}
+        className={`flex w-full items-center gap-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3 text-left transition-colors hover:border-[var(--color-accent)]/30 ${FOCUS_RING}`}
       >
         <div className="shrink-0 text-[var(--color-text-secondary)]">
           <ProviderLogo sourceType={connection.sourceType} />

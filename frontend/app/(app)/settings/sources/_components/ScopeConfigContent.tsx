@@ -172,7 +172,7 @@ function ScannerSelector({
   disabled?: boolean
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
+    <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
       {applicable.map((scanner) => {
         const checked = selected.includes(scanner)
         // Always keep at least one scanner selected — block unchecking the last.
@@ -454,7 +454,7 @@ export function ScopeConfigContent({
           </Link>
 
           {/* Connection header card */}
-          <Card className="flex items-center justify-between rounded-xl shadow-[var(--shadow-card)]">
+          <Card className="flex items-center justify-between rounded-md shadow-[var(--shadow-card)]">
             <div>
               <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
                 {loaded.name}
@@ -516,7 +516,7 @@ export function ScopeConfigContent({
         title="Sync & Scan Cadence"
         subtitle="Re-discover items and automatically re-run scans on a preset interval or a custom cron."
       >
-        <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
+        <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
           {/* Sync schedule */}
           <SettingsRow label="Sync schedule" hint={`How often to re-discover ${itemLabel} from this source.`}>
             <ScheduleEditor
@@ -565,7 +565,7 @@ export function ScopeConfigContent({
 
       {/* Connection Settings */}
       <SettingsCard eyebrow="Connection" title="Authentication" subtitle="Manage credentials for this source.">
-        <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
+        <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)]">
           {/* Org / username — read-only */}
           {orgOrOwner && (
             <SettingsRow label={orgFieldLabel} hint="Set when the connection was created.">

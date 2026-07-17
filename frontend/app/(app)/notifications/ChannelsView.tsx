@@ -40,7 +40,7 @@ interface ChannelsViewProps {
 
 function DestinationsLoadingSkeleton() {
   return (
-    <Card padding="none" className="overflow-hidden rounded-2xl">
+    <Card padding="none" className="overflow-hidden rounded-md">
       <Table>
         <Thead>
           <Tr>

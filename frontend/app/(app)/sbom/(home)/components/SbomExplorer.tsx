@@ -535,7 +535,7 @@ export function SbomExplorer() {
 
           {/* Results table */}
           {!error && (
-            <Card padding="none" className="overflow-hidden rounded-2xl">
+            <Card padding="none" className="overflow-hidden rounded-md">
               <div className="overflow-x-auto">
                 <Table>
                   <Thead>
@@ -670,7 +670,7 @@ function BulkLookupPanel({
 
   return (
     <div className="space-y-4">
-      <Card padding="none" className="rounded-2xl p-4 space-y-3">
+      <Card padding="none" className="rounded-md p-4 space-y-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             Bulk exposure check
@@ -709,14 +709,14 @@ function BulkLookupPanel({
       )}
 
       {loading && !results && (
-        <div className="flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3" aria-live="polite">
+        <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3" aria-live="polite">
           <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-[var(--color-accent)] border-t-transparent motion-safe:animate-spin" />
           <span className="text-sm text-[var(--color-text-tertiary)]">Checking exposure across your repositories…</span>
         </div>
       )}
 
       {results && (
-        <Card padding="none" className="rounded-2xl overflow-hidden">
+        <Card padding="none" className="rounded-md overflow-hidden">
           {/* Summary bar */}
           <div className="flex items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
             <p className="text-xs font-medium text-[var(--color-text-primary)]">

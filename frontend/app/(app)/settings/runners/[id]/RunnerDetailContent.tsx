@@ -26,7 +26,7 @@ function formatDuration(start: string | null, end: string | null): string {
 }
 
 
-const cardClassExtras = "overflow-hidden rounded-xl"
+const cardClassExtras = "overflow-hidden rounded-md"
 
 function SettingsRow({
   label,

@@ -167,7 +167,7 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
   if (repos.length === 0) return null
   const maxOpen = Math.max(...repos.map((r) => r.open), 1)
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
         Top repositories by findings
       </h2>
@@ -289,7 +289,7 @@ export function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
     ["#f87171", "var(--color-severity-critical)"],
   ]
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
         Finding age distribution
       </h2>

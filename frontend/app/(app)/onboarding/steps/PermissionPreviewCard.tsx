@@ -50,7 +50,7 @@ interface PermissionPreviewCardProps {
 
 export function PermissionPreviewCard({ provider }: PermissionPreviewCardProps) {
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
       <div className="flex items-start gap-3">
         <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[var(--color-accent)]/10 text-[var(--color-accent)]">
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">

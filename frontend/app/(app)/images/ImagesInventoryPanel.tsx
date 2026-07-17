@@ -234,7 +234,7 @@ export function ImagesInventoryPanel({ onCountChange }: ImagesInventoryPanelProp
 
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-8">
       {loading && images.length === 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-border)]">
+        <div className="overflow-hidden rounded-md border border-[var(--color-border)]">
           <ImagesHeaderRow />
           {Array.from({ length: 4 }).map((_, i) => (
             <div
@@ -249,12 +249,12 @@ export function ImagesInventoryPanel({ onCountChange }: ImagesInventoryPanelProp
           ))}
         </div>
       ) : isEmptyData ? (
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-border)]">
+        <div className="overflow-hidden rounded-md border border-[var(--color-border)]">
           <ImagesHeaderRow />
           <EmptyImagesState filtered={false} />
         </div>
       ) : grouped.length === 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-border)]">
+        <div className="overflow-hidden rounded-md border border-[var(--color-border)]">
           <ImagesHeaderRow />
           <EmptyImagesState filtered={isFiltered} />
         </div>
@@ -270,7 +270,7 @@ export function ImagesInventoryPanel({ onCountChange }: ImagesInventoryPanelProp
                   {items.length} {items.length === 1 ? "image" : "images"}
                 </span>
               </header>
-              <div className="overflow-hidden rounded-2xl border border-[var(--color-border)]">
+              <div className="overflow-hidden rounded-md border border-[var(--color-border)]">
                 <ImagesHeaderRow />
                 {items.map((img) => (
                   <ImageRow key={img.image_digest} image={img} />

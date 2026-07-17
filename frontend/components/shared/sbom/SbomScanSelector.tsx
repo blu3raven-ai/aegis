@@ -83,7 +83,7 @@ export function SbomScanSelector({
   }, [selectedRepoId])
 
   return (
-    <Card padding="none" className="flex flex-col gap-3 rounded-xl p-4">
+    <Card padding="none" className="flex flex-col gap-3 rounded-md p-4">
       <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         {label}
       </p>

@@ -227,7 +227,7 @@ export function SignInStep({ onProviderClick, onMagicLinkRequest }: SignInStepPr
       </div>
 
       <aside className="hidden md:block">
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
           <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-accent-subtle)] px-2.5 py-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-accent)]">
             <ShieldIcon />
             Enterprise

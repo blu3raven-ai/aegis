@@ -106,7 +106,7 @@ export function ScanHealthTable({
       title="Recent scanner runs"
       description={`Status and outcomes of the most recent ${toolLabel} scans.`}
     >
-      <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
+      <div className="overflow-auto rounded-md border border-[var(--color-border)]">
         <Table className="min-w-full">
           <Thead>
             <Tr>
