@@ -84,7 +84,7 @@ export function SbomScanSelector({
 
   return (
     <Card padding="none" className="flex flex-col gap-3 rounded-md p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         {label}
       </p>
 
@@ -93,7 +93,7 @@ export function SbomScanSelector({
         <div className="flex flex-col gap-1.5">
           <label htmlFor={repoSelectId} className="text-xs text-[var(--color-text-secondary)]">Repository</label>
           {reposLoading ? (
-            <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text-tertiary)]">
+            <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text-tertiary)]">
               <span className="h-3 w-3 shrink-0 rounded-full border-2 border-[var(--color-accent)] border-t-transparent motion-safe:animate-spin" />
               Loading repositories…
             </div>
@@ -125,7 +125,7 @@ export function SbomScanSelector({
         <div className="flex flex-col gap-1.5">
           <label htmlFor={snapshotSelectId} className="text-xs text-[var(--color-text-secondary)]">Snapshot</label>
           {historyState === "loading" ? (
-            <div className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text-tertiary)]">
+            <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-xs text-[var(--color-text-tertiary)]">
               <span className="h-3 w-3 shrink-0 rounded-full border-2 border-[var(--color-accent)] border-t-transparent motion-safe:animate-spin" />
               Loading snapshots…
             </div>

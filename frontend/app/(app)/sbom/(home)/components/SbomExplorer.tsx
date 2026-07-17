@@ -476,7 +476,7 @@ export function SbomExplorer() {
             <div
               role="status"
               aria-live="polite"
-              className="flex items-start gap-2 rounded-lg border border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] px-3 py-2"
+              className="flex items-start gap-2 rounded-md border border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] px-3 py-2"
             >
               <svg className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--color-severity-medium-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
@@ -527,7 +527,7 @@ export function SbomExplorer() {
 
           {/* Error */}
           {error && (
-            <div className="rounded-xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
+            <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
               <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
               <Button variant="link" size="sm" onClick={fetchData} className="mt-1 underline underline-offset-2 hover:no-underline">Retry</Button>
             </div>
@@ -628,8 +628,8 @@ function SearchSyntaxTrigger({ open, onToggle }: { open: boolean; onToggle: () =
  * of the count row so its two-column panel gets the full content width. */
 function SearchSyntaxPanel() {
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+      <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
         Boolean search
       </p>
       <dl className="mt-2 grid gap-y-1.5 gap-x-4 sm:grid-cols-2">
@@ -672,7 +672,7 @@ function BulkLookupPanel({
     <div className="space-y-4">
       <Card padding="none" className="rounded-md p-4 space-y-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             Bulk exposure check
           </p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
@@ -703,7 +703,7 @@ function BulkLookupPanel({
       </Card>
 
       {error && (
-        <div className="rounded-xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
           <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
         </div>
       )}
@@ -820,7 +820,7 @@ function BulkSectionHeader({ label, count, tone }: { label: string; count: numbe
   return (
     <div className="flex items-center gap-2 border-y border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
       <span className={`h-2 w-2 rounded-full ${SECTION_DOT[tone]}`} />
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         {label}
       </p>
       <span className="tabular-nums text-2xs text-[var(--color-text-tertiary)]">{count}</span>

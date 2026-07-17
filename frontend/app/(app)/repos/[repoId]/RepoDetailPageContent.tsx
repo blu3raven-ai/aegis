@@ -257,7 +257,7 @@ export function RepoDetailPageContent() {
           )}
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <h2 className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Scanner coverage
             </h2>
             <ScannerCoverageStrip
@@ -279,7 +279,7 @@ export function RepoDetailPageContent() {
                   key={f.id}
                   type="button"
                   onClick={() => setFindingsFilter(f.id)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
                     findingsFilter === f.id
                       ? "border-[var(--color-accent)]/50 bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
                       : "border-[var(--color-border)] bg-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
@@ -300,7 +300,7 @@ export function RepoDetailPageContent() {
               </p>
             ) : (
               <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
-                <thead className="bg-[var(--color-surface-raised)] text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                <thead className="bg-[var(--color-surface-raised)] text-left text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                   <tr>
                     <th className="px-5 py-3">Scanner</th>
                     <th className="px-5 py-3">Finding</th>

@@ -296,7 +296,7 @@ export function RiskyComponentsView() {
       {error && (
         <div
           role="alert"
-          className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3"
+          className="flex items-center justify-between gap-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3"
         >
           <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
           <Button variant="secondary" size="sm" onClick={() => void fetchData()}>
@@ -365,7 +365,7 @@ export function RiskyComponentsView() {
                             </span>
                             <div className="flex items-center gap-2">
                               {c.ecosystem && (
-                                <span className="text-2xs uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
+                                <span className="text-2xs font-mono uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
                                   {c.ecosystem}
                                 </span>
                               )}
@@ -399,7 +399,7 @@ export function RiskyComponentsView() {
                         <Tr>
                           <Td colSpan={3} className="bg-[var(--color-bg)] px-4 py-0">
                             <div className="py-3 pl-6">
-                              <p className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+                              <p className="mb-2 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                                 Affected assets
                               </p>
                               {pkgReposLoading ? (
@@ -411,7 +411,7 @@ export function RiskyComponentsView() {
                               ) : (
                                 <div className="space-y-1">
                                   {pkgRepos.map((r) => (
-                                    <div key={`${r.org}:${r.repo}`} className="flex items-center gap-3 rounded-lg px-3 py-1.5 text-xs transition-colors hover:bg-[var(--color-surface-raised)]">
+                                    <div key={`${r.org}:${r.repo}`} className="flex items-center gap-3 rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-[var(--color-surface-raised)]">
                                       {r.isContainer ? (
                                         <span className="font-medium text-[var(--color-text-primary)]">{r.repo}</span>
                                       ) : (

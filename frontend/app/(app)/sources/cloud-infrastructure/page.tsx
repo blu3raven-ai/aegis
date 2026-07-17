@@ -15,7 +15,7 @@ export default function CloudInfrastructurePage() {
       <main className="px-6 py-8">
         <Card padding="none" className="rounded-md p-8">
           <div className="max-w-lg">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+            <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
               In Development
             </p>
             <h2 className="mt-3 text-base font-semibold text-[var(--color-text-primary)]">

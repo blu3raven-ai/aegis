@@ -140,7 +140,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
         <div className="mb-4">
           <label
             htmlFor="pre-release-scan-sha"
-            className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
+            className="mb-1.5 block text-xs font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
           >
             Commit SHA
           </label>
@@ -153,7 +153,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
               value={sha}
               onChange={(e) => setSha(e.target.value)}
               placeholder="e.g. a1b2c3d"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-mono"
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-mono"
             />
             <Button
               type="submit"
@@ -176,7 +176,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
         </div>
 
         <fieldset>
-          <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <legend className="mb-2 text-xs font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Scanners
           </legend>
           <div className="flex flex-col gap-2">

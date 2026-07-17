@@ -132,7 +132,7 @@ export function SourceScansPageContent() {
 
   return (
     <div className="px-6 py-6">
-      <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+      <div className="overflow-hidden rounded-md border border-[var(--color-border)]">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] text-left text-xs text-[var(--color-text-secondary)]">

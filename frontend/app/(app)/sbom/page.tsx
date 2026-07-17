@@ -115,7 +115,7 @@ export default function SbomIndexPage() {
         {error && (
           <div
             role="alert"
-            className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3"
+            className="mb-6 flex items-center justify-between gap-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3"
           >
             <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
             <Button variant="secondary" size="sm" onClick={() => void load()}>

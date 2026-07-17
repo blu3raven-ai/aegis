@@ -166,7 +166,7 @@ export function SourcePageShell({
         {loading ? (
           <LoadingSkeleton />
         ) : loadError ? (
-          <div className="flex items-center justify-between rounded-2xl border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
+          <div className="flex items-center justify-between rounded-md border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
             <span className="text-sm text-[var(--color-text-primary)]">Failed to load connections.</span>
             <Button variant="secondary" size="sm" onClick={() => void load()}>
               Retry

@@ -486,7 +486,7 @@ export function AddConnectionModal({
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               Step {stepNumber} of {totalSteps}
             </p>
             <h2 id="add-source-title" className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">{title}</h2>
@@ -494,7 +494,7 @@ export function AddConnectionModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+            className="rounded p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
             aria-label="Close"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -518,14 +518,14 @@ export function AddConnectionModal({
                   return (
                     <div key={cat}>
                       {!lockedCategory && (
-                        <p className="mb-3 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+                        <p className="mb-3 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                           {CATEGORY_LABELS[cat]}
                         </p>
                       )}
                       {types.length === 0 ? (
                         <div
                           aria-disabled="true"
-                          className="flex cursor-not-allowed items-center gap-3 rounded-2xl border border-dashed border-[var(--color-border)] p-4 opacity-50"
+                          className="flex cursor-not-allowed items-center gap-3 rounded-md border border-dashed border-[var(--color-border)] p-4 opacity-50"
                         >
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[var(--color-text-secondary)]">
                             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -545,7 +545,7 @@ export function AddConnectionModal({
                                 type="button"
                                 onClick={() => handleTypeSelect(type)}
                                 aria-pressed={isSelected}
-                                className={`group flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-colors ${
+                                className={`group flex items-center gap-3 rounded-md border p-3.5 text-left transition-colors ${
                                   isSelected
                                     ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                                     : "border-[var(--color-border)] hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
@@ -590,7 +590,7 @@ export function AddConnectionModal({
                       key={m}
                       type="button"
                       onClick={() => pickMethod(m)}
-                      className="group flex w-full items-start gap-3.5 rounded-2xl border border-[var(--color-border)] p-4 text-left transition-colors hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
+                      className="group flex w-full items-start gap-3.5 rounded-md border border-[var(--color-border)] p-4 text-left transition-colors hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
                     >
                       <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
                         <Icon className="h-5 w-5" />
@@ -599,7 +599,7 @@ export function AddConnectionModal({
                         <span className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-[var(--color-text-primary)]">{meta.label}</span>
                           {meta.recommended && (
-                            <span className="rounded-full bg-[var(--color-accent-subtle)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
+                            <span className="rounded-full bg-[var(--color-accent-subtle)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
                               Recommended
                             </span>
                           )}
@@ -714,7 +714,7 @@ export function AddConnectionModal({
               })}
 
               {error && (
-                <div role="alert" className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
+                <div role="alert" className="mb-4 flex items-start gap-2.5 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
                   <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                   </svg>
@@ -971,7 +971,7 @@ function CopyRow({
     <div>
       {label && <p className="mb-1.5 text-xs font-medium text-[var(--color-text-secondary)]">{label}</p>}
       <div className="flex items-center gap-2">
-        <code className={`min-w-0 flex-1 truncate rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-xs text-[var(--color-text-primary)] ${mono ? "font-mono" : ""}`}>
+        <code className={`min-w-0 flex-1 truncate rounded-md border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-xs text-[var(--color-text-primary)] ${mono ? "font-mono" : ""}`}>
           {value}
         </code>
         <Button

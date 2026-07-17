@@ -275,7 +275,7 @@ export default function SbomRepositoriesPage() {
       {error && (
         <div
           role="alert"
-          className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3"
+          className="flex items-center justify-between gap-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3"
         >
           <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
           <Button variant="secondary" size="sm" onClick={() => void load()}>
@@ -325,7 +325,7 @@ export default function SbomRepositoriesPage() {
         // Initial fetch failed with nothing loaded — the error banner stands alone.
         <></>
       ) : sorted.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-[var(--color-border)] py-16 text-center">
           <p className="text-sm text-[var(--color-text-secondary)]">
             No repositories match the current filters.
           </p>

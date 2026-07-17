@@ -88,7 +88,7 @@ export function SbomEcosystemAnalyticsPanel() {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-[var(--color-border)] text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <tr className="border-b border-[var(--color-border)] text-left font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               <th className="py-2 pr-4 font-semibold">Ecosystem</th>
               <th className="py-2 pr-4 font-semibold">Open findings</th>
               <th className="py-2 pr-4 font-semibold">Risk</th>

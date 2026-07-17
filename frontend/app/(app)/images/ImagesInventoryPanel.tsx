@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { CommandBar, type AttributeDef } from "@/components/shared/command-bar"
 import { KpiCard } from "@/components/shared/KpiCard"
+import { Button } from "@/components/ui/Button"
 import { ImageRow } from "@/components/shared/images/ImageRow"
 import { EmptyImagesState } from "@/components/shared/images/EmptyImagesState"
 import { registryOf, repoPathOf, scanFreshness } from "@/components/shared/images/format"
@@ -165,8 +166,10 @@ export function ImagesInventoryPanel({ onCountChange }: ImagesInventoryPanelProp
       {error && (
         <div className="flex items-center justify-between gap-3 border-b border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-5 py-3">
           <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
             onClick={() => {
               setError(null)
               setLoading(true)
@@ -180,10 +183,9 @@ export function ImagesInventoryPanel({ onCountChange }: ImagesInventoryPanelProp
                 })
                 .finally(() => setLoading(false))
             }}
-            className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             Retry
-          </button>
+          </Button>
         </div>
       )}
 
@@ -263,7 +265,7 @@ export function ImagesInventoryPanel({ onCountChange }: ImagesInventoryPanelProp
           {grouped.map(({ registry, items }) => (
             <section key={registry} className="flex flex-col gap-2">
               <header className="flex items-baseline justify-between gap-3 px-1">
-                <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                <h2 className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                   {registry}
                 </h2>
                 <span className="text-2xs text-[var(--color-text-tertiary)] tabular-nums">
@@ -287,7 +289,7 @@ export function ImagesInventoryPanel({ onCountChange }: ImagesInventoryPanelProp
 
 function ImagesHeaderRow() {
   return (
-    <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)] gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-2.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+    <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1fr)] gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-2.5 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
       <div>Image</div>
       <div>Severity</div>
       <div>Last scan</div>

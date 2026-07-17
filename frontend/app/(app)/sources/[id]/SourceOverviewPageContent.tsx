@@ -60,12 +60,12 @@ function StatTile({
   spin?: boolean
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+    <div className="flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
       <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", TONE_CHIP[tone])}>
         <Icon className={cn("h-[18px] w-[18px]", spin && "animate-spin")} aria-hidden />
       </span>
       <div className="min-w-0">
-        <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        <div className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           {label}
         </div>
         <div
