@@ -119,7 +119,7 @@ export function IntegrationsChannelsTab({
     <>
       <StatsStrip destinations={destinations} />
 
-      <div className="mx-auto max-w-7xl px-6 py-8 space-y-8">
+      <div className="px-6 py-8 space-y-8">
 
       <section>
         <div className="flex items-center justify-between mb-4">

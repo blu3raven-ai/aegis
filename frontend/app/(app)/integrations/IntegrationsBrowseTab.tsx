@@ -105,7 +105,7 @@ export function IntegrationsBrowseTab({
   }, [allConnectors, searchQuery])
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 space-y-8">
+    <div className="px-6 py-8 space-y-8">
       {/* Non-enterprise users see an upgrade prompt */}
       {!isEnterprise && (
         <div className="flex items-center justify-between rounded-2xl border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-6 py-4">
