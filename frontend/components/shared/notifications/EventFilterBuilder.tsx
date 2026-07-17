@@ -61,7 +61,7 @@ export function EventFilterBuilder({ value, onChange }: EventFilterBuilderProps)
     <div className="space-y-3">
       {/* Event types */}
       <div>
-        <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
+        <label className="block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
           Event types
         </label>
         <div className="flex flex-wrap gap-1.5">

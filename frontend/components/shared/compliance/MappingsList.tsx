@@ -116,7 +116,7 @@ function MappingRow({
             {findingTitle(finding)}
           </Link>
           {finding.suppressed && (
-            <span className="shrink-0 rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+            <span className="shrink-0 rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
               Suppressed
             </span>
           )}
@@ -139,7 +139,7 @@ function MappingRow({
         {finding.manual ? (
           <span
             title="Mapped manually by an analyst"
-            className="rounded bg-[var(--color-accent-subtle)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)]"
+            className="rounded bg-[var(--color-accent-subtle)] px-1.5 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-accent)]"
           >
             Manual
           </span>

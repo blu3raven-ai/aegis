@@ -14,7 +14,7 @@ export default function Loading() {
       <div className="mx-auto w-full max-w-3xl px-4 py-6">
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i} padding="none" className="h-20 rounded-xl motion-safe:animate-pulse" />
+            <Card key={i} padding="none" className="h-20 rounded-md motion-safe:animate-pulse" />
           ))}
         </div>
         <div className="mb-4 flex flex-wrap gap-2">
@@ -24,7 +24,7 @@ export default function Loading() {
         </div>
         <div className="flex flex-col gap-2">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+            <Skeleton key={i} className="h-16 w-full rounded-md" />
           ))}
         </div>
       </div>

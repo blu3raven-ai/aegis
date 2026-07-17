@@ -112,7 +112,7 @@ export function ConnectorCard({
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-[var(--color-text-primary)]">{connector.name}</p>
             {isComingSoon && (
-              <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 Soon
               </span>
             )}
@@ -183,7 +183,7 @@ export function CatalogConnectorModal({
   const [error, setError] = useState<string | null>(null)
 
   const labelClass =
-    "block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
+    "block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

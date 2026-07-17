@@ -147,7 +147,7 @@ export function DestinationForm({
   }
 
   const eyebrowClass =
-    "block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
+    "block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
 
   return (
     <form onSubmit={(e) => { void handleSubmit(e) }} className="space-y-5">
@@ -174,7 +174,7 @@ export function DestinationForm({
                 key={t}
                 type="button"
                 onClick={() => setType(t)}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize transition-colors ${
+                className={`flex-1 rounded-md border px-3 py-2 text-sm font-medium capitalize transition-colors ${
                   type === t
                     ? "border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
                     : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)]/40 hover:text-[var(--color-text-primary)]"
@@ -255,7 +255,7 @@ export function DestinationForm({
 
       {/* Event filter */}
       <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
-        <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <p className="mb-3 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Event filter
         </p>
         <EventFilterBuilder value={eventFilter} onChange={setEventFilter} />

@@ -170,7 +170,7 @@ export function DestinationDrawer({
                 >
                   <dl className="space-y-3">
                     <div>
-                      <dt className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+                      <dt className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                         Type
                       </dt>
                       <dd className="mt-0.5 flex items-center gap-1.5 text-sm text-[var(--color-text-primary)] capitalize">
@@ -182,7 +182,7 @@ export function DestinationDrawer({
                     {destination.destination_type === "slack" &&
                       typeof destination.config.webhook_url === "string" && (
                         <div>
-                          <dt className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+                          <dt className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                             Webhook URL
                           </dt>
                           <dd className="mt-0.5 break-all font-mono text-xs text-[var(--color-text-primary)]">
@@ -194,7 +194,7 @@ export function DestinationDrawer({
                     {destination.destination_type === "webhook" &&
                       typeof destination.config.url === "string" && (
                         <div>
-                          <dt className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+                          <dt className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                             URL
                           </dt>
                           <dd className="mt-0.5 break-all font-mono text-xs text-[var(--color-text-primary)]">
@@ -206,7 +206,7 @@ export function DestinationDrawer({
                     {destination.destination_type === "email" &&
                       Array.isArray(destination.config.to_addresses) && (
                         <div>
-                          <dt className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+                          <dt className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                             Recipients
                           </dt>
                           <dd className="mt-0.5 space-y-0.5">
@@ -230,7 +230,7 @@ export function DestinationDrawer({
                 <DrawerSection label="Event filter">
                   <dl className="space-y-3">
                     <div>
-                      <dt className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+                      <dt className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                         Min severity
                       </dt>
                       <dd className="mt-0.5 text-sm capitalize text-[var(--color-text-primary)]">
@@ -238,7 +238,7 @@ export function DestinationDrawer({
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+                      <dt className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                         Event types
                       </dt>
                       <dd className="mt-1 flex flex-wrap gap-1.5">

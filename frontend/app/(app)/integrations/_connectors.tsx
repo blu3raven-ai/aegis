@@ -110,7 +110,7 @@ export function ConnectorCard({
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-[var(--color-text-primary)]">{connector.name}</p>
             {isComingSoon && (
-              <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              <span className="rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 Soon
               </span>
             )}
@@ -132,30 +132,26 @@ export function ConnectorCard({
       </div>
 
       {isComingSoon ? (
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          className="mt-4 w-full rounded-lg border border-[var(--color-border)] py-2 text-xs font-medium text-[var(--color-text-tertiary)] cursor-not-allowed"
-        >
+        <Button variant="secondary" size="sm" disabled aria-disabled="true" className="mt-4 w-full">
           Coming soon
-        </button>
+        </Button>
       ) : isApiKeys ? (
         <Link
           href="/settings/api-keys"
-          className="mt-4 block w-full rounded-lg border border-[var(--color-accent)] py-2 text-center text-xs font-semibold text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent)]/10"
+          className="mt-4 block w-full rounded-md border border-[var(--color-accent)] py-2 text-center font-mono text-xs font-semibold uppercase tracking-[0.055em] text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent)]/10"
         >
           Manage API keys →
         </Link>
       ) : (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onConfigure}
           disabled={!canConfigure}
-          className="mt-4 w-full rounded-lg border border-[var(--color-border)] py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 enabled:hover:border-[var(--color-accent)] enabled:hover:text-[var(--color-accent)] text-[var(--color-text-secondary)]"
+          className="mt-4 w-full"
         >
           {configured ? "Add another" : "Configure"}
-        </button>
+        </Button>
       )}
     </div>
   )
@@ -184,7 +180,7 @@ export function CatalogConnectorModal({
   const inputClass =
     "w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
   const labelClass =
-    "block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
+    "block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-1.5"
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -271,14 +267,15 @@ export function CatalogConnectorModal({
         ))}
 
         <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] pt-4">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={onClose}
             disabled={submitting}
-            className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
           >
             Cancel
-          </button>
+          </Button>
           <Button
             type="submit"
             variant="primary"

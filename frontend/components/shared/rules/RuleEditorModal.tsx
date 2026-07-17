@@ -582,7 +582,7 @@ export function RuleEditorModal({
 
             {/* Conditions */}
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
+              <label className="block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
                 Conditions
               </label>
               <p className="mb-2 text-xs text-[var(--color-text-tertiary)]">
@@ -597,7 +597,7 @@ export function RuleEditorModal({
 
             {/* Action */}
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
+              <label className="block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
                 Action
               </label>
               {category === "sla" && isSlaAction(action) && (

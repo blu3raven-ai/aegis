@@ -65,8 +65,8 @@ export function ControlDetailHero({
 
       {/* Metric chips */}
       <div className="mt-5 flex flex-wrap gap-3">
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
+          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Open Findings
           </div>
           <div
@@ -77,8 +77,8 @@ export function ControlDetailHero({
         </div>
 
         {highestSeverity && (
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2">
+            <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               Highest Severity
             </div>
             <div

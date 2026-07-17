@@ -103,7 +103,7 @@ export function RulePreview() {
       {breakdown !== null && (
         <Card padding="none" className="rounded-md overflow-hidden">
           <div className="px-4 py-2.5 border-b border-[var(--color-border)]">
-            <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">
+            <span className="font-mono text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">
               Results
             </span>
             {matchedIds !== null && matchedIds.length > 0 ? (

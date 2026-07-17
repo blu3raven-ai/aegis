@@ -10,7 +10,7 @@ export default function Loading() {
       </div>
       <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-36 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] motion-safe:animate-pulse" />
+          <div key={i} className="h-36 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] motion-safe:animate-pulse" />
         ))}
       </div>
     </div>

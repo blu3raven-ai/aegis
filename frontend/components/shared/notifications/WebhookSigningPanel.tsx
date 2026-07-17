@@ -164,7 +164,7 @@ function RotateModal({ open, destId, onClose, onRotated }: RotateModalProps) {
         <>
           <div
             data-testid="new-secret-value"
-            className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2"
+            className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2"
           >
             <code className="flex-1 break-all font-mono text-xs text-[var(--color-text-primary)]">
               {result.secret.raw}
@@ -231,7 +231,7 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
   }
 
   const labelClass =
-    "text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
+    "text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
 
   return (
     <div className="space-y-4">
@@ -268,7 +268,7 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
 
       {/* Secret versions list */}
       {secrets.length > 0 && (
-        <ul className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)]">
+        <ul className="divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
           {secrets.map((s) => (
             <li key={s.id} className="flex items-center justify-between gap-3 px-3 py-2">
               <div className="flex items-center gap-2">
@@ -307,7 +307,7 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
         <button
           type="button"
           onClick={() => setSnippetOpen((p) => !p)}
-          className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors rounded-xl"
+          className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] transition-colors rounded-md"
         >
           <span>Verification snippet</span>
           <span className="font-mono">{snippetOpen ? "−" : "+"}</span>
@@ -327,7 +327,7 @@ export function WebhookSigningPanel({ destId }: WebhookSigningPanelProps) {
             />
 
             <div className="relative">
-              <pre className="overflow-x-auto rounded-lg bg-[var(--color-surface-raised)] p-3 text-[11px] font-mono text-[var(--color-text-primary)] whitespace-pre">
+              <pre className="overflow-x-auto rounded-md bg-[var(--color-surface-raised)] p-3 text-[11px] font-mono text-[var(--color-text-primary)] whitespace-pre">
                 {snippetLang === "python" ? PYTHON_SNIPPET : NODE_SNIPPET}
               </pre>
               <div className="absolute right-2 top-2">

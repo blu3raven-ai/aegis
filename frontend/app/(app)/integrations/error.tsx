@@ -34,7 +34,7 @@ export default function Error({
         </Button>
         <Link
           href="/"
-          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 font-mono text-xs font-medium uppercase tracking-[0.055em] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
         >
           Go home
         </Link>

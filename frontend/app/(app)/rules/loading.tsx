@@ -15,7 +15,7 @@ export default function Loading() {
       </div>
       <div className="flex flex-1 flex-col gap-2 p-6">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-14 w-full rounded-lg bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
+          <div key={i} className="h-14 w-full rounded-md bg-[var(--color-surface-raised)] motion-safe:animate-pulse" />
         ))}
       </div>
     </div>

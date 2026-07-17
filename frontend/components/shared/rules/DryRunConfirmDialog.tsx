@@ -138,7 +138,7 @@ export function DryRunConfirmDialog({
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
           {loading && result === null && (
-            <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+            <div className="flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
               <span
                 aria-hidden="true"
                 className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-tertiary)] border-t-[var(--color-accent)]"
@@ -150,7 +150,7 @@ export function DryRunConfirmDialog({
           )}
 
           {result !== null && (
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+            <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
               {matchCount === 0 ? (
                 <p className="text-sm text-[var(--color-text-primary)]">
                   This rule wouldn&apos;t dismiss anything against the most
@@ -163,7 +163,7 @@ export function DryRunConfirmDialog({
                   would be auto-dismissed once this rule is enabled.
                 </p>
               )}
-              <p className="mt-1 text-2xs uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              <p className="mt-1 text-2xs font-mono uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 {formatExpiresIn(result.valid_until)}
               </p>
             </div>
@@ -174,7 +174,7 @@ export function DryRunConfirmDialog({
               <h3 className="mb-2 text-base font-semibold text-[var(--color-text-primary)]">
                 Sample matches ({samples.length})
               </h3>
-              <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+              <div className="overflow-hidden rounded-md border border-[var(--color-border)]">
                 <Table className="border-collapse">
                   <Thead>
                     <Tr>
@@ -244,7 +244,7 @@ export function DryRunConfirmDialog({
           {error && (
             <div
               role="alert"
-              className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
+              className="rounded-md border border-[var(--color-severity-critical)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
             >
               {error}
             </div>

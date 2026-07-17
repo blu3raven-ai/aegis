@@ -263,7 +263,7 @@ export function ReportsPageContent() {
 
       <div
         ref={formRef}
-        className={`rounded-lg border bg-[var(--color-surface)] p-5 transition-shadow ${
+        className={`rounded-md border bg-[var(--color-surface)] p-5 transition-shadow ${
           formHighlighted
             ? "border-[var(--color-accent)] shadow-[0_0_0_3px_var(--color-accent-subtle)]"
             : "border-[var(--color-border)]"
@@ -387,7 +387,7 @@ export function ReportsPageContent() {
                         )
                       })()}
                     </Td>
-                    <Td className="px-5 py-3.5 text-xs uppercase text-[var(--color-text-secondary)]">{report.format}</Td>
+                    <Td className="px-5 py-3.5 text-xs font-mono uppercase text-[var(--color-text-secondary)]">{report.format}</Td>
                     <Td className="px-5 py-3.5 text-right tabular-nums text-[var(--color-text-secondary)]">
                       {report.row_count ?? "—"}
                     </Td>

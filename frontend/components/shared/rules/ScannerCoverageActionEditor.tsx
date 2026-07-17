@@ -64,7 +64,7 @@ export function ScannerCoverageActionEditor({
         aria-label="Scanner coverage action type"
         className="grid grid-cols-1 gap-2 sm:grid-cols-2"
       >
-        <label className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 has-[input:checked]:border-[var(--color-accent)] has-[input:checked]:bg-[var(--color-accent)]/5">
+        <label className="cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 has-[input:checked]:border-[var(--color-accent)] has-[input:checked]:bg-[var(--color-accent)]/5">
           <input
             type="radio"
             name="action-type"
@@ -79,7 +79,7 @@ export function ScannerCoverageActionEditor({
             Open a gap when required scanners are missing.
           </div>
         </label>
-        <label className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 has-[input:checked]:border-[var(--color-accent)] has-[input:checked]:bg-[var(--color-accent)]/5">
+        <label className="cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 has-[input:checked]:border-[var(--color-accent)] has-[input:checked]:bg-[var(--color-accent)]/5">
           <input
             type="radio"
             name="action-type"
@@ -124,14 +124,14 @@ function RequireScannersFields({
 
   return (
     <div>
-      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <label className="mb-2 block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Required scanners
       </label>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {SCANNER_OPTIONS.map((opt) => (
           <label
             key={opt.value}
-            className="flex cursor-pointer items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)]"
+            className="flex cursor-pointer items-center gap-2 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)]"
           >
             <input
               type="checkbox"
@@ -195,12 +195,12 @@ function StaleAlertFields({
         </div>
       </FormField>
 
-      <div className="rounded-lg border border-dashed border-[var(--color-border)] px-3 py-3">
+      <div className="rounded-md border border-dashed border-[var(--color-border)] px-3 py-3">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-[var(--color-text-primary)]">
             Alert delivery
           </span>
-          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             Coming soon
           </span>
         </div>

@@ -27,7 +27,7 @@ export function IntegrationSetup({ integration }: { integration: Integration }) 
     // drawer, so a stepless integration here is one that isn't available yet.
     const label = integration.status === "preview" ? "Coming soon" : "Not yet available";
     return (
-      <div className="rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center">
+      <div className="rounded-md border border-dashed border-[var(--color-border)] px-4 py-8 text-center">
         <p className="text-sm font-medium text-[var(--color-text-primary)]">{label}</p>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Setup for {integration.name} isn’t available yet — it’s on the roadmap.
@@ -41,7 +41,7 @@ export function IntegrationSetup({ integration }: { integration: Integration }) 
   return (
     <div className="space-y-8">
       <section>
-        <h3 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        <h3 className="mb-2 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           Step 1 · Create an API key
         </h3>
         <p className="text-sm text-[var(--color-text-secondary)]">
@@ -57,7 +57,7 @@ export function IntegrationSetup({ integration }: { integration: Integration }) 
       </section>
 
       <section>
-        <h3 className="mb-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        <h3 className="mb-2 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           Step 2 · Add this to your CI config
         </h3>
         <StepsComponent aegisUrl={aegisUrl} />

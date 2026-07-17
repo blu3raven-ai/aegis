@@ -12,9 +12,9 @@ export default function Loading() {
         </div>
       </div>
       <div className="flex w-full flex-col gap-6 px-6 py-6">
-        <Card padding="none" className="h-36 rounded-2xl motion-safe:animate-pulse" />
-        <Card padding="none" className="h-56 rounded-2xl motion-safe:animate-pulse" />
-        <Card padding="none" className="h-40 rounded-2xl motion-safe:animate-pulse" />
+        <Card padding="none" className="h-36 rounded-md motion-safe:animate-pulse" />
+        <Card padding="none" className="h-56 rounded-md motion-safe:animate-pulse" />
+        <Card padding="none" className="h-40 rounded-md motion-safe:animate-pulse" />
       </div>
     </div>
   )

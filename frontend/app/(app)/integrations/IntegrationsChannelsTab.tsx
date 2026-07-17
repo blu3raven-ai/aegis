@@ -44,7 +44,7 @@ function DestinationsLoadingSkeleton() {
             {["Name", "Type", "Status", "Filters", "Last updated", "Actions"].map((h) => (
               <th
                 key={h}
-                className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
+                className="px-4 py-3 text-left text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
               >
                 {h}
               </th>

@@ -53,10 +53,10 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
       {/* Escalations — coming soon */}
       <div>
         <div className="mb-2 flex items-center gap-2">
-          <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <label className="block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Escalations
           </label>
-          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             Coming soon
           </span>
         </div>
@@ -72,7 +72,7 @@ export function SlaActionEditor({ value, destinations, onChange }: SlaActionEdit
               return (
                 <li
                   key={i}
-                  className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs text-[var(--color-text-tertiary)]"
+                  className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs text-[var(--color-text-tertiary)]"
                 >
                   <span>
                     At {esc.at_hours}h before deadline → {channel ? channel.name : "a channel"}

@@ -177,7 +177,7 @@ export function ScheduledReportsPanel() {
                 <Td className="px-0 py-2.5">
                   <div className="font-medium text-[var(--color-text-primary)]">{s.name}</div>
                   {!s.enabled && (
-                    <span className="text-2xs uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">paused</span>
+                    <span className="text-2xs font-mono uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">paused</span>
                   )}
                 </Td>
                 <Td className="px-0 py-2.5 text-[var(--color-text-secondary)]">{reportTypeLabel(s.report_type)}</Td>

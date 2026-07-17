@@ -291,7 +291,7 @@ export default function CompliancePage() {
               {Array.from({ length: 3 }).map((_, i) => (
                 <Card
                   key={i}
-                  className="animate-pulse rounded-xl"
+                  className="animate-pulse rounded-md"
                 >
                   <div className="mb-3 h-4 w-1/2 rounded bg-[var(--color-border)]" />
                   <div className="mb-3 h-1.5 w-full rounded-full bg-[var(--color-border)]" />

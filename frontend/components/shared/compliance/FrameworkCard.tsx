@@ -48,7 +48,7 @@ export function FrameworkCard({
           : "bg-[var(--color-severity-critical)]"
 
   const containerClass = [
-    "flex flex-col gap-3 rounded-xl border p-5 text-left transition-colors w-full",
+    "flex flex-col gap-3 rounded-md border p-5 text-left transition-colors w-full",
     selected
       ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
       : "border-[var(--color-border)] bg-[var(--color-surface)]",

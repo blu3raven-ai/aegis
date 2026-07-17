@@ -82,7 +82,7 @@ export function AutoDismissActionEditor({ value, onChange }: AutoDismissActionEd
         />
       </FormField>
 
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
         <div className="mb-3">
           <h4 className="text-base font-semibold text-[var(--color-text-primary)]">
             Rate alarm <span className="text-xs font-normal text-[var(--color-text-secondary)]">(safety net)</span>

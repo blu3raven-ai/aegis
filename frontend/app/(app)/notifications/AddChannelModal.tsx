@@ -142,7 +142,7 @@ export function AddChannelModal({ open, onClose }: AddChannelModalProps) {
       <div className="space-y-5">
         {/* Non-enterprise upgrade prompt */}
         {!isEnterprise && (
-          <div className="flex items-center justify-between rounded-xl border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-4 py-3">
+          <div className="flex items-center justify-between rounded-md border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-[var(--color-state-dismissed-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-state-dismissed)]">
                 Enterprise
@@ -153,7 +153,7 @@ export function AddChannelModal({ open, onClose }: AddChannelModalProps) {
             </div>
             <Link
               href="/settings/license"
-              className="shrink-0 rounded-lg border border-[var(--color-state-dismissed-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-state-dismissed)] transition-colors hover:bg-[var(--color-state-dismissed-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              className="shrink-0 rounded-md border border-[var(--color-state-dismissed-border)] px-3 py-1.5 font-mono text-xs font-semibold uppercase tracking-[0.055em] text-[var(--color-state-dismissed)] transition-colors hover:bg-[var(--color-state-dismissed-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
               onClick={onClose}
             >
               Upgrade
@@ -238,7 +238,7 @@ export function AddChannelModal({ open, onClose }: AddChannelModalProps) {
 
               return sections.map(({ cat, items }) => (
                 <div key={cat}>
-                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+                  <p className="mb-3 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
                     {CATEGORY_DISPLAY[cat] ?? cat}
                   </p>
                   <div className="grid gap-3 sm:grid-cols-2">

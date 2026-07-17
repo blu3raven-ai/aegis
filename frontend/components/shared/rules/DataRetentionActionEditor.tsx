@@ -65,7 +65,7 @@ export function DataRetentionActionEditor({
         aria-label="Data retention action type"
         className="grid grid-cols-1 gap-2 sm:grid-cols-2"
       >
-        <label className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 has-[input:checked]:border-[var(--color-accent)] has-[input:checked]:bg-[var(--color-accent)]/5">
+        <label className="cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 has-[input:checked]:border-[var(--color-accent)] has-[input:checked]:bg-[var(--color-accent)]/5">
           <input
             type="radio"
             name="action-type"
@@ -80,7 +80,7 @@ export function DataRetentionActionEditor({
             Hide from active views but keep the data retrievable.
           </div>
         </label>
-        <label className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 has-[input:checked]:border-[var(--color-accent)] has-[input:checked]:bg-[var(--color-accent)]/5">
+        <label className="cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 has-[input:checked]:border-[var(--color-accent)] has-[input:checked]:bg-[var(--color-accent)]/5">
           <input
             type="radio"
             name="action-type"
@@ -100,7 +100,7 @@ export function DataRetentionActionEditor({
       {value.type === "delete" && (
         <div
           role="alert"
-          className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-severity-critical)]/10 px-3 py-2 text-xs text-[var(--color-severity-critical-text)]"
+          className="rounded-md border border-[var(--color-severity-critical)] bg-[var(--color-severity-critical)]/10 px-3 py-2 text-xs text-[var(--color-severity-critical-text)]"
         >
           <span className="font-semibold">Warning:</span> deleting scan results is
           permanent. Findings remain visible but their scan history is lost. Use

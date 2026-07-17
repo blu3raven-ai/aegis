@@ -108,7 +108,7 @@ export function IntegrationsBrowseTab({
     <div className="px-6 py-8 space-y-8">
       {/* Non-enterprise users see an upgrade prompt */}
       {!isEnterprise && (
-        <div className="flex items-center justify-between rounded-2xl border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-6 py-4">
+        <div className="flex items-center justify-between rounded-md border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-6 py-4">
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-[var(--color-state-dismissed-subtle)] px-2.5 py-0.5 text-xs font-semibold text-[var(--color-state-dismissed)]">
               Enterprise
@@ -119,7 +119,7 @@ export function IntegrationsBrowseTab({
           </div>
           <Link
             href="/settings/license"
-            className="shrink-0 rounded-lg border border-[var(--color-state-dismissed-border)] px-4 py-2 text-sm font-semibold text-[var(--color-state-dismissed)] transition-colors hover:bg-[var(--color-state-dismissed-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+            className="shrink-0 rounded-md border border-[var(--color-state-dismissed-border)] px-4 py-2 font-mono text-xs font-semibold uppercase tracking-[0.055em] text-[var(--color-state-dismissed)] transition-colors hover:bg-[var(--color-state-dismissed-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
           >
             Upgrade
           </Link>

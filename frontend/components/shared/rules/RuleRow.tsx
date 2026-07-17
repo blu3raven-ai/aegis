@@ -93,7 +93,7 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
   // a glance — mirror the mock by tinting the border amber; a paused card
   // recedes via opacity so the eye skips over it.
   const cardClass = [
-    "flex items-start gap-4 rounded-lg border bg-[var(--color-surface)] px-4 py-3 transition-colors",
+    "flex items-start gap-4 rounded-md border bg-[var(--color-surface)] px-4 py-3 transition-colors",
     hasViolations
       ? "border-[var(--color-severity-medium-border)]"
       : "border-[var(--color-border)]",
@@ -113,7 +113,7 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
 
           {rule.enabled && (
             <span
-              className="inline-flex items-center gap-1 rounded bg-[var(--color-state-fixed)]/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wider text-[var(--color-state-fixed-text)]"
+              className="inline-flex items-center gap-1 rounded bg-[var(--color-state-fixed)]/10 px-1.5 py-0.5 text-2xs font-mono font-bold uppercase tracking-wider text-[var(--color-state-fixed-text)]"
             >
               Active
             </span>
@@ -129,7 +129,7 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
 
           {!rule.enabled && (
             <span
-              className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wider text-[var(--color-text-tertiary)]"
+              className="inline-flex items-center gap-1 rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-mono font-bold uppercase tracking-wider text-[var(--color-text-tertiary)]"
             >
               Paused
             </span>

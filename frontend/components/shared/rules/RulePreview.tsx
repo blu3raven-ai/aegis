@@ -55,7 +55,7 @@ export function RulePreview({ ruleId, refreshKey = 0 }: RulePreviewProps) {
   // Create mode — no rule persisted yet
   if (ruleId === null) {
     return (
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-6 text-center">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-6 text-center">
         <p className="text-sm text-[var(--color-text-secondary)]">
           Save the rule first to dry-run it.
         </p>
@@ -68,7 +68,7 @@ export function RulePreview({ ruleId, refreshKey = 0 }: RulePreviewProps) {
 
   if (state.status === "idle" || state.status === "loading") {
     return (
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-6 text-center">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-6 text-center">
         <p className="text-sm text-[var(--color-text-secondary)]">Running preview…</p>
       </div>
     )
@@ -76,7 +76,7 @@ export function RulePreview({ ruleId, refreshKey = 0 }: RulePreviewProps) {
 
   if (state.status === "error") {
     return (
-      <div className="rounded-lg border border-[var(--color-severity-critical)]/30 bg-[var(--color-surface-raised)] px-5 py-5">
+      <div className="rounded-md border border-[var(--color-severity-critical)]/30 bg-[var(--color-surface-raised)] px-5 py-5">
         <p className="text-sm text-[var(--color-severity-critical-text)]">{state.message}</p>
         <Button
           variant="secondary"
@@ -94,7 +94,7 @@ export function RulePreview({ ruleId, refreshKey = 0 }: RulePreviewProps) {
   const { matched_count } = state.data
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-6">
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-6">
       <p className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
         {matched_count}
       </p>
