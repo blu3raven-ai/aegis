@@ -47,6 +47,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
   const [remainingSeconds, setRemainingSeconds] = useState<number>(600)
   const [error, setError] = useState<string | null>(null)
   const [platform, setPlatform] = useState<"linux" | "macos">("linux")
+  const [method, setMethod] = useState<"docker" | "python">("docker")
   // Runner IDs that existed before this modal opened — so a new one appearing is
   // the one being set up, not an existing runner's heartbeat.
   const knownRunnerIdsRef = useRef<Set<string>>(new Set())
@@ -110,6 +111,10 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
     ? `./vuln-runner configure --url ${portalUrl} --token ${token}`
     : "..."
 
+  const dockerCmd = token
+    ? `docker run -d --restart unless-stopped -e BACKEND_URL=${portalUrl} -e RUNNER_REGISTRATION_TOKEN=${token} -e RUNNER_NAME=runner -v aegis-runner-workspace:/workspace ghcr.io/blu3raven-ai/aegis-runner:latest`
+    : "..."
+
   const minutes = Math.floor(remainingSeconds / 60)
   const seconds = remainingSeconds % 60
   const expired = remainingSeconds <= 0
@@ -138,31 +143,35 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
           </div>
 
           <SegmentedControl
-            ariaLabel="Platform"
-            value={platform}
-            onChange={setPlatform}
+            ariaLabel="Install method"
+            value={method}
+            onChange={setMethod}
             options={[
-              { id: "linux", label: "Linux" },
-              { id: "macos", label: "macOS" },
+              { id: "docker", label: "Docker" },
+              { id: "python", label: "Python" },
             ]}
           />
 
           <HostReachabilityNote origin={portalUrl} audience="the runner machine" />
 
-          <CopyableBlock
-            label="1. Install dependencies"
-            text="pip install httpx click"
-          />
-
-          <CopyableBlock
-            label="2. Configure"
-            text={configureCmd}
-          />
-
-          <CopyableBlock
-            label="3. Start"
-            text="python -m runner.vuln_runner start"
-          />
+          {method === "docker" ? (
+            <CopyableBlock label="Run the runner" text={dockerCmd} />
+          ) : (
+            <>
+              <SegmentedControl
+                ariaLabel="Platform"
+                value={platform}
+                onChange={setPlatform}
+                options={[
+                  { id: "linux", label: "Linux" },
+                  { id: "macos", label: "macOS" },
+                ]}
+              />
+              <CopyableBlock label="1. Install dependencies" text="pip install httpx click" />
+              <CopyableBlock label="2. Configure" text={configureCmd} />
+              <CopyableBlock label="3. Start" text="python -m runner.vuln_runner start" />
+            </>
+          )}
 
           {connected ? (
             <div

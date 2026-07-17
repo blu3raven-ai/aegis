@@ -26,3 +26,12 @@ test("modal can approve the connected runner in place", () => {
   assert.match(src, /approveRunner\(connected\.runnerId\)/)
   assert.match(src, /Approve runner/)
 })
+
+test("modal offers a one-command Docker deploy using the published image", () => {
+  // A Docker/Python method toggle, defaulting to Docker.
+  assert.match(src, /useState<"docker" \| "python">\("docker"\)/)
+  // The docker command injects the token + backend url and pulls the GHCR image.
+  assert.match(src, /docker run .*ghcr\.io\/blu3raven-ai\/aegis-runner/)
+  assert.match(src, /RUNNER_REGISTRATION_TOKEN=\$\{token\}/)
+  assert.match(src, /BACKEND_URL=\$\{portalUrl\}/)
+})
