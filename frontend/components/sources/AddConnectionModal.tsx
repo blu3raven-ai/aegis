@@ -384,6 +384,7 @@ export function AddConnectionModal({
     for (const field of fields) {
       if (field.required && !auth[field.key]?.trim()) {
         setError(`${field.label} is required.`)
+        document.getElementById(`connection-${field.key}`)?.focus()
         return
       }
     }
@@ -713,7 +714,7 @@ export function AddConnectionModal({
               })}
 
               {error && (
-                <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
+                <div role="alert" className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
                   <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                   </svg>
@@ -848,7 +849,7 @@ export function AddConnectionModal({
                 </Step>
               </ol>
 
-              {error && <p className="text-xs text-[var(--color-severity-critical-text)]">{error}</p>}
+              {error && <p role="alert" className="text-xs text-[var(--color-severity-critical-text)]">{error}</p>}
             </div>
           )}
 
@@ -888,7 +889,7 @@ export function AddConnectionModal({
                             {apiKeyBusy ? "Creating…" : "Create API key"}
                           </Button>
                         </span>
-                        {apiKeyError && <p className="text-[var(--color-severity-critical-text)]">{apiKeyError}</p>}
+                        {apiKeyError && <p role="alert" className="text-[var(--color-severity-critical-text)]">{apiKeyError}</p>}
                       </>
                     )}
                   </Step>

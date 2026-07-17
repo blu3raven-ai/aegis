@@ -132,7 +132,7 @@ export function RunnerLifecycleActions({ runnerId, status, onChange }: Props) {
       </div>
 
       {error && (
-        <p className="mt-2 text-sm text-[var(--color-severity-critical-text)]">{error}</p>
+        <p role="alert" className="mt-2 text-sm text-[var(--color-severity-critical-text)]">{error}</p>
       )}
 
       <Dialog

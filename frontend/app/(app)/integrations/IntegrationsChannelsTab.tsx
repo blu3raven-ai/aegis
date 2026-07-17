@@ -160,10 +160,10 @@ export function IntegrationsChannelsTab({
 
       {creatingDest && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--color-overlay)] p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+          <div role="dialog" aria-modal="true" aria-label="New destination" className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
             <DrawerSection label="New destination">
               {createError && (
-                <p className="mb-3 text-sm text-[var(--color-severity-critical)]">{createError}</p>
+                <p role="alert" className="mb-3 text-sm text-[var(--color-severity-critical)]">{createError}</p>
               )}
               <DestinationForm
                 initial={null}

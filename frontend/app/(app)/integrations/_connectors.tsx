@@ -207,7 +207,7 @@ export function CatalogConnectorModal({
     <Modal open title={`Configure ${connector.name}`} onClose={onClose}>
       <form onSubmit={(e) => { void handleSubmit(e) }} className="space-y-4">
         {error && (
-          <p className="text-sm text-[var(--color-severity-critical)]">{error}</p>
+          <p role="alert" className="text-sm text-[var(--color-severity-critical)]">{error}</p>
         )}
 
         <div>

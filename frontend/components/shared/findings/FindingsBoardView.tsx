@@ -2799,7 +2799,7 @@ function ActivityTimelineSection({ finding, scannerLabel }: { finding: Finding; 
         )}
       </ol>
 
-      <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2">
+      <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-2 focus-within:ring-2 focus-within:ring-[var(--color-accent)]">
         <textarea
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
