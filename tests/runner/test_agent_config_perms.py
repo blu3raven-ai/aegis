@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import stat
+
+import pytest
 from unittest.mock import patch
 
 from runner import agent
@@ -31,3 +33,11 @@ def test_configure_container_storage_noop_without_fuse(tmp_path, monkeypatch):
     monkeypatch.setattr(agent.os.path, "exists", lambda p: False)
     agent.configure_container_storage()
     assert not (tmp_path / ".config" / "containers" / "storage.conf").exists()
+
+
+def test_execute_job_rejects_unsafe_job_id():
+    # The jobId guard is the first statement in _execute_job, before any use of
+    # self, so a forged '../' payload is refused before it can touch the filesystem.
+    obj = agent.RunnerAgent.__new__(agent.RunnerAgent)
+    with pytest.raises(ValueError):
+        obj._execute_job({"jobId": "../../etc/passwd"})
