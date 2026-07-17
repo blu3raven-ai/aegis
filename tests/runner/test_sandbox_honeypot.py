@@ -73,3 +73,33 @@ def test_egress_log_round_trips_and_skips_garbage():
     events = parse_egress_log(lines)
     assert [e.proto for e in events] == ["dns", "tcp"]
     assert events[1].target == "10.88.0.2:4443" and events[1].detail == "62617368"
+
+
+# ── TCP handler must not be blindable by a silent connection ──────────────────
+
+def test_handle_tcp_logs_even_when_target_sends_nothing(capsys):
+    import json as _json
+    import socket
+
+    from runner.sandbox import honeypot
+
+    a, b = socket.socketpair()
+    a.close()  # target opened then sent nothing → recv returns immediately
+    honeypot._handle_tcp(b, ("10.0.0.5", 4444))
+    lines = [ln for ln in capsys.readouterr().out.splitlines() if ln.strip()]
+    obj = _json.loads(lines[-1])
+    assert obj["proto"] == "tcp" and obj["target"] == "10.0.0.5:4444"
+
+
+def test_handle_tcp_records_first_bytes(capsys):
+    import json as _json
+    import socket
+
+    from runner.sandbox import honeypot
+
+    a, b = socket.socketpair()
+    a.sendall(b"\x00\x01evil")
+    a.close()
+    honeypot._handle_tcp(b, ("10.0.0.5", 4444))
+    obj = _json.loads([ln for ln in capsys.readouterr().out.splitlines() if ln.strip()][-1])
+    assert obj["detail"].startswith("0001")
