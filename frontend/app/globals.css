@@ -8,7 +8,7 @@
   --color-bg-section:     #faf9f6;
   --color-bg-input:       #ffffff;
   --color-bg-hover:       rgba(15,39,71,0.05);
-  --color-grid:           rgba(18,21,27,0.030);
+  --color-grid:           rgba(18,21,27,0.055);
 
   --color-navy:           #10233f;
   --color-navy-hover:     #163b68;
@@ -159,7 +159,7 @@
   --color-bg-section:     #09101e;
   --color-bg-input:       #0f1e38;
   --color-bg-hover:       #253348;
-  --color-grid:           rgba(255,255,255,0.028);
+  --color-grid:           rgba(255,255,255,0.045);
 
   --color-navy:           #6f8dff;
   --color-navy-hover:     #8aa0ff;
@@ -316,14 +316,17 @@ body {
 
 body {
   background-color: var(--color-bg);
-  /* Faint blueprint grid — an instrument-panel backdrop that reads through
-     the gaps between opaque surfaces. */
+  color: var(--color-text-primary);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Faint blueprint grid backdrop for the app shell — an instrument-panel
+   texture that reads through the gaps between opaque surfaces. */
+.app-grid-bg {
   background-image:
     linear-gradient(var(--color-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
-  background-size: 48px 48px;
-  color: var(--color-text-primary);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  background-size: 46px 46px;
 }
 
 @layer base {

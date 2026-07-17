@@ -76,7 +76,7 @@ function AppShellInner({ children, sidebarProps }: { children: React.ReactNode; 
 
   return (
     <MobileSidebarProvider>
-      <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
+      <div className="app-grid-bg flex h-screen overflow-hidden bg-[var(--color-bg)]">
         <AppSidebar {...sidebarProps} navCounts={navCounts} open={searchOpen} setSearchOpen={setSearchOpen} />
         <MobileSidebar {...sidebarProps} navCounts={navCounts} collapsed={false} />
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
