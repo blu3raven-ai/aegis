@@ -27,6 +27,8 @@ _BASE_URL = "AGENT_CONFIG_BASE_URL_OVERRIDE"
 _BROAD_EXEC = "AGENT_CONFIG_BROAD_EXEC_ALLOW"
 _HOOK_FETCH = "AGENT_HOOK_SHELL_FETCH"
 _HOOK_SECRET = "AGENT_HOOK_SECRET_READ"
+_HOOK_LOCAL_SCRIPT = "AGENT_HOOK_LOCAL_SCRIPT"
+_API_KEY_HELPER = "AGENT_CONFIG_API_KEY_HELPER"
 _MCP_SHELL = "AGENT_MCP_SHELL_COMMAND"
 _MCP_TOOL_SHADOW = "AGENT_MCP_TOOL_SHADOW"
 
@@ -60,8 +62,28 @@ _SECRET_READ = re.compile(
     r"(~/\.ssh\b|~/\.aws\b|\.env\b|/proc/\d+/environ|\bprintenv\b|"
     r"[A-Z_]*API_KEY\b|[A-Z_]*_TOKEN\b|[A-Z_]*SECRET[A-Z_]*\b)",
 )
+# An interpreter running a LOCAL script that ships in the repo — the "staged
+# payload" pattern (a hook that quietly runs a bundled .mjs/.js/.py/.sh), distinct
+# from a hook invoking a standard tool like prettier/eslint. Length-bounded to
+# keep the scan linear on adversarial input.
+_INTERP_LOCAL_FILE = re.compile(
+    r"\b(?:node|deno|bun|tsx|ts-node|python\d?|ruby|perl|sh|bash|zsh)\b"
+    r"\s+[^\n|;&]{0,256}\.(?:mjs|cjs|js|ts|py|rb|pl|sh)\b",
+    re.I,
+)
+
 # Permission entries granting effectively-unrestricted shell.
 _BROAD_BASH = re.compile(r"^Bash(\(\s*:?\*\s*\))?$")
+
+
+def _cmd_is_dangerous(cmd: str) -> bool:
+    """True if a config-supplied command fetches+runs remote code, opens a reverse
+    shell, reads secrets, or runs a bundled local script."""
+    return bool(
+        _PIPE_TO_SHELL.search(cmd) or _SHELL_SUBSHELL_FETCH.search(cmd)
+        or _FETCH_PIPE_EXEC.search(cmd) or _REVERSE_SHELL.search(cmd)
+        or _SECRET_READ.search(cmd) or _INTERP_LOCAL_FILE.search(cmd)
+    )
 
 
 def _strip_jsonc(text: str) -> str:
@@ -182,7 +204,29 @@ def _check_hooks(data: dict, rel_path: str, text: str) -> list[dict]:
                 rel_path, _line_of(text, cmd[:40]), _HOOK_SECRET,
                 {"command": cmd[:200]},
             ))
+        elif _INTERP_LOCAL_FILE.search(cmd):
+            findings.append(_finding(
+                _HOOK_LOCAL_SCRIPT, "high",
+                f"Agent hook auto-runs a bundled local script (staged payload) in {rel_path}",
+                rel_path, _line_of(text, cmd[:40]), _HOOK_LOCAL_SCRIPT,
+                {"command": cmd[:200]},
+            ))
     return findings
+
+
+def _check_api_key_helper(data: dict, rel_path: str, text: str) -> list[dict]:
+    """``apiKeyHelper`` runs a shell command every time the agent starts to mint an
+    API key — pre-consent auto-exec, and credential-adjacent by definition."""
+    helper = data.get("apiKeyHelper")
+    if not isinstance(helper, str) or not helper.strip():
+        return []
+    severity = "critical" if _cmd_is_dangerous(helper) else "high"
+    return [_finding(
+        _API_KEY_HELPER, severity,
+        f"Committed config sets apiKeyHelper, which auto-runs a command pre-consent in {rel_path}",
+        rel_path, _line_of(text, "apiKeyHelper"), _API_KEY_HELPER,
+        {"command": helper[:200]},
+    )]
 
 
 def _check_env_base_url(data: dict, rel_path: str, text: str) -> list[dict]:
@@ -225,6 +269,7 @@ def _check_claude_settings(data: dict, rel_path: str, text: str) -> list[dict]:
                     {"allow": entry},
                 ))
     findings.extend(_check_env_base_url(data, rel_path, text))
+    findings.extend(_check_api_key_helper(data, rel_path, text))
     findings.extend(_check_hooks(data, rel_path, text))
     return findings
 

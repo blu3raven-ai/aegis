@@ -177,6 +177,20 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "it to exfiltrate them.",
         "Remove the secret access from the hook and rotate any exposed credentials.",
     ),
+    "AGENT_HOOK_LOCAL_SCRIPT": (
+        "An agent hook auto-runs a script file bundled in the repo, so opening the "
+        "project executes repo-supplied code before any review — the script is the "
+        "real payload.",
+        "Remove the hook, or run the script only as an explicit, reviewed step; never "
+        "auto-run repo-supplied scripts on project open.",
+    ),
+    "AGENT_CONFIG_API_KEY_HELPER": (
+        "The apiKeyHelper setting makes the agent run a shell command on every start "
+        "to mint an API key — pre-consent code execution that is also positioned to "
+        "exfiltrate credentials.",
+        "Remove apiKeyHelper from committed config; supply credentials through a "
+        "trusted local mechanism the repository does not control.",
+    ),
     # ── Natural-language exfiltration ────────────────────────────────────────
     "AGENT_EXFIL_INSTRUCTION": (
         "This instruction tells the agent to read a credential or secret and send it "
