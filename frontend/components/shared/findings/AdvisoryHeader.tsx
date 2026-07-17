@@ -19,7 +19,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   const empty = children == null || children === "" || children === false
   return (
     <div className="flex gap-3 text-sm">
-      <span className="w-32 shrink-0 font-semibold text-[var(--color-text-secondary)]">{label}</span>
+      <span className="w-32 shrink-0 font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">{label}</span>
       <span
         className={`min-w-0 ${empty ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`}
       >
