@@ -29,7 +29,7 @@ function CopyableBlock({ text, label }: { text: string; label: string }) {
       <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">{label}</p>
       <button
         type="button"
-        className="relative block w-full cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 pr-16 text-left font-mono text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
+        className="relative block w-full cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 pr-16 text-left font-mono text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
         onClick={handleCopy}
         aria-label={copied ? `${label}: copied` : `Copy ${label.toLowerCase()}`}
       >
@@ -132,7 +132,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
       size="md"
     >
       {error ? (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       ) : (
@@ -179,7 +179,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
 
           {connected ? (
             <div
-              className="rounded-lg border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] p-3"
+              className="rounded-md border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] p-3"
               role="status"
               aria-live="polite"
             >

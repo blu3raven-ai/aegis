@@ -48,7 +48,7 @@ const INITIAL_BASELINE: ArgusBaseline = {
 function StatusBanner({ conn }: { conn: ArgusConnection | null }) {
   if (!conn || !conn.endpoint) {
     return (
-      <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3">
+      <div className="rounded-md border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3">
         <p className="text-sm font-medium text-[var(--color-state-pending-text)]">Argus is not connected</p>
         <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
           Add your Argus endpoint and OAuth credentials below to enrich findings with exploit and
@@ -59,7 +59,7 @@ function StatusBanner({ conn }: { conn: ArgusConnection | null }) {
   }
   if (!conn.enabled) {
     return (
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
         <p className="text-sm font-medium text-[var(--color-text-primary)]">Argus is paused</p>
         <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
           A connection to {conn.endpoint} is stored. Toggle on under Activation to resume enriching
@@ -69,7 +69,7 @@ function StatusBanner({ conn }: { conn: ArgusConnection | null }) {
     )
   }
   return (
-    <div className="rounded-lg border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
+    <div className="rounded-md border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
       <p className="text-sm font-medium text-[var(--color-status-ok-text)]">
         Argus is connected — {conn.endpoint}
       </p>
@@ -249,7 +249,7 @@ export function ArgusConnectionContent({
 
   return (
     <div className="space-y-6">
-      <div className={`flex items-start gap-3.5 rounded-lg border px-4 py-3.5 ${hasArgus ? "border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)]" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
+      <div className={`flex items-start gap-3.5 rounded-md border px-4 py-3.5 ${hasArgus ? "border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)]" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-argus-subtle)] text-[var(--color-argus)] ring-1 ring-inset ring-[var(--color-argus-border)]">
           <Eye className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
         </span>

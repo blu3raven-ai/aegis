@@ -133,7 +133,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
 
       {/* Error */}
       {error && (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}
@@ -141,7 +141,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
       {/* Loading skeleton — grouped card style */}
       {isLoading ? (
         <div>
-          <p className="mb-4 text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <p className="mb-4 text-2xs font-mono font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Connections
           </p>
           <Card padding="none" className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md">
@@ -151,7 +151,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
         </div>
       ) : connections.length === 0 ? (
         /* Empty state — matches Teams empty style */
-        <div className="rounded-xl border-2 border-dashed border-[var(--color-border)] px-6 py-12 text-center">
+        <div className="rounded-md border-2 border-dashed border-[var(--color-border)] px-6 py-12 text-center">
           <svg
             className="mx-auto h-10 w-10 text-[var(--color-text-secondary)]"
             viewBox="0 0 24 24"
@@ -180,7 +180,7 @@ export function ConnectionList({ category, canEdit, initialTotalConnections }: C
       ) : (
         /* Connections grouped in a card — matches Account section pattern */
         <div>
-          <p className="mb-4 text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <p className="mb-4 text-2xs font-mono font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Connections
           </p>
           <Card padding="none" className="divide-y divide-[var(--color-border)] overflow-hidden rounded-md">

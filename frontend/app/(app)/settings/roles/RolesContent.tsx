@@ -161,7 +161,7 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96" />
-        <Skeleton className="h-64 rounded-lg" />
+        <Skeleton className="h-64 rounded-md" />
       </div>
     )
   }
@@ -187,7 +187,7 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
       )}
 
       {error && (
-        <div className="mb-6 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="mb-6 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}

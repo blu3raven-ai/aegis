@@ -37,7 +37,7 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
 
   if (loading) {
     return (
-      <Skeleton className="h-40 rounded-lg" />
+      <Skeleton className="h-40 rounded-md" />
     )
   }
 
@@ -46,7 +46,7 @@ export function RunnersContent({ canEdit }: { canEdit: boolean }) {
 
   return (
     <>
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]">
         <RunnerFleetBody
           runners={runners}
           isEmpty={isEmpty}
@@ -147,7 +147,7 @@ function ScanConcurrencyCard() {
   }
 
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">Scan concurrency</p>

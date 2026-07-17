@@ -34,7 +34,7 @@ const BASIC_LANGUAGES = [
 
 function LanguageSupport() {
   return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
       <p className="mb-1 text-sm font-semibold text-[var(--color-text-primary)]">Language Support</p>
       <p className="mb-4 text-xs text-[var(--color-text-secondary)]">
         Deep analysis languages receive taint flow tracing and reachability analysis.
@@ -42,7 +42,7 @@ function LanguageSupport() {
       </p>
       <div className="space-y-3">
         <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <p className="mb-2 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Deep Analysis
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -57,7 +57,7 @@ function LanguageSupport() {
           </div>
         </div>
         <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <p className="mb-2 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Frameworks
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -72,7 +72,7 @@ function LanguageSupport() {
           </div>
         </div>
         <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <p className="mb-2 text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Pattern Matching
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -135,17 +135,17 @@ export function CodeScanningContent({ canEdit = true }: { canEdit?: boolean }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+      <div className="space-y-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
         <div className="h-6 w-32 animate-pulse rounded bg-[var(--color-surface)]" />
-        <div className="h-10 animate-pulse rounded-lg bg-[var(--color-surface)]" />
-        <div className="h-28 animate-pulse rounded-lg bg-[var(--color-surface)]" />
+        <div className="h-10 animate-pulse rounded-md bg-[var(--color-surface)]" />
+        <div className="h-28 animate-pulse rounded-md bg-[var(--color-surface)]" />
       </div>
     )
   }
 
   if (!settings) {
     return (
-      <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-3 text-sm text-[var(--color-severity-critical)]">
+      <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-3 text-sm text-[var(--color-severity-critical)]">
         <p>{error ?? "Could not load settings."}</p>
         <Button
           variant="secondary"

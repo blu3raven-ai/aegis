@@ -95,8 +95,8 @@ export function AccountContent({ children }: { children?: React.ReactNode }) {
   if (loading) {
     return (
       <div className="space-y-3">
-        <Skeleton className="h-20 rounded-lg" />
-        <Skeleton className="h-24 rounded-lg" />
+        <Skeleton className="h-20 rounded-md" />
+        <Skeleton className="h-24 rounded-md" />
       </div>
     )
   }

@@ -55,13 +55,13 @@ export function UsageMeter({ used, budget }: UsageMeterProps) {
     <div>
       <div className="mb-1 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <span className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Daily usage
           </span>
           {pct >= 75 && (
             <span
               className={cn(
-                "inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em]",
+                "inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-mono font-semibold uppercase tracking-[0.14em]",
                 status.pillClass,
               )}
             >

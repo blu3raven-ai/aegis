@@ -507,7 +507,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
   return (
     <div className="space-y-6">
       {error && (
-        <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}
@@ -566,7 +566,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
           {dialogError && (
             <div
               role="alert"
-              className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]"
+              className="rounded-md border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]"
             >
               {dialogError}
             </div>
@@ -628,7 +628,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
               Enter a new password for <strong>{showResetPassword?.username}</strong>.
             </p>
             {dialogError && (
-              <div className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
+              <div className="rounded-md border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
                 {dialogError}
               </div>
             )}
@@ -697,7 +697,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                         ))}
                       </Select>
                     ) : (
-                      <span className="text-[11px] font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
+                      <span className="text-[11px] font-mono font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
                         {roles.find(r => r.id === user.roleId)?.name || ROLE_LABELS[user.role] || user.role}
                       </span>
                     )}
@@ -777,7 +777,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                     <Td colSpan={6} className="px-6 py-4">
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                          <h4 className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Team memberships</h4>
+                          <h4 className="text-2xs font-mono font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Team memberships</h4>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                           {teams.map(team => {
@@ -818,10 +818,10 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                     <Td colSpan={6} className="px-6 py-4">
                       <div className="space-y-6">
                         <div className="space-y-4">
-                          <h4 className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Direct Access</h4>
+                          <h4 className="text-2xs font-mono font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">Direct Access</h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <label className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Grant Repository Access</label>
+                              <label className="text-2xs font-mono font-bold uppercase text-[var(--color-text-secondary)]">Grant Repository Access</label>
                               <ResourceAutocomplete
                                 value={directRepoValue}
                                 ariaLabel="Grant Repository Access"
@@ -833,7 +833,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                               />
                             </div>
                             <div className="space-y-2">
-                              <label className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Grant Image Access</label>
+                              <label className="text-2xs font-mono font-bold uppercase text-[var(--color-text-secondary)]">Grant Image Access</label>
                               <ResourceAutocomplete
                                 value={directImageValue}
                                 ariaLabel="Grant Image Access"
@@ -848,7 +848,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                         </div>
 
                         <div className="space-y-3">
-                          <h4 className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Effective Direct Grants</h4>
+                          <h4 className="text-2xs font-mono font-bold uppercase text-[var(--color-text-secondary)]">Effective Direct Grants</h4>
                           <div className="flex flex-wrap gap-2">
                             {directGrants.filter(g => g.subjectId === user.id).length === 0 && (
                               <p className="text-xs text-[var(--color-text-secondary)] italic">No direct grants for this user.</p>

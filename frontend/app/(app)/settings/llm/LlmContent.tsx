@@ -247,7 +247,7 @@ export function LlmContent({ canEdit = true, sessionLoading = false }: LlmConten
     return (
       <div className="space-y-4">
         <StatusBanner configured={configured} enabled={enabled} providerName={activeProvider.name} />
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">
             Read-only
           </p>
@@ -450,7 +450,7 @@ function StatusBanner({
 }) {
   if (!configured) {
     return (
-      <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3">
+      <div className="rounded-md border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-3">
         <p className="text-sm font-medium text-[var(--color-state-pending)]">
           LLM verification is not configured
         </p>
@@ -462,7 +462,7 @@ function StatusBanner({
   }
   if (!enabled) {
     return (
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
         <p className="text-sm font-medium text-[var(--color-text-primary)]">
           LLM verification is paused
         </p>
@@ -473,7 +473,7 @@ function StatusBanner({
     )
   }
   return (
-    <div className="rounded-lg border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
+    <div className="rounded-md border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
       <p className="text-sm font-medium text-[var(--color-status-ok)]">
         LLM verification is active — {providerName}
       </p>
@@ -501,7 +501,7 @@ function ProviderPicker({
             type="button"
             onClick={() => onChange(p.id)}
             aria-pressed={active}
-            className={`flex flex-col rounded-lg border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
+            className={`flex flex-col rounded-md border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
               active
                 ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                 : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)]"

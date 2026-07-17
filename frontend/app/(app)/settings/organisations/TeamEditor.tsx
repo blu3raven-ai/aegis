@@ -213,7 +213,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
             </p>
           </>
         )}
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           <span>{team.members.length} members</span>
           <span>{team.assets.filter((a) => a.type === "repo").length} repos</span>
           <span>{team.assets.filter((a) => a.type === "image").length} images</span>
@@ -240,7 +240,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
         )}
       </div>
 
-      <div className="mt-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+      <div className="mt-10 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
         <h4 className="text-xs font-semibold text-[var(--color-text-primary)]">Ownership Policy</h4>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
           Resources can be shared with multiple teams. Users get their strongest matching team role for

@@ -5,7 +5,7 @@ import { SettingsInPageNav } from "@/components/settings/SettingsInPageNav"
 import { SettingsSections } from "./SettingsSections"
 
 const SETTINGS_ICON = (
-  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
     <svg
       aria-hidden="true"
       className="h-5 w-5"

@@ -155,7 +155,7 @@ function NvdCard({ state, handlers, canEdit }: { state: AdvisorySourceState; han
   const { enabled, apiKey, initialApiKey, initialApiKeyHint, showKey, editingKey } = state
 
   return (
-    <div className={`relative space-y-3 rounded-lg border p-4 transition-colors ${
+    <div className={`relative space-y-3 rounded-md border p-4 transition-colors ${
       enabled
         ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.03]"
         : "border-[var(--color-border)] bg-[var(--color-surface)]"
@@ -237,7 +237,7 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
   const missingKey = enabled && !apiKey.trim() && editingKey
 
   return (
-    <div className={`relative space-y-3 rounded-lg border p-4 transition-colors ${
+    <div className={`relative space-y-3 rounded-md border p-4 transition-colors ${
       enabled
         ? hasKey
           ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.03]"
@@ -323,7 +323,7 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
 
 function ArgusUnlicensedCard() {
   return (
-    <div className="relative space-y-3 rounded-lg border border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)] p-4">
+    <div className="relative space-y-3 rounded-md border border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)] p-4">
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -336,7 +336,7 @@ function ArgusUnlicensedCard() {
         </div>
         <Link
           href="/settings/license"
-          className="shrink-0 rounded-lg border border-[var(--color-argus-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-argus)] transition-colors hover:bg-[var(--color-argus-subtle)]"
+          className="shrink-0 rounded-md border border-[var(--color-argus-border)] px-3 py-1.5 text-xs font-semibold text-[var(--color-argus)] transition-colors hover:bg-[var(--color-argus-subtle)]"
         >
           Activate
         </Link>
@@ -351,7 +351,7 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
   const missingKey = enabled && !apiKey.trim() && editingKey
 
   return (
-    <div className={`relative space-y-3 rounded-lg border p-4 transition-colors ${
+    <div className={`relative space-y-3 rounded-md border p-4 transition-colors ${
       enabled
         ? hasKey
           ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.03]"

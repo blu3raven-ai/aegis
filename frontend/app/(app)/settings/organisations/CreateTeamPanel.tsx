@@ -91,7 +91,7 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
         {error && (
           <p
             role="alert"
-            className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
+            className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
           >
             {error}
           </p>

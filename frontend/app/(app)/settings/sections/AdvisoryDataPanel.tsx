@@ -128,7 +128,7 @@ function AdvisoryMirrorCard({ canRefresh }: { canRefresh: boolean }) {
         {loading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-10 animate-pulse rounded-lg bg-[var(--color-surface)]" />
+              <div key={i} className="h-10 animate-pulse rounded-md bg-[var(--color-surface)]" />
             ))}
           </div>
         ) : status ? (
@@ -156,14 +156,14 @@ function AdvisoryMirrorCard({ canRefresh }: { canRefresh: boolean }) {
         ) : null}
 
         {emptyMirror && (
-          <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-3 py-2.5 text-xs text-[var(--color-state-pending-text)]">
+          <div className="rounded-md border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-3 py-2.5 text-xs text-[var(--color-state-pending-text)]">
             The advisory mirror hasn&apos;t been populated yet. Dependency and container scans
             produce no findings until the first refresh completes — refresh now to bootstrap it.
           </div>
         )}
 
         {status?.osv.error && (
-          <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-xs text-[var(--color-severity-critical-text)]">
+          <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-xs text-[var(--color-severity-critical-text)]">
             Last OSV refresh failed: {status.osv.error}
           </div>
         )}

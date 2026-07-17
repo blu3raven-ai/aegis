@@ -147,7 +147,7 @@ export function AuditContent() {
 
         {/* Error state */}
         {loadState === "error" && (
-          <div className="rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
+          <div className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
             <p className="text-sm font-semibold text-[var(--color-severity-critical-text)]">
               Couldn&apos;t load audit events
             </p>

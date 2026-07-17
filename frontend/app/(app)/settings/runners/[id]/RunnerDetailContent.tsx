@@ -167,7 +167,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
           <Skeleton className="h-7 w-64" />
           <Skeleton className="h-4 w-48" />
         </div>
-        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-48 rounded-md" />
       </div>
     )
   }
@@ -178,7 +178,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
         <Link href="/settings/runners" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline">
           <ChevronLeft /> Back to Runners
         </Link>
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           Runner not found
         </div>
       </div>
@@ -312,7 +312,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
                       key={n}
                       type="button"
                       onClick={() => setMaxConcurrent(n)}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                      className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
                         maxConcurrent === n
                           ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
                           : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-secondary)]"

@@ -66,7 +66,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
           const isGitHubSourced = asset.source === "github"
 
           return (
-            <div key={asset.assetId} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
+            <div key={asset.assetId} className="flex items-center justify-between gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
               <div className="flex flex-1 items-center gap-2 min-w-0">
                 <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{asset.displayName}</span>
                 {sharedTeamCount > 1 && (
@@ -98,8 +98,8 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
         )}
       </div>
 
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
-        <h4 className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] mb-3">Add repository</h4>
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+        <h4 className="font-mono text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] mb-3">Add repository</h4>
         <div className="space-y-3">
           <ResourceAutocomplete
             value={value}

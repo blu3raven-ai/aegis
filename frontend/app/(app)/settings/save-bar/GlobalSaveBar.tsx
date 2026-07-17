@@ -42,8 +42,8 @@ export function GlobalSaveBar() {
         aria-label="Unsaved changes"
         className={
           showSaved
-            ? "pointer-events-auto flex w-full max-w-3xl items-center rounded-xl border border-[var(--color-status-ok)] bg-[var(--color-surface)] px-4 py-3 shadow-lg"
-            : "pointer-events-auto flex w-full max-w-3xl items-center rounded-xl border-x border-b border-x-[var(--color-border)] border-b-[var(--color-border)] border-t-2 border-t-[var(--color-accent)] bg-[var(--color-surface)] px-4 py-3 shadow-lg"
+            ? "pointer-events-auto flex w-full max-w-3xl items-center rounded-md border border-[var(--color-status-ok)] bg-[var(--color-surface)] px-4 py-3 shadow-lg"
+            : "pointer-events-auto flex w-full max-w-3xl items-center rounded-md border-x border-b border-x-[var(--color-border)] border-b-[var(--color-border)] border-t-2 border-t-[var(--color-accent)] bg-[var(--color-surface)] px-4 py-3 shadow-lg"
         }
       >
         <SaveBarContent

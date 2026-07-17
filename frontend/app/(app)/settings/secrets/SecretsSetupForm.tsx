@@ -108,7 +108,7 @@ export function SecretsSetupForm({
   return (
     <div className="space-y-6">
       {!canEdit && (
-        <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-2.5 text-xs text-[var(--color-state-pending)]">
+        <div className="rounded-md border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-2.5 text-xs text-[var(--color-state-pending)]">
           Only owners and admins can edit tool settings.
         </div>
       )}
@@ -136,7 +136,7 @@ export function SecretsSetupForm({
               type="button"
               disabled={!canEdit}
               onClick={() => setValues({ ...values, scanDepth: opt.value })}
-              className={`rounded-xl border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`rounded-md border p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                 values.scanDepth === opt.value
                   ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                   : "border-[var(--color-border)] hover:border-[var(--color-text-secondary)]"
@@ -226,7 +226,7 @@ export function SecretsSetupForm({
       <SettingsCard eyebrow="Automation" title="Scheduled Scans">
       <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
           <div className="space-y-4">
-            <label className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm">
+            <label className="flex items-start gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm">
               <input
                 type="checkbox"
                 checked={values.autoRerunEnabled}
@@ -242,7 +242,7 @@ export function SecretsSetupForm({
             </label>
 
             {values.autoRerunEnabled && (
-              <div className="space-y-4 rounded-lg border border-[var(--color-border)] p-4">
+              <div className="space-y-4 rounded-md border border-[var(--color-border)] p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   {values.rerunScheduleType === "simple" ? (
                     <FormField
@@ -302,7 +302,7 @@ export function SecretsSetupForm({
       </SettingsCard>
 
       {error && (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}

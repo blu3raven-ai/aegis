@@ -110,7 +110,7 @@ export function CostChart({ days }: CostChartProps) {
     <div>
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-base font-semibold">Token usage</h3>
-        <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        <span className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           Last {bars.length} days
         </span>
       </div>

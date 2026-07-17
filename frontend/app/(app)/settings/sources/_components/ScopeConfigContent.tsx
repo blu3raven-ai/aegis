@@ -392,7 +392,7 @@ export function ScopeConfigContent({
           <Skeleton className="h-7 w-64" />
           <Skeleton className="h-4 w-48" />
         </div>
-        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-48 rounded-md" />
       </div>
     )
   }
@@ -413,7 +413,7 @@ export function ScopeConfigContent({
             Back to {categoryLabel}
           </Link>
         )}
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           {fetchError}
         </div>
       </div>
@@ -623,7 +623,7 @@ export function ScopeConfigContent({
 
       {/* Save error */}
       {saveError && (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           {saveError}
         </div>
       )}

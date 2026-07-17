@@ -81,7 +81,7 @@ export function TotpSetupModal({
           <div className="flex justify-center">
             <img src={qrDataUrl} alt="QR code for authenticator app" className="h-44 w-44 rounded-lg" />
           </div>
-          <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2">
+          <details className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2">
             <summary className="cursor-pointer text-xs font-medium text-[var(--color-text-secondary)]">
               Cannot scan? Enter code manually
             </summary>

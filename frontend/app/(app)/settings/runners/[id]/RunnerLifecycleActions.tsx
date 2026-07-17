@@ -177,7 +177,7 @@ export function RunnerLifecycleActions({ runnerId, status, onChange }: Props) {
           Copy this token to the runner host now — it will not be shown again.
         </p>
         <div className="mt-4">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 font-[family-name:var(--font-jetbrains-mono)] text-xs break-all text-[var(--color-text-primary)]">
+          <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 font-[family-name:var(--font-jetbrains-mono)] text-xs break-all text-[var(--color-text-primary)]">
             {rotatedToken}
           </div>
         </div>

@@ -34,7 +34,7 @@ export function RulesetPicker({ selected, onChange, disabled }: RulesetPickerPro
             type="button"
             disabled={disabled}
             onClick={() => onChange(toggle(selected, r.id))}
-            className={`rounded-xl border px-4 py-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`rounded-md border px-4 py-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               active
                 ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                 : "border-[var(--color-border)] hover:border-[var(--color-text-secondary)]"
