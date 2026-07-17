@@ -21,6 +21,7 @@ const SSEContext = createContext<SSEContextValue | null>(null)
 
 const CHANNEL_NAME = "aegis-sse"
 const RECONNECT_JITTER_MS = 3000
+const RECONNECT_MAX_MS = 30000
 const FALLBACK_AFTER_FAILURES = 3
 
 export function SSEProvider({ children }: { children: ReactNode }) {
@@ -29,6 +30,7 @@ export function SSEProvider({ children }: { children: ReactNode }) {
   const isLeaderRef = useRef(false)
   const failCountRef = useRef(0)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const channelRef = useRef<BroadcastChannel | null>(null)
 
   const dispatch = useCallback((eventType: string, data: unknown) => {
@@ -135,9 +137,23 @@ export function SSEProvider({ children }: { children: ReactNode }) {
         connectedRef.current = false
         failCountRef.current += 1
         if (failCountRef.current >= FALLBACK_AFTER_FAILURES) {
+          // Native EventSource retry has failed repeatedly. Drop this connection
+          // and re-establish it with capped backoff — never give up permanently,
+          // or the dashboard silently stops updating until a manual refresh. Also
+          // hand off leadership so another open tab can take over immediately.
           es.close()
           eventSourceRef.current = null
           isLeaderRef.current = false
+          channelRef.current?.postMessage({ type: "leader-down" })
+          const backoff = Math.min(
+            RECONNECT_MAX_MS,
+            RECONNECT_JITTER_MS * 2 ** (failCountRef.current - FALLBACK_AFTER_FAILURES),
+          )
+          if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null
+            tryBecomeLeader()
+          }, backoff)
         }
       }
     }, jitter)
@@ -148,16 +164,25 @@ export function SSEProvider({ children }: { children: ReactNode }) {
     function onVisible() {
       if (document.visibilityState === "visible") {
         dispatch("scan.progress", { _refresh: true })
+        // If the stream died while the tab was backgrounded, re-establish it now
+        // so the user sees live progress again without a manual refresh.
+        if (!eventSourceRef.current) {
+          tryBecomeLeader()
+        }
       }
     }
     document.addEventListener("visibilitychange", onVisible)
     return () => document.removeEventListener("visibilitychange", onVisible)
-  }, [dispatch])
+  }, [dispatch, tryBecomeLeader])
 
   // Startup
   useEffect(() => {
     tryBecomeLeader()
     return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
       if (eventSourceRef.current) {
         eventSourceRef.current.close()
         eventSourceRef.current = null
