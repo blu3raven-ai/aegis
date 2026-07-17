@@ -12,6 +12,7 @@ the thin real-container orchestration (create net → honeypot → target → co
 """
 from __future__ import annotations
 
+import logging
 import os
 import threading
 
@@ -26,9 +27,21 @@ from runner.sandbox.honeypot import EgressEvent, parse_egress_log
 from runner.sandbox.network import internal_network
 from runner.scanners._subprocess import run_tool
 
+logger = logging.getLogger(__name__)
+
 _CATCH_PORT = 8888
 _INSPECT_TIMEOUT_S = 15.0
 _START_TIMEOUT_S = 30.0
+# The embedded honeypot image. The ``localhost/`` prefix keeps podman from ever
+# treating it as a remote ref to pull — it must resolve from the local store.
+_HONEYPOT_LOCAL_TAG = "localhost/aegis-honeypot:embedded"
+# CI bakes the honeypot OCI archive here; the runner loads it at startup (no pull).
+_DEFAULT_HONEYPOT_ARCHIVE = "/opt/aegis-honeypot/image.tar"
+_HONEYPOT_BUILD_TIMEOUT_S = 600.0
+_HONEYPOT_LOAD_TIMEOUT_S = 180.0
+_HONEYPOT_PROBE_TIMEOUT_S = 60.0
+_honeypot_lock = threading.Lock()
+_honeypot_ready: bool | None = None  # None = untried; cached bool after first probe
 # Redirect ALL of the target's outbound TCP to the honeypot's single catch port,
 # so a reverse shell to any port lands on the logger. UDP/53 (DNS) is untouched
 # and still reaches the resolver. Runs inside the trusted honeypot only.
@@ -41,12 +54,133 @@ _HONEYPOT_CMD = (
 
 
 def honeypot_image() -> str:
-    """The trusted honeypot image. Defaults to the runner's OWN image (baked as
-    ``RUNNER_IMAGE`` at build time) — it already carries the honeypot module,
-    python, and iptables, so no separate image is needed. ``HONEYPOT_IMAGE``
-    overrides for a mirror / pinned tag. Empty (neither set) → detonation
-    graceful-skips."""
-    return (os.environ.get("HONEYPOT_IMAGE") or os.environ.get("RUNNER_IMAGE") or "").strip()
+    """The trusted honeypot image ref. An explicit ``HONEYPOT_IMAGE`` (a pinned
+    mirror or pre-loaded tag) wins; otherwise the locally-built embedded honeypot,
+    which ``ensure_honeypot_image`` builds on demand. The runner's own image is no
+    longer the default: it lives in a (usually private) registry the embedded
+    rootless podman has no store entry or credentials for, so pointing detonation
+    at it silently failed the honeypot pull."""
+    return (os.environ.get("HONEYPOT_IMAGE") or "").strip() or _HONEYPOT_LOCAL_TAG
+
+
+def _image_present(image: str) -> bool:
+    """True if ``image`` is already in the local store. ``image inspect`` works on
+    both podman and docker (unlike ``image exists``), keeping the dev path portable."""
+    try:
+        code, _out, _err = run_tool(
+            [container_cli(), "image", "inspect", image], timeout=_INSPECT_TIMEOUT_S, env=docker_cli_env()
+        )
+    except Exception:  # noqa: BLE001
+        return False
+    return code == 0
+
+
+def _honeypot_archive_path() -> str:
+    return (os.environ.get("HONEYPOT_ARCHIVE") or _DEFAULT_HONEYPOT_ARCHIVE).strip()
+
+
+def _load_honeypot_archive(archive: str) -> bool:
+    """Load the baked OCI archive into the local store (airgap path — no pull)."""
+    try:
+        code, _out, _err = run_tool(
+            [container_cli(), "load", "-i", archive], timeout=_HONEYPOT_LOAD_TIMEOUT_S, env=docker_cli_env()
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("[detonation] honeypot archive load errored (%s)", archive, exc_info=True)
+        return False
+    if code != 0:
+        logger.warning("[detonation] honeypot archive load failed (rc=%s, %s)", code, archive)
+        return False
+    # podman normalises an unqualified tag to localhost/; if the archive's tag did
+    # not land as our ref, alias it (best-effort) so downstream runs resolve it.
+    if not _image_present(_HONEYPOT_LOCAL_TAG):
+        try:
+            run_tool(
+                [container_cli(), "tag", "aegis-honeypot:embedded", _HONEYPOT_LOCAL_TAG],
+                timeout=_INSPECT_TIMEOUT_S, env=docker_cli_env(),
+            )
+        except Exception:  # noqa: BLE001 — the presence check below is the real gate
+            pass
+    return _image_present(_HONEYPOT_LOCAL_TAG)
+
+
+def _build_embedded_honeypot(cancel_event: threading.Event | None) -> bool:
+    """Dev fallback: build the honeypot from a public base inside the local runtime
+    (the same nested build the target already uses). Used only when the baked
+    archive is absent — the shipped runner always has the archive."""
+    here = os.path.dirname(os.path.abspath(__file__))   # .../runner/sandbox
+    dockerfile = os.path.join(here, "honeypot.Dockerfile")
+    context = os.path.dirname(here)                      # the runner package dir
+    if not os.path.isfile(dockerfile):
+        logger.warning("[detonation] honeypot Dockerfile missing at %s — detonation unavailable", dockerfile)
+        return False
+    args = [container_cli(), "build", "--file", dockerfile, "--tag", _HONEYPOT_LOCAL_TAG, context]
+    try:
+        code, _out, _err = run_tool(
+            args, timeout=_HONEYPOT_BUILD_TIMEOUT_S, env=docker_cli_env(), cancel_event=cancel_event
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("[detonation] honeypot build errored — detonation unavailable", exc_info=True)
+        return False
+    if code != 0:
+        logger.warning("[detonation] honeypot build failed (rc=%s) — detonation unavailable", code)
+        return False
+    return _image_present(_HONEYPOT_LOCAL_TAG)
+
+
+def _make_honeypot_available(cancel_event: threading.Event | None) -> bool:
+    """Get the embedded honeypot image into the local store. Prefer the baked OCI
+    archive (airgap, no pull); fall back to building it from a public base when the
+    archive is absent (dev). Idempotent — a no-op once the image is present."""
+    if _image_present(_HONEYPOT_LOCAL_TAG):
+        return True
+    archive = _honeypot_archive_path()
+    if os.path.isfile(archive) and _load_honeypot_archive(archive):
+        return True
+    return _build_embedded_honeypot(cancel_event)
+
+
+def _probe_nested_run(image: str, cancel_event: threading.Event | None) -> bool:
+    """Actually start a throwaway container from the honeypot image to prove this
+    host can run nested containers. This is the HONEST availability check the old
+    ``podman version`` probe lacked: on a host that blocks nested user namespaces
+    it fails here, so detonation reports unavailable instead of failing mid-run."""
+    args = [container_cli(), "run", "--rm", "--network=none", image, "true"]
+    try:
+        code, _out, _err = run_tool(
+            args, timeout=_HONEYPOT_PROBE_TIMEOUT_S, env=docker_cli_env(), cancel_event=cancel_event
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning(
+            "[detonation] nested-run probe errored — detonation unavailable on this host; "
+            "static scanning is unaffected", exc_info=True,
+        )
+        return False
+    if code != 0:
+        logger.warning(
+            "[detonation] nested-run probe failed (rc=%s) — this host blocks nested containers; "
+            "detonation unavailable, static scanning is unaffected", code,
+        )
+        return False
+    return True
+
+
+def ensure_honeypot_image(cancel_event: threading.Event | None = None) -> str | None:
+    """Make a runnable honeypot image available and return its ref, or None if it
+    cannot be (→ caller graceful-skips detonation). An explicit ``HONEYPOT_IMAGE``
+    is trusted as-is. Otherwise the embedded honeypot is provisioned once — loaded
+    from the baked archive, or built as a dev fallback — then a real nested run
+    verifies the host can actually detonate. The outcome is cached for the process."""
+    override = (os.environ.get("HONEYPOT_IMAGE") or "").strip()
+    if override:
+        return override
+    global _honeypot_ready
+    with _honeypot_lock:
+        if _honeypot_ready is None:
+            _honeypot_ready = _make_honeypot_available(cancel_event) and _probe_nested_run(
+                _HONEYPOT_LOCAL_TAG, cancel_event
+            )
+        return _HONEYPOT_LOCAL_TAG if _honeypot_ready else None
 
 
 def honeypot_run_args(image: str, *, network: str, name: str) -> list[str]:
@@ -123,8 +257,8 @@ def detonate(
     an empty list means 'ran, observed no egress'."""
     if not runtime_available():
         return None
-    hp_image = honeypot_image()
-    if not hp_image:  # no honeypot image resolvable → cannot observe → skip
+    hp_image = ensure_honeypot_image(cancel_event=cancel_event)
+    if not hp_image:  # honeypot image unavailable / host can't detonate → skip
         return None
     hp_name = f"aegis-deto-hp-{run_id}"
     tgt_name = f"aegis-deto-tgt-{run_id}"

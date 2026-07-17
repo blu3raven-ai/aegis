@@ -69,21 +69,19 @@ def test_container_ip_uses_index_for_hyphenated_network_names():
     assert ".Networks.aegis-deto-net-abc" not in fmt  # the broken dot form is gone
 
 
-def test_honeypot_image_prefers_explicit_then_runner_then_empty():
-    # HONEYPOT_IMAGE wins.
-    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "mirror.local/hp:2", "RUNNER_IMAGE": "runner:1"}):
+def test_honeypot_image_prefers_explicit_then_embedded():
+    # An explicit HONEYPOT_IMAGE (pinned mirror / pre-loaded tag) wins.
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "mirror.local/hp:2"}):
         assert det.honeypot_image() == "mirror.local/hp:2"
-    # else the runner's own baked image (the turnkey default — no separate image).
-    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "", "RUNNER_IMAGE": "acme/runner:1"}, clear=False):
-        assert det.honeypot_image() == "acme/runner:1"
-    # neither set → empty → detonation graceful-skips.
-    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "", "RUNNER_IMAGE": ""}, clear=False):
-        assert det.honeypot_image() == ""
+    # else the locally-provisioned embedded honeypot — no separate registry image.
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": ""}, clear=False):
+        assert det.honeypot_image() == det._HONEYPOT_LOCAL_TAG
 
 
-def test_detonate_skips_when_no_honeypot_image():
+def test_detonate_skips_when_honeypot_unavailable():
+    # ensure_honeypot_image returns None when the host can't detonate → graceful skip.
     with patch("runner.sandbox.detonation.runtime_available", return_value=True), \
-         patch("runner.sandbox.detonation.honeypot_image", return_value=""):
+         patch("runner.sandbox.detonation.ensure_honeypot_image", return_value=None):
         assert det.detonate("tgt:img", ["setup"], run_id="x") is None
 
 
@@ -108,7 +106,7 @@ def test_detonate_returns_events_and_tears_down():
 
     with patch("runner.sandbox.detonation.runtime_available", return_value=True), \
          patch("runner.sandbox.detonation.internal_network", fake_net), \
-         patch("runner.sandbox.detonation.honeypot_image", return_value="runner:test"), \
+         patch("runner.sandbox.detonation.ensure_honeypot_image", return_value="runner:test"), \
          patch("runner.sandbox.detonation.container_ip", return_value="10.9.0.2"), \
          patch("runner.sandbox.detonation.run_tool", side_effect=fake_run):
         events = det.detonate("tgt:img", ["setup"], run_id="x")
@@ -125,6 +123,7 @@ def test_detonate_skips_when_honeypot_fails_to_start():
     # honeypot `run -d` returns non-zero → cannot observe → skip (None), still tears down.
     with patch("runner.sandbox.detonation.runtime_available", return_value=True), \
          patch("runner.sandbox.detonation.internal_network", fake_net), \
+         patch("runner.sandbox.detonation.ensure_honeypot_image", return_value="runner:test"), \
          patch("runner.sandbox.detonation.run_tool", return_value=(1, "", "start failed")):
         assert det.detonate("tgt:img", ["setup"], run_id="x") is None
 
@@ -145,7 +144,7 @@ def test_detonate_collects_even_when_target_errors():
 
     with patch("runner.sandbox.detonation.runtime_available", return_value=True), \
          patch("runner.sandbox.detonation.internal_network", fake_net), \
-         patch("runner.sandbox.detonation.honeypot_image", return_value="runner:test"), \
+         patch("runner.sandbox.detonation.ensure_honeypot_image", return_value="runner:test"), \
          patch("runner.sandbox.detonation.container_ip", return_value="10.9.0.2"), \
          patch("runner.sandbox.detonation.run_tool", side_effect=fake_run):
         events = det.detonate("tgt:img", ["setup"], run_id="x")
@@ -159,6 +158,87 @@ def test_detonate_skips_when_honeypot_has_no_ip():
 
     with patch("runner.sandbox.detonation.runtime_available", return_value=True), \
          patch("runner.sandbox.detonation.internal_network", fake_net), \
+         patch("runner.sandbox.detonation.ensure_honeypot_image", return_value="runner:test"), \
          patch("runner.sandbox.detonation.container_ip", return_value=""), \
          patch("runner.sandbox.detonation.run_tool", return_value=(0, "", "")):
         assert det.detonate("tgt:img", ["setup"], run_id="x") is None
+
+
+# ── ensure_honeypot_image: provisioning (archive → build fallback) + honest probe ──
+
+def _reset_honeypot_cache():
+    det._honeypot_ready = None
+
+
+def test_ensure_honeypot_image_override_short_circuits():
+    _reset_honeypot_cache()
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": "mirror.local/hp:9"}), \
+         patch("runner.sandbox.detonation._make_honeypot_available") as make, \
+         patch("runner.sandbox.detonation._probe_nested_run") as probe:
+        assert det.ensure_honeypot_image() == "mirror.local/hp:9"
+    make.assert_not_called()   # an explicit image is trusted as-is — no provision, no probe
+    probe.assert_not_called()
+
+
+def test_ensure_prefers_baked_archive_over_build():
+    _reset_honeypot_cache()
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": ""}, clear=False), \
+         patch("os.path.isfile", return_value=True), \
+         patch("runner.sandbox.detonation._image_present", side_effect=[False, True]), \
+         patch("runner.sandbox.detonation._load_honeypot_archive", return_value=True) as load, \
+         patch("runner.sandbox.detonation._build_embedded_honeypot") as build, \
+         patch("runner.sandbox.detonation._probe_nested_run", return_value=True):
+        assert det.ensure_honeypot_image() == det._HONEYPOT_LOCAL_TAG
+    load.assert_called_once()   # airgap path: loaded the baked archive...
+    build.assert_not_called()   # ...and never fell back to a network build
+
+
+def test_ensure_builds_when_archive_absent():
+    _reset_honeypot_cache()
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": ""}, clear=False), \
+         patch("os.path.isfile", return_value=False), \
+         patch("runner.sandbox.detonation._image_present", return_value=False), \
+         patch("runner.sandbox.detonation._load_honeypot_archive") as load, \
+         patch("runner.sandbox.detonation._build_embedded_honeypot", return_value=True) as build, \
+         patch("runner.sandbox.detonation._probe_nested_run", return_value=True):
+        assert det.ensure_honeypot_image() == det._HONEYPOT_LOCAL_TAG
+    load.assert_not_called()    # no archive → dev fallback build
+    build.assert_called_once()
+
+
+def test_ensure_none_when_nested_run_probe_fails():
+    _reset_honeypot_cache()
+    # Image provisions fine, but the host blocks nested containers → honest skip.
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": ""}, clear=False), \
+         patch("runner.sandbox.detonation._make_honeypot_available", return_value=True), \
+         patch("runner.sandbox.detonation._probe_nested_run", return_value=False):
+        assert det.ensure_honeypot_image() is None
+
+
+def test_ensure_none_when_provisioning_fails():
+    _reset_honeypot_cache()
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": ""}, clear=False), \
+         patch("runner.sandbox.detonation._make_honeypot_available", return_value=False), \
+         patch("runner.sandbox.detonation._probe_nested_run") as probe:
+        assert det.ensure_honeypot_image() is None
+    probe.assert_not_called()   # never probe if the image isn't even available
+
+
+def test_ensure_caches_outcome_across_calls():
+    _reset_honeypot_cache()
+    with patch.dict("os.environ", {"HONEYPOT_IMAGE": ""}, clear=False), \
+         patch("runner.sandbox.detonation._make_honeypot_available", return_value=True) as make, \
+         patch("runner.sandbox.detonation._probe_nested_run", return_value=True) as probe:
+        assert det.ensure_honeypot_image() == det._HONEYPOT_LOCAL_TAG
+        assert det.ensure_honeypot_image() == det._HONEYPOT_LOCAL_TAG
+    make.assert_called_once()    # provisioned + probed exactly once, then cached
+    probe.assert_called_once()
+
+
+def test_make_honeypot_available_noop_when_already_present():
+    with patch("runner.sandbox.detonation._image_present", return_value=True), \
+         patch("runner.sandbox.detonation._load_honeypot_archive") as load, \
+         patch("runner.sandbox.detonation._build_embedded_honeypot") as build:
+        assert det._make_honeypot_available(None) is True
+    load.assert_not_called()
+    build.assert_not_called()
