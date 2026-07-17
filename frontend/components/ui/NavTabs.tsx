@@ -83,7 +83,7 @@ export function NavTabs<T extends string>({
             {typeof tab.count === "number" && (
               <span
                 className={cn(
-                  "ml-0.5 rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums",
+                  "ml-0.5 rounded-full px-1.5 py-0.5 font-mono text-2xs font-semibold tabular-nums",
                   active
                     ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
                     : "bg-[var(--color-bg-section)] text-[var(--color-text-tertiary)]",

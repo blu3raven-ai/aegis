@@ -15,7 +15,7 @@ export function StatusPill({ status, label }: { status: Status; label?: string }
   const style = STYLES[status];
   if (!style) return null;
   return (
-    <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium leading-none", style.cls)}>
+    <span className={cn("inline-flex items-center gap-1.5 font-mono text-xs font-medium uppercase tracking-[0.04em] leading-none", style.cls)}>
       <span className={cn("h-1.5 w-1.5 rounded-full", style.dotCls)} aria-hidden />
       {label ?? style.label}
     </span>

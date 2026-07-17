@@ -20,7 +20,7 @@ export function KpiCard({ label, value, hint, status = "neutral" }: Props) {
       <div className={cn("text-2xl font-semibold leading-none tabular-nums", valueColor)}>
         {value}
       </div>
-      <div className="mt-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] whitespace-nowrap">
+      <div className="mt-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] whitespace-nowrap">
         {label}
       </div>
       {hint && <div className="mt-1 text-xs text-[var(--color-text-secondary)]">{hint}</div>}

@@ -247,10 +247,10 @@
   --color-argus-border:            rgb(192 132 252 / 0.2);
   --color-argus-ink:               #070d19;
 
-  --color-state-pending:           #fbbf24;
-  --color-state-pending-subtle:    rgb(251 191 36 / 0.12);
-  --color-state-pending-border:    rgb(251 191 36 / 0.3);
-  --color-state-pending-text:      #fbbf24;
+  --color-state-pending:           #d4a24a;
+  --color-state-pending-subtle:    rgb(212 162 74 / 0.12);
+  --color-state-pending-border:    rgb(212 162 74 / 0.3);
+  --color-state-pending-text:      #d4a24a;
 
   --color-scanner-sast-bg:         rgb(192 132 252 / 0.18);
   --color-scanner-sast-fg:         #d4b0fc;
