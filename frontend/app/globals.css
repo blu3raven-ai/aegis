@@ -356,6 +356,32 @@ body {
   background: transparent;
 }
 
+/* CAD corner registration ticks for instrument-panel cards. */
+.panel-ticks {
+  position: relative;
+}
+.panel-ticks::before,
+.panel-ticks::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-color: var(--color-border-strong);
+  pointer-events: none;
+}
+.panel-ticks::before {
+  left: 6px;
+  top: 6px;
+  border-left: 1px solid var(--color-border-strong);
+  border-top: 1px solid var(--color-border-strong);
+}
+.panel-ticks::after {
+  right: 6px;
+  bottom: 6px;
+  border-right: 1px solid var(--color-border-strong);
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
 @layer base {
   :focus-visible {
     outline: 2px solid var(--color-accent);

@@ -16,7 +16,7 @@ export function KpiCard({ label, value, hint, status = "neutral" }: Props) {
     "text-[var(--color-text-primary)]";
 
   return (
-    <div className="border border-[var(--color-border)] bg-[var(--color-surface-raised)] rounded px-5 py-3">
+    <div className="panel-ticks border border-[var(--color-border)] bg-[var(--color-surface-raised)] rounded px-5 py-3">
       <div className={cn("text-2xl font-semibold leading-none tabular-nums", valueColor)}>
         {value}
       </div>

@@ -12,10 +12,7 @@ export function KpiCard({
   onClick?: () => void
 }) {
   const base =
-    "relative flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 text-left " +
-    // CAD corner registration ticks — reads the card as an instrument panel.
-    "before:content-[''] before:absolute before:left-1.5 before:top-1.5 before:h-1.5 before:w-1.5 before:border-l before:border-t before:border-[var(--color-border-strong)] " +
-    "after:content-[''] after:absolute after:right-1.5 after:bottom-1.5 after:h-1.5 after:w-1.5 after:border-r after:border-b after:border-[var(--color-border-strong)]"
+    "panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 text-left"
   const body = (
     <>
       <p className="font-mono text-2xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text-tertiary)]">

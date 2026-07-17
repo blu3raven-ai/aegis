@@ -18,8 +18,8 @@ export interface AdvisoryHeaderFinding {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   const empty = children == null || children === "" || children === false
   return (
-    <div className="flex gap-3 text-sm">
-      <span className="w-32 shrink-0 font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">{label}</span>
+    <div className="grid grid-cols-[8.5rem_1fr] items-baseline gap-3 py-2 text-sm">
+      <span className="font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">{label}</span>
       <span
         className={`min-w-0 ${empty ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`}
       >
@@ -48,7 +48,7 @@ export function AdvisoryHeader({ finding }: { finding: AdvisoryHeaderFinding }) 
   ) : null
 
   return (
-    <section className="space-y-1.5">
+    <section className="divide-y divide-[var(--color-border-divider)] border-y border-[var(--color-border-divider)]">
       <Row label="Target">{finding.repo}</Row>
       <Row label="Version affected">{commit}</Row>
       <Row label="Component">{finding.filePath}</Row>

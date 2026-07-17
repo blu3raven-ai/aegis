@@ -434,7 +434,7 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
         <Link
           href={findingsHref({ kev: true, state: "open" })}
           aria-label={`View ${kevCount} KEV-exposed findings`}
-          className="flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          className="panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
         >
           <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             KEV-exposed
@@ -452,7 +452,7 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
         </Link>
 
         {data == null ? (
-          <div className="flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left">
+          <div className="panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left">
             <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               High EPSS
             </p>
@@ -465,7 +465,7 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
           <Link
             href={findingsHref({ epssMin: 0.9, state: "open" })}
             aria-label={`View ${highEpssCount} high-EPSS findings`}
-            className="flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+            className="panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
           >
             <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               High EPSS

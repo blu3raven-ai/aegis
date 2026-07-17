@@ -48,7 +48,6 @@ import { ContainerImageSection } from "@/components/shared/findings/ContainerIma
 import { CweContextSection } from "@/components/shared/findings/CweContextSection"
 import { cweInfo } from "@/lib/shared/findings/cwe-catalog"
 import { severityContext } from "@/lib/shared/findings/severity-context"
-import { triageSummary } from "@/lib/shared/findings/triage-summary"
 import { BlastRadiusSection } from "@/components/shared/findings/BlastRadiusSection"
 import { FindingReferencesSection } from "@/components/shared/findings/FindingReferencesSection"
 import { RecommendedFixSection } from "@/components/shared/findings/RecommendedFixSection"
@@ -1927,8 +1926,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 </div>
               )}
               <FindingDrawerGroup id="overview" label="Overview">
-              <TriageBanner finding={selectedFinding} />
-
               <FindingDescriptionSection
                 description={selectedFinding.description}
                 title={selectedFinding.title}
@@ -2297,35 +2294,6 @@ function SignalChip({
     >
       {children}
     </span>
-  )
-}
-
-// One-line triage headline at the top of the drawer — the verdict + urgency +
-// severity thesis an analyst reads before scrolling into the detail below.
-function TriageBanner({ finding }: { finding: Finding }) {
-  const summary = triageSummary({
-    verdict: finding.verdict,
-    actionBand: finding.actionBand,
-    severity: finding.severity,
-    kev: finding.kev,
-  })
-  if (!summary) return null
-
-  const toneClass =
-    summary.tone === "danger"
-      ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
-      : summary.tone === "caution"
-        ? "border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)]"
-        : summary.tone === "positive"
-          ? "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]"
-          : "border-[var(--color-border)] bg-[var(--color-bg-section)] text-[var(--color-text-secondary)]"
-
-  return (
-    <p
-      className={`rounded-md border-l-[3px] px-3 py-2 text-sm font-semibold leading-snug ${toneClass}`}
-    >
-      {summary.text}
-    </p>
   )
 }
 

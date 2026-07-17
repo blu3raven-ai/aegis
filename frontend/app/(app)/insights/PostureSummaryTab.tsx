@@ -183,7 +183,7 @@ function RiskScoreHero({
   }
 
   return (
-    <div className={`rounded-md border ${border} ${bg} overflow-hidden`}>
+    <div className={`panel-ticks rounded-md border ${border} ${bg} overflow-hidden`}>
       <div className="px-6 pt-5 pb-4">
         <div className="flex items-center gap-1.5">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
@@ -290,7 +290,7 @@ function KpiCard({
   const card = (
     <Card
       padding="none"
-      className={`h-full rounded-md px-5 py-3 ${href ? "transition-colors hover:border-[var(--color-accent)]/40" : ""}`}
+      className={`panel-ticks h-full rounded-md px-5 py-3 ${href ? "transition-colors hover:border-[var(--color-accent)]/40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
