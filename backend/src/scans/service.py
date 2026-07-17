@@ -675,8 +675,10 @@ async def cancel_scan(
         metadata={"scanner_types": scanner_types, "repo_id": repo_id, "org": org},
     )
 
+    from src.notifications.emitter import sse_recipients_for_org
     get_event_bus().publish_sync(Event(
         event_type="scan.cancelled",
+        target_user_ids=sse_recipients_for_org(org),
         data={
             "scanId": scan_id,
             "scannerTypes": scanner_types,

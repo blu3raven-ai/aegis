@@ -191,8 +191,10 @@ def cancel_multi_org_scan(
                 "finishedAt": now_iso(),
                 "error": "Cancelled by user",
             })
+            from src.notifications.emitter import sse_recipients_for_org
             get_event_bus().publish_sync(Event(
                 event_type="scan.failed",
+                target_user_ids=sse_recipients_for_org(org_name),
                 data={"tool": job_type, "org": org_name, "runId": result["runId"], "error": "Cancelled by user"},
             ))
         results.append({"org": org_name, "cancelled": True})
