@@ -242,3 +242,43 @@ def test_make_honeypot_available_noop_when_already_present():
         assert det._make_honeypot_available(None) is True
     load.assert_not_called()
     build.assert_not_called()
+
+
+# ── strongest-runtime auto-selection ─────────────────────────────────────────
+
+def _reset_runtime():
+    det._detected_runtime = det._UNPROBED
+
+
+def test_detect_runtime_honors_explicit_env(monkeypatch):
+    _reset_runtime()
+    monkeypatch.setenv("SANDBOX_RUNTIME", "runsc")
+    with patch("runner.sandbox.detonation._probe_nested_run") as probe:
+        assert det.detect_target_runtime("img") == "runsc"
+    probe.assert_not_called()  # explicit choice → no probing
+
+
+def test_detect_runtime_picks_strongest_available(monkeypatch):
+    _reset_runtime()
+    monkeypatch.delenv("SANDBOX_RUNTIME", raising=False)
+    # kata probe fails, gVisor (runsc) probe succeeds → pick runsc, fall through kata
+    with patch("runner.sandbox.detonation._probe_nested_run",
+               side_effect=lambda image, ce, runtime=None: runtime == "runsc"):
+        assert det.detect_target_runtime("img") == "runsc"
+
+
+def test_detect_runtime_falls_back_to_default(monkeypatch):
+    _reset_runtime()
+    monkeypatch.delenv("SANDBOX_RUNTIME", raising=False)
+    with patch("runner.sandbox.detonation._probe_nested_run", return_value=False):
+        assert det.detect_target_runtime("img") is None  # → default runc/crun
+
+
+def test_detect_runtime_caches(monkeypatch):
+    _reset_runtime()
+    monkeypatch.delenv("SANDBOX_RUNTIME", raising=False)
+    with patch("runner.sandbox.detonation._probe_nested_run", return_value=False) as probe:
+        det.detect_target_runtime("img")
+        n = probe.call_count
+        det.detect_target_runtime("img")
+        assert probe.call_count == n  # cached, no re-probe
