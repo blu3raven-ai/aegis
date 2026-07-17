@@ -82,9 +82,9 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                         e.stopPropagation()
                         onDuplicateRole(role)
                       }}
-                      disabled={role.isLocked || role.id === "role_owner"}
+                      disabled={role.isLocked}
                       className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      title={role.isLocked || role.id === "role_owner" ? "This role is protected and cannot be duplicated" : "Duplicate role"}
+                      title={role.isLocked ? "This role is protected and cannot be duplicated" : "Duplicate role"}
                       aria-label="Duplicate role"
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -98,9 +98,9 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                         e.stopPropagation()
                         onDeleteRole(role.id)
                       }}
-                      disabled={role.isLocked || role.id === "role_owner"}
+                      disabled={role.isLocked}
                       className="p-1.5 text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      title={role.isLocked || role.id === "role_owner" ? "This role is protected and cannot be deleted" : "Delete role"}
+                      title={role.isLocked ? "This role is protected and cannot be deleted" : "Delete role"}
                       aria-label="Delete role"
                     >
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

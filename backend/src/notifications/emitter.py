@@ -58,12 +58,13 @@ def _get_admin_user_ids() -> list[str]:
     from src.db.helpers import run_db
     from src.db.models import User
     from sqlalchemy import select
+    from src.authz.roles.service import ADMIN_ROLE_IDS
 
     async def _query(session):
         result = await session.execute(
             select(User.id).where(
                 User.status == "active",
-                User.role_id.in_(["role_owner", "role_admin"]),
+                User.role_id.in_(ADMIN_ROLE_IDS),
             )
         )
         return [row[0] for row in result.all()]
@@ -194,7 +195,10 @@ def _get_users_with_org_asset_access(org: str) -> list[str]:
     try:
         return run_db(_q)
     except Exception:
-        return _get_active_user_ids()
+        # Fail closed: on a scope-resolution error, fall back to admins only
+        # rather than every active user — the realtime SSE mirror of these
+        # recipients would otherwise broadcast scoped data to everyone.
+        return _get_admin_user_ids()
 
 
 def sse_recipients_for_org(org: str) -> "frozenset[str]":

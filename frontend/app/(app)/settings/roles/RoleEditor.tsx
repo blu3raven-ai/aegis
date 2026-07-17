@@ -59,8 +59,7 @@ export function RoleEditor({
 
   if (!role && !isCreating) return null
 
-  const isOwner = role?.id === "role_owner"
-  const isLocked = !!role?.isLocked || isOwner
+  const isLocked = !!role?.isLocked
 
   return (
     <div className="space-y-6">

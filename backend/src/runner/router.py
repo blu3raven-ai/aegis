@@ -99,6 +99,16 @@ def _require_runner(
     return runner, None
 
 
+def _lifecycle_target(asset_id: str | None, org: str) -> "frozenset[str] | None":
+    """Scope a runner-lifecycle SSE event: when the repo asset is known, None lets
+    the asset-grant filter apply; otherwise (org-wide jobs with no REPO_ID) scope
+    to the org's recipients so the event isn't broadcast to zero-grant viewers."""
+    if asset_id:
+        return None
+    from src.notifications.emitter import sse_recipients_for_org
+    return sse_recipients_for_org(org)
+
+
 # Registration
 
 
@@ -345,6 +355,7 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
         get_event_bus().publish_sync(Event(
             event_type="scan.progress",
             asset_id=asset_id,
+            target_user_ids=_lifecycle_target(asset_id, org),
             data={
                 "tool": tool_label,
                 "org": org,
@@ -438,6 +449,7 @@ def preview_ingest_endpoint(job_id: str, request: Request) -> JSONResponse:
     get_event_bus().publish_sync(Event(
         event_type="findings.updated",
         asset_id=asset_id,
+        target_user_ids=_lifecycle_target(asset_id, org),
         data={"tool": job_type, "org": org, "runId": run_id, "preview": True},
     ))
     return JSONResponse({"ok": True})
@@ -518,6 +530,7 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
         get_event_bus().publish_sync(Event(
             event_type="scan.completed",
             asset_id=asset_id,
+            target_user_ids=_lifecycle_target(asset_id, org),
             data={"tool": job_type, "org": org, "runId": run_id},
         ))
         # Emit notifications
@@ -536,6 +549,7 @@ def _ingest_from_minio(job: dict[str, Any]) -> None:
         get_event_bus().publish_sync(Event(
             event_type="scan.failed",
             asset_id=asset_id,
+            target_user_ids=_lifecycle_target(asset_id, org),
             data={"tool": job_type, "org": org, "runId": run_id, "error": str(e)},
         ))
         from src.notifications.emitter import notify_scan_failed

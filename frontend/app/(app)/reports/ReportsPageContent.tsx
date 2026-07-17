@@ -400,7 +400,11 @@ export function ReportsPageContent() {
                     <Td className="px-5 py-3.5">
                       <div className="flex items-center gap-1">
                         <a
-                          href={report.download_url ?? undefined}
+                          href={
+                            report.download_url && /^https?:\/\//i.test(report.download_url)
+                              ? report.download_url
+                              : undefined
+                          }
                           download
                           target="_blank"
                           rel="noopener noreferrer"

@@ -211,7 +211,7 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
         size="xl"
         footer={
           <div className="flex items-center justify-end gap-2">
-            {selectedRole && !selectedRole.isLocked && selectedRole.id !== "role_owner" && !isCreating && (
+            {selectedRole && !selectedRole.isLocked && !isCreating && (
               <Button
                 variant="secondary"
                 size="sm"
@@ -229,7 +229,7 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
               form="role-editor-form"
               variant="primary"
               size="md"
-              disabled={isSaving || (!!selectedRole && (selectedRole.isLocked || selectedRole.id === "role_owner"))}
+              disabled={isSaving || (!!selectedRole && selectedRole.isLocked)}
               isLoading={isSaving}
             >
               {isSaving ? "Saving…" : isCreating ? "Create role" : "Save role"}
