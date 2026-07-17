@@ -116,7 +116,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
     : "..."
 
   const dockerCmd = token
-    ? `docker run -d --restart unless-stopped -e BACKEND_URL=${portalUrl} -e RUNNER_REGISTRATION_TOKEN=${token} -e RUNNER_NAME=runner -v aegis-runner-workspace:/workspace ghcr.io/blu3raven-ai/aegis-runner:latest`
+    ? `docker run -d --restart unless-stopped -e BACKEND_URL=${portalUrl} -e RUNNER_REGISTRATION_TOKEN=${token} -v aegis-runner-workspace:/workspace ghcr.io/blu3raven-ai/aegis-runner:latest`
     : "..."
 
   const minutes = Math.floor(remainingSeconds / 60)

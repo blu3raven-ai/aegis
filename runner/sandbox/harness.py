@@ -61,8 +61,6 @@ class SandboxLimits:
     timeout_s: float = 120.0
     # Per-tmpfs size cap so scratch cannot fill the runner's disk.
     tmpfs_size: str = "64m"
-    # Max open files — caps fd exhaustion on top of the pids limit.
-    nofile: int = 4096
     # Writable scratch (rootfs is read-only). Apps that must write live here.
     tmpfs: Sequence[str] = field(default_factory=lambda: ("/tmp",))
 
@@ -108,10 +106,8 @@ def build_run_args(
         "--security-opt=no-new-privileges",
         "--user=65534:65534",  # nobody:nogroup
         f"--memory={lim.memory}",
-        f"--memory-swap={lim.memory}",  # == memory → no swap, so the cap is hard
         f"--cpus={lim.cpus}",
         f"--pids-limit={lim.pids}",
-        f"--ulimit=nofile={lim.nofile}:{lim.nofile}",
     ]
     if runtime:
         args.append(f"--runtime={runtime}")

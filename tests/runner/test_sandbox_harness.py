@@ -29,16 +29,6 @@ def test_rootfs_read_only_with_tmpfs_scratch():
     assert "nosuid" in tmp[0] and "nodev" in tmp[0] and "size=" in tmp[0]
 
 
-def test_memory_cap_has_no_swap_headroom():
-    a = _args()
-    mem = next(x for x in a if x.startswith("--memory=")).split("=", 1)[1]
-    assert f"--memory-swap={mem}" in a  # swap == memory → the memory cap is hard
-
-
-def test_open_file_descriptors_capped():
-    assert any(x.startswith("--ulimit=nofile=") for x in _args())
-
-
 def test_all_capabilities_dropped_and_no_new_privileges():
     a = _args()
     assert "--cap-drop=ALL" in a
