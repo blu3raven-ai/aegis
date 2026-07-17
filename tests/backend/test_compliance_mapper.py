@@ -69,6 +69,28 @@ def test_agent_scanning_maps_malicious_software_and_vuln_mgmt():
     }
 
 
+def test_agent_findings_map_to_owasp_llm_top10_by_check_id():
+    def _has(check_id):
+        return _ctrls("agent_scanning", "high", {"checkId": check_id})
+
+    # Instruction-injection / smuggling → LLM01
+    assert ("owasp-llm-top10", "LLM01") in _has("AGENT_INSTRUCTION_INJECTION")
+    assert ("owasp-llm-top10", "LLM01") in _has("AGENT_UNICODE_TAGS")
+    # Secret exfiltration → LLM02
+    assert ("owasp-llm-top10", "LLM02") in _has("AGENT_EXFIL_INSTRUCTION")
+    assert ("owasp-llm-top10", "LLM02") in _has("AGENT_SKILL_SCRIPT_SECRET_READ")
+    # Dangerous autonomous execution → LLM06
+    assert ("owasp-llm-top10", "LLM06") in _has("AGENT_MCP_TOOL_SHADOW")
+    assert ("owasp-llm-top10", "LLM06") in _has("AGENT_AUTOEXEC_ON_OPEN")
+
+
+def test_agent_finding_without_recognized_check_id_has_no_owasp_mapping():
+    ctrls = _ctrls("agent_scanning", "high", {"checkId": "AGENT_SOMETHING_UNKNOWN"})
+    assert not any(fw == "owasp-llm-top10" for fw, _ in ctrls)
+    # The base agent mappings still fire regardless of check_id.
+    assert ("soc2", "CC6.8") in ctrls
+
+
 def test_public_facing_dedup_keeps_single_cc66():
     # Rule 5 and Rule 6 both emit soc2/CC6.6 — the dedup must collapse them.
     drafts = map_finding(
