@@ -5,10 +5,11 @@ import { listDestinations } from "./destinations-api"
 import { listFindingsSummary } from "./findings-api"
 import { listRules } from "./rules-api"
 import { getLlmConfig } from "./llm-settings-api"
+import { fetchRunners } from "./settings/use-runners"
 
 export interface SetupTask {
   /** Stable id used as the localStorage key and for analytics. */
-  id: "connect_source" | "run_first_scan" | "configure_llm" | "triage_finding" | "set_sla_policy" | "add_notification"
+  id: "connect_source" | "deploy_runner" | "run_first_scan" | "configure_llm" | "triage_finding" | "set_sla_policy" | "add_notification"
   /** Short imperative title shown in the widget. */
   title: string
   /** One-line description shown when the task is incomplete. */
@@ -20,13 +21,18 @@ export interface SetupTask {
 }
 
 export async function getSetupChecklist(): Promise<SetupTask[]> {
-  const [sources, summary, rules, destinations, llm] = await Promise.allSettled([
+  const [sources, summary, rules, destinations, llm, runnersRes] = await Promise.allSettled([
     listSourceConnections(),
     listFindingsSummary(),
     listRules(),
     listDestinations(),
     getLlmConfig(),
+    fetchRunners(),
   ])
+
+  const runnersOnline =
+    runnersRes.status === "fulfilled" &&
+    (runnersRes.value.runners || []).some((r) => r.status === "online")
 
   const sourcesOk = sources.status === "fulfilled" && sources.value.ok
   const sourcesCount = sourcesOk
@@ -57,11 +63,11 @@ export async function getSetupChecklist(): Promise<SetupTask[]> {
       done: sourcesCount > 0,
     },
     {
-      id: "configure_llm",
-      title: "Set up LLM verification",
-      description: "Add your model's API key and base URL so Aegis verifies findings and cuts false positives.",
-      href: "/settings#llm",
-      done: llmConfigured,
+      id: "deploy_runner",
+      title: "Deploy a runner",
+      description: "A runner executes scans in your environment. Add and approve one so scans can run.",
+      href: "/settings/runners",
+      done: runnersOnline,
     },
     {
       id: "run_first_scan",
@@ -70,6 +76,13 @@ export async function getSetupChecklist(): Promise<SetupTask[]> {
       href: "/sources",
       // Proxy: any finding row at all (open or triaged) means scans have run.
       done: sourcesCount > 0 && openCount + triagedCount > 0,
+    },
+    {
+      id: "configure_llm",
+      title: "Set up LLM verification",
+      description: "Add your model's API key and base URL so Aegis verifies findings and cuts false positives.",
+      href: "/settings#llm",
+      done: llmConfigured,
     },
     {
       id: "triage_finding",
