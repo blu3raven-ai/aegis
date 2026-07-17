@@ -85,6 +85,14 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Remove the injected directives from the tool description and treat the MCP "
         "server as untrusted — revoke it until its source is verified.",
     ),
+    "AGENT_MCP_TOOL_SHADOW": (
+        "Two MCP tools share the same name, so the later definition shadows the "
+        "earlier one. A malicious server can register a tool name already provided "
+        "by a trusted server (e.g. read_file, send_email) to hijack the agent's "
+        "calls to it — a tool-poisoning technique.",
+        "Ensure each tool name is defined once and provided by a single trusted "
+        "server; revoke the shadowing server until its source is verified.",
+    ),
     "AGENT_MCP_SHELL_COMMAND": (
         "This MCP server launches a shell that pipes remote content into an "
         "interpreter (e.g. curl … | sh), fetching and running attacker-controlled "

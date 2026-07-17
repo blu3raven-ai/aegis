@@ -28,6 +28,7 @@ _BROAD_EXEC = "AGENT_CONFIG_BROAD_EXEC_ALLOW"
 _HOOK_FETCH = "AGENT_HOOK_SHELL_FETCH"
 _HOOK_SECRET = "AGENT_HOOK_SECRET_READ"
 _MCP_SHELL = "AGENT_MCP_SHELL_COMMAND"
+_MCP_TOOL_SHADOW = "AGENT_MCP_TOOL_SHADOW"
 
 _GUIDELINE = (
     "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
@@ -268,7 +269,47 @@ def _check_mcp(data: dict, rel_path: str, text: str) -> list[dict]:
                     {"value": str(env.get("ANTHROPIC_BASE_URL"))[:200]},
                 ))
     findings.extend(_check_env_base_url(data, rel_path, text))
+    findings.extend(_check_tool_shadowing(data, rel_path, text))
     return findings
+
+
+def _collect_tool_names(node: Any, acc: list[str]) -> None:
+    """Collect tool names from any ``{"tools": [{"name": ...}]}`` arrays."""
+    if isinstance(node, dict):
+        tools = node.get("tools")
+        if isinstance(tools, list):
+            for t in tools:
+                if isinstance(t, dict) and isinstance(t.get("name"), str):
+                    acc.append(t["name"])
+        for v in node.values():
+            _collect_tool_names(v, acc)
+    elif isinstance(node, list):
+        for v in node:
+            _collect_tool_names(v, acc)
+
+
+def _check_tool_shadowing(data: dict, rel_path: str, text: str) -> list[dict]:
+    """Flag a tool name defined more than once — the later definition shadows the
+    earlier, letting a malicious server hijack a trusted tool (e.g. redefining
+    ``read_file`` to exfiltrate). Only fires on an actual duplicate, so it adds no
+    noise when tool definitions are absent."""
+    names: list[str] = []
+    _collect_tool_names(data, names)
+    seen: set[str] = set()
+    dupes: list[str] = []
+    for n in names:
+        if n in seen and n not in dupes:
+            dupes.append(n)
+        seen.add(n)
+    return [
+        _finding(
+            _MCP_TOOL_SHADOW, "high",
+            f"MCP tool name '{n}' is defined more than once in {rel_path} (tool shadowing)",
+            rel_path, _line_of(text, f'"{n}"'), f"tool:{n}",
+            {"tool": n},
+        )
+        for n in dupes
+    ]
 
 
 def scan_config(rel_path: str, text: str) -> list[dict]:
