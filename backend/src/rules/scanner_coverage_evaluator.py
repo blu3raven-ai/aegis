@@ -265,7 +265,7 @@ def _dispatch_stale_alert(
     bus = get_event_bus()
     bus.publish_sync(Event(
         event_type="rule.scanner_coverage.stale_alert",
-        org="",
+        require_admin=True,
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,
@@ -277,7 +277,7 @@ def _dispatch_stale_alert(
     if action.get("auto_retrigger"):
         bus.publish_sync(Event(
             event_type="rule.scanner_coverage.retrigger_scan",
-            org="",
+            require_admin=True,
             data={
                 "rule_id": rule.id,
                 "repo_id": repo_id,

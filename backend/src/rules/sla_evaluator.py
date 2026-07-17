@@ -435,7 +435,7 @@ def _dispatch_escalation(
 
     get_event_bus().publish_sync(Event(
         event_type="sla.escalation",
-        org="",
+        require_admin=True,
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,
