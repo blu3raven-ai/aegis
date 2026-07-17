@@ -51,7 +51,16 @@ export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole 
                 className="cursor-pointer group"
               >
                 <Td className="px-6 py-4 font-medium text-[var(--color-text-primary)] whitespace-nowrap">
-                  {role.name}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onSelectRole(role)
+                    }}
+                    className="text-left font-medium text-[var(--color-text-primary)] hover:underline focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] rounded"
+                  >
+                    {role.name}
+                  </button>
                 </Td>
                 <Td className="px-6 py-4 text-[var(--color-text-secondary)]">
                   <div className="text-xs capitalize" title={role.permissions.join(", ")}>

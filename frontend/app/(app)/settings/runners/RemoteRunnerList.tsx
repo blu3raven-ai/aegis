@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { Button } from "@/components/ui/Button"
 import { approveRunner } from "@/lib/client/settings/use-runners"
@@ -83,7 +84,16 @@ export function RemoteRunnerList({ runners, canApprove, onRowClick, onChange }: 
               interactive
               className="cursor-pointer border-t border-[var(--color-border)]"
             >
-              <Td className="font-medium text-[var(--color-text-primary)]">{r.name}</Td>
+              <Td className="font-medium text-[var(--color-text-primary)]">
+                {/* Keep <Link> so right-click / cmd+click / keyboard still works */}
+                <Link
+                  href={`/settings/runners/${r.id}`}
+                  className="hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {r.name}
+                </Link>
+              </Td>
               <Td>
                 <span className="flex items-center gap-2">
                   <span
