@@ -112,6 +112,7 @@ def dispatch_rate_alarm(rule: Rule) -> None:
     action = rule.action or {}
     get_event_bus().publish_sync(Event(
         event_type="rule.auto_dismiss.rate_alarm",
+        require_admin=True,
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,
@@ -133,6 +134,7 @@ def auto_disable_rule(session: AsyncSession, rule: Rule, *, reason: str) -> None
 
     get_event_bus().publish_sync(Event(
         event_type="rule.auto_dismiss.auto_disabled",
+        require_admin=True,
         data={
             "rule_id": rule.id,
             "rule_name": rule.name,

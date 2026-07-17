@@ -18,9 +18,15 @@ class EventPublisher:
         self._sse_bus = sse_bus
 
     def publish(self, event: Event) -> None:
+        # Local import avoids a shared→notifications import cycle. Scope the
+        # realtime fan-out to users with access to the event's org, so source
+        # metadata (repo/branch/commit) isn't broadcast to zero-grant viewers.
+        from src.notifications.emitter import sse_recipients_for_org
+
         with event_publish_duration_seconds.labels(event_type=event.event_type).time():
             self._sse_bus.publish_sync(SseEvent(
                 event_type=event.event_type,
+                target_user_ids=sse_recipients_for_org(event.org_id or ""),
                 data={
                     "event_id": event.event_id,
                     "org_id": event.org_id,
