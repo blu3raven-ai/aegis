@@ -247,19 +247,20 @@ def _finding_to_sarif_result(
     return result
 
 
-async def build_findings_sarif(
+async def stream_findings_sarif(
     filters: FindingFilters,
     asset_ids: list[str],
     session: AsyncSession,
     include_archived_rows: bool = False,
-) -> dict[str, Any]:
-    """Build a SARIF 2.1.0 document for findings matching the filters.
+) -> AsyncIterator[bytes]:
+    """Stream a SARIF 2.1.0 document as bytes.
 
-    SARIF is a single JSON object (one tool run with a results array), so unlike
-    CSV/JSONL it is assembled rather than streamed. It is the OASIS standard that
-    GitHub/GitLab code scanning ingest, so this is the export to feed a
-    third-party security dashboard or a branch-protection gate. Scope + the
-    default-exclude-archived contract match the other export formats exactly.
+    SARIF is the OASIS standard that GitHub/GitLab code scanning ingest. The
+    findings are streamed into the ``results`` array so the full set never
+    buffers in memory; the ``rules`` array is bounded by the number of distinct
+    rule types and is emitted after ``results`` (JSON key order is irrelevant to
+    consumers). Scope + the default-exclude-archived contract match the other
+    export formats exactly.
     """
     where = _build_where_clauses(filters)
     stmt = select(Finding).order_by(Finding.id)
@@ -273,22 +274,24 @@ async def build_findings_sarif(
 
     rules_index: dict[str, int] = {}
     rules: list[dict[str, Any]] = []
-    results: list[dict[str, Any]] = []
 
-    rows = (await session.execute(stmt)).scalars().all()
-    for finding in rows:
-        results.append(_finding_to_sarif_result(finding, rules_index, rules))
-
-    return {
-        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
-        "version": "2.1.0",
-        "runs": [
-            {
-                "tool": {"driver": {"name": "Aegis", "rules": rules}},
-                "results": results,
-            }
-        ],
-    }
+    yield (
+        b'{"$schema":"https://json.schemastore.org/sarif-2.1.0.json",'
+        b'"version":"2.1.0","runs":[{"results":['
+    )
+    first = True
+    result = await session.stream(stmt)
+    async for partition in result.partitions(_BATCH_SIZE):
+        for row in partition:
+            sarif = _finding_to_sarif_result(row.Finding, rules_index, rules)
+            chunk = json.dumps(sarif, separators=(",", ":"), default=str).encode()
+            yield chunk if first else b"," + chunk
+            first = False
+    yield (
+        b'],"tool":{"driver":{"name":"Aegis","rules":'
+        + json.dumps(rules, separators=(",", ":"), default=str).encode()
+        + b"}}}]}"
+    )
 
 
 async def stream_findings_json(
