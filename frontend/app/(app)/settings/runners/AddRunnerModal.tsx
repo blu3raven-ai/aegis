@@ -27,16 +27,20 @@ function CopyableBlock({ text, label }: { text: string; label: string }) {
   return (
     <div>
       <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">{label}</p>
-      <div
-        className="relative cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 pr-16 font-mono text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-border)]"
+      <button
+        type="button"
+        className="relative block w-full cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 pr-16 text-left font-mono text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
         onClick={handleCopy}
-        title="Click to copy"
+        aria-label={copied ? `${label}: copied` : `Copy ${label.toLowerCase()}`}
       >
         <code className="block break-all">{text}</code>
-        <span className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)]">
+        <span
+          aria-hidden
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)]"
+        >
           {copied ? "Copied" : "Copy"}
         </span>
-      </div>
+      </button>
     </div>
   )
 }
