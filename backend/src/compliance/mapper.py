@@ -25,6 +25,32 @@ class _MappingDraft:
     rationale: str
 
 
+# OWASP LLM Top 10 buckets for agent-scanner rule ids (checkId). Precise: a rule
+# id that doesn't fit a bucket simply doesn't map (precision over recall).
+_LLM01_INJECTION = frozenset({
+    "AGENT_INSTRUCTION_INJECTION", "AGENT_MCP_DESCRIPTION_INJECTION",
+    "AGENT_CODE_COMMENT_INJECTION", "AGENT_LLM_INJECTION",
+    "AGENT_ENCODED_PAYLOAD", "AGENT_HOMOGLYPH",
+})
+_LLM02_DISCLOSURE = frozenset({"AGENT_EXFIL_INSTRUCTION"})
+_LLM06_AGENCY = frozenset({
+    "AGENT_MCP_SHELL_COMMAND", "AGENT_MCP_TOOL_SHADOW",
+    "AGENT_CONFIG_AUTO_APPROVE", "AGENT_SKILL_SCRIPT_FETCH",
+    "AGENT_SKILL_SCRIPT_OBFUSCATED_EXEC",
+})
+
+
+def _owasp_llm_control(check_id: str) -> tuple[str, str] | None:
+    """Map an agent-scanner rule id to an OWASP LLM Top 10 control, or None."""
+    if check_id in _LLM01_INJECTION or check_id.startswith("AGENT_UNICODE"):
+        return ("LLM01", "Instruction-injection / smuggling vector targeting the agent")
+    if check_id in _LLM02_DISCLOSURE or check_id.endswith("_SECRET_READ"):
+        return ("LLM02", "Instruction or script to read secrets and exfiltrate them")
+    if check_id in _LLM06_AGENCY or check_id.startswith(("AGENT_AUTOEXEC", "AGENT_HOOK")):
+        return ("LLM06", "Config or skill grants the agent dangerous autonomous execution")
+    return None
+
+
 def map_finding(
     *,
     scanner_type: str,
@@ -110,6 +136,11 @@ def map_finding(
             _MappingDraft("soc2", "CC6.8", 0.9, "Malicious content targeting an AI agent introduced via the repository"),
             _MappingDraft("iso27001", "A.8.8", 0.8, "Agent-targeted malicious content is a technical vulnerability management gap"),
         ]
+        # OWASP Top 10 for LLM Applications — map by the detector rule id.
+        llm = _owasp_llm_control(str(md.get("checkId") or ""))
+        if llm:
+            control_id, rationale = llm
+            mappings.append(_MappingDraft("owasp-llm-top10", control_id, 0.85, rationale))
 
     # ── Rule 7: All high/critical findings → incident response readiness ─────
     if high_impact:
