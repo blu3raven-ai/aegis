@@ -29,6 +29,7 @@
   --color-accent-deep:    #163b68;
   --color-accent-ink:     #ffffff;
   --color-accent-on:      #ffffff;
+  --color-accent-gradient-end: #8b5cf6;
 
   --color-on-danger:      #ffffff;
   --color-status-ok:      #10b981;
@@ -178,6 +179,7 @@
   --color-accent-deep:    #B2ECFF;
   --color-accent-ink:     #070d19;
   --color-accent-on:      #ffffff;
+  --color-accent-gradient-end: #a78bfa;
 
   --color-on-danger:      #F2F2F3;
 

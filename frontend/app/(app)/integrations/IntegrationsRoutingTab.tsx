@@ -9,7 +9,7 @@ interface IntegrationsRoutingTabProps {
 
 export function IntegrationsRoutingTab({ keyHint }: IntegrationsRoutingTabProps) {
   return (
-    <div className="mx-auto max-w-7xl px-6 py-8 space-y-8">
+    <div className="px-6 py-8 space-y-8">
       <section>
         {/* Mock rules-head: title + helper-line side by side */}
         <div className="mb-4 flex items-baseline justify-between gap-3">
