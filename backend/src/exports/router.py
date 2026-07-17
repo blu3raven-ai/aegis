@@ -13,15 +13,15 @@ from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 
 from src.db.engine import get_session
 from src.exports.findings_export import (
     FindingFilters,
-    build_findings_sarif,
     count_findings,
     stream_findings_csv,
     stream_findings_json,
+    stream_findings_sarif,
 )
 from src.authz.enforcement.dependencies import Permission
 from src.authz.enforcement.scope import resolve_asset_ids_from_request
@@ -82,15 +82,16 @@ async def export_findings(
         total = await count_findings(filters, asset_ids, session, include_archived_rows=include_archived)
 
     if format == "sarif":
-        # SARIF is a single JSON document (not streamable line-by-line), so it is
-        # assembled and returned whole. It is the format CI/code-scanning
-        # dashboards (GitHub, GitLab) ingest.
-        async with get_session() as session:
-            document = await build_findings_sarif(
-                filters, asset_ids, session, include_archived_rows=include_archived
-            )
-        return JSONResponse(
-            document,
+        # SARIF is one JSON document, but its results array is streamed so a
+        # large export never buffers the full finding set in memory. It is the
+        # format CI/code-scanning dashboards (GitHub, GitLab) ingest.
+        async def _generate_sarif():
+            async with get_session() as session:
+                async for chunk in stream_findings_sarif(filters, asset_ids, session, include_archived_rows=include_archived):
+                    yield chunk
+
+        return StreamingResponse(
+            _generate_sarif(),
             media_type="application/sarif+json",
             headers={
                 "Content-Disposition": f'attachment; filename="{filename}"',

@@ -88,20 +88,49 @@ def test_target_user_ids_scopes_sse_delivery():
         bus = EventBus()
         _, alice = bus.subscribe("alice", "viewer")
         _, bob = bus.subscribe("bob", "viewer")
-        # Targeted at alice only, then a broadcast both should receive.
+        # One event targeted at alice, one at bob — bob must not receive alice's.
         bus.publish(SseEvent(
             event_type="notification.new",
             data={"m": "secret"},
             target_user_ids=frozenset({"alice"}),
         ))
-        bus.publish(SseEvent(event_type="ping", data={"m": "public"}))
+        bus.publish(SseEvent(
+            event_type="notification.new",
+            data={"m": "for-bob"},
+            target_user_ids=frozenset({"bob"}),
+        ))
 
         a = await asyncio.wait_for(alice.__anext__(), 1.0)
         b = await asyncio.wait_for(bob.__anext__(), 1.0)
-        # alice (a recipient) gets the targeted event; bob skips it and his first
-        # delivered event is the broadcast — proving the targeted one was filtered.
+        # bob skipped alice's event; his first delivered event is his own,
+        # proving the targeted filter excluded him from alice's.
         assert a.data["m"] == "secret"
-        assert b.data["m"] == "public"
+        assert b.data["m"] == "for-bob"
+
+    asyncio.run(_run())
+
+
+def test_unscoped_event_reaches_admins_only():
+    """Fail-closed: an event with no scoping signal is delivered to an admin
+    subscriber but not to a non-admin — a new publish path can't broadcast
+    scoped data by default."""
+
+    async def _run() -> None:
+        bus = EventBus()
+        _, viewer = bus.subscribe("v", "viewer")
+        _, admin = bus.subscribe("a", "admin")
+        bus.publish(SseEvent(event_type="scan.progress", data={"m": "unscoped"}))
+        # A follow-up targeted at the viewer is his only deliverable event.
+        bus.publish(SseEvent(
+            event_type="notification.new",
+            data={"m": "for-viewer"},
+            target_user_ids=frozenset({"v"}),
+        ))
+
+        admin_evt = await asyncio.wait_for(admin.__anext__(), 1.0)
+        viewer_evt = await asyncio.wait_for(viewer.__anext__(), 1.0)
+        assert admin_evt.data["m"] == "unscoped"       # admin sees the unscoped event
+        assert viewer_evt.data["m"] == "for-viewer"    # viewer skipped it entirely
 
     asyncio.run(_run())
 

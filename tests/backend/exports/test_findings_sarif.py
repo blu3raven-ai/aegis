@@ -6,6 +6,7 @@ locations, and that asset scope + the default-exclude-archived contract hold.
 """
 from __future__ import annotations
 
+import json
 import os
 import uuid
 
@@ -15,7 +16,18 @@ os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost:
 os.environ.setdefault("APP_SECRET", "0" * 64)
 
 from src.db.models import Asset, Finding  # noqa: E402
-from src.exports.findings_export import FindingFilters, build_findings_sarif  # noqa: E402
+from src.exports.findings_export import FindingFilters, stream_findings_sarif  # noqa: E402
+
+
+async def _collect_sarif(session, filters, asset_ids, *, include_archived_rows=False):
+    """Consume the streamed SARIF bytes and parse them — also asserts the stream
+    is well-formed JSON."""
+    chunks = [
+        c async for c in stream_findings_sarif(
+            filters, asset_ids, session, include_archived_rows=include_archived_rows
+        )
+    ]
+    return json.loads(b"".join(chunks))
 
 
 async def _seed(session) -> str:
@@ -45,7 +57,7 @@ async def test_sarif_document_shape(db_session):
     asset_id = await _seed(db_session)
     await db_session.commit()
     try:
-        doc = await build_findings_sarif(FindingFilters(), [asset_id], db_session)
+        doc = await _collect_sarif(db_session, FindingFilters(), [asset_id])
 
         assert doc["version"] == "2.1.0"
         assert doc["$schema"].endswith("sarif-2.1.0.json")
@@ -85,7 +97,7 @@ async def test_sarif_respects_asset_scope(db_session):
     await db_session.commit()
     try:
         # A caller scoped to an unrelated asset sees no results.
-        doc = await build_findings_sarif(FindingFilters(), [str(uuid.uuid4())], db_session)
+        doc = await _collect_sarif(db_session, FindingFilters(), [str(uuid.uuid4())])
         assert doc["runs"][0]["results"] == []
     finally:
         await _cleanup(db_session, asset_id)
