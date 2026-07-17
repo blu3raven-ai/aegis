@@ -83,6 +83,10 @@ async def exchange_code(row: SsoConfig, redirect_uri: str, code: str, expected_n
         client_secret=_client_secret(row),
         redirect_uri=redirect_uri,
     )
+    # token_endpoint comes from the (guarded) discovery doc, but its value is
+    # still IdP-supplied — guard it so a compromised IdP can't redirect the
+    # code-exchange POST at an internal address.
+    assert_sendable_url(disc["token_endpoint"])
     token = await client.fetch_token(
         disc["token_endpoint"],
         code=code,
