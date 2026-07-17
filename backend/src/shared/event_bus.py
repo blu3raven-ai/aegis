@@ -16,6 +16,12 @@ MAX_QUEUE_SIZE = 256
 MAX_CONNECTIONS_PER_USER = 3
 SUBSCRIBER_TTL_SECONDS = 120
 
+# Event types safe to deliver to any authenticated subscriber. Everything else
+# must carry a scoping signal (asset_id / target_user_ids / require_admin) or it
+# reaches only admins — see the fail-closed check in _drain. Kept empty: no
+# current event is a genuine broadcast-to-everyone.
+PUBLIC_EVENT_TYPES: "frozenset[str]" = frozenset()
+
 
 @dataclass
 class Event:
@@ -143,6 +149,19 @@ class EventBus:
                 if event.asset_id is not None and sub.allowed_asset_ids is not None:
                     if event.asset_id not in sub.allowed_asset_ids:
                         continue
+                # Fail closed: an event carrying no scoping signal (no
+                # require_admin, no target_user_ids, no asset_id) reaches only
+                # admins. A publish path that should reach non-admins must opt
+                # into an audience explicitly — a new/unmigrated one can no
+                # longer broadcast scoped data by default.
+                if (
+                    not is_admin
+                    and not event.require_admin
+                    and event.target_user_ids is None
+                    and event.asset_id is None
+                    and event.event_type not in PUBLIC_EVENT_TYPES
+                ):
+                    continue
                 yield event
         finally:
             with self._lock:
