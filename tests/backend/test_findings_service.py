@@ -22,7 +22,7 @@ from src.findings.service import (
     assign_finding,
     list_assignable_users,
 )
-from src.db.models import Asset, Finding, User
+from src.db.models import Asset, Finding, Grant, User
 
 
 class FakeKevLookup:
@@ -856,10 +856,17 @@ async def assign_finding_fixture(db_session):
         detail={},
         asset_id=str(asset.id),
     )
-    db_session.add_all([user_a, user_b, finding])
+    # user_a is granted access to the asset so it is a valid assignee; user_b is
+    # left ungranted (assigning a finding to a user who can't see its asset is
+    # rejected).
+    grant = Grant(subject_type="user", subject_id=user_a.id, asset_id=str(asset.id))
+    db_session.add_all([user_a, user_b, finding, grant])
     await db_session.commit()
     asset_ids = [str(asset.id)]
     yield finding, user_a, user_b, asset_ids
+    await db_session.execute(
+        delete(Grant).where(Grant.subject_id == user_a.id, Grant.asset_id == str(asset.id))
+    )
     await db_session.execute(delete(Finding).where(Finding.id == finding.id))
     await db_session.execute(delete(User).where(User.id.in_((user_a.id, user_b.id))))
     await db_session.execute(delete(Asset).where(Asset.id == asset.id))
@@ -888,6 +895,15 @@ async def test_assign_finding_rejects_unknown_user(db_session, assign_finding_fi
     finding, _, _, asset_ids = assign_finding_fixture
     with pytest.raises(ValueError, match="unknown user"):
         await assign_finding(finding.id, "user-does-not-exist", db_session, asset_ids)
+
+
+@pytest.mark.asyncio
+async def test_assign_finding_rejects_user_without_asset_access(db_session, assign_finding_fixture):
+    # user_b exists but holds no grant on the finding's asset — assigning to them
+    # would leak the finding cross-scope, so it is rejected like an unknown user.
+    finding, _, user_b, asset_ids = assign_finding_fixture
+    with pytest.raises(ValueError, match="unknown user"):
+        await assign_finding(finding.id, user_b.id, db_session, asset_ids)
 
 
 @pytest.mark.asyncio

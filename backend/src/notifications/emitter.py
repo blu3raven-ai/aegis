@@ -73,8 +73,16 @@ def _get_admin_user_ids() -> list[str]:
     return ids
 
 
-def _publish_notification_sse(notif: dict[str, Any], require_admin: bool = False) -> None:
-    """Publish a notification.new SSE event."""
+def _publish_notification_sse(
+    notif: dict[str, Any],
+    require_admin: bool = False,
+    target_user_ids: "frozenset[str] | None" = None,
+) -> None:
+    """Publish a notification.new SSE event.
+
+    ``target_user_ids`` scopes the realtime push to the same recipients as the
+    durable inbox; without it the event would fan out to every subscriber.
+    """
     get_event_bus().publish_sync(Event(
         event_type="notification.new",
         data={
@@ -85,6 +93,7 @@ def _publish_notification_sse(notif: dict[str, Any], require_admin: bool = False
             "message": notif.get("message", ""),
         },
         require_admin=require_admin,
+        target_user_ids=target_user_ids,
     ))
 
 
@@ -188,6 +197,12 @@ def _get_users_with_org_asset_access(org: str) -> list[str]:
         return _get_active_user_ids()
 
 
+def sse_recipients_for_org(org: str) -> "frozenset[str]":
+    """Recipient set for realtime scan-lifecycle events, matching the durable
+    inbox scoping so these events aren't broadcast to users with no org access."""
+    return frozenset(_get_users_with_org_asset_access(org))
+
+
 def notify_new_critical_findings(
     tool: str,
     org: str,
@@ -230,7 +245,10 @@ def notify_new_critical_findings(
             context={"tool": tool, "org": org, "count": count},
             link=link,
         )
-        _publish_notification_sse({"title": title, "severity": severity, "category": "finding", "message": message})
+        _publish_notification_sse(
+            {"title": title, "severity": severity, "category": "finding", "message": message},
+            target_user_ids=frozenset(user_ids),
+        )
     except Exception:
         logger.warning("Failed to emit new findings notification", exc_info=True)
 

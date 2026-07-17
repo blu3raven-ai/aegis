@@ -101,6 +101,25 @@ def test_upload_presign_rejects_wrong_runner(client, approved_runner, running_jo
     assert resp.status_code == 404
 
 
+def test_upload_presign_rejects_unapproved_runner(client, running_job):
+    """A registered-but-unapproved runner holds a valid token but must not reach
+    any work/job-data endpoint — approval is required, not just authentication."""
+    raw_reg_token, _ = generate_registration_token()
+    pending, pending_token, err = register_runner(
+        raw_token=raw_reg_token,
+        name="pending-presign-runner",
+        os_name="linux",
+        arch="x86_64",
+    )
+    assert err is None
+    resp = client.post(
+        f"/api/v1/agent/jobs/{running_job['id']}/uploads/presign",
+        headers=_auth(pending_token),
+        json={"files": ["findings.json"]},
+    )
+    assert resp.status_code == 403
+
+
 def test_upload_presign_rejects_non_running_job(client, approved_runner, running_job):
     update_job_status(running_job["id"], "queued")
     resp = client.post(

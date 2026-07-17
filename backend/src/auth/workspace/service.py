@@ -37,6 +37,7 @@ from src.authz.teams.service import (
 from src.authz.roles.service import (
     create_role as _create_role,
     delete_role as _delete_role,
+    OWNER_ROLE_IDS,
     get_role,
     get_role_by_slug,
     list_roles,
@@ -671,15 +672,18 @@ def update_user_role(*, user_id: str, input: UserRoleInput, info_context: dict) 
                 not has_role_permission(actor_role, actor_role_id, MANAGE_OWNER_ROLE):
             raise_permission_denied("Only roles with manage_owner_role can modify owner users.")
 
+        # Lock the active-owner rows so a concurrent demote/disable/delete
+        # serializes and re-reads the reduced count, instead of both seeing the
+        # old count and together dropping the org below one owner.
         result = await session.execute(
-            select(_func.count()).select_from(User).where(
-                User.role_id == "role_owner", User.status == "active"
-            )
+            select(User.id).where(
+                User.role_id.in_(OWNER_ROLE_IDS), User.status == "active"
+            ).with_for_update()
         )
-        owner_count = result.scalar() or 0
+        owner_count = len(result.scalars().all())
         if (
-            current_role_id == "role_owner"
-            and new_role_id != "role_owner"
+            current_role_kind == "owner"
+            and new_role_kind != "owner"
             and user.status == "active"
             and owner_count <= 1
         ):
@@ -751,13 +755,15 @@ def _set_user_status(*, user_id: str, status: str, action: str, info_context: di
         if user is None:
             raise GraphQLError("User not found.", extensions={"code": "NOT_FOUND"})
         if status == "disabled":
+            # Lock the active-owner rows so a concurrent demote/disable/delete
+            # serializes and re-reads the reduced count.
             result = await session.execute(
-                select(_func.count()).select_from(User).where(
-                    User.role_id == "role_owner", User.status == "active"
-                )
+                select(User.id).where(
+                    User.role_id.in_(OWNER_ROLE_IDS), User.status == "active"
+                ).with_for_update()
             )
-            owner_count = result.scalar() or 0
-            if user.role_id == "role_owner" and user.status == "active" and owner_count <= 1:
+            owner_count = len(result.scalars().all())
+            if user.role_id in OWNER_ROLE_IDS and user.status == "active" and owner_count <= 1:
                 raise GraphQLError(
                     "Cannot disable the last active owner.",
                     extensions={"code": "VALIDATION_ERROR"},
@@ -853,15 +859,18 @@ def delete_user_mutation(*, user_id: str, info_context: dict) -> WorkspaceMutati
         user = await session.get(User, user_id)
         if user is None:
             raise GraphQLError("User not found.", extensions={"code": "NOT_FOUND"})
-        if user.role_id == "role_owner" and not has_role_permission(actor_role, actor_role_id, MANAGE_OWNER_ROLE):
+        if user.role_id in OWNER_ROLE_IDS and not has_role_permission(actor_role, actor_role_id, MANAGE_OWNER_ROLE):
             raise_permission_denied("Only roles with manage_owner_role can delete owner users.")
+        # Lock the active-owner rows so a concurrent demote/disable/delete
+        # serializes and re-reads the reduced count, instead of both seeing the
+        # old count and together dropping the org below one owner.
         result = await session.execute(
-            select(_func.count()).select_from(User).where(
-                User.role_id == "role_owner", User.status == "active"
-            )
+            select(User.id).where(
+                User.role_id.in_(OWNER_ROLE_IDS), User.status == "active"
+            ).with_for_update()
         )
-        owner_count = result.scalar() or 0
-        if user.role_id == "role_owner" and user.status == "active" and owner_count <= 1:
+        owner_count = len(result.scalars().all())
+        if user.role_id in OWNER_ROLE_IDS and user.status == "active" and owner_count <= 1:
             raise GraphQLError("Cannot delete the last active owner.", extensions={"code": "VALIDATION_ERROR"})
         username = user.username
         role = role_kind_from_id(user.role_id)

@@ -24,6 +24,10 @@ class Event:
     data: dict[str, Any]
     require_admin: bool = False
     asset_id: str | None = None  # When set, only delivered to subscribers that have a grant on this asset
+    # When set, delivered only to these user IDs — used for events whose audience
+    # is a precomputed recipient list rather than a single asset grant (e.g. the
+    # realtime mirror of a durable notification, scoped to the same recipients).
+    target_user_ids: "frozenset[str] | None" = None
     timestamp: float = field(default_factory=time.time)
 
     def to_sse(self, event_id: int) -> str:
@@ -128,6 +132,10 @@ class EventBus:
                     break
                 sub.last_read_at = time.time()
                 if event.require_admin and not is_admin:
+                    continue
+                # Recipient-list events are delivered only to the named users
+                # (the realtime audience matches the durable notification's).
+                if event.target_user_ids is not None and sub.user_id not in event.target_user_ids:
                     continue
                 # Asset-scoped events (scan progress/completion) are filtered to
                 # subscribers with a grant on the event's asset.

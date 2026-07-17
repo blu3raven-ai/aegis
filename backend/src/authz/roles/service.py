@@ -105,6 +105,12 @@ ADMIN_ROLE_IDS = frozenset(
     role_id for role_id, kind in _ROLE_ID_TO_KIND.items() if kind in {"owner", "admin"}
 )
 
+# Built-in role IDs of the owner kind — the set the "last active owner" invariant
+# counts, so business logic never hardcodes the "role_owner" string.
+OWNER_ROLE_IDS = frozenset(
+    role_id for role_id, kind in _ROLE_ID_TO_KIND.items() if kind == "owner"
+)
+
 
 def role_kind_from_id(role_id: str | None) -> str:
     """Map Role.id → the kind string used by RBAC checks and audit payloads.
