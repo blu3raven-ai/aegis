@@ -105,6 +105,7 @@ def load_config() -> dict[str, Any]:
 def save_config(config: dict[str, Any]) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    CONFIG_PATH.chmod(0o600)  # owner-only: the auth token lives here
 
 
 class RunnerAgent:
