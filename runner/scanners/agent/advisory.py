@@ -191,6 +191,16 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Remove apiKeyHelper from committed config; supply credentials through a "
         "trusted local mechanism the repository does not control.",
     ),
+    "AGENT_SYMLINK_ESCAPE": (
+        "This repo commits a symlink whose name looks harmless but resolves outside "
+        "the project — often to a sensitive file like ~/.ssh/authorized_keys or "
+        "~/.zshrc. An agent asked to read or write 'that file' lands the operation on "
+        "the real target while any approval prompt shows only the harmless name, so a "
+        "single approved edit can plant an SSH key or exfiltrate credentials.",
+        "Delete the symlink and never follow one that leaves the workspace. Before "
+        "acting, resolve the real destination and reject any read/write that lands "
+        "outside the project; rotate credentials in any file it pointed at.",
+    ),
     # ── Natural-language exfiltration ────────────────────────────────────────
     "AGENT_EXFIL_INSTRUCTION": (
         "This instruction tells the agent to read a credential or secret and send it "
