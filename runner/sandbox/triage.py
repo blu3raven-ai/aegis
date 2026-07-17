@@ -7,7 +7,7 @@ finding when detonation is off, so operators see what warrants runtime analysis
 without us executing anything.
 
 A target is worth detonating only when it has a runnable entry AND at least one
-risk signal: it's an agent-skill bundle (the SkillCloak surface — a skill that
+risk signal: it's an agent-skill bundle (the malicious-skill surface — a skill that
 phones home is malicious regardless of how cleanly it's packed), a static detector
 already fired on it, the entry is obfuscated, or an instruction file is oversized
 (the size-cap-padding evasion). A benign repo that merely has a postinstall is not
@@ -30,7 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Instruction files an oversize check applies to (SkillCloak padded a README to
+# Instruction files an oversize check applies to (a known evasion padded a README to
 # 22 MB to slip under scanner size caps).
 _INSTRUCTION_FILES = (
     "README.md", "SKILL.md", "AGENTS.md", "GEMINI.md", "CLAUDE.md",

@@ -66,7 +66,7 @@ def _line_of(text: str, needle: str) -> int:
 
 
 # Join shell line-continuations and collapse whitespace runs so a command split
-# across lines (the SkillCloak evasion — a flagged command broken over a newline)
+# across lines (a known evasion — a flagged command broken over a newline)
 # still matches the single-line danger patterns below.
 _LINE_CONT = re.compile(r"\\\s*\n\s*")
 _WS = re.compile(r"\s+")

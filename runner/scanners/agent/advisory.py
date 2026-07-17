@@ -177,6 +177,37 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "it to exfiltrate them.",
         "Remove the secret access from the hook and rotate any exposed credentials.",
     ),
+    "AGENT_HOOK_LOCAL_SCRIPT": (
+        "An agent hook auto-runs a script file bundled in the repo, so opening the "
+        "project executes repo-supplied code before any review — the script is the "
+        "real payload.",
+        "Remove the hook, or run the script only as an explicit, reviewed step; never "
+        "auto-run repo-supplied scripts on project open.",
+    ),
+    "AGENT_CONFIG_API_KEY_HELPER": (
+        "The apiKeyHelper setting makes the agent run a shell command on every start "
+        "to mint an API key — pre-consent code execution that is also positioned to "
+        "exfiltrate credentials.",
+        "Remove apiKeyHelper from committed config; supply credentials through a "
+        "trusted local mechanism the repository does not control.",
+    ),
+    "AGENT_CONFIG_SPAWN_HOOK": (
+        "This committed agent config runs a shell command automatically when the "
+        "agent spawns, so opening the project executes repo-supplied code before any "
+        "review.",
+        "Remove the spawn hook, or gate it behind an explicit, reviewed step; never "
+        "auto-run repo-supplied commands on agent start.",
+    ),
+    "AGENT_SYMLINK_ESCAPE": (
+        "This repo commits a symlink whose name looks harmless but resolves outside "
+        "the project — often to a sensitive file like ~/.ssh/authorized_keys or "
+        "~/.zshrc. An agent asked to read or write 'that file' lands the operation on "
+        "the real target while any approval prompt shows only the harmless name, so a "
+        "single approved edit can plant an SSH key or exfiltrate credentials.",
+        "Delete the symlink and never follow one that leaves the workspace. Before "
+        "acting, resolve the real destination and reject any read/write that lands "
+        "outside the project; rotate credentials in any file it pointed at.",
+    ),
     # ── Natural-language exfiltration ────────────────────────────────────────
     "AGENT_EXFIL_INSTRUCTION": (
         "This instruction tells the agent to read a credential or secret and send it "

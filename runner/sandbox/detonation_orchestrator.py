@@ -1,7 +1,7 @@
 """Opt-in detonation pass: run a repo's setup entry and flag runtime egress.
 
 The end-to-end wiring for the untrusted-skill/setup surface — the defense both the
-SkillCloak and DNS-reverse-shell writeups converge on. Static scanning is evadable
+malicious-skill cloaking and DNS-reverse-shell writeups converge on. Static scanning is evadable
 because the payload only exists at runtime (packed in a skipped dir, or off-repo in
 DNS); this builds the repo, runs its setup entry in the egress-denied sandbox with
 the honeypot, and turns any observed egress into a runtime-confirmed finding.

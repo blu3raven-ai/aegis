@@ -302,3 +302,24 @@ def test_derive_html_url_preserves_self_hosted_host():
         _shared.derive_html_url("https://user:pw@ghe.acme-corp.internal/acme/repo.git")
         == "https://ghe.acme-corp.internal/acme/repo"
     )
+
+
+# ── jobId / id path-traversal guard ──────────────────────────────────────────
+
+@pytest.mark.parametrize("bad", ["../etc", "..", "a/b", "/abs", ".hidden", "", "x" * 129, "a b"])
+def test_require_safe_id_rejects_traversal_and_junk(bad):
+    with pytest.raises(ValueError):
+        _shared.require_safe_id(bad, kind="jobId")
+
+
+@pytest.mark.parametrize("ok", ["job-123", "abc_DEF.9", "0", "a" * 128])
+def test_require_safe_id_accepts_plain_ids(ok):
+    assert _shared.require_safe_id(ok) == ok
+
+
+def test_setup_output_dir_rejects_unsafe_job_id(tmp_path):
+    with pytest.raises(ValueError):
+        _shared.setup_output_dir("../escape", base_dir=tmp_path)
+    # a clean id still works and stays under base_dir
+    out = _shared.setup_output_dir("job-1", base_dir=tmp_path)
+    assert out == tmp_path / "job-1" and out.is_dir()

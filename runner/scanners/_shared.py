@@ -31,8 +31,23 @@ class GitCloneError(RuntimeError):
     """Raised when git clone fails. Token is scrubbed from any captured output."""
 
 
+# A conservative id charset: no '/', no leading '.', so '..', absolute paths, and
+# path separators can never survive into a workspace path built from an id.
+_SAFE_ID_RE = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
+
+
+def require_safe_id(value: str, *, kind: str = "id") -> str:
+    """Reject any id that could traverse out of the workspace when joined into a
+    path. jobId/runId arrive from the backend job payload; a forged one like
+    ``../../home/aegis/.vuln-runner`` must not reach a filesystem path."""
+    if not isinstance(value, str) or not _SAFE_ID_RE.match(value):
+        raise ValueError(f"Unsafe {kind}: {value!r}")
+    return value
+
+
 def setup_output_dir(job_id: str, base_dir: Path | str = "/workspace") -> Path:
     """Create and return /<base_dir>/<job_id>/. Idempotent."""
+    require_safe_id(job_id, kind="job_id")
     out = Path(base_dir) / job_id
     out.mkdir(parents=True, exist_ok=True)
     return out

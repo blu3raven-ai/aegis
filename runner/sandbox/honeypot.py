@@ -112,23 +112,49 @@ def _log(event: EgressEvent) -> None:
     print(event.to_json(), flush=True)
 
 
+def _handle_tcp(conn: socket.socket, addr: tuple[str, int]) -> None:
+    """Log one inbound TCP attempt. The CONNECT itself is the egress signal, so we
+    log it even when the target sends nothing; a short recv timeout means a silent
+    or slow-drip connection can never stall the accept loop and blind detection."""
+    try:
+        conn.settimeout(2.0)
+        try:
+            first = conn.recv(_FIRST_BYTES)
+        except OSError:  # timeout (a subclass) or reset → the connect is still the signal
+            first = b""
+        _log(EgressEvent(proto="tcp", target=f"{addr[0]}:{addr[1]}", detail=first.hex()))
+    finally:
+        try:
+            conn.close()
+        except OSError:
+            pass
+
+
 def serve(self_ip: str, *, dns_port: int = _DNS_PORT, tcp_port: int = _TCP_CATCH_PORT) -> None:  # pragma: no cover
     """Thin socket loop: answer DNS on udp/<dns_port>, accept+log TCP on <tcp_port>.
     Untested wrapper — the parse/answer/log logic above carries the coverage."""
     import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Bounded so a connection flood can't spawn unbounded threads in the honeypot.
+    # Handlers are short (log + <=2s recv) and the target's own --pids-limit/--cpus
+    # already caps its connection rate; 32 concurrent is ample.
+    tcp_pool = ThreadPoolExecutor(max_workers=32)
 
     def _dns_loop() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("0.0.0.0", dns_port))
         while True:
-            data, addr = sock.recvfrom(4096)
             try:
+                data, addr = sock.recvfrom(4096)
                 qname, qtype, _ = parse_question(data)
                 _log(dns_event(qname, qtype))
                 sock.sendto(build_dns_response(data, self_ip), addr)
             except ValueError:
                 _log(EgressEvent(proto="dns", target="<unparseable>", detail=""))
+            except OSError:
+                continue  # transient socket error → one bad datagram never kills the loop
 
     def _tcp_loop() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -137,11 +163,9 @@ def serve(self_ip: str, *, dns_port: int = _DNS_PORT, tcp_port: int = _TCP_CATCH
         sock.listen(64)
         while True:
             conn, addr = sock.accept()
-            try:
-                first = conn.recv(_FIRST_BYTES)
-                _log(EgressEvent(proto="tcp", target=f"{addr[0]}:{addr[1]}", detail=first.hex()))
-            finally:
-                conn.close()
+            # Handle off the accept path (bounded pool) so a silent/slow connection
+            # can't stall the loop and a flood can't spawn unbounded threads.
+            tcp_pool.submit(_handle_tcp, conn, addr)
 
     t = threading.Thread(target=_dns_loop, daemon=True)
     t.start()

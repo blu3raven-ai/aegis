@@ -42,6 +42,14 @@ _HONEYPOT_LOAD_TIMEOUT_S = 180.0
 _HONEYPOT_PROBE_TIMEOUT_S = 60.0
 _honeypot_lock = threading.Lock()
 _honeypot_ready: bool | None = None  # None = untried; cached bool after first probe
+# Stronger-than-runc OCI runtimes to auto-select for the untrusted target when the
+# host has one, strongest first: Kata/Firecracker microVM, then gVisor. The honeypot
+# stays on the default runtime (it is trusted and needs iptables, which gVisor's
+# netstack does not fully support).
+_RUNTIME_CANDIDATES = ("kata-runtime", "runsc")
+_runtime_lock = threading.Lock()
+_UNPROBED = object()
+_detected_runtime: object = _UNPROBED
 # Redirect ALL of the target's outbound TCP to the honeypot's single catch port,
 # so a reverse shell to any port lands on the logger. UDP/53 (DNS) is untouched
 # and still reaches the resolver. Runs inside the trusted honeypot only.
@@ -140,12 +148,19 @@ def _make_honeypot_available(cancel_event: threading.Event | None) -> bool:
     return _build_embedded_honeypot(cancel_event)
 
 
-def _probe_nested_run(image: str, cancel_event: threading.Event | None) -> bool:
+def _probe_nested_run(
+    image: str, cancel_event: threading.Event | None, runtime: str | None = None
+) -> bool:
     """Actually start a throwaway container from the honeypot image to prove this
     host can run nested containers. This is the HONEST availability check the old
     ``podman version`` probe lacked: on a host that blocks nested user namespaces
-    it fails here, so detonation reports unavailable instead of failing mid-run."""
-    args = [container_cli(), "run", "--rm", "--network=none", image, "true"]
+    it fails here, so detonation reports unavailable instead of failing mid-run.
+    With ``runtime`` set it doubles as a capability probe for a stronger OCI
+    runtime (gVisor/Kata) — a False result just means fall back to the default."""
+    args = [container_cli(), "run", "--rm", "--network=none"]
+    if runtime:
+        args.append(f"--runtime={runtime}")
+    args += [image, "true"]
     try:
         code, _out, _err = run_tool(
             args, timeout=_HONEYPOT_PROBE_TIMEOUT_S, env=docker_cli_env(), cancel_event=cancel_event
@@ -181,6 +196,28 @@ def ensure_honeypot_image(cancel_event: threading.Event | None = None) -> str | 
                 _HONEYPOT_LOCAL_TAG, cancel_event
             )
         return _HONEYPOT_LOCAL_TAG if _honeypot_ready else None
+
+
+def detect_target_runtime(probe_image: str, cancel_event: threading.Event | None = None) -> str | None:
+    """The OCI runtime for the untrusted target. An explicit ``SANDBOX_RUNTIME``
+    wins; otherwise auto-select the strongest runtime the host can actually run
+    (probed with a real container, so a broken/absent runtime never disables
+    detonation — it just falls back to the default runc/crun). Cached per process."""
+    from runner.sandbox.harness import resolve_runtime
+
+    explicit = resolve_runtime(os.environ.get)
+    if explicit:
+        return explicit
+    global _detected_runtime
+    with _runtime_lock:
+        if _detected_runtime is _UNPROBED:
+            _detected_runtime = None
+            for rt in _RUNTIME_CANDIDATES:
+                if _probe_nested_run(probe_image, cancel_event, runtime=rt):
+                    logger.info("[detonation] using stronger sandbox runtime: %s", rt)
+                    _detected_runtime = rt
+                    break
+        return _detected_runtime  # type: ignore[return-value]
 
 
 def honeypot_run_args(image: str, *, network: str, name: str) -> list[str]:
@@ -260,6 +297,8 @@ def detonate(
     hp_image = ensure_honeypot_image(cancel_event=cancel_event)
     if not hp_image:  # honeypot image unavailable / host can't detonate → skip
         return None
+    if runtime is None:  # auto-select the strongest runtime the host supports
+        runtime = detect_target_runtime(hp_image, cancel_event)
     hp_name = f"aegis-deto-hp-{run_id}"
     tgt_name = f"aegis-deto-tgt-{run_id}"
     with internal_network(f"aegis-deto-net-{run_id}", cancel_event=cancel_event) as net:

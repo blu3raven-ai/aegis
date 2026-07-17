@@ -31,6 +31,7 @@ from runner.scanners.agent.exfil_instruction import scan_exfil
 from runner.scanners.agent.homoglyph import scan_homoglyphs
 from runner.scanners.agent.injection_markers import scan_injection
 from runner.scanners.agent.skill_bundle import scan_skill_bundles
+from runner.scanners.agent.symlinks import scan_symlinks
 from runner.scanners.agent.targets import iter_target_files
 from runner.scanners.agent.unicode_smuggling import scan_text
 from runner.scanners._context import read_code_window
@@ -70,6 +71,7 @@ _REPO_PASSES = (
     ("skill-bundle", scan_skill_bundles),
     ("autoexec", scan_autoexec_configs),
     ("code-comment", scan_code_comments),
+    ("symlink", scan_symlinks),
 )
 
 

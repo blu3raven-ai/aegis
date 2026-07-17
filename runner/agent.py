@@ -58,10 +58,16 @@ def _setup_sigterm_handler() -> None:
 def load_config() -> dict[str, Any]:
     """Load runner config from env vars or ~/.vuln-runner/config.json."""
     backend_url = os.environ.get("BACKEND_URL")
-    registration_token = os.environ.get("RUNNER_REGISTRATION_TOKEN")
+    # Consume-and-scrub: the one-time registration token must not linger in the
+    # process env, where it would be inherited by scanner subprocesses and
+    # readable via /proc/self/environ. On a container restart a fresh process
+    # re-reads it from the docker env; by then the saved config is used anyway.
+    registration_token = os.environ.pop("RUNNER_REGISTRATION_TOKEN", None)
 
     if backend_url and registration_token:
         import platform
+        if not backend_url.startswith("https://"):
+            logger.warning("[!] BACKEND_URL is not https:// — the registration token will be sent in plaintext")
         name = os.environ.get("RUNNER_NAME", "runner")
         logger.info("[+] Registering with %s", backend_url)
         try:
@@ -105,6 +111,29 @@ def load_config() -> dict[str, Any]:
 def save_config(config: dict[str, Any]) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    CONFIG_PATH.chmod(0o600)  # owner-only: the auth token lives here
+
+
+def configure_container_storage() -> None:
+    """Prefer fuse-overlayfs when /dev/fuse is available — it is far faster and
+    less disk-hungry than the baked vfs default for the nested image ops the
+    sandbox does. Writes the rootless user storage config, so no root and no extra
+    docker-run flags are needed; when /dev/fuse is absent the vfs default stands."""
+    if not os.path.exists("/dev/fuse"):
+        return
+    fuse = shutil.which("fuse-overlayfs")
+    if not fuse:
+        return
+    try:
+        conf_dir = Path.home() / ".config" / "containers"
+        conf_dir.mkdir(parents=True, exist_ok=True)
+        (conf_dir / "storage.conf").write_text(
+            f'[storage]\ndriver = "overlay"\n\n[storage.options.overlay]\nmount_program = "{fuse}"\n',
+            encoding="utf-8",
+        )
+        logger.info("[+] /dev/fuse present — using fuse-overlayfs for faster nested image ops")
+    except OSError:
+        logger.warning("[!] Could not write overlay storage config; keeping vfs", exc_info=True)
 
 
 class RunnerAgent:
@@ -301,7 +330,11 @@ class RunnerAgent:
         return None
 
     def _execute_job(self, job: dict[str, Any]) -> None:
-        job_id = job["jobId"]
+        from runner.scanners._shared import require_safe_id
+
+        # jobId is joined into workspace paths (job_dir, scanner output dirs); a
+        # forged backend payload must not traverse out of /workspace.
+        job_id = require_safe_id(job["jobId"], kind="jobId")
         org = job.get("org", "unknown")
         job_type = job.get("type", "dependencies_scanning")
         run_id = job.get("runId", "unknown")
@@ -499,6 +532,7 @@ class RunnerAgent:
         self._drain.install_handler()
 
         self._cleanup_workspace()
+        configure_container_storage()
 
         start_metrics_server()
 

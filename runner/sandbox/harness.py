@@ -59,6 +59,8 @@ class SandboxLimits:
     cpus: str = "1.0"
     pids: int = 256
     timeout_s: float = 120.0
+    # Per-tmpfs size cap so scratch cannot fill the runner's disk.
+    tmpfs_size: str = "64m"
     # Writable scratch (rootfs is read-only). Apps that must write live here.
     tmpfs: Sequence[str] = field(default_factory=lambda: ("/tmp",))
 
@@ -115,7 +117,10 @@ def build_run_args(
         # internet. Only meaningful on an --internal network, which has no egress.
         args.append(f"--dns={dns}")
     for mount in lim.tmpfs:
-        args.append(f"--tmpfs={mount}")
+        # nosuid,nodev + size cap. exec is kept: detonation WANTS the payload to
+        # run so the honeypot can observe it — the isolation is the sandbox, not
+        # a noexec scratch.
+        args.append(f"--tmpfs={mount}:rw,nosuid,nodev,size={lim.tmpfs_size}")
     for key, value in (env_allow or {}).items():
         args += ["--env", f"{key}={value}"]
     if name:

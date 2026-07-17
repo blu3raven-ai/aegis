@@ -158,6 +158,13 @@ RUN useradd --create-home --shell /bin/bash --uid 10001 aegis && \
     echo "aegis:100000:65536" > /etc/subuid && \
     echo "aegis:100000:65536" > /etc/subgid && \
     chown -R aegis:aegis /app /workspace /home/aegis
+
+# Shrink the privilege-escalation surface: strip setuid from every binary except
+# newuidmap/newgidmap, which rootless podman needs setuid to map the nested
+# container's user namespace.
+RUN find / -xdev -perm -4000 -type f ! -name newuidmap ! -name newgidmap \
+        -exec chmod u-s {} + 2>/dev/null || true
+
 USER aegis
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
