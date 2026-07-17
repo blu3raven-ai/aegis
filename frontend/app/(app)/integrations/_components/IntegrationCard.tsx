@@ -77,7 +77,7 @@ export function IntegrationCard({ i, onSelect }: IntegrationCardProps) {
             {CATEGORY_LABEL[i.category] ?? i.category}
           </span>
         </div>
-        <span className="shrink-0 text-xs font-semibold text-[var(--color-accent)] transition-transform group-hover:translate-x-0.5">
+        <span className="shrink-0 font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-accent)] transition-transform group-hover:translate-x-0.5">
           {ctaLabel} →
         </span>
       </div>

@@ -1688,9 +1688,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                               selectedFinding?.id === finding.id ? "bg-[var(--color-nav-active)]" : ""
                             }`}
                           >
-                            <Td className="px-4 py-3">
+                            <Td className="px-4 py-3" style={{ boxShadow: `inset 3px 0 0 ${SEV_COLOR[finding.severity]}` }}>
                               <span
-                                className="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide"
+                                className="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-2xs font-bold uppercase tracking-wide"
                                 style={{
                                   color: SEV_COLOR[finding.severity],
                                   background: `color-mix(in srgb, ${SEV_COLOR[finding.severity]} 14%, transparent)`,

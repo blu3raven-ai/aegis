@@ -20,7 +20,11 @@ const base =
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--color-accent)] text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]",
+    "relative bg-[var(--color-accent)] text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] " +
+    // CAD corner ticks — top-left and bottom-right L-brackets sitting just
+    // outside the button, reading against the page as an instrument affordance.
+    "before:content-[''] before:pointer-events-none before:absolute before:-top-[3px] before:-left-[3px] before:h-[6px] before:w-[6px] before:border-t-[1.5px] before:border-l-[1.5px] before:border-[var(--color-accent)] " +
+    "after:content-[''] after:pointer-events-none after:absolute after:-bottom-[3px] after:-right-[3px] after:h-[6px] after:w-[6px] after:border-b-[1.5px] after:border-r-[1.5px] after:border-[var(--color-accent)]",
   secondary:
     "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-hover)]",
   ghost:
