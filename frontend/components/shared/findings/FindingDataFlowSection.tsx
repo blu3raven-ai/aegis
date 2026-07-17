@@ -29,7 +29,7 @@ export function FindingDataFlowSection({ steps }: { steps?: CodeFlowStep[] }) {
                 {i + 1}
               </span>
               <div className="min-w-0">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">
+                <div className="font-mono text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">
                   {role}
                 </div>
                 <div

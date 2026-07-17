@@ -72,7 +72,7 @@ function renderChainWithRefs(chain: string, refCount: number): React.ReactNode {
 export function ImpactCallout({ children }: { children: React.ReactNode }) {
   return (
     <p className="rounded-md border-l-2 border-[var(--color-severity-high)] bg-[var(--color-severity-high-subtle)] px-3 py-2 text-sm font-medium leading-relaxed text-[var(--color-text-primary)]">
-      <span className="mr-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-high-text)]">Impact</span>
+      <span className="mr-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-high-text)]">Impact</span>
       {children}
     </p>
   )
@@ -133,7 +133,7 @@ function VerificationLockedPreview({ variant }: { variant: LockedPreviewVariant 
           </span>
           <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">{copy.teaserText}</p>
           <div className="rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2">
-            <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-medium-text)]">
+            <div className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-medium-text)]">
               {copy.teaserLabel}
             </div>
             <pre className="mt-1 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-xs">
@@ -246,7 +246,7 @@ export function EvidenceSection({
               id={evidenceRefId(i + 1)}
               className="scroll-mt-4 rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2 target:ring-1 target:ring-[var(--color-accent)]"
             >
-              <div className="flex items-center justify-between gap-3 text-2xs font-semibold uppercase tracking-[0.14em]">
+              <div className="flex items-center justify-between gap-3 font-mono text-2xs font-semibold uppercase tracking-[0.14em]">
                 <span className="flex items-center gap-1.5">
                   <span className="rounded bg-[var(--color-surface-raised)] px-1 font-mono normal-case tracking-normal text-[var(--color-text-tertiary)]">
                     R{i + 1}
@@ -272,7 +272,7 @@ export function EvidenceSection({
 
       {attackPaths.length > 0 && (
         <div className="mt-3">
-          <h4 className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <h4 className="mb-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Attack paths
           </h4>
           <ol className="space-y-2">
@@ -292,7 +292,7 @@ export function EvidenceSection({
 
       {mitigatingFactors.length > 0 && (
         <div className="mt-3">
-          <h4 className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <h4 className="mb-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Mitigating factors
           </h4>
           <ul className="list-disc space-y-1 pl-5 text-sm text-[var(--color-text-secondary)]">
@@ -305,11 +305,11 @@ export function EvidenceSection({
 
       {fix && (
         <div className="mt-3">
-          <h4 className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <h4 className="mb-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Suggested fix
           </h4>
           {fixIsDiff ? (
-            <pre className="overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 font-[family-name:var(--font-jetbrains-mono)] text-[12px] leading-relaxed">
+            <pre className="overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 font-[family-name:var(--font-jetbrains-mono)] text-[12px] leading-relaxed">
               {fix.split("\n").map((line, i) => (
                 <div key={i} className={diffLineClass(line)}>{line || " "}</div>
               ))}
@@ -322,7 +322,7 @@ export function EvidenceSection({
 
       {reproduction && (
         <div className="mt-3">
-          <h4 className="mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <h4 className="mb-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Proof of concept
           </h4>
           <pre className="whitespace-pre-wrap break-words rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-xs leading-relaxed text-[var(--color-text-primary)]">
@@ -342,8 +342,8 @@ export function EvidenceSection({
           <h4
             className={
               mitigationUnconfirmed
-                ? "mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-medium-text)]"
-                : "mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]"
+                ? "mb-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-medium-text)]"
+                : "mb-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]"
             }
           >
             {mitigationUnconfirmed ? "Unconfirmed mitigation" : "Mitigation found"}
@@ -389,7 +389,7 @@ function VerificationProvenance({ metadata }: { metadata: VerificationMetadata }
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs tabular-nums text-[var(--color-text-secondary)]">
-      <span className="font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <span className="font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         Verified by
       </span>
       {metadata.model && <span className="font-mono text-[var(--color-text-primary)]">{metadata.model}</span>}

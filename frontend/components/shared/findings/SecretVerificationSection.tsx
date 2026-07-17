@@ -58,7 +58,7 @@ export function SecretVerificationSection({ verified, detector }: Props) {
             ? `The secret scanner authenticated this credential against the provider${detector ? ` (${detector})` : ""} — it is active and usable right now. Rotate it immediately.`
             : `The secret scanner could not confirm this credential is active against the provider${detector ? ` (${detector})` : ""}. It may be revoked, rotated, or a non-live format — still treat it as a leak and rotate.`}
         </p>
-        <p className="mt-2 text-2xs uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        <p className="mt-2 font-mono text-2xs uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           Checked by the secret scanner
         </p>
       </div>

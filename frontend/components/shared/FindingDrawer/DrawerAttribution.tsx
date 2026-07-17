@@ -31,7 +31,7 @@ export function DrawerAttribution({ fields }: { fields: AttributionFields }) {
   return (
     <Card as="section" padding="none" className="rounded-md">
       <div className="px-4 pt-4 pb-2">
-        <p className="text-2xs font-semibold uppercase tracking-[0.6px] text-[var(--color-text-tertiary)]">
+        <p className="font-mono text-2xs font-semibold uppercase tracking-[0.6px] text-[var(--color-text-tertiary)]">
           Introduced by
         </p>
       </div>

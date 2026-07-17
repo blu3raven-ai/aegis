@@ -179,7 +179,7 @@ function BandMultiPicker({ value, onApply, onClose }: CustomPickerProps) {
       aria-label="Set action band"
       className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg"
     >
-      <div className="mb-1 px-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <div className="mb-1 px-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         action band
       </div>
       <div className="flex flex-wrap gap-1.5 p-1">

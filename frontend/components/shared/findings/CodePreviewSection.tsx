@@ -245,7 +245,7 @@ export function CodePreviewSection({
           <h3 id="finding-code-preview-title" className="text-base font-semibold text-[var(--color-text-primary)]">
             Code preview
           </h3>
-          <div className="mt-2 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)] p-4">
+          <div className="mt-2 space-y-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)] p-4">
             {[88, 64, 76, 48, 70].map((w, i) => (
               <div
                 key={i}
@@ -276,7 +276,7 @@ export function CodePreviewSection({
           <h3 id="finding-code-preview-title" className="text-base font-semibold text-[var(--color-text-primary)]">
             Code preview
           </h3>
-          <div className="mt-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] p-4 text-center">
+          <div className="mt-2 rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] p-4 text-center">
             {filePath && (
               <p className="truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-tertiary)]" title={filePath}>
                 {filePath}
@@ -345,7 +345,7 @@ export function CodePreviewSection({
       )}
 
       {useCodeLines ? (
-        <div className="mt-2 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)]">
+        <div className="mt-2 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)]">
           <pre ref={preRef} className="relative max-h-72 overflow-auto p-3 text-[12px] leading-relaxed">
             <CodeLines
               lines={lines}
@@ -359,7 +359,7 @@ export function CodePreviewSection({
           </pre>
         </div>
       ) : (
-        <div className="mt-2 overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)] px-3 py-2">
+        <div className="mt-2 overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)] px-3 py-2">
           <code
             className={cn(
               "whitespace-pre font-[family-name:var(--font-jetbrains-mono)] text-[13px]",
@@ -392,7 +392,7 @@ export function CodePreviewSection({
             </div>
           }
         >
-          <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)]">
+          <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)]">
             <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed">
               <CodeLines
                 lines={lines}

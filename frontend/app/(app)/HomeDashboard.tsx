@@ -560,7 +560,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
 
 function ErrorBanner({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
+    <div className="flex items-center justify-between rounded-md border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
       <div className="flex items-center gap-2 text-sm">
         <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--color-severity-high-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
@@ -752,7 +752,7 @@ export function HomeDashboard() {
     // Your week, Your repos). Each section is a small header rectangle + a content block sized
     // to the real component so the layout doesn't reflow when data arrives.
     const sectionHeader = "h-3 w-28"
-    const card = "rounded-2xl"
+    const card = "rounded-md"
     return (
       <div className="space-y-8" aria-busy="true" aria-live="polite">
         {/* Greeting */}

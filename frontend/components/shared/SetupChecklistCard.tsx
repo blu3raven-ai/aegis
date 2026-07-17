@@ -165,7 +165,7 @@ export function SetupChecklistCard() {
                 {isActive && (
                   <span
                     aria-hidden="true"
-                    className="mt-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-white transition-colors group-hover:bg-[var(--color-accent-hover)]"
+                    className="mt-1 inline-flex shrink-0 items-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-mono font-medium uppercase tracking-[0.055em] text-[var(--color-accent-on)] transition-colors group-hover:bg-[var(--color-accent-hover)]"
                   >
                     Start
                     <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

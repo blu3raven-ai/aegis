@@ -123,7 +123,7 @@ export function FindingReferencesSection({
             >
               <span className="flex items-center gap-2 truncate">
                 <span className="font-mono text-[var(--color-text-primary)]">{r.label}</span>
-                <span className="text-2xs uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+                <span className="font-mono text-2xs uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                   {r.sub}
                 </span>
               </span>

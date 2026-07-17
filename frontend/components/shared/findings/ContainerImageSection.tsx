@@ -7,7 +7,7 @@ import type { FindingContainerImage } from "@/lib/shared/findings/row-mapper"
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+      <dt className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
         {label}
       </dt>
       <dd className="mt-0.5 truncate text-sm text-[var(--color-text-primary)]">{children}</dd>
@@ -36,7 +36,7 @@ export function ContainerImageSection({
       </h3>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
         <div className="col-span-2 min-w-0">
-          <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <dt className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Image
           </dt>
           <dd className="mt-0.5 truncate font-mono text-xs text-[var(--color-text-primary)]" title={ref}>
@@ -64,7 +64,7 @@ export function ContainerImageSection({
           image.layerConcentration.totalWithLayer > 1 &&
           image.layerConcentration.findingCount > 1 && (
             <div className="col-span-2 min-w-0">
-              <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+              <dt className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                 Layer concentration
               </dt>
               <dd className="mt-1 text-sm text-[var(--color-text-primary)]">
@@ -79,7 +79,7 @@ export function ContainerImageSection({
           )}
         {image.digest && (
           <div className="col-span-2 min-w-0">
-            <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            <dt className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
               Digest
             </dt>
             <dd
@@ -92,7 +92,7 @@ export function ContainerImageSection({
         )}
         {image.baseImageRecommendation && (
           <div className="col-span-2 min-w-0">
-            <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            <dt className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
               Recommended base upgrade
             </dt>
             <dd className="mt-1 text-sm text-[var(--color-text-primary)]">
@@ -112,7 +112,7 @@ export function ContainerImageSection({
         )}
         {image.newerTags && image.newerTags.length > 0 && (
           <div className="col-span-2 min-w-0">
-            <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+            <dt className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
               Newer tags available
             </dt>
             <dd className="mt-1 flex flex-wrap gap-1.5">

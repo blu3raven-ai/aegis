@@ -111,7 +111,7 @@ export function TechnicalDetailSection({
             id={evidenceRefId(i + 1)}
             className="scroll-mt-4 rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2 target:ring-1 target:ring-[var(--color-accent)]"
           >
-            <div className="flex items-center justify-between gap-3 text-2xs font-semibold uppercase tracking-[0.14em]">
+            <div className="flex items-center justify-between gap-3 text-2xs font-mono font-semibold uppercase tracking-[0.14em]">
               <span className="flex items-center gap-1.5">
                 <span className="rounded bg-[var(--color-surface-raised)] px-1 font-mono normal-case tracking-normal text-[var(--color-text-tertiary)]">
                   R{i + 1}
@@ -258,7 +258,7 @@ export function NotesVerificationSection({
           </p>
         ) : ruledOut && (ruledOut.reasoning || ruledOut.snippet) ? (
           <div className="border-l-2 border-[var(--color-status-ok-border)] pl-3">
-            <p className="mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]">
+            <p className="mb-1 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]">
               Mitigation found
             </p>
             {ruledOut.reasoning ? <p className="text-sm leading-relaxed">{ruledOut.reasoning}</p> : null}
@@ -276,7 +276,7 @@ export function NotesVerificationSection({
         ) : null}
         {metadata?.model ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs tabular-nums text-[var(--color-text-secondary)]">
-            <span className="font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <span className="font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Verified by
             </span>
             <span className="font-mono text-[var(--color-text-primary)]">{metadata.model}</span>

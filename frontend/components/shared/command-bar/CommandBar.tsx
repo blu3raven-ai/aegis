@@ -277,7 +277,7 @@ export function CommandBar({
           >
             {typeaheadMatches.length > 0 ? (
               <>
-                <div className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                <div className="px-2 pb-1 pt-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                   Add filter
                 </div>
                 <ul>
@@ -292,7 +292,7 @@ export function CommandBar({
                           aria-selected={highlighted}
                           onMouseEnter={() => setHighlightedIdx(idx)}
                           onClick={() => handleTypeaheadPick(def.key)}
-                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs ${
+                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${
                             highlighted ? "bg-[var(--color-surface-raised)]" : ""
                           } hover:bg-[var(--color-surface-raised)]`}
                         >

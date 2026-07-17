@@ -76,10 +76,10 @@ function CveCard({ severity }: { severity: "critical" | "high" }) {
         </span>
       </h3>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)]">
+        <span className="inline-flex items-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-mono font-medium uppercase tracking-[0.055em] text-[var(--color-accent-on)]">
           Investigate →
         </span>
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)]">
+        <span className="inline-flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-mono font-medium uppercase tracking-[0.055em] text-[var(--color-text-secondary)]">
           Open fix PR
         </span>
       </div>

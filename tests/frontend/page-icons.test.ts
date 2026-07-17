@@ -28,7 +28,7 @@ describe("page-icons module", () => {
   it("wraps every icon in an accent IconChip with the design-system tokens", () => {
     assert.ok(src.includes("bg-[var(--color-accent-subtle)]"), "chip background uses accent-subtle token")
     assert.ok(src.includes("text-[var(--color-accent)]"), "icon stroke uses accent token")
-    assert.ok(src.includes("rounded-lg"), "chip is rounded-lg")
+    assert.ok(src.includes("rounded-md"), "chip is rounded-md")
     assert.ok(src.includes("p-1.5"), "chip padding is p-1.5")
     assert.ok(/w-5\s+h-5|h-5\s+w-5/.test(src), "icon svg is 5x5")
   })

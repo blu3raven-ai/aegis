@@ -45,7 +45,7 @@ export function FindingDataflowTrace({
               key={i}
               className="rounded border border-[var(--color-border)] p-2"
             >
-              <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+              <div className="flex items-center gap-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                 <span className="rounded-full bg-[var(--color-surface)] px-1.5 py-0.5">
                   {i + 1}
                 </span>

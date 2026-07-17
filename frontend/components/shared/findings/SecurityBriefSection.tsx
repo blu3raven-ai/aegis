@@ -76,7 +76,7 @@ function CvssBreakdown({ vector }: { vector: string }) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+      <dt className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
         {label}
       </dt>
       <dd className="mt-0.5 text-sm text-[var(--color-text-primary)]">{children}</dd>

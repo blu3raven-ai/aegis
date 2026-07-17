@@ -43,7 +43,7 @@ function Cell({
 }) {
   return (
     <div className={wide ? "col-span-2 min-w-0" : "min-w-0"}>
-      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">{label}</dt>
+      <dt className="font-mono text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">{label}</dt>
       <dd
         className={`mt-1 truncate text-[var(--color-text-primary)] ${
           mono ? "font-[family-name:var(--font-jetbrains-mono)] text-[11px]" : "text-sm"

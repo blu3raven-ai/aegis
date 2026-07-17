@@ -29,7 +29,7 @@ export function EmptyOverviewBanner({
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center gap-4 rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5 px-5 py-4"
+      className="flex flex-wrap items-center gap-4 rounded-md border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5 px-5 py-4"
     >
       <span
         aria-hidden="true"

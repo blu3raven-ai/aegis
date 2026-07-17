@@ -82,11 +82,11 @@ export function DismissPopover({
           ref={menuRef}
           role="menu"
           onKeyDown={handleKeyDown}
-          className={`absolute right-0 z-50 min-w-[16rem] max-w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg ${
+          className={`absolute right-0 z-50 min-w-[16rem] max-w-[min(20rem,calc(100vw-2rem))] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-[var(--shadow-card)] ${
             placement === "bottom" ? "top-full mt-1" : "bottom-full mb-1"
           }`}
         >
-          <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <p className="px-2 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Select reason
           </p>
           {reasons.map((reason) => (
@@ -99,7 +99,7 @@ export function DismissPopover({
                 onDismiss(reason)
                 setOpen(false)
               }}
-              className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
+              className="w-full rounded px-2 py-1.5 text-left text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
             >
               {reason}
             </button>

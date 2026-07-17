@@ -150,7 +150,7 @@ export function SbomExportMenu({
           role="menu"
           aria-label="Export SBOM format"
           onKeyDown={handleMenuKeyDown}
-          className="absolute right-0 top-full z-40 mt-1 min-w-[180px] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg"
+          className="absolute right-0 top-full z-40 mt-1 min-w-[180px] rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg"
         >
           {FORMATS.map((fmt, i) => (
             <button
@@ -162,7 +162,7 @@ export function SbomExportMenu({
               role="menuitem"
               tabIndex={i === activeIndex ? 0 : -1}
               onClick={() => handleSelect(fmt)}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             >
               <span className="font-mono text-2xs text-[var(--color-text-tertiary)]">.{FORMAT_EXT[fmt].split(".").pop()}</span>
               <span>{FORMAT_LABELS[fmt]}</span>

@@ -78,7 +78,7 @@ export function DrawerHeader({
       )}
       <div className="relative flex items-start justify-between gap-4 p-5">
       <div className="min-w-0">
-        <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <p className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           {eyebrowDotColor && (
             <span
               aria-hidden="true"
