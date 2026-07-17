@@ -195,6 +195,12 @@ class ProgressEmitter:
                 self._current_repo = None
             self._emit_locked()
 
+    def detonating(self, repo: str) -> None:
+        with self._lock:
+            self._current_repo = repo
+            self._stage = "detonating"
+            self._emit_locked()
+
     def normalizing(self) -> None:
         with self._lock:
             self._stage = "normalizing"

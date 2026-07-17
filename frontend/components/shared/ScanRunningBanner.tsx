@@ -76,6 +76,7 @@ function elapsedSeconds(startedAt: string | null, nowMs: number): number {
 const DEFAULT_STAGES: Record<string, string> = {
   queued: "Queued",
   scanning: "Scanning",
+  detonating: "Detonating in sandbox",
   ingesting: "Saving results",
   classifying: "Analysing findings",
 }
@@ -285,6 +286,11 @@ export function ScanRunningBanner({
             {tone === "running" && (
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                 You can keep working — we will notify you when it is done.
+              </p>
+            )}
+            {progress?.stage === "detonating" && (
+              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                Running untrusted code in an isolated sandbox — this can take a few minutes.
               </p>
             )}
           </div>

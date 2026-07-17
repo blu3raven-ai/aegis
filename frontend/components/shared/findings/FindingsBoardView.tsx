@@ -243,7 +243,7 @@ function ActionBandBadge({ band }: { band: FindingActionBand }) {
   const color = ACTION_BAND_COLOR[band]
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold"
+      className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-semibold"
       style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}
       title={`Action band: ${ACTION_BAND_LABEL[band]}`}
     >
@@ -1740,7 +1740,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                             <Td className="px-3 py-3 hidden md:table-cell">
                               <div className="flex items-center gap-2">
                                 <span
-                                  className="inline-flex h-4 w-[2.4rem] items-center justify-center rounded text-[9px] font-bold"
+                                  className="inline-flex h-4 w-[2.4rem] items-center justify-center rounded text-2xs font-bold"
                                   style={{ background: SCANNER_BG[finding.scanner], color: SCANNER_FG[finding.scanner] }}
                                 >
                                   {SCANNER_LABEL[finding.scanner]}
@@ -2547,7 +2547,7 @@ function CompactFindingRow({
         <div className="flex items-center gap-2 min-w-0">
           {/* Severity as dot + label, not colour alone (a11y: color-not-only). */}
           <span
-            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+            className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide"
             style={{ color: sevColor, background: `color-mix(in srgb, ${sevColor} 14%, transparent)` }}
           >
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: sevColor }} aria-hidden="true" />
@@ -2555,7 +2555,7 @@ function CompactFindingRow({
           </span>
           {/* Scanner type — which tool/finding class drives the triage approach. */}
           <span
-            className="inline-flex h-[18px] shrink-0 items-center rounded px-1.5 text-[9px] font-bold uppercase tracking-wide"
+            className="inline-flex h-[18px] shrink-0 items-center rounded px-1.5 text-2xs font-bold uppercase tracking-wide"
             style={{ background: SCANNER_BG[finding.scanner], color: SCANNER_FG[finding.scanner] }}
             title={SCANNER_GROUP_LABEL[finding.scanner]}
           >
@@ -2594,7 +2594,7 @@ function CompactFindingRow({
             its place once the finding leaves the default open state. */}
         {isClosed ? (
           <span
-            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusToneClass(finding.state)}`}
+            className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-medium uppercase tracking-wider ${statusToneClass(finding.state)}`}
           >
             {statusPillLabel(finding.state)}
           </span>

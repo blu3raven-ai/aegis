@@ -1,10 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { generateRunnerToken } from "@/lib/client/settings/use-runners"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Check } from "lucide-react"
+import { generateRunnerToken, fetchRunners, approveRunner } from "@/lib/client/settings/use-runners"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { Button } from "@/components/ui/Button"
 import { Sheet } from "@/components/ui/Sheet"
 import { HostReachabilityNote } from "@/components/shared/HostReachabilityNote"
+import { useSSE } from "@/components/providers/SSEProvider"
 
 interface Props {
   open: boolean
@@ -44,10 +47,26 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
   const [remainingSeconds, setRemainingSeconds] = useState<number>(600)
   const [error, setError] = useState<string | null>(null)
   const [platform, setPlatform] = useState<"linux" | "macos">("linux")
+  // Runner IDs that existed before this modal opened — so a new one appearing is
+  // the one being set up, not an existing runner's heartbeat.
+  const knownRunnerIdsRef = useRef<Set<string>>(new Set())
+  const [connected, setConnected] = useState<{ runnerId: string; name: string } | null>(null)
+  const [approving, setApproving] = useState(false)
+  const [approved, setApproved] = useState(false)
 
   useEffect(() => {
     if (!open) return
-    async function generate() {
+    setConnected(null)
+    setApproved(false)
+    void (async () => {
+      try {
+        const r = await fetchRunners()
+        knownRunnerIdsRef.current = new Set((r.runners || []).map((x) => x.id))
+      } catch {
+        /* best-effort snapshot; a false "connected" is harmless */
+      }
+    })()
+    void (async () => {
       try {
         const data = await generateRunnerToken()
         setToken(data.token)
@@ -55,9 +74,27 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
       } catch {
         setError("Failed to generate token")
       }
-    }
-    void generate()
+    })()
   }, [open])
+
+  // A new runner heartbeating while this modal is open is the one being set up.
+  useSSE("runner.status", (e) => {
+    if (!open || connected || knownRunnerIdsRef.current.has(e.runnerId)) return
+    setConnected({ runnerId: e.runnerId, name: e.name })
+  })
+
+  const handleApprove = useCallback(async () => {
+    if (!connected) return
+    setApproving(true)
+    try {
+      await approveRunner(connected.runnerId)
+      setApproved(true)
+    } catch {
+      setError("Failed to approve runner")
+    } finally {
+      setApproving(false)
+    }
+  }, [connected])
 
   useEffect(() => {
     if (!expiresAt) return
@@ -127,9 +164,39 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
             text="python -m runner.vuln_runner start"
           />
 
-          <p className="text-xs text-[var(--color-text-secondary)]">
-            After the runner connects, it will appear as &ldquo;Pending Approval&rdquo;. An admin must approve it before it can receive scan jobs.
-          </p>
+          {connected ? (
+            <div
+              className="rounded-lg border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] p-3"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="flex items-center gap-2 text-sm font-medium text-[var(--color-status-ok-text)]">
+                <Check className="h-4 w-4 shrink-0" aria-hidden />
+                {approved
+                  ? `${connected.name} approved — ready to receive scans`
+                  : `${connected.name} connected`}
+              </div>
+              {!approved && (
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <span className="text-xs text-[var(--color-text-secondary)]">
+                    Approve it so it can receive scan jobs.
+                  </span>
+                  <Button size="xs" onClick={handleApprove} isLoading={approving}>
+                    Approve runner
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] motion-reduce:animate-none" />
+              Waiting for the runner to connect…
+            </div>
+          )}
         </div>
       )}
     </Sheet>
