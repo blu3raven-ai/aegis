@@ -134,6 +134,12 @@ def serve(self_ip: str, *, dns_port: int = _DNS_PORT, tcp_port: int = _TCP_CATCH
     """Thin socket loop: answer DNS on udp/<dns_port>, accept+log TCP on <tcp_port>.
     Untested wrapper — the parse/answer/log logic above carries the coverage."""
     import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Bounded so a connection flood can't spawn unbounded threads in the honeypot.
+    # Handlers are short (log + <=2s recv) and the target's own --pids-limit/--cpus
+    # already caps its connection rate; 32 concurrent is ample.
+    tcp_pool = ThreadPoolExecutor(max_workers=32)
 
     def _dns_loop() -> None:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -157,8 +163,9 @@ def serve(self_ip: str, *, dns_port: int = _DNS_PORT, tcp_port: int = _TCP_CATCH
         sock.listen(64)
         while True:
             conn, addr = sock.accept()
-            # Handle off the accept path so a silent/slow connection can't stall it.
-            threading.Thread(target=_handle_tcp, args=(conn, addr), daemon=True).start()
+            # Handle off the accept path (bounded pool) so a silent/slow connection
+            # can't stall the loop and a flood can't spawn unbounded threads.
+            tcp_pool.submit(_handle_tcp, conn, addr)
 
     t = threading.Thread(target=_dns_loop, daemon=True)
     t.start()
