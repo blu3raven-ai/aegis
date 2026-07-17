@@ -28,27 +28,6 @@ TOOL_LABELS = {
 }
 
 
-def _get_active_user_ids() -> list[str]:
-    """Get all active user IDs for broadcast notifications. Cached 30s."""
-    cached = _user_cache.get("active_users")
-    if cached is not None:
-        return cached
-
-    from src.db.helpers import run_db
-    from src.db.models import User
-    from sqlalchemy import select
-
-    async def _query(session):
-        result = await session.execute(
-            select(User.id).where(User.status == "active")
-        )
-        return [row[0] for row in result.all()]
-
-    ids = run_db(_query)
-    _user_cache.set("active_users", ids)
-    return ids
-
-
 def _get_admin_user_ids() -> list[str]:
     """Get admin/owner user IDs for admin-only notifications. Cached 30s."""
     cached = _user_cache.get("admin_users")
@@ -128,7 +107,7 @@ def notify_scan_completed(
     link = f"/findings?scanner={tool}"
 
     try:
-        user_ids = _get_active_user_ids()
+        user_ids = _get_users_with_org_asset_access(org)
         emit_notification_to_all(
             user_ids,
             notification_type="scan.completed",
@@ -139,7 +118,10 @@ def notify_scan_completed(
             context={"tool": tool, "org": org, "runId": run_id, "counts": counts},
             link=link,
         )
-        _publish_notification_sse({"title": title, "severity": severity, "category": "scan", "message": message})
+        _publish_notification_sse(
+            {"title": title, "severity": severity, "category": "scan", "message": message},
+            target_user_ids=frozenset(user_ids),
+        )
     except Exception:
         logger.warning("Failed to emit scan completed notification", exc_info=True)
 
@@ -152,7 +134,7 @@ def notify_scan_failed(tool: str, org: str, run_id: str, error: str) -> None:
     link = f"/findings?scanner={tool}"
 
     try:
-        user_ids = _get_active_user_ids()
+        user_ids = _get_users_with_org_asset_access(org)
         emit_notification_to_all(
             user_ids,
             notification_type="scan.failed",
@@ -163,7 +145,10 @@ def notify_scan_failed(tool: str, org: str, run_id: str, error: str) -> None:
             context={"tool": tool, "org": org, "runId": run_id, "error": error[:500]},
             link=link,
         )
-        _publish_notification_sse({"title": title, "severity": "error", "category": "scan", "message": message})
+        _publish_notification_sse(
+            {"title": title, "severity": "error", "category": "scan", "message": message},
+            target_user_ids=frozenset(user_ids),
+        )
     except Exception:
         logger.warning("Failed to emit scan failed notification", exc_info=True)
 

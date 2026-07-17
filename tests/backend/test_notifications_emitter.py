@@ -15,6 +15,8 @@ from src.notifications.emitter import (
     _finding_severity,
     _tool_to_settings_path,
     notify_new_critical_findings,
+    notify_scan_completed,
+    notify_scan_failed,
 )
 
 
@@ -90,7 +92,7 @@ def test_label_empty_when_nothing_identifiable():
 @pytest.fixture
 def captured(monkeypatch):
     calls = {}
-    monkeypatch.setattr(emitter, "_get_active_user_ids", lambda: ["u1"])
+    monkeypatch.setattr(emitter, "_get_users_with_org_asset_access", lambda org: ["u1"])
     monkeypatch.setattr(emitter, "_publish_notification_sse", lambda *a, **k: None)
 
     def _capture(user_ids, **kwargs):
@@ -139,3 +141,36 @@ def test_top_finding_label_in_message(captured):
     assert "log4j" in captured["message"]
     assert "acme-org" in captured["message"]
     assert captured["link"] == "/findings?scanner=dependencies_scanning"
+
+
+# ── scan-lifecycle notifications scope to org asset access (not all users) ──
+
+@pytest.fixture
+def scan_capture(monkeypatch):
+    """Capture inbox recipients + SSE target set for scan-lifecycle notifies."""
+    calls = {}
+    monkeypatch.setattr(emitter, "_get_users_with_org_asset_access", lambda org: ["scoped-user"])
+
+    def _capture_inbox(user_ids, **kwargs):
+        calls["inbox_user_ids"] = user_ids
+
+    def _capture_sse(payload, target_user_ids=None, **kwargs):
+        calls["sse_target"] = target_user_ids
+
+    monkeypatch.setattr(emitter, "emit_notification_to_all", _capture_inbox)
+    monkeypatch.setattr(emitter, "_publish_notification_sse", _capture_sse)
+    return calls
+
+
+def test_scan_completed_scopes_recipients_to_org(scan_capture):
+    notify_scan_completed("code_scanning", "acme-org", "run-1", {"critical": 3, "high": 5})
+    # Durable inbox rows go only to org-scoped users, not every active user.
+    assert scan_capture["inbox_user_ids"] == ["scoped-user"]
+    # SSE mirror carries the same scoped target set, not an unscoped broadcast.
+    assert scan_capture["sse_target"] == frozenset(["scoped-user"])
+
+
+def test_scan_failed_scopes_recipients_to_org(scan_capture):
+    notify_scan_failed("code_scanning", "acme-org", "run-1", "boom")
+    assert scan_capture["inbox_user_ids"] == ["scoped-user"]
+    assert scan_capture["sse_target"] == frozenset(["scoped-user"])
