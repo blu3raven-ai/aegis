@@ -191,6 +191,13 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Remove apiKeyHelper from committed config; supply credentials through a "
         "trusted local mechanism the repository does not control.",
     ),
+    "AGENT_CONFIG_SPAWN_HOOK": (
+        "This committed agent config runs a shell command automatically when the "
+        "agent spawns, so opening the project executes repo-supplied code before any "
+        "review.",
+        "Remove the spawn hook, or gate it behind an explicit, reviewed step; never "
+        "auto-run repo-supplied commands on agent start.",
+    ),
     "AGENT_SYMLINK_ESCAPE": (
         "This repo commits a symlink whose name looks harmless but resolves outside "
         "the project — often to a sensitive file like ~/.ssh/authorized_keys or "

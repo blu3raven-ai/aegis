@@ -29,6 +29,7 @@ _HOOK_FETCH = "AGENT_HOOK_SHELL_FETCH"
 _HOOK_SECRET = "AGENT_HOOK_SECRET_READ"
 _HOOK_LOCAL_SCRIPT = "AGENT_HOOK_LOCAL_SCRIPT"
 _API_KEY_HELPER = "AGENT_CONFIG_API_KEY_HELPER"
+_SPAWN_HOOK = "AGENT_CONFIG_SPAWN_HOOK"
 _MCP_SHELL = "AGENT_MCP_SHELL_COMMAND"
 _MCP_TOOL_SHADOW = "AGENT_MCP_TOOL_SHADOW"
 
@@ -357,16 +358,139 @@ def _check_tool_shadowing(data: dict, rel_path: str, text: str) -> list[dict]:
     ]
 
 
+def _load_yaml(text: str) -> Any | None:
+    import yaml
+    try:
+        return yaml.safe_load(text)
+    except Exception:  # noqa: BLE001 — malformed YAML → nothing to inspect
+        return None
+
+
+def _check_cursor_permissions(data: dict, rel_path: str, text: str) -> list[dict]:
+    """`.cursor/permissions.json` is committed per-repo and CONCATENATED into the
+    user's own allowlist, so a repo can only widen what auto-runs — the injection
+    vector."""
+    findings: list[dict] = []
+    term = data.get("terminalAllowlist")
+    if isinstance(term, list) and term:
+        findings.append(_finding(
+            _BROAD_EXEC, "high",
+            f"Committed Cursor terminalAllowlist auto-approves shell commands in {rel_path}",
+            rel_path, _line_of(text, "terminalAllowlist"), _BROAD_EXEC,
+            {"entries": [str(t)[:60] for t in term[:8]]},
+        ))
+    auto = data.get("autoRun")
+    allow = auto.get("allow_instructions") if isinstance(auto, dict) else None
+    if isinstance(allow, list) and allow:
+        findings.append(_finding(
+            _AUTO_APPROVE, "high",
+            f"Committed Cursor autoRun.allow_instructions auto-runs actions in {rel_path}",
+            rel_path, _line_of(text, "allow_instructions"), _AUTO_APPROVE,
+            {"entries": [str(a)[:60] for a in allow[:8]]},
+        ))
+    mcp_allow = data.get("mcpAllowlist")
+    if isinstance(mcp_allow, list) and mcp_allow:
+        findings.append(_finding(
+            _AUTO_APPROVE, "high",
+            f"Committed Cursor mcpAllowlist auto-approves MCP servers in {rel_path}",
+            rel_path, _line_of(text, "mcpAllowlist"), f"{_AUTO_APPROVE}:mcp",
+            {"entries": [str(a)[:60] for a in mcp_allow[:8]]},
+        ))
+    return findings
+
+
+def _check_gemini_settings(data: dict, rel_path: str, text: str) -> list[dict]:
+    findings = _check_mcp(data, rel_path, text)
+    if data.get("autoAccept") is True:
+        findings.append(_finding(
+            _AUTO_APPROVE, "high",
+            f"Committed Gemini autoAccept runs tools without confirmation in {rel_path}",
+            rel_path, _line_of(text, "autoAccept"), _AUTO_APPROVE, {},
+        ))
+    servers = data.get("mcpServers")
+    if isinstance(servers, dict):
+        for name, spec in servers.items():
+            if isinstance(spec, dict) and spec.get("trust") is True:
+                findings.append(_finding(
+                    _AUTO_APPROVE, "high",
+                    f"Gemini MCP server '{name}' is trusted, bypassing tool confirmations in {rel_path}",
+                    rel_path, _line_of(text, "trust"), f"{_AUTO_APPROVE}:{name}",
+                    {"server": str(name)},
+                ))
+    return findings
+
+
+def _check_aider(data: dict, rel_path: str, text: str) -> list[dict]:
+    findings: list[dict] = []
+    if data.get("yes-always") is True:
+        findings.append(_finding(
+            _AUTO_APPROVE, "high",
+            f"Committed Aider yes-always auto-confirms every prompt in {rel_path}",
+            rel_path, _line_of(text, "yes-always"), _AUTO_APPROVE, {},
+        ))
+    api_base = data.get("openai-api-base")
+    if isinstance(api_base, str) and api_base.strip():
+        findings.append(_finding(
+            _BASE_URL, "high",
+            f"Committed Aider openai-api-base redirects the LLM endpoint in {rel_path}",
+            rel_path, _line_of(text, "openai-api-base"), _BASE_URL,
+            {"value": api_base[:200]},
+        ))
+    return findings
+
+
+def _check_amazonq_agent(data: dict, rel_path: str, text: str) -> list[dict]:
+    findings = _check_mcp(data, rel_path, text)
+    tools = data.get("tools")
+    if isinstance(tools, list) and "*" in tools:
+        findings.append(_finding(
+            _BROAD_EXEC, "high",
+            f'Amazon Q agent grants all tools ("*") in {rel_path}',
+            rel_path, _line_of(text, "tools"), _BROAD_EXEC, {},
+        ))
+    allowed = data.get("allowedTools")
+    if isinstance(allowed, list) and any("*" in str(a) for a in allowed):
+        findings.append(_finding(
+            _AUTO_APPROVE, "high",
+            f"Amazon Q agent auto-approves tools via a wildcard allowedTools entry in {rel_path}",
+            rel_path, _line_of(text, "allowedTools"), _AUTO_APPROVE,
+            {"entries": [str(a)[:60] for a in allowed[:8]]},
+        ))
+    hooks = data.get("hooks")
+    spawn = hooks.get("agentSpawn") if isinstance(hooks, dict) else None
+    if isinstance(spawn, list):
+        for h in spawn:
+            cmd = h.get("command") if isinstance(h, dict) else None
+            if isinstance(cmd, str) and cmd.strip():
+                sev = "critical" if _cmd_is_dangerous(cmd) else "high"
+                findings.append(_finding(
+                    _SPAWN_HOOK, sev,
+                    f"Amazon Q agent runs a command automatically on spawn in {rel_path}",
+                    rel_path, _line_of(text, cmd[:40]), _SPAWN_HOOK,
+                    {"command": cmd[:200]},
+                ))
+    return findings
+
+
 def scan_config(rel_path: str, text: str) -> list[dict]:
     """Inspect one agent config file; return findings for dangerous constructs."""
     base = rel_path.rsplit("/", 1)[-1]
+    if base == ".aider.conf.yml":
+        data = _load_yaml(text)
+        return _check_aider(data, rel_path, text) if isinstance(data, dict) else []
     data = _load(text)
     if not isinstance(data, dict):
         return []
-    if base == ".mcp.json" or rel_path == ".vscode/mcp.json":
+    if base in (".mcp.json", "mcp.json"):  # .mcp.json, .vscode/.cursor/.amazonq/mcp.json
         return _check_mcp(data, rel_path, text)
     if rel_path == ".vscode/settings.json":
         return _check_vscode_settings(data, rel_path, text)
     if base in ("settings.json", "settings.local.json") and rel_path.startswith(".claude/"):
         return _check_claude_settings(data, rel_path, text)
+    if rel_path == ".cursor/permissions.json":
+        return _check_cursor_permissions(data, rel_path, text)
+    if rel_path == ".gemini/settings.json":
+        return _check_gemini_settings(data, rel_path, text)
+    if rel_path.startswith(".amazonq/cli-agents/") and base.endswith(".json"):
+        return _check_amazonq_agent(data, rel_path, text)
     return []

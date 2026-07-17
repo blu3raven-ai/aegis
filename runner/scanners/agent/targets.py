@@ -39,6 +39,10 @@ _INSTRUCTION_PATHS = frozenset({
     ".github/copilot-instructions.md",
     ".vscode/settings.json",
     ".vscode/mcp.json",
+    ".cursor/mcp.json",
+    ".cursor/permissions.json",
+    ".gemini/settings.json",
+    ".amazonq/mcp.json",
 })
 
 # Directories never worth walking — vendored code, build output, VCS internals.
@@ -71,6 +75,8 @@ def is_agent_instruction_file(rel_path: str) -> bool:
     if rel_path.startswith(".claude/"):
         return True
     if rel_path.startswith(".cursor/rules/") and suffix == ".mdc":
+        return True
+    if rel_path.startswith(".amazonq/cli-agents/") and suffix == ".json":
         return True
     return False
 
