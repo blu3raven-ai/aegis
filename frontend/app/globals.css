@@ -329,6 +329,33 @@ body {
   background-size: 46px 46px;
 }
 
+/* Instrument-grade scrollbars — thin, quiet, rounded; darken on hover.
+   Firefox uses scrollbar-width/color; WebKit/Blink use the pseudo-elements. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-tertiary);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 @layer base {
   :focus-visible {
     outline: 2px solid var(--color-accent);
