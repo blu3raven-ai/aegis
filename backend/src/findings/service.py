@@ -1333,7 +1333,8 @@ async def assign_finding(
     Returns (finding, previous_assignee). Raises LookupError if the finding
     does not exist or its asset is outside the caller's scope (404 path —
     avoids leaking existence). Raises ValueError if assignee_user_id is
-    non-empty but references a user that does not exist.
+    non-empty but is not an assignable user (does not exist, or has no access
+    to the finding's asset).
     """
     if assignee_user_id is not None:
         normalized = assignee_user_id.strip()
@@ -1355,10 +1356,11 @@ async def assign_finding(
         raise LookupError(f"finding {finding_id} not found")
 
     if assignee_user_id is not None:
-        user_id = (
-            await session.execute(select(User.id).where(User.id == assignee_user_id))
-        ).scalar_one_or_none()
-        if user_id is None:
+        # The assignee must be able to see the finding's asset — otherwise the
+        # assignment notification (and finding metadata) would leak cross-scope,
+        # and a bare existence check would be a user-id oracle.
+        from src.authz.enforcement.scope import users_with_asset_access
+        if assignee_user_id not in await users_with_asset_access(session, finding.asset_id):
             raise ValueError(f"unknown user: {assignee_user_id}")
 
     previous = finding.assignee_user_id
