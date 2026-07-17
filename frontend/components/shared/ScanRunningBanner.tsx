@@ -273,7 +273,7 @@ export function ScanRunningBanner({
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
-              <span className={cn("text-2xs font-semibold uppercase tracking-[0.14em]", cfg.text)}>
+              <span className={cn("font-mono text-2xs font-semibold uppercase tracking-[0.14em]", cfg.text)}>
                 {stageLabel}
               </span>
               <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-secondary)]">

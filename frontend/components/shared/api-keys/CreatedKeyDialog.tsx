@@ -32,11 +32,11 @@ export function CreatedKeyDialog({ token, onClose }: Props) {
           API key created
         </h2>
 
-        <div className="mb-4 rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-3 py-2 text-xs text-[var(--color-text-primary)]">
+        <div className="mb-4 rounded-md border border-l-2 border-[var(--color-state-pending-border)] border-l-[var(--color-state-pending)] bg-[var(--color-state-pending-subtle)] px-3 py-2 text-xs text-[var(--color-text-primary)]">
           Copy this key now — it will not be shown again.
         </div>
 
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2">
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2">
           <code className="flex-1 break-all font-mono text-[11px] text-[var(--color-text-primary)]">
             {token}
           </code>

@@ -11,7 +11,7 @@ export function DrawerStatusBanner({
 }) {
   if (state === "dismissed") {
     return (
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-state-dismissed-subtle)] px-5 py-3">
+      <div className="border-b border-l-2 border-[var(--color-border)] border-l-[var(--color-state-dismissed)] bg-[var(--color-state-dismissed-subtle)] px-5 py-3">
         <p className="text-sm font-medium text-[var(--color-state-dismissed)]">Dismissed</p>
         {dismissedReason && (
           <p className="mt-0.5 text-xs text-[var(--color-state-dismissed-muted)]">
@@ -24,7 +24,7 @@ export function DrawerStatusBanner({
 
   if (state === "deferred") {
     return (
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-state-deferred-subtle)] px-5 py-3">
+      <div className="border-b border-l-2 border-[var(--color-border)] border-l-[var(--color-state-deferred)] bg-[var(--color-state-deferred-subtle)] px-5 py-3">
         <p className="text-sm font-medium text-[var(--color-state-deferred)]">
           Deferred: no patch available
         </p>
@@ -37,7 +37,7 @@ export function DrawerStatusBanner({
 
   if (state === "fixed" || state === "closed") {
     return (
-      <div className="border-b border-[var(--color-border)] bg-[var(--color-state-fixed-subtle)] px-5 py-3">
+      <div className="border-b border-l-2 border-[var(--color-border)] border-l-[var(--color-state-fixed-text)] bg-[var(--color-state-fixed-subtle)] px-5 py-3">
         <p className="text-sm font-medium text-[var(--color-state-fixed-text)]">
           {state === "fixed" ? "Fixed" : "Closed"}
         </p>
