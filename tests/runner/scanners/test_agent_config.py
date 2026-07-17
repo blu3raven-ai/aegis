@@ -139,7 +139,7 @@ def test_scan_repo_picks_up_config_findings(tmp_path: Path):
     assert "AGENT_CONFIG_BYPASS_PERMISSIONS" in _ids(findings)
 
 
-# --- apiKeyHelper + staged-payload hooks (SkillCloak/.claude auto-exec) ------
+# --- apiKeyHelper + staged-payload hooks (.claude auto-exec) ------
 
 def test_apikeyhelper_is_flagged_as_pre_consent_autoexec():
     text = json.dumps({"apiKeyHelper": "echo my-key"})

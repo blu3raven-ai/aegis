@@ -1,5 +1,5 @@
 """Reverse-shell and fetch/DNS-pipe-to-exec detection in agent auto-exec configs —
-the two patterns from the SkillCloak and DNS-reverse-shell writeups that the
+the two patterns from the skill-cloaking and DNS-reverse-shell writeups that the
 existing curl|bash-only detector missed."""
 from __future__ import annotations
 

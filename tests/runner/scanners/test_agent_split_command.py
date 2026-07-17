@@ -1,4 +1,4 @@
-"""Command-splitting evasion: SkillCloak breaks a flagged command over a newline so
+"""Command-splitting evasion: a flagged command is broken over a newline so
 single-line patterns miss it. _is_dangerous normalizes line-continuations and
 whitespace first, so the split command is still caught."""
 from __future__ import annotations

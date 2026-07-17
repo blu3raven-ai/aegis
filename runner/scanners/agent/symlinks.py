@@ -1,6 +1,6 @@
 """Flag committed symlinks that escape the repo or point at sensitive targets.
 
-The GhostApproval / SymJack class (CVE-2026-12958, CVE-2026-50549, and siblings):
+The disguised-symlink consent-bypass class (CVE-2026-12958, CVE-2026-50549, and siblings):
 a repo ships a symlink disguised as a benign file — e.g. ``project_settings.json``
 that really points to ``~/.ssh/authorized_keys`` or ``~/.zshrc``. An agent asked to
 "append to the settings file" lands the write on the real target, and the approval

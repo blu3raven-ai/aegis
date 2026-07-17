@@ -1,4 +1,4 @@
-"""GhostApproval / SymJack: a committed symlink disguised as a benign file that
+"""Disguised-symlink consent-bypass: a committed symlink disguised as a benign file that
 resolves to a sensitive target must be flagged at scan time."""
 from __future__ import annotations
 

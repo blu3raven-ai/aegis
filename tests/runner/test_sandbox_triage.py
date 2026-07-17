@@ -36,7 +36,7 @@ def test_obfuscated_entry_is_detonated(tmp_path):
 
 
 def test_oversized_instruction_file_is_flagged(tmp_path):
-    # The SkillCloak size-cap padding trick — a 22MB README.
+    # The size-cap padding trick — a 22MB README.
     (tmp_path / "README.md").write_text("A" * 6_000_000)
     r = triage_target(str(tmp_path), has_entry=True)
     assert r.worth_detonating is True
