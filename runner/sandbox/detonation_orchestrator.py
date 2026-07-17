@@ -21,6 +21,7 @@ import hashlib
 import os
 import tempfile
 import threading
+from collections.abc import Callable
 
 from runner.sandbox.build import BuildRecipe, build_image_args
 from runner.sandbox.detonation import detonate
@@ -114,6 +115,7 @@ def _build(recipe: BuildRecipe, tag: str, cancel_event: threading.Event | None) 
 def detonate_repo(
     repo_root: str, *, env, run_id: str, static_hits: int = 0,
     cancel_event: threading.Event | None = None,
+    on_detonation_start: "Callable[[], None] | None" = None,
 ) -> list[dict]:
     """Triage the target, then act on the verdict:
 
@@ -139,6 +141,11 @@ def detonate_repo(
     body = dockerfile_body(entry.ecosystem)
     if body is None:
         return []
+
+    # Past every triage/consent/runtime gate — real execution (build + run) starts
+    # now and can take minutes. Signal it so the progress UI isn't silent here.
+    if on_detonation_start is not None:
+        on_detonation_start()
 
     tag = f"aegis-deto-{run_id}:latest"
     fd, path = tempfile.mkstemp(prefix="aegis-deto-", suffix=".Dockerfile")

@@ -76,6 +76,7 @@ function elapsedSeconds(startedAt: string | null, nowMs: number): number {
 const DEFAULT_STAGES: Record<string, string> = {
   queued: "Queued",
   scanning: "Scanning",
+  detonating: "Detonating in sandbox",
   ingesting: "Saving results",
   classifying: "Analysing findings",
 }

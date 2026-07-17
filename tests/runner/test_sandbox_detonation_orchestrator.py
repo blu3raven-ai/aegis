@@ -52,6 +52,25 @@ def test_no_entry_is_noop():
     assert _run(_Env(DETONATE="1"), detect_entry=lambda root: None) == []
 
 
+def test_on_detonation_start_fires_only_when_code_runs():
+    calls = []
+    cb = lambda: calls.append(1)  # noqa: E731
+    defaults = {
+        "runtime_available": lambda: True,
+        "detect_entry": lambda root: _ENTRY,
+        "_build": lambda recipe, tag, cancel_event: True,
+        "detonate": lambda tag, cmd, *, run_id, cancel_event=None: [],
+    }
+    with patch.multiple("runner.sandbox.detonation_orchestrator", **defaults):
+        # Real execution → callback fires once.
+        orch.detonate_repo("/repo", env=_Env(DETONATE="1"), run_id="x", static_hits=1, on_detonation_start=cb)
+        # Not worth detonating → no execution, no callback.
+        orch.detonate_repo("/repo", env=_Env(DETONATE="1"), run_id="x", static_hits=0, on_detonation_start=cb)
+        # DETONATE off → recommend only, no callback.
+        orch.detonate_repo("/repo", env=_Env(), run_id="x", static_hits=2, on_detonation_start=cb)
+    assert calls == [1]
+
+
 def test_worth_but_detonation_off_recommends():
     findings = _run(_Env(), static_hits=2)  # DETONATE unset, but a risk signal fired
     assert len(findings) == 1
