@@ -8,7 +8,6 @@ from urllib.parse import urlparse, urlunparse
 
 import httpx
 
-from src.shared.url_guard import UnsafeURLError, assert_sendable_url
 
 # Exceptions
 
@@ -42,7 +41,14 @@ def _validate_instance_url(url: str) -> str:
         for info in socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM):
             addr = info[4][0]
             ip = ipaddress.ip_address(addr)
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+                or ip.is_unspecified
+            ):
                 raise ConnectionTestError(
                     f"URL resolves to a private/internal address ({addr}). "
                     "Only publicly routable instances are allowed."
@@ -85,6 +91,15 @@ class _HostPinningTransport(httpx.AsyncHTTPTransport):
         # without this, connecting via IP would fail cert verification.
         request.extensions["sni_hostname"] = self._hostname.encode("ascii")
         return await super().handle_async_request(request)
+
+
+def _pinned_registry_target(registry_url: str) -> tuple[str, _HostPinningTransport]:
+    """Validate a container-registry host and return an IP-pinned base URL plus a
+    SNI-preserving transport, so the request connects to the address we checked
+    rather than whatever a second DNS lookup returns."""
+    base_url = _validate_instance_url(f"https://{registry_url}")
+    hostname = urlparse(f"https://{registry_url}").hostname or ""
+    return base_url, _HostPinningTransport(hostname)
 
 
 # Result type
@@ -859,8 +874,8 @@ async def _test_ecr(auth: dict) -> ConnectionTestResult:
         return ConnectionTestResult(success=False, message="Registry URL is required (e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com)")
 
     try:
-        assert_sendable_url(f"https://{registry_url}")
-    except UnsafeURLError as exc:
+        base_url, transport = _pinned_registry_target(registry_url)
+    except ConnectionTestError as exc:
         return ConnectionTestResult(success=False, message=f"Registry URL not permitted: {exc}")
 
     import base64
@@ -868,8 +883,8 @@ async def _test_ecr(auth: dict) -> ConnectionTestResult:
     headers = {"Authorization": f"Basic {b64_auth}", "Accept": "application/json"}
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(f"https://{registry_url}/v2/_catalog", headers=headers)
+        async with httpx.AsyncClient(timeout=30, transport=transport) as client:
+            resp = await client.get(f"{base_url}/v2/_catalog", headers=headers)
             resp.raise_for_status()
             data = resp.json()
             repos = data.get("repositories", [])
@@ -903,8 +918,8 @@ async def _test_acr(auth: dict) -> ConnectionTestResult:
         return ConnectionTestResult(success=False, message="Registry URL is required (e.g. myregistry.azurecr.io)")
 
     try:
-        assert_sendable_url(f"https://{registry_url}")
-    except UnsafeURLError as exc:
+        base_url, transport = _pinned_registry_target(registry_url)
+    except ConnectionTestError as exc:
         return ConnectionTestResult(success=False, message=f"Registry URL not permitted: {exc}")
 
     username = auth.get("username") or registry_url.split(".")[0]
@@ -914,8 +929,8 @@ async def _test_acr(auth: dict) -> ConnectionTestResult:
     headers = {"Authorization": f"Basic {b64_auth}"}
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(f"https://{registry_url}/v2/_catalog", headers=headers)
+        async with httpx.AsyncClient(timeout=30, transport=transport) as client:
+            resp = await client.get(f"{base_url}/v2/_catalog", headers=headers)
             resp.raise_for_status()
             data = resp.json()
             repos = data.get("repositories", [])
@@ -948,8 +963,8 @@ async def _test_gcr(auth: dict) -> ConnectionTestResult:
         return ConnectionTestResult(success=False, message="Service account JSON key or access token is required")
 
     try:
-        assert_sendable_url(f"https://{registry_url}")
-    except UnsafeURLError as exc:
+        base_url, transport = _pinned_registry_target(registry_url)
+    except ConnectionTestError as exc:
         return ConnectionTestResult(success=False, message=f"Registry URL not permitted: {exc}")
 
     import base64
@@ -958,8 +973,8 @@ async def _test_gcr(auth: dict) -> ConnectionTestResult:
     headers = {"Authorization": f"Basic {b64_auth}"}
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(f"https://{registry_url}/v2/_catalog", headers=headers)
+        async with httpx.AsyncClient(timeout=30, transport=transport) as client:
+            resp = await client.get(f"{base_url}/v2/_catalog", headers=headers)
             resp.raise_for_status()
             data = resp.json()
             repos = data.get("repositories", [])

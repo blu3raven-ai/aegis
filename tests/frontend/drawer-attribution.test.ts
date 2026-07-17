@@ -225,8 +225,13 @@ test("renders nothing when all fields are undefined", () => {
 test("PR link opens in a new tab with noopener noreferrer rel", () => {
   const source = readFileSync(COMPONENT_PATH, "utf8")
   assert.ok(
-    /href=\{introduced_by_pr_url\}/.test(source),
-    "anchor must bind href to introduced_by_pr_url",
+    /href=\{introduced_by_pr_url\.trim\(\)\}/.test(source),
+    "anchor must bind href to introduced_by_pr_url.trim()",
+  )
+  assert.ok(
+    source.includes("https?:") &&
+      source.includes(".test(introduced_by_pr_url.trim())"),
+    "anchor must render only for http(s) URLs (no javascript: sink)",
   )
   assert.ok(/target="_blank"/.test(source), 'anchor must set target="_blank"')
   assert.ok(

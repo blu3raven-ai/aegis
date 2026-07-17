@@ -61,9 +61,9 @@ export function DrawerAttribution({ fields }: { fields: AttributionFields }) {
             </>
           )}
         </div>
-        {introduced_by_pr_url && (
+        {introduced_by_pr_url && /^https?:\/\//i.test(introduced_by_pr_url.trim()) && (
           <a
-            href={introduced_by_pr_url}
+            href={introduced_by_pr_url.trim()}
             target="_blank"
             rel="noopener noreferrer"
             className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--color-accent)] underline underline-offset-2 hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"

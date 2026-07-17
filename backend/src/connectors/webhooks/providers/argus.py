@@ -16,6 +16,7 @@ Event type mapping (Argus → internal):
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -24,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from src.connectors.base import BaseIngester, TestResult
 from src.connectors.registry import register_connector
+from src.connectors.webhooks.dedupe import register_delivery
 from src.connectors.webhooks.ingest_guard import parse_json_object, read_guarded_body
 from src.connectors.webhooks.signature import verify_hmac_sha256
 from src.shared.event_publisher import get_event_publisher
@@ -114,6 +116,11 @@ async def argus_webhook(request: Request):
     if event_type not in _HANDLED_EVENT_TYPES:
         logger.info("argus.webhook: received unknown event_type=%s; ignoring", event_type)
         return {"status": "ok", "handled": False}
+
+    delivery_id = hashlib.sha256(body).hexdigest()[:32]
+    if register_delivery("argus", delivery_id):
+        logger.info("argus.webhook: dropping replayed delivery id=%s", delivery_id)
+        return {"status": "ok", "handled": False, "duplicate": True}
 
     _publish_intel_event(event_type, org_id, data)
     logger.info("argus.webhook: published intel event type=%s org=%s", event_type, org_id)
