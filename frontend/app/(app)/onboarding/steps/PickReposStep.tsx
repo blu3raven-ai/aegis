@@ -9,6 +9,7 @@ interface PickReposStepProps {
   onNext: (data: { repo_count: number; selected_repo_ids: string[] }) => void
   onBack: () => void
   onSkip: () => void
+  saving?: boolean
 }
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
@@ -36,7 +37,7 @@ function formatScanDuration(seconds: number): string {
   return `~${minutes} min scan`
 }
 
-export function PickReposStep({ onNext, onBack, onSkip }: PickReposStepProps) {
+export function PickReposStep({ onNext, onBack, onSkip, saving = false }: PickReposStepProps) {
   const [repos, setRepos] = useState<RepoMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -101,6 +102,7 @@ export function PickReposStep({ onNext, onBack, onSkip }: PickReposStepProps) {
       onSkip={onSkip}
       nextLabel="Start scanning"
       nextDisabled={loading || selectedCount === 0}
+      loading={saving}
     >
       <div className="flex flex-col gap-4">
         {/* Account context row */}

@@ -28,7 +28,7 @@ export function CompletionCelebration() {
       </div>
 
       <Link
-        href="/dashboard"
+        href="/"
         className="rounded-lg bg-[var(--color-accent)] px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
       >
         Go to Dashboard

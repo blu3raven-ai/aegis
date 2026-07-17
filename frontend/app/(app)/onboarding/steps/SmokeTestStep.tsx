@@ -13,9 +13,10 @@ interface SmokeTestStepProps {
   onNext: (data: { scan_run_id?: string; findings_count?: number }) => void
   onBack: () => void
   onSkip: () => void
+  loading?: boolean
 }
 
-export function SmokeTestStep({ onNext, onBack, onSkip }: SmokeTestStepProps) {
+export function SmokeTestStep({ onNext, onBack, onSkip, loading = false }: SmokeTestStepProps) {
   const [status, setStatus] = useState<ScanStatus>("idle")
   const [findingsCount, setFindingsCount] = useState<number | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
@@ -76,6 +77,7 @@ export function SmokeTestStep({ onNext, onBack, onSkip }: SmokeTestStepProps) {
       onSkip={onSkip}
       nextLabel="Continue"
       nextDisabled={!canProceed}
+      loading={loading}
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_320px]">
         <div className="flex flex-col gap-4">

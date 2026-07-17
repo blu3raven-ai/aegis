@@ -162,7 +162,7 @@ export function SignInStep({ onProviderClick, onMagicLinkRequest }: SignInStepPr
               type="button"
               aria-label={provider.ariaLabel}
               onClick={() => onProviderClick(provider.id)}
-              className="flex items-center justify-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)]"
+              className="flex items-center justify-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
             >
               {provider.icon}
               <span>{provider.label}</span>

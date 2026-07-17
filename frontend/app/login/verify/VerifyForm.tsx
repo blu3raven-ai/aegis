@@ -68,7 +68,7 @@ export function VerifyForm() {
       </FormField>
 
       {error && (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
+        <div role="alert" className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
           {error}
           {isExpired && (
             <>
@@ -84,7 +84,7 @@ export function VerifyForm() {
       <button
         type="submit"
         disabled={isPending || code.length !== 6}
-        className="w-full cursor-pointer rounded-lg bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="w-full cursor-pointer rounded-lg bg-[var(--color-accent)] px-4 py-3 text-sm font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
       >
         {isPending ? "Verifying..." : "Verify"}
       </button>

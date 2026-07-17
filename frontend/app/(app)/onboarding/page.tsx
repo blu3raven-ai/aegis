@@ -154,6 +154,7 @@ export default function OnboardingPage() {
         )}
         {!showSignIn && currentStep === 0 && (
           <ConnectSourceStep
+            loading={saving}
             onNext={async (data) => {
               await handleComplete("connect_source", data)
               advance()
@@ -167,6 +168,7 @@ export default function OnboardingPage() {
         )}
         {!showSignIn && currentStep === 1 && (
           <PickReposStep
+            saving={saving}
             onNext={async (data) => {
               await handleComplete("pick_repos", data)
               advance()
@@ -180,6 +182,7 @@ export default function OnboardingPage() {
         )}
         {!showSignIn && currentStep === 2 && (
           <SmokeTestStep
+            loading={saving}
             onNext={async (data) => {
               await handleDismiss("smoke_test", data)
             }}

@@ -109,7 +109,7 @@ export function LoginForm() {
       </FormField>
 
       {error && (
-        <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
+        <div role="alert" className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}
@@ -117,7 +117,7 @@ export function LoginForm() {
       <button
         type="submit"
         disabled={isPending || !email.trim() || !password}
-        className="w-full py-3 px-4 cursor-pointer bg-[var(--color-accent)] text-[var(--color-accent-on)] text-sm font-semibold rounded-lg hover:bg-[var(--color-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="w-full py-3 px-4 cursor-pointer bg-[var(--color-accent)] text-[var(--color-accent-on)] text-sm font-semibold rounded-lg hover:bg-[var(--color-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
       >
         {isPending ? "Signing in…" : "Sign in"}
       </button>
