@@ -83,6 +83,18 @@ def test_normalizing_clears_current_repo():
     assert "currentRepo" not in snap
 
 
+def test_detonating_sets_stage_and_current_repo():
+    events, cb = _capture()
+    emitter = ProgressEmitter(cb, expected=1)
+
+    emitter.scanning("repo-a")
+    emitter.detonating("repo-a")
+
+    snap = events[-1]
+    assert snap["stage"] == "detonating"
+    assert snap["currentRepo"] == "repo-a"
+
+
 def test_done_sets_finished_to_expected_and_stage_done():
     events, cb = _capture()
     emitter = ProgressEmitter(cb, expected=3)

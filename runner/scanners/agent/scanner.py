@@ -201,6 +201,7 @@ class AgentScanner:
                     str(clone_dir), env=env, run_id=uuid.uuid4().hex[:8],
                     static_hits=len(findings),  # detectors that already fired → a triage signal
                     cancel_event=cancel_event,
+                    on_detonation_start=lambda: emitter.detonating(repo_name),
                 ))
             except Exception as e:  # noqa: BLE001
                 log_tail.append(f"[!] agent detonation error ({repo_name}): {e}")
