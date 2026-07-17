@@ -95,6 +95,7 @@ export function TeamImagesTab({ team, sharing, canEdit, onChanged }: TeamImagesT
         <div className="space-y-3">
           <ResourceAutocomplete
             value={value}
+            ariaLabel="Add image"
             placeholder="Search or enter registry/org/image"
             suggestions={suggestions}
             error={error}

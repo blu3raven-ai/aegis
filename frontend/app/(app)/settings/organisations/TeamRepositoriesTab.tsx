@@ -103,6 +103,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
         <div className="space-y-3">
           <ResourceAutocomplete
             value={value}
+            ariaLabel="Add repository"
             placeholder="Search or enter org/repo"
             suggestions={suggestions}
             error={error}

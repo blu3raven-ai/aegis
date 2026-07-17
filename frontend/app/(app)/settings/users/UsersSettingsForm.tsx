@@ -824,6 +824,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                               <label className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Grant Repository Access</label>
                               <ResourceAutocomplete
                                 value={directRepoValue}
+                                ariaLabel="Grant Repository Access"
                                 placeholder="Search repositories..."
                                 suggestions={directRepoSuggestions}
                                 error={directRepoError}
@@ -835,6 +836,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                               <label className="text-2xs font-bold uppercase text-[var(--color-text-secondary)]">Grant Image Access</label>
                               <ResourceAutocomplete
                                 value={directImageValue}
+                                ariaLabel="Grant Image Access"
                                 placeholder="Search images..."
                                 suggestions={directImageSuggestions}
                                 error={directImageError}
@@ -862,6 +864,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                                 {grant.source === "manual" && (
                                   <button
                                     onClick={() => void handleRemoveDirectGrant(user.id, grant.assetId)}
+                                    aria-label={`Remove access to ${grant.assetDisplayName ?? grant.assetId}`}
                                     className="text-[var(--color-text-secondary)] hover:text-[var(--color-severity-critical-text)]"
                                   >
                                     <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
