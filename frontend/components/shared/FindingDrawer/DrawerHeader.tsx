@@ -76,17 +76,17 @@ export function DrawerHeader({
           }}
         />
       )}
+      {/* CAD corner registration ticks — instrument-panel framing. */}
+      <span aria-hidden="true" className="pointer-events-none absolute left-2 top-2 h-2 w-2 border-l border-t" style={{ borderColor: eyebrowDotColor ?? "var(--color-accent)" }} />
+      <span aria-hidden="true" className="pointer-events-none absolute right-2 top-2 h-2 w-2 border-r border-t" style={{ borderColor: eyebrowDotColor ?? "var(--color-accent)" }} />
       <div className="relative flex items-start justify-between gap-4 p-5">
       <div className="min-w-0">
-        <p className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-          {eyebrowDotColor && (
-            <span
-              aria-hidden="true"
-              className="inline-block h-2 w-2 shrink-0 rounded-full"
-              style={{ background: eyebrowDotColor }}
-            />
-          )}
-          {eyebrow}
+        <p className="flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.22em]">
+          <span className="text-[var(--color-text-tertiary)]">[</span>
+          <span style={eyebrowDotColor ? { color: eyebrowDotColor } : undefined} className={eyebrowDotColor ? "" : "text-[var(--color-text-secondary)]"}>
+            {eyebrow}
+          </span>
+          <span className="text-[var(--color-text-tertiary)]">]</span>
         </p>
         <h2
           className="mt-2 text-lg font-semibold tracking-tight text-[var(--color-text-primary)]"
