@@ -248,6 +248,13 @@ class _FakeUpdateSession:
             def scalar(self):
                 return 5
 
+            def scalars(self):
+                class _S:
+                    def all(self):
+                        return ["o1", "o2", "o3", "o4", "o5"]
+
+                return _S()
+
         return _R()
 
     async def flush(self):
@@ -355,6 +362,13 @@ class _FakeDeleteSession:
         class _R:
             def scalar(self):
                 return 5
+
+            def scalars(self):
+                class _S:
+                    def all(self):
+                        return ["o1", "o2", "o3", "o4", "o5"]
+
+                return _S()
 
         return _R()
 
