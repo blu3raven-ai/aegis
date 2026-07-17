@@ -50,3 +50,16 @@ def test_load_config_empty_error_body_falls_back_to_status(monkeypatch: pytest.M
 
     with pytest.raises(RuntimeError, match="HTTP 503"):
         agent_mod.load_config()
+
+
+def test_load_config_scrubs_registration_token_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The one-time registration token must not linger in os.environ (where scanner
+    # subprocesses inherit it / it's readable via /proc/self/environ) — scrubbed
+    # regardless of whether registration then succeeds or fails.
+    import os
+
+    _register_env(monkeypatch)
+    _patch_client(monkeypatch, lambda request: httpx.Response(400, json={"error": "nope"}))
+    with pytest.raises(Exception):
+        agent_mod.load_config()
+    assert "RUNNER_REGISTRATION_TOKEN" not in os.environ

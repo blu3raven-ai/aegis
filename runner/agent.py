@@ -58,7 +58,11 @@ def _setup_sigterm_handler() -> None:
 def load_config() -> dict[str, Any]:
     """Load runner config from env vars or ~/.vuln-runner/config.json."""
     backend_url = os.environ.get("BACKEND_URL")
-    registration_token = os.environ.get("RUNNER_REGISTRATION_TOKEN")
+    # Consume-and-scrub: the one-time registration token must not linger in the
+    # process env, where it would be inherited by scanner subprocesses and
+    # readable via /proc/self/environ. On a container restart a fresh process
+    # re-reads it from the docker env; by then the saved config is used anyway.
+    registration_token = os.environ.pop("RUNNER_REGISTRATION_TOKEN", None)
 
     if backend_url and registration_token:
         import platform
