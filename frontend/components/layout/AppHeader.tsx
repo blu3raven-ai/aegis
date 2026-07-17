@@ -341,7 +341,7 @@ export function AppHeader({
         </button>
 
         {/* Breadcrumbs */}
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm min-w-0">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.06em] min-w-0">
           {crumbs.map((crumb, i) => (
             <span key={crumb.label} className="flex items-center gap-1.5 min-w-0">
               {i > 0 && (

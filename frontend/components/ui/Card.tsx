@@ -23,7 +23,7 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 // stay in one place. For pop-ups / modals / floating menus, prefer Sheet or
 // Dialog — Card is for static dashboard surfaces.
 
-const base = "rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
+const base = "rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]"
 
 const paddingClasses: Record<CardPadding, string> = {
   none: "",

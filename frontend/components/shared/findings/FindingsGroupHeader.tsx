@@ -35,7 +35,7 @@ export function FindingsGroupHeader({
       aria-expanded={expanded}
       className="flex w-full items-center justify-between px-4 py-2 bg-[var(--color-bg-section)] text-left hover:bg-[var(--color-bg-hover)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-inset"
     >
-      <span className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <span className="flex items-center gap-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         <svg
           width="10"
           height="10"
