@@ -81,11 +81,21 @@ def _runner_from_request(request: Request) -> dict[str, Any] | None:
     return authenticate_runner(token)
 
 
-def _require_runner(request: Request) -> tuple[dict[str, Any] | None, JSONResponse | None]:
-    """Authenticate runner or return 401 response."""
+def _require_runner(
+    request: Request, *, require_approved: bool = True
+) -> tuple[dict[str, Any] | None, JSONResponse | None]:
+    """Authenticate runner or return 401/403.
+
+    Defaults to requiring an ``approved`` runner so no work or job-data endpoint
+    can be reached by a pending/unapproved (but token-holding) runner. Only the
+    heartbeat opts out, since a pending runner must heartbeat while it waits for
+    admin approval.
+    """
     runner = _runner_from_request(request)
     if not runner:
         return None, JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if require_approved and runner.get("status") != "approved":
+        return None, JSONResponse({"error": "Runner not approved"}, status_code=403)
     return runner, None
 
 
@@ -136,7 +146,7 @@ class HeartbeatRequest(BaseModel):
 
 @router.post("/heartbeat")
 def post_heartbeat(request: Request, body: HeartbeatRequest | None = None) -> JSONResponse:
-    runner, err = _require_runner(request)
+    runner, err = _require_runner(request, require_approved=False)
     if err:
         return err
 
