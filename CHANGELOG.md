@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 
 ---
 
+## v2.9.0 — 2026-07-17
+
+### Security
+- Scan-lifecycle notifications are delivered only to users whose asset grants cover the affected source, closing a cross-scope notification leak
+- Agent-config parsing bounds an expensive matching pass to prevent denial-of-service from crafted git-hook input
+- The live scan event stream fails closed when a subscriber's authorization cannot be confirmed
+- SARIF export streams results incrementally instead of buffering the full document in memory
+
+### Added
+- Agent-security scans can detonate a repository's runnable setup entry point inside an embedded, egress-denied sandbox and raise a finding when it attempts to reach the network or exfiltrate data
+- The detonation sandbox is fully self-contained in the runner image — no host Docker socket, registry pull, or outbound network required — so it runs in air-gapped environments
+- Scan progress shows a dedicated detonating stage while a sandbox run is in flight
+- Agent-config scanning covers additional coding-agent providers and flags local-script hook commands, api-key-helper indirection, command-splitting evasion, and symlinks that escape to sensitive paths
+- The agent scanner flags MCP tool names that shadow a trusted built-in command
+- Agent-security findings map to a new OWASP LLM Top 10 compliance framework
+- Runners can be deployed with a single copy-paste Docker command, with live connection status and in-place approval in the add-runner modal
+
+### Fixed
+- The live scan stream reconnects automatically after repeated failures instead of giving up
+- First-run onboarding no longer dead-ends, and the setup scan-progress flow guides users through their first scan
+- Keyboard accessibility and screen-reader support improved across onboarding, settings rows, the runner install command, and finding comments
+- Resolved UI/UX standards violations surfaced by a frontend audit
+
 ## v2.8.0 — 2026-07-13
 
 ### Security
