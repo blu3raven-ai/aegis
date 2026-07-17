@@ -283,6 +283,11 @@ export function ScanRunningBanner({
             <p className="mt-0.5 line-clamp-2 text-sm text-[var(--color-text-primary)]" title={headline}>
               {headline}
             </p>
+            {progress?.stage === "detonating" && (
+              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                Running untrusted code in an isolated sandbox — this can take a few minutes.
+              </p>
+            )}
           </div>
           <div className="-mr-1 -mt-1 flex shrink-0 items-center">
             {isActive && (
