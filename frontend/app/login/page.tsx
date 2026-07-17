@@ -62,9 +62,9 @@ export default function LoginPage() {
 
           {/* Login form */}
           <div className="px-8 pb-8 pt-6">
-            <h2 className="mb-5 text-center text-lg font-semibold text-[var(--color-text-primary)]">
+            <h1 className="mb-5 text-center text-lg font-semibold text-[var(--color-text-primary)]">
               Sign in to your account
-            </h2>
+            </h1>
             <LoginForm />
           </div>
         </div>

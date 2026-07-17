@@ -808,9 +808,9 @@ export function HomeDashboard() {
 
       {/* Greeting — plain (no card chrome) per mock */}
       <div>
-        <h1 className="text-[26px] font-bold leading-tight tracking-[-0.025em] text-[var(--color-text-primary)]">
+        <h2 className="text-[26px] font-bold leading-tight tracking-[-0.025em] text-[var(--color-text-primary)]">
           {salutation}, {displayName}
-        </h1>
+        </h2>
         <p
           className="mt-1 text-sm text-[var(--color-text-secondary)]"
           aria-busy={loading ? "true" : "false"}

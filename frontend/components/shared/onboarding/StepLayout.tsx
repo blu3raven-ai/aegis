@@ -1,5 +1,7 @@
 "use client"
 
+import { Button } from "@/components/ui/Button"
+
 interface StepLayoutProps {
   title: string
   description: string
@@ -42,36 +44,27 @@ export function StepLayout({
       <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-4">
         <div>
           {!isFirstStep && onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              disabled={loading}
-              className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] disabled:opacity-50"
-            >
+            <Button variant="secondary" size="md" onClick={onBack} disabled={loading}>
               Back
-            </button>
+            </Button>
           )}
         </div>
         <div className="flex items-center gap-3">
           {onSkip && !isLastStep && (
-            <button
-              type="button"
-              onClick={onSkip}
-              disabled={loading}
-              className="text-sm text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] disabled:opacity-50"
-            >
+            <Button variant="ghost" size="md" onClick={onSkip} disabled={loading}>
               Skip for now
-            </button>
+            </Button>
           )}
           {onNext && (
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={onNext}
-              disabled={nextDisabled || loading}
-              className="rounded-lg bg-[var(--color-accent)] px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={nextDisabled}
+              isLoading={loading}
             >
               {loading ? "Saving…" : nextLabel}
-            </button>
+            </Button>
           )}
         </div>
       </div>

@@ -28,9 +28,10 @@ interface ConnectSourceStepProps {
   onNext: (data: { provider: Provider; configured: boolean }) => void
   onBack: () => void
   onSkip: () => void
+  loading?: boolean
 }
 
-export function ConnectSourceStep({ onNext, onBack, onSkip }: ConnectSourceStepProps) {
+export function ConnectSourceStep({ onNext, onBack, onSkip, loading = false }: ConnectSourceStepProps) {
   const [selected, setSelected] = useState<Provider | null>(null)
 
   return (
@@ -42,6 +43,7 @@ export function ConnectSourceStep({ onNext, onBack, onSkip }: ConnectSourceStepP
       onSkip={onSkip}
       nextLabel="Continue"
       nextDisabled={!selected}
+      loading={loading}
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_320px]">
         <div className="flex flex-col gap-4">
@@ -51,7 +53,7 @@ export function ConnectSourceStep({ onNext, onBack, onSkip }: ConnectSourceStepP
                 key={p.id}
                 type="button"
                 onClick={() => setSelected(p.id)}
-                className={`flex flex-col items-center gap-3 rounded-xl border-2 p-6 transition-colors ${
+                className={`flex flex-col items-center gap-3 rounded-xl border-2 p-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] ${
                   selected === p.id
                     ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                     : "border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-accent)]/50"
