@@ -118,12 +118,9 @@ RUN mkdir -p /etc/containers && \
     printf '[engine]\ncgroup_manager = "cgroupfs"\n[storage]\ndriver = "vfs"\n' > /etc/containers/containers.conf && \
     printf '[storage]\ndriver = "vfs"\n' > /etc/containers/storage.conf
 
-# The runner image doubles as the detonation honeypot sidecar (it already carries
-# the runner package + python; iptables is added above). Baking the image's own
-# tag here lets detonation default HONEYPOT_IMAGE to itself, so enabling detonation
-# needs only DETONATE=1. CI passes the published tag via --build-arg RUNNER_IMAGE.
-ARG RUNNER_IMAGE=""
-ENV RUNNER_IMAGE=${RUNNER_IMAGE}
+# The detonation honeypot ships as a self-contained OCI archive baked in below
+# (loaded into the embedded podman at startup, no registry pull). Enabling
+# detonation then needs only DETONATE=1.
 
 # Scanner CLIs
 COPY --from=builder \
@@ -147,6 +144,12 @@ COPY --from=builder /install /usr/local
 # Application code (build context is the runner/ directory; mounted as /app/runner)
 WORKDIR /app
 COPY . /app/runner/
+
+# Baked honeypot OCI archive: CI writes runner/.honeypot/image.tar before the
+# build, so the runner loads the honeypot at startup with no registry pull
+# (airgap-capable). A committed .keep keeps the dir present for bare local builds
+# where the archive is absent — there the runner rebuilds the honeypot at runtime.
+COPY .honeypot/ /opt/aegis-honeypot/
 
 # Non-root user. The subuid/subgid ranges are what rootless podman maps into a
 # nested container's user namespace — without them it cannot start one.

@@ -72,3 +72,6 @@ docs/internal/
 
 # evaluation tools
 .deepeval/
+
+# CI-generated embedded honeypot archive (baked into the runner image at build)
+runner/.honeypot/image.tar
