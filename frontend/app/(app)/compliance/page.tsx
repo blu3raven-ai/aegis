@@ -10,8 +10,10 @@ import { PageHeader } from "@/components/layout/PageHeader"
 import { ComplianceIcon } from "@/lib/shared/ui/page-icons"
 import { Button } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
+import { EmptyState } from "@/components/ui/EmptyState"
 import { FilterChip } from "@/components/ui/FilterChip"
 import { SearchInput } from "@/components/shared/SearchInput"
+import { ShieldCheck } from "lucide-react"
 import {
   listFrameworks,
   getFrameworkSummary,
@@ -324,33 +326,16 @@ export default function CompliancePage() {
         )}
 
         {loadState === "ok" && frameworks.length === 0 && (
-          <Card padding="none" className="flex flex-col items-center justify-center gap-4 rounded-md py-20 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]">
-              <svg
-                className="h-8 w-8"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
-              </svg>
-            </div>
-            <div className="flex flex-col gap-1">
-              <p className="text-base font-semibold text-[var(--color-text-primary)]">
-                No frameworks tracked yet
-              </p>
-              <p className="max-w-sm text-sm text-[var(--color-text-secondary)]">
-                Add a framework to start mapping findings to compliance controls.
-              </p>
-            </div>
-            <Button variant="secondary" size="md" onClick={() => setAddModalOpen(true)}>
-              Add framework
-            </Button>
-          </Card>
+          <EmptyState
+            icon={ShieldCheck}
+            title="No frameworks tracked yet"
+            description="Add a framework to start mapping findings to compliance controls."
+            cta={
+              <Button variant="secondary" size="md" onClick={() => setAddModalOpen(true)}>
+                Add framework
+              </Button>
+            }
+          />
         )}
 
         {loadState === "ok" && frameworks.length > 0 && (
@@ -443,6 +428,7 @@ export default function CompliancePage() {
       <AddFrameworkModal
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
+        trackedIds={frameworks.map((f) => f.id)}
         onCreated={() => {
           setAddModalOpen(false)
           fetchAll()
