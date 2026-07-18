@@ -134,7 +134,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   )
 })
 
-function Spinner({ className }: { className?: string }) {
+export function Spinner({ className }: { className?: string }) {
   return (
     <svg
       className={cn("animate-spin", className)}
@@ -154,3 +154,4 @@ function Spinner({ className }: { className?: string }) {
 }
 
 export type { ButtonProps, ButtonVariant, ButtonSize }
+export { Spinner }

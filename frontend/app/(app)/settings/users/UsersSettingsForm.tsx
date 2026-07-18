@@ -22,7 +22,7 @@ import {
   type Grant,
   type RoleRecord,
 } from "@/lib/client/settings-api"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
@@ -500,7 +500,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
   if (loading && users.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+        <Spinner className="h-8 w-8" />
       </div>
     )
   }

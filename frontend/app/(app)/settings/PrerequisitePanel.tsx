@@ -6,7 +6,7 @@ import {
   type ScannerPrerequisiteState,
   type PrerequisiteItem,
 } from "@/lib/shared/prerequisite-utils"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 
 export type { PrerequisiteItem }
 
@@ -85,7 +85,7 @@ export function PrerequisitePanel({
         {items.map((item) => (
           <li key={item.label} className="flex items-start gap-2.5">
             <span className="mt-0.5 shrink-0">
-              {item.status === "loading" && <SpinnerIcon />}
+              {item.status === "loading" && <Spinner className="h-4 w-4" />}
               {item.status === "pass" && <CheckIcon />}
               {item.status === "fail" && <XIcon />}
             </span>
