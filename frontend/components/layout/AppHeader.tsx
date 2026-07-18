@@ -322,7 +322,7 @@ export function AppHeader({
           type="button"
           aria-label="Open menu"
           onClick={() => setOpen(true)}
-          className="rounded-md p-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] md:hidden"
+          className="rounded-md p-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] md:hidden"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

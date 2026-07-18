@@ -248,7 +248,7 @@ export function SidebarContent({
                 type="button"
                 onClick={() => onSearchOpen(!searchOpen)}
                 aria-label="Search"
-                className="flex w-full items-center justify-center rounded-lg py-2 px-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+                className="flex w-full items-center justify-center rounded-lg py-2 px-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
               >
                 <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                   <path d={ICON_SEARCH} />
