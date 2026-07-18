@@ -31,7 +31,7 @@ export function TeamList({ teams, selectedTeamId, query, onQueryChange, onSelect
             onClick={() => onSelect(team.id)}
             className={`block w-full rounded-md px-3 py-2.5 text-left transition-colors ${
               selectedTeamId === team.id
-                ? "bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
+                ? "bg-[var(--color-accent)] text-white font-medium"
                 : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
             }`}
           >

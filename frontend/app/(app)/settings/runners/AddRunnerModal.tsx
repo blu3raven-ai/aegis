@@ -6,6 +6,7 @@ import { generateRunnerToken, fetchRunners, approveRunner } from "@/lib/client/s
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Button } from "@/components/ui/Button"
 import { Sheet } from "@/components/ui/Sheet"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { HostReachabilityNote } from "@/components/shared/HostReachabilityNote"
 import { useSSE } from "@/components/providers/SSEProvider"
 
@@ -159,7 +160,13 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
 
           <HostReachabilityNote origin={portalUrl} audience="the runner machine" />
 
-          {method === "docker" ? (
+          {!token ? (
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : method === "docker" ? (
             <CopyableBlock label="Run the runner" text={dockerCmd} />
           ) : (
             <>
