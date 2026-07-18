@@ -516,7 +516,7 @@ export function RecommendedFixSection({ fix, onViewDiff }: RecommendedFixSection
     <section aria-labelledby="finding-recommended-fix-title">
       <h3
         id="finding-recommended-fix-title"
-        className="text-base font-semibold text-[var(--color-text-primary)]"
+        className="border-b border-[var(--color-border-divider)] pb-1.5 text-base font-semibold text-[var(--color-text-primary)]"
       >
         Recommended fix
       </h3>

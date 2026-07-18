@@ -235,7 +235,7 @@ export function MitigatingFactorsSection({ factors }: { factors?: string[] }) {
   if (items.length === 0) return null
   return (
     <section className="space-y-2">
-      <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Mitigating factors</h3>
+      <h3 className="border-b border-[var(--color-border-divider)] pb-1.5 text-base font-semibold text-[var(--color-text-primary)]">Mitigating factors</h3>
       <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-[var(--color-text-secondary)]">
         {items.map((f, i) => (
           <li key={i}>{f}</li>
@@ -250,7 +250,7 @@ export function RemediationStepsSection({ steps }: { steps?: string[] }) {
   if (items.length === 0) return null
   return (
     <section className="space-y-2">
-      <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Defense in depth</h3>
+      <h3 className="border-b border-[var(--color-border-divider)] pb-1.5 text-base font-semibold text-[var(--color-text-primary)]">Defense in depth</h3>
       <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-[var(--color-text-secondary)]">
         {items.map((s, i) => (
           <li key={i}>{s}</li>
