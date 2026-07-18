@@ -89,7 +89,7 @@ export function FilterOverflow({
           )}
           {FILTER_GROUPS.map((group) => (
             <div key={group.label} className="mb-3 last:mb-0">
-              <p className="mb-1.5 px-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+              <p className="mb-1.5 px-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                 {group.label}
               </p>
               <div className="flex flex-wrap gap-1.5">

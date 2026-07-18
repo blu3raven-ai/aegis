@@ -203,17 +203,17 @@ export function PickReposStep({ onNext, onBack, onSkip, saving = false }: PickRe
                         <div className="flex items-center gap-2">
                           <span className="truncate font-mono text-sm text-[var(--color-text-primary)]">{r.repo_id}</span>
                           {r.language && (
-                            <span className="shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1.5 py-px text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+                            <span className="shrink-0 rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1.5 py-px font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                               {r.language}
                             </span>
                           )}
                           {r.is_private === true && (
-                            <span className="shrink-0 rounded border border-[var(--color-border)] px-1.5 py-px text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                            <span className="shrink-0 rounded border border-[var(--color-border)] px-1.5 py-px font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                               Private
                             </span>
                           )}
                           {r.is_private === false && (
-                            <span className="shrink-0 rounded border border-[var(--color-border)] px-1.5 py-px text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                            <span className="shrink-0 rounded border border-[var(--color-border)] px-1.5 py-px font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                               Public
                             </span>
                           )}

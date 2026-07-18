@@ -20,7 +20,7 @@ export function SettingsCard({ heading, children, className }: SettingsCardProps
   return (
     <div className={className}>
       {heading && (
-        <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-tertiary)]">
+        <p className="mb-2 px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-tertiary)]">
           {heading}
         </p>
       )}

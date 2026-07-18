@@ -43,7 +43,7 @@ function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
 
   return (
     <Card className="rounded-md">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Severity breakdown
       </p>
       <div className="mt-4 flex items-center gap-6">
@@ -119,7 +119,7 @@ function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
   const maxOpen = Math.max(...repos.map((r) => r.open), 1)
   return (
     <Card className="rounded-md">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Top repositories by findings
       </p>
       <div className="mt-4 space-y-3">
@@ -184,7 +184,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
   const { repositoryCoverage: cov, remediation: rem } = snap
   return (
     <Card className="rounded-md">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Repository coverage
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-6">
@@ -216,7 +216,7 @@ function CoverageAndRemediation({ snap }: { snap: PostureSnapshotResponse }) {
 
       <div className="border-t border-[var(--color-border)] my-4" />
 
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Remediation (last 90 days)
       </p>
       <div className="mt-4 flex flex-wrap items-end gap-6">
@@ -270,7 +270,7 @@ function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
   ]
   return (
     <Card className="rounded-md">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Finding age distribution
       </p>
       <div className="mt-4 space-y-2.5">

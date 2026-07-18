@@ -174,7 +174,7 @@ export function SignInStep({ onProviderClick, onMagicLinkRequest }: SignInStepPr
 
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-[var(--color-border)]" />
-          <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             or continue with email
           </span>
           <div className="h-px flex-1 bg-[var(--color-border)]" />
@@ -228,7 +228,7 @@ export function SignInStep({ onProviderClick, onMagicLinkRequest }: SignInStepPr
 
       <aside className="hidden md:block">
         <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-accent-subtle)] px-2.5 py-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-accent)]">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-accent-subtle)] px-2.5 py-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-accent)]">
             <ShieldIcon />
             Enterprise
           </div>

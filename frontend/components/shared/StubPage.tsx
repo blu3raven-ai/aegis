@@ -33,7 +33,7 @@ export function StubPage({ title, phase, purpose }: StubPageProps) {
     <>
       <PageHeader icon={<StubIcon />} title={title} />
       <Card padding="none" className="mx-auto mt-12 max-w-lg px-6 py-8 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+        <p className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
           Coming in Phase {phase}
         </p>
         <p className="mt-3 text-sm text-[var(--color-text-secondary)]">

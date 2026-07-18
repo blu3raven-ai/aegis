@@ -30,7 +30,7 @@ export default function LoginPage() {
                 {isVendor ? (
                   <>
                     <span
-                      className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
+                      className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
                       style={{ fontFamily: "var(--font-space-grotesk)" }}
                     >
                       Raven Protocol

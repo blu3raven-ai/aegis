@@ -161,7 +161,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
       {/* Just introduced */}
       <section>
         <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Just introduced · needs your attention
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
@@ -175,7 +175,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
       {/* Open in your repos */}
       <section>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Open in your repos
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
@@ -189,7 +189,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
       {/* Your week */}
       <section>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Your week
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
@@ -221,7 +221,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
       {/* Your repos */}
       <section>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Your repos
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>

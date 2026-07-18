@@ -179,7 +179,7 @@ function RiskScoreHero({
   return (
     <div className={`panel-ticks rounded-md border ${border} ${bg} overflow-hidden`}>
       <div className="px-6 pt-5 pb-4">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
           Risk score
         </h2>
         <div className="mt-2 flex items-baseline gap-3">
@@ -194,7 +194,7 @@ function RiskScoreHero({
             {riskScore.rating}
           </span>
         </div>
-        <p className="mt-1 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <p className="font-mono mt-1 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           Lower is better
         </p>
         {deltaNode && <div className="mt-2">{deltaNode}</div>}
@@ -204,7 +204,7 @@ function RiskScoreHero({
 
         {scoreSeries && (
           <div className="mt-5 border-t border-[var(--color-border)] pt-4">
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               {RANGE_LABEL[rangeDays]} trend
             </p>
             <div className="mt-2">
@@ -244,7 +244,7 @@ function KpiCard({
       className={`panel-ticks h-full rounded-md px-5 py-3 ${href ? "transition-colors hover:border-[var(--color-accent)]/40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           {label}
         </p>
         {delta && (
@@ -671,7 +671,7 @@ function RiskTrendChart({
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Risk score over time
         </h2>
-        <span className="text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           Last {RANGE_LABEL[rangeDays]} · lower is better
         </span>
       </div>
@@ -764,7 +764,7 @@ function RiskTrendChart({
                 style={{ left: xOf(hoverIdx) }}
               >
                 <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 shadow-lg whitespace-nowrap">
-                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                  <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                     {formatChartDate(hovered.date)}
                   </p>
                   <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--color-text-primary)]">
@@ -958,7 +958,7 @@ function PostureTrendChart({
                 style={{ left: xOf(hoverIdx) }}
               >
                 <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 shadow-lg">
-                  <p className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                  <p className="mb-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                     {formatChartDate(hovered.date)}
                   </p>
                   <div className="space-y-1">
@@ -1048,7 +1048,7 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Risk by team
         </h2>
-        <span className="text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           Critical + high
         </span>
       </div>

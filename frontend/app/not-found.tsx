@@ -16,7 +16,7 @@ export default function NotFound() {
           {isVendor ? (
             <>
               <span
-                className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
+                className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
                 style={{ fontFamily: "var(--font-space-grotesk)" }}
               >
                 Raven Protocol
@@ -47,7 +47,7 @@ export default function NotFound() {
         {/* Divider keeps the brand and the error message as distinct tiers */}
         <div className="my-8 h-px w-12 bg-[var(--color-border)]" />
 
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Error 404
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--color-text-primary)]">

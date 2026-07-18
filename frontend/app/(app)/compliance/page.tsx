@@ -277,7 +277,7 @@ export default function CompliancePage() {
                   key={i}
                   className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3"
                 >
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+                  <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                     —
                   </div>
                   <div className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">

@@ -20,8 +20,8 @@ export function EngineBadge({ engine }: EngineBadgeProps) {
 
   const isBoth = engine === "both"
   const className = isBoth
-    ? "inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] bg-[var(--color-accent)] text-[var(--color-accent-on)]"
-    : "inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
+    ? "inline-flex items-center rounded-full px-2 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] bg-[var(--color-accent)] text-[var(--color-accent-on)]"
+    : "inline-flex items-center rounded-full px-2 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
 
   return <span className={className}>{LABELS[engine as Engine]}</span>
 }

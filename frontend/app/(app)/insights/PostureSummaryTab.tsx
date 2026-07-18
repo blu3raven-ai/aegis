@@ -186,7 +186,7 @@ function RiskScoreHero({
     <div className={`panel-ticks rounded-md border ${border} ${bg} overflow-hidden`}>
       <div className="px-6 pt-5 pb-4">
         <div className="flex items-center gap-1.5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             Risk score
           </h2>
           <span className="group relative inline-flex">
@@ -219,7 +219,7 @@ function RiskScoreHero({
             {riskScore.rating}
           </span>
         </div>
-        <p className="mt-1 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <p className="font-mono mt-1 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           Lower is better
         </p>
         {deltaNode && <div className="mt-2">{deltaNode}</div>}
@@ -253,7 +253,7 @@ function RiskScoreHero({
 
         {scoreSeries && (
           <div className="mt-5 border-t border-[var(--color-border)] pt-4">
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               {RANGE_LABEL[rangeDays]} trend
             </p>
             <div className="mt-2">
@@ -834,7 +834,7 @@ function RiskTrendChart({
         </h2>
         <div className="flex flex-wrap items-center gap-3">
           {periodVelocityNode}
-          <span className="text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             Last {RANGE_LABEL[rangeDays]} · lower is better
           </span>
         </div>
@@ -980,7 +980,7 @@ function RiskTrendChart({
                 style={{ left: xOf(hoverIdx) }}
               >
                 <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 shadow-lg whitespace-nowrap">
-                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                  <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                     {formatChartDate(hovered.date)}
                   </p>
                   <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--color-text-primary)]">
@@ -1250,7 +1250,7 @@ function PostureTrendChart({
                 style={{ left: xOf(hoverIdx) }}
               >
                 <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 shadow-lg">
-                  <p className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                  <p className="mb-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                     {formatChartDate(hovered.date)}
                   </p>
                   <div className="space-y-1">
@@ -1341,7 +1341,7 @@ function DiscoveryVelocityChart({
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
             Discovery velocity
           </h2>
-          <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
+          <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
             last {RANGE_LABEL[rangeDays]}
           </span>
         </div>
@@ -1388,7 +1388,7 @@ function DiscoveryVelocityChart({
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
             Discovery velocity
           </h2>
-          <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
+          <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
             last {RANGE_LABEL[rangeDays]}
           </span>
         </div>
@@ -1591,7 +1591,7 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           Risk by team
         </h2>
-        <span className="text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           Critical + high
         </span>
       </div>
@@ -1798,7 +1798,7 @@ function BacklogFlowChart({
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
             Open backlog over time
           </h2>
-          <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             last {RANGE_LABEL[rangeDays]}
           </span>
         </div>
@@ -1930,7 +1930,7 @@ function SeverityMixChart({
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
             Severity mix over time
           </h2>
-          <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             share of open
           </span>
         </div>

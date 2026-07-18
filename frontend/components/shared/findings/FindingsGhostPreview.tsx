@@ -60,7 +60,7 @@ function GroupHeader({ label, count }: { label: string; count: number }) {
       <svg className="h-3 w-3 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="m6 9 6 6 6-6" />
       </svg>
-      <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+      <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
         {label}
       </span>
       <span className="text-2xs tabular-nums text-[var(--color-text-tertiary)]">{count}</span>

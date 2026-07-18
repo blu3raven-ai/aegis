@@ -89,7 +89,7 @@ export function HistorySidebar({ activeTypes, stats, onSelect }: HistorySidebarP
         <div key={section.label}>
           {i > 0 && <div className="mx-3 border-t border-[var(--color-border)]" />}
           <div className="px-2 pb-3">
-            <div className="px-2.5 pb-1 pt-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <div className="px-2.5 pb-1 pt-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               {section.label}
             </div>
             <div className="flex flex-col gap-0.5">

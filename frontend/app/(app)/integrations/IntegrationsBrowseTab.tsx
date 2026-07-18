@@ -222,7 +222,7 @@ export function IntegrationsBrowseTab({
 
             return sections.map(({ cat, items }) => (
               <div key={cat}>
-                <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+                <p className="mb-3 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
                   {CATEGORY_DISPLAY[cat] ?? cat}
                 </p>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

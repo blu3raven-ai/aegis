@@ -205,7 +205,7 @@ export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotRespons
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {Math.round(cov.percentage)}%
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             of {cov.total} repos
           </p>
         </div>
@@ -213,7 +213,7 @@ export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotRespons
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {cov.affected}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             affected
           </p>
         </div>
@@ -221,7 +221,7 @@ export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotRespons
           <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
             {cov.unaffected}
           </span>
-          <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <p className="mt-1 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             clean
           </p>
         </div>

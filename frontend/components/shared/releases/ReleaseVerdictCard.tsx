@@ -124,7 +124,7 @@ export function ReleaseVerdictCard({
           {style.iconGlyph}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Pre-release scan result
           </div>
           <div className="mt-1 text-base font-semibold text-[var(--color-text-primary)]">

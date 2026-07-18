@@ -522,7 +522,7 @@ function SortableTh({
       <button
         type="button"
         onClick={onClick}
-        className="group inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] rounded-sm"
+        className="font-mono group inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] rounded-sm"
         aria-label={`Sort by ${label}`}
       >
         {label}
@@ -1729,7 +1729,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                                     className="mt-0.5 flex items-baseline gap-1.5 text-2xs text-[var(--color-text-tertiary)]"
                                     title={finding.ruledOutReason}
                                   >
-                                    <span className="shrink-0 font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]">
+                                    <span className="font-mono shrink-0 font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]">
                                       Ruled out
                                     </span>
                                     <span className="truncate">{finding.ruledOutReason}</span>
@@ -2478,7 +2478,7 @@ function CompactFindingRow({
             className="mt-0.5 flex items-baseline gap-1.5 text-[11px] text-[var(--color-text-tertiary)]"
             title={finding.ruledOutReason}
           >
-            <span className="shrink-0 font-semibold uppercase tracking-[0.1em] text-[var(--color-status-ok-text)]">
+            <span className="font-mono shrink-0 font-semibold uppercase tracking-[0.1em] text-[var(--color-status-ok-text)]">
               Ruled out
             </span>
             <span className="truncate">{finding.ruledOutReason}</span>

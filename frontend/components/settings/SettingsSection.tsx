@@ -30,7 +30,7 @@ export function SettingsSection({
     >
       <header className="mb-3 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             {title}
           </h2>
           {subtitle && (

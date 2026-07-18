@@ -130,7 +130,7 @@ export function SecurityBriefSection({
               CISA Known Exploited
             </span>
             {kev.known_ransomware && (
-              <span className="rounded-md border border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-severity-critical-text)]">
+              <span className="font-mono rounded-md border border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-severity-critical-text)]">
                 Ransomware
               </span>
             )}

@@ -272,7 +272,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           <div className="max-h-72 overflow-y-auto py-2">
             {groups.map((grp) => (
               <div key={grp}>
-                <div className="px-3 py-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+                <div className="px-3 py-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                   {grp}
                 </div>
                 {displayGrouped[grp].map((item, i) => {

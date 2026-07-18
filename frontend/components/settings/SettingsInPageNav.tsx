@@ -310,7 +310,7 @@ function NavGroup({
           : "mb-1"
       }
     >
-      <div className="px-3 pb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <div className="px-3 pb-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         {label}
       </div>
       <div className="flex flex-col gap-0.5">

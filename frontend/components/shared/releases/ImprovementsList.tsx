@@ -21,7 +21,7 @@ interface ImprovementsListProps {
 }
 
 const CHIP_BASE =
-  "inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em]"
+  "inline-flex items-center rounded-full px-1.5 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em]"
 
 export function ImprovementsList({ improvements }: ImprovementsListProps) {
   if (improvements.length === 0) return null

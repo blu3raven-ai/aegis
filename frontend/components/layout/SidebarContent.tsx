@@ -199,7 +199,7 @@ export function SidebarContent({
   function GroupLabel({ label }: { label: string }) {
     if (collapsed) return <div className="mt-2" />
     return (
-      <p className="mt-3 mb-1 px-2.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+      <p className="mt-3 mb-1 px-2.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
         {label}
       </p>
     )
@@ -315,7 +315,7 @@ export function SidebarContent({
                 <>
                   <span className="truncate">{item.label}</span>
                   {item.badge && (
-                    <span className="ml-auto shrink-0 rounded border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-1.5 py-px text-2xs font-bold uppercase tracking-[0.08em] text-[var(--color-state-dismissed)]">
+                    <span className="font-mono ml-auto shrink-0 rounded border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-1.5 py-px text-2xs font-bold uppercase tracking-[0.08em] text-[var(--color-state-dismissed)]">
                       {item.badge}
                     </span>
                   )}

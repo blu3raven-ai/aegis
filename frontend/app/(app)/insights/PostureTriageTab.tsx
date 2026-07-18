@@ -306,7 +306,7 @@ function ScannerBreakdownCard({ rows }: { rows: ScannerBreakdownItem[] | null })
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-[var(--color-border)] text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              <tr className="border-b border-[var(--color-border)] text-left font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 <th className="py-2 pr-4 font-semibold">Scanner</th>
                 <th className="py-2 pr-4 font-semibold">Open findings</th>
                 <th className="py-2 pr-4 font-semibold">Risk</th>
@@ -486,7 +486,7 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
         </p>
       ) : (
         <div className="space-y-1.5">
-          <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             Top EPSS findings
           </p>
           {top.map((f) => {
@@ -612,7 +612,7 @@ function SlaPostureCard({ data }: { data: SlaPostureSummary | null }) {
                       className={`h-1.5 w-1.5 rounded-full ${SEV_DOT[s.key]}`}
                       aria-hidden="true"
                     />
-                    <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                    <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                       {s.label}
                     </span>
                   </div>
@@ -660,7 +660,7 @@ function SlaPostureCard({ data }: { data: SlaPostureSummary | null }) {
             const maxBreach = Math.max(...byScanner.map((s) => s.breached), 1)
             return (
               <div className="space-y-1.5">
-                <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                   Breaches by scanner
                 </p>
                 <div className="space-y-1">

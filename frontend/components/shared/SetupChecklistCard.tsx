@@ -65,7 +65,7 @@ export function SetupChecklistCard() {
         <div className="flex items-center justify-between gap-3">
           <h2
             id="setup-heading"
-            className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
+            className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
           >
             Get started
           </h2>

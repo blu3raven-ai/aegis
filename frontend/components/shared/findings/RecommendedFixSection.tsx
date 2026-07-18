@@ -414,7 +414,7 @@ function RotationStep({ step }: { step: FindingRecommendedFixStep }) {
         <p className="text-sm text-[var(--color-text-primary)]">
           {step.label}
           {step.destructive && (
-            <span className="ml-2 inline-flex items-center rounded-sm bg-[color-mix(in_srgb,var(--color-severity-critical)_14%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-critical-text)]">
+            <span className="font-mono ml-2 inline-flex items-center rounded-sm bg-[color-mix(in_srgb,var(--color-severity-critical)_14%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-critical-text)]">
               Destructive
             </span>
           )}
@@ -466,7 +466,7 @@ function RotationBody({ fix }: { fix: FindingRecommendedFix }) {
             </span>
           )}
           {fix.verifiedActive && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-high-text)]">
+            <span className="font-mono inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-high-text)]">
               Verified active
             </span>
           )}

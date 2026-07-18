@@ -55,7 +55,7 @@ export function PermissionGroup({
           size="xs"
           onClick={handleToggleGroup}
           disabled={disabled}
-          className="font-bold uppercase tracking-[0.14em] text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+          className="font-mono font-bold uppercase tracking-[0.14em] text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
         >
           {allSelected ? "Unselect All" : "Select All"}
         </Button>

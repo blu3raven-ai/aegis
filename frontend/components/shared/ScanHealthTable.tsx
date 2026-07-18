@@ -66,7 +66,7 @@ function RunRow({ label, run, showMode }: { label: string; run: ScanHealthRun; s
       interactive={run.status !== "failed"}
       className={run.status === "failed" ? "bg-[var(--color-severity-critical-subtle)]" : undefined}
     >
-      <Td className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{label}</Td>
+      <Td className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{label}</Td>
       <Td className="text-[var(--color-text-primary)]">{formatScanTimestamp(run.startedAt ?? run.createdAt)}</Td>
       <Td>
         <span className={`capitalize ${statusColour(run.status)}`}>

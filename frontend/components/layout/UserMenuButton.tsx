@@ -161,7 +161,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
             <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">
               {user.username}
             </p>
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               {roleLabel}
             </p>
           </div>

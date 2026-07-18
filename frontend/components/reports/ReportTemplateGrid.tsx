@@ -214,7 +214,7 @@ const TEMPLATES: ReportTemplate[] = [
 export function ReportTemplateGrid({ onSelect, disabledReasons }: ReportTemplateGridProps) {
   return (
     <section aria-label="Report templates">
-      <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)] mb-3">
+      <h2 className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)] mb-3">
         Templates
       </h2>
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-3">
@@ -277,12 +277,12 @@ function TemplateTile({
         </div>
         {interactive ? (
           <span
-            className={`text-2xs font-semibold uppercase tracking-[0.14em] rounded px-1.5 py-0.5 ${TAG_CLASS[tag]}`}
+            className={`font-mono text-2xs font-semibold uppercase tracking-[0.14em] rounded px-1.5 py-0.5 ${TAG_CLASS[tag]}`}
           >
             {TAG_LABEL[tag]}
           </span>
         ) : (
-          <span className="rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <span className="rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1.5 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             {disabledReason ? "Unavailable" : "Coming soon"}
           </span>
         )}
@@ -299,7 +299,7 @@ function TemplateTile({
           {formats.map(fmt => (
             <span
               key={fmt}
-              className="text-2xs font-semibold uppercase tracking-[0.06em] rounded px-1.5 py-0.5 bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]"
+              className="font-mono text-2xs font-semibold uppercase tracking-[0.06em] rounded px-1.5 py-0.5 bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]"
             >
               {fmt}
             </span>
