@@ -96,13 +96,13 @@ export function LoginForm() {
             placeholder="••••••••"
             required
             autoComplete="current-password"
-            className="pr-10"
+            className="pr-12"
           />
           <button
             type="button"
             onClick={() => setShowPassword((value) => !value)}
             aria-label={showPassword ? "Hide password" : "Show password"}
-            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
+            className="absolute inset-y-0 right-0 flex h-full w-12 items-center justify-center rounded-r-md text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
           >
             {showPassword ? <EyeOffIcon /> : <EyeIcon />}
           </button>
@@ -119,10 +119,11 @@ export function LoginForm() {
         type="submit"
         variant="primary"
         size="md"
+        isLoading={isPending}
         disabled={isPending || !email.trim() || !password}
-        className="w-full"
+        className="w-full h-11"
       >
-        {isPending ? "Signing in…" : "Sign in"}
+        Sign in
       </Button>
     </form>
   )
