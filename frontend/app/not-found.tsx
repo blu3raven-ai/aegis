@@ -17,13 +17,13 @@ export default function NotFound() {
             <>
               <span
                 className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
-                style={{ fontFamily: "var(--font-space-grotesk)" }}
+                style={{ fontFamily: "var(--font-jetbrains-mono)" }}
               >
                 Raven Protocol
               </span>
               <span
                 className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
-                style={{ fontFamily: "var(--font-space-grotesk)" }}
+                style={{ fontFamily: "var(--font-jetbrains-mono)" }}
               >
                 Blu3Raven
               </span>
@@ -37,7 +37,7 @@ export default function NotFound() {
           ) : (
             <span
               className="max-w-full truncate text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
-              style={{ fontFamily: "var(--font-space-grotesk)" }}
+              style={{ fontFamily: "var(--font-jetbrains-mono)" }}
             >
               {brandName}
             </span>
