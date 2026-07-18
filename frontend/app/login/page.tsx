@@ -22,7 +22,15 @@ export default function LoginPage() {
     <main 
       className="flex min-h-screen items-center justify-center px-4"
       style={{
-        background: 'linear-gradient(135deg, #0f1419 0%, #1a1f2e 15%, #2d1b4e 30%, #1a3a52 50%, #2d4a3f 70%, #1f3a5c 85%, #0f1419 100%)',
+        background: `
+          linear-gradient(90deg, rgba(45, 127, 249, 0.03) 1px, transparent 1px),
+          linear-gradient(0deg, rgba(45, 127, 249, 0.03) 1px, transparent 1px),
+          linear-gradient(45deg, rgba(45, 127, 249, 0.05) 1px, transparent 1px),
+          linear-gradient(-45deg, rgba(45, 127, 249, 0.05) 1px, transparent 1px),
+          linear-gradient(135deg, #0a0e17 0%, #0f1419 25%, #141a2a 50%, #0f1419 75%, #0a0e17 100%)
+        `,
+        backgroundSize: '60px 60px, 60px 60px, 85px 85px, 85px 85px, 100% 100%',
+        backgroundPosition: '0 0, 0 0, 0 0, 0 0, 0 0',
       }}
     >
       <div className="w-full max-w-sm">
