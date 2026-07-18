@@ -2233,7 +2233,7 @@ function SignalChip({
     <span
       title={title}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-2xs font-semibold uppercase tracking-[0.04em]",
         tones[tone],
       )}
     >
@@ -2280,7 +2280,7 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
     <div className="flex flex-wrap items-center gap-2" aria-label="Risk signals">
       <SignalChip tone={SEVERITY_TONE[finding.severity]} title="Finding severity">
         <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-        <span className="capitalize">{finding.severity}</span>
+        <span>{finding.severity}</span>
       </SignalChip>
       {likelihood && (
         <SignalChip
