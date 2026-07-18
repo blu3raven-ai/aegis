@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { addOrganisationRepository, removeOrganisationRepository, searchOrganisationRepositories } from "@/lib/client/settings-api"
+import { FolderGit2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { EmptyState } from "@/components/ui/EmptyState"
 import type { OrganisationTeam, ResourceSharingIndex } from "./team-types"
@@ -103,11 +104,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
         {repoAssets.length === 0 && (
           <div className="py-6">
             <EmptyState
-              icon={() => (
-                <svg className="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 12a9 9 0 100 0m0 0h18M3 12l4-4m0 8l-4-4M21 12l-4-4m0 8l4-4" />
-                </svg>
-              )}
+              icon={FolderGit2}
               title="No repositories assigned"
               description="Add repositories to give this team access to scan results."
             />
