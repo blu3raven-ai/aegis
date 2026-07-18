@@ -268,7 +268,7 @@ export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotRespons
         </div>
       </div>
       <p className="mt-3 text-2xs text-[var(--color-text-tertiary)]">
-        Counts repos with open findings — a repo not yet scanned shows as having no open findings.
+        Counts repos with open findings. A repo not yet scanned shows as having no open findings.
       </p>
     </Card>
   )

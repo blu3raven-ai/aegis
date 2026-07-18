@@ -65,7 +65,7 @@ export function EpssExposureWidget({ findings }: EpssExposureWidgetProps) {
         </ul>
       ) : (
         <p className="mt-4 text-xs text-[var(--color-text-secondary)]">
-          No EPSS scores yet — run{" "}
+          No EPSS scores yet. Run{" "}
           <code className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]">
             aegis epss refresh
           </code>{" "}

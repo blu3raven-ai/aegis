@@ -113,7 +113,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
       ? `Last attested ${formatAssessedAt(assessment.assessed_at)}${
           assessment.assessed_by ? ` · ${assessment.assessed_by}` : ""
         }`
-      : "Not yet attested — status is derived from open findings."
+      : "Not yet attested. Status is derived from open findings."
 
   const statusLabel = STATUS_OPTIONS.find((o) => o.id === assessment?.manual_status)?.label
 

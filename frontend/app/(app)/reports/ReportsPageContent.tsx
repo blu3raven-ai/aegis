@@ -103,7 +103,7 @@ export function ReportsPageContent() {
       if (!res.ok) {
         throw new Error(
           res.status === 404
-            ? "PCI DSS isn’t a tracked framework yet — add it under Compliance to export its attestation."
+            ? "PCI DSS isn’t a tracked framework yet. Add it under Compliance to export its attestation."
             : "Couldn’t generate the PCI DSS attestation. Please try again.",
         )
       }

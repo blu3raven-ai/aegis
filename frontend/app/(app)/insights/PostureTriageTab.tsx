@@ -145,7 +145,7 @@ function RiskDecompositionCard() {
             Risk decomposition
           </h2>
           <p className="text-2xs text-[var(--color-text-secondary)]">
-            Where your risk concentrates — switch the dimension to re-slice.
+            Where your risk concentrates. Switch the dimension to re-slice.
           </p>
         </div>
         <SegmentedControl

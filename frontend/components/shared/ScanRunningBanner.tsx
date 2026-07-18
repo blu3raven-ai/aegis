@@ -285,12 +285,12 @@ export function ScanRunningBanner({
             </p>
             {tone === "running" && (
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                You can keep working — we will notify you when it is done.
+                You can keep working. We will notify you when it is done.
               </p>
             )}
             {progress?.stage === "detonating" && (
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                Running untrusted code in an isolated sandbox — this can take a few minutes.
+                Running untrusted code in an isolated sandbox. This can take a few minutes.
               </p>
             )}
           </div>

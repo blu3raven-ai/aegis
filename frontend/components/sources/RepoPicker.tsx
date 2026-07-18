@@ -109,7 +109,7 @@ export function RepoPicker({
           return
         }
         if (!res.ok && res.status !== 403 && res.status !== 429) {
-          setUrlError("Couldn't verify that repository — check the URL.")
+          setUrlError("Couldn't verify that repository. Check the URL.")
           return
         }
         // 403 / 429 == rate-limited; don't block, fall through and add.
@@ -184,7 +184,7 @@ export function RepoPicker({
           <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
             <p className="text-sm text-[var(--color-text-primary)]">No repositories found</p>
             <p className="text-xs text-[var(--color-text-secondary)]">
-              The token may have no repo access — check its scopes.
+              The token may have no repo access. Check its scopes.
             </p>
           </div>
         ) : (

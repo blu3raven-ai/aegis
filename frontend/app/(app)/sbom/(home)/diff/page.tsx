@@ -142,7 +142,7 @@ export default function SbomDiffPage() {
       <div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SbomScanSelector
-            label="Side A — base"
+            label="Side A · base"
             repos={repos}
             reposLoading={reposLoading}
             selectedRepoId={sideARepo}
@@ -151,7 +151,7 @@ export default function SbomDiffPage() {
             onHashChange={setSideAHash}
           />
           <SbomScanSelector
-            label="Side B — target"
+            label="Side B · target"
             repos={repos}
             lockRepo
             selectedRepoId={sideARepo}
@@ -179,7 +179,7 @@ export default function SbomDiffPage() {
 
         {sameSnapshot && (
           <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
-            Pick two different snapshots to compare — both sides are the same snapshot.
+            Pick two different snapshots to compare. Both sides are the same snapshot.
           </p>
         )}
       </div>

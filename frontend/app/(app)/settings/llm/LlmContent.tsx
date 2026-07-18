@@ -32,27 +32,27 @@ const PROVIDERS: ProviderPreset[] = [
   {
     id: "anthropic",
     name: "Anthropic",
-    description: "Claude family — recommended for SAST and secrets verification.",
+    description: "Claude family: recommended for SAST and secrets verification.",
     apiBaseUrl: "https://api.anthropic.com/v1",
     baseUrlEditable: false,
     models: [
-      { id: "claude-opus-4-7", label: "Claude Opus 4.7 — highest accuracy" },
-      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 — balanced (recommended)" },
-      { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 — fastest, lowest cost" },
+      { id: "claude-opus-4-7", label: "Claude Opus 4.7 · highest accuracy" },
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 · balanced (recommended)" },
+      { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 · fastest, lowest cost" },
     ],
   },
   {
     id: "openai",
     name: "OpenAI",
-    description: "GPT family — broad model coverage.",
+    description: "GPT family: broad model coverage.",
     apiBaseUrl: "https://api.openai.com/v1",
     baseUrlEditable: false,
     models: [
-      { id: "gpt-4o",      label: "GPT-4o — broad coverage" },
-      { id: "gpt-4o-mini", label: "GPT-4o mini — low cost" },
-      { id: "o3",          label: "o3 — deep reasoning" },
-      { id: "o1",          label: "o1 — extended reasoning" },
-      { id: "o1-mini",     label: "o1 mini — fast reasoning" },
+      { id: "gpt-4o",      label: "GPT-4o · broad coverage" },
+      { id: "gpt-4o-mini", label: "GPT-4o mini · low cost" },
+      { id: "o3",          label: "o3 · deep reasoning" },
+      { id: "o1",          label: "o1 · extended reasoning" },
+      { id: "o1-mini",     label: "o1 mini · fast reasoning" },
     ],
   },
   {
@@ -66,7 +66,7 @@ const PROVIDERS: ProviderPreset[] = [
   {
     id: "custom",
     name: "Custom (OpenAI-compatible)",
-    description: "Any OpenAI-compatible endpoint — vLLM, Ollama, LiteLLM, etc.",
+    description: "Any OpenAI-compatible endpoint: vLLM, Ollama, LiteLLM, etc.",
     apiBaseUrl: "https://your-endpoint.example.com/v1",
     baseUrlEditable: true,
     models: [],
@@ -274,7 +274,7 @@ export function LlmContent({ canEdit = true, sessionLoading = false }: LlmConten
           <ProviderPicker value={form.provider} onChange={handleProviderChange} />
         </SettingsRow>
 
-        <SettingsRow label="API key" description={configured ? "A key is stored. Paste a new one to replace it." : "Used only to authenticate from the Aegis backend — never sent to the browser."} layout="stack">
+        <SettingsRow label="API key" description={configured ? "A key is stored. Paste a new one to replace it." : "Used only to authenticate from the Aegis backend. Never sent to the browser."} layout="stack">
           <div className="flex gap-2">
             <div className="flex-1">
               <Input
@@ -475,7 +475,7 @@ function StatusBanner({
   return (
     <div className="rounded-md border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
       <p className="text-sm font-medium text-[var(--color-status-ok)]">
-        LLM verification is active — {providerName}
+        LLM verification is active: {providerName}
       </p>
       <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
         New SAST and secrets findings are verified automatically before they hit the inbox.

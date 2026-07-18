@@ -155,7 +155,7 @@ export function DryRunConfirmDialog({
               {matchCount === 0 ? (
                 <p className="text-sm text-[var(--color-text-primary)]">
                   This rule wouldn&apos;t dismiss anything against the most
-                  recent findings. You can still enable it — it will dismiss
+                  recent findings. You can still enable it. It will dismiss
                   matches as they arrive.
                 </p>
               ) : (

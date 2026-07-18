@@ -218,7 +218,7 @@ export function LlmDetail({ onChanged }: DetailComponentProps) {
   return (
     <div className="flex flex-col gap-5">
       <p className="text-sm text-[var(--color-text-secondary)]">
-        Connect your own OpenAI-compatible model to verify scanner findings — confirming real exploits with a cited
+        Connect your own OpenAI-compatible model to verify scanner findings, confirming real exploits with a cited
         evidence chain and ruling out false positives. Independent of threat-intel enrichment.
       </p>
 

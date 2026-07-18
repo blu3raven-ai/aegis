@@ -222,7 +222,7 @@ export function SidebarContent({
                     Blu3Raven
                   </span>
                   <span className="mt-0.5 font-mono text-2xs leading-tight text-[var(--color-text-secondary)]">
-                    Aegis — Vulnerability Management Portal
+                    Aegis · Vulnerability Management Portal
                   </span>
                 </>
               ) : (

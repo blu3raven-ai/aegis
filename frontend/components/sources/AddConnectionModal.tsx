@@ -317,7 +317,7 @@ export function AddConnectionModal({
     setApiKeyError(null)
     try {
       const key = await createApiKey({
-        name: `CI/CD — ${SOURCE_TYPE_LABELS[selectedType]}`,
+        name: `CI/CD · ${SOURCE_TYPE_LABELS[selectedType]}`,
         scopes: ["scan:trigger"],
       })
       setApiKeyToken(key.token)
@@ -774,7 +774,7 @@ export function AddConnectionModal({
                     <p className="max-w-xs text-xs leading-relaxed text-[var(--color-text-secondary)]">
                       {testing
                         ? "Discovering every repo your token can access."
-                        : "Enter your Personal Access Token on the left — every repo it can access loads here to cherry-pick."}
+                        : "Enter your Personal Access Token on the left. Every repo it can access loads here to cherry-pick."}
                     </p>
                   </div>
                 )}
@@ -822,7 +822,7 @@ export function AddConnectionModal({
                     <>
                       <CopyRow value={webhookSecret} mono copied={copied === "secret"} onCopy={(v) => copy(v, "secret")} />
                       <p className="text-[var(--color-text-tertiary)]">
-                        Copy it now — it won&apos;t be shown again. You can rotate it later from Webhook Endpoints.
+                        Copy it now. It won&apos;t be shown again. You can rotate it later from Webhook Endpoints.
                       </p>
                     </>
                   ) : (
@@ -861,7 +861,7 @@ export function AddConnectionModal({
               <div className="space-y-4">
                 <p className="text-sm text-[var(--color-text-secondary)]">
                   Run the Aegis scanner inside your {providerLabel} pipeline. It scans each build and reports findings
-                  back to Aegis — no webhook required.
+                  back to Aegis. No webhook required.
                 </p>
 
                 <HostReachabilityNote origin={aegisUrl} audience={`your ${providerLabel} pipeline`} />
@@ -876,7 +876,7 @@ export function AddConnectionModal({
                       <>
                         <CopyRow value={apiKeyToken} mono copied={copied === "apikey"} onCopy={(v) => copy(v, "apikey")} />
                         <p className="text-[var(--color-text-tertiary)]">
-                          Copy it now — it won&apos;t be shown again. It&apos;s saved under{" "}
+                          Copy it now. It won&apos;t be shown again. It&apos;s saved under{" "}
                           <Link href="/settings/api-keys" className="text-[var(--color-accent)] underline" onClick={onClose}>
                             Settings → API keys
                           </Link>.
@@ -902,7 +902,7 @@ export function AddConnectionModal({
                     )}
                   </Step>
                   <Step n={3}>
-                    That&apos;s it — Aegis links each scan to the right source from the repository
+                    That&apos;s it. Aegis links each scan to the right source from the repository
                     automatically, so there&apos;s no source id to manage.
                   </Step>
                 </ol>

@@ -1246,7 +1246,7 @@ export function PostureSummaryTab({
       <ComplianceSnapshot frameworks={frameworks} summaries={complianceSummaries} />
 
       <p className="text-xs text-[var(--color-text-tertiary)]">
-        Covers scanned source code only — runtime is not directly observed.
+        Covers scanned source code only. Runtime is not directly observed.
       </p>
     </div>
   )

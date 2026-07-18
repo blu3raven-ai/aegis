@@ -316,7 +316,7 @@ function GroupNode({ cond, onChange, onRemove, depth = 0, fields, operatorsForFi
       <div className={`space-y-2 ${depth > 0 ? "pl-3 border-l border-[var(--color-border-divider)]" : ""}`}>
         {children.length === 0 && (
           <p className="text-xs text-[var(--color-text-tertiary)] italic px-1">
-            No conditions — add one below.
+            No conditions. Add one below.
           </p>
         )}
         {children.map((child, i) => {

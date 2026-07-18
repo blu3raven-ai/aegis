@@ -83,7 +83,7 @@ export function CostChart({ days }: CostChartProps) {
           style={{ height: HEIGHT }}
           className="flex items-center justify-center rounded border border-dashed border-[var(--color-border)] text-xs italic text-[var(--color-text-secondary)]"
         >
-          No usage yet — your next scan will show up here.
+          No usage yet. Your next scan will show up here.
         </div>
       </div>
     )

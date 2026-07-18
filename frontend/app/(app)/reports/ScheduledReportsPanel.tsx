@@ -413,7 +413,7 @@ function ScheduleModal({
 
           {destinations.length === 0 ? (
             <p className="text-xs text-[var(--color-text-secondary)]">
-              No notification destinations configured — this report will be archived to Report
+              No notification destinations configured. This report will be archived to Report
               history only.
             </p>
           ) : (
@@ -438,7 +438,7 @@ function ScheduleModal({
               </div>
               {destIds.length === 0 && (
                 <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                  Not delivered anywhere — archived to Report history only.
+                  Not delivered anywhere. Archived to Report history only.
                 </p>
               )}
             </div>

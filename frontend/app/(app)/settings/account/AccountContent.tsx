@@ -147,7 +147,7 @@ export function AccountContent({ children }: { children?: React.ReactNode }) {
             <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
               {user.avatarUrl
                 ? "JPG, PNG, or GIF · max 100KB"
-                : "Add a profile photo — JPG, PNG, or GIF · max 100KB"}
+                : "Add a profile photo: JPG, PNG, or GIF · max 100KB"}
             </p>
             <div className="mt-2 flex items-center gap-3">
               <input

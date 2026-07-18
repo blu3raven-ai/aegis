@@ -20,7 +20,7 @@ export function EmptyActivityState() {
         No activity yet
       </p>
       <p className="max-w-xs text-xs text-[var(--color-text-secondary)]">
-        Nothing has happened yet — check back later once scans have run or findings have been triaged.
+        Nothing has happened yet. Check back later once scans have run or findings have been triaged.
       </p>
     </div>
   )

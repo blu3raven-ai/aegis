@@ -135,7 +135,7 @@ function AdvisoryMirrorCard({ canRefresh }: { canRefresh: boolean }) {
           <div className="divide-y divide-[var(--color-border)]">
             <FeedRow
               name="OSV catalog"
-              detail="Open-source vulnerability advisories — drives dependency & container matching"
+              detail="Open-source vulnerability advisories. Drives dependency & container matching"
               count={status.osv.advisories}
               lastRefreshedAt={status.osv.lastRefreshedAt}
               error={status.osv.error}
@@ -158,7 +158,7 @@ function AdvisoryMirrorCard({ canRefresh }: { canRefresh: boolean }) {
         {emptyMirror && (
           <div className="rounded-md border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-3 py-2.5 text-xs text-[var(--color-state-pending-text)]">
             The advisory mirror hasn&apos;t been populated yet. Dependency and container scans
-            produce no findings until the first refresh completes — refresh now to bootstrap it.
+            produce no findings until the first refresh completes. Refresh now to bootstrap it.
           </div>
         )}
 
@@ -350,7 +350,7 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
         <div className="mt-6 border-t border-[var(--color-border)] pt-6">
           <SettingsRow
             label="Flag recently published versions"
-            description="Look up each dependency version's publish date (via deps.dev) to flag supply-chain-fresh releases. Off by default — sends package names to deps.dev, so leave off for air-gapped installs."
+            description="Look up each dependency version's publish date (via deps.dev) to flag supply-chain-fresh releases. Off by default: sends package names to deps.dev, so leave off for air-gapped installs."
           >
             <ToggleSwitch
               label="Toggle release-age enrichment"
@@ -377,7 +377,7 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
           )}
           <SettingsRow
             label="Recommend newer base-image tags"
-            description="List a scanned image's tags from its registry to surface newer versions on container findings. Off by default — reaches the image registry, so leave off for air-gapped installs."
+            description="List a scanned image's tags from its registry to surface newer versions on container findings. Off by default: reaches the image registry, so leave off for air-gapped installs."
           >
             <ToggleSwitch
               label="Toggle base-image tag recommendations"
@@ -388,7 +388,7 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
           </SettingsRow>
           <SettingsRow
             label="Prove base-image upgrades"
-            description="SBOM-scan the newest available tag of each image and recommend it when it has fewer vulnerabilities. Off by default — runs an extra scan per image and reaches the registry, so leave off for air-gapped installs."
+            description="SBOM-scan the newest available tag of each image and recommend it when it has fewer vulnerabilities. Off by default: runs an extra scan per image and reaches the registry, so leave off for air-gapped installs."
           >
             <ToggleSwitch
               label="Toggle base-image upgrade recommendations"

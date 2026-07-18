@@ -10,7 +10,7 @@ export function ArgusSection() {
     <SettingsSection
       id="argus"
       title="Argus verification"
-      subtitle="Connect your hosted Argus service over OAuth — no model key needed in Aegis"
+      subtitle="Connect your hosted Argus service over OAuth. No model key needed in Aegis"
     >
       <ArgusConnectionContent canEdit={canEdit} sessionLoading={loading} />
     </SettingsSection>

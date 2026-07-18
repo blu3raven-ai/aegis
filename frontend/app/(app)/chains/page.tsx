@@ -122,10 +122,10 @@ const MOCK_CHAINS: MockChain[] = [
       body: (
         <>
           <strong>Upgrade log4j-core <code className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[11.5px]">2.14.0 → 2.17.1</code></strong>
-          {" "}— patch release, no breaking changes, ~5 min to merge.
+          . Patch release, no breaking changes, ~5 min to merge.
         </>
       ),
-      meta: "Breaking node 3 (Log4j RCE) eliminates the bridge between exploit and impact — no need to fix the other 3 nodes.",
+      meta: "Breaking node 3 (Log4j RCE) eliminates the bridge between exploit and impact. No need to fix the other 3 nodes.",
       actions: [
         { label: "Open fix PR", primary: true },
         { label: "Create Jira ticket" },
@@ -274,7 +274,7 @@ function PreviewBanner() {
         </div>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
           Chain correlation requires reachability analysis (Argus engine). The data below is a
-          design preview — not yet generally available. Targeted for a future release.
+          design preview. Not yet generally available. Targeted for a future release.
         </p>
       </div>
       <a

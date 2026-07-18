@@ -58,7 +58,7 @@ export default function LoginPage() {
                       className="mt-0.5 text-xs text-[var(--color-text-secondary)]"
                       style={{ fontFamily: "var(--font-jetbrains-mono)" }}
                     >
-                      Aegis — Vulnerability Management Portal
+                      Aegis · Vulnerability Management Portal
                     </span>
                   </>
                 ) : (

@@ -140,7 +140,7 @@ export function RuleEditorModal({
                 value={channelId}
                 onChange={(e) => setChannelId(Number(e.target.value))}
               >
-                <option value="">— select channel —</option>
+                <option value="">Select channel…</option>
                 {destinations.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name} ({d.destination_type})

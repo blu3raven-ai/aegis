@@ -144,7 +144,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
         {card.identityKey}
         {card.cve && (
           <span className="ml-2 font-[family-name:var(--font-jetbrains-mono)] text-sm font-normal text-[var(--color-text-tertiary)]">
-            — {card.cve}
+            · {card.cve}
           </span>
         )}
       </h3>

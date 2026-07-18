@@ -31,7 +31,7 @@ export default function NotFound() {
                 className="mt-1 text-xs text-[var(--color-text-secondary)]"
                 style={{ fontFamily: "var(--font-manrope)" }}
               >
-                Aegis — Vulnerability Management Portal
+                Aegis · Vulnerability Management Portal
               </span>
             </>
           ) : (

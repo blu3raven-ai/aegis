@@ -226,7 +226,7 @@ function RunnerFleetBody({
           </div>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
             Scanners run on separate machines you register. Runners are trusted
-            with repository tokens and registry credentials — only register on
+            with repository tokens and registry credentials. Only register on
             machines you control.
           </p>
         </div>

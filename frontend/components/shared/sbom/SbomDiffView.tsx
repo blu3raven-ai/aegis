@@ -171,7 +171,7 @@ function TruncatedRow({ shown, total }: { shown: number; total: number }) {
   if (shown >= total) return null
   return (
     <li className="py-2 pl-4 text-2xs text-[var(--color-text-tertiary)]">
-      Showing the first {shown.toLocaleString()} of {total.toLocaleString()} — this diff is too large to
+      Showing the first {shown.toLocaleString()} of {total.toLocaleString()}. This diff is too large to
       list in full.
     </li>
   )

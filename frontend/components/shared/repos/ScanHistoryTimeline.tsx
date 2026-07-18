@@ -61,7 +61,7 @@ export function ScanHistoryTimeline({ runs }: ScanHistoryTimelineProps) {
           </div>
         ))}
         <p className="px-5 py-3 text-center text-xs text-[var(--color-text-tertiary)] border-t border-[var(--color-border)]">
-          No scan history yet — trigger a scan above to get started.
+          No scan history yet. Trigger a scan above to get started.
         </p>
       </div>
     )

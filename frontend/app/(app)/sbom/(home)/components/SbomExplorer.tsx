@@ -520,7 +520,7 @@ export function SbomExplorer() {
 
           {truncated && !loading && (
             <p className="text-2xs text-[var(--color-text-secondary)]">
-              Showing the first {total.toLocaleString()} matches — this version filter scanned too many
+              Showing the first {total.toLocaleString()} matches. This version filter scanned too many
               components to be exhaustive. Add an ecosystem or repository filter for complete results.
             </p>
           )}
@@ -740,7 +740,7 @@ function BulkLookupPanel({
                 <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
               </svg>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                Too many matches to scan exhaustively — some packages may show fewer repositories than they actually appear in, or read as not found. Narrow the list to get complete results.
+                Too many matches to scan exhaustively. Some packages may show fewer repositories than they actually appear in, or read as not found. Narrow the list to get complete results.
               </p>
             </div>
           )}
@@ -751,7 +751,7 @@ function BulkLookupPanel({
                 <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
               </svg>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                Only the first {results.acceptedCount.toLocaleString()} of {parsedCount.toLocaleString()} pasted packages were checked — the rest aren&apos;t in any bucket below. Split the list into smaller batches to check them all.
+                Only the first {results.acceptedCount.toLocaleString()} of {parsedCount.toLocaleString()} pasted packages were checked. The rest aren&apos;t in any bucket below. Split the list into smaller batches to check them all.
               </p>
             </div>
           )}
@@ -764,7 +764,7 @@ function BulkLookupPanel({
             matches={flaggedInUse}
           />
           <BulkExposureSection
-            label="Loose range — a clean reinstall could pull the flagged version"
+            label="Loose range: a clean reinstall could pull the flagged version"
             count={latent.length}
             tone="warning"
             matches={latent}
@@ -839,9 +839,9 @@ function OccurrenceChip({ occ }: { occ: BulkOccurrence }) {
   // and the flagged/latent state is stated in words (not conveyed by colour alone).
   let title = `${occ.repo} @ ${occ.version || "—"}`
   if (occ.flagged) {
-    title = `${occ.repo} @ ${occ.version || "—"} — installed version matches the flagged version`
+    title = `${occ.repo} @ ${occ.version || "—"}: installed version matches the flagged version`
   } else if (occ.latent) {
-    title = `${occ.repo} @ ${occ.version || "—"} — declared range could resolve to the flagged version on a clean reinstall`
+    title = `${occ.repo} @ ${occ.version || "—"}: declared range could resolve to the flagged version on a clean reinstall`
   }
   return (
     <span title={title} className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-2xs ${cls}`}>

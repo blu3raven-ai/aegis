@@ -112,7 +112,7 @@ export function RulePreview() {
               </span>
             ) : (
               <span className="ml-2 text-xs text-[var(--color-text-tertiary)] font-medium">
-                No rules matched — default fanout applies
+                No rules matched. Default fanout applies
               </span>
             )}
           </div>

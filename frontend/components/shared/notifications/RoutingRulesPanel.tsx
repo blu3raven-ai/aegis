@@ -136,7 +136,7 @@ export function RoutingRulesPanel() {
           </h2>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
             Send findings to the right channel based on rules. Rules evaluate in
-            priority order — the first match wins.
+            priority order. The first match wins.
           </p>
         </div>
         {!loading && !loadError && (

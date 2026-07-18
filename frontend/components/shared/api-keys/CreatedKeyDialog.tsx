@@ -33,7 +33,7 @@ export function CreatedKeyDialog({ token, onClose }: Props) {
         </h2>
 
         <div className="mb-4 rounded-md border border-l-2 border-[var(--color-state-pending-border)] border-l-[var(--color-state-pending)] bg-[var(--color-state-pending-subtle)] px-3 py-2 text-xs text-[var(--color-text-primary)]">
-          Copy this key now — it will not be shown again.
+          Copy this key now. It will not be shown again.
         </div>
 
         <div className="mb-4 flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2">

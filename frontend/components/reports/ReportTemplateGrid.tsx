@@ -263,8 +263,8 @@ function TemplateTile({
         interactive
           ? `Use ${title} template`
           : disabledReason
-            ? `${title} — ${disabledReason}`
-            : `${title} — coming soon`
+            ? `${title}: ${disabledReason}`
+            : `${title}: coming soon`
       }
       className={`${baseClass} ${stateClass}`}
     >

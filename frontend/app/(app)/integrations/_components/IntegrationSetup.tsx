@@ -30,7 +30,7 @@ export function IntegrationSetup({ integration }: { integration: Integration }) 
       <div className="rounded-md border border-dashed border-[var(--color-border)] px-4 py-8 text-center">
         <p className="text-sm font-medium text-[var(--color-text-primary)]">{label}</p>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-          Setup for {integration.name} isn’t available yet — it’s on the roadmap.
+          Setup for {integration.name} isn’t available yet. It’s on the roadmap.
         </p>
       </div>
     );
@@ -62,7 +62,7 @@ export function IntegrationSetup({ integration }: { integration: Integration }) 
         </h3>
         <StepsComponent aegisUrl={aegisUrl} />
         <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
-          Aegis links results to the right source automatically from the repository — no source id needed.
+          Aegis links results to the right source automatically from the repository. No source id needed.
         </p>
       </section>
     </div>

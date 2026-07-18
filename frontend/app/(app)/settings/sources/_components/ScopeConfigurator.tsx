@@ -143,7 +143,7 @@ export function ScopeConfigurator({
                 )}
               </span>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                Cherry-pick the exact {itemLabel} to scan — nothing else is pulled.
+                Cherry-pick the exact {itemLabel} to scan. Nothing else is pulled.
               </p>
             </div>
           </label>

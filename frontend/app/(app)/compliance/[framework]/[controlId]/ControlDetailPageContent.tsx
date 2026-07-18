@@ -30,13 +30,13 @@ function statusReason(
   highestSeverity: string | null,
 ): string {
   if (item?.manual_status) {
-    return `Manually attested ${item.manual_status.replace(/_/g, " ")} — this overrides the finding-derived status.`
+    return `Manually attested ${item.manual_status.replace(/_/g, " ")}. This overrides the finding-derived status.`
   }
-  if (openCount === 0) return "No open findings map to this control — derived as compliant."
+  if (openCount === 0) return "No open findings map to this control. Derived as compliant."
   if (highestSeverity === "critical" || highestSeverity === "high") {
-    return `${openCount} open finding${openCount === 1 ? "" : "s"} mapped (highest: ${highestSeverity}) — derived as at risk.`
+    return `${openCount} open finding${openCount === 1 ? "" : "s"} mapped (highest: ${highestSeverity}). Derived as at risk.`
   }
-  return `${openCount} open finding${openCount === 1 ? "" : "s"} mapped (highest: ${highestSeverity ?? "low"}) — derived as partial.`
+  return `${openCount} open finding${openCount === 1 ? "" : "s"} mapped (highest: ${highestSeverity ?? "low"}). Derived as partial.`
 }
 
 export function ControlDetailPageContent() {

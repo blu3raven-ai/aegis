@@ -143,7 +143,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
           <div className={`flex items-center gap-2 text-xs font-medium ${expired ? "text-[var(--color-severity-critical-text)]" : "text-[var(--color-text-secondary)]"}`}>
             <span className={`h-2 w-2 rounded-full ${expired ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-status-ok)]"}`} />
             {expired
-              ? "Token expired — close and generate a new one"
+              ? "Token expired. Close and generate a new one"
               : `Token expires in ${minutes}:${String(seconds).padStart(2, "0")}`
             }
           </div>
@@ -194,7 +194,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
               <div className="flex items-center gap-2 text-sm font-medium text-[var(--color-status-ok-text)]">
                 <Check className="h-4 w-4 shrink-0" aria-hidden />
                 {approved
-                  ? `${connected.name} approved — ready to receive scans`
+                  ? `${connected.name} approved. Ready to receive scans`
                   : `${connected.name} connected`}
               </div>
               {!approved && (

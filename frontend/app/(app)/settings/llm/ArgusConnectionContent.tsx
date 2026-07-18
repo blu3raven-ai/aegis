@@ -71,7 +71,7 @@ function StatusBanner({ conn }: { conn: ArgusConnection | null }) {
   return (
     <div className="rounded-md border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] px-4 py-3">
       <p className="text-sm font-medium text-[var(--color-status-ok-text)]">
-        Argus is connected — {conn.endpoint}
+        Argus is connected: {conn.endpoint}
       </p>
       <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
         New findings are enriched with exploit and threat intel automatically as they arrive.
@@ -269,7 +269,7 @@ export function ArgusConnectionContent({
             )}
           </div>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            AI-powered threat intelligence — EPSS scores, exploit availability, and advisory enrichment. Works with any plan.
+            AI-powered threat intelligence: EPSS scores, exploit availability, and advisory enrichment. Works with any plan.
           </p>
         </div>
       </div>
@@ -293,7 +293,7 @@ export function ArgusConnectionContent({
 
         <SettingsRow
           label="Token endpoint"
-          description="Your identity provider's OAuth2 token endpoint — Aegis exchanges the refresh token here for a short-lived access token."
+          description="Your identity provider's OAuth2 token endpoint. Aegis exchanges the refresh token here for a short-lived access token."
           layout="stack"
         >
           <Input
@@ -376,7 +376,7 @@ export function ArgusConnectionContent({
             className={`text-xs ${testResult.ok ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-severity-critical-text)]"}`}
           >
             {testResult.ok
-              ? "Connection OK — Argus reachable."
+              ? "Connection OK. Argus reachable."
               : `Test failed${testResult.error ? ` (${testResult.error})` : ""}.`}
           </span>
         )}

@@ -79,7 +79,7 @@ export function ConnectSourceStep({ onNext, onBack, onSkip, loading = false }: C
                 >
                   Settings › Sources
                 </a>
-                . Click <strong>Continue</strong> to proceed — you can configure the webhook and token there.
+                . Click <strong>Continue</strong> to proceed. You can configure the webhook and token there.
               </p>
             </div>
           )}

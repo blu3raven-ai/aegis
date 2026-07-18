@@ -20,7 +20,7 @@ function FeaturedCard() {
           critical
         </span>
         <h3 className="flex-1 min-w-0 text-base font-semibold text-[var(--color-text-primary)] tracking-[-0.005em]">
-          Newly introduced vulnerability — preview
+          Newly introduced vulnerability · preview
         </h3>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-text-secondary)]">
@@ -45,7 +45,7 @@ function CompactRow() {
       </span>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-[var(--color-text-primary)]">
-          Recently surfaced finding — preview
+          Recently surfaced finding · preview
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-text-tertiary)]">
           <span>example-repo</span>
@@ -72,7 +72,7 @@ function CveCard({ severity }: { severity: "critical" | "high" }) {
       <h3 className="mt-3 truncate text-base font-semibold text-[var(--color-text-primary)]">
         com.example:library
         <span className="ml-2 font-[family-name:var(--font-jetbrains-mono)] text-sm font-normal text-[var(--color-text-tertiary)]">
-          — CVE-0000-0000
+          · CVE-0000-0000
         </span>
       </h3>
       <div className="mt-4 flex flex-wrap items-center gap-2">

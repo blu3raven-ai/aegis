@@ -47,15 +47,15 @@ function SeverityBreakdown({ vulns, packageName, repo, showTotal = false }: { vu
   // "5 C 9 H …" which announces meaninglessly.
   const ariaLabel =
     present.length > 0
-      ? `${present.map((t) => `${vulns[t.key]} ${t.key}`).join(", ")} ${findingWord} — view in Findings`
-      : `${vulns.total.toLocaleString()} ${findingWord} — view in Findings`
+      ? `${present.map((t) => `${vulns[t.key]} ${t.key}`).join(", ")} ${findingWord}. View in Findings`
+      : `${vulns.total.toLocaleString()} ${findingWord}. View in Findings`
   // When scoped to one repo (the per-repo drill-down), carry that repo into the
   // Findings filter so the destination list matches the per-repo count clicked.
   const href = `/findings?q=${encodeURIComponent(packageName)}${repo ? `&repo=${encodeURIComponent(repo)}` : ""}`
   return (
     <Link
       href={href}
-      title={`${vulns.total.toLocaleString()} ${findingWord} — view in Findings`}
+      title={`${vulns.total.toLocaleString()} ${findingWord}. View in Findings`}
       aria-label={ariaLabel}
       className="inline-flex items-center gap-2 rounded hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
     >
@@ -342,7 +342,7 @@ export function RiskyComponentsView() {
                       </p>
                       {!hasFilters && (
                         <p className="mx-auto mt-1 max-w-sm text-xs text-[var(--color-text-tertiary)]">
-                          Packages appear here once dependency scans have run and any vulnerabilities are matched — not necessarily that your estate is clean.
+                          Packages appear here once dependency scans have run and any vulnerabilities are matched. That doesn&apos;t necessarily mean your estate is clean.
                         </p>
                       )}
                       {hasFilters && (

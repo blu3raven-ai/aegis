@@ -116,7 +116,7 @@ function ScheduleEditor({
             : "text-xs text-[var(--color-text-tertiary)]"}>
             {cronInvalid
               ? "Enter a valid 5-field cron (minute hour day month weekday)."
-              : "Format: minute hour day month weekday — e.g. 0 2 * * * (daily 2am)."}
+              : "Format: minute hour day month weekday, e.g. 0 2 * * * (daily 2am)."}
           </p>
         </>
       )}

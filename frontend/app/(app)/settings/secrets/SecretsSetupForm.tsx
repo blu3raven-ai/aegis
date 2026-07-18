@@ -127,7 +127,7 @@ export function SecretsSetupForm({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(
             [
-              { value: "light", label: "Light", desc: "Scans current code only. Fast — typically completes in minutes." },
+              { value: "light", label: "Light", desc: "Scans current code only. Fast: typically completes in minutes." },
               { value: "deep", label: "Deep", desc: "Scans full git history for leaked secrets. Thorough but can take hours on large repos." },
             ] as const
           ).map((opt) => (
