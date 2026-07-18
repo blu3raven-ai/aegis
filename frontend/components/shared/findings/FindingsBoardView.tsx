@@ -2002,6 +2002,13 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 })}
               />
 
+              <NotesVerificationSection
+                verdict={selectedFinding.verdict}
+                metadata={selectedFinding.verificationMetadata}
+              />
+              </FindingDrawerGroup>
+
+              <FindingDrawerGroup id="poc" label="Proof of Concept">
               <FindingPocSection
                 findingId={Number(selectedFinding.id)}
                 pocScript={selectedFinding.verificationMetadata?.poc_script}
@@ -2009,11 +2016,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 pocLanguage={selectedFinding.verificationMetadata?.poc_language}
                 verificationEnabled={verificationEnabled}
                 onGenerated={handlePocGenerated}
-              />
-
-              <NotesVerificationSection
-                verdict={selectedFinding.verdict}
-                metadata={selectedFinding.verificationMetadata}
               />
               </FindingDrawerGroup>
 

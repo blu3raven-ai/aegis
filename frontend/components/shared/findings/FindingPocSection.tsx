@@ -96,12 +96,9 @@ export function FindingPocSection({
 
   return (
     <section className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Proof of Concept</h3>
-        {pocScript && meta ? (
-          <span className="text-2xs font-mono text-[var(--color-text-tertiary)]">{meta}</span>
-        ) : null}
-      </div>
+      {pocScript && meta ? (
+        <p className="text-right text-2xs font-mono text-[var(--color-text-tertiary)]">{meta}</p>
+      ) : null}
 
       {pocScript ? (
         <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text-primary)]">

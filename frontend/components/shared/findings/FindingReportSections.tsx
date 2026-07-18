@@ -4,7 +4,6 @@ import type React from "react"
 
 import { LinkButton } from "@/components/ui/LinkButton"
 import { ReverifyButton } from "@/components/shared/findings/ReverifyButton"
-import { VerdictBadge } from "@/components/shared/findings/VerdictBadge"
 import { ImpactCallout } from "@/components/shared/findings/EvidenceSection"
 import type { Verdict } from "@/lib/shared/findings/verdicts"
 import { verdictRationale } from "@/lib/shared/findings/verdict-rationale"
@@ -179,7 +178,9 @@ function VerificationUpsell({
         {ghost}
       </div>
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--color-surface)_55%,transparent)] px-6 text-center">
-        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--color-text-primary)]">
+          {title}
+        </h3>
         <p className="max-w-sm text-xs leading-relaxed text-[var(--color-text-secondary)]">
           {description}
         </p>
@@ -263,11 +264,11 @@ export function AdvisoryIncompleteNote({
   findingId: number | string
 }) {
   return (
-    <section className="rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-3">
-      <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+    <section className="flex flex-col items-center rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-4 text-center">
+      <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--color-text-primary)]">
         Remediation guidance incomplete
       </h3>
-      <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+      <p className="mt-1 max-w-sm text-sm leading-relaxed text-[var(--color-text-secondary)]">
         Verification finished without remediation steps for this finding.
       </p>
       <div className="mt-3">
@@ -449,12 +450,16 @@ export function NotesVerificationSection({
     metadata?.tokens_in || metadata?.tokens_out
       ? `${(metadata.tokens_in ?? 0).toLocaleString()} in / ${(metadata.tokens_out ?? 0).toLocaleString()} out`
       : null
-  const present = Boolean(verdict || rationale || metadata?.model || ruledOut)
+  // The verdict itself is already prominent in the overview chips, so this
+  // section only earns its place when it carries real provenance: a rationale,
+  // a ruled-out reason, a runtime question, or model/token usage.
+  const present = Boolean(
+    rationale || metadata?.model || ruledOut || metadata?.runtime_question || tokens,
+  )
 
   return (
     <ReportSection title="Notes / Verification" present={present}>
       <div className="space-y-2">
-        {verdict ? <VerdictBadge verdict={verdict} /> : null}
         {rationale ? (
           <p className="text-sm leading-relaxed text-[var(--color-text-secondary)]">{rationale.text}</p>
         ) : null}
