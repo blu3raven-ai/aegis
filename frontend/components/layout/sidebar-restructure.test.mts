@@ -108,7 +108,7 @@ describe("Sidebar — IA: Overview / Workspace / Inventory / Reporting / Configu
     assert.ok(sidebar.includes("useBranding()"), "useBranding hook is wired")
     assert.ok(sidebar.includes("{brandName}"), "brand name renders from hook")
     assert.ok(!sidebar.includes("brandSubtitle"), "no subtitle wiring — customer layout is single-line")
-    assert.ok(sidebar.includes("--font-space-grotesk"), "Space Grotesk font preserved")
+    assert.ok(sidebar.includes("font-mono"), "branding renders in the mono font")
     assert.ok(sidebar.includes("UserMenuButton"), "UserMenuButton preserved")
     assert.ok(sidebar.includes("TIER_LABELS[tier]"), "Tier card preserved")
   })

@@ -8,9 +8,9 @@ const src = readFileSync(
 )
 
 describe("FindingsPagination", () => {
-  it("renders 'Showing X-Y of N findings'", () => {
+  it("renders 'Showing X-Y of N finding(s)' via the plural helper", () => {
     assert.match(src, /Showing/)
-    assert.match(src, /findings/)
+    assert.match(src, /plural\(total, "finding"\)/)
   })
 
   it("computes totalPages from total + pageSize", () => {
