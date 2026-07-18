@@ -55,7 +55,7 @@ function RepoCard({ repo }: { repo: RepoSummary }) {
           <strong className="font-semibold tabular-nums text-[var(--color-text-primary)]">
             {totalFindings.toLocaleString()}
           </strong>{" "}
-          findings
+          {totalFindings === 1 ? "finding" : "findings"}
         </span>
         <span className="text-[var(--color-text-tertiary)]">
           {lastScanned ? `Updated ${lastScanned}` : "Never scanned"}
@@ -109,7 +109,7 @@ export default function SbomIndexPage() {
       {/* Repo grid */}
       <div className="flex-1 px-6 py-6">
         <p className="mb-4 text-xs text-[var(--color-text-secondary)]">
-          {repos.length} repositories with SBOMs
+          {repos.length} {repos.length === 1 ? "repository" : "repositories"} with SBOMs
         </p>
 
         {error && (
