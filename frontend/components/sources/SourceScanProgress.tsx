@@ -41,6 +41,8 @@ const SCANNER_SHORT: Record<string, string> = {
   secret_scanning: "Secret",
   code_scanning: "Code",
   container_scanning: "Container",
+  iac_scanning: "IaC",
+  agent_scanning: "Coding Agent",
 }
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
