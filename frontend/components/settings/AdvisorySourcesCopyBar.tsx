@@ -17,7 +17,7 @@ export function AdvisorySourcesCopyBar({ sourceLabel, onCopy }: AdvisorySourcesC
         <svg className="h-4 w-4 text-[var(--color-status-ok)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
-        <span className="text-sm text-[var(--color-status-ok)]">Copied — settings refreshed</span>
+        <span className="text-sm text-[var(--color-status-ok)]">Copied · settings refreshed</span>
       </div>
     )
   }
