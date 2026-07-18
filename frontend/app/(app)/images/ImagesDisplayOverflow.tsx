@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { Select } from "@/components/ui/Select"
 
 export type ImagesSortMode = "critical" | "last-scan" | "name"
 
@@ -63,18 +64,19 @@ export function ImagesDisplayOverflow({ sort, onSortChange }: ImagesDisplayOverf
             <label htmlFor="images-sort" className="w-12 shrink-0 text-2xs text-[var(--color-text-secondary)]">
               Sort
             </label>
-            <select
+            <Select
               id="images-sort"
+              size="sm"
               value={sort}
               onChange={(e) => onSortChange(e.target.value as ImagesSortMode)}
-              className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text-primary)] focus:outline-none focus-visible:border-[var(--color-accent)]"
+              className="flex-1"
             >
               {(Object.keys(SORT_LABELS) as ImagesSortMode[]).map((s) => (
                 <option key={s} value={s}>
                   {SORT_LABELS[s]}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
       )}
