@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Fragment, useTransition, type MutableRefObject } from "react"
 import { ROLE_LABELS, type UserRole } from "@/lib/shared/auth/roles.ts"
+import { plural } from "@/lib/shared/plural"
 import { fetchCurrentUser } from "@/lib/client/auth"
 import { apiClient } from "@/lib/client/api-client.ts"
 import { ApiClientError } from "@/lib/client/api-client.types.ts"
@@ -713,7 +714,10 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                       onClick={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
                       className="text-xs font-medium text-[var(--color-accent)] hover:underline"
                     >
-                      {teams.filter(t => t.members.some(m => m.userId === user.id)).length} teams
+                      {(() => {
+                        const n = teams.filter(t => t.members.some(m => m.userId === user.id)).length
+                        return `${n} ${plural(n, "team")}`
+                      })()}
                     </button>
                   </Td>
                   <Td className="py-4 text-center">
@@ -729,7 +733,10 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
                       }}
                       className="text-xs font-medium text-[var(--color-accent)] hover:underline"
                     >
-                      {user.manualDirectGrantCount + user.githubDirectGrantCount} resources
+                      {(() => {
+                        const n = user.manualDirectGrantCount + user.githubDirectGrantCount
+                        return `${n} ${plural(n, "resource")}`
+                      })()}
                     </button>
                   </Td>
                   <Td className="px-5 py-4 text-right">
