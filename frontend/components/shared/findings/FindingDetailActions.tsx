@@ -33,6 +33,8 @@ interface FindingDetailActionsProps {
   /** Assignment is a disposition like Defer/Dismiss, so the real assignee
    *  picker lives here in the action row (rendered first). */
   assigneeControl?: ReactNode
+  /** Accept-as-intended-risk is a disposition too — rendered next to Defer. */
+  acceptRiskControl?: ReactNode
   /** Real disposition control — dismiss the finding with a reason. */
   dismiss?: DismissControl
   /** For already-closed findings: reopen is the only useful disposition, so it
@@ -72,6 +74,7 @@ export function FindingDetailActions({
   onNotifySlack,
   onDefer,
   assigneeControl,
+  acceptRiskControl,
   dismiss,
   onReopen,
   reopenBusy,
@@ -133,6 +136,8 @@ export function FindingDetailActions({
           Defer
         </Button>
       )}
+
+      {acceptRiskControl}
 
       {dismiss && (
         <div className="ml-auto flex items-center gap-2">

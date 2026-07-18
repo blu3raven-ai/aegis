@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/Button"
 import { Textarea } from "@/components/ui/Textarea"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
@@ -11,23 +11,35 @@ import type { FindingRow } from "@/lib/shared/findings/row-mapper"
 type Scope = "rule" | "file"
 
 /**
- * Drawer create surface for a ground-truth carve-out. Declares the finding's
- * behavior as intended-by-design so matching findings are ruled out on the next
- * scan. The scope choice picks which key the carve-out matches on; a carve-out
- * that would match on nothing (asset only) is never submitted.
+ * Disposition control for a ground-truth carve-out, rendered as a popover in the
+ * finding action bar next to Defer/Dismiss. Declares the finding's behavior as
+ * intended-by-design so matching findings are ruled out on the next scan. The
+ * scope choice picks which key the carve-out matches on; a carve-out that would
+ * match on nothing (asset only) is never submitted.
  */
 export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
   const { allowed } = useHasPermission("manage_sources")
   const ruleKey = finding.ruleId ?? finding.rule ?? null
   const fileKey = finding.filePath ?? null
-  // Default to the rule scope, falling back to file when the finding carries
-  // no rule id — so the default is always a scope that can actually match.
   const [open, setOpen] = useState(false)
   const [statement, setStatement] = useState("")
   const [scope, setScope] = useState<Scope>(ruleKey ? "rule" : "file")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  // Close on outside click. Ref the outer container so re-clicking the trigger
+  // to toggle-close isn't misread as an outside click.
+  useEffect(() => {
+    if (!open) return
+    const onMouseDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onMouseDown)
+    return () => document.removeEventListener("mousedown", onMouseDown)
+  }, [open])
 
   if (!finding.assetId || !allowed) return null
 
@@ -63,26 +75,39 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
     }
   }
 
-  return (
-    <section className="space-y-2">
-      <h3 className="text-base font-semibold text-[var(--color-text-primary)]">
-        Accept as intended risk
-      </h3>
-      <p className="text-sm text-[var(--color-text-tertiary)]">
-        Declare this behavior as intended-by-design. Matching findings will be ruled out on
-        the next scan.
-      </p>
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.stopPropagation()
+      setOpen(false)
+      triggerRef.current?.focus()
+    }
+  }
 
-      {done ? (
-        <p className="text-sm text-[var(--color-status-ok-text)]">
-          Accepted. This finding will be ruled out on the next scan.
-        </p>
-      ) : !open ? (
-        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-          Accept as intended risk
-        </Button>
-      ) : (
-        <div className="space-y-3">
+  return (
+    <div ref={rootRef} className="relative">
+      <Button
+        ref={triggerRef}
+        variant="secondary"
+        size="sm"
+        onClick={() => setOpen((v) => !v)}
+        disabled={done}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
+        {done ? "Risk accepted" : "Accept risk"}
+      </Button>
+
+      {open && !done && (
+        <div
+          role="dialog"
+          aria-label="Accept as intended risk"
+          onKeyDown={handleKeyDown}
+          className="absolute left-0 top-full z-50 mt-1 w-[min(22rem,calc(100vw-2rem))] space-y-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-[var(--shadow-card)]"
+        >
+          <p className="text-xs leading-relaxed text-[var(--color-text-tertiary)]">
+            Declare this behavior as intended-by-design. Matching findings will be ruled out on
+            the next scan.
+          </p>
           <Textarea
             value={statement}
             onChange={(e) => setStatement(e.target.value)}
@@ -100,7 +125,10 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
               {error}
             </p>
           ) : null}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); setError(null) }}>
+              Cancel
+            </Button>
             <Button
               variant="primary"
               size="sm"
@@ -110,19 +138,9 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
             >
               Accept risk
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setOpen(false)
-                setError(null)
-              }}
-            >
-              Cancel
-            </Button>
           </div>
         </div>
       )}
-    </section>
+    </div>
   )
 }

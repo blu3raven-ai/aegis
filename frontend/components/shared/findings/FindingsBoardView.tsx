@@ -1904,6 +1904,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   : {
                       onDefer: handleDeferCurrent,
                       canDefer: !deferring,
+                      acceptRiskControl: <FindingAcceptRiskAction finding={selectedFinding} />,
                       dismiss: {
                         reasons: DISMISS_REASONS,
                         onDismiss: (reason: string) =>
@@ -2007,8 +2008,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 verdict={selectedFinding.verdict}
                 metadata={selectedFinding.verificationMetadata}
               />
-
-              <FindingAcceptRiskAction finding={selectedFinding} />
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="remediation" label="Remediation">
