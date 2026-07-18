@@ -138,7 +138,7 @@ export function AddChannelModal({ open, onClose }: AddChannelModalProps) {
   }, [])
 
   return (
-    <Sheet open={open} onClose={onClose} title="Add notification channel" size="xl">
+    <Sheet open={open} onClose={onClose} title="Add notification channel" variant="modal" size="xl">
       <div className="space-y-5">
         {/* Non-enterprise upgrade prompt */}
         {!isEnterprise && (

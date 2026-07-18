@@ -124,7 +124,8 @@ function RotateModal({ open, destId, onClose, onRotated }: RotateModalProps) {
     <Sheet
       open={open}
       onClose={handleClose}
-      title={result ? "New signing secret — save it now" : "Rotate signing secret"}
+      title={result ? "New signing secret · save it now" : "Rotate signing secret"}
+      variant="modal"
       description={
         result
           ? "This secret will not be shown again. Copy it before closing."

@@ -36,7 +36,7 @@ export function SaveViewModal({ open, onClose, currentUrlState, onSaved }: SaveV
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Save view" size="sm">
+    <Sheet open={open} onClose={onClose} title="Save view" variant="modal" size="sm">
       <form onSubmit={handleSubmit}>
         <FormField label="Name" htmlFor="save-view-name" error={error ?? undefined}>
           <Input

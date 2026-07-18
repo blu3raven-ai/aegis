@@ -158,6 +158,7 @@ export function ChannelsView({
         open={creatingDest}
         onClose={onCancelCreate}
         title="New destination"
+        variant="modal"
         description="Configure a notification destination."
         size="md"
       >

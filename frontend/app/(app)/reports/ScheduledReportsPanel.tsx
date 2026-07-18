@@ -332,6 +332,7 @@ function ScheduleModal({
       open={open}
       onClose={handleClose}
       title={editing ? "Edit scheduled report" : "New scheduled report"}
+      variant="modal"
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-3 text-sm">

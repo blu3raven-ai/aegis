@@ -122,6 +122,7 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
       open={open}
       onClose={handleClose}
       title="New compliance framework"
+      variant="modal"
       description="Define the framework and seed its initial controls. You can add or edit controls later."
       size="lg"
     >
