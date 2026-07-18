@@ -124,7 +124,7 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
           onChange={(e) => setValue(e.target.value)}
           className="w-auto"
         >
-          <option value="">— select —</option>
+          <option value="">Select…</option>
           <option value="true">true</option>
           <option value="false">false</option>
         </Select>
@@ -141,7 +141,7 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
           onChange={(e) => setValue(e.target.value)}
           className="w-auto"
         >
-          <option value="">— select —</option>
+          <option value="">Select…</option>
           {suggestions.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}

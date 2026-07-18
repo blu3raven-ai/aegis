@@ -309,7 +309,7 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
             <ol className="mt-1 list-inside list-decimal space-y-0.5 leading-relaxed">
               <li>Go to <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener noreferrer" className="text-[var(--color-accent)] hover:underline">GitHub &rsaquo; Settings &rsaquo; Tokens</a> (fine-grained)</li>
               <li>Click &quot;Generate new token&quot;</li>
-              <li>No extra permissions needed &mdash; advisory access is public</li>
+              <li>No extra permissions needed. Advisory access is public</li>
             </ol>
             <p className="mt-1.5 text-[var(--color-text-tertiary)]">
               A classic PAT with zero scopes also works.
