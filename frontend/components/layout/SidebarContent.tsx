@@ -215,10 +215,10 @@ export function SidebarContent({
             <div className="flex min-w-0 flex-col">
               {isVendor ? (
                 <>
-                  <span className="font-[family-name:var(--font-space-grotesk)] text-[0.6rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
+                  <span className="text-[0.6rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
                     Raven Protocol
                   </span>
-                  <span className="font-[family-name:var(--font-space-grotesk)] text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
+                  <span className="text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
                     Blu3Raven
                   </span>
                   <span className="mt-0.5 text-2xs leading-tight text-[var(--color-text-secondary)]">
@@ -226,7 +226,7 @@ export function SidebarContent({
                   </span>
                 </>
               ) : (
-                <span className="font-[family-name:var(--font-space-grotesk)] text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)] truncate">
+                <span className="text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)] truncate">
                   {brandName}
                 </span>
               )}

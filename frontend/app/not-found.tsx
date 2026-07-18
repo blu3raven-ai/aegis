@@ -15,30 +15,18 @@ export default function NotFound() {
         <div className="mt-4 flex flex-col items-center">
           {isVendor ? (
             <>
-              <span
-                className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
-                style={{ fontFamily: "var(--font-space-grotesk)" }}
-              >
+              <span className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
                 Raven Protocol
               </span>
-              <span
-                className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
-                style={{ fontFamily: "var(--font-space-grotesk)" }}
-              >
+              <span className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
                 Blu3Raven
               </span>
-              <span
-                className="mt-1 text-xs text-[var(--color-text-secondary)]"
-                style={{ fontFamily: "var(--font-manrope)" }}
-              >
+              <span className="mt-1 text-xs text-[var(--color-text-secondary)]">
                 Aegis — Vulnerability Management Portal
               </span>
             </>
           ) : (
-            <span
-              className="max-w-full truncate text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
-              style={{ fontFamily: "var(--font-space-grotesk)" }}
-            >
+            <span className="max-w-full truncate text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
               {brandName}
             </span>
           )}
