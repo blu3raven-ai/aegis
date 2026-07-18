@@ -207,9 +207,11 @@ export function Sheet({
       <div
         aria-hidden="true"
         onClick={handleClose}
+        title={isModal ? "Click to close" : undefined}
         className={cn(
           "fixed inset-0 bg-[var(--color-overlay-strong)] transition-opacity",
           animatingIn ? "opacity-100" : "opacity-0",
+          isModal && "cursor-pointer hover:bg-[var(--color-overlay)]",
         )}
         style={{ transitionDuration: `${animatingIn ? ENTER_MS : EXIT_MS}ms` }}
       />
@@ -252,6 +254,7 @@ export function Sheet({
             <button
               type="button"
               onClick={handleClose}
+        title={isModal ? "Click to close" : undefined}
               aria-label="Close"
               className="-mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             >

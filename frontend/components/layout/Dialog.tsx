@@ -52,9 +52,10 @@ export function Dialog({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-[var(--color-overlay-strong)] transition-opacity"
+        className="fixed inset-0 bg-[var(--color-overlay-strong)] transition-opacity cursor-pointer hover:bg-[var(--color-overlay)]"
         onClick={onClose}
         aria-hidden="true"
+        title="Click to close"
       />
 
       {/* Dialog */}

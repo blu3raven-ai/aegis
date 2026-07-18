@@ -219,7 +219,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
       {/* Backdrop */}
-      <button type="button" className="fixed inset-0 bg-[var(--color-overlay-strong)] cursor-default" onClick={onClose} aria-label="Close search" />
+      <button type="button" className="fixed inset-0 bg-[var(--color-overlay-strong)] cursor-pointer hover:bg-[var(--color-overlay)] transition-colors" onClick={onClose} aria-label="Close search" title="Click to close" />
 
       {/* Modal */}
       <div className="relative z-10 max-w-lg w-full mx-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl overflow-hidden">
