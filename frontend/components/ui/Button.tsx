@@ -154,4 +154,3 @@ export function Spinner({ className }: { className?: string }) {
 }
 
 export type { ButtonProps, ButtonVariant, ButtonSize }
-export { Spinner }
