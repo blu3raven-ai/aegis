@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Button } from "@/components/ui/Button"
 
 interface AdvisorySourcesCopyBarProps {
   sourceLabel: string
@@ -31,8 +32,10 @@ export function AdvisorySourcesCopyBar({ sourceLabel, onCopy }: AdvisorySourcesC
         {state === "error" && (
           <span className="text-xs text-[var(--color-severity-critical)]">{errorMsg}</span>
         )}
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
+          isLoading={state === "copying"}
           disabled={state === "copying"}
           onClick={async () => {
             setState("copying")
@@ -45,10 +48,9 @@ export function AdvisorySourcesCopyBar({ sourceLabel, onCopy }: AdvisorySourcesC
               setState("error")
             }
           }}
-          className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
         >
-          {state === "copying" ? "Copying..." : `Copy from ${sourceLabel}`}
-        </button>
+          {state === "copying" ? "Copying" : `Copy from ${sourceLabel}`}
+        </Button>
       </div>
     </div>
   )

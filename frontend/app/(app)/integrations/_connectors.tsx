@@ -280,6 +280,7 @@ export function CatalogConnectorModal({
             type="submit"
             variant="primary"
             size="sm"
+            isLoading={submitting}
             disabled={submitting}
           >
             {submitting ? "Saving…" : "Save"}
