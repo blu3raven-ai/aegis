@@ -34,7 +34,7 @@ function EmptyState({
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)]/10">
             {icon}
           </div>
-          <h3 className="mt-4 text-base font-semibold text-[var(--color-text-primary)]">No Connections Yet</h3>
+          <h3 className="mt-4 text-base font-semibold text-[var(--color-text-primary)]">No connections yet</h3>
           <p className="mt-1.5 text-sm text-[var(--color-text-secondary)]">
             Sources are where Aegis discovers your {itemLabel}. Connect your provider below, and Aegis will
             automatically find and scan them for vulnerabilities, exposed secrets, and code issues.

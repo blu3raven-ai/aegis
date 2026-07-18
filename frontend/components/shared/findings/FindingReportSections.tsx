@@ -134,7 +134,7 @@ export function TechnicalDetailSection({
   const items = evidence ?? []
   return (
     <ReportSection
-      title="Technical Detail"
+      title="Technical detail"
       present={items.length > 0}
     >
       <ul className="space-y-2">
@@ -178,7 +178,7 @@ export function AttackScenarioSection({
   const paths = (attackPaths ?? []).filter((p) => p?.steps?.trim())
   return (
     <ReportSection
-      title="Attack Scenario"
+      title="Attack scenario"
       present={Boolean(repro) || paths.length > 0}
     >
       <div className="space-y-3">
