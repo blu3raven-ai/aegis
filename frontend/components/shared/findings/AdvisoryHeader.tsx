@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import type { VerificationMetadata } from "@/lib/shared/findings/row-mapper"
+import { Table, Tbody, Tr, Td } from "@/components/ui/Table"
 
 /** Minimal finding shape the advisory header reads — a camelCase structural
  *  subset of `Finding`, so the drawer can pass `selectedFinding` directly. */
@@ -18,14 +19,16 @@ export interface AdvisoryHeaderFinding {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   const empty = children == null || children === "" || children === false
   return (
-    <div className="grid grid-cols-[8.5rem_1fr] items-baseline gap-3 py-2 text-sm">
-      <span className="font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">{label}</span>
-      <span
-        className={`min-w-0 ${empty ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`}
+    <Tr>
+      <Td className="w-[9.5rem] whitespace-nowrap border-r border-[var(--color-border-divider)] bg-[var(--color-bg-section)] px-3 py-2 align-baseline font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">
+        {label}
+      </Td>
+      <Td
+        className={`px-3 py-2 align-baseline text-sm ${empty ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`}
       >
         {empty ? "—" : children}
-      </span>
-    </div>
+      </Td>
+    </Tr>
   )
 }
 
@@ -48,7 +51,9 @@ export function AdvisoryHeader({ finding }: { finding: AdvisoryHeaderFinding }) 
   ) : null
 
   return (
-    <section className="divide-y divide-[var(--color-border-divider)] border-y border-[var(--color-border-divider)]">
+    <section className="overflow-hidden rounded-md border border-[var(--color-border)]">
+      <Table>
+        <Tbody divided>
       <Row label="Target">{finding.repo}</Row>
       <Row label="Version affected">{commit}</Row>
       <Row label="Component">{finding.filePath}</Row>
@@ -56,6 +61,8 @@ export function AdvisoryHeader({ finding }: { finding: AdvisoryHeaderFinding }) 
       <Row label="CVSS 3.1">{cvss}</Row>
       <Row label="CWE">{finding.cwe}</Row>
       <Row label="CVE">{finding.cve}</Row>
+        </Tbody>
+      </Table>
     </section>
   )
 }
