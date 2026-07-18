@@ -80,7 +80,7 @@ export function FindingDrawerGroup({
       {open ? (
         <div
           id={regionId}
-          className="divide-y divide-[var(--color-border-divider)] [&>*]:px-5 [&>*]:py-4"
+          className="divide-y divide-[var(--color-border-divider)] [&>*]:px-5 [&>*]:py-3.5"
         >
           {children}
         </div>

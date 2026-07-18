@@ -17,19 +17,18 @@ export interface AdvisoryHeaderFinding {
   secretDetector?: string | null
 }
 
-/** One header row — always rendered; shows a muted "—" when the value is
- *  absent so the report header block is complete for every finding. */
+/** One spec-table row. Rows with no value are omitted entirely so the table
+ *  only lists fields the finding actually carries. */
 function Row({ label, children }: { label: string; children: ReactNode }) {
   const empty = children == null || children === "" || children === false
+  if (empty) return null
   return (
     <Tr>
-      <Td className="w-[9.5rem] whitespace-nowrap border-r border-[var(--color-border-divider)] bg-[var(--color-bg-section)] px-3 py-2 align-baseline font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">
+      <Td className="w-[9.5rem] whitespace-nowrap border-r border-[var(--color-border-divider)] bg-[var(--color-bg-section)] px-3 py-1.5 align-baseline font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">
         {label}
       </Td>
-      <Td
-        className={`px-3 py-2 align-baseline text-sm ${empty ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`}
-      >
-        {empty ? "—" : children}
+      <Td className="px-3 py-1.5 align-baseline text-sm text-[var(--color-text-primary)]">
+        {children}
       </Td>
     </Tr>
   )
