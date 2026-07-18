@@ -24,6 +24,7 @@ import {
 } from "./PostureBreakdownPanels"
 import { findingsHref } from "./posture-links"
 import { Sparkline } from "@/components/shared/charts/Sparkline"
+import { ChartEmptyState } from "@/components/shared/charts/ChartEmptyState"
 import { useMeasuredWidth } from "@/components/shared/charts/useMeasuredWidth"
 
 
@@ -738,14 +739,10 @@ function RiskTrendChart({
   const points = trend.points
   if (points.length < 2) {
     return (
-      <Card className="rounded-md">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Risk score over time
-        </h2>
-        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-          Not enough history to plot a trend yet.
-        </p>
-      </Card>
+      <ChartEmptyState
+        title="Risk score over time"
+        message="Not enough history to plot a trend yet. Scores appear here as scans accrue over days."
+      />
     )
   }
 
@@ -1036,14 +1033,10 @@ function PostureTrendChart({
   const points = trend.points
   if (points.length < 2) {
     return (
-      <Card className="rounded-md">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Open findings by severity · last {RANGE_LABEL[rangeDays]}
-        </h2>
-        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-          Not enough data to plot a trend yet.
-        </p>
-      </Card>
+      <ChartEmptyState
+        title={`Open findings by severity · last ${RANGE_LABEL[rangeDays]}`}
+        message="Not enough data to plot a trend yet. Severity bands appear here as scans accrue over days."
+      />
     )
   }
 
