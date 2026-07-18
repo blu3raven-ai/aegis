@@ -296,7 +296,7 @@ function GroupNode({ cond, onChange, onRemove, depth = 0, fields, operatorsForFi
           {isAll ? "ALL of" : "ANY of"}
         </Button>
         <span className="text-xs text-[var(--color-text-tertiary)]">
-          {isAll ? "(AND — all conditions must match)" : "(OR — at least one must match)"}
+          {isAll ? "(AND: all conditions must match)" : "(OR: at least one must match)"}
         </span>
         {onRemove && (
           <Button

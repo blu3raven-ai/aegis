@@ -797,7 +797,7 @@ function PostureTrendChart({
     return (
       <Card className="rounded-md">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Open findings by severity — last {RANGE_LABEL[rangeDays]}
+          Open findings by severity · last {RANGE_LABEL[rangeDays]}
         </h2>
         <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
           Not enough data to plot a trend yet.
@@ -871,7 +871,7 @@ function PostureTrendChart({
     <Card className="rounded-md">
       <div className="flex items-center justify-between gap-3 mb-3">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Open findings by severity — last {RANGE_LABEL[rangeDays]}
+          Open findings by severity · last {RANGE_LABEL[rangeDays]}
         </h2>
       </div>
       <div ref={boxRef} className="relative" style={{ height: H }}>

@@ -10,21 +10,21 @@ const src = readFileSync(
 describe("ReleaseVerdictCard verdict copy", () => {
   it("contains the no_go title", () => {
     assert.ok(
-      src.includes("critical findings — not recommended for release"),
+      src.includes("critical findings: not recommended for release"),
       "should render no_go title",
     )
   })
 
   it("contains the warn title", () => {
     assert.ok(
-      src.includes("high findings — review before release"),
+      src.includes("high findings: review before release"),
       "should render warn title",
     )
   })
 
   it("contains the go title", () => {
     assert.ok(
-      src.includes("Cleared for release — no blockers"),
+      src.includes("Cleared for release, no blockers"),
       "should render go title",
     )
   })
@@ -35,7 +35,7 @@ describe("ReleaseVerdictCard verdict copy", () => {
 
   it("contains the unknown title", () => {
     assert.ok(
-      src.includes("Verdict unavailable — re-run scan to compute"),
+      src.includes("Verdict unavailable: re-run scan to compute"),
       "should render unknown title",
     )
   })

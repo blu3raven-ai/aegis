@@ -203,7 +203,7 @@ function RiskScoreHero({
               role="tooltip"
               className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 w-72 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-secondary)] opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
             >
-              Weighs every open finding by severity, then by exploitability — findings on CISA&rsquo;s KEV list (actively exploited) and reachable high-severity ones count for more. The total maps to 0&ndash;100 on a curve that keeps rising as the backlog grows but never pins at 100. Lower is better.
+              Weighs every open finding by severity, then by exploitability. Findings on CISA&rsquo;s KEV list (actively exploited) and reachable high-severity ones count for more. The total maps to 0&ndash;100 on a curve that keeps rising as the backlog grows but never pins at 100. Lower is better.
             </span>
           </span>
         </div>
@@ -1038,7 +1038,7 @@ function PostureTrendChart({
     return (
       <Card className="rounded-md">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Open findings by severity — last {RANGE_LABEL[rangeDays]}
+          Open findings by severity · last {RANGE_LABEL[rangeDays]}
         </h2>
         <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
           Not enough data to plot a trend yet.
@@ -1135,7 +1135,7 @@ function PostureTrendChart({
     <Card className="rounded-md">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Open findings by severity — last {RANGE_LABEL[rangeDays]}
+          Open findings by severity · last {RANGE_LABEL[rangeDays]}
         </h2>
         {netFindingsNode}
       </div>
