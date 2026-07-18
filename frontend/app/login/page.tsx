@@ -23,14 +23,14 @@ export default function LoginPage() {
       className="flex min-h-screen items-center justify-center px-4"
       style={{
         background: `
-          linear-gradient(90deg, rgba(45, 127, 249, 0.03) 1px, transparent 1px),
-          linear-gradient(0deg, rgba(45, 127, 249, 0.03) 1px, transparent 1px),
-          linear-gradient(45deg, rgba(45, 127, 249, 0.05) 1px, transparent 1px),
-          linear-gradient(-45deg, rgba(45, 127, 249, 0.05) 1px, transparent 1px),
-          linear-gradient(135deg, #0a0e17 0%, #0f1419 25%, #141a2a 50%, #0f1419 75%, #0a0e17 100%)
+          repeating-linear-gradient(0deg, rgba(45, 127, 249, 0.02) 0px, rgba(45, 127, 249, 0.02) 1px, transparent 1px, transparent 2px),
+          repeating-linear-gradient(90deg, rgba(45, 127, 249, 0.02) 0px, rgba(45, 127, 249, 0.02) 1px, transparent 1px, transparent 2px),
+          repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(45, 127, 249, 0.04) 4px, rgba(45, 127, 249, 0.04) 5px),
+          radial-gradient(circle at 15% 20%, rgba(45, 127, 249, 0.08) 0%, transparent 40%),
+          radial-gradient(circle at 85% 70%, rgba(45, 127, 249, 0.06) 0%, transparent 40%),
+          linear-gradient(135deg, #0a0e17 0%, #0f1419 50%, #0a0e17 100%)
         `,
-        backgroundSize: '60px 60px, 60px 60px, 85px 85px, 85px 85px, 100% 100%',
-        backgroundPosition: '0 0, 0 0, 0 0, 0 0, 0 0',
+        backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%',
       }}
     >
       <div className="w-full max-w-sm">
