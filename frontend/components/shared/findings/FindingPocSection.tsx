@@ -1,8 +1,10 @@
 "use client"
 
 import { useCallback, useRef, useState } from "react"
+import { Copy, Download, Sparkles } from "lucide-react"
 
 import { Button, buttonClassName } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 import { LinkButton } from "@/components/ui/LinkButton"
 import { findingPocUrl, generateFindingPoc } from "@/lib/client/findings-api"
 
@@ -136,9 +138,15 @@ export function FindingPocSection({
             download
             className={buttonClassName({ variant: "secondary", size: "sm" })}
           >
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
             Download
           </a>
-          <Button variant="secondary" size="sm" onClick={copy}>
+          <Button
+            variant="secondary"
+            size="sm"
+            leadingIcon={<Copy className="h-3.5 w-3.5" />}
+            onClick={copy}
+          >
             {copied ? "Copied" : "Copy"}
           </Button>
         </div>
@@ -156,26 +164,36 @@ export function FindingPocSection({
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              maxLength={500}
-              aria-label="Proof-of-concept guidance"
-              placeholder={
-                pocScript
-                  ? "Refine (optional): what should it change?"
-                  : "Guidance (optional): e.g. target the login route, prefer curl"
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter") run()
-              }}
-              className="h-8 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
-            />
-            <Button variant="secondary" size="sm" onClick={run}>
-              {pocScript ? "Regenerate" : "Generate PoC"}
-            </Button>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Input
+                size="sm"
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                maxLength={500}
+                aria-label="Proof-of-concept guidance"
+                placeholder={
+                  pocScript
+                    ? "Refine (optional): what should it change?"
+                    : "Guidance (optional): e.g. target the login route, prefer curl"
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") run()
+                }}
+                className="flex-1"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                leadingIcon={<Sparkles className="h-3.5 w-3.5" />}
+                onClick={run}
+              >
+                {pocScript ? "Regenerate" : "Generate PoC"}
+              </Button>
+            </div>
+            <p className="text-2xs text-[var(--color-text-tertiary)]">
+              Runs on demand and spends tokens. The script proves reachability with a benign marker only.
+            </p>
           </div>
         ))}
 
