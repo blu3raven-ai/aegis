@@ -65,6 +65,8 @@ const SCANNER_LABELS: Record<string, string> = {
   container_scanning: "Container Scanning",
   secret_scanning: "Secret Scanning",
   iac_scanning: "IaC Scanning",
+  agent_scanning: "Coding Agent Scanning",
+  deep_audit: "Deep Audit",
 }
 
 function scannerLabel(tool: string): string {

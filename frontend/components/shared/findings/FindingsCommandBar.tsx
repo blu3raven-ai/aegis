@@ -63,7 +63,7 @@ const STATIC_ATTRIBUTES: AttributeDef[] = [
       { value: "container_scanning", label: "Containers" },
       { value: "secret_scanning", label: "Secrets" },
       { value: "iac_scanning", label: "Infrastructure as Code" },
-      { value: "agent_scanning", label: "Agent Security" },
+      { value: "agent_scanning", label: "Coding Agent Scanning" },
       { value: "deep_audit", label: "Deep Audit" },
     ],
   },

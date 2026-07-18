@@ -161,7 +161,7 @@ const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
   container_scanning: "Containers",
   secret_scanning: "Secrets",
   iac_scanning: "Infrastructure as Code",
-  agent_scanning: "Agent Security",
+  agent_scanning: "Coding Agent Scanning",
   deep_audit: "Deep Audit",
 }
 
