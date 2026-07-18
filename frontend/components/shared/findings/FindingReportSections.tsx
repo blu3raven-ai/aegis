@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { LinkButton } from "@/components/ui/LinkButton"
+import { ReverifyButton } from "@/components/shared/findings/ReverifyButton"
 import { VerdictBadge } from "@/components/shared/findings/VerdictBadge"
 import { ImpactCallout } from "@/components/shared/findings/EvidenceSection"
 import type { Verdict } from "@/lib/shared/findings/verdicts"
@@ -160,11 +161,13 @@ function VerificationUpsell({
   title,
   description,
   verificationEnabled,
+  findingId,
   ghost,
 }: {
   title: string
   description: string
   verificationEnabled: boolean
+  findingId: number | string
   ghost: React.ReactNode
 }) {
   return (
@@ -181,9 +184,9 @@ function VerificationUpsell({
           {description}
         </p>
         {verificationEnabled ? (
-          <p className="mt-1 text-2xs font-mono uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">
-            Queued for verification on the next scan
-          </p>
+          <div className="mt-1">
+            <ReverifyButton findingId={findingId} />
+          </div>
         ) : (
           <div className="mt-1 flex flex-col items-center gap-1.5">
             <LinkButton
@@ -207,14 +210,17 @@ function VerificationUpsell({
 /** Advisory-absent empty state — a blurred advisory preview behind the CTA. */
 export function AdvisoryUnverifiedNote({
   verificationEnabled = true,
+  findingId,
 }: {
   verificationEnabled?: boolean
+  findingId: number | string
 }) {
   return (
     <VerificationUpsell
       title="Advisory not generated"
       description="LLM verification produces the full advisory: exploit summary, cited technical evidence, attack scenario, impact, and remediation guidance."
       verificationEnabled={verificationEnabled}
+      findingId={findingId}
       ghost={<GhostAdvisory />}
     />
   )
@@ -230,14 +236,17 @@ export function isUsableRemediation(remediation?: string): boolean {
 /** Remediation-absent empty state — a blurred fix preview behind the CTA. */
 export function RemediationUnverifiedNote({
   verificationEnabled = true,
+  findingId,
 }: {
   verificationEnabled?: boolean
+  findingId: number | string
 }) {
   return (
     <VerificationUpsell
       title="No fix generated yet"
       description="LLM verification proposes a concrete remediation: a patch or version upgrade with the steps to apply it safely."
       verificationEnabled={verificationEnabled}
+      findingId={findingId}
       ghost={<GhostRemediation />}
     />
   )
@@ -248,8 +257,10 @@ export function RemediationUnverifiedNote({
  *  be able to recognize and act on rather than silently seeing an empty group. */
 export function AdvisoryIncompleteNote({
   verificationEnabled = true,
+  findingId,
 }: {
   verificationEnabled?: boolean
+  findingId: number | string
 }) {
   return (
     <section className="rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-3">
@@ -259,12 +270,10 @@ export function AdvisoryIncompleteNote({
       <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-secondary)]">
         Verification finished without remediation steps for this finding.
       </p>
-      {verificationEnabled ? (
-        <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">
-          Re-scan the repository to run verification again and complete the advisory.
-        </p>
-      ) : (
-        <div className="mt-3">
+      <div className="mt-3">
+        {verificationEnabled ? (
+          <ReverifyButton findingId={findingId} />
+        ) : (
           <LinkButton
             href="/settings#llm"
             variant="primary"
@@ -273,8 +282,8 @@ export function AdvisoryIncompleteNote({
           >
             Enable LLM verification
           </LinkButton>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   )
 }

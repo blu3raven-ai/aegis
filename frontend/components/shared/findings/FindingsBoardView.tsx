@@ -1967,7 +1967,10 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
                 </div>
               ) : (
-                <AdvisoryUnverifiedNote verificationEnabled={verificationEnabled} />
+                <AdvisoryUnverifiedNote
+                  verificationEnabled={verificationEnabled}
+                  findingId={selectedFinding.id}
+                />
               )}
 
               {selectedFinding.scanner === "secret_scanning" && (
@@ -2004,6 +2007,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 pocScript={selectedFinding.verificationMetadata?.poc_script}
                 pocFilename={selectedFinding.verificationMetadata?.poc_filename}
                 pocLanguage={selectedFinding.verificationMetadata?.poc_language}
+                verificationEnabled={verificationEnabled}
                 onGenerated={handlePocGenerated}
               />
 
@@ -2039,9 +2043,15 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 && !isUsableRemediation(selectedFinding.remediation)
                 && !selectedFinding.verificationMetadata?.remediation?.length && (
                   hasVerifiedAdvisory(selectedFinding) ? (
-                    <AdvisoryIncompleteNote verificationEnabled={verificationEnabled} />
+                    <AdvisoryIncompleteNote
+                      verificationEnabled={verificationEnabled}
+                      findingId={selectedFinding.id}
+                    />
                   ) : (
-                    <RemediationUnverifiedNote verificationEnabled={verificationEnabled} />
+                    <RemediationUnverifiedNote
+                      verificationEnabled={verificationEnabled}
+                      findingId={selectedFinding.id}
+                    />
                   )
                 )}
               </FindingDrawerGroup>

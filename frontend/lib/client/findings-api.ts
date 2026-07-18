@@ -450,6 +450,17 @@ export async function generateFindingPoc(
   return res.poc
 }
 
+/** Re-run verification by re-scanning the finding's source (LLM-backed; spends
+ *  tokens). Asynchronous — the advisory updates when the re-scan re-ingests. */
+export async function reverifyFinding(
+  findingId: number | string,
+): Promise<{ scan_id: string; status: string }> {
+  return apiClient<{ scan_id: string; status: string }>(
+    `/api/v1/findings/${encodeURIComponent(String(findingId))}/verify`,
+    { method: "POST", body: {} },
+  )
+}
+
 /** Defer (snooze) a finding — drops it from the open queue until reopened. */
 export async function deferFinding(findingId: number): Promise<{ ok: true }> {
   return apiClient<{ ok: true }>(`/api/v1/findings/${findingId}`, {

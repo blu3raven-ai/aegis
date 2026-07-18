@@ -37,8 +37,8 @@ test("isUsableRemediation rejects raw scanner metavar templates", () => {
 test("unverified advisory + remediation render a blurred verification upsell", () => {
   assert.match(src, /export function AdvisoryUnverifiedNote/)
   assert.match(src, /export function RemediationUnverifiedNote/)
-  // Blurred ghost behind a BYOK call to action; queued copy when enabled.
+  // Blurred ghost behind a BYOK call to action; a retry when a key is configured.
   assert.match(src, /blur-\[3px\]/)
   assert.match(src, /Enable LLM verification/)
-  assert.match(src, /Queued for verification on the next scan/)
+  assert.match(src, /<ReverifyButton findingId=\{findingId\} \/>/)
 })
