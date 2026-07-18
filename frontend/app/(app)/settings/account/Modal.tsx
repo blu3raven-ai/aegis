@@ -20,7 +20,7 @@ export function Modal({
   children: React.ReactNode
 }) {
   return (
-    <Sheet open={open} onClose={onClose} title={title} size="sm">
+    <Sheet open={open} onClose={onClose} title={title} variant="modal" size="sm">
       {children}
     </Sheet>
   )

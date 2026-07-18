@@ -48,6 +48,7 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
       onClose={handleClose}
       title="Create team"
       description="Set up a team first, then assign members, repositories, and container images from the editor."
+      variant="modal"
       size="md"
       dismissGuard={{ isDirty: name.trim() !== "" || description.trim() !== "" }}
       footer={

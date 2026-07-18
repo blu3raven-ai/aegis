@@ -540,6 +540,7 @@ export function UsersSettingsForm({ canEdit = true, inviteTriggerRef }: UsersSet
         onClose={() => { setShowAdd(false); setDialogError(null) }}
         title="Invite a member"
         description="Create an account with a starter password. Members can reset it later from account settings."
+        variant="modal"
         size="md"
         dismissGuard={{
           isDirty: newUsername.trim() !== "" || newEmail.trim() !== "" || newPassword !== "",

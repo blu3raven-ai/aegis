@@ -129,6 +129,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
       onClose={onClose}
       title="Add runner"
       description="Run these commands on your remote machine."
+      variant="modal"
       size="md"
     >
       {error ? (

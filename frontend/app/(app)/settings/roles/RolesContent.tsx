@@ -208,6 +208,7 @@ export function RolesContent({ createTriggerRef }: RolesContentProps = {}) {
             ? "Name the role and pick the permissions it grants."
             : "Adjust the permissions this role grants."
         }
+        variant="modal"
         size="xl"
         footer={
           <div className="flex items-center justify-end gap-2">
