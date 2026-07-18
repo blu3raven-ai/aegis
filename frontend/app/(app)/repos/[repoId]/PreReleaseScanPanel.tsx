@@ -235,7 +235,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
               )}
               {activeScan.status === "completed" && <span>✓</span>}
               {activeScan.status === "failed" && <span>×</span>}
-              <span>{activeScan.status}</span>
+              <span className="capitalize">{activeScan.status.replace(/_/g, " ")}</span>
             </div>
           </div>
 

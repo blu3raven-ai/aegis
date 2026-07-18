@@ -82,8 +82,8 @@ export function ScanHistoryTimeline({ runs }: ScanHistoryTimelineProps) {
                   {scannerAbbrev(run.scanner_type)}
                 </span>
               </Td>
-              <Td className={`px-5 py-3.5 font-medium ${STATUS_STYLES[run.status] ?? "text-[var(--color-text-secondary)]"}`}>
-                {run.status}
+              <Td className={`px-5 py-3.5 font-medium capitalize ${STATUS_STYLES[run.status] ?? "text-[var(--color-text-secondary)]"}`}>
+                {run.status.replace(/_/g, " ")}
               </Td>
               <Td className="px-5 py-3.5 text-[var(--color-text-secondary)]">
                 {relativeTime(run.started_at)}
