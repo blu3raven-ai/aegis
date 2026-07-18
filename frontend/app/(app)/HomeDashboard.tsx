@@ -196,6 +196,8 @@ const SCANNER_SHORT: Record<string, string> = {
   sast: "Code Scanning",
   secrets: "Secrets",
   iac: "IaC",
+  agent: "Coding Agent",
+  audit: "Deep Audit",
 }
 
 function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {

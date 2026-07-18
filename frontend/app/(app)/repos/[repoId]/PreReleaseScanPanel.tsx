@@ -6,6 +6,7 @@ import {
   getScanStatus,
   type ScanDetail,
 } from "@/lib/client/repos-api"
+import { scannerAbbrev } from "@/lib/shared/findings/row-mapper"
 import { Button } from "@/components/ui/Button"
 
 interface PreReleaseScanPanelProps {
@@ -13,13 +14,6 @@ interface PreReleaseScanPanelProps {
   onScanComplete: (scanId: string) => void
 }
 
-// Local redeclaration keeps the panel decoupled from ScanHistoryTimeline.
-const TOOL_LABELS: Record<string, string> = {
-  dependencies:        "SCA",
-  code_scanning:       "SAST",
-  container_scanning:  "CONT",
-  secrets:             "SEC",
-}
 
 const STATUS_STYLES: Record<ScanDetail["status"], string> = {
   queued:    "text-[var(--color-state-pending)]",
@@ -254,7 +248,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
                   key={st}
                   className="rounded px-1.5 py-0.5 text-xs font-semibold bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
                 >
-                  {TOOL_LABELS[st] ?? st}
+                  {scannerAbbrev(st)}
                 </span>
               ))}
             </div>

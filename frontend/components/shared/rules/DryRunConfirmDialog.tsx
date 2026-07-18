@@ -15,6 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import { plural } from "@/lib/shared/plural"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import type { DryRunConfirmation } from "@/lib/client/rules-api"
 import { Button, Spinner } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
@@ -193,7 +194,7 @@ export function DryRunConfirmDialog({
                           {m.severity}
                         </Td>
                         <Td className="px-3 py-2 text-sm text-[var(--color-text-primary)]">
-                          {m.scanner}
+                          {scannerLabel(m.scanner)}
                         </Td>
                         <Td className="px-3 py-2 text-sm text-[var(--color-text-primary)]">
                           {m.repo_id}

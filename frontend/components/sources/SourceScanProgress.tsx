@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { useSSE } from "@/components/providers/SSEProvider"
 import { ScanRunningBanner } from "@/components/shared/ScanRunningBanner"
 import { getActiveSourceScanRuns } from "@/lib/client/source-connections-api"
+import { scannerShortLabel } from "@/lib/shared/findings/row-mapper"
 import { cn } from "@/lib/shared/utils"
 import type { ScanCompletedEvent, ScanFailedEvent, ScanProgressEvent } from "@/lib/shared/sse-types"
 
@@ -36,15 +37,6 @@ interface SourceScanProgressProps {
   isCancelling?: boolean
 }
 
-const SCANNER_SHORT: Record<string, string> = {
-  dependencies_scanning: "Dependency",
-  secret_scanning: "Secret",
-  code_scanning: "Code",
-  container_scanning: "Container",
-  iac_scanning: "IaC",
-  agent_scanning: "Coding Agent",
-}
-
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled"])
 
 // Status priority for aggregation — higher wins.
@@ -62,10 +54,9 @@ function extractScannerType(runId: string): string {
 
 function buildScanLabel(runs: ActiveRun[]): string {
   if (runs.length === 1) {
-    const label = SCANNER_SHORT[runs[0].scannerType]
-    return label ? `${label} scan` : "Scan"
+    return `${scannerShortLabel(runs[0].scannerType)} scan`
   }
-  const names = runs.map((r) => SCANNER_SHORT[r.scannerType] ?? r.scannerType)
+  const names = runs.map((r) => scannerShortLabel(r.scannerType))
   if (names.length <= 2) return `${names.join(" & ")} scan`
   return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]} scan`
 }
@@ -246,7 +237,7 @@ export function SourceScanProgress({ connectionId, org, runIds, onDone, onDismis
         commandLabel=""
         scanLabel={scanLabel}
         runCounts={runCounts}
-        activeScannerLabel={SCANNER_SHORT[aggRun.scannerType]}
+        activeScannerLabel={scannerShortLabel(aggRun.scannerType)}
         onCancel={onCancel}
         onDismiss={onDismiss}
         isCancelling={isCancelling}

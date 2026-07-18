@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useParams, useSearchParams } from "next/navigation"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import Link from "next/link"
 import { RepoDetailHero } from "@/components/shared/repos/RepoDetailHero"
 import { ScanHistoryTimeline } from "@/components/shared/repos/ScanHistoryTimeline"
@@ -311,7 +312,7 @@ export function RepoDetailPageContent() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {filteredFindings.map((f) => (
                     <tr key={f.id} className="hover:bg-[var(--color-surface-raised)]">
-                      <td className="px-5 py-3.5 text-xs text-[var(--color-text-secondary)]">{f.tool}</td>
+                      <td className="px-5 py-3.5 text-xs text-[var(--color-text-secondary)]">{scannerLabel(f.tool)}</td>
                       <td className="px-5 py-3.5 font-mono text-xs text-[var(--color-text-primary)] max-w-xs truncate">{f.identity_key}</td>
                       <td className={`px-5 py-3.5 text-xs font-semibold ${SEV_COLORS[f.severity ?? ""] ?? "text-[var(--color-text-secondary)]"}`}>
                         {f.severity ?? "—"}

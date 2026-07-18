@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import { fetchRunnerDetail, fetchRunnerHeartbeats, saveRunnerSettings } from "@/lib/client/settings/use-runners"
 import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
 import { Card } from "@/components/ui/Card"
@@ -283,10 +284,10 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
               <Tbody divided={false}>
                 {recentJobs.slice(0, 10).map((job) => (
                   <Tr key={job.id} className="border-b border-[var(--color-border)] last:border-0">
-                    <Td className="py-2.5 text-[var(--color-text-primary)]">{job.jobType}</Td>
+                    <Td className="py-2.5 text-[var(--color-text-primary)]">{scannerLabel(job.jobType)}</Td>
                     <Td className="py-2.5 text-[var(--color-text-secondary)]">{job.org}</Td>
-                    <Td className={`py-2.5 font-medium ${JOB_STATUS_CLASS[job.status] ?? "text-[var(--color-text-tertiary)]"}`}>
-                      {job.status}
+                    <Td className={`py-2.5 font-medium capitalize ${JOB_STATUS_CLASS[job.status] ?? "text-[var(--color-text-tertiary)]"}`}>
+                      {job.status.replace(/_/g, " ")}
                     </Td>
                     <Td className="py-2.5 tabular-nums text-[var(--color-text-secondary)]">
                       {formatDuration(job.startedAt, job.completedAt)}

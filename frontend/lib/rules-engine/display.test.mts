@@ -32,11 +32,11 @@ describe("summarizeAction — require_scanners branch", () => {
     assert.match(src, /if\s*\(\s*isRequireScannersAction\(action\)\s*\)/)
   })
 
-  it("defines a SCANNER_LABELS map with all four scanner abbreviations", () => {
-    assert.match(src, /dependencies:\s*"SCA"/)
-    assert.match(src, /code_scanning:\s*"SAST"/)
-    assert.match(src, /container_scanning:\s*"Containers"/)
-    assert.match(src, /secrets:\s*"Secrets"/)
+  it("humanizes required scanners via the shared scannerLabel helper", () => {
+    // Previously a local 4-key map that dropped iac/agent/deep_audit and leaked
+    // raw keys; now routed through the canonical scannerLabel (all 7 members).
+    assert.match(src, /scannerLabel\(s\)/)
+    assert.match(src, /import \{ scannerLabel \} from "@\/lib\/shared\/findings\/row-mapper"/)
   })
 
   it("appends a 'required' suffix to the joined labels", () => {

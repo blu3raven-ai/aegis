@@ -3,6 +3,7 @@
  * but lighter, focused on a single repo's history across scanner types.
  */
 import type { ScanRunRow } from "@/lib/client/repos-api"
+import { scannerAbbrev } from "@/lib/shared/findings/row-mapper"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 
 const STATUS_STYLES: Record<string, string> = {
@@ -13,12 +14,6 @@ const STATUS_STYLES: Record<string, string> = {
   queued:    "text-[var(--color-state-pending)]",
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  dependencies:        "SCA",
-  code_scanning:       "SAST",
-  container_scanning:  "CONT",
-  secrets:             "SEC",
-}
 
 function durationLabel(ms: number | null | undefined): string {
   if (ms == null) return "—"
@@ -84,7 +79,7 @@ export function ScanHistoryTimeline({ runs }: ScanHistoryTimelineProps) {
             <Tr key={run.scan_id} interactive>
               <Td className="px-5 py-3.5">
                 <span className="rounded px-1.5 py-0.5 text-xs font-semibold bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
-                  {TOOL_LABELS[run.scanner_type] ?? run.scanner_type}
+                  {scannerAbbrev(run.scanner_type)}
                 </span>
               </Td>
               <Td className={`px-5 py-3.5 font-medium ${STATUS_STYLES[run.status] ?? "text-[var(--color-text-secondary)]"}`}>

@@ -144,6 +144,29 @@ export const SCANNER_LABELS: Record<ScannerType, string> = {
   deep_audit: "Deep Audit",
 }
 
+/** Compact scanner labels for dense contexts (progress banners, dashboard
+ *  cards) — the "Scanning" suffix dropped. Keep in lockstep with SCANNER_LABELS. */
+export const SCANNER_SHORT_LABELS: Record<ScannerType, string> = {
+  dependencies_scanning: "Dependency",
+  secret_scanning: "Secret",
+  code_scanning: "Code",
+  container_scanning: "Container",
+  iac_scanning: "IaC",
+  agent_scanning: "Coding Agent",
+  deep_audit: "Deep Audit",
+}
+
+/** Badge abbreviations for the tightest contexts (row tags, history timeline). */
+export const SCANNER_ABBREV: Record<ScannerType, string> = {
+  dependencies_scanning: "SCA",
+  secret_scanning: "SEC",
+  code_scanning: "SAST",
+  container_scanning: "CONT",
+  iac_scanning: "IaC",
+  agent_scanning: "AGT",
+  deep_audit: "AUD",
+}
+
 export const SCANNER_DESCRIPTIONS: Record<ScannerType, string> = {
   dependencies_scanning: "Checks the open-source libraries your project relies on for known security problems.",
   secret_scanning: "Looks for passwords, API keys, and other secrets accidentally left in your code.",
