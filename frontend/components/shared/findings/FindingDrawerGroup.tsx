@@ -61,7 +61,7 @@ export function FindingDrawerGroup({
         onClick={toggle}
         aria-expanded={open}
         aria-controls={regionId}
-        className="flex w-full items-center gap-2 bg-[var(--color-bg-section)] px-5 py-2.5 text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
+        className="flex w-full items-center gap-2 bg-[var(--color-bg-section)] px-5 py-2.5 text-left font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
       >
         <svg
           width="10"
