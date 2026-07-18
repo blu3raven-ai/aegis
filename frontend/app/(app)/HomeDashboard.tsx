@@ -5,6 +5,7 @@ import Link from "next/link"
 import { gqlQuery } from "@/lib/client/graphql-client"
 import { formatPercentile, type EpssTopFinding } from "@/lib/client/epss-api"
 import { listFindings, type Finding as ApiFinding } from "@/lib/client/findings-api"
+import { scannerShortLabel } from "@/lib/shared/findings/row-mapper"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { HOME_DASHBOARD_QUERY } from "@/lib/shared/graphql/queries"
 import type {
@@ -189,21 +190,11 @@ function formatRelative(iso: string | null | undefined): string {
   return `${months}mo ago`
 }
 
-const SCANNER_SHORT: Record<string, string> = {
-  deps: "Dependencies",
-  container: "Container",
-  containers: "Container",
-  sast: "Code Scanning",
-  secrets: "Secrets",
-  iac: "IaC",
-  agent: "Coding Agent",
-  audit: "Deep Audit",
-}
 
 function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
   const sevKey = (finding.severity || "").toLowerCase()
   const sevClass = SEVERITY_BADGE[sevKey] ?? "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
-  const scannerLabel = SCANNER_SHORT[finding.scanner] ?? finding.scanner
+  const scannerLabel = scannerShortLabel(finding.scanner)
   const fileLine = finding.file_path
     ? finding.line != null
       ? `${finding.file_path}:${finding.line}`
@@ -270,7 +261,7 @@ function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
 function CompactFindingRow({ finding }: { finding: ApiFinding }) {
   const sevKey = (finding.severity || "").toLowerCase()
   const sevClass = SEVERITY_BADGE[sevKey] ?? "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
-  const scannerLabel = SCANNER_SHORT[finding.scanner] ?? finding.scanner
+  const scannerLabel = scannerShortLabel(finding.scanner)
   const fileLine = finding.file_path
     ? finding.line != null
       ? `${finding.file_path}:${finding.line}`
