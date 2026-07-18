@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { addOrganisationRepository, removeOrganisationRepository, searchOrganisationRepositories } from "@/lib/client/settings-api"
 import { Button } from "@/components/ui/Button"
+import { EmptyState } from "@/components/ui/EmptyState"
 import type { OrganisationTeam, ResourceSharingIndex } from "./team-types"
 import { ResourceAutocomplete } from "./ResourceAutocomplete"
 
@@ -18,6 +19,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [removingAssetId, setRemovingAssetId] = useState<string | null>(null)
 
   const repoAssets = team.assets.filter((a) => a.type === "repo")
 
@@ -50,11 +52,16 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
   }
 
   async function removeRepository(assetId: string) {
-    const result = await removeOrganisationRepository(team.id, assetId)
-    if (result.ok) {
-      await onChanged()
-    } else {
-      setError(result.error)
+    setRemovingAssetId(assetId)
+    try {
+      const result = await removeOrganisationRepository(team.id, assetId)
+      if (result.ok) {
+        await onChanged()
+      } else {
+        setError(result.error)
+      }
+    } finally {
+      setRemovingAssetId(null)
     }
   }
 
@@ -82,10 +89,10 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
               </div>
               <Button
                 disabled={!canEdit || isGitHubSourced}
-                variant="secondary"
+                variant="destructive"
                 size="sm"
+                isLoading={removingAssetId === asset.assetId}
                 onClick={() => void removeRepository(asset.assetId)}
-                className="border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical-text)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
                 title={isGitHubSourced ? "This repository is synced from a source connection and cannot be manually removed" : undefined}
               >
                 Remove
@@ -94,7 +101,17 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
           )
         })}
         {repoAssets.length === 0 && (
-          <p className="py-4 text-center text-xs text-[var(--color-text-secondary)] italic">No repositories assigned to this team.</p>
+          <div className="py-6">
+            <EmptyState
+              icon={() => (
+                <svg className="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 100 0m0 0h18M3 12l4-4m0 8l-4-4M21 12l-4-4m0 8l4-4" />
+                </svg>
+              )}
+              title="No repositories assigned"
+              description="Add repositories to give this team access to scan results."
+            />
+          </div>
         )}
       </div>
 

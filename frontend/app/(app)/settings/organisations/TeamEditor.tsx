@@ -127,7 +127,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
             <FormField
               label="Team Name"
               htmlFor="team-name"
-              error={error && !name.trim() ? error : undefined}
+              error={error}
             >
               <Input
                 id="team-name"
@@ -148,7 +148,6 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
                 placeholder="What does this team do?"
               />
             </FormField>
-            {error && name.trim() && <p className="text-xs text-[var(--color-severity-critical-text)]">{error}</p>}
             <div className="flex gap-2">
               <Button
                 variant="primary"

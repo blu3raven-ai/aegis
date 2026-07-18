@@ -56,7 +56,7 @@ export function ResourceAutocomplete({
         placeholder={placeholder}
         aria-label={ariaLabel}
       />
-      {error && <p role="alert" className="text-xs text-[var(--color-state-pending-text)]">{error}</p>}
+      {error && <p role="alert" className="text-xs text-[var(--color-severity-critical-text)]">{error}</p>}
       {showSuggestions && suggestions.length > 0 && (
         <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-lg">
           {suggestions.map((suggestion) => (
