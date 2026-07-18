@@ -99,42 +99,147 @@ export function hasVerifiedAdvisory(f: {
   )
 }
 
-/** Consolidated stand-in shown once when a finding has no verified advisory —
- *  replaces the wall of per-section "verify to generate" prompts. When the org
- *  hasn't configured a model key yet it carries the BYOK call to action;
- *  otherwise it explains the finding is queued for the next scan. */
+// Structural skeletons blurred behind the call to action so the analyst sees
+// there is rich content to unlock. Purely decorative: aria-hidden, inert.
+function GhostAdvisory() {
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <div className="h-3.5 w-40 rounded bg-[var(--color-surface-raised)]" />
+        <div className="h-2.5 w-full rounded bg-[var(--color-surface-raised)]" />
+        <div className="h-2.5 w-11/12 rounded bg-[var(--color-surface-raised)]" />
+      </div>
+      <div className="flex gap-2">
+        <div className="h-5 w-20 rounded-sm bg-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)]" />
+        <div className="h-5 w-16 rounded-sm bg-[var(--color-surface-raised)]" />
+        <div className="h-5 w-24 rounded-sm bg-[color-mix(in_srgb,var(--color-status-ok)_40%,transparent)]" />
+      </div>
+      <div className="space-y-2 rounded-md border border-[var(--color-border)] p-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-4">
+            <div className="h-2.5 w-24 rounded bg-[var(--color-surface-raised)]" />
+            <div className="h-2.5 flex-1 rounded bg-[var(--color-surface-raised)]" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function GhostRemediation() {
+  // A ghosted unified diff: tinted add/remove lines read as "a patch lives here".
+  const rows: Array<[string, string]> = [
+    ["low", "w-10/12"],
+    ["critical", "w-8/12"],
+    ["low", "w-11/12"],
+    ["neutral", "w-9/12"],
+    ["low", "w-7/12"],
+  ]
+  const tint = (kind: string) =>
+    kind === "low"
+      ? "bg-[color-mix(in_srgb,var(--color-severity-low)_38%,transparent)]"
+      : kind === "critical"
+        ? "bg-[color-mix(in_srgb,var(--color-severity-critical)_38%,transparent)]"
+        : "bg-[var(--color-surface-raised)]"
+  return (
+    <div className="space-y-4">
+      <div className="h-3.5 w-32 rounded bg-[var(--color-surface-raised)]" />
+      <div className="space-y-1.5 rounded-md border border-[var(--color-border)] p-3">
+        {rows.map(([kind, w], i) => (
+          <div key={i} className={`h-2.5 rounded ${w} ${tint(kind)}`} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Blurred preview of verifier-generated content behind a call to action. When
+ *  no model key is configured it carries the BYOK CTA; otherwise it explains the
+ *  finding is queued for verification on the next scan. */
+function VerificationUpsell({
+  title,
+  description,
+  verificationEnabled,
+  ghost,
+}: {
+  title: string
+  description: string
+  verificationEnabled: boolean
+  ghost: React.ReactNode
+}) {
+  return (
+    <section className="relative overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none select-none px-4 py-4 opacity-60 blur-[3px]"
+      >
+        {ghost}
+      </div>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--color-surface)_55%,transparent)] px-6 text-center">
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
+        <p className="max-w-sm text-xs leading-relaxed text-[var(--color-text-secondary)]">
+          {description}
+        </p>
+        {verificationEnabled ? (
+          <p className="mt-1 text-2xs font-mono uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">
+            Queued for verification on the next scan
+          </p>
+        ) : (
+          <div className="mt-1 flex flex-col items-center gap-1.5">
+            <LinkButton
+              href="/settings#llm"
+              variant="primary"
+              size="sm"
+              trailingIcon={<span aria-hidden="true">→</span>}
+            >
+              Enable LLM verification
+            </LinkButton>
+            <p className="text-2xs text-[var(--color-text-tertiary)]">
+              Bring your own model key to unlock verified advisories.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** Advisory-absent empty state — a blurred advisory preview behind the CTA. */
 export function AdvisoryUnverifiedNote({
   verificationEnabled = true,
 }: {
   verificationEnabled?: boolean
 }) {
   return (
-    <section className="rounded-md border border-[var(--color-border)] border-l-2 border-l-[var(--color-accent)] bg-[var(--color-bg-section)] px-4 py-3">
-      <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Advisory not generated</h3>
-      <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-        LLM verification produces the full advisory: exploit summary, cited
-        technical evidence, attack scenario, impact, and remediation guidance.
-      </p>
-      {verificationEnabled ? (
-        <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">
-          This finding is queued for verification on the next scan of its repository.
-        </p>
-      ) : (
-        <div className="mt-3">
-          <LinkButton
-            href="/settings#llm"
-            variant="primary"
-            size="sm"
-            trailingIcon={<span aria-hidden="true">→</span>}
-          >
-            Enable LLM verification
-          </LinkButton>
-          <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
-            Bring your own model key to run the verification pass on this finding.
-          </p>
-        </div>
-      )}
-    </section>
+    <VerificationUpsell
+      title="Advisory not generated"
+      description="LLM verification produces the full advisory: exploit summary, cited technical evidence, attack scenario, impact, and remediation guidance."
+      verificationEnabled={verificationEnabled}
+      ghost={<GhostAdvisory />}
+    />
+  )
+}
+
+/** Scanner remediation text is usable only when it is a real fix, not a raw
+ *  rule template (a `$UPPER` placeholder token means the scanner handed us its
+ *  template, not concrete guidance). */
+export function isUsableRemediation(remediation?: string): boolean {
+  return remediation ? !/\$[A-Z][A-Z0-9_]*/.test(remediation) : false
+}
+
+/** Remediation-absent empty state — a blurred fix preview behind the CTA. */
+export function RemediationUnverifiedNote({
+  verificationEnabled = true,
+}: {
+  verificationEnabled?: boolean
+}) {
+  return (
+    <VerificationUpsell
+      title="No fix generated yet"
+      description="LLM verification proposes a concrete remediation: a patch or version upgrade with the steps to apply it safely."
+      verificationEnabled={verificationEnabled}
+      ghost={<GhostRemediation />}
+    />
   )
 }
 

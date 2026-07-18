@@ -390,9 +390,11 @@ describe("FindingsBoardView URL sync", () => {
   })
 
   it("suppresses raw scanner metavar templates in the remediation section", () => {
-    // A `$FUNC`-style token means the scanner sent its rule template, not a fix.
-    assert.match(src, /\/\\\$\[A-Z\]\[A-Z0-9_\]\*\/\.test\(remediation\)/)
-    assert.match(src, /No automated fix yet\. Verify this finding to generate one\./)
+    // Usability now flows through the shared isUsableRemediation helper; an
+    // unusable scanner template falls through to the verification-aware empty
+    // state rather than being echoed.
+    assert.match(src, /isUsableRemediation\(selectedFinding\.remediation\)/)
+    assert.match(src, /RemediationUnverifiedNote/)
   })
 
   it("badges a fix that provably applies (positive-only, gated on fix_verified)", () => {

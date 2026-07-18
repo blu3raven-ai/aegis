@@ -28,3 +28,17 @@ test("MitigatingFactorsSection + RemediationStepsSection render supplementary ve
   assert.match(src, /export function RemediationStepsSection/)
   assert.match(src, /Defense in depth/)
 })
+
+test("isUsableRemediation rejects raw scanner metavar templates", () => {
+  assert.match(src, /export function isUsableRemediation/)
+  assert.match(src, /\/\\\$\[A-Z\]\[A-Z0-9_\]\*\/\.test\(remediation\)/)
+})
+
+test("unverified advisory + remediation render a blurred verification upsell", () => {
+  assert.match(src, /export function AdvisoryUnverifiedNote/)
+  assert.match(src, /export function RemediationUnverifiedNote/)
+  // Blurred ghost behind a BYOK call to action; queued copy when enabled.
+  assert.match(src, /blur-\[3px\]/)
+  assert.match(src, /Enable LLM verification/)
+  assert.match(src, /Queued for verification on the next scan/)
+})

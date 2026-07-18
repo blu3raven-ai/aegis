@@ -42,6 +42,8 @@ import {
   NotesVerificationSection,
   AdvisoryUnverifiedNote,
   AdvisoryIncompleteNote,
+  RemediationUnverifiedNote,
+  isUsableRemediation,
   hasVerifiedAdvisory,
 } from "@/components/shared/findings/FindingReportSections"
 import { FindingAcceptRiskAction } from "@/components/shared/findings/FindingAcceptRiskAction"
@@ -2022,22 +2024,25 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 </p>
               )}
 
-              {/* Fall back to the scanner's own remediation text only when there
-                  is no structured fix, so the "Recommended fix" heading never
-                  renders twice. */}
+              {/* Scanner's own remediation text, only when there is no structured
+                  fix (self-nulls if the scanner text isn't usable). */}
               {!selectedFinding.recommendedFix && (
                 <FindingRemediationSection remediation={selectedFinding.remediation} />
               )}
 
               <RemediationStepsSection steps={selectedFinding.verificationMetadata?.remediation} />
 
-              {/* Verified finding whose advisory returned no remediation from any
-                  source — flag the partial result and point to a re-scan. */}
-              {hasVerifiedAdvisory(selectedFinding)
-                && !selectedFinding.recommendedFix
-                && !selectedFinding.remediation
+              {/* No remediation from any source: a verified finding shows the
+                  partial-result note; an unverified one shows the blurred fix
+                  preview with the verification call to action. */}
+              {!selectedFinding.recommendedFix
+                && !isUsableRemediation(selectedFinding.remediation)
                 && !selectedFinding.verificationMetadata?.remediation?.length && (
-                  <AdvisoryIncompleteNote verificationEnabled={verificationEnabled} />
+                  hasVerifiedAdvisory(selectedFinding) ? (
+                    <AdvisoryIncompleteNote verificationEnabled={verificationEnabled} />
+                  ) : (
+                    <RemediationUnverifiedNote verificationEnabled={verificationEnabled} />
+                  )
                 )}
               </FindingDrawerGroup>
 
@@ -2190,25 +2195,18 @@ function FindingDescriptionSection({
 }
 
 function FindingRemediationSection({ remediation }: { remediation?: string }) {
-  // ponytail: a `$FUNC`-style token means the scanner handed us its raw rule
-  // template, not a usable fix — show the empty state instead of echoing it.
-  // Ceiling: also suppresses a real fix literally containing `$UPPER`; scanner
-  // remediation text rarely does, so fine until it bites.
-  const usable = remediation ? !/\$[A-Z][A-Z0-9_]*/.test(remediation) : false
+  // A `$FUNC`-style token means the scanner handed us its raw rule template, not
+  // a usable fix. When there's nothing usable this renders null and the parent
+  // shows the verification-aware empty state instead.
+  if (!isUsableRemediation(remediation)) return null
   return (
     <section aria-labelledby="finding-remediation-title">
       <h3 id="finding-remediation-title" className="text-base font-semibold text-[var(--color-text-primary)]">
         Recommended fix
       </h3>
-      {usable ? (
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-primary)]">
-          {remediation}
-        </p>
-      ) : (
-        <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-          No automated fix yet. Verify this finding to generate one.
-        </p>
-      )}
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-primary)]">
+        {remediation}
+      </p>
     </section>
   )
 }
