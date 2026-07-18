@@ -1,6 +1,7 @@
 "use client"
 
 import { SearchInput } from "@/components/shared/SearchInput"
+import { plural } from "@/lib/shared/plural"
 import type { OrganisationTeam } from "./team-types"
 
 interface TeamListProps {
@@ -36,7 +37,7 @@ export function TeamList({ teams, selectedTeamId, query, onQueryChange, onSelect
           >
             <div className="truncate font-medium">{team.name}</div>
             <div className="mt-0.5 truncate text-[11px] opacity-70">
-              {team.members.length} members · {team.assets.filter((a) => a.type === "repo").length} repos
+              {team.members.length} {plural(team.members.length, "member")} · {team.assets.filter((a) => a.type === "repo").length} {plural(team.assets.filter((a) => a.type === "repo").length, "repo")}
             </div>
           </button>
         ))}

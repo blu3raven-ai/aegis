@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { plural } from "@/lib/shared/plural"
 import type { OrganisationTeam, ResourceSharingIndex } from "./team-types"
 import { TeamImagesTab } from "./TeamImagesTab"
 import { TeamRepositoriesTab } from "./TeamRepositoriesTab"
@@ -105,6 +106,9 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
       setSubmitting(false)
     }
   }
+
+  const repoCount = team.assets.filter((a) => a.type === "repo").length
+  const imageCount = team.assets.filter((a) => a.type === "image").length
 
   return (
     <Card as="section" className="min-w-0 flex-1">
@@ -214,9 +218,9 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
           </>
         )}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-          <span>{team.members.length} members</span>
-          <span>{team.assets.filter((a) => a.type === "repo").length} repos</span>
-          <span>{team.assets.filter((a) => a.type === "image").length} images</span>
+          <span>{team.members.length} {plural(team.members.length, "member")}</span>
+          <span>{repoCount} {plural(repoCount, "repo")}</span>
+          <span>{imageCount} {plural(imageCount, "image")}</span>
         </div>
       </div>
 
