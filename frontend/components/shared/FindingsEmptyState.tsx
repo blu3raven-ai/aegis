@@ -11,7 +11,7 @@ export function FindingsEmptyState({
   return (
     <div className="flex min-h-[280px] flex-col items-center justify-center gap-2 px-8 text-center">
       <svg
-        className="mb-1 h-7 w-7 text-[var(--color-text-tertiary)]"
+        className="mb-3 h-12 w-12 text-[var(--color-text-tertiary)]"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
