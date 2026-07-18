@@ -75,7 +75,7 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
 
       {done ? (
         <p className="text-sm text-[var(--color-status-ok-text)]">
-          Accepted — this finding will be ruled out on the next scan.
+          Accepted. This finding will be ruled out on the next scan.
         </p>
       ) : !open ? (
         <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>

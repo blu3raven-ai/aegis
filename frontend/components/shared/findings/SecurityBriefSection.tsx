@@ -138,7 +138,7 @@ export function SecurityBriefSection({
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
             {kevDue
               ? `Federal agencies must remediate by ${kevDue}.`
-              : "Actively exploited in the wild — prioritise remediation."}
+              : "Actively exploited in the wild. Prioritise remediation."}
           </p>
         </div>
       )}

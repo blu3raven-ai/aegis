@@ -34,7 +34,7 @@ const MOCK_GROUPS: Array<{ group: string; rows: MockRow[] }> = [
   {
     group: "Dependencies",
     rows: [
-      { severity: "critical", title: "CVE-0000-0000 — example-package", repo: "example-org/frontend", scanner: "Dependencies", age: "2h", ageMinutes: 120 },
+      { severity: "critical", title: "CVE-0000-0000: example-package", repo: "example-org/frontend", scanner: "Dependencies", age: "2h", ageMinutes: 120 },
       { severity: "high",     title: "Outdated transitive dependency",  repo: "example-org/frontend", scanner: "Dependencies", age: "5h", ageMinutes: 300 },
       { severity: "medium",   title: "Known advisory in lockfile",      repo: "example-org/api",      scanner: "Dependencies", age: "1d", ageMinutes: 60 * 24 },
     ],

@@ -80,7 +80,7 @@ export function EnableVerificationBanner({ verificationEnabled }: EnableVerifica
           </p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
             Your model runs an AI verification pass on SAST, IaC, and dependency findings
-            to mark them as confirmed, needs verify, possible, or ruled out —
+            to mark them as confirmed, needs verify, possible, or ruled out,
             typically reducing noise by 40–60%.
           </p>
           <div className="mt-2 flex items-center gap-3">

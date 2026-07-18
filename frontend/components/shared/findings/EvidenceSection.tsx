@@ -99,7 +99,7 @@ const LOCKED_PREVIEW = {
     teaserLabel: "source · app/views.py:14",
     teaserCode: 'q = request.GET["q"]',
     title: "Enable LLM verification to verify this finding",
-    body: "Your model runs an AI exploit-verification pass — confirming real exploits with a cited evidence chain and ruling out false positives.",
+    body: "Your model runs an AI exploit-verification pass, confirming real exploits with a cited evidence chain and ruling out false positives.",
   },
   reachability: {
     teaserChip: "🔴 Reachable",
@@ -108,7 +108,7 @@ const LOCKED_PREVIEW = {
     teaserLabel: "import · src/api/parse.ts:12",
     teaserCode: "parse(userInput)",
     title: "Enable LLM verification to check reachability",
-    body: "Your model checks whether your code actually reaches this vulnerable dependency — flagging reachable risks and ruling out unreachable ones.",
+    body: "Your model checks whether your code actually reaches this vulnerable dependency, flagging reachable risks and ruling out unreachable ones.",
   },
 } as const
 

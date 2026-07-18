@@ -333,7 +333,7 @@ function ConfigPatchBody({ fix }: { fix: FindingRecommendedFix }) {
           />
         )}
         <p className="text-xs text-[var(--color-text-tertiary)]">
-          Suggested change — review before applying.
+          Suggested change. Review before applying.
         </p>
       </div>
     </div>
@@ -486,7 +486,7 @@ function RotationBody({ fix }: { fix: FindingRecommendedFix }) {
       )}
 
       <p className="mt-3 text-xs text-[var(--color-severity-medium-text)]">
-        Removing the secret from code does not remediate it — the live credential must be
+        Removing the secret from code does not remediate it. The live credential must be
         revoked and rotated.
       </p>
     </div>

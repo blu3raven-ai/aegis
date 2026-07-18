@@ -200,7 +200,7 @@ const REACHABILITY_SIGNAL: Record<
   reachable: {
     tone: "danger",
     label: "Reachable",
-    title: "A call path reaches the vulnerable symbol — exploitable in this codebase",
+    title: "A call path reaches the vulnerable symbol: exploitable in this codebase",
     glyph: (
       <svg {...REACH_GLYPH_PROPS}>
         <path d="M3 12h12" />
@@ -211,7 +211,7 @@ const REACHABILITY_SIGNAL: Record<
   no_path: {
     tone: "success",
     label: "Not reachable",
-    title: "No call path reaches the vulnerable symbol — lower exploitation risk",
+    title: "No call path reaches the vulnerable symbol: lower exploitation risk",
     glyph: (
       <svg {...REACH_GLYPH_PROPS}>
         <circle cx="12" cy="12" r="8" />
@@ -222,7 +222,7 @@ const REACHABILITY_SIGNAL: Record<
   unknown: {
     tone: "neutral",
     label: "Reachability unknown",
-    title: "Reachability could not be determined — treat as potentially reachable",
+    title: "Reachability could not be determined: treat as potentially reachable",
     glyph: (
       <svg {...REACH_GLYPH_PROPS}>
         <circle cx="12" cy="12" r="8" />
@@ -762,7 +762,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
   useSSE("argus.intel_push", (data: ArgusIntelPushEvent) => {
     if (!dismissedIntelRef.current) {
-      setIntelMessage(data.message ?? "New Argus intel available — chain risk scores updated.")
+      setIntelMessage(data.message ?? "New Argus intel available. Chain risk scores updated.")
     }
   })
 
@@ -1260,7 +1260,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     try {
       await reopenFinding(Number(d.finding.id))
     } catch {
-      setDismissError("Couldn't undo — the finding may remain actioned.")
+      setDismissError("Couldn't undo. The finding may remain actioned.")
     }
   }, [lastDismissed])
 
@@ -1380,7 +1380,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           role="status"
           className="border-b border-[var(--color-verdict-uncertain-border)] bg-[var(--color-verdict-uncertain-subtle)] px-6 py-2 text-2xs text-[var(--color-verdict-uncertain)]"
         >
-          This view referenced {staleViewKeys.length} stale {staleViewKeys.length === 1 ? "filter" : "filters"} ({staleViewKeys.join(", ")}) — they were skipped.
+          This view referenced {staleViewKeys.length} stale {staleViewKeys.length === 1 ? "filter" : "filters"} ({staleViewKeys.join(", ")}). They were skipped.
         </div>
       )}
 
@@ -1920,7 +1920,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 >
                   <p className="font-semibold">Couldn&apos;t load the full detail for this finding.</p>
                   <p className="mt-1 break-words text-[var(--color-text-secondary)]">
-                    Showing the summary only — code, verification, and remediation may be missing.
+                    Showing the summary only. Code, verification, and remediation may be missing.
                   </p>
                   <p className="mt-1 break-words font-mono text-2xs text-[var(--color-text-tertiary)]">{detailError}</p>
                 </div>
@@ -1980,7 +1980,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 <section className="space-y-2">
                   <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Call path (verified)</h3>
                   <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-                    No verified call path — verify this finding to trace source → sink.
+                    No verified call path. Verify this finding to trace source → sink.
                   </p>
                 </section>
               )}
@@ -2020,7 +2020,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3 w-3">
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
-                  Fix verified — applies cleanly to the current code
+                  Fix verified, applies cleanly to the current code
                 </p>
               )}
 
@@ -2199,7 +2199,7 @@ function FindingRemediationSection({ remediation }: { remediation?: string }) {
         </p>
       ) : (
         <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-          No automated fix yet — verify this finding to generate one.
+          No automated fix yet. Verify this finding to generate one.
         </p>
       )}
     </section>
@@ -2291,7 +2291,7 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
         </SignalChip>
       )}
       {finding.actionBand && (
-        <SignalChip tone={bandTone} title="SSVC action band — derived from KEV, reachability, and severity">
+        <SignalChip tone={bandTone} title="SSVC action band: derived from KEV, reachability, and severity">
           <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
           {ACTION_BAND_LABEL[finding.actionBand]}
         </SignalChip>
@@ -2320,7 +2320,7 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
           tone={finding.secretVerified ? "danger" : "neutral"}
           title={
             finding.secretVerified
-              ? "The scanner authenticated this credential against the provider — it is live"
+              ? "The scanner authenticated this credential against the provider, so it is live"
               : "The scanner could not confirm this credential is live"
           }
         >

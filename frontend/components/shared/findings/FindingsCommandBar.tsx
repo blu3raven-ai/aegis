@@ -101,7 +101,7 @@ const STATIC_ATTRIBUTES: AttributeDef[] = [
     key: "bands",
     label: "action band",
     group: "Risk signals",
-    description: "SSVC action band — Act · Attend · Track",
+    description: "SSVC action band: Act · Attend · Track",
     type: "enum",
     options: [
       { value: "act", label: "Act" },

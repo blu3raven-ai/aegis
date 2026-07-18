@@ -39,6 +39,6 @@ describe("CodePreviewSection — no in-app secret reveal", () => {
 
   it("shows the masked value as redacted, not a broken reveal affordance", () => {
     assert.match(src, /•+ \(redacted\)/)
-    assert.match(src, /the full secret is never stored/)
+    assert.match(src, /full secret is never stored/i)
   })
 })

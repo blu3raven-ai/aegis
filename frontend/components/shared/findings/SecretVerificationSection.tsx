@@ -50,13 +50,13 @@ export function SecretVerificationSection({ verified, detector }: Props) {
                 : "text-[var(--color-text-primary)]",
             )}
           >
-            {verified ? "Live credential — provider-verified" : "Not verified live"}
+            {verified ? "Live credential, provider-verified" : "Not verified live"}
           </span>
         </div>
         <p className="mt-1.5 text-sm leading-relaxed text-[var(--color-text-primary)]">
           {verified
-            ? `The secret scanner authenticated this credential against the provider${detector ? ` (${detector})` : ""} — it is active and usable right now. Rotate it immediately.`
-            : `The secret scanner could not confirm this credential is active against the provider${detector ? ` (${detector})` : ""}. It may be revoked, rotated, or a non-live format — still treat it as a leak and rotate.`}
+            ? `The secret scanner authenticated this credential against the provider${detector ? ` (${detector})` : ""}. It is active and usable right now. Rotate it immediately.`
+            : `The secret scanner could not confirm this credential is active against the provider${detector ? ` (${detector})` : ""}. It may be revoked, rotated, or a non-live format. Still treat it as a leak and rotate.`}
         </p>
         <p className="mt-2 font-mono text-2xs uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           Checked by the secret scanner

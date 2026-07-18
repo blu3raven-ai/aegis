@@ -18,7 +18,7 @@ export function FindingDataFlowSection({ steps }: { steps?: CodeFlowStep[] }) {
         Data flow
       </h3>
       <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-        How tainted input reaches the sink — source first.
+        How tainted input reaches the sink, source first.
       </p>
       <ol className="relative mt-3 space-y-2.5 before:absolute before:left-[11px] before:top-3 before:bottom-3 before:w-px before:bg-[var(--color-border-divider)]">
         {steps.map((step, i) => {

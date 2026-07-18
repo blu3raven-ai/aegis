@@ -34,7 +34,7 @@ export function severityContext(input: {
   if (actionBand === "act") {
     return {
       tone: "danger",
-      text: `On the CISA KEV list — actively exploited in the wild — at ${sevLabel}. Treat as urgent and remediate now.`,
+      text: `On the CISA KEV list, actively exploited in the wild, at ${sevLabel}. Treat as urgent and remediate now.`,
     }
   }
 
@@ -43,12 +43,12 @@ export function severityContext(input: {
     if (kev) {
       return {
         tone: "caution",
-        text: `On the CISA KEV list — actively exploited in the wild — so it warrants prompt attention even at ${sevLabel}.`,
+        text: `On the CISA KEV list, actively exploited in the wild, so it warrants prompt attention even at ${sevLabel}.`,
       }
     }
     return {
       tone: "caution",
-      text: `${capitalise(sevLabel)} with a call path that reaches the vulnerable code, so it is exploitable here — attend to it soon.`,
+      text: `${capitalise(sevLabel)} with a call path that reaches the vulnerable code, so it is exploitable here. Attend to it soon.`,
     }
   }
 
@@ -56,19 +56,19 @@ export function severityContext(input: {
   if (reachability === "no_path") {
     return {
       tone: "neutral",
-      text: `No call path reaches the vulnerable code, so real-world exploitability is lower than ${sevLabel} alone implies — track it.`,
+      text: `No call path reaches the vulnerable code, so real-world exploitability is lower than ${sevLabel} alone implies. Track it.`,
     }
   }
   if (reachability === "reachable") {
     // Reachable but not escalated ⇒ severity is below high; keep it honest.
     return {
       tone: "neutral",
-      text: `The vulnerable code is reachable, but at ${sevLabel} this stays a track-level item — monitor it.`,
+      text: `The vulnerable code is reachable, but at ${sevLabel} this stays a track-level item. Monitor it.`,
     }
   }
   return {
     tone: "neutral",
-    text: `Not on the KEV list and no reachable exploit path is confirmed, so it is lower urgency than ${sevLabel} in isolation — track it.`,
+    text: `Not on the KEV list and no reachable exploit path is confirmed, so it is lower urgency than ${sevLabel} in isolation. Track it.`,
   }
 }
 

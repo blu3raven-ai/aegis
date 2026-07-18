@@ -73,7 +73,7 @@ export function ContainerImageSection({
                   {image.layerConcentration.findingCount} of {image.layerConcentration.totalWithLayer}
                 </span>{" "}
                 findings on this image
-                {image.layerConcentration.layerIndex <= 2 ? " — likely the base image" : ""}.
+                {image.layerConcentration.layerIndex <= 2 ? ", likely the base image" : ""}.
               </dd>
             </div>
           )}
@@ -99,8 +99,8 @@ export function ContainerImageSection({
               Upgrade to{" "}
               <span className="font-[family-name:var(--font-jetbrains-mono)] text-[13px] font-semibold">
                 {image.baseImageRecommendation.recommendedTag}
-              </span>{" "}
-              —{" "}
+              </span>
+              :{" "}
               <span className="font-semibold tabular-nums text-[var(--color-severity-low-text)]">
                 {image.baseImageRecommendation.recommendedVulnCount}
               </span>{" "}

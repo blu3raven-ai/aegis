@@ -151,7 +151,7 @@ function CodeLines({
                 "whitespace-pre",
                 highlighted && blurHighlighted && "select-none blur-[5px]",
               )}
-              title={highlighted && blurHighlighted ? "Redacted — open in the repository to view the value" : undefined}
+              title={highlighted && blurHighlighted ? "Redacted. Open in the repository to view the value" : undefined}
             >
               {line || " "}
             </span>
@@ -268,9 +268,9 @@ export function CodePreviewSection({
     if (showEmptyWhenMissing && (filePath || noSourceSite)) {
       const message = noSourceSite
         ? scanner === "container_scanning"
-          ? "No source to preview — this vulnerability comes from a package in the container image, not a line in your code."
-          : "No source to preview — this transitive dependency isn't declared in your manifests, so there's no line to point at."
-        : "We couldn't capture the surrounding code for this location. The source may not have been readable during the scan — re-run it to pull in the lines."
+          ? "No source to preview. This vulnerability comes from a package in the container image, not a line in your code."
+          : "No source to preview. This transitive dependency isn't declared in your manifests, so there's no line to point at."
+        : "We couldn't capture the surrounding code for this location. The source may not have been readable during the scan, so re-run it to pull in the lines."
       return (
         <section aria-labelledby="finding-code-preview-title">
           <h3 id="finding-code-preview-title" className="text-base font-semibold text-[var(--color-text-primary)]">
@@ -373,7 +373,7 @@ export function CodePreviewSection({
 
       {isSecret && (
         <p className="mt-1.5 text-[11px] text-[var(--color-text-tertiary)]">
-          Only a short prefix is shown — the full secret is never stored. Open it at the source to view or rotate it.
+          Only a short prefix is shown. The full secret is never stored. Open it at the source to view or rotate it.
         </p>
       )}
 

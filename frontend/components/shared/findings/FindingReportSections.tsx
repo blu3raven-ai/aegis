@@ -83,7 +83,7 @@ export function SummarySection({ chain, refCount }: { chain?: string; refCount: 
     <ReportSection
       title="Summary"
       present={Boolean(value)}
-      empty="Not verified yet — run verification to summarize the exploit path."
+      empty="Not verified yet. Run verification to summarize the exploit path."
     >
       <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
         {value ? renderChainWithRefs(value, refCount) : null}
@@ -102,7 +102,7 @@ export function TechnicalDetailSection({
     <ReportSection
       title="Technical Detail"
       present={items.length > 0}
-      empty="No cited evidence yet — verify to collect the source, sink, and gate lines."
+      empty="No cited evidence yet. Verify to collect the source, sink, and gate lines."
     >
       <ul className="space-y-2">
         {items.map((e, i) => (
@@ -147,7 +147,7 @@ export function AttackScenarioSection({
     <ReportSection
       title="Attack Scenario"
       present={Boolean(repro) || paths.length > 0}
-      empty="No attack scenario yet — verify this finding to generate one."
+      empty="No attack scenario yet. Verify this finding to generate one."
     >
       <div className="space-y-3">
         {repro ? (
@@ -176,7 +176,7 @@ export function ImpactSection({ impact }: { impact?: string }) {
     <ReportSection
       title="Impact"
       present={Boolean(value)}
-      empty="No impact statement yet — verify this finding to generate one."
+      empty="No impact statement yet. Verify this finding to generate one."
     >
       {value ? <ImpactCallout>{value}</ImpactCallout> : null}
     </ReportSection>
@@ -254,7 +254,7 @@ export function NotesVerificationSection({
         ) : null}
         {ruledOut?.source === "accepted_risk" && ruledOut.statement ? (
           <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-            Ruled out — accepted risk: {ruledOut.statement}
+            Ruled out, accepted risk: {ruledOut.statement}
           </p>
         ) : ruledOut && (ruledOut.reasoning || ruledOut.snippet) ? (
           <div className="border-l-2 border-[var(--color-status-ok-border)] pl-3">
@@ -271,7 +271,7 @@ export function NotesVerificationSection({
         ) : null}
         {metadata?.carve_out_source === "baseline" ? (
           <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-            Downgraded — matches baseline: {metadata.carve_out_ref}
+            Downgraded, matches baseline: {metadata.carve_out_ref}
           </p>
         ) : null}
         {metadata?.model ? (
