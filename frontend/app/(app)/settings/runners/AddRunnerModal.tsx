@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Check } from "lucide-react"
 import { generateRunnerToken, fetchRunners, approveRunner } from "@/lib/client/settings/use-runners"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 import { Sheet } from "@/components/ui/Sheet"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { HostReachabilityNote } from "@/components/shared/HostReachabilityNote"
@@ -214,7 +214,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
               role="status"
               aria-live="polite"
             >
-              <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] motion-reduce:animate-none" />
+              <Spinner className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" />
               Waiting for the runner to connect…
             </div>
           )}

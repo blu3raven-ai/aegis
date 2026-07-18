@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { Spinner } from "@/components/ui/Button"
 import { StepIndicator } from "@/components/shared/onboarding/StepIndicator"
 import { CompletionCelebration } from "@/components/shared/onboarding/CompletionCelebration"
 import { SignInStep, type SignInProvider } from "./steps/SignInStep"
@@ -116,7 +117,7 @@ export default function OnboardingPage() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)]" />
+        <Spinner className="h-8 w-8 text-[var(--color-accent)]" />
       </div>
     )
   }

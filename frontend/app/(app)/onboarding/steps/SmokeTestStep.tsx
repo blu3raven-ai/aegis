@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { startDependenciesRuns, fetchDependenciesRuns } from "@/lib/client/dependencies-client"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 import { StepLayout } from "@/components/shared/onboarding/StepLayout"
 import { WhileYouWaitCard } from "./WhileYouWaitCard"
 
@@ -95,7 +95,7 @@ export function SmokeTestStep({ onNext, onBack, onSkip, loading = false }: Smoke
 
           {(status === "starting" || status === "running") && (
             <div className="flex items-center gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)]" />
+              <Spinner className="h-5 w-5 shrink-0 text-[var(--color-accent)]" />
               <div>
                 <p className="text-sm font-medium text-[var(--color-text-primary)]">
                   {status === "starting" ? "Starting scan…" : "Scan in progress…"}

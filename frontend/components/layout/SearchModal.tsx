@@ -2,6 +2,7 @@
 
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { Spinner } from "@/components/ui/Button"
 import { search, type SearchHit } from "@/lib/client/search-api"
 import { Skeleton } from "@/components/ui/Skeleton"
 
@@ -246,7 +247,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
             className="flex-1 bg-transparent text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] outline-none"
           />
           {isLoading && (
-            <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border border-[var(--color-border)] border-t-[var(--color-text-secondary)]" />
+            <Spinner className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-secondary)]" />
           )}
           <kbd className="rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-2xs text-[var(--color-text-secondary)]">
             Esc

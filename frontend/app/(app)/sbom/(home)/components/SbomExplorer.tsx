@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { gqlQuery, isQuerySyntaxError } from "@/lib/client/graphql-client"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Skeleton } from "@/components/ui/Skeleton"
@@ -710,7 +710,7 @@ function BulkLookupPanel({
 
       {loading && !results && (
         <div className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3" aria-live="polite">
-          <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-[var(--color-accent)] border-t-transparent motion-safe:animate-spin" />
+          <Spinner className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" />
           <span className="text-sm text-[var(--color-text-tertiary)]">Checking exposure across your repositories…</span>
         </div>
       )}
