@@ -447,7 +447,7 @@ export function RuleEditorModal({
   const submitLabel = mode === "edit" ? "Save changes" : "Create rule"
   const namePlaceholder =
     category === "sla"
-      ? "e.g. Critical CVEs — 7 days"
+      ? "e.g. Critical CVEs, 7 days"
       : category === "scanner_coverage"
         ? "e.g. Production repos require SCA + SAST"
         : category === "auto_dismiss"
@@ -455,12 +455,12 @@ export function RuleEditorModal({
           : "e.g. Archive completed scans after 1 year"
   const descriptionPlaceholder =
     category === "sla"
-      ? "Optional — explain when this SLA applies."
+      ? "Optional. Explain when this SLA applies."
       : category === "scanner_coverage"
-        ? "Optional — explain when this coverage rule applies."
+        ? "Optional. Explain when this coverage rule applies."
         : category === "auto_dismiss"
-          ? "Optional — explain when findings should be auto-dismissed."
-          : "Optional — explain when this retention rule applies."
+          ? "Optional. Explain when findings should be auto-dismissed."
+          : "Optional. Explain when this retention rule applies."
   const fieldSchema =
     category === "sla"
       ? SLA_RULE_FIELDS

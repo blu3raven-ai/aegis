@@ -157,7 +157,7 @@ export function RuleRow({ rule, onEdit, onToggle, onDelete, canManage }: RuleRow
               disabled
               aria-disabled="true"
               title="Coming soon"
-              aria-label="View violations — coming soon"
+              aria-label="View violations (coming soon)"
               className="cursor-not-allowed text-[var(--color-text-tertiary)] underline-offset-2 disabled:opacity-60"
             >
               View violations →
