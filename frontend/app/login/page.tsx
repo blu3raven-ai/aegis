@@ -19,7 +19,15 @@ export default function LoginPage() {
   // Show login form while loading or if not authenticated
   // FastAPI redirects authenticated users away from /login if they try accessing it
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--color-background)] px-4">
+    <main 
+      className="flex min-h-screen items-center justify-center px-4"
+      style={{
+        backgroundImage: `linear-gradient(45deg, #1a1f2e 25%, transparent 25%), linear-gradient(-45deg, #1a1f2e 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1f2e 75%), linear-gradient(-45deg, transparent 75%, #1a1f2e 75%)`,
+        backgroundSize: '24px 24px',
+        backgroundPosition: '0 0, 0 12px, 12px -12px, -12px 0px',
+        backgroundColor: '#0f1419',
+      }}
+    >
       <div className="w-full max-w-sm">
         <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
           {/* Branding header — vendor identity when name is NULL; customer otherwise */}
