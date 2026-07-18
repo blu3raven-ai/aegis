@@ -2,6 +2,7 @@
 
 import type React from "react"
 
+import { LinkButton } from "@/components/ui/LinkButton"
 import { VerdictBadge } from "@/components/shared/findings/VerdictBadge"
 import { ImpactCallout } from "@/components/shared/findings/EvidenceSection"
 import type { Verdict } from "@/lib/shared/findings/verdicts"
@@ -99,15 +100,76 @@ export function hasVerifiedAdvisory(f: {
 }
 
 /** Consolidated stand-in shown once when a finding has no verified advisory —
- *  replaces the wall of per-section "verify to generate" prompts. */
-export function AdvisoryUnverifiedNote() {
+ *  replaces the wall of per-section "verify to generate" prompts. When the org
+ *  hasn't configured a model key yet it carries the BYOK call to action;
+ *  otherwise it explains the finding is queued for the next scan. */
+export function AdvisoryUnverifiedNote({
+  verificationEnabled = true,
+}: {
+  verificationEnabled?: boolean
+}) {
   return (
     <section className="rounded-md border border-[var(--color-border)] border-l-2 border-l-[var(--color-accent)] bg-[var(--color-bg-section)] px-4 py-3">
       <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Advisory not generated</h3>
       <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-secondary)]">
-        Run LLM verification to produce the full advisory: exploit summary, cited
+        LLM verification produces the full advisory: exploit summary, cited
         technical evidence, attack scenario, impact, and remediation guidance.
       </p>
+      {verificationEnabled ? (
+        <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">
+          This finding is queued for verification on the next scan of its repository.
+        </p>
+      ) : (
+        <div className="mt-3">
+          <LinkButton
+            href="/settings#llm"
+            variant="primary"
+            size="sm"
+            trailingIcon={<span aria-hidden="true">→</span>}
+          >
+            Enable LLM verification
+          </LinkButton>
+          <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
+            Bring your own model key to run the verification pass on this finding.
+          </p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** Shown in the Remediation group when a finding was verified but the advisory
+ *  came back without remediation guidance — a partial result the analyst should
+ *  be able to recognize and act on rather than silently seeing an empty group. */
+export function AdvisoryIncompleteNote({
+  verificationEnabled = true,
+}: {
+  verificationEnabled?: boolean
+}) {
+  return (
+    <section className="rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-3">
+      <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+        Remediation guidance incomplete
+      </h3>
+      <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+        Verification finished without remediation steps for this finding.
+      </p>
+      {verificationEnabled ? (
+        <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">
+          Re-scan the repository to run verification again and complete the advisory.
+        </p>
+      ) : (
+        <div className="mt-3">
+          <LinkButton
+            href="/settings#llm"
+            variant="primary"
+            size="sm"
+            trailingIcon={<span aria-hidden="true">→</span>}
+          >
+            Enable LLM verification
+          </LinkButton>
+        </div>
+      )}
     </section>
   )
 }

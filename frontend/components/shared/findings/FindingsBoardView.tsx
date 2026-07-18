@@ -41,6 +41,7 @@ import {
   RemediationStepsSection,
   NotesVerificationSection,
   AdvisoryUnverifiedNote,
+  AdvisoryIncompleteNote,
   hasVerifiedAdvisory,
 } from "@/components/shared/findings/FindingReportSections"
 import { FindingAcceptRiskAction } from "@/components/shared/findings/FindingAcceptRiskAction"
@@ -1964,7 +1965,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
                 </div>
               ) : (
-                <AdvisoryUnverifiedNote />
+                <AdvisoryUnverifiedNote verificationEnabled={verificationEnabled} />
               )}
 
               {selectedFinding.scanner === "secret_scanning" && (
@@ -2029,6 +2030,15 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               )}
 
               <RemediationStepsSection steps={selectedFinding.verificationMetadata?.remediation} />
+
+              {/* Verified finding whose advisory returned no remediation from any
+                  source — flag the partial result and point to a re-scan. */}
+              {hasVerifiedAdvisory(selectedFinding)
+                && !selectedFinding.recommendedFix
+                && !selectedFinding.remediation
+                && !selectedFinding.verificationMetadata?.remediation?.length && (
+                  <AdvisoryIncompleteNote verificationEnabled={verificationEnabled} />
+                )}
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="context" label="Context" defaultOpen={false}>
