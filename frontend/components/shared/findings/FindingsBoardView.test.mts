@@ -7,6 +7,8 @@ const mapperSrc = readFileSync(
   new URL("../../../lib/shared/findings/row-mapper.ts", import.meta.url).pathname,
   "utf-8",
 )
+// Package / detector / rule now live in the consolidated advisory spec table.
+const advisorySrc = readFileSync(new URL("./AdvisoryHeader.tsx", import.meta.url).pathname, "utf-8")
 
 describe("FindingsBoardView filter bar additions", () => {
   it("declares a ScannerFilter type that includes 'all' + every FindingScanner option", () => {
@@ -304,8 +306,8 @@ describe("FindingsBoardView advisory Security Brief wiring", () => {
   })
 
   it("shows the affected package as its own field", () => {
-    assert.match(src, /selectedFinding\.package && \(/)
-    assert.match(src, /Package<\/dt>/)
+    assert.match(advisorySrc, /finding\.package \?/)
+    assert.match(advisorySrc, /label="Package"/)
   })
 })
 
@@ -327,9 +329,9 @@ describe("FindingsBoardView secret validity wiring", () => {
     assert.match(src, /Unverified/)
   })
 
-  it("shows the detector in the Details grid", () => {
-    assert.match(src, /selectedFinding\.secretDetector && \(/)
-    assert.match(src, />Detector<\/dt>/)
+  it("shows the detector in the advisory table", () => {
+    assert.match(advisorySrc, /finding\.secretDetector \?/)
+    assert.match(advisorySrc, /label="Detector"/)
   })
 })
 

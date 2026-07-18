@@ -12,6 +12,9 @@ export interface AdvisoryHeaderFinding {
   filePath?: string | null
   introducedByCommit?: string | null
   verificationMetadata?: VerificationMetadata
+  package?: string | null
+  rule?: string | null
+  secretDetector?: string | null
 }
 
 /** One header row — always rendered; shows a muted "—" when the value is
@@ -61,6 +64,17 @@ export function AdvisoryHeader({ finding }: { finding: AdvisoryHeaderFinding }) 
       <Row label="CVSS 3.1">{cvss}</Row>
       <Row label="CWE">{finding.cwe}</Row>
       <Row label="CVE">{finding.cve}</Row>
+      {finding.package ? (
+        <Row label="Package">
+          <span title={finding.package}>{finding.package}</span>
+        </Row>
+      ) : null}
+      {finding.rule ? (
+        <Row label="Rule">
+          <span title={finding.rule}>{finding.rule}</span>
+        </Row>
+      ) : null}
+      {finding.secretDetector ? <Row label="Detector">{finding.secretDetector}</Row> : null}
         </Tbody>
       </Table>
     </section>

@@ -29,15 +29,13 @@ function at(haystack: string, needle: string): number {
 test("verdict and fix precede reference metadata", () => {
   const verdict = at(board, "<NotesVerificationSection")
   const fix = at(board, "<RecommendedFixSection")
-  const details = at(board, 'id="finding-details-title"')
   const origin = at(board, "<FindingOriginSection")
   assert.ok(verdict < origin, "Verification must come before Origin")
-  assert.ok(fix < details, "Recommended fix must come before the Details grid")
-  assert.ok(verdict < details, "Verification must come before the Details grid")
+  assert.ok(fix < origin, "Recommended fix must come before the Origin metadata")
 })
 
-test("weakness context leads the how-bad band, above Details", () => {
-  assert.ok(at(board, "<CweContextSection") < at(board, 'id="finding-details-title"'))
+test("weakness context precedes the origin metadata", () => {
+  assert.ok(at(board, "<CweContextSection") < at(board, "<FindingOriginSection"))
 })
 
 test("signal strip always carries a severity read", () => {

@@ -2060,61 +2060,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 scannerLabel={SCANNER_LABEL[selectedFinding.scanner]}
               />
 
-              {/* Reference metadata: rule, weakness id, package, repository. */}
-              <section aria-labelledby="finding-details-title">
-                <h3 id="finding-details-title" className="text-base font-semibold text-[var(--color-text-primary)]">
-                  Details
-                </h3>
-                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  {selectedFinding.rule && (
-                    <div className="col-span-2 min-w-0">
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Rule</dt>
-                      <dd
-                        className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
-                        title={selectedFinding.rule}
-                      >
-                        {selectedFinding.rule}
-                      </dd>
-                    </div>
-                  )}
-                  {selectedFinding.cwe && (
-                    <div>
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">CWE</dt>
-                      <dd className="mt-1 text-sm text-[var(--color-text-primary)]">
-                        <CweValue cwe={selectedFinding.cwe} />
-                      </dd>
-                    </div>
-                  )}
-                  {selectedFinding.package && (
-                    <div className="col-span-2 min-w-0">
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Package</dt>
-                      <dd
-                        className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
-                        title={selectedFinding.package}
-                      >
-                        {selectedFinding.package}
-                      </dd>
-                    </div>
-                  )}
-                  {selectedFinding.secretDetector && (
-                    <div>
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Detector</dt>
-                      <dd className="mt-1 text-sm text-[var(--color-text-primary)]">
-                        {selectedFinding.secretDetector}
-                      </dd>
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Repository</dt>
-                    <dd
-                      className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
-                      title={selectedFinding.repo}
-                    >
-                      {selectedFinding.repo}
-                    </dd>
-                  </div>
-                </dl>
-              </section>
 
               <FindingReferencesSection
                 cve={selectedFinding.cve}
@@ -2413,20 +2358,6 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
 
 // CWE id linked to its MITRE definition so an analyst can read the weakness
 // class in one click; renders plain text when the id isn't well-formed.
-function CweValue({ cwe }: { cwe: string }) {
-  const m = cwe.match(/(?:CWE-)?(\d+)/i)
-  if (!m) return <>{cwe}</>
-  return (
-    <a
-      href={`https://cwe.mitre.org/data/definitions/${m[1]}.html`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="rounded-sm text-[var(--color-accent)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-    >
-      {cwe}
-    </a>
-  )
-}
 
 
 function statusPillLabel(state: string | undefined): string {
