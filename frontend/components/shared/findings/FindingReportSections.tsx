@@ -13,10 +13,12 @@ import type {
 } from "@/lib/shared/findings/row-mapper"
 
 /**
- * The finding drawer's body as an advisory report: one block per report section
- * (Summary, Technical Detail, Attack Scenario, Impact, Distinctness, Notes), each
- * ALWAYS rendered with an empty state when its data is absent — so an unverified
- * finding still shows the full report skeleton with "verify to generate" prompts.
+ * The finding drawer's advisory report, rendered as one flowing document: each
+ * part (Summary, Technical Detail, Attack Scenario, Impact, Distinctness, Notes)
+ * is a heading + body that appears only when the verifier supplied its data.
+ * Absent parts are omitted rather than shown as skeletons, so a verified finding
+ * reads as a single cohesive advisory. When nothing is verified the caller shows
+ * one consolidated {@link AdvisoryUnverifiedNote} instead of a wall of prompts.
  */
 
 const KIND_COLOR: Record<VerificationEvidenceKind, string> = {
@@ -52,27 +54,60 @@ function renderChainWithRefs(chain: string, refCount: number): React.ReactNode {
   })
 }
 
-/** Section shell: a report heading that is always present, with the body or a
- *  muted empty state below it. */
+/** One part of the advisory document: a `##`-style heading over its body.
+ *  Renders nothing when the verifier supplied no data, so the report omits
+ *  empty parts rather than padding them with skeletons. */
 function ReportSection({
   title,
   present,
-  empty,
   children,
 }: {
   title: string
   present: boolean
-  empty: string
   children?: React.ReactNode
 }) {
+  if (!present) return null
   return (
     <section className="space-y-2">
-      <h3 className="text-base font-semibold text-[var(--color-text-primary)]">{title}</h3>
-      {present ? (
-        children
-      ) : (
-        <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">{empty}</p>
-      )}
+      <h3 className="border-b border-[var(--color-border-divider)] pb-1.5 text-base font-semibold text-[var(--color-text-primary)]">
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
+
+/** True when the verifier supplied any of the prose advisory parts, so the
+ *  drawer should render the bundled document rather than the unverified note. */
+export function hasVerifiedAdvisory(f: {
+  exploitChain?: string | null
+  evidence?: unknown[] | null
+  codeFlows?: unknown[] | null
+  verificationMetadata?: VerificationMetadata | null
+}): boolean {
+  const vm = f.verificationMetadata
+  return Boolean(
+    f.exploitChain?.trim() ||
+      f.evidence?.length ||
+      f.codeFlows?.length ||
+      vm?.reproduction?.trim() ||
+      vm?.attack_paths?.length ||
+      vm?.impact?.trim() ||
+      vm?.mitigating_factors?.length ||
+      vm?.distinctness?.trim(),
+  )
+}
+
+/** Consolidated stand-in shown once when a finding has no verified advisory —
+ *  replaces the wall of per-section "verify to generate" prompts. */
+export function AdvisoryUnverifiedNote() {
+  return (
+    <section className="rounded-md border border-[var(--color-border)] border-l-2 border-l-[var(--color-accent)] bg-[var(--color-bg-section)] px-4 py-3">
+      <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Advisory not generated</h3>
+      <p className="mt-1 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+        Run LLM verification to produce the full advisory: exploit summary, cited
+        technical evidence, attack scenario, impact, and remediation guidance.
+      </p>
     </section>
   )
 }
@@ -83,7 +118,6 @@ export function SummarySection({ chain, refCount }: { chain?: string; refCount: 
     <ReportSection
       title="Summary"
       present={Boolean(value)}
-      empty="Not verified yet. Run verification to summarize the exploit path."
     >
       <p className="text-sm leading-relaxed text-[var(--color-text-primary)]">
         {value ? renderChainWithRefs(value, refCount) : null}
@@ -102,7 +136,6 @@ export function TechnicalDetailSection({
     <ReportSection
       title="Technical Detail"
       present={items.length > 0}
-      empty="No cited evidence yet. Verify to collect the source, sink, and gate lines."
     >
       <ul className="space-y-2">
         {items.map((e, i) => (
@@ -147,7 +180,6 @@ export function AttackScenarioSection({
     <ReportSection
       title="Attack Scenario"
       present={Boolean(repro) || paths.length > 0}
-      empty="No attack scenario yet. Verify this finding to generate one."
     >
       <div className="space-y-3">
         {repro ? (
@@ -176,7 +208,6 @@ export function ImpactSection({ impact }: { impact?: string }) {
     <ReportSection
       title="Impact"
       present={Boolean(value)}
-      empty="No impact statement yet. Verify this finding to generate one."
     >
       {value ? <ImpactCallout>{value}</ImpactCallout> : null}
     </ReportSection>
@@ -189,7 +220,6 @@ export function DistinctnessSection({ distinctness }: { distinctness?: string })
     <ReportSection
       title="Distinctness"
       present={Boolean(value)}
-      empty="None noted."
     >
       <p className="text-sm leading-relaxed text-[var(--color-text-secondary)]">{value}</p>
     </ReportSection>
@@ -246,7 +276,7 @@ export function NotesVerificationSection({
   const present = Boolean(verdict || rationale || metadata?.model || ruledOut)
 
   return (
-    <ReportSection title="Notes / Verification" present={present} empty="Not verified yet.">
+    <ReportSection title="Notes / Verification" present={present}>
       <div className="space-y-2">
         {verdict ? <VerdictBadge verdict={verdict} /> : null}
         {rationale ? (

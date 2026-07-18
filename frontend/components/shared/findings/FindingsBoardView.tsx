@@ -40,6 +40,8 @@ import {
   DistinctnessSection,
   RemediationStepsSection,
   NotesVerificationSection,
+  AdvisoryUnverifiedNote,
+  hasVerifiedAdvisory,
 } from "@/components/shared/findings/FindingReportSections"
 import { FindingAcceptRiskAction } from "@/components/shared/findings/FindingAcceptRiskAction"
 import { SecretVerificationSection } from "@/components/shared/findings/SecretVerificationSection"
@@ -1938,12 +1940,31 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="analysis" label="Analysis">
-              <SummarySection
-                chain={selectedFinding.exploitChain ?? undefined}
-                refCount={selectedFinding.evidence?.length ?? 0}
-              />
-
-              <TechnicalDetailSection evidence={selectedFinding.evidence} />
+              {/* The verifier's output reads as one advisory document — parts
+                  omit themselves when empty; the whole thing collapses to a
+                  single note when nothing has been verified yet. */}
+              {hasVerifiedAdvisory(selectedFinding) ? (
+                <div className="space-y-5">
+                  <SummarySection
+                    chain={selectedFinding.exploitChain ?? undefined}
+                    refCount={selectedFinding.evidence?.length ?? 0}
+                  />
+                  <TechnicalDetailSection evidence={selectedFinding.evidence} />
+                  {selectedFinding.codeFlows && selectedFinding.codeFlows.length > 0 ? (
+                    <FindingDataFlowSection steps={selectedFinding.codeFlows} />
+                  ) : null}
+                  <AttackScenarioSection
+                    reproduction={selectedFinding.verificationMetadata?.reproduction}
+                    attackPaths={selectedFinding.verificationMetadata?.attack_paths}
+                    refCount={selectedFinding.evidence?.length ?? 0}
+                  />
+                  <ImpactSection impact={selectedFinding.verificationMetadata?.impact} />
+                  <MitigatingFactorsSection factors={selectedFinding.verificationMetadata?.mitigating_factors} />
+                  <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
+                </div>
+              ) : (
+                <AdvisoryUnverifiedNote />
+              )}
 
               {selectedFinding.scanner === "secret_scanning" && (
                 <SecretVerificationSection
@@ -1973,29 +1994,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   repoHtmlUrl: selectedFinding.repoHtmlUrl,
                 })}
               />
-
-              {selectedFinding.codeFlows && selectedFinding.codeFlows.length > 0 ? (
-                <FindingDataFlowSection steps={selectedFinding.codeFlows} />
-              ) : (
-                <section className="space-y-2">
-                  <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Call path (verified)</h3>
-                  <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-                    No verified call path. Verify this finding to trace source → sink.
-                  </p>
-                </section>
-              )}
-
-              <AttackScenarioSection
-                reproduction={selectedFinding.verificationMetadata?.reproduction}
-                attackPaths={selectedFinding.verificationMetadata?.attack_paths}
-                refCount={selectedFinding.evidence?.length ?? 0}
-              />
-
-              <ImpactSection impact={selectedFinding.verificationMetadata?.impact} />
-
-              <MitigatingFactorsSection factors={selectedFinding.verificationMetadata?.mitigating_factors} />
-
-              <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
 
               <FindingPocSection
                 findingId={Number(selectedFinding.id)}
