@@ -1,4 +1,5 @@
 import { type ControlSummaryItem, deriveControlStatus } from "@/lib/client/compliance-api"
+import { plural } from "@/lib/shared/plural"
 import { Button } from "@/components/ui/Button"
 
 interface FrameworkCardProps {
@@ -123,7 +124,7 @@ export function FrameworkCard({
                   {pctValue}%
                 </span>
                 <span className="text-xs text-[var(--color-text-secondary)]">
-                  {derived.met} of {derived.total} controls
+                  {derived.met} of {derived.total} {plural(derived.total, "control")}
                 </span>
               </>
             )}

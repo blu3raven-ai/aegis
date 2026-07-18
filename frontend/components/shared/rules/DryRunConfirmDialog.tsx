@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { plural } from "@/lib/shared/plural"
 import type { DryRunConfirmation } from "@/lib/client/rules-api"
 import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
@@ -159,7 +160,7 @@ export function DryRunConfirmDialog({
                 </p>
               ) : (
                 <p className="text-sm text-[var(--color-text-primary)]">
-                  <span className="font-semibold">{matchCount} findings</span>{" "}
+                  <span className="font-semibold">{matchCount} {plural(matchCount, "finding")}</span>{" "}
                   would be auto-dismissed once this rule is enabled.
                 </p>
               )}
