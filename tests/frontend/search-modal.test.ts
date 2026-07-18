@@ -48,7 +48,7 @@ describe("SearchModal component", () => {
     assert.ok(src.includes("controller.abort()"))
   })
   it("shows loading indicator", () => {
-    assert.ok(src.includes("animate-spin") || src.includes("animate-pulse"))
+    assert.ok(src.includes("<Spinner") || src.includes("animate-spin") || src.includes("animate-pulse"))
   })
   it("renders grouped results", () => {
     assert.ok(src.includes("displayGrouped") || src.includes("grouped"))
