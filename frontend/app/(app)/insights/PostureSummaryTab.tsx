@@ -47,11 +47,14 @@ function formatChartDate(iso: string): string {
 }
 
 
+// Chart-adjacent severity dots/legends use the ordinal ramp so they match the
+// ramped chart fills (donut, severity mix). Discrete badges elsewhere in the
+// app keep the conventional severity tokens.
 const SEV_VARS = {
-  critical: "var(--color-severity-critical)",
-  high: "var(--color-severity-high)",
-  medium: "var(--color-severity-medium)",
-  low: "var(--color-severity-low)",
+  critical: "var(--color-sev-ramp-critical)",
+  high: "var(--color-sev-ramp-high)",
+  medium: "var(--color-sev-ramp-medium)",
+  low: "var(--color-sev-ramp-low)",
   unrated: "var(--color-text-tertiary)",
 }
 
@@ -718,10 +721,10 @@ const STACK_ORDER: StackLayer[] = ["low", "medium", "high", "critical"]
 // Quiet fills, crisp strokes — the layer boundary lines carry the data while
 // the fill stays a faint tint, matching the backlog trend chart's language.
 const STACK_FILL: Record<StackLayer, { color: string; opacity: number }> = {
-  low:      { color: "var(--color-severity-low)",      opacity: 0.14 },
-  medium:   { color: "var(--color-severity-medium)",   opacity: 0.16 },
-  high:     { color: "var(--color-severity-high)",     opacity: 0.20 },
-  critical: { color: "var(--color-severity-critical)", opacity: 0.24 },
+  low:      { color: "var(--color-sev-ramp-low)",      opacity: 0.16 },
+  medium:   { color: "var(--color-sev-ramp-medium)",   opacity: 0.18 },
+  high:     { color: "var(--color-sev-ramp-high)",     opacity: 0.20 },
+  critical: { color: "var(--color-sev-ramp-critical)", opacity: 0.24 },
 }
 
 /** Composite risk score (0-100) over the selected window — the detail view of
@@ -2062,22 +2065,14 @@ function SlaComplianceGauge({
   const within = Math.max(totalOpen - breached, 0)
   const compliancePct = Math.round((within / totalOpen) * 100)
 
-  // 270° sweep gauge starting from bottom-left.
-  const size = 132
-  const cx = size / 2
-  const cy = size / 2
-  const r = 54
-  const stroke = 7
-  const startAngle = 135
-  const sweep = 270
-  const circ = 2 * Math.PI * r
-  const arcLen = (sweep / 360) * circ
-  const filled = (compliancePct / 100) * arcLen
-
+  // One percentage against a target reads far better as a number than a radial
+  // arc, so this is a big-number + threshold bar rather than a gauge. Status
+  // tone lives only in the bar fill; the number stays neutral.
+  const target = 90
   const tone =
-    compliancePct >= 90 ? "var(--color-status-ok)"
-    : compliancePct >= 70 ? "var(--color-severity-medium)"
-    : "var(--color-severity-critical)"
+    compliancePct >= target ? "var(--color-status-ok)"
+    : compliancePct >= 70 ? "var(--color-sev-ramp-medium)"
+    : "var(--color-sev-ramp-critical)"
 
   const bySev = [
     { key: "critical", label: "Critical", n: slaPosture.criticalBreached },
@@ -2088,68 +2083,65 @@ function SlaComplianceGauge({
 
   return (
     <Card className="rounded-md">
-      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-        SLA compliance
-      </h2>
-      <div className="mt-3 flex items-center gap-5">
-        <div className="relative shrink-0" style={{ width: size, height: size }}>
-          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img"
-            aria-label={`${compliancePct}% of open findings within SLA`}>
-            <circle
-              cx={cx} cy={cy} r={r} fill="none"
-              stroke="var(--color-surface-raised)" strokeWidth={stroke}
-              strokeDasharray={`${arcLen} ${circ - arcLen}`} strokeLinecap="butt"
-              transform={`rotate(${startAngle} ${cx} ${cy})`}
-            />
-            <circle
-              cx={cx} cy={cy} r={r} fill="none"
-              stroke={tone} strokeWidth={stroke} strokeOpacity={0.85}
-              strokeDasharray={`${filled} ${circ - filled}`} strokeLinecap="butt"
-              transform={`rotate(${startAngle} ${cx} ${cy})`}
-              className="chart-arc-sweep"
-              style={{ ["--arc-len" as string]: filled }}
-            />
-          </svg>
-          <span className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
-              {compliancePct}%
-            </span>
-            <span className="mt-0.5 text-2xs font-mono font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
-              within SLA
-            </span>
-          </span>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          SLA compliance
+        </h2>
+        <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          within target
+        </span>
+      </div>
+
+      <div className="mt-4 flex items-end gap-2.5">
+        <span
+          className="text-[40px] font-semibold leading-[0.85] tracking-[-0.02em] tabular-nums text-[var(--color-text-primary)]"
+          aria-label={`${compliancePct}% of open findings within SLA`}
+        >
+          {compliancePct}<span className="text-2xl text-[var(--color-text-tertiary)]">%</span>
+        </span>
+        <span className="pb-1.5 text-xs text-[var(--color-text-secondary)]">within SLA</span>
+      </div>
+
+      <div className="mt-4">
+        <div className="relative h-1.5 rounded-[3px] bg-[var(--color-surface-raised)]" role="img"
+          aria-label={`${compliancePct} percent within SLA against a ${target} percent target`}>
+          <div
+            className="h-full origin-left rounded-[3px] chart-bar-grow"
+            style={{ width: `${compliancePct}%`, background: tone }}
+          />
+          <div
+            className="absolute -top-1 -bottom-1 w-px bg-[var(--color-text-secondary)]"
+            style={{ left: `${target}%` }}
+            aria-hidden="true"
+          />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-semibold tabular-nums text-[var(--color-text-primary)]">
-              {within.toLocaleString()}
-            </span>
-            <span className="text-xs text-[var(--color-text-secondary)]">within SLA</span>
-          </div>
-          <div className="mt-0.5 flex items-baseline gap-2">
-            <span className="text-lg font-semibold tabular-nums" style={{ color: "var(--color-severity-critical-text)" }}>
-              {breached.toLocaleString()}
-            </span>
-            <span className="text-xs text-[var(--color-text-secondary)]">breached</span>
-          </div>
-          {bySev.length > 0 && (
-            <div className="mt-2.5 flex flex-col gap-1 border-t border-[var(--color-border)] pt-2">
-              {bySev.map((s) => (
-                <div key={s.key} className="flex items-center gap-2 text-2xs">
-                  <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: SEV_VARS[s.key as keyof typeof SEV_VARS] }} />
-                  <span className="text-[var(--color-text-secondary)]">{s.label}</span>
-                  <span className="ml-auto font-semibold tabular-nums text-[var(--color-text-primary)]">{s.n.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {slaPosture.maxBreachAgeDays > 0 && (
-            <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
-              Oldest breach: <span className="font-medium text-[var(--color-text-secondary)] tabular-nums">{slaPosture.maxBreachAgeDays}d</span> over target
-            </p>
-          )}
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs">
+          <span className="text-[var(--color-text-secondary)]">
+            <b className="font-semibold tabular-nums text-[var(--color-text-primary)]">{within.toLocaleString()}</b> within
+          </span>
+          <span className="text-[var(--color-text-secondary)]">
+            <b className="font-semibold tabular-nums" style={{ color: "var(--color-severity-critical-text)" }}>{breached.toLocaleString()}</b> breached
+          </span>
+          <span className="text-[var(--color-text-tertiary)]">target {target}%</span>
         </div>
       </div>
+
+      {bySev.length > 0 && (
+        <div className="mt-3 flex flex-col gap-1 border-t border-[var(--color-border)] pt-2.5">
+          {bySev.map((s) => (
+            <div key={s.key} className="flex items-center gap-2 text-2xs">
+              <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: SEV_VARS[s.key as keyof typeof SEV_VARS] }} />
+              <span className="text-[var(--color-text-secondary)]">{s.label}</span>
+              <span className="ml-auto font-semibold tabular-nums text-[var(--color-text-primary)]">{s.n.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {slaPosture.maxBreachAgeDays > 0 && (
+        <p className="mt-2.5 text-2xs text-[var(--color-text-tertiary)]">
+          Oldest breach: <span className="font-medium text-[var(--color-text-secondary)] tabular-nums">{slaPosture.maxBreachAgeDays}d</span> over target
+        </p>
+      )}
     </Card>
   )
 }

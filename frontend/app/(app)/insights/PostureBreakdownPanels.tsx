@@ -10,20 +10,14 @@ import type {
 import { Card } from "@/components/ui/Card"
 import { findingsHref } from "./posture-links"
 
-const SEV_VARS = {
-  critical: "var(--color-severity-critical)",
-  high: "var(--color-severity-high)",
-  medium: "var(--color-severity-medium)",
-  low: "var(--color-severity-low)",
+// Ordinal ramp for adjacent chart fills (donut arcs + legend dots) — one warm
+// family ordered by lightness so rank reads without a legend lookup.
+const RAMP_VARS = {
+  critical: "var(--color-sev-ramp-critical)",
+  high: "var(--color-sev-ramp-high)",
+  medium: "var(--color-sev-ramp-medium)",
+  low: "var(--color-sev-ramp-low)",
   unrated: "var(--color-text-tertiary)",
-}
-
-const SEV_CLASSES = {
-  critical: "text-[var(--color-severity-critical-text)]",
-  high: "text-[var(--color-severity-high-text)]",
-  medium: "text-[var(--color-severity-medium-text)]",
-  low: "text-[var(--color-severity-low-text)]",
-  unrated: "text-[var(--color-text-tertiary)]",
 }
 
 export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
@@ -85,9 +79,9 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
                 cy="56"
                 r={r}
                 fill="none"
-                stroke={SEV_VARS[seg.key]}
+                stroke={RAMP_VARS[seg.key]}
                 strokeWidth={stroke}
-                strokeOpacity={0.85}
+                strokeOpacity={0.9}
                 strokeDasharray={`${seg.dashLen} ${circ - seg.dashLen}`}
                 strokeDashoffset={seg.dashOffset}
                 strokeLinecap="butt"
@@ -118,7 +112,7 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
             >
               <span
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ background: SEV_VARS[seg.key] }}
+                style={{ background: RAMP_VARS[seg.key] }}
                 aria-hidden="true"
               />
               <span className="min-w-[52px] capitalize text-[var(--color-text-secondary)]">
@@ -173,47 +167,25 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
                   {repo.name}
                 </span>
               </span>
-              <span className="flex items-center gap-2 text-[11px] tabular-nums shrink-0">
+              <span className="flex items-center gap-3 text-[11px] tabular-nums shrink-0">
                 {repo.critical > 0 && (
-                  <span className={SEV_CLASSES.critical}>{repo.critical}</span>
+                  <span className="flex items-center gap-1 text-[var(--color-text-secondary)]">
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: "var(--color-sev-ramp-critical)" }}
+                      aria-hidden="true"
+                    />
+                    {repo.critical}
+                  </span>
                 )}
-                {repo.high > 0 && <span className={SEV_CLASSES.high}>{repo.high}</span>}
-                <span className="text-[var(--color-text-secondary)]">{repo.open}</span>
+                <span className="text-[var(--color-text-tertiary)]">{repo.open} open</span>
               </span>
             </div>
             <div
-              className="flex h-1.5 origin-left overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)] chart-bar-grow"
+              className="h-1.5 origin-left overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)] chart-bar-grow"
               style={{ width: `${Math.max((repo.open / maxOpen) * 100, 8)}%`, animationDelay: `${i * 50}ms` }}
             >
-              {repo.critical > 0 && (
-                <span
-                  className="h-full"
-                  title={`Critical: ${repo.critical.toLocaleString()}`}
-                  style={{
-                    width: `${(repo.critical / repo.open) * 100}%`,
-                    background: SEV_VARS.critical,
-                    opacity: 0.85,
-                  }}
-                />
-              )}
-              {repo.high > 0 && (
-                <span
-                  className="h-full"
-                  title={`High: ${repo.high.toLocaleString()}`}
-                  style={{
-                    width: `${(repo.high / repo.open) * 100}%`,
-                    background: SEV_VARS.high,
-                    opacity: 0.85,
-                  }}
-                />
-              )}
-              {repo.open - repo.critical - repo.high > 0 && (
-                <span
-                  className="h-full flex-1"
-                  title={`Other: ${(repo.open - repo.critical - repo.high).toLocaleString()}`}
-                  style={{ background: "var(--color-text-tertiary)", opacity: 0.35 }}
-                />
-              )}
+              <span className="block h-full" style={{ background: "var(--color-border-strong)" }} />
             </div>
           </Link>
         ))}
@@ -268,14 +240,10 @@ export function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
   const total = buckets.reduce((sum, b) => sum + b.count, 0)
   if (total === 0) return null
   const maxCount = Math.max(...buckets.map((b) => b.count), 1)
-  // Age reads as a heat ramp fresh → stale, but as flat instrument tones
-  // rather than glossy gradients: accent → medium → high → critical.
-  const ageTone = [
-    "var(--color-accent)",
-    "var(--color-severity-medium)",
-    "var(--color-severity-high)",
-    "var(--color-severity-critical)",
-  ]
+  // The bucket labels already name each age band, so colour is redundant here.
+  // Bars stay neutral; a single accent flags only the oldest (>90d) band —
+  // the one that actually needs attention.
+  const oldestIdx = buckets.length - 1
   return (
     <Card className="rounded-md">
       <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
@@ -283,7 +251,10 @@ export function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
       </h2>
       <div className="mt-4 space-y-2.5">
         {buckets.map((bucket, i) => {
-          const tone = ageTone[i] ?? ageTone[3]
+          const tone =
+            i === oldestIdx && bucket.count > 0
+              ? "var(--color-sev-ramp-critical)"
+              : "var(--color-text-tertiary)"
           const pct = (bucket.count / maxCount) * 100
           return (
             <div key={bucket.label} className="flex items-center gap-3">

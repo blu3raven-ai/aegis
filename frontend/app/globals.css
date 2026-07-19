@@ -69,6 +69,15 @@
   --color-severity-low-border: rgb(96 165 250 / 0.3);
   --color-severity-low-text: #2563eb;
 
+  /* Ordinal severity ramp — one warm family ordered by lightness, for adjacent
+     chart fills only (donut, severity mix, stacked bars). Discrete badges keep
+     the conventional severity tokens above. Light-mode values run darker so
+     fills and strokes clear contrast on the near-white surface. */
+  --color-sev-ramp-low:      #9c8368;
+  --color-sev-ramp-medium:   #b5791f;
+  --color-sev-ramp-high:     #c05a20;
+  --color-sev-ramp-critical: #cf463f;
+
   --color-state-dismissed:         #a855f7;
   --color-state-dismissed-subtle:  rgb(168 85 247 / 0.05);
   --color-state-dismissed-muted:   rgb(168 85 247 / 0.7);
@@ -210,6 +219,12 @@
   --color-severity-low-subtle: rgb(96 165 250 / 0.12);
   --color-severity-low-border: rgb(96 165 250 / 0.3);
   --color-severity-low-text: #60a5fa;
+
+  /* Ordinal severity ramp (dark) — toned warm family, no pure primaries. */
+  --color-sev-ramp-low:      #8a6f5a;
+  --color-sev-ramp-medium:   #c9963f;
+  --color-sev-ramp-high:     #d97a3c;
+  --color-sev-ramp-critical: #e0605a;
 
   --color-state-dismissed:         #c084fc;
   --color-state-dismissed-subtle:  rgb(192 132 252 / 0.08);
