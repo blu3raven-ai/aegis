@@ -1,11 +1,24 @@
 "use client"
 
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import { Database, FolderGit2, History, Radar, Settings, TriangleAlert, Webhook, Workflow, type LucideIcon } from "lucide-react"
 import { Spinner } from "@/components/ui/Button"
 import { search, type SearchHit } from "@/lib/client/search-api"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
+
+// One glyph per result category so scanning a mixed result set is fast.
+const CATEGORY_ICON: Record<string, LucideIcon> = {
+  Findings: TriangleAlert,
+  "Attack Chains": Workflow,
+  Repositories: FolderGit2,
+  "Audit Events": History,
+  Destinations: Webhook,
+  Tools: Radar,
+  Sources: Database,
+  Settings: Settings,
+}
 
 const ICON_SEARCH =
   "M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
@@ -65,7 +78,13 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   const [apiResults, setApiResults] = useState<FlatResult[]>([])
   const [apiGrouped, setApiGrouped] = useState<Record<string, FlatResult[]>>({})
 
-  const debouncedQuery = useDeferredValue(query)
+  // Debounce the query that drives fetching so a burst of keystrokes issues one
+  // request, not one per character.
+  const [debouncedQuery, setDebouncedQuery] = useState("")
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 200)
+    return () => clearTimeout(t)
+  }, [query])
 
   // Fetch from the real backend when the debounced query changes
   useEffect(() => {
@@ -266,9 +285,6 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
           {isLoading && (
             <Spinner className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-secondary)]" />
           )}
-          <kbd className="rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-2xs text-[var(--color-text-secondary)]">
-            Esc
-          </kbd>
         </div>
 
         {/* Results */}
@@ -296,6 +312,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                 {displayGrouped[grp].map((item, i) => {
                   const flatIndex = groupOffsets[grp] + i
                   const isActive = flatIndex === activeIndex
+                  const RowIcon = CATEGORY_ICON[grp]
                   return (
                     <button
                       key={`${grp}-${item.href}-${i}`}
@@ -312,6 +329,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                           : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
                       }`}
                     >
+                      {RowIcon && <RowIcon className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.8} aria-hidden="true" />}
                       <span className="flex-1 truncate">{item.label}</span>
                       {item.subtitle && (
                         <span className="shrink-0 max-w-[120px] truncate text-2xs text-[var(--color-text-secondary)] opacity-60">
@@ -329,6 +347,21 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
             No results found.
           </div>
         ) : null}
+
+        <div className="flex items-center gap-4 border-t border-[var(--color-border)] px-3 py-2 text-2xs text-[var(--color-text-secondary)]">
+          <span className="flex items-center gap-1.5">
+            <kbd className="rounded border border-[var(--color-border)] px-1 py-0.5 font-mono">↑↓</kbd>
+            Navigate
+          </span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="rounded border border-[var(--color-border)] px-1 py-0.5 font-mono">↵</kbd>
+            Open
+          </span>
+          <span className="flex items-center gap-1.5">
+            <kbd className="rounded border border-[var(--color-border)] px-1 py-0.5 font-mono">Esc</kbd>
+            Close
+          </span>
+        </div>
       </div>
     </div>
   )
