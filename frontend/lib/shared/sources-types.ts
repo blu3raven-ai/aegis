@@ -156,6 +156,20 @@ export const SCANNER_SHORT_LABELS: Record<ScannerType, string> = {
   deep_audit: "Deep Audit",
 }
 
+/** What each scanner covers, as a standalone noun — for breakdown lists where a
+ *  "Scanner" dimension header already sets the context, so the "…Scanning"
+ *  suffix would just repeat on every row. "Coding-agent output" disambiguates
+ *  the AI-agent scanner from plain "Code". */
+export const SCANNER_SUBJECT_LABELS: Record<ScannerType, string> = {
+  dependencies_scanning: "Dependencies",
+  secret_scanning: "Secrets",
+  code_scanning: "Code",
+  container_scanning: "Containers",
+  iac_scanning: "IaC",
+  agent_scanning: "Coding-agent output",
+  deep_audit: "Deep audit",
+}
+
 /** Badge abbreviations for the tightest contexts (row tags, history timeline). */
 export const SCANNER_ABBREV: Record<ScannerType, string> = {
   dependencies_scanning: "SCA",

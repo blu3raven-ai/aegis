@@ -12,6 +12,7 @@ import type {
 import { getPostureRiskContributions } from "@/lib/client/posture-api"
 import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { scannerSubjectLabel } from "@/lib/shared/findings/row-mapper"
 import { findingsHref } from "./posture-links"
 
 // ── Shared severity styling (mirrors SbomEcosystemAnalytics) ────────────────
@@ -174,7 +175,11 @@ function RiskDecompositionCard() {
               const widthPct = Math.max(4, Math.round((row.riskScore / maxRisk) * 100))
               const canFilter = dimensionHasFilter(dimension)
               const href = canFilter ? riskRowHref(dimension, row.label) : undefined
-              const label = dimension === "scanner" ? scannerLabel(row.label) : rowLabel(row.label)
+              // Subject form ("Dependencies", "Containers") — the Scanner
+              // dimension header already sets the context, so a "…Scanning"
+              // suffix on every row would be redundant, and it keeps this list
+              // consistent with the Severity/Ecosystem dimensions.
+              const label = dimension === "scanner" ? scannerSubjectLabel(row.label) : rowLabel(row.label)
 
               const inner = (
                 <>
