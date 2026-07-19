@@ -200,9 +200,9 @@ function CompactSourceCard({
         />
       </div>
       {enabled && (
-        <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-state-fixed-text)]">
-            <StatusDot />
+        <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border-divider)] pt-3">
+          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${hasKey ? "text-[var(--color-state-fixed-text)]" : "text-[var(--color-text-tertiary)]"}`}>
+            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${hasKey ? "bg-[var(--color-state-fixed-text)]" : "bg-[var(--color-text-tertiary)]"}`} aria-hidden="true" />
             {hasKey ? "Key set" : "No key"}
           </span>
           <Button variant="secondary" size="xs" onClick={() => setOpen(true)}>
