@@ -998,6 +998,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     [],
   )
   const [lastDismissed, setLastDismissed] = useState<{ finding: Finding; index: number; verb: string } | null>(null)
+  // Bulk dismiss can't restore rows optimistically, so it tracks just the ids to
+  // reopen and refetches on undo.
+  const [lastBulkDismissed, setLastBulkDismissed] = useState<{ ids: number[] } | null>(null)
   // A `?finding=<id>` deep link that resolved to nothing (deleted or out of scope).
   const [deepLinkMissing, setDeepLinkMissing] = useState(false)
 
@@ -1130,6 +1133,12 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     const t = window.setTimeout(() => setLastDismissed(null), 7000)
     return () => window.clearTimeout(t)
   }, [lastDismissed])
+
+  useEffect(() => {
+    if (!lastBulkDismissed) return
+    const t = window.setTimeout(() => setLastBulkDismissed(null), 8000)
+    return () => window.clearTimeout(t)
+  }, [lastBulkDismissed])
 
   // Auto-expire the missing-deep-link notice.
   useEffect(() => {
@@ -1268,6 +1277,18 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
       setDismissError("Couldn't undo. The finding may remain actioned.")
     }
   }, [lastDismissed])
+
+  const handleUndoBulk = useCallback(async () => {
+    const b = lastBulkDismissed
+    if (!b) return
+    setLastBulkDismissed(null)
+    try {
+      await Promise.all(b.ids.map((id) => reopenFinding(id)))
+    } catch {
+      setDismissError("Couldn't undo every finding. Some may remain dismissed.")
+    }
+    void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
+  }, [lastBulkDismissed, load, sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page])
 
   useEffect(() => {
     if (!selectedFinding) return
@@ -1501,7 +1522,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               <BulkActionBar
                 ids={Array.from(selection).map(Number).filter(Number.isFinite)}
                 onClear={clearSelection}
-                onDismissed={() => {
+                onDismissed={(ids) => {
+                  setLastDismissed(null)
+                  setLastBulkDismissed({ ids })
                   // Refetch to drop the now-dismissed rows.
                   void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
                   clearSelection()
@@ -2134,6 +2157,29 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
         </div>
       )}
 
+      {lastBulkDismissed && !lastDismissed && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 z-[110] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2.5 shadow-xl"
+        >
+          <span className="text-sm text-[var(--color-text-primary)]">
+            Dismissed{" "}
+            <span className="font-medium">
+              {lastBulkDismissed.ids.length} {lastBulkDismissed.ids.length === 1 ? "finding" : "findings"}
+            </span>
+          </span>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={handleUndoBulk}
+            className="font-semibold text-[var(--color-accent)] hover:underline"
+          >
+            Undo
+          </Button>
+        </div>
+      )}
+
       {deepLinkMissing && (
         <div
           role="status"
@@ -2539,7 +2585,7 @@ function BulkActionBar({
 }: {
   ids: number[]
   onClear: () => void
-  onDismissed: () => void
+  onDismissed: (ids: number[]) => void
 }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2551,7 +2597,7 @@ function BulkActionBar({
     setError(null)
     try {
       await bulkDismissFindings(ids, reason)
-      onDismissed()
+      onDismissed(ids)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dismiss failed")
     } finally {
