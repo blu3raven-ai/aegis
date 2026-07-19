@@ -36,7 +36,7 @@ export default function SettingsPage() {
       />
       <div className="flex min-h-0 flex-1">
         <SettingsInPageNav />
-        <div data-settings-content className="flex-1 overflow-y-auto px-6 py-6 pb-12">
+        <div data-settings-content className="min-h-0 flex-1 overflow-y-auto px-6 py-6 pb-12">
           <SettingsSections />
         </div>
       </div>
