@@ -351,13 +351,13 @@ export function ArgusConnectionContent({
 
       <SettingsCard heading="Activation">
         <SettingsRow
-          label="Enable threat-intel enrichment"
+          label="Enable Argus enrichment"
           description="When on, findings are enriched with Argus exploit and threat intelligence (exploit availability, chain risk) as they arrive."
         >
           <ToggleSwitch
             checked={form.enabled}
             onChange={(next) => setForm({ ...form, enabled: next })}
-            label="Enable threat-intel enrichment"
+            label="Enable Argus enrichment"
           />
         </SettingsRow>
       </SettingsCard>

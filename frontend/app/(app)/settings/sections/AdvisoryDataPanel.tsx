@@ -36,7 +36,7 @@ export function AdvisoryDataDetail({ onChanged }: DetailComponentProps) {
       <AdvisorySourcesCard canEdit={canEdit} />
       <SettingsCard
         eyebrow="Suggested add-on"
-        title="Hosted Threat Intelligence"
+        title="Argus — Hosted Threat Intelligence"
         subtitle="Layer exploit availability, chain risk, and advisory context on top of the built-in feeds above."
       >
         <ArgusConnectionContent
@@ -121,7 +121,7 @@ function AdvisoryMirrorCard({ canRefresh }: { canRefresh: boolean }) {
   return (
     <SettingsCard
       eyebrow="Advisory Mirror"
-      title="Vulnerability Feeds"
+      title="Built-in Vulnerability Feeds"
       subtitle="Central advisory data every scanner matches against. Refreshes automatically each night; refresh on demand to bootstrap or pull the latest."
     >
       <div className="space-y-4">
@@ -321,7 +321,7 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
   return (
     <SettingsCard
       eyebrow="Advisory Sources"
-      title="Vulnerability Data Sources"
+      title="Optional Enrichment API Keys"
       subtitle="Optional API keys that enrich matched vulnerabilities with CVSS scores, fix versions, and advisory detail. Applied to both dependency and container scanning."
     >
       <fieldset disabled={!canEdit || !loaded} className="disabled:opacity-50">
