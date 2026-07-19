@@ -1611,9 +1611,9 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
               >
                 {row.label}
               </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-raised)]">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)]">
                 <div
-                  className="h-full rounded-full"
+                  className="h-full rounded-[2px] origin-left chart-bar-grow"
                   title={`${row.label}: ${row.count.toLocaleString()} critical + high`}
                   style={{ width: `${row.bar * 100}%`, background: row.barColor }}
                 />
@@ -2003,8 +2003,8 @@ function SlaComplianceGauge({
   const size = 132
   const cx = size / 2
   const cy = size / 2
-  const r = 52
-  const stroke = 12
+  const r = 54
+  const stroke = 7
   const startAngle = 135
   const sweep = 270
   const circ = 2 * Math.PI * r
@@ -2052,7 +2052,7 @@ function SlaComplianceGauge({
             />
           </svg>
           <span className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold leading-none tabular-nums" style={{ color: toneText }}>
+            <span className="text-2xl font-semibold leading-none tabular-nums" style={{ color: toneText }}>
               {compliancePct}%
             </span>
             <span className="mt-0.5 text-2xs font-mono font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">

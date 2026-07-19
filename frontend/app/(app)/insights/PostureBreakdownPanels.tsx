@@ -26,17 +26,6 @@ const SEV_CLASSES = {
   unrated: "text-[var(--color-text-tertiary)]",
 }
 
-
-// Lighter companion tone per severity, used as the second gradient stop so
-// each donut arc reads as a soft sweep rather than a flat band.
-const SEV_GRAD_LIGHT = {
-  critical: "#f87171",
-  high: "#fb923c",
-  medium: "#fcd34d",
-  low: "#93c5fd",
-  unrated: "var(--color-text-tertiary)",
-}
-
 export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
   const counts = snap.counts
   if (counts.total === 0) return null
@@ -47,12 +36,12 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
     .map((key) => ({ key, value: key === "unrated" ? counts.unknown : counts[key] }))
     .filter((s) => s.value > 0)
 
-  const r = 42
-  const stroke = 13
+  const r = 43
+  const stroke = 10
   const circ = 2 * Math.PI * r
-  // Small visual gap between adjacent arcs for a segmented, modern look.
+  // Small visual gap between adjacent arcs for a segmented instrument look.
   // Skipped when there's only one arc (a lone slice needs no separator).
-  const gap = segments.length > 1 ? 3 : 0
+  const gap = segments.length > 1 ? 4 : 0
 
   const segmentsWithOffsets = segments.map((seg, i, arr) => {
     const frac = seg.value / counts.total
@@ -81,14 +70,6 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
             role="img"
             aria-label={`${counts.critical} critical, ${counts.high} high, ${counts.medium} medium, ${counts.low} low, ${counts.unknown} unrated`}
           >
-            <defs>
-              {segments.map((seg) => (
-                <linearGradient key={seg.key} id={`donut-${seg.key}`} x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor={SEV_VARS[seg.key]} />
-                  <stop offset="100%" stopColor={SEV_GRAD_LIGHT[seg.key]} />
-                </linearGradient>
-              ))}
-            </defs>
             <circle
               cx="56"
               cy="56"
@@ -104,11 +85,11 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
                 cy="56"
                 r={r}
                 fill="none"
-                stroke={`url(#donut-${seg.key})`}
+                stroke={SEV_VARS[seg.key]}
                 strokeWidth={stroke}
                 strokeDasharray={`${seg.dashLen} ${circ - seg.dashLen}`}
                 strokeDashoffset={seg.dashOffset}
-                strokeLinecap="round"
+                strokeLinecap="butt"
                 transform="rotate(-90 56 56)"
                 className="chart-fade"
                 style={{ animationDelay: `${i * 80}ms` }}
@@ -172,7 +153,7 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
         Top repositories by findings
       </h2>
       <div className="mt-4 space-y-1">
-        {repos.map((repo) => (
+        {repos.map((repo, i) => (
           <Link
             key={repo.name}
             href={findingsHref({ repo: repo.name, state: "open" })}
@@ -195,8 +176,8 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
               </span>
             </div>
             <div
-              className="flex h-2 overflow-hidden rounded-full bg-[var(--color-surface-raised)]"
-              style={{ width: `${Math.max((repo.open / maxOpen) * 100, 8)}%` }}
+              className="flex h-1.5 origin-left overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)] chart-bar-grow"
+              style={{ width: `${Math.max((repo.open / maxOpen) * 100, 8)}%`, animationDelay: `${i * 50}ms` }}
             >
               {repo.critical > 0 && (
                 <span
@@ -279,14 +260,13 @@ export function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
   const total = buckets.reduce((sum, b) => sum + b.count, 0)
   if (total === 0) return null
   const maxCount = Math.max(...buckets.map((b) => b.count), 1)
-  // Age reads as a heat ramp: fresh (accent blue) → stale (critical red).
-  // Each bar is a left-to-right gradient between the tone and a lighter
-  // companion so it reads with depth instead of a flat dull band.
-  const ageRamp = [
-    ["#60a5fa", "var(--color-accent)"],
-    ["#fcd34d", "var(--color-severity-medium)"],
-    ["#fb923c", "var(--color-severity-high)"],
-    ["#f87171", "var(--color-severity-critical)"],
+  // Age reads as a heat ramp fresh → stale, but as flat instrument tones
+  // rather than glossy gradients: accent → medium → high → critical.
+  const ageTone = [
+    "var(--color-accent)",
+    "var(--color-severity-medium)",
+    "var(--color-severity-high)",
+    "var(--color-severity-critical)",
   ]
   return (
     <Card className="rounded-md">
@@ -295,20 +275,21 @@ export function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
       </h2>
       <div className="mt-4 space-y-2.5">
         {buckets.map((bucket, i) => {
-          const [from, to] = ageRamp[i] ?? ageRamp[3]
+          const tone = ageTone[i] ?? ageTone[3]
           const pct = (bucket.count / maxCount) * 100
           return (
             <div key={bucket.label} className="flex items-center gap-3">
               <span className="min-w-[64px] text-right text-[11px] tabular-nums text-[var(--color-text-tertiary)]">
                 {bucket.label}
               </span>
-              <div className="h-5 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-raised)]">
+              <div className="h-2 flex-1 overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)]">
                 <div
-                  className="h-full rounded-full transition-[width] duration-500 ease-out"
+                  className="h-full origin-left rounded-[2px] chart-bar-grow"
                   title={`${bucket.label}: ${bucket.count.toLocaleString()}`}
                   style={{
                     width: `${Math.max(pct, bucket.count > 0 ? 3 : 0)}%`,
-                    background: `linear-gradient(90deg, ${from} 0%, ${to} 100%)`,
+                    background: tone,
+                    animationDelay: `${i * 60}ms`,
                   }}
                 />
               </div>
