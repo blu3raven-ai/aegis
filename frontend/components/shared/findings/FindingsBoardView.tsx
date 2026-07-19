@@ -2794,7 +2794,7 @@ function FindingsSummaryStrip({
         valueClass={isEmpty ? NEUTRAL : summary.high > 0 ? WARN : OK}
       />
       <KpiCard
-        label="Resolved this week"
+        label="Fixed this week"
         value={fixedValue}
         note={isEmpty ? placeholder : `Fixed in last ${windowDays}d`}
         valueClass={isEmpty ? NEUTRAL : summary.fixed_recent > 0 ? OK : NEUTRAL}
