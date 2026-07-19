@@ -20,6 +20,20 @@ import { ArgusConnectionContent } from "../llm/ArgusConnectionContent"
 import type { DetailComponentProps } from "../registry"
 
 /**
+ * Refresh errors arrive as "npm: <cause>; PyPI: <cause>; …" — the same cause
+ * repeated once per feed. Collapse to the distinct cause(s) so the panel shows
+ * one readable line instead of a wall of identical storage errors.
+ */
+function summarizeRefreshError(raw: string): string {
+  const parts = raw.split(/;\s+/).map((p) => p.trim()).filter(Boolean)
+  const causes = [...new Set(parts.map((p) => p.replace(/^[A-Za-z0-9.\- ]+:\s*/, "")))]
+  if (causes.length === 1) {
+    return parts.length > 1 ? `${causes[0]} (${parts.length} feeds)` : causes[0]
+  }
+  return `${causes[0]} …and ${causes.length - 1} more`
+}
+
+/**
  * Advisory Data settings: the shared advisory feeds that drive vulnerability
  * matching and enrichment for every scanner. Three parts:
  *   1. Advisory mirror — freshness/size of the built-in OSV/EPSS/KEV feeds and
@@ -163,8 +177,12 @@ function AdvisoryMirrorCard({ canRefresh }: { canRefresh: boolean }) {
         )}
 
         {status?.osv.error && (
-          <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-xs text-[var(--color-severity-critical-text)]">
-            Last OSV refresh failed: {status.osv.error}
+          <div
+            className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-xs text-[var(--color-severity-critical-text)]"
+            title={status.osv.error}
+          >
+            <span className="font-semibold">Last OSV refresh failed.</span>{" "}
+            <span className="text-[var(--color-text-secondary)]">{summarizeRefreshError(status.osv.error)}</span>
           </div>
         )}
 
