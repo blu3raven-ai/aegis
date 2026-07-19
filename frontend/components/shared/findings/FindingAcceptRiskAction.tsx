@@ -10,6 +10,12 @@ import type { FindingRow } from "@/lib/shared/findings/row-mapper"
 
 type Scope = "rule" | "file"
 
+// Plain-language names for how wide the risk acceptance reaches.
+const SCOPE_LABEL: Record<Scope, string> = {
+  rule: "This rule, repo-wide",
+  file: "Just this file",
+}
+
 /**
  * Disposition control for a ground-truth carve-out, rendered as a popover in the
  * finding action bar next to Defer/Dismiss. Declares the finding's behavior as
@@ -49,9 +55,10 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
   // Only offer scopes whose matching key exists — a carve-out must match on
   // something concrete, never on the asset alone.
   const options = [
-    { id: "rule" as const, label: "This rule on this repo", disabled: !ruleKey },
-    { id: "file" as const, label: "This file", disabled: !fileKey },
+    { id: "rule" as const, label: SCOPE_LABEL.rule, disabled: !ruleKey },
+    { id: "file" as const, label: SCOPE_LABEL.file, disabled: !fileKey },
   ]
+  const enabledScopes = options.filter((o) => !o.disabled)
 
   const activeKey = scope === "rule" ? ruleKey : fileKey
   const canSubmit = Boolean(statement.trim()) && Boolean(activeKey) && !submitting
@@ -150,12 +157,28 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
             placeholder="e.g. eval() here is a sandboxed plugin loader"
             aria-label="Why this is intended"
           />
-          <SegmentedControl
-            options={options}
-            value={scope}
-            onChange={setScope}
-            ariaLabel="Carve-out scope"
-          />
+          <div className="space-y-1.5">
+            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              Apply exception to
+            </p>
+            {enabledScopes.length > 1 ? (
+              <SegmentedControl
+                options={options}
+                value={scope}
+                onChange={setScope}
+                ariaLabel="How wide the exception reaches"
+              />
+            ) : enabledScopes.length === 1 ? (
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                {SCOPE_LABEL[enabledScopes[0].id]}
+                <span className="text-[var(--color-text-tertiary)]"> — the only scope this finding supports</span>
+              </p>
+            ) : (
+              <p className="text-xs text-[var(--color-severity-high-text)]">
+                This finding has no rule or file to scope to, so it can’t be accepted as a risk here.
+              </p>
+            )}
+          </div>
           {error ? (
             <p role="alert" className="text-sm text-[var(--color-severity-critical)]">
               {error}
