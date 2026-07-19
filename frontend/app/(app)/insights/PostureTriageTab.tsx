@@ -330,9 +330,7 @@ function ScannerBreakdownCard({ rows }: { rows: ScannerBreakdownItem[] | null })
                     </td>
                     <td className="py-2.5 pr-4">
                       {visibleSev.length === 0 ? (
-                        <span className="text-xs italic text-[var(--color-text-tertiary)]">
-                          none
-                        </span>
+                        <span className="text-xs text-[var(--color-text-tertiary)]">—</span>
                       ) : (
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                           {visibleSev.map((s) => (

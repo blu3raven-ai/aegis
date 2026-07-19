@@ -64,7 +64,7 @@ function TrendChart() {
   return (
     <Card className="rounded-md">
       <div className="mb-3 flex items-baseline justify-between">
-        <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Severity trend</h3>
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Severity trend</h3>
         <span className="text-xs text-[var(--color-text-tertiary)]">last 30 days · preview</span>
       </div>
       <svg viewBox={`0 0 ${w} ${h}`} className="h-32 w-full" preserveAspectRatio="none">
@@ -82,7 +82,7 @@ function AttentionPanel() {
   return (
     <Card className="rounded-md">
       <div className="mb-3 flex items-baseline justify-between">
-        <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Needs attention</h3>
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Needs attention</h3>
         <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
       </div>
       <div className="space-y-2">
