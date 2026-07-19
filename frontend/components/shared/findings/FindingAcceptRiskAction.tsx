@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button"
 import { Textarea } from "@/components/ui/Textarea"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { useHasPermission } from "@/lib/client/use-permission"
-import { createAcceptedRisk } from "@/lib/client/accepted-risks-api"
+import { createAcceptedRisk, deleteAcceptedRisk } from "@/lib/client/accepted-risks-api"
 import type { FindingRow } from "@/lib/shared/findings/row-mapper"
 
 type Scope = "rule" | "file"
@@ -27,6 +27,9 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  // Id of the carve-out just created, so the inline Undo can delete it.
+  const [createdId, setCreatedId] = useState<number | null>(null)
+  const [undoing, setUndoing] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
 
@@ -68,8 +71,25 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
     setSubmitting(false)
     if (result.ok) {
       setDone(true)
+      setCreatedId(result.data.acceptedRisk.id)
       setOpen(false)
       setStatement("")
+    } else {
+      setError(result.error)
+    }
+  }
+
+  // Undo the accept by deleting the carve-out we just created. This is the only
+  // faithful reversal — the finding's state never changed, a carve-out was added.
+  async function handleUndo() {
+    if (createdId == null || undoing) return
+    setUndoing(true)
+    setError(null)
+    const result = await deleteAcceptedRisk(createdId)
+    setUndoing(false)
+    if (result.ok) {
+      setDone(false)
+      setCreatedId(null)
     } else {
       setError(result.error)
     }
@@ -85,17 +105,33 @@ export function FindingAcceptRiskAction({ finding }: { finding: FindingRow }) {
 
   return (
     <div ref={rootRef} className="relative">
-      <Button
-        ref={triggerRef}
-        variant="secondary"
-        size="sm"
-        onClick={() => setOpen((v) => !v)}
-        disabled={done}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-      >
-        {done ? "Risk accepted" : "Accept risk"}
-      </Button>
+      {done ? (
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
+            <svg className="h-3.5 w-3.5 text-[var(--color-state-fixed-text)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M3.5 8.5l3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Risk accepted
+          </span>
+          <Button variant="ghost" size="sm" onClick={handleUndo} isLoading={undoing} aria-label="Undo accepting this risk">
+            Undo
+          </Button>
+          {error && (
+            <span role="alert" className="text-[11px] text-[var(--color-severity-high-text)]">{error}</span>
+          )}
+        </div>
+      ) : (
+        <Button
+          ref={triggerRef}
+          variant="secondary"
+          size="sm"
+          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+        >
+          Accept risk
+        </Button>
+      )}
 
       {open && !done && (
         <div
