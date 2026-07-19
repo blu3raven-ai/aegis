@@ -166,7 +166,7 @@ export const SCANNER_SUBJECT_LABELS: Record<ScannerType, string> = {
   code_scanning: "Code",
   container_scanning: "Containers",
   iac_scanning: "IaC",
-  agent_scanning: "Coding-agent output",
+  agent_scanning: "Agent config files",
   deep_audit: "Deep audit",
 }
 
