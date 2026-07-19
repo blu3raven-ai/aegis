@@ -66,7 +66,7 @@ export function CostChart({ days }: CostChartProps) {
   if (days === null) {
     return (
       <div>
-        <h3 className="mb-2 text-base font-semibold">Token usage</h3>
+        <h3 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Token usage</h3>
         <div
           style={{ height: HEIGHT }}
           className="motion-safe:animate-pulse rounded border border-[var(--color-border)] bg-[var(--color-surface)]"
@@ -78,10 +78,10 @@ export function CostChart({ days }: CostChartProps) {
   if (totalTokens === 0) {
     return (
       <div>
-        <h3 className="mb-2 text-base font-semibold">Token usage</h3>
+        <h3 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Token usage</h3>
         <div
           style={{ height: HEIGHT }}
-          className="flex items-center justify-center rounded border border-dashed border-[var(--color-border)] text-xs italic text-[var(--color-text-secondary)]"
+          className="flex items-center justify-center rounded border border-dashed border-[var(--color-border)] text-xs text-[var(--color-text-secondary)]"
         >
           No usage yet. Your next scan will show up here.
         </div>
@@ -109,7 +109,7 @@ export function CostChart({ days }: CostChartProps) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-base font-semibold">Token usage</h3>
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Token usage</h3>
         <span className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           Last {bars.length} days
         </span>
