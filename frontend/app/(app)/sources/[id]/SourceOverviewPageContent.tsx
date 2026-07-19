@@ -254,7 +254,7 @@ export function SourceOverviewPageContent() {
         {/* Connection details */}
         <Card as="section" className="lg:col-span-1">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               Connection details
             </h2>
             <StatusPill status={STATUS_PILL[connection.status]} label={STATUS_LABEL[connection.status]} />

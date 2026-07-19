@@ -202,7 +202,7 @@ export default function SbomDiffPage() {
       {diffState === "ok" && diffResult && (
         <div className="mt-6 flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               Results
             </h2>
             <Button

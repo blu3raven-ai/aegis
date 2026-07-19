@@ -27,7 +27,7 @@ export function SbomHistoryDrawer({
   return (
     <FindingsDrawerShell open={open} onClose={onClose} label="SBOM version history">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3.5">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Version History
         </h2>
         <Button

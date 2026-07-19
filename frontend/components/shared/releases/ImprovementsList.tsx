@@ -31,7 +31,7 @@ export function ImprovementsList({ improvements }: ImprovementsListProps) {
   return (
     <section className="flex flex-col gap-3">
       <header className="flex items-end justify-between gap-4">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Improvements in this release
         </h2>
         <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">

@@ -127,7 +127,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
         onSubmit={handleSubmit}
         className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
       >
-        <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Trigger pre-release scan
         </h2>
 

@@ -162,7 +162,7 @@ export function ControlDetailPageContent() {
           <Card padding="none" elevation="sm" className="rounded-md">
             <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] px-5 py-3">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                   Mapped Findings
                   {activeFindings.length > 0 && (
                     <span className="ml-2 rounded-full bg-[var(--color-severity-critical-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-severity-critical-text)]">
