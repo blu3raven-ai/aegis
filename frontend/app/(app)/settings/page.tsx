@@ -24,7 +24,11 @@ const SETTINGS_ICON = (
 
 export default function SettingsPage() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // h-full + overflow-hidden pins this page to the main scroll area's height so
+    // `main` (overflow-y-auto, shared by every page) has nothing to scroll — the
+    // inner content column below is the only scroller. Without this the whole page
+    // grows and a hash jump (e.g. #license) scrolls `main`, unpinning the header.
+    <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         icon={SETTINGS_ICON}
         title="Settings"
