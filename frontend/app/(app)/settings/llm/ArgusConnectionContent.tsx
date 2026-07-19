@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/Input"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { SettingsRow } from "@/components/settings/SettingsRow"
 import { ToggleSwitch } from "@/components/settings/ToggleSwitch"
+import { Sheet } from "@/components/ui/Sheet"
 import { useLicense } from "@/lib/client/license/client"
-import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
 import {
   disconnectArgus,
   getArgusConnection,
@@ -146,17 +146,10 @@ export function ArgusConnectionContent({
     form.client_id.trim().length > 0 &&
     form.refresh_token.length > 0
 
-  const isDirty =
-    form.refresh_token.length > 0 ||
-    form.endpoint !== baseline.endpoint ||
-    form.token_endpoint !== baseline.token_endpoint ||
-    form.client_id !== baseline.client_id ||
-    form.enabled !== baseline.enabled
-
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     if (!canSave) {
       setError("Fill in every field, including the refresh token.")
-      return
+      return false
     }
     setSaving(true)
     setError(null)
@@ -167,12 +160,12 @@ export function ArgusConnectionContent({
         token_endpoint: form.token_endpoint.trim(),
         client_id: form.client_id.trim(),
         refresh_token: form.refresh_token,
-        enabled: form.enabled,
+        enabled: true,
       })
       setConn(next)
       // Clear the secret field — the stored value is masked; further edits
       // start blank rather than re-submitting what's already on file.
-      setForm((f) => ({ ...f, refresh_token: "" }))
+      setForm((f) => ({ ...f, refresh_token: "", enabled: next.enabled }))
       setBaseline({
         endpoint: next.endpoint,
         token_endpoint: next.token_endpoint,
@@ -180,8 +173,10 @@ export function ArgusConnectionContent({
         enabled: next.enabled,
       })
       onActiveChange?.(next.enabled)
+      return true
     } catch {
       setError("Couldn't save the connection. Check the fields and try again.")
+      return false
     } finally {
       setSaving(false)
     }
@@ -222,17 +217,26 @@ export function ArgusConnectionContent({
     }
   }
 
-  // Register with the page-level save bar so Argus edits are saved/discarded
-  // through the same shared bar as the other settings sections.
-  useSaveBarSection({
-    id: "argus",
-    dirty: canEdit && isDirty,
-    saving,
-    count: Number(canEdit && isDirty),
-    error,
-    onSave: handleSave,
-    onDiscard: handleDiscard,
-  })
+  // The connection form lives in a modal that opens only when the user turns
+  // Argus on (or clicks Manage) — the card itself stays compact.
+  const [configOpen, setConfigOpen] = useState(false)
+
+  function openConfig() {
+    setError(null)
+    setTestResult(null)
+    setConfigOpen(true)
+  }
+  function closeConfig() {
+    handleDiscard()
+    setConfigOpen(false)
+  }
+  async function saveConfig() {
+    if (await handleSave()) setConfigOpen(false)
+  }
+  async function handleToggle(next: boolean) {
+    if (next) openConfig()
+    else await disconnect()
+  }
 
   // Read-only view for users without manage_settings.
   if (!canEdit && !sessionLoading) {
@@ -276,111 +280,113 @@ export function ArgusConnectionContent({
 
       <StatusBanner conn={conn} />
 
-      <SettingsCard heading="Connection">
-        <SettingsRow
-          label="Argus endpoint"
-          description="Base URL of your hosted Argus threat-intel service."
-          layout="stack"
-        >
-          <Input
-            id="argus-endpoint"
-            type="url"
-            value={form.endpoint}
-            placeholder="https://argus.your-org.example.com"
-            onChange={(e) => setForm({ ...form, endpoint: e.target.value })}
-          />
-        </SettingsRow>
-
-        <SettingsRow
-          label="Token endpoint"
-          description="Your identity provider's OAuth2 token endpoint. Aegis exchanges the refresh token here for a short-lived access token."
-          layout="stack"
-        >
-          <Input
-            id="argus-token-endpoint"
-            type="url"
-            value={form.token_endpoint}
-            placeholder="https://idp.your-org.example.com/oauth2/token"
-            onChange={(e) => setForm({ ...form, token_endpoint: e.target.value })}
-          />
-        </SettingsRow>
-
-        <SettingsRow label="Client ID" description="OAuth2 client identifier issued for Aegis." layout="stack">
-          <Input
-            id="argus-client-id"
-            type="text"
-            value={form.client_id}
-            placeholder="aegis-verification"
-            autoComplete="off"
-            onChange={(e) => setForm({ ...form, client_id: e.target.value })}
-          />
-        </SettingsRow>
-
-        <SettingsRow
-          label="Refresh token"
-          description={
-            configured
-              ? "A token is stored. Paste a new one to replace it (required to re-save)."
-              : "Long-lived OAuth2 refresh token. Stored encrypted and never sent to the browser."
-          }
-          layout="stack"
-        >
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Input
-                id="argus-refresh-token"
-                type={showToken ? "text" : "password"}
-                value={form.refresh_token}
-                placeholder={configured ? "•••••••• (stored)" : "Paste refresh token"}
-                autoComplete="off"
-                onChange={(e) => setForm({ ...form, refresh_token: e.target.value })}
-              />
-            </div>
-            <Button
-              variant="secondary"
-              size="md"
-              onClick={() => setShowToken((s) => !s)}
-              aria-label={showToken ? "Hide refresh token" : "Show refresh token"}
-              className="shrink-0"
-            >
-              {showToken ? "Hide" : "Show"}
-            </Button>
-          </div>
-        </SettingsRow>
-      </SettingsCard>
-
       <SettingsCard heading="Activation">
         <SettingsRow
-          label="Enable Argus enrichment"
-          description="When on, findings are enriched with Argus exploit and threat intelligence (exploit availability, chain risk) as they arrive."
+          label="Enable Argus"
+          description="When on, findings are enriched with Argus exploit and threat intelligence as they arrive. Turning it on opens a short setup for your endpoint and OAuth credentials."
         >
           <ToggleSwitch
-            checked={form.enabled}
-            onChange={(next) => setForm({ ...form, enabled: next })}
-            label="Enable Argus enrichment"
+            checked={configured && form.enabled}
+            onChange={handleToggle}
+            label="Enable Argus"
           />
         </SettingsRow>
+        {configured && (
+          <SettingsRow label="Connection" description={`Connected to ${conn?.endpoint ?? ""}.`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={openConfig}>Manage connection</Button>
+              <Button variant="secondary" size="sm" onClick={test} isLoading={testing}>Test connection</Button>
+              <Button variant="ghost" size="sm" onClick={disconnect} className="text-[var(--color-severity-critical-text)]">Disconnect</Button>
+              {testResult && (
+                <span className={`text-xs ${testResult.ok ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-severity-critical-text)]"}`}>
+                  {testResult.ok ? "Connection OK. Argus reachable." : `Test failed${testResult.error ? ` (${testResult.error})` : ""}.`}
+                </span>
+              )}
+            </div>
+          </SettingsRow>
+        )}
       </SettingsCard>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="secondary" size="md" onClick={test} isLoading={testing} disabled={!configured}>
-          Test connection
-        </Button>
-        {configured && (
-          <Button variant="ghost" size="md" onClick={disconnect} className="text-[var(--color-severity-critical-text)]">
-            Disconnect
-          </Button>
-        )}
-        {testResult && (
-          <span
-            className={`text-xs ${testResult.ok ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-severity-critical-text)]"}`}
+      <Sheet
+        open={configOpen}
+        onClose={closeConfig}
+        title={configured ? "Manage Argus connection" : "Connect Argus"}
+        description="Enter your hosted Argus endpoint and OAuth credentials. Aegis exchanges the refresh token for short-lived access tokens — nothing is sent to the browser."
+        variant="modal"
+        size="lg"
+        dismissGuard={{ isDirty: canSave, message: "Discard the Argus connection details you entered?" }}
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            {error && <span className="mr-auto text-xs text-[var(--color-severity-critical-text)]">{error}</span>}
+            <Button variant="secondary" size="sm" onClick={closeConfig}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={saveConfig} isLoading={saving} disabled={!canSave}>
+              {configured ? "Save changes" : "Connect"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 px-5 py-5">
+          <SettingsRow label="Argus endpoint" description="Base URL of your hosted Argus threat-intel service." layout="stack">
+            <Input
+              id="argus-endpoint"
+              type="url"
+              value={form.endpoint}
+              placeholder="https://argus.your-org.example.com"
+              onChange={(e) => setForm({ ...form, endpoint: e.target.value })}
+            />
+          </SettingsRow>
+          <SettingsRow label="Token endpoint" description="Your identity provider's OAuth2 token endpoint. Aegis exchanges the refresh token here for a short-lived access token." layout="stack">
+            <Input
+              id="argus-token-endpoint"
+              type="url"
+              value={form.token_endpoint}
+              placeholder="https://idp.your-org.example.com/oauth2/token"
+              onChange={(e) => setForm({ ...form, token_endpoint: e.target.value })}
+            />
+          </SettingsRow>
+          <SettingsRow label="Client ID" description="OAuth2 client identifier issued for Aegis." layout="stack">
+            <Input
+              id="argus-client-id"
+              type="text"
+              value={form.client_id}
+              placeholder="aegis-verification"
+              autoComplete="off"
+              onChange={(e) => setForm({ ...form, client_id: e.target.value })}
+            />
+          </SettingsRow>
+          <SettingsRow
+            label="Refresh token"
+            description={
+              configured
+                ? "A token is stored. Paste a new one to replace it (required to re-save)."
+                : "Long-lived OAuth2 refresh token. Stored encrypted and never sent to the browser."
+            }
+            layout="stack"
           >
-            {testResult.ok
-              ? "Connection OK. Argus reachable."
-              : `Test failed${testResult.error ? ` (${testResult.error})` : ""}.`}
-          </span>
-        )}
-      </div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  id="argus-refresh-token"
+                  type={showToken ? "text" : "password"}
+                  value={form.refresh_token}
+                  placeholder={configured ? "•••••••• (stored)" : "Paste refresh token"}
+                  autoComplete="off"
+                  onChange={(e) => setForm({ ...form, refresh_token: e.target.value })}
+                />
+              </div>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => setShowToken((s) => !s)}
+                aria-label={showToken ? "Hide refresh token" : "Show refresh token"}
+                className="shrink-0"
+              >
+                {showToken ? "Hide" : "Show"}
+              </Button>
+            </div>
+          </SettingsRow>
+        </div>
+      </Sheet>
     </div>
   )
 }
