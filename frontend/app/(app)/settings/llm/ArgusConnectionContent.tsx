@@ -5,11 +5,9 @@ import { Eye } from "lucide-react"
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { SettingsCard } from "@/components/settings/SettingsCard"
 import { SettingsRow } from "@/components/settings/SettingsRow"
 import { ToggleSwitch } from "@/components/settings/ToggleSwitch"
 import { Sheet } from "@/components/ui/Sheet"
-import { useLicense } from "@/lib/client/license/client"
 import {
   disconnectArgus,
   getArgusConnection,
@@ -103,8 +101,6 @@ export function ArgusConnectionContent({
   sessionLoading = false,
   onActiveChange,
 }: ArgusConnectionContentProps = {}) {
-  const { addons } = useLicense()
-  const hasArgus = addons?.includes("argus") ?? false
   const [conn, setConn] = useState<ArgusConnection | null>(null)
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [baseline, setBaseline] = useState<ArgusBaseline>(INITIAL_BASELINE)
@@ -251,61 +247,52 @@ export function ArgusConnectionContent({
     )
   }
 
+  // On = a connection is stored and active. Configured-but-off reads as "paused".
+  const active = configured && form.enabled
+
   return (
     <div className="space-y-6">
-      <div className={`flex items-start gap-3.5 rounded-md border px-4 py-3.5 ${hasArgus ? "border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)]" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-argus-subtle)] text-[var(--color-argus)] ring-1 ring-inset ring-[var(--color-argus-border)]">
-          <Eye className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
+      <div className={`rounded-md border px-4 py-3.5 transition-colors ${active ? "border-[var(--color-argus-border)] bg-[var(--color-argus-subtle)]" : "border-[var(--color-border)] bg-[var(--color-surface)]"}`}>
+        <div className="flex items-start gap-3.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-argus-subtle)] text-[var(--color-argus)] ring-1 ring-inset ring-[var(--color-argus-border)]">
+            <Eye className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
             <span className="text-sm font-semibold text-[var(--color-text-primary)]">Blu3Raven Argus</span>
-            {hasArgus ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-argus-subtle)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-argus)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-argus)]" aria-hidden="true" />
-                Active
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-border-strong)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-text-tertiary)]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-text-tertiary)]" aria-hidden="true" />
-                Not activated
-              </span>
-            )}
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+              AI-powered threat intelligence: exploit availability, chain risk (how vulnerabilities combine into an attack path), and advisory enrichment on top of the built-in feeds. Works with any plan.
+            </p>
           </div>
-          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            AI-powered threat intelligence: exploit availability, chain risk (how vulnerabilities combine into an attack path), and advisory enrichment on top of the built-in feeds. Works with any plan.
-          </p>
-        </div>
-      </div>
-
-      <StatusBanner conn={conn} />
-
-      <SettingsCard heading="Activation">
-        <SettingsRow
-          label="Enable Argus"
-          description="When on, findings are enriched with Argus exploit and threat intelligence as they arrive. Turning it on opens a short setup for your endpoint and OAuth credentials."
-        >
           <ToggleSwitch
-            checked={configured && form.enabled}
+            checked={active}
             onChange={handleToggle}
             label="Enable Argus"
           />
-        </SettingsRow>
-        {configured && (
-          <SettingsRow label="Connection" description={`Connected to ${conn?.endpoint ?? ""}.`}>
+        </div>
+
+        {configured ? (
+          <div className="mt-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-[var(--color-border-divider)] pt-3">
+            <span className={`inline-flex min-w-0 items-center gap-1.5 text-xs font-medium ${active ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-state-pending-text)]"}`}>
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? "bg-[var(--color-status-ok-text)]" : "bg-[var(--color-state-pending-text)]"}`} aria-hidden="true" />
+              <span className="truncate">{active ? "Enriching findings" : "Paused"} · {conn?.endpoint}</span>
+            </span>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="secondary" size="sm" onClick={openConfig}>Manage connection</Button>
-              <Button variant="secondary" size="sm" onClick={test} isLoading={testing}>Test connection</Button>
-              <Button variant="ghost" size="sm" onClick={disconnect} className="text-[var(--color-severity-critical-text)]">Disconnect</Button>
               {testResult && (
                 <span className={`text-xs ${testResult.ok ? "text-[var(--color-status-ok-text)]" : "text-[var(--color-severity-critical-text)]"}`}>
-                  {testResult.ok ? "Connection OK. Argus reachable." : `Test failed${testResult.error ? ` (${testResult.error})` : ""}.`}
+                  {testResult.ok ? "Reachable" : `Test failed${testResult.error ? ` (${testResult.error})` : ""}`}
                 </span>
               )}
+              <Button variant="secondary" size="xs" onClick={openConfig}>Manage</Button>
+              <Button variant="secondary" size="xs" onClick={test} isLoading={testing}>Test</Button>
+              <Button variant="ghost" size="xs" onClick={disconnect} className="text-[var(--color-severity-critical-text)]">Disconnect</Button>
             </div>
-          </SettingsRow>
+          </div>
+        ) : (
+          <p className="mt-3 border-t border-[var(--color-border-divider)] pt-3 text-xs text-[var(--color-text-tertiary)]">
+            Turning it on opens a short setup for your endpoint and OAuth credentials.
+          </p>
         )}
-      </SettingsCard>
+      </div>
 
       <Sheet
         open={configOpen}
