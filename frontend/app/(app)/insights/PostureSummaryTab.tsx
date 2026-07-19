@@ -638,7 +638,7 @@ function AttentionPanel({
   return (
     <Card padding="none" className="rounded-md">
       <div className="px-5 pt-5 pb-3">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Needs attention</h2>
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Needs attention</h2>
       </div>
       {rows.length === 0 && teams !== null ? (
         <p className="px-5 pb-5 text-sm text-[var(--color-text-secondary)]">
@@ -826,7 +826,7 @@ function RiskTrendChart({
   return (
     <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Risk score over time
         </h2>
         <div className="flex flex-wrap items-center gap-3">
@@ -1127,7 +1127,7 @@ function PostureTrendChart({
   return (
     <Card className="rounded-md">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Open findings by severity · last {RANGE_LABEL[rangeDays]}
         </h2>
         {netFindingsNode}
@@ -1331,7 +1331,7 @@ function DiscoveryVelocityChart({
     return (
       <Card className="rounded-md">
         <div className="mb-1 flex items-center gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Discovery velocity
           </h2>
           <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
@@ -1378,7 +1378,7 @@ function DiscoveryVelocityChart({
     <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Discovery velocity
           </h2>
           <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
@@ -1581,7 +1581,7 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
   return (
     <Card className="rounded-md">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Risk by team
         </h2>
         <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
@@ -1671,7 +1671,7 @@ function ComplianceSnapshot({
 
   return (
     <div>
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-4">
         Compliance posture
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -1788,7 +1788,7 @@ function BacklogFlowChart({
     <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Open backlog over time
           </h2>
           <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
@@ -1920,7 +1920,7 @@ function SeverityMixChart({
     <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Severity mix over time
           </h2>
           <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
@@ -2029,7 +2029,7 @@ function SlaComplianceGauge({
 
   return (
     <Card className="rounded-md">
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         SLA compliance
       </h2>
       <div className="mt-3 flex items-center gap-5">

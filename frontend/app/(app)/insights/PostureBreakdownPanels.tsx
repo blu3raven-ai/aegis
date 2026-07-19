@@ -58,7 +58,7 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
 
   return (
     <Card className="rounded-md">
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Severity breakdown
       </h2>
       <div className="mt-4 flex items-center gap-6">
@@ -149,7 +149,7 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
   const maxOpen = Math.max(...repos.map((r) => r.open), 1)
   return (
     <Card className="rounded-md">
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Top repositories by findings
       </h2>
       <div className="mt-4 space-y-1">
@@ -219,7 +219,7 @@ export function RepositoryCoveragePanel({ snap }: { snap: PostureSnapshotRespons
   const { repositoryCoverage: cov } = snap
   return (
     <Card className="rounded-md">
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Affected repositories
       </h2>
       <div className="mt-4 flex flex-wrap items-end gap-6">
@@ -270,7 +270,7 @@ export function AgeBucketsPanel({ buckets }: { buckets: PostureAgeBucket[] }) {
   ]
   return (
     <Card className="rounded-md">
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Finding age distribution
       </h2>
       <div className="mt-4 space-y-2.5">

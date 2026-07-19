@@ -136,7 +136,7 @@ function RiskDecompositionCard() {
     <Card padding="md" className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Risk decomposition
           </h2>
           <p className="text-2xs text-[var(--color-text-secondary)]">
@@ -261,15 +261,15 @@ function rowLabel(label: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
-/** Bar fill tone for a risk score. Magnitude is carried by bar length; the
- *  fill stays a muted severity tint so rows read as a calm heat map rather
- *  than saturated blocks — the crisp colour signal lives in the score number. */
+/** Bar fill tone for a risk score. Magnitude is carried by bar length against
+ *  the dashed scale gridlines; the fill uses the severity tone at /85 to match
+ *  the house chart language (see Home's week chart). */
 function barTone(score: number): string {
-  if (score >= 20) return "bg-[var(--color-severity-critical)]/50"
-  if (score >= 10) return "bg-[var(--color-severity-high)]/50"
-  if (score >= 3) return "bg-[var(--color-severity-medium)]/55"
-  if (score > 0) return "bg-[var(--color-severity-low)]/55"
-  return "bg-[var(--color-text-tertiary)]/40"
+  if (score >= 20) return "bg-[var(--color-severity-critical)]/85"
+  if (score >= 10) return "bg-[var(--color-severity-high)]/85"
+  if (score >= 3) return "bg-[var(--color-severity-medium)]/85"
+  if (score > 0) return "bg-[var(--color-severity-low)]/85"
+  return "bg-[var(--color-text-tertiary)]/60"
 }
 
 // ── Card 2: Scanner breakdown ───────────────────────────────────────────────
@@ -278,7 +278,7 @@ function ScannerBreakdownCard({ rows }: { rows: ScannerBreakdownItem[] | null })
   return (
     <Card padding="md" className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Scanner breakdown
         </h2>
         <p className="text-2xs text-[var(--color-text-secondary)]">
@@ -397,7 +397,7 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
   return (
     <Card padding="md" className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Exploitability
         </h2>
         <p className="text-2xs text-[var(--color-text-secondary)]">
@@ -555,7 +555,7 @@ function SlaPostureCard({ data }: { data: SlaPostureSummary | null }) {
   return (
     <Card padding="md" className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           SLA posture
         </h2>
         <p className="text-2xs text-[var(--color-text-secondary)]">
