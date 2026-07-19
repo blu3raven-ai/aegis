@@ -122,7 +122,7 @@ export function ChannelsView({
 
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Channels</h2>
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Channels</h2>
             <Button variant="primary" size="sm" onClick={onStartCreate}>
               Add channel
             </Button>

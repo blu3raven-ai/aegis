@@ -13,7 +13,7 @@ export function IntegrationsRoutingTab({ keyHint }: IntegrationsRoutingTabProps)
       <section>
         {/* Mock rules-head: title + helper-line side by side */}
         <div className="mb-4 flex items-baseline justify-between gap-3">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Routing rules</h2>
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Routing rules</h2>
           <p className="text-xs text-[var(--color-text-secondary)]">
             Evaluated top-down · first match wins per channel
           </p>

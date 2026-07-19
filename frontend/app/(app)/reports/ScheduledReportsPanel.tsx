@@ -132,7 +132,7 @@ export function ScheduledReportsPanel() {
     <Card as="section">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Scheduled reports</h2>
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Scheduled reports</h2>
           <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
             Reports run automatically and deliver to configured notification destinations.
           </p>

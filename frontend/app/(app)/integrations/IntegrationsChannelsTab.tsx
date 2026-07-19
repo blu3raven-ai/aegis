@@ -88,7 +88,7 @@ function StatsStrip({ destinations }: { destinations: NotificationDestination[] 
       <KpiCard
         label="Channels configured"
         value={String(stats.channelCount)}
-        note={stats.channelCount === 1 ? "1 enabled destination" : `${stats.channelCount} enabled destinations`}
+        note={stats.channelCount === 1 ? "1 enabled channel" : `${stats.channelCount} enabled channels`}
         valueClass={NEUTRAL}
       />
       <KpiCard label="Events sent (24h)" value="—" note={unavailableHint} valueClass={NEUTRAL} />
@@ -124,9 +124,9 @@ export function IntegrationsChannelsTab({
 
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Destinations</h2>
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Channels</h2>
           <Button variant="primary" size="sm" onClick={onStartCreate}>
-            + Add destination
+            + Add channel
           </Button>
         </div>
 

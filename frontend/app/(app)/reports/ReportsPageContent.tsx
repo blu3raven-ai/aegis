@@ -269,7 +269,7 @@ export function ReportsPageContent() {
             : "border-[var(--color-border)]"
         }`}
       >
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">Generate new report</h2>
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-4">Generate new report</h2>
         <form onSubmit={handleGenerate} className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-sm text-[var(--color-text-secondary)] w-28">Report type</span>
@@ -345,7 +345,7 @@ export function ReportsPageContent() {
       ) : (
       <div className="space-y-3">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Report history</h2>
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Report history</h2>
         <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
           {total} {total === 1 ? "report" : "reports"}
         </span>
