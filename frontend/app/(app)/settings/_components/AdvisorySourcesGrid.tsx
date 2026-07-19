@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { Database, ShieldCheck } from "lucide-react"
 import { useLicense } from "@/lib/client/license/client"
+import { testAdvisoryKey } from "@/lib/client/settings-api"
 import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
@@ -159,6 +160,37 @@ function MaskedKeyDisplay({ id, maskedValue, canEdit, onChangeClick }: MaskedKey
   )
 }
 
+// Validates a freshly-entered key against its upstream before the operator
+// commits it via the save bar, so an invalid key is caught in the modal.
+function KeyTester({ source, apiKey, canTest }: { source: "nvd" | "ghsa"; apiKey: string; canTest: boolean }) {
+  const [testing, setTesting] = useState(false)
+  const [result, setResult] = useState<{ valid: boolean; error: string } | null>(null)
+
+  // A stale ✓/✗ would mislead once the key is edited — clear it on change.
+  useEffect(() => setResult(null), [apiKey])
+
+  async function run() {
+    setTesting(true)
+    const r = await testAdvisoryKey(source, apiKey)
+    setResult(r.ok ? { valid: r.valid, error: r.error } : { valid: false, error: r.error })
+    setTesting(false)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2.5">
+      <Button variant="secondary" size="sm" onClick={run} isLoading={testing} disabled={!canTest || testing}>
+        Test key
+      </Button>
+      {result && (
+        <span className={`inline-flex min-w-0 items-center gap-1.5 text-xs font-medium ${result.valid ? "text-[var(--color-state-fixed-text)]" : "text-[var(--color-severity-critical-text)]"}`}>
+          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${result.valid ? "bg-[var(--color-state-fixed-text)]" : "bg-[var(--color-severity-critical)]"}`} aria-hidden="true" />
+          <span className="truncate">{result.valid ? "Key valid — reachable" : result.error}</span>
+        </span>
+      )}
+    </div>
+  )
+}
+
 // Compact source card for the settings panel: a toggle + status; the key form
 // and instructions open in a modal (opened on enable or via the key button) so
 // the section stays uncluttered.
@@ -253,6 +285,8 @@ function NvdCard({ state, handlers, canEdit, variant = "inline" }: { state: Advi
             />
           )}
         </FormField>
+
+        <KeyTester source="nvd" apiKey={apiKey} canTest={editingKey && Boolean(apiKey.trim())} />
 
         <div className="flex items-start gap-2 rounded-md border border-[var(--color-border)]/60 bg-[var(--color-bg-section)] px-3 py-2.5">
           <InfoIcon />
@@ -367,6 +401,8 @@ function GhsaCard({ state, handlers, canEdit, variant = "inline" }: { state: Adv
             </>
           )}
         </FormField>
+
+        <KeyTester source="ghsa" apiKey={apiKey} canTest={editingKey && Boolean(apiKey.trim())} />
 
         <div className="flex items-start gap-2 rounded-md border border-[var(--color-border)]/60 bg-[var(--color-bg-section)] px-3 py-2.5">
           <InfoIcon />

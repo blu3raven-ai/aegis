@@ -27,6 +27,12 @@ class ToolSettingsRequest(BaseModel):
     settings: dict[str, str]
 
 
+class AdvisoryKeyTestRequest(BaseModel):
+    """Validate an advisory-source API key against its upstream without persisting it."""
+    source: Literal["nvd", "ghsa"]
+    apiKey: str
+
+
 class RateLimitResponse(BaseModel):
     remaining: int
     limit: int

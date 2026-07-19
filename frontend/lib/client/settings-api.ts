@@ -196,6 +196,27 @@ export async function saveToolSettings(input: {
   return result
 }
 
+export type AdvisoryKeyTestResult =
+  | { ok: true; valid: boolean; error: string }
+  | { ok: false; error: string }
+
+/** Validate an advisory-source key (NVD or GHSA) against its upstream without
+ *  persisting it, so the modal can show an immediate valid/invalid result. */
+export async function testAdvisoryKey(source: "nvd" | "ghsa", apiKey: string): Promise<AdvisoryKeyTestResult> {
+  try {
+    const data = await requestJson<{ valid: boolean; error: string }>("/advisory-key/test", {
+      method: "POST",
+      body: JSON.stringify({ source, apiKey }),
+    })
+    return { ok: true, valid: Boolean(data.valid), error: data.error ?? "" }
+  } catch (error) {
+    return {
+      ok: false,
+      error: isNetworkFailure(error) ? friendlySettingsUnavailableMessage() : extractErrorMessage(error, "Test failed."),
+    }
+  }
+}
+
 export type ScannerPrerequisitesResult =
   | { ok: true; runner_connected: boolean; error: string | null; scanner_status?: string | null; runner_name?: string | null; runner_platform?: string | null }
   | { ok: false; error: string }

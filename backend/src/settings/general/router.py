@@ -15,6 +15,7 @@ from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import MANAGE_SETTINGS
 from src.settings.general.schemas import (
     AccountSettingsRequest,
+    AdvisoryKeyTestRequest,
     GeneralSettingsRequest,
     ToolSettingsRequest,
 )
@@ -384,3 +385,20 @@ async def save_tool_settings(
     notify_settings_changed(tool, actor_user_id(request) or "unknown")
 
     return _ok_response()
+
+
+@router.post("/advisory-key/test")
+def test_advisory_key(
+    request: Request,
+    body: AdvisoryKeyTestRequest,
+    _: None = Depends(Permission(MANAGE_SETTINGS)),
+) -> JSONResponse:
+    """Check an advisory-source key against its upstream so the operator gets an
+    immediate valid/invalid answer before committing it through the save bar."""
+    key = (body.apiKey or "").strip()
+    if not key or key == "[redacted]":
+        raise _api_error("Enter a key to test.", 400)
+
+    validator = _validate_nvd_api_key if body.source == "nvd" else _validate_ghsa_api_key
+    valid, error = validator(key)
+    return JSONResponse({"valid": valid, "error": error})
