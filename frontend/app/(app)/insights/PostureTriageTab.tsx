@@ -12,7 +12,7 @@ import type {
 import { getPostureRiskContributions } from "@/lib/client/posture-api"
 import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
-import { scannerSubjectLabel } from "@/lib/shared/findings/row-mapper"
+import { scannerSubjectLabel, scannerDescription } from "@/lib/shared/findings/row-mapper"
 import { findingsHref } from "./posture-links"
 
 // ── Shared severity styling (mirrors SbomEcosystemAnalytics) ────────────────
@@ -184,7 +184,10 @@ function RiskDecompositionCard() {
               const inner = (
                 <>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="min-w-0 truncate text-sm font-medium text-[var(--color-text-primary)]">
+                    <span
+                      className="min-w-0 truncate text-sm font-medium text-[var(--color-text-primary)]"
+                      title={dimension === "scanner" ? scannerDescription(row.label) : undefined}
+                    >
                       {label}
                     </span>
                     <span className="flex shrink-0 items-center gap-3 text-xs tabular-nums">

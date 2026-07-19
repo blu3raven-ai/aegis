@@ -118,7 +118,7 @@ const MOCK_CHAINS: MockChain[] = [
       "T1530 · Cloud storage access",
     ],
     recommendation: {
-      title: "Cheapest fix to break this chain",
+      title: "Fewest fixes to break this chain",
       body: (
         <>
           <strong>Upgrade log4j-core <code className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[11.5px]">2.14.0 → 2.17.1</code></strong>
@@ -305,7 +305,7 @@ function StatStrip() {
         delta="verified by Argus"
       />
       <StatItem
-        label="Cheapest break"
+        label="Fewest to break all chains"
         value="3 fixes"
         delta="resolves all chains"
       />

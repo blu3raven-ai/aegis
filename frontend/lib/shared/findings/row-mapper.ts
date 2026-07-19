@@ -1,6 +1,6 @@
 import type { Finding as ApiFinding } from "../../client/findings-api.ts"
 import { timeAgo } from "../time-ago.ts"
-import { SCANNER_LABELS, SCANNER_SHORT_LABELS, SCANNER_SUBJECT_LABELS, SCANNER_ABBREV } from "../sources-types.ts"
+import { SCANNER_LABELS, SCANNER_SHORT_LABELS, SCANNER_SUBJECT_LABELS, SCANNER_ABBREV, SCANNER_DESCRIPTIONS } from "../sources-types.ts"
 import type { Verdict } from "./verdicts.ts"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low"
@@ -345,6 +345,12 @@ export function scannerShortLabel(raw: string): string {
  *  for breakdown lists where a dimension header already names the axis. */
 export function scannerSubjectLabel(raw: string): string {
   return SCANNER_SUBJECT_LABELS[normaliseScanner(raw)]
+}
+
+/** Plain-language explanation of what a scanner does — for hover tooltips on
+ *  labels/filters where the name alone (e.g. "Deep Audit") isn't self-evident. */
+export function scannerDescription(raw: string): string {
+  return SCANNER_DESCRIPTIONS[normaliseScanner(raw)]
 }
 
 /** Badge abbreviation ("SCA", "AGT") for the tightest contexts. */

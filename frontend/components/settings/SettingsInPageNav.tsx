@@ -248,7 +248,7 @@ const NAV_GROUPS: NavGroupSpec[] = [
     label: "Organization",
     items: [
       { id: "general", href: "#general", label: "General", icon: ICONS.building },
-      { id: "sso", href: "#sso", label: "SSO / SAML", icon: ICONS.lock },
+      { id: "sso", href: "#sso", label: "SSO (SAML / OIDC)", icon: ICONS.lock },
       { id: "audit", href: "#audit", label: "Audit Log", icon: ICONS.scroll },
       { id: "runners", href: "#runners", label: "Runners", icon: ICONS.runner },
     ],

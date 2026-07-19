@@ -387,7 +387,7 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
             />
           </SettingsRow>
           <SettingsRow
-            label="Prove base-image upgrades"
+            label="Recommend proven base-image upgrades"
             description="SBOM-scan the newest available tag of each image and recommend it when it has fewer vulnerabilities. Off by default: runs an extra scan per image and reaches the registry, so leave off for air-gapped installs."
           >
             <ToggleSwitch

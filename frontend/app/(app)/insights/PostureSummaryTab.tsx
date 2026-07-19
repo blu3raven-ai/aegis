@@ -421,7 +421,7 @@ function KpiGrid({
       />
 
       <KpiCard
-        label="SLA attainment"
+        label="Within SLA"
         value={slaAttainment != null ? `${slaAttainment}` : "—"}
         unit={slaAttainment != null ? "%" : undefined}
         detail={
@@ -1337,7 +1337,7 @@ function DiscoveryVelocityChart({
       <Card className="rounded-md">
         <div className="mb-1 flex items-center gap-2">
           <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-            Discovery velocity
+            Findings introduced vs resolved
           </h2>
           <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
             last {RANGE_LABEL[rangeDays]}
@@ -1388,7 +1388,7 @@ function DiscoveryVelocityChart({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-            Discovery velocity
+            Findings introduced vs resolved
           </h2>
           <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
             last {RANGE_LABEL[rangeDays]}
@@ -1830,7 +1830,7 @@ function BacklogFlowChart({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-            Open backlog over time
+            Total open over time
           </h2>
           <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             last {RANGE_LABEL[rangeDays]}
@@ -1846,7 +1846,7 @@ function BacklogFlowChart({
       <div ref={boxRef} className="relative select-none" style={{ height: H }}>
         {W > 0 && (
           <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} className="block" role="img"
-            aria-label="Open findings backlog level over the selected window">
+            aria-label="Total open findings over the selected window">
             <defs>
               <linearGradient id={`${gradId}-fill`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={tone} stopOpacity="0.26" />

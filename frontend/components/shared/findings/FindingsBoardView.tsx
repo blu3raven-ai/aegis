@@ -178,6 +178,14 @@ const ACTION_BAND_LABEL: Record<FindingActionBand, string> = {
   track: "Track",
 }
 
+// SSVC-style priority derived from KEV + reachability + severity. The label
+// alone ("Act") isn't self-explanatory, so the badge tooltip carries the gloss.
+const ACTION_BAND_HINT: Record<FindingActionBand, string> = {
+  act: "Act now — actively exploited or reachable and severe",
+  attend: "Attend soon — elevated priority, schedule a fix",
+  track: "Track — lower priority, monitor for change",
+}
+
 const ACTION_BAND_COLOR: Record<FindingActionBand, string> = {
   act: "var(--color-severity-critical)",
   attend: "var(--color-accent)",
@@ -249,7 +257,7 @@ function ActionBandBadge({ band }: { band: FindingActionBand }) {
     <span
       className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-semibold"
       style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}
-      title={`Action band: ${ACTION_BAND_LABEL[band]}`}
+      title={`Action band · ${ACTION_BAND_LABEL[band]}: ${ACTION_BAND_HINT[band]}`}
     >
       {ACTION_BAND_LABEL[band]}
     </span>

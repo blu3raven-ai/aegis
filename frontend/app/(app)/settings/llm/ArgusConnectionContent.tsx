@@ -269,7 +269,7 @@ export function ArgusConnectionContent({
             )}
           </div>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            AI-powered threat intelligence: EPSS scores, exploit availability, and advisory enrichment. Works with any plan.
+            AI-powered threat intelligence: exploit availability, chain risk (how vulnerabilities combine into an attack path), and advisory enrichment on top of the built-in feeds. Works with any plan.
           </p>
         </div>
       </div>

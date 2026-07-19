@@ -71,7 +71,7 @@ export function SmokeTestStep({ onNext, onBack, onSkip, loading = false }: Smoke
 
   return (
     <StepLayout
-      title="Run a smoke scan"
+      title="Run your first scan"
       description="Trigger a dependency scan against your repositories to verify everything is connected."
       onBack={onBack}
       onNext={canProceed ? () => onNext({ scan_run_id: runId ?? undefined, findings_count: findingsCount ?? undefined }) : undefined}

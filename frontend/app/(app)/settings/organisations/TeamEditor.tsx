@@ -244,7 +244,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
       </div>
 
       <div className="mt-10 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
-        <h4 className="text-xs font-semibold text-[var(--color-text-primary)]">Ownership Policy</h4>
+        <h4 className="text-xs font-semibold text-[var(--color-text-primary)]">Sharing &amp; role precedence</h4>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
           Resources can be shared with multiple teams. Users get their strongest matching team role for
           shared resources.
