@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useRef } from "react"
+import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
 
 import { DestinationsTable, type TestStatus } from "@/components/shared/notifications/DestinationsTable"
 import { DestinationForm } from "@/components/shared/notifications/DestinationForm"
@@ -116,6 +117,8 @@ export function IntegrationsChannelsTab({
   onStartCreate,
   onCancelCreate,
 }: IntegrationsChannelsTabProps) {
+  const createModalRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(createModalRef, onCancelCreate, creatingDest)
   return (
     <>
       <StatsStrip destinations={destinations} />
@@ -156,8 +159,8 @@ export function IntegrationsChannelsTab({
       </section>
 
       {creatingDest && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--color-overlay)] p-4">
-          <div role="dialog" aria-modal="true" aria-label="New destination" className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--color-overlay)] p-4" onClick={onCancelCreate}>
+          <div ref={createModalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="New destination" onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl focus:outline-none">
             <DrawerSection label="New destination">
               {createError && (
                 <p role="alert" className="mb-3 text-sm text-[var(--color-severity-critical)]">{createError}</p>

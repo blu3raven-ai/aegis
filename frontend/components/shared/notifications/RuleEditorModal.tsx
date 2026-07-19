@@ -7,7 +7,8 @@
  * and the ConditionBuilder recursive tree editor.
  */
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
 import type {
   Condition,
   CreateRulePayload,
@@ -63,6 +64,9 @@ export function RuleEditorModal({
     }
   }, [rule, open])
 
+  const panelRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(panelRef, onClose, open)
+
   if (!open) return null
 
   async function handleSubmit(e: React.FormEvent) {
@@ -89,10 +93,12 @@ export function RuleEditorModal({
 
       {/* Modal */}
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={rule ? "Edit routing rule" : "New routing rule"}
-        className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl"
+        className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
