@@ -392,7 +392,7 @@ function KpiGrid({
               </strong>
             </>
           ) : rem.avgDays == null ? (
-            "No remediations recorded yet"
+            "No fixes recorded yet"
           ) : undefined
         }
         spark={null}
@@ -401,7 +401,7 @@ function KpiGrid({
       />
 
       <KpiCard
-        label="Resolved (30d)"
+        label="Fixed (30d)"
         value={rem.fixedLast30d.toLocaleString()}
         detail={
           rem.totalFixed > 0 ? (
@@ -412,7 +412,7 @@ function KpiGrid({
               fixed all-time
             </>
           ) : (
-            "No remediations recorded yet"
+            "No fixes recorded yet"
           )
         }
         spark={null}

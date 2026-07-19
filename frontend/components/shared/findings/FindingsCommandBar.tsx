@@ -12,6 +12,7 @@ import type { FindingsMoreFiltersValues } from "./FindingsMoreFiltersPopover"
 import type { AgePresetKey } from "./FindingsAgeFilter"
 import type { SortKey } from "./FindingsSortDropdown"
 import type { FindingActionBand } from "@/lib/shared/findings/row-mapper"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 
 const STATIC_ATTRIBUTES: AttributeDef[] = [
   {
@@ -58,13 +59,13 @@ const STATIC_ATTRIBUTES: AttributeDef[] = [
     description: "Which scanner surfaced the finding",
     type: "enum",
     options: [
-      { value: "dependencies_scanning", label: "Dependencies" },
-      { value: "code_scanning", label: "Code Scanning" },
-      { value: "container_scanning", label: "Containers" },
-      { value: "secret_scanning", label: "Secrets" },
-      { value: "iac_scanning", label: "Infrastructure as Code" },
-      { value: "agent_scanning", label: "Coding Agent Scanning" },
-      { value: "deep_audit", label: "Deep Audit" },
+      { value: "dependencies_scanning", label: scannerLabel("dependencies_scanning") },
+      { value: "code_scanning", label: scannerLabel("code_scanning") },
+      { value: "container_scanning", label: scannerLabel("container_scanning") },
+      { value: "secret_scanning", label: scannerLabel("secret_scanning") },
+      { value: "iac_scanning", label: scannerLabel("iac_scanning") },
+      { value: "agent_scanning", label: scannerLabel("agent_scanning") },
+      { value: "deep_audit", label: scannerLabel("deep_audit") },
     ],
   },
   {

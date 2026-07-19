@@ -89,6 +89,7 @@ import { VerdictBadge } from "@/components/shared/findings/VerdictBadge"
 import { parseVerdictFilter, type VerdictFilter } from "@/lib/shared/findings/verdicts"
 import {
   mapApiFinding,
+  scannerLabel,
   type FindingRow as Finding,
   type FindingScanner as Scanner,
   type FindingSeverity as Severity,
@@ -155,15 +156,6 @@ const SCANNER_FG: Record<Scanner, string> = {
   deep_audit: "var(--color-scanner-audit-fg)",
 }
 
-const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
-  dependencies_scanning: "Dependencies",
-  code_scanning: "Code Scanning",
-  container_scanning: "Containers",
-  secret_scanning: "Secrets",
-  iac_scanning: "Infrastructure as Code",
-  agent_scanning: "Coding Agent Scanning",
-  deep_audit: "Deep Audit",
-}
 
 const SEVERITY_GROUP_LABEL: Record<Severity, string> = {
   critical: "Critical",
@@ -295,7 +287,7 @@ function groupKeyFor(row: Finding, key: GroupKey): string {
 function groupLabelFor(key: GroupKey, value: string): string {
   switch (key) {
     case "scanner":
-      return SCANNER_GROUP_LABEL[value as Scanner] ?? value
+      return scannerLabel(value)
     case "severity":
       return SEVERITY_GROUP_LABEL[value as Severity] ?? value
     case "status":
@@ -1863,7 +1855,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           header={
             selectedFinding ? (
               <DrawerHeader
-                eyebrow={`${selectedFinding.severity.charAt(0).toUpperCase()}${selectedFinding.severity.slice(1)} · ${SCANNER_GROUP_LABEL[selectedFinding.scanner]}`}
+                eyebrow={`${selectedFinding.severity.charAt(0).toUpperCase()}${selectedFinding.severity.slice(1)} · ${scannerLabel(selectedFinding.scanner)}`}
                 eyebrowDotColor={SEV_COLOR[selectedFinding.severity]}
                 title={selectedFinding.title}
                 identifier={selectedFinding.cve ?? selectedFinding.filePath}
@@ -2481,7 +2473,7 @@ function CompactFindingRow({
           <span
             className="inline-flex h-[18px] shrink-0 items-center rounded px-1.5 text-2xs font-bold uppercase tracking-wide"
             style={{ background: SCANNER_BG[finding.scanner], color: SCANNER_FG[finding.scanner] }}
-            title={SCANNER_GROUP_LABEL[finding.scanner]}
+            title={scannerLabel(finding.scanner)}
           >
             {SCANNER_LABEL[finding.scanner]}
           </span>

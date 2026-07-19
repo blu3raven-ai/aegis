@@ -29,7 +29,7 @@ export function CreatedKeyDialog({ token, onClose }: Props) {
           id="created-key-title"
           className="mb-2 text-base font-semibold text-[var(--color-text-primary)]"
         >
-          API key created
+          API token created
         </h2>
 
         <div className="mb-4 rounded-md border border-l-2 border-[var(--color-state-pending-border)] border-l-[var(--color-state-pending)] bg-[var(--color-state-pending-subtle)] px-3 py-2 text-xs text-[var(--color-text-primary)]">

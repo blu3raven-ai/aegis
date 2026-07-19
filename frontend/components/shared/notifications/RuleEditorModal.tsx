@@ -132,7 +132,7 @@ export function RuleEditorModal({
               label="Channel"
               htmlFor="rule-channel"
               required
-              hint={destinations.length === 0 ? "No destinations configured. Add one in Notification destinations first." : undefined}
+              hint={destinations.length === 0 ? "No channels configured. Add one in Notification channels first." : undefined}
             >
               <Select
                 id="rule-channel"

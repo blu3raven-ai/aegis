@@ -88,7 +88,7 @@ function StatsStrip({ destinations }: { destinations: NotificationDestination[] 
       <KpiCard
         label="Channels configured"
         value={String(stats.channelCount)}
-        note={stats.channelCount === 1 ? "1 enabled destination" : `${stats.channelCount} enabled destinations`}
+        note={stats.channelCount === 1 ? "1 enabled channel" : ` enabled channels`}
         valueClass={NEUTRAL}
       />
       <KpiCard label="Events sent (24h)" value="—" note={unavailableHint} valueClass={NEUTRAL} />
@@ -122,16 +122,16 @@ export function ChannelsView({
 
         <section>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Destinations</h2>
+            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Channels</h2>
             <Button variant="primary" size="sm" onClick={onStartCreate}>
-              Add destination
+              Add channel
             </Button>
           </div>
 
           {destsState === "loading" && <DestinationsLoadingSkeleton />}
           {destsState === "error" && (
             <div className="flex items-center gap-3 text-sm text-[var(--color-severity-high-text)]">
-              <span>Failed to load destinations.</span>
+              <span>Failed to load channels.</span>
               <Button variant="ghost" size="xs" onClick={onReload}>
                 Retry
               </Button>
@@ -157,12 +157,12 @@ export function ChannelsView({
       <Sheet
         open={creatingDest}
         onClose={onCancelCreate}
-        title="New destination"
+        title="New channel"
         variant="modal"
-        description="Configure a notification destination."
+        description="Configure a notification channel."
         size="md"
       >
-        <DrawerSection label="New destination">
+        <DrawerSection label="New channel">
           {createError && (
             <p
               role="alert"

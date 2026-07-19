@@ -458,7 +458,7 @@ export function AddConnectionModal({
 
   const title =
     screen === "provider"
-      ? "Add a Source"
+      ? "Add Connection"
       : screen === "method"
         ? `Connect ${providerLabel}`
         : method === "webhook"
@@ -868,7 +868,7 @@ export function AddConnectionModal({
 
                 <ol className="space-y-4">
                   <Step n={1}>
-                    Create an API key with{" "}
+                    Create an API token with{" "}
                     <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">scan:trigger</code>{" "}
                     scope and add it to your CI as a secret named{" "}
                     <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">AEGIS_API_KEY</code>.
@@ -878,7 +878,7 @@ export function AddConnectionModal({
                         <p className="text-[var(--color-text-tertiary)]">
                           Copy it now. It won&apos;t be shown again. It&apos;s saved under{" "}
                           <Link href="/settings/api-keys" className="text-[var(--color-accent)] underline" onClick={onClose}>
-                            Settings → API keys
+                            Settings → API tokens
                           </Link>.
                         </p>
                       </>
@@ -886,7 +886,7 @@ export function AddConnectionModal({
                       <>
                         <span className="block">
                           <Button variant="secondary" size="sm" onClick={handleCreateApiKey} disabled={apiKeyBusy} isLoading={apiKeyBusy}>
-                            {apiKeyBusy ? "Creating…" : "Create API key"}
+                            {apiKeyBusy ? "Creating…" : "Create API token"}
                           </Button>
                         </span>
                         {apiKeyError && <p role="alert" className="text-[var(--color-severity-critical-text)]">{apiKeyError}</p>}

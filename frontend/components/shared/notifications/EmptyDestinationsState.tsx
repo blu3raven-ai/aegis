@@ -21,14 +21,14 @@ export function EmptyDestinationsState({ onAdd }: { onAdd: () => void }) {
       </div>
       <div className="text-center">
         <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-          No notification destinations
+          No notification channels
         </p>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Route critical events to Slack, a webhook, or email.
         </p>
       </div>
       <Button variant="primary" size="md" onClick={onAdd}>
-        Add your first destination
+        Add your first channel
       </Button>
     </div>
   )

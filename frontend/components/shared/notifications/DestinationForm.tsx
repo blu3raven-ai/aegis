@@ -289,7 +289,7 @@ export function DestinationForm({
           disabled={submitting}
           isLoading={submitting}
         >
-          {submitting ? "Saving…" : isEditing ? "Save changes" : "Add destination"}
+          {submitting ? "Saving…" : isEditing ? "Save changes" : "Add channel"}
         </Button>
       </div>
     </form>
