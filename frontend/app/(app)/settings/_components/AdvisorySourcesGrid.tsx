@@ -546,8 +546,15 @@ export function AdvisorySourcesGrid({ values, onChange, canEdit, includeArgus = 
   const hasArgusLicense = addons?.includes("argus") ?? false
   const showArgus = includeArgus && values.argus && onChange.argus
 
+  // Compact variant stacks each source as a full-width row so NVD / GHSA / Argus
+  // read as one consistent list. Inline (setup wizards) keeps the multi-col grid.
+  const layout =
+    variant === "compact"
+      ? "flex flex-col gap-3"
+      : `grid grid-cols-1 gap-6 md:grid-cols-2 ${showArgus ? "lg:grid-cols-3" : ""}`
+
   return (
-    <div className={`grid grid-cols-1 gap-6 md:grid-cols-2 ${showArgus ? "lg:grid-cols-3" : ""}`}>
+    <div className={layout}>
       <NvdCard state={values.nvd} handlers={onChange.nvd} canEdit={canEdit} variant={variant} />
       <GhsaCard state={values.ghsa} handlers={onChange.ghsa} canEdit={canEdit} variant={variant} />
       {showArgus &&
