@@ -31,11 +31,11 @@ function SectionCard({ section }: { section: SettingsSectionDef }) {
   return (
     <Card padding="lg" className="flex flex-col gap-4">
       <div>
-        <h3 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           {section.title}
         </h3>
         {section.subtitle && (
-          <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{section.subtitle}</p>
+          <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">{section.subtitle}</p>
         )}
       </div>
       <Detail />

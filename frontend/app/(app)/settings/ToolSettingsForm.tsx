@@ -117,7 +117,7 @@ export function ToolSettingsForm({
     <form onSubmit={onSubmit} className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">{title}</h2>
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{title}</h2>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{description}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
