@@ -20,11 +20,12 @@ import { findingsHref } from "./posture-links"
 
 type SevKey = "critical" | "high" | "medium" | "low"
 
+// Chart-adjacent severity dots use the ordinal ramp to match the Overview.
 const SEV_DOT: Record<SevKey, string> = {
-  critical: "bg-[var(--color-severity-critical)]",
-  high: "bg-[var(--color-severity-high)]",
-  medium: "bg-[var(--color-severity-medium)]",
-  low: "bg-[var(--color-severity-low)]",
+  critical: "bg-[var(--color-sev-ramp-critical)]",
+  high: "bg-[var(--color-sev-ramp-high)]",
+  medium: "bg-[var(--color-sev-ramp-medium)]",
+  low: "bg-[var(--color-sev-ramp-low)]",
 }
 
 const SEV_TEXT: Record<SevKey, string> = {
@@ -265,11 +266,10 @@ function rowLabel(label: string): string {
  *  the dashed scale gridlines; the fill uses the severity tone at /85 to match
  *  the house chart language (see Home's week chart). */
 function barTone(score: number): string {
-  if (score >= 20) return "bg-[var(--color-severity-critical)]/85"
-  if (score >= 10) return "bg-[var(--color-severity-high)]/85"
-  if (score >= 3) return "bg-[var(--color-severity-medium)]/85"
-  if (score > 0) return "bg-[var(--color-severity-low)]/85"
-  return "bg-[var(--color-text-tertiary)]/60"
+  // The scanner name labels the row and the risk number carries the tier, so
+  // the bar is a neutral magnitude mark — only critical-tier rows get an accent.
+  if (score >= 20) return "bg-[var(--color-sev-ramp-critical)]/80"
+  return "bg-[var(--color-border-strong)]"
 }
 
 // ── Card 2: Scanner breakdown ───────────────────────────────────────────────
