@@ -5,7 +5,7 @@ import Link from "next/link"
 import { gqlQuery } from "@/lib/client/graphql-client"
 import { formatPercentile, type EpssTopFinding } from "@/lib/client/epss-api"
 import { listFindings, type Finding as ApiFinding } from "@/lib/client/findings-api"
-import { scannerShortLabel } from "@/lib/shared/findings/row-mapper"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { HOME_DASHBOARD_QUERY } from "@/lib/shared/graphql/queries"
 import type {
@@ -194,7 +194,7 @@ function formatRelative(iso: string | null | undefined): string {
 function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
   const sevKey = (finding.severity || "").toLowerCase()
   const sevClass = SEVERITY_BADGE[sevKey] ?? "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
-  const scannerLabel = scannerShortLabel(finding.scanner)
+  const scannerName = scannerLabel(finding.scanner)
   const fileLine = finding.file_path
     ? finding.line != null
       ? `${finding.file_path}:${finding.line}`
@@ -252,7 +252,7 @@ function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
           </>
         )}
         <span className="text-[var(--color-text-tertiary)]" aria-hidden="true">·</span>
-        <span className="text-[var(--color-text-tertiary)]">{scannerLabel}{finding.cve ? ` · ${finding.cve}` : ""}</span>
+        <span className="text-[var(--color-text-tertiary)]">{scannerName}{finding.cve ? ` · ${finding.cve}` : ""}</span>
       </div>
     </Link>
   )
@@ -261,7 +261,7 @@ function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
 function CompactFindingRow({ finding }: { finding: ApiFinding }) {
   const sevKey = (finding.severity || "").toLowerCase()
   const sevClass = SEVERITY_BADGE[sevKey] ?? "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
-  const scannerLabel = scannerShortLabel(finding.scanner)
+  const scannerName = scannerLabel(finding.scanner)
   const fileLine = finding.file_path
     ? finding.line != null
       ? `${finding.file_path}:${finding.line}`
@@ -287,7 +287,7 @@ function CompactFindingRow({ finding }: { finding: ApiFinding }) {
           {fileLine && (
             <code className="font-[family-name:var(--font-jetbrains-mono)]">{fileLine}</code>
           )}
-          <span>{scannerLabel}</span>
+          <span>{scannerName}</span>
           {finding.created_at && <span>{formatRelative(finding.created_at)}</span>}
         </div>
       </div>

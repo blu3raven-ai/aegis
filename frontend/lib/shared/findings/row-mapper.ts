@@ -1,6 +1,6 @@
 import type { Finding as ApiFinding } from "../../client/findings-api.ts"
 import { timeAgo } from "../time-ago.ts"
-import { SCANNER_LABELS, SCANNER_SHORT_LABELS, SCANNER_SUBJECT_LABELS, SCANNER_ABBREV, SCANNER_DESCRIPTIONS } from "../sources-types.ts"
+import { SCANNER_LABELS, SCANNER_ABBREV, SCANNER_DESCRIPTIONS } from "../sources-types.ts"
 import type { Verdict } from "./verdicts.ts"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low"
@@ -334,17 +334,6 @@ export function normaliseScanner(raw: string): FindingScanner {
  *  instead of per-component label maps, which drift from the canonical enum. */
 export function scannerLabel(raw: string): string {
   return SCANNER_LABELS[normaliseScanner(raw)]
-}
-
-/** Compact scanner label ("Dependency", "Coding Agent") for dense contexts. */
-export function scannerShortLabel(raw: string): string {
-  return SCANNER_SHORT_LABELS[normaliseScanner(raw)]
-}
-
-/** What the scanner covers, as a standalone noun ("Dependencies", "Containers"),
- *  for breakdown lists where a dimension header already names the axis. */
-export function scannerSubjectLabel(raw: string): string {
-  return SCANNER_SUBJECT_LABELS[normaliseScanner(raw)]
 }
 
 /** Plain-language explanation of what a scanner does — for hover tooltips on

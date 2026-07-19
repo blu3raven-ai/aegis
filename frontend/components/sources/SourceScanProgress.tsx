@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { useSSE } from "@/components/providers/SSEProvider"
 import { ScanRunningBanner } from "@/components/shared/ScanRunningBanner"
 import { getActiveSourceScanRuns } from "@/lib/client/source-connections-api"
-import { scannerShortLabel } from "@/lib/shared/findings/row-mapper"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import { cn } from "@/lib/shared/utils"
 import type { ScanCompletedEvent, ScanFailedEvent, ScanProgressEvent } from "@/lib/shared/sse-types"
 
@@ -53,12 +53,13 @@ function extractScannerType(runId: string): string {
 }
 
 function buildScanLabel(runs: ActiveRun[]): string {
+  // The canonical label already ends in "Scanning", so no trailing "scan".
   if (runs.length === 1) {
-    return `${scannerShortLabel(runs[0].scannerType)} scan`
+    return scannerLabel(runs[0].scannerType)
   }
-  const names = runs.map((r) => scannerShortLabel(r.scannerType))
-  if (names.length <= 2) return `${names.join(" & ")} scan`
-  return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]} scan`
+  const names = runs.map((r) => scannerLabel(r.scannerType))
+  if (names.length <= 2) return names.join(" & ")
+  return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`
 }
 
 export function SourceScanProgress({ connectionId, org, runIds, onDone, onDismiss, onCancel, isCancelling }: SourceScanProgressProps) {
@@ -237,7 +238,7 @@ export function SourceScanProgress({ connectionId, org, runIds, onDone, onDismis
         commandLabel=""
         scanLabel={scanLabel}
         runCounts={runCounts}
-        activeScannerLabel={scannerShortLabel(aggRun.scannerType)}
+        activeScannerLabel={scannerLabel(aggRun.scannerType)}
         onCancel={onCancel}
         onDismiss={onDismiss}
         isCancelling={isCancelling}

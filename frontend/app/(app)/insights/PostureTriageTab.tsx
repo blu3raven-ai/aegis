@@ -12,7 +12,7 @@ import type {
 import { getPostureRiskContributions } from "@/lib/client/posture-api"
 import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
-import { scannerSubjectLabel, scannerDescription } from "@/lib/shared/findings/row-mapper"
+import { scannerLabel, scannerDescription } from "@/lib/shared/findings/row-mapper"
 import { findingsHref } from "./posture-links"
 
 // ── Shared severity styling (mirrors SbomEcosystemAnalytics) ────────────────
@@ -54,19 +54,6 @@ function riskTone(score: number): string {
   return "text-[var(--color-text-tertiary)]"
 }
 
-const SCANNER_LABELS: Record<string, string> = {
-  dependencies_scanning: "Dependency Scanning",
-  code_scanning: "Code Scanning",
-  container_scanning: "Container Scanning",
-  secret_scanning: "Secret Scanning",
-  iac_scanning: "IaC Scanning",
-  agent_scanning: "Coding Agent Scanning",
-  deep_audit: "Deep Audit",
-}
-
-function scannerLabel(tool: string): string {
-  return SCANNER_LABELS[tool] ?? tool
-}
 
 interface PostureTriageTabProps {
   scannerBreakdown: ScannerBreakdownItem[] | null
@@ -175,11 +162,10 @@ function RiskDecompositionCard() {
               const widthPct = Math.max(4, Math.round((row.riskScore / maxRisk) * 100))
               const canFilter = dimensionHasFilter(dimension)
               const href = canFilter ? riskRowHref(dimension, row.label) : undefined
-              // Subject form ("Dependencies", "Containers") — the Scanner
-              // dimension header already sets the context, so a "…Scanning"
-              // suffix on every row would be redundant, and it keeps this list
-              // consistent with the Severity/Ecosystem dimensions.
-              const label = dimension === "scanner" ? scannerSubjectLabel(row.label) : rowLabel(row.label)
+              // Canonical scanner name (same helper as the filter, tables, and
+              // the scanner-breakdown card below) so one scanner reads the same
+              // everywhere. The hover title carries what it actually covers.
+              const label = dimension === "scanner" ? scannerLabel(row.label) : rowLabel(row.label)
 
               const inner = (
                 <>
