@@ -344,6 +344,7 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
     >
       <fieldset disabled={!canEdit || !loaded} className="disabled:opacity-50">
         <AdvisorySourcesGrid
+          variant="compact"
           canEdit={canEdit}
           includeArgus={false}
           values={{

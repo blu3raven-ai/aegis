@@ -1,10 +1,15 @@
 "use client"
 
+import { useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useLicense } from "@/lib/client/license/client"
 import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
+import { Sheet } from "@/components/ui/Sheet"
+import { ToggleSwitch } from "@/components/settings/ToggleSwitch"
+
+type SourceVariant = "inline" | "compact"
 
 export interface AdvisorySourceState {
   enabled: boolean
@@ -42,6 +47,8 @@ export interface AdvisorySourcesGridProps {
   /** Render the Argus advisory-source card. Off where Argus is surfaced as its
    *  own hosted-connection add-on instead of a per-scanner key. Default true. */
   includeArgus?: boolean
+  /** "compact" shows each source as a toggle whose key form opens in a modal. */
+  variant?: SourceVariant
 }
 
 function maskKey(key: string, hint?: string): string {
@@ -151,37 +158,72 @@ function MaskedKeyDisplay({ id, maskedValue, canEdit, onChangeClick }: MaskedKey
   )
 }
 
-function NvdCard({ state, handlers, canEdit }: { state: AdvisorySourceState; handlers: AdvisorySourceHandlers; canEdit: boolean }) {
-  const { enabled, apiKey, initialApiKey, initialApiKeyHint, showKey, editingKey } = state
-
+// Compact source card for the settings panel: a toggle + status; the key form
+// and instructions open in a modal (opened on enable or via the key button) so
+// the section stays uncluttered.
+function CompactSourceCard({
+  name, desc, enabled, hasKey, canEdit, onToggle, modalTitle, children,
+}: {
+  name: string
+  desc: string
+  enabled: boolean
+  hasKey: boolean
+  canEdit: boolean
+  onToggle: (v: boolean) => void
+  modalTitle: string
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(false)
   return (
     <div className={`relative space-y-3 rounded-md border p-4 transition-colors ${
       enabled
         ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.03]"
         : "border-[var(--color-border)] bg-[var(--color-surface)]"
     }`}>
-      <div className="flex items-start justify-between">
-        <label className="flex items-center gap-2.5 text-sm">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => handlers.setEnabled(e.target.checked)}
-            className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]/30"
-          />
-          <div>
-            <span className="font-medium text-[var(--color-text-primary)]">NVD (NIST)</span>
-            <p className="text-xs text-[var(--color-text-secondary)]">National Vulnerability Database</p>
-          </div>
-        </label>
-        {enabled && (
-          <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-state-fixed-text)]">
-            <StatusDot />
-            Active
-          </span>
-        )}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <span className="font-medium text-[var(--color-text-primary)]">{name}</span>
+          <p className="text-xs text-[var(--color-text-secondary)]">{desc}</p>
+        </div>
+        <ToggleSwitch
+          checked={enabled}
+          disabled={!canEdit}
+          label={`Toggle ${name}`}
+          onChange={(v) => { onToggle(v); if (v) setOpen(true) }}
+        />
       </div>
-      <div className={`space-y-3 transition-opacity ${enabled ? "" : "opacity-40 pointer-events-none"}`}>
-        <FormField
+      {enabled && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-state-fixed-text)]">
+            <StatusDot />
+            {hasKey ? "Key set" : "No key"}
+          </span>
+          <Button variant="secondary" size="xs" onClick={() => setOpen(true)}>
+            {hasKey ? "Manage key" : "Add key"}
+          </Button>
+        </div>
+      )}
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title={modalTitle}
+        variant="modal"
+        size="md"
+        footer={<div className="flex justify-end"><Button variant="primary" size="sm" onClick={() => setOpen(false)}>Done</Button></div>}
+      >
+        <div className="space-y-3 px-5 py-5">{children}</div>
+      </Sheet>
+    </div>
+  )
+}
+
+function NvdCard({ state, handlers, canEdit, variant = "inline" }: { state: AdvisorySourceState; handlers: AdvisorySourceHandlers; canEdit: boolean; variant?: SourceVariant }) {
+  const { enabled, apiKey, initialApiKey, initialApiKeyHint, showKey, editingKey } = state
+  const hasKey = Boolean(apiKey.trim() || (!editingKey && initialApiKey))
+
+  const keyBody = (
+    <>
+      <FormField
           label={<>API Key <span className="font-normal text-[var(--color-text-tertiary)]">(optional)</span></>}
           htmlFor="advisory-nvd-key"
         >
@@ -226,22 +268,29 @@ function NvdCard({ state, handlers, canEdit }: { state: AdvisorySourceState; han
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </>
   )
-}
 
-function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; handlers: AdvisorySourceHandlers; canEdit: boolean }) {
-  const { enabled, apiKey, initialApiKey, initialApiKeyHint, showKey, editingKey } = state
-  const hasKey = apiKey.trim() || (!editingKey && initialApiKey)
-  const missingKey = enabled && !apiKey.trim() && editingKey
+  if (variant === "compact") {
+    return (
+      <CompactSourceCard
+        name="NVD (NIST)"
+        desc="National Vulnerability Database"
+        enabled={enabled}
+        hasKey={hasKey}
+        canEdit={canEdit}
+        onToggle={handlers.setEnabled}
+        modalTitle="NVD (NIST) API key"
+      >
+        {keyBody}
+      </CompactSourceCard>
+    )
+  }
 
   return (
     <div className={`relative space-y-3 rounded-md border p-4 transition-colors ${
       enabled
-        ? hasKey
-          ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.03]"
-          : "border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)]"
+        ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.03]"
         : "border-[var(--color-border)] bg-[var(--color-surface)]"
     }`}>
       <div className="flex items-start justify-between">
@@ -253,22 +302,31 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
             className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]/30"
           />
           <div>
-            <span className="font-medium text-[var(--color-text-primary)]">GitHub Advisory Database</span>
-            <p className="text-xs text-[var(--color-text-secondary)]">GHSA-enriched Vulnerability Database</p>
+            <span className="font-medium text-[var(--color-text-primary)]">NVD (NIST)</span>
+            <p className="text-xs text-[var(--color-text-secondary)]">National Vulnerability Database</p>
           </div>
         </label>
         {enabled && (
-          <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-medium ${
-            hasKey
-              ? "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed-text)]"
-              : "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]"
-          }`}>
+          <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-[var(--color-state-fixed-subtle)] px-2 py-0.5 text-2xs font-medium text-[var(--color-state-fixed-text)]">
             <StatusDot />
-            {hasKey ? "Active" : "Needs key"}
+            Active
           </span>
         )}
       </div>
       <div className={`space-y-3 transition-opacity ${enabled ? "" : "opacity-40 pointer-events-none"}`}>
+        {keyBody}
+      </div>
+    </div>
+  )
+}
+
+function GhsaCard({ state, handlers, canEdit, variant = "inline" }: { state: AdvisorySourceState; handlers: AdvisorySourceHandlers; canEdit: boolean; variant?: SourceVariant }) {
+  const { enabled, apiKey, initialApiKey, initialApiKeyHint, showKey, editingKey } = state
+  const hasKey = Boolean(apiKey.trim() || (!editingKey && initialApiKey))
+  const missingKey = enabled && !apiKey.trim() && editingKey
+
+  const keyBody = (
+    <>
         <FormField
           label={<>GitHub PAT <span className="font-normal text-[var(--color-state-pending-text)]">(required)</span></>}
           htmlFor="advisory-ghsa-key"
@@ -316,6 +374,59 @@ function GhsaCard({ state, handlers, canEdit }: { state: AdvisorySourceState; ha
             </p>
           </div>
         </div>
+    </>
+  )
+
+  if (variant === "compact") {
+    return (
+      <CompactSourceCard
+        name="GitHub Advisory Database"
+        desc="GHSA-enriched Vulnerability Database"
+        enabled={enabled}
+        hasKey={hasKey}
+        canEdit={canEdit}
+        onToggle={handlers.setEnabled}
+        modalTitle="GitHub Advisory Database — PAT"
+      >
+        {keyBody}
+      </CompactSourceCard>
+    )
+  }
+
+  return (
+    <div className={`relative space-y-3 rounded-md border p-4 transition-colors ${
+      enabled
+        ? hasKey
+          ? "border-[var(--color-accent)]/40 bg-[var(--color-accent)]/[0.03]"
+          : "border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)]"
+        : "border-[var(--color-border)] bg-[var(--color-surface)]"
+    }`}>
+      <div className="flex items-start justify-between">
+        <label className="flex items-center gap-2.5 text-sm">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => handlers.setEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]/30"
+          />
+          <div>
+            <span className="font-medium text-[var(--color-text-primary)]">GitHub Advisory Database</span>
+            <p className="text-xs text-[var(--color-text-secondary)]">GHSA-enriched Vulnerability Database</p>
+          </div>
+        </label>
+        {enabled && (
+          <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-medium ${
+            hasKey
+              ? "bg-[var(--color-state-fixed-subtle)] text-[var(--color-state-fixed-text)]"
+              : "bg-[var(--color-state-pending-subtle)] text-[var(--color-state-pending-text)]"
+          }`}>
+            <StatusDot />
+            {hasKey ? "Active" : "Needs key"}
+          </span>
+        )}
+      </div>
+      <div className={`space-y-3 transition-opacity ${enabled ? "" : "opacity-40 pointer-events-none"}`}>
+        {keyBody}
       </div>
     </div>
   )
@@ -430,15 +541,15 @@ function ArgusCard({ state, handlers, canEdit }: { state: AdvisorySourceState; h
   )
 }
 
-export function AdvisorySourcesGrid({ values, onChange, canEdit, includeArgus = true }: AdvisorySourcesGridProps) {
+export function AdvisorySourcesGrid({ values, onChange, canEdit, includeArgus = true, variant = "inline" }: AdvisorySourcesGridProps) {
   const { addons } = useLicense()
   const hasArgusLicense = addons?.includes("argus") ?? false
   const showArgus = includeArgus && values.argus && onChange.argus
 
   return (
     <div className={`grid grid-cols-1 gap-6 md:grid-cols-2 ${showArgus ? "lg:grid-cols-3" : ""}`}>
-      <NvdCard state={values.nvd} handlers={onChange.nvd} canEdit={canEdit} />
-      <GhsaCard state={values.ghsa} handlers={onChange.ghsa} canEdit={canEdit} />
+      <NvdCard state={values.nvd} handlers={onChange.nvd} canEdit={canEdit} variant={variant} />
+      <GhsaCard state={values.ghsa} handlers={onChange.ghsa} canEdit={canEdit} variant={variant} />
       {showArgus &&
         (hasArgusLicense ? (
           <ArgusCard state={values.argus!} handlers={onChange.argus!} canEdit={canEdit} />
