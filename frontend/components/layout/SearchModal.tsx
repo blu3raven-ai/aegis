@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Spinner } from "@/components/ui/Button"
 import { search, type SearchHit } from "@/lib/client/search-api"
 import { Skeleton } from "@/components/ui/Skeleton"
+import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
 
 const ICON_SEARCH =
   "M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
@@ -57,6 +58,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState("")
   const [activeIndex, setActiveIndex] = useState(0)
   const [fetchState, setFetchState] = useState<FetchState>("idle")
@@ -221,6 +223,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: "nearest" })
   }, [activeIndex])
 
+  // Trap Tab focus inside the panel and restore focus to the trigger on close.
+  useDialogA11y(panelRef, onClose, open)
+
   if (!open) return null
 
   return (
@@ -229,7 +234,7 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
       <button type="button" className="fixed inset-0 bg-[var(--color-overlay-strong)] cursor-pointer hover:bg-[var(--color-overlay)] transition-colors" onClick={onClose} aria-label="Close search" />
 
       {/* Modal */}
-      <div role="dialog" aria-modal="true" aria-label="Site search" className="relative z-10 max-w-lg w-full mx-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl overflow-hidden">
+      <div ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Site search" className="relative z-10 max-w-lg w-full mx-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl overflow-hidden focus:outline-none">
         {/* Input row */}
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2.5">
           <svg
