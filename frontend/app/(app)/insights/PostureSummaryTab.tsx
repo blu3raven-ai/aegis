@@ -14,6 +14,7 @@ import type { ComplianceFramework, ControlSummaryItem } from "@/lib/client/compl
 import type { SlaBreachSummary } from "@/lib/client/sla-api"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Card } from "@/components/ui/Card"
+import { LinkButton } from "@/components/ui/LinkButton"
 import { Button } from "@/components/ui/Button"
 import { Skeleton } from "@/components/ui/Skeleton"
 import {
@@ -1560,7 +1561,7 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
     rows = null
   } else if (teams.length === 0) {
     rows = []
-    emptyMessage = "Team data not configured."
+    emptyMessage = "Team data not configured"
   } else {
     const slice = teams.slice(0, 6)
     // Bar length tracks the same quantity as the printed number (critical + high).
@@ -1599,32 +1600,24 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="relative">
-          {/* Ghosted preview bars so the empty card still reads as an instrument */}
-          <div className="space-y-3 opacity-30" aria-hidden="true">
-            {[0.9, 0.65, 0.45, 0.3].map((w, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="h-2.5 w-20 rounded-[2px] bg-[var(--color-surface-muted)]" />
-                <span className="h-1.5 flex-1 overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)]">
-                  <span
-                    className="block h-full rounded-[2px] bg-[var(--color-text-tertiary)]/60"
-                    style={{ width: `${w * 100}%` }}
-                  />
-                </span>
-                <span className="h-2.5 w-5 rounded-[2px] bg-[var(--color-surface-muted)]" />
-              </div>
-            ))}
-          </div>
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-center">
-            <p className="text-sm text-[var(--color-text-secondary)]">{emptyMessage}</p>
-            <Link
+        <section className="flex flex-col items-center rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-4 text-center">
+          <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--color-text-primary)]">
+            {emptyMessage}
+          </h3>
+          <p className="mt-1 max-w-sm text-sm leading-relaxed text-[var(--color-text-secondary)]">
+            Group repositories into teams to see where critical and high risk concentrates.
+          </p>
+          <div className="mt-3">
+            <LinkButton
               href="/teams"
-              className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-accent)] hover:underline"
+              variant="primary"
+              size="sm"
+              trailingIcon={<span aria-hidden="true">→</span>}
             >
-              Set up teams →
-            </Link>
+              Set up teams
+            </LinkButton>
           </div>
-        </div>
+        </section>
       ) : (
         <div className="space-y-3">
           {rows.map((row) => (
