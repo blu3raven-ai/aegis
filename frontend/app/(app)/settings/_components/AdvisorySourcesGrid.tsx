@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react"
 import Link from "next/link"
+import { Database, ShieldCheck } from "lucide-react"
 import { useLicense } from "@/lib/client/license/client"
 import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
@@ -162,10 +163,11 @@ function MaskedKeyDisplay({ id, maskedValue, canEdit, onChangeClick }: MaskedKey
 // and instructions open in a modal (opened on enable or via the key button) so
 // the section stays uncluttered.
 function CompactSourceCard({
-  name, desc, enabled, hasKey, canEdit, onToggle, modalTitle, children,
+  name, desc, icon, enabled, hasKey, canEdit, onToggle, modalTitle, children,
 }: {
   name: string
   desc: string
+  icon: ReactNode
   enabled: boolean
   hasKey: boolean
   canEdit: boolean
@@ -181,9 +183,14 @@ function CompactSourceCard({
         : "border-[var(--color-border)] bg-[var(--color-surface)]"
     }`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <span className="font-medium text-[var(--color-text-primary)]">{name}</span>
-          <p className="text-xs text-[var(--color-text-secondary)]">{desc}</p>
+        <div className="flex min-w-0 items-start gap-3.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)] ring-1 ring-inset ring-[var(--color-border)]">
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <span className="text-sm font-semibold text-[var(--color-text-primary)]">{name}</span>
+            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">{desc}</p>
+          </div>
         </div>
         <ToggleSwitch
           checked={enabled}
@@ -276,6 +283,7 @@ function NvdCard({ state, handlers, canEdit, variant = "inline" }: { state: Advi
       <CompactSourceCard
         name="NVD (NIST)"
         desc="National Vulnerability Database"
+        icon={<Database className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />}
         enabled={enabled}
         hasKey={hasKey}
         canEdit={canEdit}
@@ -382,6 +390,7 @@ function GhsaCard({ state, handlers, canEdit, variant = "inline" }: { state: Adv
       <CompactSourceCard
         name="GitHub Advisory Database"
         desc="GHSA-enriched Vulnerability Database"
+        icon={<ShieldCheck className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />}
         enabled={enabled}
         hasKey={hasKey}
         canEdit={canEdit}

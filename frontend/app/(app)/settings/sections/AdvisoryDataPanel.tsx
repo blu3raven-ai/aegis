@@ -47,18 +47,7 @@ export function AdvisoryDataDetail({ onChanged }: DetailComponentProps) {
   return (
     <div className="flex flex-col gap-6">
       <AdvisoryMirrorCard canRefresh={canEdit} />
-      <AdvisorySourcesCard canEdit={canEdit} />
-      <SettingsCard
-        eyebrow="Suggested add-on"
-        title="Argus — Hosted Threat Intelligence"
-        subtitle="Layer exploit availability, chain risk, and advisory context on top of the built-in feeds above."
-      >
-        <ArgusConnectionContent
-          canEdit={canEdit}
-          sessionLoading={permLoading}
-          onActiveChange={() => onChanged?.()}
-        />
-      </SettingsCard>
+      <AdvisorySourcesCard canEdit={canEdit} sessionLoading={permLoading} onChanged={onChanged} />
     </div>
   )
 }
@@ -218,7 +207,7 @@ type AdvisorySourceDraft = {
   editingKey: boolean
 }
 
-function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
+function AdvisorySourcesCard({ canEdit, sessionLoading, onChanged }: { canEdit: boolean; sessionLoading: boolean; onChanged?: () => void }) {
   const [loaded, setLoaded] = useState(false)
   const [initialNvd, setInitialNvd] = useState({ enabled: true, apiKey: "", hint: "" })
   const [initialGhsa, setInitialGhsa] = useState({ enabled: false, apiKey: "", hint: "" })
@@ -339,9 +328,10 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
   return (
     <SettingsCard
       eyebrow="Advisory Sources"
-      title="Optional Enrichment API Keys"
-      subtitle="Optional API keys that enrich matched vulnerabilities with CVSS scores, fix versions, and advisory detail. Applied to both dependency and container scanning."
+      title="Enrichment Sources"
+      subtitle="Enrich matched vulnerabilities with CVSS scores, fix versions, and advisory detail across dependency and container scanning. NVD and GHSA are free API keys; Argus is a hosted add-on."
     >
+      <div className="flex flex-col gap-3">
       <fieldset disabled={!canEdit || !loaded} className="disabled:opacity-50">
         <AdvisorySourcesGrid
           variant="compact"
@@ -366,7 +356,15 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
             },
           }}
         />
-        <div className="mt-6 border-t border-[var(--color-border)] pt-6">
+      </fieldset>
+      <ArgusConnectionContent
+        canEdit={canEdit}
+        sessionLoading={sessionLoading}
+        onActiveChange={() => onChanged?.()}
+        isAddon
+      />
+      </div>
+      <fieldset disabled={!canEdit || !loaded} className="mt-6 border-t border-[var(--color-border)] pt-6 disabled:opacity-50">
           <SettingsRow
             label="Flag recently published versions"
             description="Look up each dependency version's publish date (via deps.dev) to flag supply-chain-fresh releases. Off by default: sends package names to deps.dev, so leave off for air-gapped installs."
@@ -416,7 +414,6 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
               onChange={setBaseImageRecommend}
             />
           </SettingsRow>
-        </div>
       </fieldset>
     </SettingsCard>
   )

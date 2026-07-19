@@ -94,12 +94,16 @@ interface ArgusConnectionContentProps {
   /** Notify the parent when this connection's active state changes, so the
    *  shared "which provider is on" state stays in sync. */
   onActiveChange?: (active: boolean) => void
+  /** Rendered inline as a row alongside the built-in advisory sources: mark the
+   *  card with an "Add-on" pill so its paid-plugin status reads at a glance. */
+  isAddon?: boolean
 }
 
 export function ArgusConnectionContent({
   canEdit = true,
   sessionLoading = false,
   onActiveChange,
+  isAddon = false,
 }: ArgusConnectionContentProps = {}) {
   const [conn, setConn] = useState<ArgusConnection | null>(null)
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
@@ -258,7 +262,14 @@ export function ArgusConnectionContent({
             <Eye className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <span className="text-sm font-semibold text-[var(--color-text-primary)]">Blu3Raven Argus</span>
+            <span className="inline-flex items-center gap-2">
+              <span className="text-sm font-semibold text-[var(--color-text-primary)]">Blu3Raven Argus</span>
+              {isAddon && (
+                <span className="inline-flex items-center rounded-full bg-[var(--color-argus-subtle)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-argus)] ring-1 ring-inset ring-[var(--color-argus-border)]">
+                  Add-on
+                </span>
+              )}
+            </span>
             <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
               AI-powered threat intelligence: exploit availability, chain risk (how vulnerabilities combine into an attack path), and advisory enrichment on top of the built-in feeds. Works with any plan.
             </p>
