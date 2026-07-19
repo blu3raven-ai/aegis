@@ -56,6 +56,7 @@ type FetchState = "idle" | "loading" | "done" | "error"
 export function SearchModal({ open, onClose }: SearchModalProps) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const [query, setQuery] = useState("")
   const [activeIndex, setActiveIndex] = useState(0)
   const [fetchState, setFetchState] = useState<FetchState>("idle")
@@ -215,15 +216,20 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
     [flatList, activeIndex, navigateAndClose, onClose],
   )
 
+  // Keep the keyboard-highlighted result scrolled into view within the list.
+  useEffect(() => {
+    listRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: "nearest" })
+  }, [activeIndex])
+
   if (!open) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
       {/* Backdrop */}
-      <button type="button" className="fixed inset-0 bg-[var(--color-overlay-strong)] cursor-pointer hover:bg-[var(--color-overlay)] transition-colors" onClick={onClose} aria-label="Close search" title="Click to close" />
+      <button type="button" className="fixed inset-0 bg-[var(--color-overlay-strong)] cursor-pointer hover:bg-[var(--color-overlay)] transition-colors" onClick={onClose} aria-label="Close search" />
 
       {/* Modal */}
-      <div className="relative z-10 max-w-lg w-full mx-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl overflow-hidden">
+      <div role="dialog" aria-modal="true" aria-label="Site search" className="relative z-10 max-w-lg w-full mx-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl overflow-hidden">
         {/* Input row */}
         <div className="flex items-center gap-2 border-b border-[var(--color-border)] px-3 py-2.5">
           <svg
@@ -244,6 +250,12 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Search…"
+            role="combobox"
+            aria-expanded={flatList.length > 0}
+            aria-controls="search-results-list"
+            aria-activedescendant={flatList.length > 0 ? `search-opt-${activeIndex}` : undefined}
+            aria-autocomplete="list"
+            aria-label="Search"
             className="flex-1 bg-transparent text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-secondary)] outline-none"
           />
           {isLoading && (
@@ -270,9 +282,9 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
             Search unavailable. Showing local results only.
           </div>
         ) : flatList.length > 0 ? (
-          <div className="max-h-72 overflow-y-auto py-2">
+          <div ref={listRef} id="search-results-list" role="listbox" aria-label="Search results" className="max-h-72 overflow-y-auto py-2">
             {groups.map((grp) => (
-              <div key={grp}>
+              <div key={grp} role="group" aria-label={grp}>
                 <div className="px-3 py-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                   {grp}
                 </div>
@@ -282,7 +294,11 @@ export function SearchModal({ open, onClose }: SearchModalProps) {
                   return (
                     <button
                       key={`${grp}-${item.href}-${i}`}
+                      id={`search-opt-${flatIndex}`}
                       type="button"
+                      role="option"
+                      aria-selected={isActive}
+                      data-active={isActive || undefined}
                       onClick={() => navigateAndClose(item.href)}
                       onMouseEnter={() => setActiveIndex(flatIndex)}
                       className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm transition-colors ${

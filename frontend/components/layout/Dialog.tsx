@@ -55,7 +55,6 @@ export function Dialog({
         className="fixed inset-0 bg-[var(--color-overlay-strong)] transition-opacity cursor-pointer hover:bg-[var(--color-overlay)]"
         onClick={onClose}
         aria-hidden="true"
-        title="Click to close"
       />
 
       {/* Dialog */}
