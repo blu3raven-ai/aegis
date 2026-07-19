@@ -714,11 +714,13 @@ type StackLayer = "low" | "medium" | "high" | "critical"
 
 const STACK_ORDER: StackLayer[] = ["low", "medium", "high", "critical"]
 
+// Quiet fills, crisp strokes — the layer boundary lines carry the data while
+// the fill stays a faint tint, matching the backlog trend chart's language.
 const STACK_FILL: Record<StackLayer, { color: string; opacity: number }> = {
-  low:      { color: "var(--color-severity-low)",      opacity: 0.55 },
-  medium:   { color: "var(--color-severity-medium)",   opacity: 0.60 },
-  high:     { color: "var(--color-severity-high)",     opacity: 0.75 },
-  critical: { color: "var(--color-severity-critical)", opacity: 0.85 },
+  low:      { color: "var(--color-severity-low)",      opacity: 0.14 },
+  medium:   { color: "var(--color-severity-medium)",   opacity: 0.16 },
+  high:     { color: "var(--color-severity-high)",     opacity: 0.20 },
+  critical: { color: "var(--color-severity-critical)", opacity: 0.24 },
 }
 
 /** Composite risk score (0-100) over the selected window — the detail view of
@@ -1180,8 +1182,8 @@ function PostureTrendChart({
                     d={points.map((_, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(cumulative[i][idx]).toFixed(1)}`).join(" ")}
                     fill="none"
                     stroke={STACK_FILL[layer].color}
-                    strokeWidth={idx === STACK_ORDER.length - 1 ? 1.5 : 0.75}
-                    strokeOpacity={STACK_FILL[layer].opacity + 0.1}
+                    strokeWidth={idx === STACK_ORDER.length - 1 ? 1.5 : 1}
+                    strokeOpacity={0.9}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     pathLength={1}
@@ -1901,8 +1903,13 @@ function SeverityMixChart({
     })
   })
 
+  // Upper boundary of a layer — stroked as the crisp data line above the tint.
+  function boundaryPath(layerIdx: number): string {
+    return points.map((_, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(cum[i][layerIdx]).toFixed(1)}`).join(" ")
+  }
+
   function areaPath(layerIdx: number): string {
-    const top = points.map((_, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(cum[i][layerIdx]).toFixed(1)}`).join(" ")
+    const top = boundaryPath(layerIdx)
     if (layerIdx === 0) {
       return top + ` L${xOf(points.length - 1).toFixed(1)},${yOf(0).toFixed(1)} L${xOf(0).toFixed(1)},${yOf(0).toFixed(1)} Z`
     }
@@ -1944,6 +1951,11 @@ function SeverityMixChart({
                 </linearGradient>
               ))}
             </defs>
+            <g stroke="var(--color-border)" strokeOpacity="0.4" strokeDasharray="3 4">
+              {[0, 0.5, 1].map((g) => (
+                <line key={g} x1={PAD_L} x2={PAD_L + plotW} y1={yOf(g)} y2={yOf(g)} />
+              ))}
+            </g>
             <g fontSize="10" fill="var(--color-text-tertiary)">
               {[0, 0.5, 1].map((g) => (
                 <text key={g} x="0" y={yOf(g) + 3.5}>{Math.round(g * 100)}%</text>
@@ -1954,6 +1966,21 @@ function SeverityMixChart({
                 key={layer}
                 d={areaPath(idx)}
                 fill={`url(#${gradId}-${layer})`}
+                className="chart-rise"
+                style={{ animationDelay: `${idx * 90}ms` }}
+              />
+            ))}
+            {/* Inner boundary strokes only — the top edge of a 100%-normalized
+                stack is a constant line and would just double the gridline. */}
+            {STACK_ORDER.slice(0, -1).map((layer, idx) => (
+              <path
+                key={`${layer}-edge`}
+                d={boundaryPath(idx)}
+                fill="none"
+                stroke={STACK_FILL[layer].color}
+                strokeWidth={1}
+                strokeOpacity={0.9}
+                vectorEffect="non-scaling-stroke"
                 className="chart-rise"
                 style={{ animationDelay: `${idx * 90}ms` }}
               />
@@ -2015,10 +2042,6 @@ function SlaComplianceGauge({
     compliancePct >= 90 ? "var(--color-status-ok)"
     : compliancePct >= 70 ? "var(--color-severity-medium)"
     : "var(--color-severity-critical)"
-  const toneText =
-    compliancePct >= 90 ? "var(--color-status-ok-text)"
-    : compliancePct >= 70 ? "var(--color-severity-medium-text)"
-    : "var(--color-severity-critical-text)"
 
   const bySev = [
     { key: "critical", label: "Critical", n: slaPosture.criticalBreached },
@@ -2039,20 +2062,20 @@ function SlaComplianceGauge({
             <circle
               cx={cx} cy={cy} r={r} fill="none"
               stroke="var(--color-surface-raised)" strokeWidth={stroke}
-              strokeDasharray={`${arcLen} ${circ - arcLen}`} strokeLinecap="round"
+              strokeDasharray={`${arcLen} ${circ - arcLen}`} strokeLinecap="butt"
               transform={`rotate(${startAngle} ${cx} ${cy})`}
             />
             <circle
               cx={cx} cy={cy} r={r} fill="none"
-              stroke={tone} strokeWidth={stroke}
-              strokeDasharray={`${filled} ${circ - filled}`} strokeLinecap="round"
+              stroke={tone} strokeWidth={stroke} strokeOpacity={0.85}
+              strokeDasharray={`${filled} ${circ - filled}`} strokeLinecap="butt"
               transform={`rotate(${startAngle} ${cx} ${cy})`}
               className="chart-arc-sweep"
               style={{ ["--arc-len" as string]: filled }}
             />
           </svg>
           <span className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-semibold leading-none tabular-nums" style={{ color: toneText }}>
+            <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
               {compliancePct}%
             </span>
             <span className="mt-0.5 text-2xs font-mono font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">

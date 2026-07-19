@@ -36,8 +36,8 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
     .map((key) => ({ key, value: key === "unrated" ? counts.unknown : counts[key] }))
     .filter((s) => s.value > 0)
 
-  const r = 43
-  const stroke = 10
+  const r = 45
+  const stroke = 7
   const circ = 2 * Math.PI * r
   // Small visual gap between adjacent arcs for a segmented instrument look.
   // Skipped when there's only one arc (a lone slice needs no separator).
@@ -87,6 +87,7 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
                 fill="none"
                 stroke={SEV_VARS[seg.key]}
                 strokeWidth={stroke}
+                strokeOpacity={0.85}
                 strokeDasharray={`${seg.dashLen} ${circ - seg.dashLen}`}
                 strokeDashoffset={seg.dashOffset}
                 strokeLinecap="butt"
@@ -99,7 +100,7 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
             ))}
           </svg>
           <span className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold leading-none tabular-nums text-[var(--color-text-primary)]">
+            <span className="text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">
               {counts.total.toLocaleString()}
             </span>
             <span className="mt-0.5 text-2xs font-mono font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
@@ -116,7 +117,7 @@ export function SeverityDonut({ snap }: { snap: PostureSnapshotResponse }) {
               className="group -mx-2 flex items-center gap-2 rounded-md px-2 py-1 text-xs transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
             >
               <span
-                className="h-3 w-3 rounded-full ring-2 ring-transparent transition-all group-hover:ring-[var(--color-surface)]"
+                className="h-1.5 w-1.5 rounded-full"
                 style={{ background: SEV_VARS[seg.key] }}
                 aria-hidden="true"
               />
@@ -186,6 +187,7 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
                   style={{
                     width: `${(repo.critical / repo.open) * 100}%`,
                     background: SEV_VARS.critical,
+                    opacity: 0.85,
                   }}
                 />
               )}
@@ -196,6 +198,7 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
                   style={{
                     width: `${(repo.high / repo.open) * 100}%`,
                     background: SEV_VARS.high,
+                    opacity: 0.85,
                   }}
                 />
               )}
@@ -203,7 +206,7 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
                 <span
                   className="h-full flex-1"
                   title={`Other: ${(repo.open - repo.critical - repo.high).toLocaleString()}`}
-                  style={{ background: SEV_VARS.medium, opacity: 0.5 }}
+                  style={{ background: "var(--color-text-tertiary)", opacity: 0.35 }}
                 />
               )}
             </div>
