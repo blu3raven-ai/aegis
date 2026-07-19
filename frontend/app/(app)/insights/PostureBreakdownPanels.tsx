@@ -162,11 +162,16 @@ export function TopReposPanel({ repos }: { repos: PostureTopRepository[] }) {
             className="-mx-2 block rounded-md px-2 py-1.5 transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]"
           >
             <div className="flex items-center justify-between mb-1">
-              <span
-                className="text-xs font-medium text-[var(--color-text-primary)] truncate max-w-[200px]"
-                title={repo.name}
-              >
-                {repo.name}
+              <span className="flex min-w-0 items-baseline gap-2">
+                <span className="font-mono text-2xs tabular-nums text-[var(--color-text-tertiary)]" aria-hidden="true">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span
+                  className="text-xs font-medium text-[var(--color-text-primary)] truncate max-w-[200px]"
+                  title={repo.name}
+                >
+                  {repo.name}
+                </span>
               </span>
               <span className="flex items-center gap-2 text-[11px] tabular-nums shrink-0">
                 {repo.critical > 0 && (

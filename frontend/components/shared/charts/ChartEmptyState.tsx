@@ -34,7 +34,7 @@ export function ChartEmptyState({ title, message }: ChartEmptyStateProps) {
 
   return (
     <Card className="rounded-md">
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)]">{title}</h2>
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{title}</h2>
       <div className="relative mt-3">
         <svg
           viewBox={`0 0 ${W} ${H}`}

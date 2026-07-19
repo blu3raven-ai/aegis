@@ -1302,9 +1302,9 @@ function PostureTrendChart({
 // ── Discovery Velocity Chart ────────────────────────────────────────────────
 
 /**
- * Dual-bar chart showing findings introduced vs resolved per day.
- * "Resolved" is derived: resolved[i] = max(0, new[i] − netChange[i])
- * where netChange = open[i] − open[i−1].
+ * Mirrored flow chart: findings introduced per day above the midline,
+ * resolved mirrored below. "Resolved" is derived:
+ * resolved[i] = max(0, new[i] − netChange[i]) where netChange = open[i] − open[i−1].
  */
 function DiscoveryVelocityChart({
   trend,
@@ -1315,7 +1315,6 @@ function DiscoveryVelocityChart({
 }) {
   const [hoverIdx, setHoverIdx] = React.useState<number | null>(null)
   const [boxRef, W] = useMeasuredWidth<HTMLDivElement>()
-  const barId = `vel-${React.useId().replace(/:/g, "")}`
   const points = trend.points
 
   const derived = React.useMemo(() => points.map((p, i) => {
@@ -1359,12 +1358,16 @@ function DiscoveryVelocityChart({
   const plotW = Math.max(W - PAD_L - PAD_R, 0)
   const plotH = H - PAD_T - PAD_B
   const maxVal = Math.max(...derived.map(d => Math.max(d.introduced, d.resolved)), 1)
-  const yOf = (v: number) => PAD_T + plotH - (v / maxVal) * plotH
+  // Mirror layout: introduced grows up from the midline, resolved mirrors
+  // down. One column per day instead of paired side-by-side bars keeps a long
+  // range readable instead of dissolving into alternating-colour noise.
+  const yMid = PAD_T + plotH / 2
+  const half = plotH / 2 - 2
+  const hOf = (v: number) => (v / maxVal) * half
 
   const groupW = plotW / Math.max(points.length, 1)
-  const barGap = 1.5
-  const barW = Math.max(1, (groupW * 0.82) / 2 - barGap / 2)
-  const xOfGroup = (i: number) => PAD_L + i * groupW + groupW * 0.09
+  const barW = Math.max(1.5, groupW * 0.6)
+  const xOfGroup = (i: number) => PAD_L + i * groupW + (groupW - barW) / 2
 
   function idxFromPointer(e: React.PointerEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -1373,7 +1376,7 @@ function DiscoveryVelocityChart({
     setHoverIdx(Math.round(frac * (points.length - 1)))
   }
 
-  const gridSteps = [0.25, 0.5, 0.75, 1.0]
+  const gridSteps = [0.5, 1.0]
   const hov = hoverIdx !== null ? { ...derived[hoverIdx], date: points[hoverIdx].date, idx: hoverIdx } : null
 
   return (
@@ -1428,62 +1431,56 @@ function DiscoveryVelocityChart({
             role="img"
             aria-label="Findings introduced vs resolved per day"
           >
-            <defs>
-              <linearGradient id={`${barId}-intro`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-severity-high)" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="var(--color-severity-high)" stopOpacity="0.35" />
-              </linearGradient>
-              <linearGradient id={`${barId}-resolved`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-status-ok)" stopOpacity="0.85" />
-                <stop offset="100%" stopColor="var(--color-status-ok)" stopOpacity="0.3" />
-              </linearGradient>
-            </defs>
-
-            {/* Subtle grid */}
-            <g stroke="var(--color-border)" strokeOpacity="0.3">
+            {/* Mirrored scale grid around the zero midline */}
+            <g stroke="var(--color-border)" strokeOpacity="0.35" strokeDasharray="3 4">
               {gridSteps.map((g) => (
-                <line key={g} x1={PAD_L} y1={yOf(maxVal * g)} x2={W - PAD_R} y2={yOf(maxVal * g)} />
+                <g key={g}>
+                  <line x1={PAD_L} y1={yMid - hOf(maxVal * g)} x2={W - PAD_R} y2={yMid - hOf(maxVal * g)} />
+                  <line x1={PAD_L} y1={yMid + hOf(maxVal * g)} x2={W - PAD_R} y2={yMid + hOf(maxVal * g)} />
+                </g>
               ))}
             </g>
+            <line
+              x1={PAD_L} y1={yMid} x2={W - PAD_R} y2={yMid}
+              stroke="var(--color-border-strong)" strokeOpacity="0.7"
+            />
             <g fontSize="10" fill="var(--color-text-tertiary)">
-              {gridSteps.map((g) => (
-                <text key={g} x="0" y={yOf(maxVal * g) + 3.5} textAnchor="start">
-                  {Math.round(maxVal * g)}
-                </text>
-              ))}
+              <text x="0" y={yMid - hOf(maxVal) + 3.5} textAnchor="start">{maxVal}</text>
+              <text x="0" y={yMid + 3.5} textAnchor="start">0</text>
+              <text x="0" y={yMid + hOf(maxVal) + 3.5} textAnchor="start">{maxVal}</text>
             </g>
 
-            {/* Bars */}
+            {/* Bars — introduced above the midline, resolved below */}
             {derived.map((d, i) => {
               const gx = xOfGroup(i)
-              const introH = Math.max(0, (d.introduced / maxVal) * plotH)
-              const resolvedH = Math.max(0, (d.resolved / maxVal) * plotH)
+              const introH = hOf(d.introduced)
+              const resolvedH = hOf(d.resolved)
               const isHov = hoverIdx === i
               const dimmed = hoverIdx !== null && !isHov
-              const delay = `${Math.min(i * 12, 360)}ms`
+              const delay = `${Math.min(i * 8, 320)}ms`
               return (
                 <g key={i} opacity={dimmed ? 0.35 : 1} style={{ transition: "opacity 80ms" }}>
                   {introH > 0 && (
                     <rect
                       x={gx}
-                      y={yOf(d.introduced)}
+                      y={yMid - introH}
                       width={barW}
                       height={introH}
-                      fill={`url(#${barId}-intro)`}
-                      rx="1.5"
-                      className="chart-grow"
+                      fill="var(--color-severity-high)"
+                      fillOpacity="0.8"
+                      className="chart-fade"
                       style={{ animationDelay: delay }}
                     />
                   )}
                   {resolvedH > 0 && (
                     <rect
-                      x={gx + barW + barGap}
-                      y={yOf(d.resolved)}
+                      x={gx}
+                      y={yMid + 1}
                       width={barW}
                       height={resolvedH}
-                      fill={`url(#${barId}-resolved)`}
-                      rx="1.5"
-                      className="chart-grow"
+                      fill="var(--color-status-ok)"
+                      fillOpacity="0.65"
+                      className="chart-fade"
                       style={{ animationDelay: delay }}
                     />
                   )}
@@ -1602,7 +1599,32 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-[var(--color-text-secondary)]">{emptyMessage}</p>
+        <div className="relative">
+          {/* Ghosted preview bars so the empty card still reads as an instrument */}
+          <div className="space-y-3 opacity-30" aria-hidden="true">
+            {[0.9, 0.65, 0.45, 0.3].map((w, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="h-2.5 w-20 rounded-[2px] bg-[var(--color-surface-muted)]" />
+                <span className="h-1.5 flex-1 overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)]">
+                  <span
+                    className="block h-full rounded-[2px] bg-[var(--color-text-tertiary)]/60"
+                    style={{ width: `${w * 100}%` }}
+                  />
+                </span>
+                <span className="h-2.5 w-5 rounded-[2px] bg-[var(--color-surface-muted)]" />
+              </div>
+            ))}
+          </div>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 text-center">
+            <p className="text-sm text-[var(--color-text-secondary)]">{emptyMessage}</p>
+            <Link
+              href="/teams"
+              className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-accent)] hover:underline"
+            >
+              Set up teams →
+            </Link>
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           {rows.map((row) => (
@@ -1652,23 +1674,30 @@ function ComplianceSnapshot({
 
     if (pct >= 0.95) {
       return (
-        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]">
+        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]">
           On track
         </span>
       )
     }
     if (pct >= 0.8) {
       return (
-        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold bg-[var(--color-severity-medium)]/15 text-[var(--color-severity-medium-text)]">
+        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide bg-[var(--color-severity-medium)]/15 text-[var(--color-severity-medium-text)]">
           Partial
         </span>
       )
     }
     return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold bg-[var(--color-severity-critical)]/15 text-[var(--color-severity-critical-text)]">
+      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide bg-[var(--color-severity-critical)]/15 text-[var(--color-severity-critical-text)]">
         At risk
       </span>
     )
+  }
+
+  /** Progress-bar tone tied to the same thresholds as the status badge. */
+  function barTone(pct: number): string {
+    if (pct >= 0.95) return "bg-[var(--color-status-ok)]/70"
+    if (pct >= 0.8) return "bg-[var(--color-severity-medium)]/70"
+    return "bg-[var(--color-severity-critical)]/70"
   }
 
   return (
@@ -1698,12 +1727,26 @@ function ComplianceSnapshot({
           }
           const passing = controls.filter((c) => c.finding_count === 0).length
           const total = controls.length
+          const pct = total > 0 ? passing / total : 0
           return (
             <Card key={fw.id} padding="none" className="rounded-md px-5 py-4">
-              <p className="text-xs font-semibold text-[var(--color-text-primary)]">{fw.label}</p>
-              <div className="mt-2">{statusBadge(controls)}</div>
+              <p className="truncate text-xs font-semibold text-[var(--color-text-primary)]" title={fw.label}>
+                {fw.label}
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                {statusBadge(controls)}
+                <span className="font-mono text-2xs tabular-nums text-[var(--color-text-tertiary)]">
+                  {passing}/{total}
+                </span>
+              </div>
+              <div className="mt-2.5 h-1 overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)]" aria-hidden="true">
+                <div
+                  className={`h-full rounded-[2px] origin-left chart-bar-grow ${barTone(pct)}`}
+                  style={{ width: `${Math.round(pct * 100)}%` }}
+                />
+              </div>
               <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
-                {passing} of {total} controls
+                {passing} of {total} controls passing
               </p>
             </Card>
           )
@@ -2152,7 +2195,7 @@ export function PostureSummaryTab({
   return (
     <div className="px-6 py-5 space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-[var(--color-text-secondary)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Trends over the last {RANGE_LABEL[rangeDays]}
         </p>
         <SegmentedControl
