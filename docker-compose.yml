@@ -117,7 +117,7 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:3000/healthz"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
       interval: 30s
       timeout: 3s
       start_period: 15s
@@ -136,31 +136,17 @@ services:
 
   runner:
     build: ./runner
-    # Hardened like its siblings, but adapted for the rootless-podman detonation
-    # sandbox this container runs internally:
-    #   - drop all caps, add back only SETUID/SETGID — newuidmap/newgidmap need
-    #     them to map the nested container's user namespace.
-    #   - deliberately NO `no-new-privileges`: it would disable those setuid
-    #     helpers and the sandbox could not start.
-    #   - read-only root fs, with the few paths podman/scanners must write to
-    #     mounted writable below.
-    cap_drop: [ALL]
-    cap_add: [SETUID, SETGID]
-    read_only: true
-    tmpfs:
-      # Scanner + podman scratch. exec is required (helpers exec from /tmp), so
-      # only nosuid is set. If large scans exhaust RAM, move /tmp to a named
-      # disk volume instead.
-      - /tmp:nosuid,size=1g,uid=10001,gid=10001
-      - /run:nosuid,size=64m,uid=10001,gid=10001
+    # NOTE: this service intentionally does NOT carry the read-only / cap-drop
+    # hardening its siblings do. It runs a nested rootless-podman detonation
+    # sandbox that needs userns setup (newuidmap/newgidmap) and writable podman
+    # state; applying that hardening to the outer container breaks the sandbox.
+    # The untrusted-code path is hardened per detonation container instead.
     environment:
       BACKEND_URL: http://aegis:3000
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       RUNNER_NAME: ${RUNNER_NAME:-runner}
       SCANNER_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_scanner
       SCANNER_WORKSPACE_VOLUME: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_runner-workspace
-      # Rootless podman runtime dir on the writable tmpfs above.
-      XDG_RUNTIME_DIR: /run
     deploy:
       resources:
         limits:
@@ -168,9 +154,6 @@ services:
     volumes:
       - runner-workspace:/workspace
       - aegis-grype-cache:/home/aegis/.cache/grype
-      # podman vfs graphroot — disk-backed (vfs makes full image copies, so a
-      # tmpfs would exhaust RAM) and aegis-owned via the Dockerfile pre-create.
-      - runner-containers:/home/aegis/.local/share/containers
     networks:
       - internal
     restart: unless-stopped
@@ -189,4 +172,3 @@ volumes:
   minio_data:
   runner-workspace:
   aegis-grype-cache:
-  runner-containers:
