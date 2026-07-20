@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { FindingsDrawerShell } from "@/components/shared/FindingsDrawerShell"
+import { Sheet } from "@/components/ui/Sheet"
 import { AVAILABLE_SCOPES } from "./ScopesBadgeList"
 import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
@@ -49,9 +49,8 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
   }
 
   return (
-    <FindingsDrawerShell open={open} onClose={onClose} label="Create API key">
+    <Sheet open={open} onClose={onClose} title="Create API key" variant="modal" size="md">
       <div className="p-6">
-        <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">Create API key</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <FormField label="Name" htmlFor="apikey-name" required>
             <Input
@@ -123,6 +122,6 @@ export function CreateApiKeyDialog({ open, onClose, onSubmit }: Props) {
           </div>
         </form>
       </div>
-    </FindingsDrawerShell>
+    </Sheet>
   )
 }
