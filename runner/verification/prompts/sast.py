@@ -94,8 +94,8 @@ def hunter_user_message(
         f"  tool: {finding.get('tool')}\n"
         f"  rule: {finding.get('rule', finding.get('check_id', ''))}\n"
         f"  severity: {finding.get('severity')}\n"
-        f"  file: {finding.get('file')}\n"
-        f"  line: {finding.get('line')}\n"
+        f"  file: {finding.get('file') or finding.get('file_path')}\n"
+        f"  line: {finding.get('line') or finding.get('start_line')}\n"
         "\n"
         f"Code context:\n```\n{code_context}\n```\n"
     ]

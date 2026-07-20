@@ -46,3 +46,19 @@ def test_chat_raises_on_rate_limit_with_retry_after():
     with pytest.raises(LlmRateLimitedError) as exc_info:
         client.chat([{"role": "user", "content": "x"}])
     assert exc_info.value.retry_after_seconds == 30
+
+
+def test_chat_strips_markdown_fences_from_content():
+    # Self-hostable models routinely wrap JSON in ```json fences despite the
+    # "raw JSON only" instruction. chat() must strip them so callers parsing
+    # resp.content don't fail and burn a repair round-trip on every call.
+    fenced = '```json\n{"exploit_chain": "x", "evidence": []}\n```'
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(lambda r: _ok(fenced)))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert resp.content == '{"exploit_chain": "x", "evidence": []}'
+
+
+def test_chat_leaves_unfenced_content_untouched():
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(lambda r: _ok('{"a": 1}')))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert resp.content == '{"a": 1}'

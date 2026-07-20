@@ -46,6 +46,15 @@ class VerificationResult:
     tokens_out: int
     verification_metadata: dict = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        # Surface token spend into metadata so the backend usage ledger
+        # (record_usage_from_findings) can sum it per scan. Scanners copy
+        # verification_metadata onto the finding; without this the totals live
+        # only on the result object and never reach the ledger, so Insights
+        # shows zero usage despite real LLM calls.
+        self.verification_metadata["tokens_in"] = self.tokens_in
+        self.verification_metadata["tokens_out"] = self.tokens_out
+
 
 def _read_code_context(file_path: str, line: int, repo_root: str, *, window: int = 40) -> str:
     full = Path(repo_root) / file_path
@@ -127,8 +136,19 @@ def verify_finding(
     matched_risks = accepted_risks_for_finding(finding, accepted_risks)
     declared_ids = {str(r.get("id")) for r in matched_risks}
 
-    code_context = _read_code_context(
-        finding.get("file", ""), int(finding.get("line", 1)), repo_root,
+    # Findings arrive with either (file, line) [semgrep path] or
+    # (file_path, start_line) [SARIF normalize path]. The normalize path
+    # already attaches a code_window read from source, so prefer it; only
+    # fall back to a disk read when no window was attached. Without this,
+    # the SARIF-path finding has file=None and the hunter sees
+    # "// not readable" — every verdict degrades to hunter_no_chain.
+    code_context = (
+        finding.get("code_window")
+        or _read_code_context(
+            finding.get("file") or finding.get("file_path") or "",
+            int(finding.get("line") or finding.get("start_line") or 1),
+            repo_root,
+        )
     )
 
     reachability = (finding.get("detail") or {}).get("reachability") or None
