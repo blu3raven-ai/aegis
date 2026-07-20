@@ -125,7 +125,7 @@ def judge_prose_files(
             continue
 
         severity = verdict.severity if verdict.severity in _VALID_SEVERITIES else "high"
-        meta = {"engine": "llm"}
+        meta = {"engine": "llm", "tokens_in": result.tokens_in, "tokens_out": result.tokens_out}
         if escalated:
             meta["tier"] = "frontier"
             meta["escalated"] = True

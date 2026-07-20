@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -15,6 +16,22 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
+
+# Many self-hostable models wrap JSON in ```json ... ``` fences despite the
+# system prompt saying "raw JSON only". Stripping before validation avoids a
+# spurious repair round-trip that doubles token cost and can degrade the
+# verdict when the retry comes back emptier than the first attempt.
+_FENCE_OPEN = re.compile(r"^\s*```[a-zA-Z0-9_+-]*\s*\n?")
+_FENCE_CLOSE = re.compile(r"\n?\s*```\s*$")
+
+
+def _strip_fences(content: str) -> str:
+    s = content.strip()
+    if not s.startswith("```"):
+        return s
+    s = _FENCE_OPEN.sub("", s, count=1)
+    s = _FENCE_CLOSE.sub("", s, count=1)
+    return s.strip()
 
 _T = TypeVar("_T", bound=BaseModel)
 
@@ -137,13 +154,16 @@ class LlmClient:
 
         data = resp.json()
         try:
-            content = data["choices"][0]["message"]["content"]
+            # content can be null when the model refuses or hits a length cap;
+            # coerce to "" so _strip_fences and the repair path handle it
+            # instead of crashing on None.strip().
+            content = data["choices"][0]["message"].get("content") or ""
         except (KeyError, IndexError) as e:
             raise LlmError(f"malformed llm response: {e}") from e
 
         usage = data.get("usage", {})
         return LlmResponse(
-            content=content,
+            content=_strip_fences(content),
             tokens_in=int(usage.get("prompt_tokens", 0)),
             tokens_out=int(usage.get("completion_tokens", 0)),
             prompt_hash=prompt_hash,
@@ -180,7 +200,7 @@ class LlmClient:
             tokens_out += resp.tokens_out
             prompt_hashes.append(resp.prompt_hash)
             try:
-                parsed = model_cls.model_validate_json(resp.content)
+                parsed = model_cls.model_validate_json(_strip_fences(resp.content))
             except (ValidationError, ValueError) as exc:
                 last_error = str(exc)
                 if attempt >= max_repairs:
