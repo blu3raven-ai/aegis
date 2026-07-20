@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from urllib.parse import urlsplit
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
+
+import httpx
 
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
 
@@ -42,30 +45,114 @@ def _is_disallowed_ip(ip: str) -> bool:
     )
 
 
-def assert_sendable_url(url: str) -> None:
-    """Raise UnsafeURLError unless `url` is a public http(s) endpoint.
+def _resolve_public_ip(host: str, port: int | None = None) -> str:
+    """Resolve `host`, reject if ANY address is non-public, return the first IP.
 
-    Every address the host resolves to must be a global/public IP; a single
-    internal answer rejects the whole URL so a split-horizon name can't slip
-    through.
+    Rejecting on any single internal answer stops a split-horizon name from
+    slipping through. The returned IP lets callers *pin* the connection to the
+    address that was validated, closing the DNS-rebinding window between check
+    and connect.
     """
-    parts = urlsplit(url)
-    if parts.scheme not in _ALLOWED_SCHEMES:
-        raise UnsafeURLError(f"scheme not permitted: {parts.scheme!r}")
-
-    host = parts.hostname
-    if not host:
-        raise UnsafeURLError("missing host")
-
     try:
-        infos = socket.getaddrinfo(host, parts.port or None, proto=socket.IPPROTO_TCP)
+        infos = socket.getaddrinfo(host, port or None, proto=socket.IPPROTO_TCP)
     except socket.gaierror as exc:
         raise UnsafeURLError(f"host does not resolve: {host}") from exc
 
-    resolved = {info[4][0] for info in infos}
+    resolved = [info[4][0] for info in infos]
     if not resolved:
         raise UnsafeURLError(f"host does not resolve: {host}")
 
     for ip in resolved:
         if _is_disallowed_ip(ip):
             raise UnsafeURLError("destination resolves to a non-public address")
+    return resolved[0]
+
+
+def assert_sendable_url(url: str) -> None:
+    """Raise UnsafeURLError unless `url` is a public http(s) endpoint."""
+    parts = urlsplit(url)
+    if parts.scheme not in _ALLOWED_SCHEMES:
+        raise UnsafeURLError(f"scheme not permitted: {parts.scheme!r}")
+    host = parts.hostname
+    if not host:
+        raise UnsafeURLError("missing host")
+    _resolve_public_ip(host, parts.port)
+
+
+def assert_public_host(host: str) -> str:
+    """Validate a bare host (no scheme) and return the validated IP to connect to.
+
+    For raw-socket sinks (e.g. syslog TCP) that can't carry a URL scheme:
+    connect to the returned IP, not the hostname, so the connection can't be
+    rebound to an internal address after validation.
+    """
+    if not host:
+        raise UnsafeURLError("missing host")
+    return _resolve_public_ip(host)
+
+
+class _HostPinningTransport(httpx.AsyncHTTPTransport):
+    """Async httpx transport that restores the original hostname for TLS SNI.
+
+    Pairs with :func:`resolve_pinned_url`: the request URL carries the validated
+    IP so the connect can't be rebound, while SNI + certificate verification
+    still use the real hostname.
+    """
+
+    def __init__(self, hostname: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._hostname = hostname
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        request.extensions["sni_hostname"] = self._hostname.encode("ascii")
+        return await super().handle_async_request(request)
+
+
+class _SyncHostPinningTransport(httpx.HTTPTransport):
+    """Sync counterpart of :class:`_HostPinningTransport`."""
+
+    def __init__(self, hostname: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._hostname = hostname
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        request.extensions["sni_hostname"] = self._hostname.encode("ascii")
+        return super().handle_request(request)
+
+
+def _pin(url: str) -> tuple[str, str]:
+    """Validate `url` and return (ip_pinned_url, original_hostname). Raises UnsafeURLError."""
+    parts = urlsplit(url)
+    if parts.scheme not in _ALLOWED_SCHEMES:
+        raise UnsafeURLError(f"scheme not permitted: {parts.scheme!r}")
+    host = parts.hostname
+    if not host:
+        raise UnsafeURLError("missing host")
+    ip = _resolve_public_ip(host, parts.port)
+    ip_host = f"[{ip}]" if ipaddress.ip_address(ip).version == 6 else ip
+    netloc = f"{ip_host}:{parts.port}" if parts.port else ip_host
+    pinned = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    return pinned, host
+
+
+def resolve_pinned_url(url: str) -> tuple[str, _HostPinningTransport]:
+    """Validate `url`; return an IP-pinned URL plus an SNI-preserving async transport.
+
+    The returned URL has its host replaced by the validated IP, so httpx
+    connects to the address that was checked rather than whatever a second DNS
+    lookup returns (DNS-rebinding defense). Use both together:
+
+        pinned, transport = resolve_pinned_url(url)
+        async with httpx.AsyncClient(transport=transport) as c:
+            await c.post(pinned, ...)
+
+    Raises UnsafeURLError.
+    """
+    pinned, host = _pin(url)
+    return pinned, _HostPinningTransport(host)
+
+
+def resolve_pinned_url_sync(url: str) -> tuple[str, _SyncHostPinningTransport]:
+    """Sync counterpart of :func:`resolve_pinned_url` for ``httpx.Client``."""
+    pinned, host = _pin(url)
+    return pinned, _SyncHostPinningTransport(host)

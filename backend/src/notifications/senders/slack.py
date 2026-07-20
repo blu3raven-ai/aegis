@@ -12,7 +12,7 @@ from typing import Any
 from src.connectors.base import BaseSender, SendResult, TestResult
 from src.connectors.http import default_client
 from src.connectors.registry import register_connector
-from src.notifications.url_guard import UnsafeURLError, assert_sendable_url
+from src.notifications.url_guard import UnsafeURLError, resolve_pinned_url_sync
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +34,12 @@ class SlackSender(BaseSender):
             return SendResult(success=False, error="slack config missing webhook_url")
 
         try:
-            assert_sendable_url(url)
+            url, pin_transport = resolve_pinned_url_sync(url)
         except UnsafeURLError:
             return SendResult(success=False, error="blocked: destination URL is not permitted")
 
         try:
-            with default_client() as client:
+            with default_client(transport=pin_transport) as client:
                 resp = client.post(url, json=payload)
             if resp.status_code == 200:
                 return SendResult(success=True, response_code=resp.status_code)
