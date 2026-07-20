@@ -511,6 +511,30 @@ def test_registry_digest_rejects_172_16_to_31(monkeypatch):
     assert rd.fetch_registry_digest("internal-registry.example/x/y:1") is None
 
 
+def test_registry_digest_rejects_cgnat(monkeypatch):
+    from runner.scanners.container import registry_digest as rd
+
+    # RFC 6598 CGNAT — not flagged private by stdlib ipaddress; can host metadata
+    # on some clouds. Must be blocked the same as RFC1918.
+    monkeypatch.setattr(rd, "_resolve_host", lambda h: ["100.100.100.200"])
+    monkeypatch.setattr(
+        rd,
+        "run_tool",
+        lambda args, **kw: pytest.fail("run_tool must not be called"),
+    )
+    assert rd.fetch_registry_digest("internal-registry.example/x/y:1") is None
+
+
+def test_is_blocked_ip_rejects_cgnat_range():
+    from runner.scanners.container.registry_digest import _is_blocked_ip
+
+    assert _is_blocked_ip("100.100.100.200") is True
+    assert _is_blocked_ip("100.64.0.1") is True
+    assert _is_blocked_ip("100.127.255.254") is True
+    # Public addresses remain allowed.
+    assert _is_blocked_ip("93.184.216.34") is False
+
+
 def test_registry_digest_rejects_127_0_0_1(monkeypatch):
     from runner.scanners.container import registry_digest as rd
 

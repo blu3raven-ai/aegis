@@ -35,20 +35,15 @@ def _validate_instance_url(url: str) -> str:
     if not hostname:
         raise ConnectionTestError("Invalid URL: missing hostname")
 
-    # Resolve once and validate every returned address.
+    # Resolve once and validate every returned address. Delegate to the shared
+    # url_guard so the RFC 6598 CGNAT block (and any future additions) applies
+    # uniformly instead of being re-implemented per call site.
+    from src.shared.url_guard import _is_disallowed_ip
     try:
         resolved_ip: str | None = None
         for info in socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM):
             addr = info[4][0]
-            ip = ipaddress.ip_address(addr)
-            if (
-                ip.is_private
-                or ip.is_loopback
-                or ip.is_link_local
-                or ip.is_reserved
-                or ip.is_multicast
-                or ip.is_unspecified
-            ):
+            if _is_disallowed_ip(addr):
                 raise ConnectionTestError(
                     f"URL resolves to a private/internal address ({addr}). "
                     "Only publicly routable instances are allowed."

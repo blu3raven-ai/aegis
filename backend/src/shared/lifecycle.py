@@ -38,6 +38,25 @@ from src.rules_engine.subjects import RuleFindingSubject
 
 logger = logging.getLogger(__name__)
 
+
+def in_assigned_scope(name: str | None, assigned: list[str] | None) -> bool:
+    """True if ``name`` is permitted under the job's assigned scope.
+
+    Single source of truth for the ingest scope check, shared by the findings
+    lifecycle, the repo SBOM ingest, and the container SBOM ingest so the three
+    stores cannot drift apart again. Mirrors the original findings-filter
+    semantics: no assigned scope (empty/None) means "scope not enforced" —
+    allow. When a scope is set, the name must tail-match an assigned entry
+    (clone URL, owner/repo, or image ref).
+    """
+    if not assigned or not name:
+        return True
+    tail = name.split("/")[-1]
+    return (
+        any(r.endswith(name) or name.endswith(r.split("/")[-1]) for r in assigned)
+        or any(r.endswith(tail) for r in assigned)
+    )
+
 VALID_DISMISS_REASONS: frozenset[str] = frozenset([
     # Dismiss is "this finding isn't actionable" only. Risk acceptance and
     # fix-tracking are their own dispositions (accepted-risk carve-out / defer).
@@ -313,15 +332,12 @@ def apply_lifecycle(
             # to scan. Match on the owner/repo tail since GIT_REPOS are clone
             # URLs and extract_repo returns owner/repo.
             assigned = ctx.git_repos
-            if assigned and repo:
-                tail = repo.split("/")[-1]
-                if not any(r.endswith(repo) or repo.endswith(r.split("/")[-1]) for r in assigned) and \
-                   not any(r.endswith(tail) for r in assigned):
-                    logger.warning(
-                        "ingest: finding repo %s not in job scope %s — skipping",
-                        repo, sorted(assigned)[:5],
-                    )
-                    continue
+            if not in_assigned_scope(repo, assigned):
+                logger.warning(
+                    "ingest: finding repo %s not in job scope %s — skipping",
+                    repo, sorted(assigned)[:5],
+                )
+                continue
             severity = hooks.extract_severity(raw)
             engine = hooks.extract_engine(raw)
             detail = _sanitize_for_pg(hooks.extract_detail(raw))

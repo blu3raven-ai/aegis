@@ -60,6 +60,7 @@ def test_index_stamps_display_name_with_registry_prefix(monkeypatch):
 
     monkeypatch.setattr("src.assets.service.upsert_asset", fake_upsert_asset)
     monkeypatch.setattr("src.db.helpers.run_db", lambda fn: fn(None))
+    monkeypatch.setattr("src.runner.jobs.docker_images_for_run", lambda run_id: [])
     monkeypatch.setattr(scanner_mod, "upsert_sbom", lambda *a, **k: None)
 
     result, _newer, _meta = _index_container_sboms(org="acme", run_id="run-1", source_type="ghcr", prefix="p")
