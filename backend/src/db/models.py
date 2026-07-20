@@ -881,6 +881,12 @@ class ApiKey(Base):
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     scopes: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
     created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # FK to users so disabling/deleting the creator revokes/cascades their keys.
+    # `created_by` above is the display string (kept for backfill/audit); this
+    # is the enforceable link.
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

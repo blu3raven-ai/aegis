@@ -199,7 +199,8 @@ def ingest_dependencies_from_minio(org: str, run_id: str, source_type: str | Non
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     new_findings: list[dict[str, Any]] = []
     if all_findings:
-        ctx = ScanContext(tool="dependencies_scanning", org=org, run_id=run_id, source_type=source_type)
+        from src.runner.jobs import git_repos_for_run
+        ctx = ScanContext(tool="dependencies_scanning", org=org, run_id=run_id, source_type=source_type, git_repos=git_repos_for_run(run_id))
         new_findings = _apply_lifecycle(dependencies_hooks, ctx, all_findings)
 
     if new_findings:

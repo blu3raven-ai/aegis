@@ -66,9 +66,15 @@ async def verification_cache_lookup(body: VerificationCacheRequest, request: Req
 
     from src.db.engine import get_session
     from src.shared.finding_queries import lookup_verification_cache
+    from src.runner.jobs import asset_ids_for_runner_job
+
+    # Scope the cache to the assets this runner is actually assigned to scan,
+    # so a rogue runner can't replay a verdict planted on one asset against a
+    # finding on a different asset. Empty scope → no replay (fail-closed).
+    asset_ids = asset_ids_for_runner_job(runner["id"])
 
     async with get_session() as session:
-        results = await lookup_verification_cache(session, tool=body.tool, hashes=body.hashes)
+        results = await lookup_verification_cache(session, tool=body.tool, hashes=body.hashes, asset_ids=asset_ids)
     return JSONResponse({"results": results})
 
 

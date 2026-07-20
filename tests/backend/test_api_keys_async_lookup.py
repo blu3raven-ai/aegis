@@ -38,6 +38,7 @@ def _matching_row() -> SimpleNamespace:
         expires_at=None,
         scopes=["scan:trigger"],
         allowed_source_ids=None,
+        created_by_user_id=None,
     )
 
 

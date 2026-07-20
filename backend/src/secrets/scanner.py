@@ -385,7 +385,8 @@ def ingest_findings(
     # rather than resurrecting the archived row.
     previous = read_latest_findings(org)
     merged = merge_pool(findings, previous)
-    ctx = ScanContext(tool="secret_scanning", org=org, run_id=run_id, source_type=source_type)
+    from src.runner.jobs import git_repos_for_run
+    ctx = ScanContext(tool="secret_scanning", org=org, run_id=run_id, source_type=source_type, git_repos=git_repos_for_run(run_id))
     new_findings = _apply_lifecycle(secrets_hooks, ctx, merged)
 
     try:

@@ -283,3 +283,79 @@ def requeue_stale_jobs() -> list[dict[str, Any]]:
             pass
 
     return requeued
+
+
+def git_repos_for_run(run_id: str) -> list[str]:
+    """Return the GIT_REPOS assigned to a scan run, for ingest scope-checking.
+
+    Ingest drops findings whose repo isn't in this set, so a rogue runner can't
+    plant findings on assets it wasn't asked to scan.
+    """
+    from src.db.helpers import run_db as _run_db
+    from src.db.models import RunnerJob
+    from sqlalchemy import select
+
+    async def _query(session):
+        row = (
+            await session.execute(
+                select(RunnerJob).where(RunnerJob.run_id == run_id).limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return []
+        env = _decrypt_env_vars(row.env_vars or {})
+        repos = (env.get("GIT_REPOS") or "").split(",")
+        return [r.strip() for r in repos if r.strip()]
+
+    return _run_db(_query)
+
+
+def asset_ids_for_runner_job(runner_id: str) -> list[str]:
+    """Asset ids the runner's active job is assigned to scan.
+
+    Used to scope the verification-cache lookup so a rogue runner can't replay a
+    verdict planted on one asset against a finding on a different asset. Empty
+    when there's no resolvable active job (callers fail-closed — re-verify).
+    """
+    from src.db.helpers import run_db as _run_db
+    from src.db.models import RunnerJob, Asset
+    from src.assets.refs import repo_ref
+    from sqlalchemy import select
+
+    async def _query(session):
+        job = (
+            await session.execute(
+                select(RunnerJob)
+                .where(RunnerJob.runner_id == runner_id, RunnerJob.status.in_(["assigned", "running"]))
+                .order_by(RunnerJob.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if job is None:
+            return []
+        env = _decrypt_env_vars(job.env_vars or {})
+        source_type = env.get("SOURCE_TYPE") or ""
+        repos_raw = (env.get("GIT_REPOS") or "").split(",")
+        refs: list[str] = []
+        for url in repos_raw:
+            url = url.strip()
+            if not url:
+                continue
+            # GIT_REPOS are clone URLs; derive owner/repo from the path.
+            path = url.split("://", 1)[-1]
+            path = path.split("/", 1)[-1] if "/" in path else path
+            if path.endswith(".git"):
+                path = path[:-4]
+            if "/" not in path:
+                continue
+            owner, _, repo = path.partition("/")
+            try:
+                refs.append(repo_ref(source_type, owner, repo))
+            except ValueError:
+                continue
+        if not refs:
+            return []
+        rows = (await session.execute(select(Asset.id).where(Asset.external_ref.in_(refs)))).scalars().all()
+        return [str(r) for r in rows]
+
+    return _run_db(_query)

@@ -782,6 +782,17 @@ def _set_user_status(*, user_id: str, status: str, action: str, info_context: di
                 )
                 .values(revoked_at=datetime.now(timezone.utc), revocation_reason="user_disabled")
             )
+            # Revoke the user's live API keys too — a disabled user's PAT must
+            # stop authenticating immediately, not survive until it expires.
+            from src.db.models import ApiKey
+            await session.execute(
+                _sa_update(ApiKey)
+                .where(
+                    ApiKey.created_by_user_id == user_id,
+                    ApiKey.revoked_at.is_(None),
+                )
+                .values(revoked_at=datetime.now(timezone.utc))
+            )
         user.updated_at = datetime.now(timezone.utc)
         await session.flush()
         return user.username

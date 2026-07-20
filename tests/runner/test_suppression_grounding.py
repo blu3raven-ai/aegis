@@ -155,11 +155,35 @@ def test_iac_empty_snippet_downgrades_to_needs_verify() -> None:
 
 
 def test_iac_non_empty_snippet_returns_ruled_out() -> None:
-    """IaC skeptic cites a non-empty snippet → ruled_out is kept."""
+    """IaC skeptic cites a snippet that actually exists in the repo → ruled_out."""
     with tempfile.TemporaryDirectory() as repo_root:
+        # The citation must be real — write the snippet at the cited line so the
+        # grounding check (file exists + snippet within ±2 lines) passes.
+        f = Path(repo_root) / "infra" / "main.tf"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        lines = [""] * 7 + ['acl = "private"']
+        f.write_text("\n".join(lines) + "\n")
         llm = _mock_llm(_IAC_HUNTER_JSON, _iac_skeptic_json(snippet='acl = "private"'))
         result = verify_iac_finding(finding=_IAC_FINDING, repo_root=repo_root, llm=llm)
 
     assert result.verdict == "ruled_out", (
-        f"Non-empty mitigation snippet must keep ruled_out; got {result.verdict!r}"
+        f"Repo-grounded mitigation snippet must keep ruled_out; got {result.verdict!r}"
+    )
+
+
+def test_iac_snippet_not_in_repo_downgrades_to_needs_verify() -> None:
+    """IaC skeptic cites a snippet that isn't in the repo → needs_verify.
+
+    A prompt-injected repo can claim a mitigation that doesn't exist; the
+    grounding check must catch it and refuse to suppress.
+    """
+    with tempfile.TemporaryDirectory() as repo_root:
+        llm = _mock_llm(_IAC_HUNTER_JSON, _iac_skeptic_json(snippet='acl = "private"'))
+        result = verify_iac_finding(finding=_IAC_FINDING, repo_root=repo_root, llm=llm)
+
+    assert result.verdict == "needs_verify", (
+        f"Mitigation snippet absent from repo must not rule out; got {result.verdict!r}"
+    )
+    assert "mitigation_citation_unverified" in (
+        result.verification_metadata.get("suppression_downgraded") or ""
     )

@@ -59,6 +59,7 @@ def test_runs_due_schedule_and_marks_success():
 
     with (
         patch.object(runner, "_load_enabled_schedules", return_value=[schedule]),
+        patch.object(runner, "_creator_live_scope", return_value=["a-1"]),
         patch("src.reports.service.generate_report", return_value=report),
         patch("src.reports.service.get_download_url", return_value="https://signed/url"),
         patch.object(runner, "_deliver") as deliver,
@@ -83,6 +84,7 @@ def test_failure_records_status_failed():
 
     with (
         patch.object(runner, "_load_enabled_schedules", return_value=[schedule]),
+        patch.object(runner, "_creator_live_scope", return_value=["a-1"]),
         patch("src.reports.service.generate_report", side_effect=_boom),
         patch.object(runner, "_deliver"),
         patch.object(runner, "_mark_run") as mark,
@@ -129,6 +131,7 @@ def test_strips_asset_ids_from_filters_when_calling_generate():
 
     with (
         patch.object(runner, "_load_enabled_schedules", return_value=[schedule]),
+        patch.object(runner, "_creator_live_scope", return_value=["a-1", "a-2"]),
         patch("src.reports.service.generate_report", side_effect=_gen),
         patch("src.reports.service.get_download_url", return_value="https://signed/url"),
         patch.object(runner, "_deliver"),

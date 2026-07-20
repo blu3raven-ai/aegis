@@ -9,13 +9,23 @@ from src.shared.finding_queries import _ruled_out_grounded
 
 
 def test_grounded_via_evidence_file():
-    evidence = [{"kind": "code", "file": "app/db.py", "line": 12}]
+    # A file citation alone isn't grounding — it must carry a real snippet.
+    evidence = [{"kind": "code", "file": "app/db.py", "line": 12, "snippet": "if user.is_admin:"}]
     assert _ruled_out_grounded(evidence, None) is True
 
 
+def test_evidence_file_without_snippet_is_not_grounded():
+    assert _ruled_out_grounded([{"kind": "code", "file": "app/db.py", "line": 12}], None) is False
+
+
 def test_grounded_via_ruled_out_reason_file():
-    meta = {"ruled_out_reason": {"file": "app/guard.py", "line": 3}}
+    meta = {"ruled_out_reason": {"file": "app/guard.py", "line": 3, "snippet": "abort(401)"}}
     assert _ruled_out_grounded([], meta) is True
+
+
+def test_ruled_out_reason_without_snippet_is_not_grounded():
+    meta = {"ruled_out_reason": {"file": "app/guard.py", "line": 3}}
+    assert _ruled_out_grounded([], meta) is False
 
 
 def test_ungrounded_when_no_file_anywhere():

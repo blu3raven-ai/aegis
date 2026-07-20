@@ -32,11 +32,15 @@ async def create_api_key(
     _: None = Depends(Permission(MANAGE_SETTINGS)),
 ) -> dict:
     created_by = getattr(request.state, "user_sub", None)
+    # user_sub is the user id for session-authenticated callers; for an API-key
+    # caller it's "api_key:<id>", which is not a user FK — leave it null there.
+    creator_user_id = created_by if (created_by and not created_by.startswith("api_key:")) else None
     record, token = await service.create(
         name=body.name,
         scopes=body.scopes,
         created_by=created_by,
         expires_in_days=body.expires_in_days,
+        created_by_user_id=creator_user_id,
     )
     result = record.to_dict()
     # Token returned exactly once — never stored or logged

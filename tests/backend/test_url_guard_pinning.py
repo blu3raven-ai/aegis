@@ -55,6 +55,19 @@ def test_rejects_when_any_answer_is_internal(resolver):
         resolver("https://split.example.com/hook")
 
 
+@pytest.mark.parametrize("cgnat", ["100.64.0.1", "100.100.100.200", "100.127.255.254"])
+def test_rejects_rfc6598_cgnat_range(cgnat):
+    # RFC 6598 (100.64.0.0/10) isn't flagged private by stdlib ipaddress but is
+    # non-routable and can host internal/metadata services — must be blocked.
+    with _getaddrinfo_returning(cgnat), pytest.raises(UnsafeURLError):
+        resolve_pinned_url("https://cgnat.example.com/hook")
+
+
+def test_allows_public_ipv4():
+    with _getaddrinfo_returning("104.16.0.1"):
+        resolve_pinned_url("https://public.example.com/hook")  # no raise
+
+
 def test_rebind_after_validation_cannot_reach_internal():
     # First resolution (validation) is public; a later lookup flips to internal.
     # Because the connect target is pinned to the URL's IP, the flip is moot:

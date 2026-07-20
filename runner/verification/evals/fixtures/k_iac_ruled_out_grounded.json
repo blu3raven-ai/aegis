@@ -21,7 +21,7 @@
       "tokens_out": 40
     },
     {
-      "content": "{\"mitigation_found\":true,\"mitigation_file\":\"infra/policy.tf\",\"mitigation_line\":5,\"mitigation_snippet\":\"Effect = \\\"Deny\\\", Action = \\\"s3:*\\\"\",\"reasoning\":\"a bucket policy denies all non-SSL access, compensating for the missing native logging\"}",
+      "content": "{\"mitigation_found\":true,\"mitigation_file\":\"infra/policy.tf\",\"mitigation_line\":5,\"mitigation_snippet\":\"Effect = \\\"Deny\\\"\",\"reasoning\":\"a bucket policy denies all non-SSL access, compensating for the missing native logging\"}",
       "tokens_in": 140,
       "tokens_out": 45
     }
