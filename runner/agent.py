@@ -82,15 +82,28 @@ def load_config() -> dict[str, Any]:
         logger.info("[+] Registering with %s", backend_url)
         try:
             with httpx.Client(timeout=15.0) as client:
-                resp = client.post(
-                    f"{backend_url}/api/v1/agent/register",
-                    json={
-                        "token": registration_token,
-                        "name": name,
-                        "os": platform.system().lower(),
-                        "arch": platform.machine(),
-                    },
-                )
+                # Back off on rate-limit instead of crash-looping: a restart
+                # storm can trip the register limiter, and without a retry the
+                # container just restarts and re-hits the 429 forever.
+                for _attempt in range(6):
+                    resp = client.post(
+                        f"{backend_url}/api/v1/agent/register",
+                        json={
+                            "token": registration_token,
+                            "name": name,
+                            "os": platform.system().lower(),
+                            "arch": platform.machine(),
+                        },
+                    )
+                    if resp.status_code != 429:
+                        break
+                    retry_after = 30
+                    try:
+                        retry_after = int(resp.json().get("detail", {}).get("retry_after_seconds", 30))
+                    except (ValueError, TypeError):
+                        pass
+                    logger.warning("[!] Register rate-limited; retrying in %ds", retry_after)
+                    time.sleep(min(retry_after, 120))
             if resp.status_code != 200:
                 # The error body may not be JSON (e.g. a middleware rejection
                 # returns plain text), so fall back to the raw text/status.
