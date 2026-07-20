@@ -514,7 +514,7 @@ async def require_jwt(request: Request, call_next):
     # Health check and documentation paths (if enabled) are always open.
     # /login and /pending are open so SessionAuthMiddleware's redirects can
     # resolve to the SPA shell without requiring a Bearer token.
-    open_paths = {"/healthz",
+    open_paths = {"/health",
                   "/api/v1/auth/login", "/api/v1/auth/login/verify", "/api/v1/auth/logout",
                   # Email-change confirmation: the one-time token in the link is
                   # the capability, so the recipient can open it without a session.
