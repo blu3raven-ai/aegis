@@ -225,6 +225,30 @@ def test_register_does_not_hijack_approved_runner_by_name(mem, monkeypatch):
     assert still["authTokenHash"] == original_hash
 
 
+def test_register_takes_over_stale_approved_runner_by_name(mem, monkeypatch):
+    """Re-registering a name held by an approved runner that has gone silent
+    (no heartbeat for a while) reuses and re-approves it, rotating the token —
+    so a runner that died and restarts isn't stranded as a duplicate pending row."""
+    monkeypatch.setenv("RUNNER_REGISTRATION_TOKEN", "compose-token")
+    monkeypatch.setattr("src.runner.registry.validate_registration_token", lambda _t: None)
+
+    r1, _, _ = registry.register_runner(raw_token="compose-token", name="worker-1")
+    assert r1["status"] == "approved"
+    original_id = r1["id"]
+    original_hash = r1["authTokenHash"]
+
+    # Simulate the runner going silent — heartbeat older than the staleness window.
+    stale = mem.read_runner(original_id)
+    stale["lastHeartbeatAt"] = "2020-01-01T00:00:00+00:00"
+    mem.write_runner(stale)
+
+    r2, _, _ = registry.register_runner(raw_token="compose-token", name="worker-1")
+    # Same record, re-approved, token rotated — not a new pending duplicate.
+    assert r2["id"] == original_id
+    assert r2["status"] == "approved"
+    assert r2["authTokenHash"] != original_hash
+
+
 # Registry: authentication
 
 

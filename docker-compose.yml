@@ -154,6 +154,9 @@ services:
     volumes:
       - runner-workspace:/workspace
       - aegis-grype-cache:/home/aegis/.cache/grype
+      # Persisted runner auth config so a container restart reuses the token
+      # instead of re-registering and creating a duplicate pending runner.
+      - runner-config:/home/aegis/.vuln-runner
     networks:
       - internal
     restart: unless-stopped
@@ -172,3 +175,4 @@ volumes:
   minio_data:
   runner-workspace:
   aegis-grype-cache:
+  runner-config:

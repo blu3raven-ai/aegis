@@ -56,13 +56,23 @@ def _setup_sigterm_handler() -> None:
 
 
 def load_config() -> dict[str, Any]:
-    """Load runner config from env vars or ~/.vuln-runner/config.json."""
+    """Load runner config from ~/.vuln-runner/config.json, registering first if needed.
+
+    A persisted config is reused so a container restart doesn't re-register and
+    create a duplicate (pending) runner record. Registration only happens when no
+    config exists yet AND the registration env vars are present.
+    """
     backend_url = os.environ.get("BACKEND_URL")
     # Consume-and-scrub: the one-time registration token must not linger in the
     # process env, where it would be inherited by scanner subprocesses and
     # readable via /proc/self/environ. On a container restart a fresh process
     # re-reads it from the docker env; by then the saved config is used anyway.
     registration_token = os.environ.pop("RUNNER_REGISTRATION_TOKEN", None)
+
+    # Reuse a persisted config across restarts — this is what stops a restart
+    # from re-registering and producing a duplicate pending runner.
+    if CONFIG_PATH.exists():
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
     if backend_url and registration_token:
         import platform
@@ -93,25 +103,39 @@ def load_config() -> dict[str, Any]:
             data = resp.json()
             logger.info("[✓] Registered as %s (status: %s)", data["runnerId"], data["status"])
             config_data = data.get("config", {})
-            return {
+            config = {
                 "portalUrl": backend_url,
                 "authToken": data["authToken"],
                 "name": name,
                 "maxConcurrent": config_data.get("maxConcurrent", 2),
             }
+            # Persist so a restart reuses this config instead of re-registering.
+            save_config(config)
+            return config
 
         except httpx.ConnectError:
             raise RuntimeError(f"Cannot reach backend at {backend_url} — is it running?")
 
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError(f"Runner not configured. Set BACKEND_URL + RUNNER_REGISTRATION_TOKEN env vars, or run: vuln-runner configure --url <URL> --token <TOKEN>")
-    return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    raise FileNotFoundError(f"Runner not configured. Set BACKEND_URL + RUNNER_REGISTRATION_TOKEN env vars, or run: vuln-runner configure --url <URL> --token <TOKEN>")
 
 
 def save_config(config: dict[str, Any]) -> None:
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
     CONFIG_PATH.chmod(0o600)  # owner-only: the auth token lives here
+
+
+def invalidate_config() -> None:
+    """Delete the persisted config so the next start re-registers.
+
+    Called when the backend rejects the auth token (401) — e.g. after the
+    runner record was revoked or the DB was reset — so the agent doesn't loop
+    on a dead token across container restarts.
+    """
+    try:
+        CONFIG_PATH.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("[!] Could not remove persisted config", exc_info=True)
 
 
 def configure_container_storage() -> None:
@@ -189,7 +213,8 @@ class RunnerAgent:
                     timeout=10.0,
                 )
                 if resp.status_code == 401:
-                    logger.error("[!] Auth token rejected — re-register this runner")
+                    logger.error("[!] Auth token rejected — clearing config to force re-register")
+                    invalidate_config()
                     self._stop.set()
                     return
                 if resp.status_code == 200:
@@ -318,7 +343,8 @@ class RunnerAgent:
             if resp.status_code == 403:
                 return None
             if resp.status_code == 401:
-                logger.error("[!] Auth token rejected")
+                logger.error("[!] Auth token rejected — clearing config to force re-register")
+                invalidate_config()
                 self._stop.set()
                 return None
             if resp.status_code == 200:
