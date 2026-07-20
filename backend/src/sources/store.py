@@ -13,6 +13,7 @@ from src.db.models import SourceConnection
 from src.shared.encryption import decrypt_string, encrypt_string, is_encrypted
 from src.shared.paths import dt_to_iso as _dt_to_iso, now_iso as _now_iso, parse_iso_utc
 from src.shared.repo_owner import owner_of
+from src.shared.url_guard import UnsafeURLError, assert_sendable_url
 
 _logger = logging.getLogger(__name__)
 
@@ -127,6 +128,25 @@ class SourceNotFoundError(SourceValidationError):
 
 class SourceStoreError(RuntimeError):
     pass
+
+
+def _reject_unsafe_instance_url(auth: dict[str, Any]) -> None:
+    """Block SSRF at the save boundary.
+
+    A source's ``instanceUrl`` becomes the base the runner clones/fetches from
+    with the connection's token, so an internal/link-local target would
+    exfiltrate that credential as HTTP basic-auth. Validate it the same way the
+    live connection test does — normalizing a bare host to https:// since a
+    schemeless value is otherwise rejected outright.
+    """
+    raw = (auth.get("instanceUrl") or "").strip()
+    if not raw:
+        return
+    candidate = raw if raw.lower().startswith(("http://", "https://")) else f"https://{raw}"
+    try:
+        assert_sendable_url(candidate)
+    except UnsafeURLError as exc:
+        raise SourceValidationError(f"instanceUrl is not allowed: {exc}") from exc
 
 
 def _mask_auth(auth: dict[str, Any]) -> dict[str, Any]:
@@ -364,6 +384,7 @@ def create_connection(data: dict[str, Any], org_id: str = "default") -> dict[str
         raise SourceValidationError("Connection name is required.")
     if not isinstance(data.get("auth"), dict):
         raise SourceValidationError("Auth configuration is required.")
+    _reject_unsafe_instance_url(data["auth"])
 
     scanners = data.get("scanners") or []
     _validate_scanners(category, scanners)
@@ -449,6 +470,8 @@ def _validate_schedule_fields(data: dict[str, Any]) -> None:
 
 def update_connection(connection_id: str, data: dict[str, Any], org_id: str = "default") -> dict[str, Any]:
     _validate_schedule_fields(data)
+    if isinstance(data.get("auth"), dict):
+        _reject_unsafe_instance_url(data["auth"])
 
     async def _query(session):
         conn = await session.get(SourceConnection, connection_id)

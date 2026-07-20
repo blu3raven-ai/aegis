@@ -52,15 +52,18 @@ def put_llm_config(
     _: None = Depends(Permission(MANAGE_SETTINGS)),
 ) -> dict:
     org_id = _resolve_org_id()
-    upsert_llm_config(LlmConfigUpsert(
-        org_id=org_id,
-        api_key=body.api_key,
-        api_base_url=body.api_base_url,
-        model=body.model,
-        scan_token_budget=body.scan_token_budget,
-        daily_token_budget=body.daily_token_budget,
-        enabled=body.enabled,
-    ))
+    try:
+        upsert_llm_config(LlmConfigUpsert(
+            org_id=org_id,
+            api_key=body.api_key,
+            api_base_url=body.api_base_url,
+            model=body.model,
+            scan_token_budget=body.scan_token_budget,
+            daily_token_budget=body.daily_token_budget,
+            enabled=body.enabled,
+        ))
+    except UnsafeURLError as exc:
+        raise HTTPException(status_code=422, detail=f"unsafe_url: {str(exc)[:200]}") from exc
     request.state.audit_metadata = {"enabled": body.enabled, "model": body.model}
     return fetch_public_llm_config(org_id) or {"configured": True}
 
