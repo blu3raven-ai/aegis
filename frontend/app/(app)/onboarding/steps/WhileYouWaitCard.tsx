@@ -2,23 +2,16 @@
 
 import Link from "next/link"
 
-interface TaskBase {
+// Support / docs / community all resolve to the product site (same target the
+// header CTAs use) until dedicated URLs exist.
+const SUPPORT_URL = "https://blu3raven.ai/"
+
+interface Task {
   title: string
   description: string
   icon: React.ReactNode
-}
-
-interface LinkTask extends TaskBase {
-  kind: "link"
   href: string
 }
-
-interface ButtonTask extends TaskBase {
-  kind: "button"
-  onClick: () => void
-}
-
-type Task = LinkTask | ButtonTask
 
 function SlackIcon() {
   return (
@@ -87,35 +80,28 @@ function TaskBody({ icon, title, description }: { icon: React.ReactNode; title: 
 export function WhileYouWaitCard() {
   const tasks: Task[] = [
     {
-      kind: "link",
       title: "Connect Slack",
       description: "Get scan results in #security.",
       icon: <SlackIcon />,
       href: "/integrations",
     },
     {
-      kind: "link",
       title: "Wire up Jira write-back",
       description: "Create tickets for blockers automatically.",
       icon: <JiraIcon />,
       href: "/integrations",
     },
     {
-      kind: "link",
       title: "Invite your team",
       description: "Add reviewers and owners.",
       icon: <TeamIcon />,
       href: "/settings/users",
     },
     {
-      kind: "button",
       title: "60-second tour",
       description: "See how Aegis surfaces blockers.",
       icon: <TourIcon />,
-      onClick: () => {
-        // eslint-disable-next-line no-console
-        console.log("tour clicked")
-      },
+      href: SUPPORT_URL,
     },
   ]
 
@@ -128,30 +114,28 @@ export function WhileYouWaitCard() {
         </div>
         <div className="flex flex-col gap-2">
           {tasks.map((task) =>
-            task.kind === "link" ? (
+            task.href.startsWith("http") ? (
+              <a key={task.title} href={task.href} target="_blank" rel="noopener noreferrer" className={TASK_ROW_CLASSES}>
+                <TaskBody icon={task.icon} title={task.title} description={task.description} />
+              </a>
+            ) : (
               <Link key={task.title} href={task.href} className={TASK_ROW_CLASSES}>
                 <TaskBody icon={task.icon} title={task.title} description={task.description} />
               </Link>
-            ) : (
-              <button key={task.title} type="button" onClick={task.onClick} className={TASK_ROW_CLASSES}>
-                <TaskBody icon={task.icon} title={task.title} description={task.description} />
-              </button>
             ),
           )}
         </div>
       </div>
       <p className="text-center text-2xs text-[var(--color-text-tertiary)]">
         Need help?{" "}
-        <button
-          type="button"
-          onClick={() => {
-            // eslint-disable-next-line no-console
-            console.log("support clicked")
-          }}
+        <a
+          href={SUPPORT_URL}
+          target="_blank"
+          rel="noopener noreferrer"
           className="text-[var(--color-text-secondary)] underline-offset-2 hover:underline"
         >
           Visit support
-        </button>
+        </a>
       </p>
     </div>
   )

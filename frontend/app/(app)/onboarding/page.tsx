@@ -104,13 +104,11 @@ export default function OnboardingPage() {
   const advance = () => setCurrentStep((s) => Math.min(s + 1, STEPS.length - 1))
   const retreat = () => setCurrentStep((s) => Math.max(s - 1, 0))
 
-  const handleProviderClick = (provider: SignInProvider) => {
-    console.log("[onboarding] sso provider clicked", provider)
+  const handleProviderClick = (_provider: SignInProvider) => {
     setSignedIn(true)
   }
 
-  const handleMagicLinkRequest = (email: string) => {
-    console.log("[onboarding] magic link requested", email)
+  const handleMagicLinkRequest = (_email: string) => {
     setSignedIn(true)
   }
 
