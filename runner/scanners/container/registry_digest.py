@@ -80,11 +80,18 @@ def _is_blocked_host(host: str) -> bool:
     return False
 
 
+_CGNAT_RANGE = ipaddress.ip_network("100.64.0.0/10")  # RFC 6598 — carrier-grade NAT
+
+
 def _is_blocked_ip(addr: str) -> bool:
     try:
         ip = ipaddress.ip_address(addr)
     except ValueError:
         return False
+    # RFC 6598 CGNAT space isn't flagged as private by stdlib ipaddress, but is
+    # non-routable and can host internal/metadata services in some clouds.
+    if ip.version == 4 and ip in _CGNAT_RANGE:
+        return True
     if ip.is_loopback or ip.is_link_local or ip.is_private:
         return True
     if ip.is_unspecified or ip.is_reserved or ip.is_multicast:

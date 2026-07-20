@@ -35,6 +35,9 @@ def _resolves_to(*ips):
     "169.254.169.254", # link-local — the cloud metadata endpoint, the classic SSRF target
     "0.0.0.0",         # unspecified
     "224.0.0.1",       # multicast
+    "100.100.100.200", # RFC 6598 CGNAT — Alibaba cloud metadata, not flagged private by stdlib
+    "100.64.0.1",      # RFC 6598 CGNAT
+    "100.127.255.254", # RFC 6598 CGNAT range edge
 ])
 def test_rejects_internal_addresses(bad_ip):
     with _resolves_to(bad_ip):

@@ -310,6 +310,29 @@ def git_repos_for_run(run_id: str) -> list[str]:
     return _run_db(_query)
 
 
+def docker_images_for_run(run_id: str) -> list[str]:
+    """Return the DOCKER_IMAGES assigned to a container scan run, for ingest
+    scope-checking. Mirrors ``git_repos_for_run``: a rogue container runner
+    can't plant SBOMs or findings on image assets it wasn't asked to scan."""
+    from src.db.helpers import run_db as _run_db
+    from src.db.models import RunnerJob
+    from sqlalchemy import select
+
+    async def _query(session):
+        row = (
+            await session.execute(
+                select(RunnerJob).where(RunnerJob.run_id == run_id).limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return []
+        env = _decrypt_env_vars(row.env_vars or {})
+        images = (env.get("DOCKER_IMAGES") or "").split(",")
+        return [i.strip() for i in images if i.strip()]
+
+    return _run_db(_query)
+
+
 def asset_ids_for_runner_job(runner_id: str) -> list[str]:
     """Asset ids the runner's active job is assigned to scan.
 

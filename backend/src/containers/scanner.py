@@ -197,6 +197,19 @@ def _download_scan_output_from_minio(
     return image_sboms
 
 
+def _image_name(ref: str) -> str:
+    """Image ref with the trailing ``:tag`` stripped (digest already removed).
+
+    Used for ingest scope-matching so a tagless SBOM ``component.name`` and a
+    tagged ``DOCKER_IMAGES`` entry line up. Only strips a tag in the last path
+    segment — a registry port (``registry:5000/...``) is preserved.
+    """
+    last = ref.rsplit("/", 1)[-1]
+    if ":" not in last:
+        return ref
+    return ref.rsplit(":", 1)[0]
+
+
 def _image_external_ref(source_type: str, full_ref: str) -> str:
     """Canonical image external_ref from a full image ref ('ghcr.io/acme/app:1.2.3').
 
@@ -232,7 +245,15 @@ def _index_container_sboms(
     from src.assets.service import upsert_asset
     from src.db.helpers import run_db
     from src.containers.tag_recommendation import select_newer_tags
+    from src.runner.jobs import docker_images_for_run
+    from src.shared.lifecycle import in_assigned_scope
 
+    assigned = docker_images_for_run(run_id)
+    # Compare on the image name without tag — the assigned DOCKER_IMAGES carry
+    # a tag but the SBOM's component.name may not, and the finding's
+    # repository.name never does. Strip the trailing :tag (not a registry port
+    # like registry:5000/...) so a legit tagless SBOM isn't dropped.
+    assigned_names = [_image_name(r) for r in assigned]
     assets: dict[str, str] = {}
     newer_by_asset: dict[str, list[str]] = {}
     meta_by_asset: dict[str, dict[str, Any]] = {}
@@ -243,6 +264,12 @@ def _index_container_sboms(
             continue
         component = (sbom.get("metadata") or {}).get("component") or {}
         full_ref = component.get("name") or image_safe_name.replace("_", "/")
+        if not in_assigned_scope(_image_name(full_ref), assigned_names):
+            logger.warning(
+                "container ingest: SBOM image %s not in job scope %s — skipping",
+                full_ref, sorted(assigned)[:5],
+            )
+            continue
         digest = data.get("digest")
         try:
             external_ref = _image_external_ref(source_type, full_ref)

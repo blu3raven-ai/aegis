@@ -44,7 +44,11 @@ def ingest_agent_from_minio(org: str, run_id: str, source_type: str | None = Non
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     new_findings: list[dict[str, Any]] = []
     if all_findings:
-        ctx = ScanContext(tool="agent_scanning", org=org, run_id=run_id, source_type=source_type)
+        from src.runner.jobs import git_repos_for_run
+        ctx = ScanContext(
+            tool="agent_scanning", org=org, run_id=run_id, source_type=source_type,
+            git_repos=git_repos_for_run(run_id),
+        )
         new_findings = _apply_lifecycle(agent_scanning_hooks, ctx, all_findings)
 
         try:

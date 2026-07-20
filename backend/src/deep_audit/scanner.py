@@ -44,7 +44,11 @@ def ingest_deep_audit_from_minio(org: str, run_id: str, source_type: str | None 
     # Skip lifecycle on empty results — could be scanner errors, not truly 0 findings
     new_findings: list[dict[str, Any]] = []
     if all_findings:
-        ctx = ScanContext(tool="deep_audit", org=org, run_id=run_id, source_type=source_type)
+        from src.runner.jobs import git_repos_for_run
+        ctx = ScanContext(
+            tool="deep_audit", org=org, run_id=run_id, source_type=source_type,
+            git_repos=git_repos_for_run(run_id),
+        )
         new_findings = _apply_lifecycle(deep_audit_hooks, ctx, all_findings)
 
         try:

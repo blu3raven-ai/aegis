@@ -109,7 +109,10 @@ def _ingest_sboms_from_minio(org: str, run_id: str, source_type: str, prefix: st
     from src.assets.refs import repo_ref
     from src.assets.service import upsert_asset
     from src.db.helpers import run_db
+    from src.runner.jobs import git_repos_for_run
+    from src.shared.lifecycle import in_assigned_scope
 
+    assigned = git_repos_for_run(run_id)
     sbom_keys = [k for k in list_objects(prefix) if k.endswith("/sbom.cdx.json")]
     assets: dict[str, str] = {}
     for key in sbom_keys:
@@ -118,6 +121,12 @@ def _ingest_sboms_from_minio(org: str, run_id: str, source_type: str, prefix: st
         if len(parts) < 5:
             continue
         repo_name = parts[-2]
+        if not in_assigned_scope(repo_name, assigned):
+            logger.warning(
+                "dependency ingest: SBOM repo %s not in job scope %s — skipping",
+                repo_name, sorted(assigned)[:5],
+            )
+            continue
         sbom_json = download_json(key)
         if not sbom_json:
             continue
