@@ -893,9 +893,37 @@ def delete_user_mutation(*, user_id: str, info_context: dict) -> WorkspaceMutati
 # Role mutation resolvers
 # ---------------------------------------------------------------------------
 
+def _reject_permission_escalation(info_context: dict, target_perms: set[str]) -> None:
+    """Forbid a role write that would confer permissions the caller lacks.
+
+    Mirrors the guard on the user-assignment path (`update_user_role`): a
+    `manage_roles` holder must never mint, edit, or reassign into a role whose
+    permission set exceeds their own — otherwise an admin could grant itself
+    `manage_owner_role` (or any permission) by defining or reassigning a role.
+    The subset check subsumes the owner case, so no role-name branching is
+    needed.
+    """
+    actor_role = info_context.get("role") or "viewer"
+    actor_role_id = info_context.get("role_id")
+    try:
+        if isinstance(actor_role_id, str) and actor_role_id:
+            actor_record = get_role(actor_role_id)
+        else:
+            actor_record = get_role_by_slug(actor_role)
+        actor_perms = resolve_role_permissions(actor_record)
+    except ValueError:
+        actor_perms = set()
+    escalated = set(target_perms) - actor_perms
+    if escalated:
+        raise_permission_denied(
+            f"Cannot grant permissions you don't hold: {', '.join(sorted(escalated))}"
+        )
+
+
 def create_role_mutation(*, input: RoleInput, info_context: dict) -> WorkspaceRole:
     _require_permission(info_context, MANAGE_ROLES)
     _check_feature(info_context, "custom_roles")
+    _reject_permission_escalation(info_context, set(input.permissions))
     role_data = _create_role({
         "name": input.name,
         "description": input.description,
@@ -906,6 +934,7 @@ def create_role_mutation(*, input: RoleInput, info_context: dict) -> WorkspaceRo
 
 def update_role_mutation(*, role_id: str, input: RoleInput, info_context: dict) -> WorkspaceRole:
     _require_permission(info_context, MANAGE_ROLES)
+    _reject_permission_escalation(info_context, set(input.permissions))
     try:
         role_data = _update_role(role_id, {
             "name": input.name,
@@ -928,9 +957,13 @@ def delete_role_mutation(
 
     if replacement_role_id:
         try:
-            get_role(replacement_role_id)
+            replacement_record = get_role(replacement_role_id)
         except ValueError:
             raise GraphQLError("Replacement role not found.", extensions={"code": "NOT_FOUND"})
+        # Reassigning users into the replacement role confers its permissions —
+        # block escalation (e.g. reassigning into role_owner) the same way the
+        # role create/update writes do.
+        _reject_permission_escalation(info_context, resolve_role_permissions(replacement_record))
 
     from sqlalchemy import select, func as _func
     from src.db.models import User as _User
