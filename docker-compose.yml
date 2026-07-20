@@ -165,7 +165,6 @@ services:
       resources:
         limits:
           memory: 2G
-    pids_limit: 512
     volumes:
       - runner-workspace:/workspace
       - aegis-grype-cache:/home/aegis/.cache/grype
