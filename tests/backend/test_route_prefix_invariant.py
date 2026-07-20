@@ -15,8 +15,9 @@ EXEMPT_EXACT = (
     "/openapi.json",
     "/docs",
     "/redoc",
-    # Unversioned health probe — convention for monitoring/k8s probes
+    # Unversioned health probes — convention for monitoring/k8s probes
     "/health",
+    "/healthz",
 )
 
 

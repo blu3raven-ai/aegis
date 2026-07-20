@@ -28,7 +28,7 @@ def _resolves_to(*ips):
     return patch("src.shared.url_guard.socket.getaddrinfo", side_effect=fake)
 
 
-# ── source instanceUrl (SSRF-01) ─────────────────────────────────────────────
+# ── source instanceUrl ─────────────────────────────────────────────
 
 @pytest.mark.parametrize("bad", ["10.0.0.5", "127.0.0.1", "169.254.169.254", "192.168.1.1"])
 def test_source_instance_url_rejects_internal(bad):
@@ -51,7 +51,7 @@ def test_source_instance_url_noop_when_absent():
     _reject_unsafe_instance_url({"token": "x"})  # no instanceUrl → no raise, no DNS
 
 
-# ── LLM apiBaseUrl (SSRF-02) ─────────────────────────────────────────────────
+# ── LLM apiBaseUrl ─────────────────────────────────────────────────
 
 def _upsert(url):
     return LlmConfigUpsert(

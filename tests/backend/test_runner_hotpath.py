@@ -55,6 +55,11 @@ class _MemStorage:
     def write_runner(self, runner):
         self.runners[runner["id"]] = dict(runner)
 
+    def touch_heartbeat(self, runner_id):
+        r = self.runners.get(runner_id)
+        if r:
+            r["lastHeartbeatAt"] = registry.now_iso()
+
     def list_runners(self):
         return [dict(r) for r in self.runners.values()]
 
@@ -101,6 +106,7 @@ def mem(monkeypatch):
     # where the names are imported, since Python binds at import time.
     monkeypatch.setattr("src.runner.storage.read_runner", s.read_runner)
     monkeypatch.setattr("src.runner.storage.write_runner", s.write_runner)
+    monkeypatch.setattr("src.runner.storage.touch_heartbeat", s.touch_heartbeat)
     monkeypatch.setattr("src.runner.storage.list_runners", s.list_runners)
     monkeypatch.setattr("src.runner.storage.delete_runner", s.delete_runner)
     monkeypatch.setattr("src.runner.storage.read_job", s.read_job)

@@ -1,4 +1,4 @@
-"""Verified email change (SR: AUTH-01).
+"""Verified email change.
 
 A self-service email change is staged and only promoted once the recipient
 proves control of the new address via a one-time token. Committing unverified

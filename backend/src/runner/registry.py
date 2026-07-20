@@ -139,8 +139,10 @@ def heartbeat(runner_id: str, metrics: dict[str, Any] | None = None) -> dict[str
     runner = read_runner(runner_id)
     if not runner:
         return None
-    runner["lastHeartbeatAt"] = now_iso()
-    write_runner(runner)
+    # Touch ONLY last_heartbeat — never write the whole record from here, or a
+    # concurrent revoke/rotate is stomped by this continuously-running path.
+    from src.runner.storage import touch_heartbeat
+    touch_heartbeat(runner_id)
 
     # Store metrics if provided
     if metrics:

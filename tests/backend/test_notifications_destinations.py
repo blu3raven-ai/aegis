@@ -26,9 +26,11 @@ from src.notifications.destination import (
     create_destination,
     delete_destination,
     list_pending_retries,
+    read_config_secret,
     record_delivery,
     update_destination,
 )
+from src.shared.encryption import is_encrypted
 from src.notifications.router_event import (
     SUBSCRIBED_EVENT_TYPES,
     _event_matches_filter,
@@ -930,7 +932,9 @@ async def test_create_destination_persists_model_and_returns_dict_shape_dbbacked
     assert row is not None
     assert row.destination_type == "slack"
     assert row.name == name
-    assert row.config == {"webhook_url": "https://hooks.example.test/abc"}
+    # webhook_url is a bearer secret — stored encrypted, recoverable on read.
+    assert is_encrypted(row.config["webhook_url"])
+    assert read_config_secret(row.config["webhook_url"]) == "https://hooks.example.test/abc"
     assert row.enabled is True
     assert row.event_filter == {"min_severity": "critical"}
 
@@ -981,7 +985,7 @@ async def test_update_destination_partial_update_only_touches_passed_fields_dbba
     row = result.scalars().first()
     assert row is not None
     assert row.name == renamed
-    assert row.config == {"webhook_url": "https://x"}
+    assert read_config_secret(row.config["webhook_url"]) == "https://x"
     assert row.enabled is True
     assert row.event_filter == {"min_severity": "high"}
 

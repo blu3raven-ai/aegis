@@ -1,4 +1,4 @@
-"""DNS-rebinding defense for outbound sinks (SR: GQL-01).
+"""DNS-rebinding defense for outbound sinks.
 
 `assert_sendable_url` resolves-and-validates but the subsequent connect
 re-resolves, so a name that answered public at check time could answer

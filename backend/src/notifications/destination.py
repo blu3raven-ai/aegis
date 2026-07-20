@@ -11,6 +11,30 @@ from sqlalchemy import select
 
 from src.db.helpers import run_db
 from src.db.models import NotificationDestination, NotificationDelivery
+from src.shared.encryption import decrypt_string, encrypt_string, is_encrypted
+
+# Secret-bearing keys in a destination config that must be encrypted at rest,
+# consistent with every other secret class in the app. The Slack webhook URL
+# embeds a bearer token in its path, so it counts.
+_SECRET_CONFIG_KEYS = ("secret", "webhook_url")
+
+
+def _encrypt_config_secrets(config: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of `config` with secret-bearing values encrypted."""
+    out = dict(config)
+    for key in _SECRET_CONFIG_KEYS:
+        value = out.get(key)
+        if isinstance(value, str) and value and not is_encrypted(value):
+            out[key] = encrypt_string(value)
+    return out
+
+
+def read_config_secret(value: str | None) -> str:
+    """Decrypt a config secret written by `_encrypt_config_secrets`, tolerating
+    legacy cleartext values written before encryption was introduced."""
+    if not value:
+        return ""
+    return decrypt_string(value) if is_encrypted(value) else value
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +189,7 @@ def create_destination(
         dest = NotificationDestination(
             destination_type=destination_type,
             name=name,
-            config=config,
+            config=_encrypt_config_secrets(config),
             enabled=enabled,
             event_filter=event_filter,
             created_at=now,
@@ -198,7 +222,7 @@ def update_destination(
         if name is not None:
             dest.name = name
         if config is not None:
-            dest.config = config
+            dest.config = _encrypt_config_secrets(config)
         if enabled is not None:
             dest.enabled = enabled
         if event_filter is not None:

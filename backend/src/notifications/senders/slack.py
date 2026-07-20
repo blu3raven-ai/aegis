@@ -12,6 +12,7 @@ from typing import Any
 from src.connectors.base import BaseSender, SendResult, TestResult
 from src.connectors.http import default_client
 from src.connectors.registry import register_connector
+from src.notifications.destination import read_config_secret
 from src.notifications.url_guard import UnsafeURLError, resolve_pinned_url_sync
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ class SlackSender(BaseSender):
     href = "/notifications"
 
     def send(self, payload: dict[str, Any], config: dict[str, Any]) -> SendResult:
-        url = config.get("webhook_url", "")
+        url = read_config_secret(config.get("webhook_url", ""))
         if not url:
             return SendResult(success=False, error="slack config missing webhook_url")
 

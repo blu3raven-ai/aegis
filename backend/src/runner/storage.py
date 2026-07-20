@@ -6,7 +6,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from src.db.helpers import run_db
 from src.db.models import Runner, RunnerHeartbeat, RunnerJob, RunnerToken
@@ -64,6 +64,25 @@ def read_runner(runner_id: str) -> dict[str, Any] | None:
         return _runner_to_dict(runner) if runner else None
 
     return run_db(_query)
+
+
+def touch_heartbeat(runner_id: str) -> None:
+    """Targeted UPDATE of last_heartbeat only.
+
+    The heartbeat path must never persist status or auth_token_hash: it runs
+    continuously and its full read-modify-write would stomp a concurrent
+    revoke_runner / rotate_auth_token (TOCTOU), resurrecting a revoked runner
+    and its old token. A single-column UPDATE can't clobber fields it never
+    names.
+    """
+    async def _query(session):
+        await session.execute(
+            update(Runner)
+            .where(Runner.id == runner_id)
+            .values(last_heartbeat=datetime.now(timezone.utc))
+        )
+
+    run_db(_query)
 
 
 def write_runner(runner: dict[str, Any]) -> None:
