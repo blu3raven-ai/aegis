@@ -43,6 +43,7 @@ import {
   AdvisoryUnverifiedNote,
   AdvisoryIncompleteNote,
   RemediationUnverifiedNote,
+  SecretNoVerificationNote,
   isUsableRemediation,
   hasVerifiedAdvisory,
 } from "@/components/shared/findings/FindingReportSections"
@@ -1989,6 +1990,8 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   <MitigatingFactorsSection factors={selectedFinding.verificationMetadata?.mitigating_factors} />
                   <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
                 </div>
+              ) : selectedFinding.scanner === "secret_scanning" ? (
+                <SecretNoVerificationNote />
               ) : (
                 <AdvisoryUnverifiedNote
                   verificationEnabled={verificationEnabled}
@@ -2032,14 +2035,18 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="poc" label="Proof of Concept">
-              <FindingPocSection
-                findingId={Number(selectedFinding.id)}
-                pocScript={selectedFinding.verificationMetadata?.poc_script}
-                pocFilename={selectedFinding.verificationMetadata?.poc_filename}
-                pocLanguage={selectedFinding.verificationMetadata?.poc_language}
-                verificationEnabled={verificationEnabled}
-                onGenerated={handlePocGenerated}
-              />
+              {selectedFinding.scanner === "secret_scanning" ? (
+                <SecretNoVerificationNote />
+              ) : (
+                <FindingPocSection
+                  findingId={Number(selectedFinding.id)}
+                  pocScript={selectedFinding.verificationMetadata?.poc_script}
+                  pocFilename={selectedFinding.verificationMetadata?.poc_filename}
+                  pocLanguage={selectedFinding.verificationMetadata?.poc_language}
+                  verificationEnabled={verificationEnabled}
+                  onGenerated={handlePocGenerated}
+                />
+              )}
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="remediation" label="Remediation">
@@ -2067,6 +2074,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               {!selectedFinding.recommendedFix
                 && !isUsableRemediation(selectedFinding.remediation)
                 && !selectedFinding.verificationMetadata?.remediation?.length && (
+                  selectedFinding.scanner === "secret_scanning" ? null : (
                   hasVerifiedAdvisory(selectedFinding) ? (
                     <AdvisoryIncompleteNote
                       verificationEnabled={verificationEnabled}
@@ -2077,7 +2085,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                       verificationEnabled={verificationEnabled}
                       findingId={selectedFinding.id}
                     />
-                  )
+                  ))
                 )}
               </FindingDrawerGroup>
 

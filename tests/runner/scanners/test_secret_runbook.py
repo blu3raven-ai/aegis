@@ -1,9 +1,11 @@
 """Tests for the deterministic secret rotation runbook.
 
-These guard the safety invariants of the operational remediation: revoke is
-always the first, destructive step; history-scrub never precedes revoke; the
-runbook is never empty (generic fallback); and it is attached to every emitted
-secret finding without any LLM involvement.
+One generic playbook backs every secret finding. These guard its safety
+invariants: revoke is always the first, destructive step; history-scrub never
+precedes revoke; the runbook is never empty; the detector name surfaces as the
+credential label; and no provider-specific URLs are hardcoded (they'd be wrong
+for self-hosted GitLab/Gitea). The runbook is attached to every emitted secret
+finding without any LLM involvement.
 """
 from __future__ import annotations
 
@@ -14,10 +16,7 @@ from pathlib import Path
 import pytest
 
 from runner.scanners.secrets import normalize
-from runner.scanners.secrets.remediation import (
-    _normalize_detector,
-    build_secret_runbook,
-)
+from runner.scanners.secrets.remediation import build_secret_runbook
 
 
 _SCRUB_LABEL = "Purge the secret from git history"
@@ -38,59 +37,50 @@ def _scrub_order(runbook: dict) -> int:
     return next(s["order"] for s in runbook["steps"] if s["label"] == _SCRUB_LABEL)
 
 
-# ---------------------------------------------------------------------------
-# Known detectors map to their provider playbook
-# ---------------------------------------------------------------------------
-
-_KNOWN = [
-    ("AWS", "AWS"),
-    ("GCP", "Google Cloud (service account key)"),
-    ("Github", "GitHub"),
-    ("OpenAI", "OpenAI"),
-    ("Slack", "Slack"),
-    ("Stripe", "Stripe"),
-]
+# Every detector uses the same generic steps; the detector name only surfaces as
+# the credential label.
+_DETECTORS = ["AWS", "GCP", "Github", "GitLab", "Gitea", "OpenAI", "Slack", "Stripe"]
 
 
-@pytest.mark.parametrize("detector,provider", _KNOWN)
-def test_known_detector_maps_to_provider_playbook(detector: str, provider: str) -> None:
+@pytest.mark.parametrize("detector", _DETECTORS)
+def test_runbook_surfaces_detector_as_label(detector: str) -> None:
     runbook = build_secret_runbook(_finding(detector))
 
     assert runbook["kind"] == "rotation"
     assert runbook["source"] == "deterministic"
-    assert runbook["provider"] == provider
-    assert provider in runbook["title"]
+    assert runbook["provider"] == detector
+    assert detector in runbook["title"]
     assert detector in runbook["rationale"]
 
 
-@pytest.mark.parametrize("detector,_provider", _KNOWN)
-def test_known_detector_revoke_first_and_scrub_after(detector: str, _provider: str) -> None:
+@pytest.mark.parametrize("detector", _DETECTORS)
+def test_runbook_revoke_first_and_scrub_after(detector: str) -> None:
     runbook = build_secret_runbook(_finding(detector))
     steps = runbook["steps"]
 
     assert steps, "steps must never be empty"
-    # Revoke is order 1 and destructive.
     assert steps[0]["order"] == 1
     assert steps[0]["destructive"] is True
     assert _revoke_order(runbook) == 1
-    # History scrub comes strictly after revoke.
     assert _scrub_order(runbook) > _revoke_order(runbook)
-    # Orders are a contiguous 1..N sequence.
     assert [s["order"] for s in steps] == list(range(1, len(steps) + 1))
 
 
-# ---------------------------------------------------------------------------
-# Unknown detector -> generic playbook
-# ---------------------------------------------------------------------------
+def test_runbook_has_no_provider_specific_urls() -> None:
+    # No hardcoded provider rotation/push-protection URLs — they'd be wrong for
+    # self-hosted GitLab/Gitea and add no value for SaaS the operator knows.
+    runbook = build_secret_runbook(_finding("GitLab"))
+    blob = json.dumps(runbook)
+    for verboten in ("github.com/settings", "gitlab.com/-/", "docs.github.com"):
+        assert verboten not in blob, f"hardcoded provider URL leaked into runbook: {verboten}"
 
-def test_unknown_detector_falls_back_to_generic() -> None:
+
+def test_unknown_detector_uses_generic_steps() -> None:
     runbook = build_secret_runbook(_finding("SomeRandomHighEntropyToken"))
 
-    assert _normalize_detector("SomeRandomHighEntropyToken") == "generic"
     assert runbook["kind"] == "rotation"
     assert runbook["source"] == "deterministic"
-    assert runbook["steps"], "generic fallback must not be empty"
-    # Revoke-first invariant holds for the generic playbook too.
+    assert runbook["steps"], "generic runbook must not be empty"
     assert runbook["steps"][0]["order"] == 1
     assert runbook["steps"][0]["destructive"] is True
     assert _scrub_order(runbook) > _revoke_order(runbook)
@@ -105,35 +95,6 @@ def test_empty_detector_still_produces_runbook() -> None:
     assert runbook["title"] == "Rotate the exposed credential"
     assert runbook["steps"][0]["destructive"] is True
     assert _scrub_order(runbook) > _revoke_order(runbook)
-
-
-# ---------------------------------------------------------------------------
-# Detector-name normalization
-# ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize(
-    "detector,expected_key",
-    [
-        ("AWS", "aws"),
-        ("aws", "aws"),
-        ("AWSSessionKey", "aws"),
-        ("GCP", "gcp"),
-        ("GitHubApp", "github"),
-        ("github", "github"),
-        ("SlackWebhook", "slack"),
-        ("OpenAI", "openai"),
-        ("Stripe", "stripe"),
-        ("UnknownThing", "generic"),
-    ],
-)
-def test_detector_normalization(detector: str, expected_key: str) -> None:
-    assert _normalize_detector(detector) == expected_key
-
-
-def test_trufflehog_variant_resolves_to_aws() -> None:
-    """A TruffleHog DetectorName variant still lands on the AWS playbook."""
-    runbook = build_secret_runbook(_finding("AWSSessionKey"))
-    assert runbook["provider"] == "AWS"
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +141,6 @@ def test_normalize_file_attaches_runbook_to_every_finding() -> None:
         assert fix["kind"] == "rotation"
         assert fix["source"] == "deterministic"
         assert fix["steps"][0]["destructive"] is True
-        # Provider-verified flag carried through from the trufflehog record.
     assert out[0]["recommended_fix"]["verifiedActive"] is True
     assert out[0]["recommended_fix"]["provider"] == "AWS"
     assert out[1]["recommended_fix"]["verifiedActive"] is False

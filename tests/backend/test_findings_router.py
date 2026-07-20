@@ -884,6 +884,21 @@ def test_reverify_finding_404_when_out_of_scope():
     assert resp.status_code == 404
 
 
+def test_reverify_finding_422_for_secret_scanning():
+    # Secret material must never be sent to the verification model, so the
+    # reverify endpoint refuses secret findings before touching LLM config.
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID, tool="secret_scanning")
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict",
+               return_value={**_ADVISORY_DICT, "scanner": "secret_scanning", "asset_id": _FAKE_ASSET_ID}):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/verify")
+    assert resp.status_code == 422
+
+
 def test_reverify_finding_409_when_llm_not_configured():
     finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
     with patch("src.findings.router.require_permission"), \

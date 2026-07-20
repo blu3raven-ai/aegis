@@ -234,6 +234,24 @@ export function isUsableRemediation(remediation?: string): boolean {
   return remediation ? !/\$[A-Z][A-Z0-9_]*/.test(remediation) : false
 }
 
+/** Shown in place of the LLM verification upsell for secret findings. Secret
+ *  material must never be sent to the verification model, so the LLM advisory /
+ *  remediation / PoC surfaces are intentionally absent for these findings. */
+export function SecretNoVerificationNote() {
+  return (
+    <section className="rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-4 text-center">
+      <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--color-text-primary)]">
+        LLM verification disabled
+      </h3>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-[var(--color-text-secondary)]">
+        Secret findings are never sent to the verification model, so no LLM
+        advisory, remediation, or proof-of-concept is generated. Rotate the
+        secret and revoke any exposed credentials.
+      </p>
+    </section>
+  )
+}
+
 /** Remediation-absent empty state — a blurred fix preview behind the CTA. */
 export function RemediationUnverifiedNote({
   verificationEnabled = true,
