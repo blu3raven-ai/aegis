@@ -584,6 +584,10 @@ async def reverify_finding(finding_id: int, request: Request) -> dict[str, Any]:
     """
     require_permission(request, RUN_SCANS)
     finding = await _scoped_finding_dict(finding_id, request)
+    # Secret findings are never sent to the verification model — the secret
+    # material must not leak to the LLM — so there is nothing to re-verify.
+    if (finding.get("scanner") or "") == "secret_scanning":
+        raise HTTPException(status_code=422, detail="LLM verification is not available for secret findings")
     cfg = fetch_llm_config(_resolve_org_id())
     if cfg is None or not cfg.enabled or not cfg.api_key:
         raise HTTPException(status_code=409, detail="LLM is not configured")
