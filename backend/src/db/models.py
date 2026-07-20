@@ -44,6 +44,12 @@ class User(Base):
     sso_subject: Mapped[str | None] = mapped_column(String(512), nullable=True)
     sso_protocol: Mapped[str | None] = mapped_column(String(16), nullable=True)
     scim_managed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=sa.false())
+    # A self-service email change is staged here and only promoted to `email`
+    # once the new address is proven via a one-time token, so a caller can't
+    # claim an address they don't control (which SSO JIT auto-link would trust).
+    pending_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pending_email_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    pending_email_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

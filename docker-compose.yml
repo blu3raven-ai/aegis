@@ -94,6 +94,15 @@ services:
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      # Public base URL used to build links in outbound email (e.g. the
+      # email-change confirmation link). Set to how users reach the app.
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
+      # SMTP is required for transactional email (email-change verification).
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       # Mounts the e2e fixture-seed endpoint. Empty (off) everywhere except CI e2e.
       ENABLE_TEST_ENDPOINTS: ${ENABLE_TEST_ENDPOINTS:-}
       FASTAPI_ENV: production
