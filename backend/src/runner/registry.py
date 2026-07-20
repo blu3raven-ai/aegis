@@ -64,21 +64,29 @@ def register_runner(
     raw_auth, auth_hash = generate_auth_token()
 
     # Idempotent by name for compose runners that restart, but a re-registration
-    # cannot prove it is the same runner. Only reuse a record that is not yet
-    # trusted (pending/stale). If an already-approved runner owns this name, a
-    # new registration is treated as a distinct, untrusted runner: the trusted
-    # record — its token, job assignments and approval — is left untouched, and
-    # the newcomer starts pending until an admin approves it.
+    # cannot prove it is the same runner. Reuse a record that is not yet trusted
+    # (pending), or one whose approved holder has gone silent (no heartbeat for a
+    # while — the runner died and is re-registering). Only when an approved
+    # holder is still actively heartbeating do we treat the newcomer as a
+    # distinct, untrusted runner: the live record is left untouched and the
+    # newcomer starts pending until an admin approves it.
+    STALE_AFTER_SECONDS = 120  # runners heartbeat every <60s; 2 min silent = dead
     name_taken_by_approved = False
     if is_local and name:
         existing = _find_runner_by_name(name)
         if existing:
-            if existing.get("status") == "approved":
+            approved_and_live = existing.get("status") == "approved" and _heartbeated_within(
+                existing, STALE_AFTER_SECONDS
+            )
+            if approved_and_live:
                 name_taken_by_approved = True
             else:
+                # Reuse this record (pending, or approved-but-stale). For a local
+                # runner presenting the shared registration token, re-approve on
+                # takeover so a restart/recover doesn't strand the runner pending.
                 existing["authTokenHash"] = auth_hash
-                existing["status"] = "pending_approval"
-                existing["approvedAt"] = None
+                existing["status"] = "approved" if is_local else "pending_approval"
+                existing["approvedAt"] = now_iso() if is_local else None
                 existing["lastHeartbeatAt"] = now_iso()
                 if os_name:
                     existing["os"] = os_name
@@ -102,15 +110,29 @@ def register_runner(
         "authTokenHash": auth_hash,
         "orgId": None,
     }
-    # Auto-approve compose runners, except when the name is already held by an
-    # approved runner — auto-approving there would hand a caller who knows the
-    # shared token an approved runner under another runner's name.
+    # Auto-approve compose runners, except when the name is already held by a
+    # live approved runner — auto-approving there would hand a caller who knows
+    # the shared token an approved runner under another runner's name.
     if is_local and not name_taken_by_approved:
         runner["status"] = "approved"
         runner["approvedAt"] = now_iso()
 
     write_runner(runner)
     return runner, raw_auth, None
+
+
+def _heartbeated_within(runner: dict[str, Any], seconds: int) -> bool:
+    """True if the runner heartbeated within the last `seconds`."""
+    raw = runner.get("lastHeartbeatAt")
+    if not raw:
+        return False
+    try:
+        last = parse_iso_utc(raw)
+    except (ValueError, TypeError):
+        return False
+    if last is None:
+        return False
+    return (datetime.now(timezone.utc) - last).total_seconds() <= seconds
 
 
 def _find_runner_by_name(name: str) -> dict[str, Any] | None:
