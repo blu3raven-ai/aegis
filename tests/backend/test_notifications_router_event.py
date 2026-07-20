@@ -27,6 +27,7 @@ from src.db.models import (
     NotificationDestination,
     NotificationRule,
 )
+from src.notifications.destination import read_config_secret
 from src.notifications.router_event import NotificationEventRouter
 from src.shared.event_bus import Event
 
@@ -248,7 +249,7 @@ async def test_handle_event_dispatches_to_matching_slack_destination(
     assert len(slack.calls) == 1
     payload, config = slack.calls[0]
     assert "blocks" in payload and "text" in payload
-    assert config["webhook_url"] == "https://hooks.example.test/x"
+    assert read_config_secret(config["webhook_url"]) == "https://hooks.example.test/x"
 
     # Delivery row recorded as 'delivered'.
     rows = (await db_session.execute(

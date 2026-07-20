@@ -221,7 +221,13 @@ def persist_raw_secret_to_channel(
             if isinstance(entry, dict) and entry.get("status") == "active":
                 entry["status"] = "rotating"
 
-        existing.append({"version": version, "raw": raw, "status": "active", "created_at": now_iso})
+        from src.shared.encryption import encrypt_string
+
+        # Encrypt the raw secret at rest — it's the working outbound-signing key,
+        # so it must be stored like every other secret class, not in cleartext.
+        existing.append(
+            {"version": version, "raw": encrypt_string(raw), "status": "active", "created_at": now_iso}
+        )
         dest.config = {**dest.config, "_signing_secrets": existing}
         flag_modified(dest, "config")
         await session.flush()

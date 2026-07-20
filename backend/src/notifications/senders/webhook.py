@@ -22,6 +22,7 @@ from typing import Any
 from src.connectors.base import BaseSender, SendResult, TestResult
 from src.connectors.http import default_client
 from src.connectors.registry import register_connector
+from src.notifications.destination import read_config_secret
 from src.notifications.url_guard import UnsafeURLError, resolve_pinned_url_sync
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class GenericWebhookSender(BaseSender):
 
             signing_entries: list[dict[str, Any]] = config.get("_signing_secrets") or []
             active_raws = [
-                e["raw"]
+                read_config_secret(e["raw"])
                 for e in signing_entries
                 if isinstance(e, dict) and e.get("raw") and e.get("status") != "revoked"
             ]
@@ -78,7 +79,7 @@ class GenericWebhookSender(BaseSender):
                 headers.update(signing_hdrs)
             else:
                 # Legacy: honour config["secret"] if present (pre-Phase 44 channels)
-                legacy_secret = config.get("secret", "")
+                legacy_secret = read_config_secret(config.get("secret", ""))
                 if legacy_secret:
                     headers[_LEGACY_SIG_HEADER] = _sign(body, legacy_secret)
                     logger.warning(
