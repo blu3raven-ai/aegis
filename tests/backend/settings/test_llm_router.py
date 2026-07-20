@@ -6,6 +6,14 @@ from unittest.mock import patch
 
 import pytest
 from cryptography.fernet import Fernet
+
+
+@pytest.fixture(autouse=True)
+def _allow_llm_base_url():
+    """These tests exercise the router contract, not the SSRF guard, so
+    neutralize the base-URL validation for their placeholder URLs."""
+    with patch("src.settings.llm.service.assert_sendable_url", lambda *_a, **_k: None):
+        yield
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from sqlalchemy import delete

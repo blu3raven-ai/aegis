@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.helpers import run_db
 from src.db.models import LlmConfig
 from src.security.crypto import decrypt, encrypt
+from src.shared.url_guard import assert_sendable_url
 
 
 @dataclass
@@ -34,6 +35,13 @@ class LlmConfigUpsert:
 
 
 def upsert_llm_config(upsert: LlmConfigUpsert) -> None:
+    # The base URL is shipped to the runner and used as the verification LLM
+    # endpoint, receiving the API key as a Bearer token — an internal/link-local
+    # target would exfiltrate that key. Validate before persisting (raises
+    # UnsafeURLError, which the router surfaces as 422).
+    if upsert.api_base_url:
+        assert_sendable_url(upsert.api_base_url)
+
     async def _q(session: AsyncSession) -> None:
         row = (
             await session.execute(
