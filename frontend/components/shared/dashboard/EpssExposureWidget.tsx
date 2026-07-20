@@ -46,7 +46,7 @@ export function EpssExposureWidget({ findings }: EpssExposureWidgetProps) {
             return (
               <li key={f.finding_id}>
                 <Link
-                  href={`/findings/${f.finding_id}`}
+                  href={`/findings?finding=${f.finding_id}`}
                   className={`group flex items-center gap-3 rounded-lg px-2 py-1.5 -mx-2 transition-colors hover:bg-[var(--color-bg-hover)] ${LINK_FOCUS}`}
                 >
                   <span className="font-[family-name:var(--font-jetbrains-mono)] text-[11.5px] text-[var(--color-text-primary)] shrink-0">

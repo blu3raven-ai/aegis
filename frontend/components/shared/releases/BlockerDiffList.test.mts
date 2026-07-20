@@ -22,7 +22,7 @@ describe("BlockerDiffList wiring", () => {
 
   it("links each row to /findings/{id}", () => {
     assert.ok(
-      src.includes("`/findings/${row.finding_id}`"),
+      src.includes("`/findings?finding=${row.finding_id}`"),
       "should link to finding detail page",
     )
   })

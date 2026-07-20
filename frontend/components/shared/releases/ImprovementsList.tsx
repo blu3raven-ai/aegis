@@ -76,7 +76,7 @@ export function ImprovementsList({ improvements }: ImprovementsListProps) {
                 </div>
               </div>
               <Link
-                href={`/findings/${row.finding_id}`}
+                href={`/findings?finding=${row.finding_id}`}
                 className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline"
               >
                 View finding →

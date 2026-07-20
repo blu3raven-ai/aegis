@@ -159,7 +159,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
 
       {/* Open-fix-PR / Jira stay disabled until those integrations are wired through. */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <LinkButton href={`/findings/${card.primaryFindingId}`} variant="primary" size="sm">
+        <LinkButton href={`/findings?finding=${card.primaryFindingId}`} variant="primary" size="sm">
           Investigate →
         </LinkButton>
         <Button variant="secondary" size="sm" disabled title="Coming soon">
@@ -202,7 +202,7 @@ function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
     : null
   return (
     <Link
-      href={`/findings/${finding.id}`}
+      href={`/findings?finding=${finding.id}`}
       className={`block rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
     >
       {/* Sev chip + title row */}
@@ -269,7 +269,7 @@ function CompactFindingRow({ finding }: { finding: ApiFinding }) {
     : null
   return (
     <Link
-      href={`/findings/${finding.id}`}
+      href={`/findings?finding=${finding.id}`}
       className={`group flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
     >
       <span

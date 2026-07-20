@@ -109,7 +109,7 @@ function MappingRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Link
-            href={`/findings/${finding.id}`}
+            href={`/findings?finding=${finding.id}`}
             title={`${finding.tool}: ${finding.identity_key}`}
             className={`truncate text-sm font-medium text-[var(--color-text-primary)] hover:underline ${finding.suppressed ? "line-through" : ""}`}
           >
