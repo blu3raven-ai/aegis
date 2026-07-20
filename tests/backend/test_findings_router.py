@@ -20,7 +20,7 @@ from src.findings.router import router as findings_router  # noqa: E402
 
 _FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 _OTHER_ASSET_ID = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
-_VALID_REASON = "Risk is tolerable"
+_VALID_REASON = "Alert is inaccurate"
 
 
 def _make_app() -> FastAPI:

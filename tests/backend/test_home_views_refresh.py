@@ -101,7 +101,7 @@ def _seed_dismissed_finding(key: str) -> None:
         await session.flush()
         await upsert_decision(
             session, tool=_TOOL, asset_id=None, identity_key=key,
-            status="dismissed", reason="Risk is tolerable", decided_by="tester",
+            status="dismissed", reason="Alert is inaccurate", decided_by="tester",
         )
     run_db(_q)
 
@@ -254,7 +254,7 @@ def test_dismiss_finding_triggers_refresh():
             tool=_TOOL,
             org=org,
             identity_key=key,
-            reason="Risk is tolerable",
+            reason="Alert is inaccurate",
             user_id="tester",
         )
 
@@ -291,7 +291,7 @@ def test_bulk_dismiss_triggers_refresh():
             tool=_TOOL,
             org=org,
             identity_keys=keys,
-            reason="Risk is tolerable",
+            reason="Alert is inaccurate",
             user_id="tester",
         )
 

@@ -379,10 +379,10 @@ export async function getFindingRelated(findingId: number): Promise<FindingRelat
 }
 
 
-/** Reasons accepted by the backend. Keep in sync with backend/src/shared/lifecycle.VALID_DISMISS_REASONS. */
+/** User-offered dismiss reasons — "this finding isn't actionable" only. Risk
+ *  acceptance and fix-tracking are handled by the Accept risk / Defer actions,
+ *  not dismiss. Keep in sync with backend/src/shared/lifecycle.VALID_DISMISS_REASONS. */
 export const DISMISS_REASONS = [
-  "Fix started",
-  "Risk is tolerable",
   "Alert is inaccurate",
   "Vulnerable code is not used",
 ] as const
