@@ -212,7 +212,17 @@ export function SourceOverviewPageContent() {
   if (!connection) return <OverviewSkeleton />
 
   const itemNoun = CATEGORY_ITEM_LABELS[connection.category]
-  const items = connection.discoveredItems ?? []
+  // The "Discovered" card shows only the repos this connection will actually
+  // scan — its configured scope — not every repo the source turned up.
+  const discoveredAll = connection.discoveredItems ?? []
+  const scanScope = connection.scanScope ?? "all"
+  const items =
+    scanScope === "selected"
+      ? discoveredAll.filter((item) => (connection.includedItems ?? []).includes(item))
+      : scanScope === "all-except-excluded"
+        ? discoveredAll.filter((item) => !(connection.excludedItems ?? []).includes(item))
+        : discoveredAll
+  const excludedFromScan = discoveredAll.length - items.length
   const VISIBLE = 24
   const overflow = Math.max(0, items.length - VISIBLE)
   const scan = scanSummary(connection)
@@ -295,17 +305,15 @@ export function SourceOverviewPageContent() {
           </dl>
         </Card>
 
-        {/* Discovered items */}
+        {/* Discovered items — filtered to this connection's scan scope */}
         <Card as="section" className="lg:col-span-2">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold capitalize text-[var(--color-text-primary)]">
-              Discovered {itemNoun}
+              {scanScope === "all" ? `Discovered ${itemNoun}` : `In scan scope`}
             </h2>
-            {connection.discoveredItemCount != null && (
-              <span className="shrink-0 rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs font-medium tabular-nums text-[var(--color-text-secondary)]">
-                {connection.discoveredItemCount.toLocaleString()}
-              </span>
-            )}
+            <span className="shrink-0 rounded-full bg-[var(--color-surface-raised)] px-2 py-0.5 text-xs font-medium tabular-nums text-[var(--color-text-secondary)]">
+              {items.length.toLocaleString()}
+            </span>
           </div>
 
           {items.length > 0 ? (
@@ -326,11 +334,18 @@ export function SourceOverviewPageContent() {
                   + {overflow.toLocaleString()} more
                 </p>
               )}
+              {excludedFromScan > 0 && (
+                <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">
+                  {excludedFromScan.toLocaleString()} {itemNoun} discovered but not in the scan scope.
+                </p>
+              )}
             </>
           ) : (
             <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
-              {connection.discoveredItemCount
-                ? `${connection.discoveredItemCount.toLocaleString()} ${itemNoun} discovered. Run a scan to surface findings.`
+              {discoveredAll.length
+                ? scanScope === "all"
+                  ? `${discoveredAll.length.toLocaleString()} ${itemNoun} discovered. Run a scan to surface findings.`
+                  : `No ${itemNoun} selected for scanning. Adjust the scan scope to include some.`
                 : `No ${itemNoun} discovered yet. They'll appear after the next sync.`}
             </p>
           )}
