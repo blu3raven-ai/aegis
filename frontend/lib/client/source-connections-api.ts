@@ -282,7 +282,14 @@ export async function getActiveSourceScanRuns(
 }
 
 /** One entry per connection that currently has an active source scan. */
-export type ActiveScanSummary = { connectionId: string; org: string; runIds: string[] }
+export type ActiveScanSummary = {
+  connectionId: string
+  org: string
+  runIds: string[]
+  /** Earliest run start (ISO), so the banner's elapsed timer is correct on
+   *  mount instead of resetting to 0 after a page refresh. */
+  startedAt?: string | null
+}
 
 /**
  * All in-flight source scans (manual or scheduled) across connections, so the

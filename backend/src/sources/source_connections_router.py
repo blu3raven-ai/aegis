@@ -448,15 +448,28 @@ async def get_all_active_scan_runs(
 
         async with get_session() as session:
             result = await session.execute(
-                select(ScanRun.id, ScanRun.metadata_json["org_label"].astext)
+                select(
+                    ScanRun.id,
+                    ScanRun.metadata_json["org_label"].astext,
+                    ScanRun.started_at,
+                )
                 .where(or_(ScanRun.id.like("manual-%"), ScanRun.id.like("scheduled-%")))
                 .where(ScanRun.status.in_(["queued", "running", "ingesting"]))
                 .order_by(ScanRun.id)
             )
             run_ids_by_org: dict[str, list[str]] = {}
-            for run_id, org_label in result.fetchall():
-                if org_label:
-                    run_ids_by_org.setdefault(org_label.lower(), []).append(run_id)
+            earliest_started_by_org: dict[str, str | None] = {}
+            for run_id, org_label, started_at in result.fetchall():
+                if not org_label:
+                    continue
+                key = org_label.lower()
+                run_ids_by_org.setdefault(key, []).append(run_id)
+                # Track the earliest run start so the banner's elapsed timer is
+                # correct immediately on mount instead of resetting to 0.
+                if started_at is not None:
+                    prev = earliest_started_by_org.get(key)
+                    if prev is None or started_at < prev:
+                        earliest_started_by_org[key] = started_at
 
         scans = []
         for org_lower, conns in conns_by_org.items():
@@ -465,7 +478,12 @@ async def get_all_active_scan_runs(
                 continue
             # If two connections share an org label, attribute the runs to the
             # first — the banner only needs one connection to drive cancel/poll.
-            scans.append({**conns[0], "runIds": run_ids})
+            started = earliest_started_by_org.get(org_lower)
+            scans.append({
+                **conns[0],
+                "runIds": run_ids,
+                "startedAt": started.isoformat() if started else None,
+            })
 
         return JSONResponse({"scans": scans})
     except SourceStoreError as exc:

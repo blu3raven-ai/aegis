@@ -34,6 +34,9 @@ interface ActiveScan {
   /** Display label (org/owner or source name) for the banner. */
   org: string
   runIds: string[]
+  /** Earliest run start (ISO). Seed for the banner's elapsed timer so a page
+   *  refresh doesn't reset it to 0 while waiting for the per-run poll. */
+  startedAt?: string | null
 }
 
 interface ScanProgressValue {
@@ -148,9 +151,18 @@ export function ScanProgressProvider({ children }: { children: React.ReactNode }
       persisted.map(async (s) => {
         if (!s?.connectionId) return null
         const r = await getActiveSourceScanRuns(s.connectionId)
-        return r.ok && r.data.runIds.length > 0
-          ? { connectionId: s.connectionId, org: s.org, runIds: r.data.runIds }
-          : null
+        if (!r.ok || r.data.runIds.length === 0) return null
+        // Earliest run start seeds the banner timer so a refresh doesn't flash 0.
+        const starts = r.data.runs
+          .map((run) => run.startedAt)
+          .filter((v): v is string => Boolean(v))
+          .sort()
+        return {
+          connectionId: s.connectionId,
+          org: s.org,
+          runIds: r.data.runIds,
+          startedAt: starts[0] ?? null,
+        }
       }),
     ).then((results) => {
       if (cancelled) return
@@ -242,6 +254,7 @@ export function ScanProgressProvider({ children }: { children: React.ReactNode }
               connectionId={scan.connectionId}
               org={scan.org}
               runIds={scan.runIds}
+              initialStartedAt={scan.startedAt ?? null}
               onDone={() => unregister(scan.connectionId)}
               onDismiss={() => dismiss(scan.connectionId)}
               onCancel={canCancel ? () => void cancel(scan.connectionId) : undefined}
