@@ -31,9 +31,16 @@ class UnsafeURLError(ValueError):
     """Raised when a destination URL is not permitted for outbound delivery."""
 
 
+_CGNAT_RANGE = ipaddress.ip_network("100.64.0.0/10")  # RFC 6598 — shared carrier-grade NAT
+
+
 def _is_disallowed_ip(ip: str) -> bool:
     addr = ipaddress.ip_address(ip)
     if str(addr) in _METADATA_ADDRESSES:
+        return True
+    # RFC 6598 CGNAT space isn't flagged as private by stdlib ipaddress, but is
+    # non-routable and can host internal/metadata services in some clouds.
+    if addr.version == 4 and addr in _CGNAT_RANGE:
         return True
     return (
         addr.is_loopback

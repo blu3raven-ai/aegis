@@ -38,7 +38,9 @@ from src.auth.authentication.rate_limit import RateLimitService
 from src.auth.authentication.session import DEFAULT_TTL_SECONDS, SessionService
 from src.db.models import User
 from src.authz.roles.service import role_kind_from_id
-from src.shared.config import get_session_secret
+from src.authz.permissions.catalog import MANAGE_USERS
+from src.authz.permissions.service import has_role_permission
+from src.shared.config import get_session_secret, read_app_config
 from src.shared.passwords import hash_password, verify_password
 from src.shared.encryption import DecryptionError
 from src.shared.totp import verify_totp
@@ -176,7 +178,31 @@ async def login(
         )
         raise HTTPException(status_code=401, detail="Account is disabled.")
 
-    if user.totp_enabled and user.totp_secret:
+    # Enforce the admin-set MFA floor. The policy is stored in app config; it
+    # was previously a dead toggle (persisted, never read). Privileged users
+    # (those holding manage_users) and non-SSO accounts can be required to
+    # complete MFA before a session is issued. SSO accounts rely on the IdP's
+    # own MFA, so the manual-user policy exempts them.
+    auth_security = read_app_config().get("authSecurity") or {}
+    is_sso = user.sso_subject is not None
+    policy_requires_mfa = (
+        (bool(auth_security.get("requireMfaAdmins")) and has_role_permission(
+            role_kind_from_id(user.role_id), user.role_id, MANAGE_USERS))
+        or (bool(auth_security.get("requireMfaManualUsers")) and not is_sso)
+    )
+    if policy_requires_mfa and not user.totp_secret:
+        # The policy requires MFA but the user hasn't enrolled — refuse rather
+        # than silently issuing a session that bypasses the admin-set floor.
+        _audit.record(
+            action="auth.login.failure",
+            resource_type="user",
+            actor=ActorInfo(email=user.email or payload.identifier),
+            request=ctx,
+            metadata={"reason": "mfa_enrollment_required"},
+        )
+        raise HTTPException(status_code=403, detail="MFA enrollment is required by policy before signing in.")
+
+    if (user.totp_enabled or policy_requires_mfa) and user.totp_secret:
         pending_token = secrets.token_urlsafe(32)
         _pending_mfa[pending_token] = {
             "user_id": user.id,

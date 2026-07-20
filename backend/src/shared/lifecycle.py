@@ -166,12 +166,17 @@ class ScanContext:
     def __init__(
         self, tool: str, org: str, run_id: str,
         source_type: str,
+        git_repos: list[str] | None = None,
         **kwargs: Any,
     ):
         self.tool = tool
         self.org = normalize_org(org)
         self.run_id = run_id
         self.source_type = source_type
+        # The repos the dispatching job was assigned to scan. Ingest drops any
+        # finding whose repo isn't in this set, so a rogue runner can't plant
+        # findings on assets it wasn't asked to scan.
+        self.git_repos = git_repos
         self.extra = kwargs
 
 
@@ -270,6 +275,20 @@ def apply_lifecycle(
 
             prev = prev_map.get(key)
             repo = hooks.extract_repo(raw)
+            # Drop findings whose repo wasn't in the job's assigned scope — a
+            # rogue runner otherwise plants findings on assets it wasn't asked
+            # to scan. Match on the owner/repo tail since GIT_REPOS are clone
+            # URLs and extract_repo returns owner/repo.
+            assigned = ctx.git_repos
+            if assigned and repo:
+                tail = repo.split("/")[-1]
+                if not any(r.endswith(repo) or repo.endswith(r.split("/")[-1]) for r in assigned) and \
+                   not any(r.endswith(tail) for r in assigned):
+                    logger.warning(
+                        "ingest: finding repo %s not in job scope %s — skipping",
+                        repo, sorted(assigned)[:5],
+                    )
+                    continue
             severity = hooks.extract_severity(raw)
             engine = hooks.extract_engine(raw)
             detail = _sanitize_for_pg(hooks.extract_detail(raw))

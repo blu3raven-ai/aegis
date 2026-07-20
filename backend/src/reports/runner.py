@@ -114,6 +114,38 @@ def _mark_run(schedule_id: int, *, status: str, error: str | None, now: datetime
     run_db(_query)
 
 
+def _disable_schedule(schedule_id: int) -> None:
+    async def _query(session: AsyncSession) -> None:
+        sr = await session.get(ScheduledReport, schedule_id)
+        if sr is None:
+            return
+        sr.enabled = False
+
+    run_db(_query)
+
+
+def _creator_live_scope(created_by: str) -> list[str]:
+    """Re-resolve the creator's current asset grants at dispatch time.
+
+    Extracted so tests can patch it without a live grant table. Empty for a
+    disabled/removed creator or one with no remaining grants (fail-closed).
+    """
+    from src.authz.enforcement.scope import get_user_asset_ids
+    from src.authz.roles.service import role_kind_from_id
+    from src.db.models import User
+
+    async def _resolve(session):
+        creator = await session.get(User, created_by)
+        if creator is None or creator.status != "active":
+            return []
+        return await get_user_asset_ids(
+            session,
+            {"user_id": created_by, "role": role_kind_from_id(creator.role_id)},
+        )
+
+    return run_db(_resolve)
+
+
 def _ran_within_last_minute(schedule: ScheduledReport, now: datetime) -> bool:
     """Skip re-running a schedule that fired within the previous 55 seconds.
 
@@ -146,6 +178,19 @@ def run_due_schedules(*, now: datetime | None = None) -> int:
         try:
             filters = dict(sr.filters or {})
             asset_ids = list(filters.pop("asset_ids", []))
+            # Re-resolve the creator's live asset scope at dispatch time and
+            # intersect with the snapshot frozen at schedule creation. A user
+            # whose grants were revoked (or who was disabled) must not keep
+            # receiving reports on assets they can no longer see.
+            live_scope = set(_creator_live_scope(sr.created_by))
+            asset_ids = [aid for aid in asset_ids if aid in live_scope]
+            if not asset_ids:
+                # Creator lost all grants on the scheduled assets — skip and
+                # disable so it doesn't keep firing no-op runs.
+                _mark_run(sr.id, status="skipped:revoked", error=None, now=now)
+                _disable_schedule(sr.id)
+                continue
+
             report = generate_report(
                 report_type=sr.report_type,
                 fmt=sr.format,

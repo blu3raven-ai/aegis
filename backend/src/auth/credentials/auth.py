@@ -64,6 +64,16 @@ async def verify_api_key(authorization_header: str | None) -> object | None:
                 select(ApiKey).where(ApiKey.token_hash == candidate_hash)
             )
             row = result.scalar_one_or_none()
+            if row is None or row.created_by_user_id is None:
+                return _validate_row(candidate_hash, row)
+            # Defense-in-depth: a key whose creator has been disabled must not
+            # authenticate even if the revoke-on-disable race lost. The disable
+            # path already revokes the row; this catches any straggler.
+            from src.db.models import User
+
+            creator = await session.get(User, row.created_by_user_id)
+            if creator is not None and creator.status not in ("active", "pending"):
+                return None
     except Exception:
         return None
 

@@ -27,14 +27,22 @@ def _utcnow() -> datetime:
 
 
 def _ruled_out_grounded(evidence: Any, verification_metadata: Any) -> bool:
-    """Whether a ``ruled_out`` verdict cites a real file, in the evidence or in
-    the suppression's ``ruled_out_reason``. An ungrounded ruled_out must not be
-    allowed to hide a finding (recall safety)."""
-    if any(isinstance(e, dict) and e.get("file") for e in (evidence or [])):
+    """Whether a ``ruled_out`` verdict cites a real, snippet-backed citation —
+    in the evidence or in the suppression's ``ruled_out_reason``. A file name
+    alone is not grounding: a prompt-injected repo can name a file without a
+    real mitigation. An ungrounded ruled_out must not hide a finding (recall)."""
+    if any(
+        isinstance(e, dict) and e.get("file") and (e.get("snippet") or "").strip()
+        for e in (evidence or [])
+    ):
         return True
     meta = verification_metadata if isinstance(verification_metadata, dict) else {}
     reason = meta.get("ruled_out_reason")
-    return bool(isinstance(reason, dict) and reason.get("file"))
+    return (
+        isinstance(reason, dict)
+        and bool(reason.get("file"))
+        and bool((reason.get("snippet") or "").strip())
+    )
 
 
 async def compute_deps_verdict(
@@ -550,7 +558,8 @@ async def query_top_repositories(
 
 
 async def lookup_verification_cache(
-    session: AsyncSession, *, tool: str, hashes: list[str]
+    session: AsyncSession, *, tool: str, hashes: list[str],
+    asset_ids: list[str] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Return cached LLM verification results keyed by verification-input hash.
 
@@ -558,22 +567,24 @@ async def lookup_verification_cache(
     only when the runner actually verified it (never on a skip), so a match here
     means the exact (rule + code window + reachability) was already analysed. The
     runner replays the stored verdict instead of re-spending tokens.
+
+    Scoped to ``asset_ids`` when provided so a rogue runner can't replay a cache
+    entry planted on one asset to suppress a finding on a different asset.
     """
     if not hashes:
         return {}
-    rows = (
-        await session.execute(
-            select(
-                Finding.verdict,
-                Finding.evidence,
-                Finding.exploit_chain,
-                Finding.verification_metadata,
-            ).where(
-                Finding.tool == tool,
-                Finding.verification_metadata["verification_input_hash"].astext.in_(hashes),
-            )
-        )
-    ).all()
+    stmt = select(
+        Finding.verdict,
+        Finding.evidence,
+        Finding.exploit_chain,
+        Finding.verification_metadata,
+    ).where(
+        Finding.tool == tool,
+        Finding.verification_metadata["verification_input_hash"].astext.in_(hashes),
+    )
+    if asset_ids is not None:
+        stmt = stmt.where(Finding.asset_id.in_(asset_ids))
+    rows = (await session.execute(stmt)).all()
     out: dict[str, dict[str, Any]] = {}
     for verdict, evidence, chain, meta in rows:
         h = (meta or {}).get("verification_input_hash")

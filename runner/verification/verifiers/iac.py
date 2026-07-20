@@ -260,6 +260,27 @@ def verify_iac_finding(
                 tokens_out=tokens_out,
                 verification_metadata=metadata,
             )
+        # Mechanically verify the mitigation citation exists in the repo before
+        # allowing it to ground a ruled_out — otherwise a prompt-injected repo
+        # can claim a mitigation that isn't there and suppress the finding.
+        mit_unverified, _ = verify_citations(
+            [{
+                "file": skeptic_model.mitigation_file or "",
+                "line": skeptic_model.mitigation_line or 0,
+                "snippet": skeptic_model.mitigation_snippet or "",
+            }],
+            repo_root,
+        )
+        if mit_unverified:
+            metadata["suppression_downgraded"] = f"mitigation_citation_unverified:{mit_unverified[0]}"
+            return VerificationResult(
+                verdict="needs_verify",
+                exploit_chain=chain,
+                evidence=evidence,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                verification_metadata=metadata,
+            )
         return VerificationResult(
             verdict="ruled_out",
             exploit_chain=chain,

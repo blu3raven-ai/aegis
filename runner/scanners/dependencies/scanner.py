@@ -43,8 +43,15 @@ logger = logging.getLogger(__name__)
 
 
 # SBOM tools may invoke lockfile install scripts inside untrusted repos —
-# scrub credentials before handing control over.
-_SBOM_TOOL_DROP_ENV = ("GIT_TOKEN",)
+# scrub credentials before handing control over so a malicious build hook
+# can't exfiltrate them.
+_SBOM_TOOL_DROP_ENV = (
+    "GIT_TOKEN", "GH_TOKEN", "GITHUB_TOKEN", "GL_TOKEN", "GITLAB_TOKEN",
+    "NPM_TOKEN", "NPM_CONFIG__AUTH", "NODE_AUTH_TOKEN",
+    "PIP_INDEX_URL", "PIP_EXTRA_INDEX_URL",
+    "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+    "DOCKER_PASSWORD", "JFROG_API_KEY",
+)
 
 SCAN_MODE_FULL = "full"
 SCAN_MODE_SBOM_ONLY = "sbom_only"
@@ -273,7 +280,11 @@ class DependenciesScanner:
         if shutil.which("cdxgen") is None:
             return False
         rc, _, stderr = run_tool(
-            ["cdxgen", "-o", str(output), str(target), "--no-recurse"],
+            # --no-install-deps: cdxgen otherwise executes the scanned repo's
+            # setup.py / build hooks on the runner host to resolve the dep tree
+            # — an attacker-controlled repo would RCE the runner. SBOM
+            # generation does not require installing the project.
+            ["cdxgen", "-o", str(output), str(target), "--no-recurse", "--no-install-deps"],
             timeout=TIMEOUT_CDXGEN,
             drop_env=_SBOM_TOOL_DROP_ENV,
             cancel_event=cancel_event,

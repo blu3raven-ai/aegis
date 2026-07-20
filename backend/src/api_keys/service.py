@@ -36,6 +36,7 @@ def _create_sync(
     scopes: list[str],
     created_by: str | None,
     expires_in_days: int | None,
+    created_by_user_id: str | None = None,
 ) -> tuple[ApiKeyRecord, str]:
     """Create a new API key. Returns (record, plain_token)."""
     token = _generate_token()
@@ -55,6 +56,7 @@ def _create_sync(
             token_hash=token_hash,
             scopes=scopes,
             created_by=created_by,
+            created_by_user_id=created_by_user_id,
             expires_at=expires_at,
         )
         session.add(row)
@@ -120,8 +122,9 @@ async def create(
     scopes: list[str],
     created_by: str | None,
     expires_in_days: int | None,
+    created_by_user_id: str | None = None,
 ) -> tuple[ApiKeyRecord, str]:
-    return _create_sync(name, scopes, created_by, expires_in_days)
+    return _create_sync(name, scopes, created_by, expires_in_days, created_by_user_id)
 
 
 async def list_keys() -> list[ApiKeyRecord]:
