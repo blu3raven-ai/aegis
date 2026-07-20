@@ -31,6 +31,9 @@ interface SourceScanProgressProps {
   connectionId: string
   org: string
   runIds: string[]
+  /** Earliest run start (ISO) if known, to seed the elapsed timer so a page
+   *  refresh doesn't reset it while the per-run poll rehydrates. */
+  initialStartedAt?: string | null
   onDone?: () => void
   onDismiss?: () => void
   onCancel?: () => void
@@ -62,7 +65,7 @@ function buildScanLabel(runs: ActiveRun[]): string {
   return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`
 }
 
-export function SourceScanProgress({ connectionId, org, runIds, onDone, onDismiss, onCancel, isCancelling }: SourceScanProgressProps) {
+export function SourceScanProgress({ connectionId, org, runIds, initialStartedAt, onDone, onDismiss, onCancel, isCancelling }: SourceScanProgressProps) {
   const now = Date.now()
   const [runs, setRuns] = useState<ActiveRun[]>(() =>
     runIds.map((runId) => ({
@@ -71,7 +74,10 @@ export function SourceScanProgress({ connectionId, org, runIds, onDone, onDismis
       status: "queued" as const,
       progress: null,
       logTail: [],
-      startedAt: null,
+      // Seed with the known earliest run start so the elapsed timer is correct
+      // on mount (e.g. after a refresh) instead of resetting to 0. The per-run
+      // poll refines each run's startedAt shortly after.
+      startedAt: initialStartedAt ?? null,
       createdAt: new Date(now).toISOString(),
     })),
   )
