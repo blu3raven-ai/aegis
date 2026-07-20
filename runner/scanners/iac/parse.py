@@ -32,9 +32,18 @@ def _fingerprint(chk: dict) -> str:
     return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
-def parse_checkov_results(raw: dict, *, repo_root: str) -> list[dict]:
-    results = raw.get("results") or {}
-    failed = results.get("failed_checks") or []
+def parse_checkov_results(raw: dict | list, *, repo_root: str) -> list[dict]:
+    # checkov -o json emits a single object for one framework, but a JSON array
+    # of objects (one per framework) when multiple frameworks run. Merge every
+    # entry's failed_checks so the multi-framework case doesn't crash on .get.
+    entries = raw if isinstance(raw, list) else [raw]
+    failed: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        res = entry.get("results") or {}
+        if isinstance(res, dict):
+            failed.extend(res.get("failed_checks") or [])
     out: list[dict] = []
     for chk in failed:
         sev = _SEVERITY_MAP.get((chk.get("severity") or "").upper(), "medium")

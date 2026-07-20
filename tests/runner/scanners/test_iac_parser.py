@@ -64,6 +64,33 @@ def test_passed_checks_ignored():
     assert parse_checkov_results(raw, repo_root="/") == []
 
 
+def test_multi_framework_list_output_merges_failed_checks():
+    # checkov -o json emits a JSON *array* (one object per framework) when
+    # multiple frameworks run — not a single object. .get on a list would crash
+    # the whole iac job; merge every entry's failed_checks instead.
+    raw = [
+        {"results": {"failed_checks": [
+            {"check_id": "CKV_AWS_19", "check_name": "Encrypt S3",
+             "file_path": "/s3.tf", "file_line_range": [1, 1], "resource": "a", "severity": "HIGH"},
+        ]}},
+        {"results": {"failed_checks": [
+            {"check_id": "CKV_DOCKER_3", "check_name": "No USER",
+             "file_path": "/Dockerfile", "file_line_range": [1, 1], "resource": "b", "severity": "MEDIUM"},
+        ]}},
+    ]
+    findings = parse_checkov_results(raw, repo_root="/")
+    assert {f["check_id"] for f in findings} == {"CKV_AWS_19", "CKV_DOCKER_3"}
+
+
+def test_mixed_list_entries_with_non_dict_skipped():
+    raw = [{"results": {"failed_checks": [
+        {"check_id": "CKV_AWS_19", "check_name": "x", "file_path": "/s.tf",
+         "file_line_range": [1, 1], "resource": "r", "severity": "HIGH"},
+    ]}}, "not-a-dict"]
+    findings = parse_checkov_results(raw, repo_root="/")
+    assert len(findings) == 1
+
+
 def test_parse_attaches_code_window_from_source(tmp_path):
     tf = tmp_path / "main.tf"
     tf.write_text(
