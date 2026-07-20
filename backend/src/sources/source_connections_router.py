@@ -26,6 +26,25 @@ _DECRYPT_FAILED_MSG = (
 source_connections_router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
 
 
+def _connection_orgs(conn: dict[str, Any]) -> set[str]:
+    """Lower-cased source orgs a connection scans, used to match its scan runs.
+
+    A connection with an explicit ``orgOrOwner`` scans exactly that org.
+    Cherry-pick / multi-org PAT connections carry no single ``orgOrOwner``, so
+    fall back to the org prefixes of their discovered repo full-names
+    ("owner/repo" -> "owner") — without this, such a connection's active runs
+    never group back to it and its progress banner never appears.
+    """
+    org = ((conn.get("auth") or {}).get("orgOrOwner") or "").strip()
+    if org:
+        return {org.lower()}
+    return {
+        item.split("/", 1)[0].strip().lower()
+        for item in (conn.get("discoveredItems") or [])
+        if isinstance(item, str) and "/" in item
+    } - {""}
+
+
 # Pydantic models
 
 
@@ -362,9 +381,8 @@ async def get_active_scan_runs(
 
     try:
         connection = sources_store.get_connection(connection_id)
-        auth = connection.get("auth") or {}
-        org = (auth.get("orgOrOwner") or "").strip()
-        if not org:
+        orgs = _connection_orgs(connection)
+        if not orgs:
             return JSONResponse({"runs": [], "runIds": []})
 
         async with get_session() as session:
@@ -378,7 +396,7 @@ async def get_active_scan_runs(
                 )
                 .where(or_(ScanRun.id.like("manual-%"), ScanRun.id.like("scheduled-%")))
                 .where(ScanRun.status.in_(["queued", "running", "ingesting"]))
-                .where(func.lower(ScanRun.metadata_json["org_label"].astext) == org.lower())
+                .where(func.lower(ScanRun.metadata_json["org_label"].astext).in_(list(orgs)))
                 .order_by(ScanRun.id)
             )
             runs = []
@@ -420,10 +438,10 @@ async def get_all_active_scan_runs(
         # org_label (lower-cased) -> the connections that scan that org.
         conns_by_org: dict[str, list[dict[str, str]]] = {}
         for conn in sources_store.list_connections():
-            org = ((conn.get("auth") or {}).get("orgOrOwner") or "").strip()
-            if org:
-                conns_by_org.setdefault(org.lower(), []).append(
-                    {"connectionId": conn["id"], "org": org}
+            display = ((conn.get("auth") or {}).get("orgOrOwner") or "").strip()
+            for o in _connection_orgs(conn):
+                conns_by_org.setdefault(o, []).append(
+                    {"connectionId": conn["id"], "org": display or o}
                 )
         if not conns_by_org:
             return JSONResponse({"scans": []})
