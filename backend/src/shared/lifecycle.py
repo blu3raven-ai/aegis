@@ -26,6 +26,7 @@ from src.shared.finding_queries import (
     upsert_decision,
     upsert_finding,
     delete_decision,
+    _ruled_out_grounded,
 )
 from src.assets.service import upsert_asset
 from src.shared.paths import normalize_org
@@ -94,6 +95,38 @@ def _apply_detail(prev: Any, tool: str, detail: dict) -> None:
     prev.rule_name = queryable["rule_name"]
     prev.package_name = queryable["package_name"]
     prev.package_version = queryable["package_version"]
+
+    # Promote verification fields from detail to typed columns. Without this, a
+    # re-touch of an existing finding (e.g. completion ingest after preview
+    # ingest) updates only the detail JSONB and leaves the typed verdict/
+    # evidence/verification_metadata stuck at the preview's unverified values —
+    # the runner's verified verdict lands in the blob but never the column the
+    # UI/queries read. Mirrors upsert_finding's write path.
+    v_verdict = detail.get("verdict")
+    v_evidence = detail.get("evidence")
+    v_chain = detail.get("exploit_chain")
+    v_meta = detail.get("verification_metadata")
+    v_fix = detail.get("recommended_fix")
+    v_cvss = None
+    if isinstance(v_meta, dict) and isinstance(v_meta.get("cvss_score"), (int, float)):
+        v_cvss = float(v_meta["cvss_score"])
+    if (
+        tool != "dependencies_scanning"
+        and v_verdict == "ruled_out"
+        and not _ruled_out_grounded(v_evidence, v_meta)
+    ):
+        v_verdict = "needs_verify"
+    if v_verdict is not None:
+        prev.verdict = v_verdict
+    if v_evidence is not None:
+        prev.evidence = v_evidence
+    if v_chain is not None:
+        prev.exploit_chain = v_chain
+    if v_meta is not None:
+        prev.verification_metadata = v_meta
+        prev.cvss_score = v_cvss
+    if v_fix is not None:
+        prev.recommended_fix = v_fix
 
     lean, fat = split_detail(tool, detail)
     prev.detail = lean
