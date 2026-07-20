@@ -15,7 +15,10 @@ from pydantic import BaseModel
 
 from src.auth._gql_errors import raise_for_gql
 from src.authz.enforcement import require_caller_identity
-from src.auth.account.service import change_email as _change_email
+from src.auth.account.service import (
+    change_email as _change_email,
+    confirm_email_change as _confirm_email_change,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -28,6 +31,10 @@ class EmailChangeRequest(BaseModel):
     current_password: str = ""
 
 
+class EmailVerifyRequest(BaseModel):
+    token: str
+
+
 @email_router.patch("/email")
 def change_email(
     body: EmailChangeRequest,
@@ -37,6 +44,18 @@ def change_email(
         _change_email(
             email=body.email, current_password=body.current_password, info_context=ctx
         )
+    except GraphQLError as e:
+        raise_for_gql(e, logger=_logger)
+    return {"ok": True}
+
+
+@email_router.post("/email/verify")
+def verify_email(body: EmailVerifyRequest) -> dict:
+    # Intentionally unauthenticated: the single-use, expiring token delivered to
+    # the new address is the capability — the recipient proving inbox control is
+    # exactly the check, and they may open the link without an active session.
+    try:
+        _confirm_email_change(token=body.token)
     except GraphQLError as e:
         raise_for_gql(e, logger=_logger)
     return {"ok": True}

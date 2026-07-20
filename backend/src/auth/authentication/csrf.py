@@ -25,6 +25,9 @@ _CSRF_BYPASS_PATHS = frozenset({
     "/api/v1/auth/login",
     "/api/v1/auth/login/verify",
     "/api/v1/auth/logout",
+    # Authorized by the single-use email token, not the session; a forged call
+    # could only confirm the caller's own pending change, so CSRF adds nothing.
+    "/api/v1/auth/email/verify",
     "/auth/sso/saml/acs",
     "/auth/sso/saml/slo",
     "/auth/sso/oidc/callback",

@@ -8,9 +8,12 @@ this module — the account surface is REST-only.
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
+import os
 import secrets as _secrets
 import time
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import quote
 
@@ -178,11 +181,52 @@ def account_notifications(*, info_context: dict) -> AccountNotifications:
 # Mutation resolvers
 # ---------------------------------------------------------------------------
 
+_EMAIL_VERIFY_TTL = timedelta(hours=1)
+
+
+def _hash_email_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _public_app_url() -> str:
+    return (os.environ.get("PUBLIC_APP_URL") or "http://localhost:3000").rstrip("/")
+
+
+def _send_email_verification(to_email: str, token: str) -> bool:
+    """Send the confirmation link to the new address. Returns delivery success.
+
+    The one-time token rides in the link (a capability sent only to the address
+    being proven); it is single-use and expires in an hour.
+    """
+    from src.notifications.senders.email import EmailSender
+
+    link = f"{_public_app_url()}/verify-email?token={token}"
+    subject = "Confirm your new email address"
+    body = (
+        "You requested to change the email address on your account.\n\n"
+        f"Confirm this is your address by opening this link:\n{link}\n\n"
+        "The link expires in 1 hour. If you didn't request this, you can safely "
+        "ignore this email — your address will not be changed."
+    )
+    result = EmailSender().send({"subject": subject, "body": body}, {"to_addresses": [to_email]})
+    return bool(result.success)
+
+
 def change_email(
     *, email: str, current_password: str, info_context: dict
 ) -> AccountMutationResult:
+    """Stage an email change and send a confirmation link to the new address.
+
+    The address is NOT written to the account until the recipient proves control
+    of it via :func:`confirm_email_change`. Committing unverified would let a
+    caller claim an address they don't own, which SSO JIT auto-link then trusts.
+    """
     user_id = info_context["user_id"]
     new_email = email.strip().lower() if email else ""
+    if not new_email:
+        raise_bad_input("A new email address is required.")
+
+    token = _secrets.token_urlsafe(32)
 
     async def _q(session):
         user = await session.get(User, user_id)
@@ -207,16 +251,82 @@ def change_email(
                 "Email changes for SSO accounts require TOTP to be enabled.",
                 extensions={"code": "FORBIDDEN"},
             )
-        if new_email:
-            existing = await session.execute(
-                select(User).where(func.lower(User.email) == new_email, User.id != user_id)
+        # Verification is delivered by email, so the change can't proceed without
+        # a mailer — fail loudly (after re-auth) rather than stage a change the
+        # user could never confirm.
+        if not os.environ.get("SMTP_HOST"):
+            raise GraphQLError(
+                "Email changes require an administrator to configure SMTP first.",
+                extensions={"code": "FAILED_PRECONDITION"},
             )
-            if existing.scalar_one_or_none() is not None:
-                raise GraphQLError("Email already in use.", extensions={"code": "CONFLICT"})
-        user.email = new_email
+        if new_email == (user.email or "").strip().lower():
+            raise_bad_input("That is already your email address.")
+        existing = await session.execute(
+            select(User).where(func.lower(User.email) == new_email, User.id != user_id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise GraphQLError("Email already in use.", extensions={"code": "CONFLICT"})
+        # Stage — do NOT touch user.email until the address is proven.
+        user.pending_email = new_email
+        user.pending_email_token_hash = _hash_email_token(token)
+        user.pending_email_expires_at = datetime.now(timezone.utc) + _EMAIL_VERIFY_TTL
 
     run_db(_q)
-    _fire_audit("account.email.updated", user_id, info_context.get("role", ""))
+    if not _send_email_verification(new_email, token):
+        raise GraphQLError(
+            "Could not send the verification email. Please try again later.",
+            extensions={"code": "INTERNAL_ERROR"},
+        )
+    _fire_audit("account.email.change_requested", user_id, info_context.get("role", ""))
+    return AccountMutationResult(ok=True)
+
+
+def confirm_email_change(*, token: str) -> AccountMutationResult:
+    """Promote a staged email change once the recipient proves control via token."""
+    if not token or not token.strip():
+        raise_bad_input("A verification token is required.")
+    token_hash = _hash_email_token(token.strip())
+    promoted_user_id: dict[str, str] = {}
+
+    async def _q(session):
+        user = (
+            await session.execute(
+                select(User).where(User.pending_email_token_hash == token_hash)
+            )
+        ).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if (
+            user is None
+            or not user.pending_email
+            or user.pending_email_expires_at is None
+            or user.pending_email_expires_at < now
+        ):
+            # Same opaque error for missing/expired so a token can't be probed.
+            raise GraphQLError(
+                "This verification link is invalid or has expired.",
+                extensions={"code": "NOT_FOUND"},
+            )
+        target = user.pending_email
+        # Re-check uniqueness at promotion time — another account may have taken
+        # the address between request and confirmation.
+        clash = (
+            await session.execute(
+                select(User).where(func.lower(User.email) == target, User.id != user.id)
+            )
+        ).scalar_one_or_none()
+        if clash is not None:
+            user.pending_email = None
+            user.pending_email_token_hash = None
+            user.pending_email_expires_at = None
+            raise GraphQLError("Email already in use.", extensions={"code": "CONFLICT"})
+        user.email = target
+        user.pending_email = None
+        user.pending_email_token_hash = None
+        user.pending_email_expires_at = None
+        promoted_user_id["id"] = user.id
+
+    run_db(_q)
+    _fire_audit("account.email.updated", promoted_user_id.get("id", ""), "")
     return AccountMutationResult(ok=True)
 
 
