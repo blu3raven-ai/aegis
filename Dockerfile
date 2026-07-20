@@ -67,7 +67,7 @@ USER app
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -fsS http://localhost:3000/healthz || exit 1
+  CMD curl -fsS http://localhost:3000/health || exit 1
 
 CMD ["uvicorn", "src.main:app", \
      "--host", "0.0.0.0", "--port", "3000", \

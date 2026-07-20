@@ -1,5 +1,5 @@
-"""Tests for the health endpoints — shape, status codes, probe reflection, and
-the authenticated/unauthenticated split."""
+"""Tests for /health — shape, status codes, probe reflection, and the rule that
+per-probe internals are returned only to a manage_settings caller."""
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
@@ -14,10 +14,10 @@ from src.health.router import router as health_router
 
 @pytest.fixture(autouse=True)
 def _grant_manage_settings(monkeypatch):
-    # /health now requires MANAGE_SETTINGS; grant it so the probe-shape tests can
-    # reach the detail endpoint. The denial case re-patches this to False.
+    # /health includes probe detail only for a manage_settings caller; grant it
+    # so the probe-shape tests see the detail. The leak test re-patches to False.
     monkeypatch.setattr(
-        "src.authz.enforcement.dependencies.has_role_permission", lambda *a, **k: True
+        "src.health.router.has_role_permission", lambda *a, **k: True
     )
 
 
@@ -143,33 +143,22 @@ class TestDeepHealthEndpoint:
         assert "T" in data["timestamp"]
 
 
-class TestHealthzLeak:
-    """The unauthenticated liveness probe must not expose internals."""
+class TestHealthLeak:
+    """An unauthenticated /health must not expose per-probe internals."""
 
-    def test_healthz_returns_status_only(self):
-        # A failing probe carries a leaky error + details; /healthz must surface
-        # none of it — only the overall status.
+    def test_unauthenticated_health_is_status_only(self, monkeypatch):
+        # No manage_settings → status only, even when a probe carries a leaky
+        # error + details. Still 200 so monitors keep working.
+        monkeypatch.setattr("src.health.router.has_role_permission", lambda *a, **k: False)
         results = [_make_probe(n, "ok") for n in PROBE_NAMES]
         results[0] = _make_probe("argus", "fail", "connection refused: 10.0.4.21:5432")
         app = _make_app()
         with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=results)):
             with TestClient(app) as c:
-                resp = c.get("/healthz")
+                resp = c.get("/health")
         assert resp.status_code == 200
         data = resp.json()
         assert set(data.keys()) == {"status"}
         assert data["status"] == "fail"
-        # No probe internals or error strings anywhere in the body.
         assert "probes" not in data
         assert "10.0.4.21" not in resp.text
-
-    def test_health_detail_requires_manage_settings(self, monkeypatch):
-        monkeypatch.setattr(
-            "src.authz.enforcement.dependencies.has_role_permission", lambda *a, **k: False
-        )
-        all_ok = [_make_probe(n, "ok") for n in PROBE_NAMES]
-        app = _make_app()
-        with patch("src.health.router.run_all_probes", new=AsyncMock(return_value=all_ok)):
-            with TestClient(app) as c:
-                resp = c.get("/health")
-        assert resp.status_code == 403

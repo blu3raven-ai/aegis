@@ -1,20 +1,20 @@
-"""Health endpoints.
+"""Health endpoint.
 
-Two surfaces: an unauthenticated liveness probe (`/healthz`) that returns only
-the overall status, and an authenticated detail endpoint (`/health`) that
-returns per-probe internals. Splitting them keeps operational internals
-(internal service URLs, fleet size, scan volume, raw error strings) out of an
-unauthenticated response. Both return 200 so monitors parse the JSON even when
-a subsystem is degraded.
+`/health` is unauthenticated (monitors and load balancers poll it) and always
+returns 200 so they can parse the JSON even when a subsystem is degraded. It
+returns only the overall status to an unauthenticated caller; the per-probe
+internals (internal service URLs, fleet size, scan volume, raw error strings)
+are included only for an operator holding `manage_settings`, so they never leak
+to an anonymous request.
 """
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Request
 
-from src.authz.enforcement.dependencies import Permission
 from src.authz.permissions.catalog import MANAGE_SETTINGS
+from src.authz.permissions.service import has_role_permission
 from src.health.probes import run_all_probes
 
 router = APIRouter()
@@ -28,24 +28,17 @@ def _overall(statuses: list[str]) -> str:
     return "degraded"
 
 
-@router.get("/healthz")
-async def liveness() -> dict:
-    """Unauthenticated liveness probe — overall status only, no internals."""
-    results = await run_all_probes()
-    return {"status": _overall([r.status for r in results])}
-
-
 @router.get("/health")
-async def health_check(_: None = Depends(Permission(MANAGE_SETTINGS))) -> dict:
-    """Full per-probe detail — authenticated (MANAGE_SETTINGS) only."""
+async def health_check(request: Request) -> dict:
+    """Overall status for anyone; full probe detail only for `manage_settings`."""
     results = await run_all_probes()
+    body: dict = {"status": _overall([r.status for r in results])}
 
-    overall = _overall([r.status for r in results])
-
-    return {
-        "status": overall,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "probes": [
+    role = getattr(request.state, "user_role", None)
+    role_id = getattr(request.state, "user_role_id", None)
+    if has_role_permission(role, role_id, MANAGE_SETTINGS):
+        body["timestamp"] = datetime.now(timezone.utc).isoformat()
+        body["probes"] = [
             {
                 "name": r.name,
                 "status": r.status,
@@ -54,5 +47,5 @@ async def health_check(_: None = Depends(Permission(MANAGE_SETTINGS))) -> dict:
                 "error": r.error,
             }
             for r in results
-        ],
-    }
+        ]
+    return body
