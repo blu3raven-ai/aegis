@@ -4,6 +4,7 @@ lives in scan dispatch (Argus wins), not in the settings writes."""
 from __future__ import annotations
 
 import os
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -11,6 +12,14 @@ from cryptography.fernet import Fernet
 from sqlalchemy import delete
 
 os.environ.setdefault("APP_SECRET", Fernet.generate_key().decode())
+
+
+@pytest.fixture(autouse=True)
+def _allow_llm_base_url():
+    """This suite tests provider-independence, not the SSRF guard; neutralize
+    the base-URL validation for its placeholder URLs."""
+    with patch("src.settings.llm.service.assert_sendable_url", lambda *_a, **_k: None):
+        yield
 
 from src.db.models import ArgusConnection, LlmConfig  # noqa: E402
 from src.settings.argus.service import (  # noqa: E402
