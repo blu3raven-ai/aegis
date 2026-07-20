@@ -19,13 +19,19 @@ Centralising here lets a single SLA change land in one place."""
 
 
 @contextlib.contextmanager
-def default_client(timeout_s: float = DEFAULT_TIMEOUT_S) -> Iterator[httpx.Client]:
+def default_client(
+    timeout_s: float = DEFAULT_TIMEOUT_S,
+    transport: httpx.BaseTransport | None = None,
+) -> Iterator[httpx.Client]:
     """Yield an httpx.Client with the kernel's default timeout.
 
     Used as `with default_client() as client: client.post(...)`. Context
-    manager so the client gets closed even on exception.
+    manager so the client gets closed even on exception. Pass `transport` to
+    pin the connection to a pre-validated IP (SSRF/DNS-rebinding defense).
+    Redirects are not followed (httpx default), so a redirect can't slip the
+    connection past the pin.
     """
-    with httpx.Client(timeout=timeout_s) as client:
+    with httpx.Client(timeout=timeout_s, transport=transport) as client:
         yield client
 
 

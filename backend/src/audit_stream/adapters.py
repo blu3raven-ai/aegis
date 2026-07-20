@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import json
 import socket
 import uuid
@@ -11,7 +10,12 @@ import httpx
 
 from src.db.models import AuditStreamConfig
 from src.security.crypto import decrypt
-from src.shared.url_guard import UnsafeURLError, assert_sendable_url
+from src.shared.url_guard import (
+    UnsafeURLError,
+    assert_public_host,
+    assert_sendable_url,
+    resolve_pinned_url,
+)
 
 
 def _token_for(cfg: AuditStreamConfig) -> str | None:
@@ -24,8 +28,14 @@ async def webhook_deliver(
     events: list[dict],
     transport: httpx.BaseTransport | None = None,
 ) -> dict:
+    # Pin to the validated IP so the connect can't be rebound to an internal
+    # host after the check. Tests inject their own transport and control
+    # resolution, so only validate (don't pin) on that path.
     try:
-        assert_sendable_url(url)
+        if transport is None:
+            url, transport = resolve_pinned_url(url)
+        else:
+            assert_sendable_url(url)
     except UnsafeURLError as exc:
         return {"ok": False, "error": str(exc)}
     headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -48,7 +58,10 @@ async def splunk_hec_deliver(
     transport: httpx.BaseTransport | None = None,
 ) -> dict:
     try:
-        assert_sendable_url(url)
+        if transport is None:
+            url, transport = resolve_pinned_url(url)
+        else:
+            assert_sendable_url(url)
     except UnsafeURLError as exc:
         return {"ok": False, "error": str(exc)}
     headers: dict[str, str] = {
@@ -75,23 +88,15 @@ async def syslog_deliver(
     host, _, port_s = url.partition(":")
     if not host or not port_s.isdigit():
         return {"ok": False, "error": "Syslog target must be 'host:port'."}
+    # Validate once and connect to the returned IP, not the hostname, so the
+    # TCP connect can't be rebound to an internal address after the check.
     try:
-        assert_sendable_url(f"syslog://{host}")
-    except UnsafeURLError:
-        # assert_sendable_url rejects non-http(s) schemes, so fall through to
-        # the ip_address check below which handles syslog validation directly.
-        pass
-    # Validate that the syslog host does not resolve to a private/loopback address.
-    try:
-        for info in socket.getaddrinfo(host, None, socket.AF_UNSPEC, socket.SOCK_STREAM):
-            ip = ipaddress.ip_address(info[4][0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                return {"ok": False, "error": f"Syslog host resolves to a private address ({info[4][0]})"}
-    except socket.gaierror:
-        return {"ok": False, "error": f"Cannot resolve syslog host: {host}"}
+        validated_ip = assert_public_host(host)
+    except UnsafeURLError as exc:
+        return {"ok": False, "error": str(exc)}
     port = int(port_s)
     try:
-        await asyncio.get_running_loop().run_in_executor(None, _syslog_write, host, port, events)
+        await asyncio.get_running_loop().run_in_executor(None, _syslog_write, validated_ip, port, events)
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
     return {"ok": True, "error": None}

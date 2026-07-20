@@ -22,7 +22,7 @@ from typing import Any
 from src.connectors.base import BaseSender, SendResult, TestResult
 from src.connectors.http import default_client
 from src.connectors.registry import register_connector
-from src.notifications.url_guard import UnsafeURLError, assert_sendable_url
+from src.notifications.url_guard import UnsafeURLError, resolve_pinned_url_sync
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class GenericWebhookSender(BaseSender):
             return SendResult(success=False, error="webhook config missing url")
 
         try:
-            assert_sendable_url(url)
+            url, pin_transport = resolve_pinned_url_sync(url)
         except UnsafeURLError:
             return SendResult(success=False, error="blocked: destination URL is not permitted")
 
@@ -86,7 +86,7 @@ class GenericWebhookSender(BaseSender):
                         "HMAC headers via POST /api/v1/notifications/destinations/<id>/signing-secret"
                     )
 
-            with default_client() as client:
+            with default_client(transport=pin_transport) as client:
                 resp = client.post(url, content=body, headers=headers)
             if 200 <= resp.status_code < 300:
                 return SendResult(success=True, response_code=resp.status_code)
