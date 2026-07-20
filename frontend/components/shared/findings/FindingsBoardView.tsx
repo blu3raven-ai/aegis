@@ -2122,9 +2122,11 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               <div className="px-5 py-4">
                 <section className="space-y-2">
                   <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Testing &amp; Safe Harbor</h3>
+                  {/* Mirrors the backend advisory footer (advisory.py _SAFE_HARBOR_TEXT) — keep the wording in sync. */}
                   <p className="text-xs text-[var(--color-text-secondary)]">
-                    Findings are verified locally against source with benign proof-of-concept payloads;
-                    no production systems or user data are accessed. Reports are confidential pending a fix.
+                    All testing was performed locally against the open-source code with benign proof-of-concept
+                    payloads. No production systems or user data were accessed, and there was no impact to
+                    availability. This report is kept confidential pending a fix.
                   </p>
                 </section>
               </div>
