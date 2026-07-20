@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -15,6 +16,14 @@ from src.settings.llm.service import (  # noqa: E402
     fetch_public_llm_config,
     upsert_llm_config,
 )
+
+
+@pytest.fixture(autouse=True)
+def _allow_llm_base_url():
+    """These tests exercise storage/response shape, not the SSRF guard, so
+    neutralize the base-URL validation for their placeholder URLs."""
+    with patch("src.settings.llm.service.assert_sendable_url", lambda *_a, **_k: None):
+        yield
 
 
 @pytest.fixture

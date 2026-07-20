@@ -8,6 +8,14 @@ from unittest.mock import patch
 import pytest
 from cryptography.fernet import Fernet
 from fastapi import FastAPI, Request
+
+
+@pytest.fixture(autouse=True)
+def _allow_llm_base_url():
+    """This suite seeds config via the PUT path; neutralize the base-URL
+    validation so its placeholder URL isn't rejected by the SSRF guard."""
+    with patch("src.settings.llm.service.assert_sendable_url", lambda *_a, **_k: None):
+        yield
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession

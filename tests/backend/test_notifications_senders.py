@@ -24,14 +24,15 @@ def _ensure_senders_registered(reset_and_reload_connectors):
 
 
 @pytest.fixture(autouse=True)
-def _allow_test_urls(monkeypatch):
-    # The SSRF guard resolves the destination host before sending; the fake test
-    # URLs (example.test) don't resolve in CI, so pin them to a public address so
-    # the guard passes and the real sender logic (signing, response handling) runs.
-    monkeypatch.setattr(
-        "socket.getaddrinfo",
-        lambda *a, **k: [(2, 1, 0, "", ("93.184.216.34", 0))],
-    )
+def _allow_test_urls(monkeypatch, _ensure_senders_registered):
+    # These tests exercise sender contract (signing, response handling), not the
+    # SSRF/DNS-rebind pin — that has its own coverage. Stub the pinner to a
+    # no-op so the placeholder URLs (example.test) pass through unchanged instead
+    # of being resolved and rewritten to a validated IP. Depends on the reload
+    # fixture so it patches the freshly-reloaded sender modules.
+    identity = lambda u: (u, None)
+    monkeypatch.setattr("src.notifications.senders.webhook.resolve_pinned_url_sync", identity)
+    monkeypatch.setattr("src.notifications.senders.slack.resolve_pinned_url_sync", identity)
 
 
 
@@ -143,7 +144,7 @@ def test_slack_send_success_returns_success_result_with_200(monkeypatch):
     from src.notifications.senders import slack as _slack
 
     fake = _FakeClientCtx(_FakeResp(200, "ok"))
-    monkeypatch.setattr(_slack, "default_client", lambda: fake)
+    monkeypatch.setattr(_slack, "default_client", lambda *a, **k: fake)
 
     out = _slack.SlackSender().send(
         {"text": "hello"},
@@ -160,7 +161,7 @@ def test_slack_send_non_200_returns_failure_with_truncated_body(monkeypatch):
 
     long_body = "x" * 500
     fake = _FakeClientCtx(_FakeResp(429, long_body))
-    monkeypatch.setattr(_slack, "default_client", lambda: fake)
+    monkeypatch.setattr(_slack, "default_client", lambda *a, **k: fake)
 
     out = _slack.SlackSender().send(
         {"text": "hi"},
@@ -177,7 +178,7 @@ def test_slack_send_exception_returns_failure_with_truncated_error(monkeypatch):
     from src.notifications.senders import slack as _slack
 
     fake = _FakeClientCtx(_FakeResp(200), raises=RuntimeError("connection refused " + "x" * 1000))
-    monkeypatch.setattr(_slack, "default_client", lambda: fake)
+    monkeypatch.setattr(_slack, "default_client", lambda *a, **k: fake)
 
     out = _slack.SlackSender().send(
         {"text": "hi"}, {"webhook_url": "https://hooks.slack.test/x"},
@@ -193,7 +194,7 @@ def test_webhook_send_success_returns_success_result_with_2xx(monkeypatch):
     from src.notifications.senders import webhook as _webhook
 
     fake = _FakeClientCtx(_FakeResp(202, "accepted"))
-    monkeypatch.setattr(_webhook, "default_client", lambda: fake)
+    monkeypatch.setattr(_webhook, "default_client", lambda *a, **k: fake)
 
     out = _webhook.GenericWebhookSender().send(
         {"k": "v"},
@@ -214,7 +215,7 @@ def test_webhook_send_3xx_treated_as_failure(monkeypatch):
     from src.notifications.senders import webhook as _webhook
 
     fake = _FakeClientCtx(_FakeResp(302, "redirect"))
-    monkeypatch.setattr(_webhook, "default_client", lambda: fake)
+    monkeypatch.setattr(_webhook, "default_client", lambda *a, **k: fake)
 
     out = _webhook.GenericWebhookSender().send(
         {"k": "v"}, {"url": "https://example.test/hook"},
@@ -229,7 +230,7 @@ def test_webhook_send_legacy_secret_signs_with_sha256_header(monkeypatch):
     from src.notifications.senders import webhook as _webhook
 
     fake = _FakeClientCtx(_FakeResp(200))
-    monkeypatch.setattr(_webhook, "default_client", lambda: fake)
+    monkeypatch.setattr(_webhook, "default_client", lambda *a, **k: fake)
 
     out = _webhook.GenericWebhookSender().send(
         {"k": "v"},
@@ -252,7 +253,7 @@ def test_webhook_send_phase44_active_signing_secret_uses_versioned_headers(monke
     from src.notifications.senders import webhook as _webhook
 
     fake = _FakeClientCtx(_FakeResp(200))
-    monkeypatch.setattr(_webhook, "default_client", lambda: fake)
+    monkeypatch.setattr(_webhook, "default_client", lambda *a, **k: fake)
 
     out = _webhook.GenericWebhookSender().send(
         {"k": "v"},
@@ -277,7 +278,7 @@ def test_webhook_send_revoked_signing_secrets_ignored(monkeypatch):
     from src.notifications.senders import webhook as _webhook
 
     fake = _FakeClientCtx(_FakeResp(200))
-    monkeypatch.setattr(_webhook, "default_client", lambda: fake)
+    monkeypatch.setattr(_webhook, "default_client", lambda *a, **k: fake)
 
     out = _webhook.GenericWebhookSender().send(
         {"k": "v"},
@@ -301,7 +302,7 @@ def test_webhook_send_exception_returns_failure_result(monkeypatch):
     from src.notifications.senders import webhook as _webhook
 
     fake = _FakeClientCtx(_FakeResp(200), raises=ConnectionError("dns fail"))
-    monkeypatch.setattr(_webhook, "default_client", lambda: fake)
+    monkeypatch.setattr(_webhook, "default_client", lambda *a, **k: fake)
 
     out = _webhook.GenericWebhookSender().send(
         {"k": "v"}, {"url": "https://example.test/hook"},

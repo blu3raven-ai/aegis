@@ -69,17 +69,24 @@ def _ctx(user_id: str) -> dict:
 
 # --- change_email ----------------------------------------------------------
 
-def test_change_email_requires_correct_password_for_password_users():
+def test_change_email_requires_correct_password_for_password_users(monkeypatch):
     uid = f"reauth-em-{uuid4().hex[:8]}"
     _seed_user(uid, password_hash=hash_password("correct-horse"))
+    # A change is now staged for verification, not committed, so mock the mailer
+    # and satisfy the SMTP precondition.
+    monkeypatch.setenv("SMTP_HOST", "smtp.test")
+    monkeypatch.setattr(
+        "src.auth.account.service._send_email_verification", lambda *a, **k: True
+    )
     try:
         with pytest.raises(GraphQLError) as exc:
             change_email(email="new@example.com", current_password="wrong", info_context=_ctx(uid))
         assert exc.value.extensions["code"] == "FORBIDDEN"
         assert _email_of(uid) == f"{uid}@example.com"  # unchanged
 
+        # Correct re-auth stages the change but must NOT commit it until verified.
         change_email(email="new@example.com", current_password="correct-horse", info_context=_ctx(uid))
-        assert _email_of(uid) == "new@example.com"
+        assert _email_of(uid) == f"{uid}@example.com"  # still the old address
     finally:
         _cleanup(uid)
 

@@ -94,6 +94,15 @@ services:
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      # Public base URL used to build links in outbound email (e.g. the
+      # email-change confirmation link). Set to how users reach the app.
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
+      # SMTP is required for transactional email (email-change verification).
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       # Mounts the e2e fixture-seed endpoint. Empty (off) everywhere except CI e2e.
       ENABLE_TEST_ENDPOINTS: ${ENABLE_TEST_ENDPOINTS:-}
       FASTAPI_ENV: production
@@ -127,19 +136,42 @@ services:
 
   runner:
     build: ./runner
+    # Hardened like its siblings, but adapted for the rootless-podman detonation
+    # sandbox this container runs internally:
+    #   - drop all caps, add back only SETUID/SETGID — newuidmap/newgidmap need
+    #     them to map the nested container's user namespace.
+    #   - deliberately NO `no-new-privileges`: it would disable those setuid
+    #     helpers and the sandbox could not start.
+    #   - read-only root fs, with the few paths podman/scanners must write to
+    #     mounted writable below.
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    read_only: true
+    tmpfs:
+      # Scanner + podman scratch. exec is required (helpers exec from /tmp), so
+      # only nosuid is set. If large scans exhaust RAM, move /tmp to a named
+      # disk volume instead.
+      - /tmp:nosuid,size=1g,uid=10001,gid=10001
+      - /run:nosuid,size=64m,uid=10001,gid=10001
     environment:
       BACKEND_URL: http://aegis:3000
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       RUNNER_NAME: ${RUNNER_NAME:-runner}
       SCANNER_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_scanner
       SCANNER_WORKSPACE_VOLUME: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_runner-workspace
+      # Rootless podman runtime dir on the writable tmpfs above.
+      XDG_RUNTIME_DIR: /run
     deploy:
       resources:
         limits:
           memory: 2G
+    pids_limit: 512
     volumes:
       - runner-workspace:/workspace
       - aegis-grype-cache:/home/aegis/.cache/grype
+      # podman vfs graphroot — disk-backed (vfs makes full image copies, so a
+      # tmpfs would exhaust RAM) and aegis-owned via the Dockerfile pre-create.
+      - runner-containers:/home/aegis/.local/share/containers
     networks:
       - internal
     restart: unless-stopped
@@ -158,3 +190,4 @@ volumes:
   minio_data:
   runner-workspace:
   aegis-grype-cache:
+  runner-containers:
