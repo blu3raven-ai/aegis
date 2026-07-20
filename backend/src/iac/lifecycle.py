@@ -44,7 +44,12 @@ class IacScanningHooks(LifecycleHooks):
         return raw.get("severity")
 
     def extract_engine(self, raw: dict[str, Any]) -> str | None:
-        return raw.get("engine") or "checkov"
+        # The findings table's engine check constraint only permits semgrep/byo
+        # (plus NULL). The checkov tool is already recorded on Finding.tool, so
+        # defaulting to "checkov" here would violate the constraint and abort the
+        # whole iac ingest. Mirror agent_scanning: emit NULL unless the runner
+        # stamped an explicit engine.
+        return raw.get("engine") or None
 
     def extract_detail(self, raw: dict[str, Any]) -> dict:
         detail: dict[str, Any] = {
