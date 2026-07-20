@@ -395,6 +395,10 @@ def build_llm_client(env: JobEnv):
         api_key=api_key,
         api_base_url=env.get("LLM_API_BASE_URL", "https://api.openai.com/v1"),
         model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
+        # Generation on slow/self-hosted endpoints can exceed the 60s httpx
+        # default — the agent judge's large prompt regularly did, which surfaced
+        # as ReadTimeout and left agent findings unverified. Overridable per job.
+        timeout=float(env.get("LLM_TIMEOUT", "120")),
     )
 
 
@@ -419,6 +423,7 @@ def build_escalation_llm_client(env: JobEnv):
             or env.get("LLM_API_BASE_URL", "https://api.openai.com/v1")
         ),
         model=model,
+        timeout=float(env.get("LLM_TIMEOUT", "120")),
     )
 
 

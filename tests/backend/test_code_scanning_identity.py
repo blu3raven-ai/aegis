@@ -11,6 +11,7 @@ from src.code_scanning.ingest import (
     code_finding_identity,
     finding_identity_key,
     identity_key_from_finding,
+    ingest_findings_jsonl,
     repo_relative_path,
 )
 from src.code_scanning.lifecycle import code_scanning_hooks
@@ -104,6 +105,37 @@ def test_extract_detail_carries_verification_fields():
 def test_extract_detail_omits_verdict_when_unverified():
     detail = code_scanning_hooks.extract_detail(_raw(12, "sink(x)"))
     assert "verdict" not in detail
+
+
+def test_ingest_preserves_runner_verdict_through_remap(tmp_path):
+    # The runner stamps verdict/evidence/exploit_chain/verification_metadata onto
+    # each finding after its LLM pass. ingest_findings_jsonl rebuilds each dict
+    # in the SARIF/canonical remap — it must promote those fields to the top
+    # level or the lifecycle's extract_detail drops them and the preview-ingested
+    # needs_verify verdict persists, silently discarding verification.
+    raw = _raw(12, "sink(x)")
+    raw["engine"] = "semgrep"
+    raw["verdict"] = "ruled_out"
+    raw["evidence"] = [{"kind": "code", "file": "app/guard.py", "line": 9, "snippet": "abort(401)"}]
+    raw["exploit_chain"] = "guard aborts"
+    raw["verification_metadata"] = {
+        "verification_input_hash": "abc",
+        "ruled_out_reason": {"file": "app/guard.py", "line": 9, "snippet": "abort(401)"},
+    }
+    path = tmp_path / "findings.jsonl"
+    path.write_text(__import__("json").dumps(raw) + "\n")
+
+    out = ingest_findings_jsonl(path)
+    assert len(out) == 1
+    f = out[0]
+    assert f["verdict"] == "ruled_out"
+    assert f["evidence"] == raw["evidence"]
+    assert f["exploit_chain"] == "guard aborts"
+    assert f["verification_metadata"]["verification_input_hash"] == "abc"
+    # And extract_detail must then carry them through to the upsert.
+    detail = code_scanning_hooks.extract_detail(f)
+    assert detail["verdict"] == "ruled_out"
+    assert detail["verification_metadata"]["verification_input_hash"] == "abc"
 
 
 def test_repo_relative_path_strips_checkout_prefix():

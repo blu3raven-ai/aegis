@@ -210,6 +210,15 @@ def ingest_findings_jsonl(findings_path: Path) -> list[dict[str, Any]]:
                         "repo_html_url": raw.get("repo_html_url", ""),
                         "engine": engine,
                         "state": "open",
+                        # Verification fields the runner stamps after its LLM pass.
+                        # These must be promoted to the top level (not left inside
+                        # finding_data) or the lifecycle's extract_detail drops them
+                        # and the preview-ingested `needs_verify` verdict persists.
+                        "verdict": raw.get("verdict"),
+                        "evidence": raw.get("evidence"),
+                        "exploit_chain": raw.get("exploit_chain"),
+                        "verification_metadata": raw.get("verification_metadata"),
+                        "recommended_fix": raw.get("recommended_fix"),
                         "finding_data": raw,
                     }
                     findings.append(finding)
