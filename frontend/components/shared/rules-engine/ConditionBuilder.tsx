@@ -124,7 +124,7 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
           onChange={(e) => setValue(e.target.value)}
           className="w-auto"
         >
-          <option value="">— select —</option>
+          <option value="">Select…</option>
           <option value="true">true</option>
           <option value="false">false</option>
         </Select>
@@ -141,7 +141,7 @@ function LeafNode({ cond, onChange, onRemove, fields, operatorsForField }: LeafN
           onChange={(e) => setValue(e.target.value)}
           className="w-auto"
         >
-          <option value="">— select —</option>
+          <option value="">Select…</option>
           {suggestions.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
@@ -296,7 +296,7 @@ function GroupNode({ cond, onChange, onRemove, depth = 0, fields, operatorsForFi
           {isAll ? "ALL of" : "ANY of"}
         </Button>
         <span className="text-xs text-[var(--color-text-tertiary)]">
-          {isAll ? "(AND — all conditions must match)" : "(OR — at least one must match)"}
+          {isAll ? "(AND: all conditions must match)" : "(OR: at least one must match)"}
         </span>
         {onRemove && (
           <Button
@@ -316,7 +316,7 @@ function GroupNode({ cond, onChange, onRemove, depth = 0, fields, operatorsForFi
       <div className={`space-y-2 ${depth > 0 ? "pl-3 border-l border-[var(--color-border-divider)]" : ""}`}>
         {children.length === 0 && (
           <p className="text-xs text-[var(--color-text-tertiary)] italic px-1">
-            No conditions — add one below.
+            No conditions. Add one below.
           </p>
         )}
         {children.map((child, i) => {

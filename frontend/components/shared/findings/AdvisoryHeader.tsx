@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import type { VerificationMetadata } from "@/lib/shared/findings/row-mapper"
+import { Table, Tbody, Tr, Td } from "@/components/ui/Table"
 
 /** Minimal finding shape the advisory header reads — a camelCase structural
  *  subset of `Finding`, so the drawer can pass `selectedFinding` directly. */
@@ -11,21 +12,25 @@ export interface AdvisoryHeaderFinding {
   filePath?: string | null
   introducedByCommit?: string | null
   verificationMetadata?: VerificationMetadata
+  package?: string | null
+  rule?: string | null
+  secretDetector?: string | null
 }
 
-/** One header row — always rendered; shows a muted "—" when the value is
- *  absent so the report header block is complete for every finding. */
+/** One spec-table row. Rows with no value are omitted entirely so the table
+ *  only lists fields the finding actually carries. */
 function Row({ label, children }: { label: string; children: ReactNode }) {
   const empty = children == null || children === "" || children === false
+  if (empty) return null
   return (
-    <div className="flex gap-3 text-sm">
-      <span className="w-32 shrink-0 font-semibold text-[var(--color-text-secondary)]">{label}</span>
-      <span
-        className={`min-w-0 ${empty ? "text-[var(--color-text-tertiary)]" : "text-[var(--color-text-primary)]"}`}
-      >
-        {empty ? "—" : children}
-      </span>
-    </div>
+    <Tr>
+      <Td className="w-[9.5rem] whitespace-nowrap border-r border-[var(--color-border-divider)] bg-[var(--color-bg-section)] px-3 py-1.5 align-baseline font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-text-tertiary)]">
+        {label}
+      </Td>
+      <Td className="px-3 py-1.5 align-baseline text-sm text-[var(--color-text-primary)]">
+        {children}
+      </Td>
+    </Tr>
   )
 }
 
@@ -48,7 +53,9 @@ export function AdvisoryHeader({ finding }: { finding: AdvisoryHeaderFinding }) 
   ) : null
 
   return (
-    <section className="space-y-1.5">
+    <section className="overflow-hidden rounded-md border border-[var(--color-border)]">
+      <Table>
+        <Tbody divided>
       <Row label="Target">{finding.repo}</Row>
       <Row label="Version affected">{commit}</Row>
       <Row label="Component">{finding.filePath}</Row>
@@ -56,6 +63,19 @@ export function AdvisoryHeader({ finding }: { finding: AdvisoryHeaderFinding }) 
       <Row label="CVSS 3.1">{cvss}</Row>
       <Row label="CWE">{finding.cwe}</Row>
       <Row label="CVE">{finding.cve}</Row>
+      {finding.package ? (
+        <Row label="Package">
+          <span title={finding.package}>{finding.package}</span>
+        </Row>
+      ) : null}
+      {finding.rule ? (
+        <Row label="Rule">
+          <span title={finding.rule}>{finding.rule}</span>
+        </Row>
+      ) : null}
+      {finding.secretDetector ? <Row label="Detector">{finding.secretDetector}</Row> : null}
+        </Tbody>
+      </Table>
     </section>
   )
 }

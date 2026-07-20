@@ -89,9 +89,9 @@ export function LicenseContent() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-20 rounded-lg" />
-        <Skeleton className="h-16 rounded-lg" />
-        <Skeleton className="h-40 rounded-lg" />
+        <Skeleton className="h-20 rounded-md" />
+        <Skeleton className="h-16 rounded-md" />
+        <Skeleton className="h-40 rounded-md" />
       </div>
     )
   }

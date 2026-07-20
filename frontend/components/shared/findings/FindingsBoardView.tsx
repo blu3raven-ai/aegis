@@ -40,6 +40,11 @@ import {
   DistinctnessSection,
   RemediationStepsSection,
   NotesVerificationSection,
+  AdvisoryUnverifiedNote,
+  AdvisoryIncompleteNote,
+  RemediationUnverifiedNote,
+  isUsableRemediation,
+  hasVerifiedAdvisory,
 } from "@/components/shared/findings/FindingReportSections"
 import { FindingAcceptRiskAction } from "@/components/shared/findings/FindingAcceptRiskAction"
 import { SecretVerificationSection } from "@/components/shared/findings/SecretVerificationSection"
@@ -48,7 +53,6 @@ import { ContainerImageSection } from "@/components/shared/findings/ContainerIma
 import { CweContextSection } from "@/components/shared/findings/CweContextSection"
 import { cweInfo } from "@/lib/shared/findings/cwe-catalog"
 import { severityContext } from "@/lib/shared/findings/severity-context"
-import { triageSummary } from "@/lib/shared/findings/triage-summary"
 import { BlastRadiusSection } from "@/components/shared/findings/BlastRadiusSection"
 import { FindingReferencesSection } from "@/components/shared/findings/FindingReferencesSection"
 import { RecommendedFixSection } from "@/components/shared/findings/RecommendedFixSection"
@@ -85,6 +89,7 @@ import { VerdictBadge } from "@/components/shared/findings/VerdictBadge"
 import { parseVerdictFilter, type VerdictFilter } from "@/lib/shared/findings/verdicts"
 import {
   mapApiFinding,
+  scannerLabel,
   type FindingRow as Finding,
   type FindingScanner as Scanner,
   type FindingSeverity as Severity,
@@ -151,15 +156,6 @@ const SCANNER_FG: Record<Scanner, string> = {
   deep_audit: "var(--color-scanner-audit-fg)",
 }
 
-const SCANNER_GROUP_LABEL: Record<Scanner, string> = {
-  dependencies_scanning: "Dependencies",
-  code_scanning: "Code Scanning",
-  container_scanning: "Containers",
-  secret_scanning: "Secrets",
-  iac_scanning: "Infrastructure as Code",
-  agent_scanning: "Agent Security",
-  deep_audit: "Deep Audit",
-}
 
 const SEVERITY_GROUP_LABEL: Record<Severity, string> = {
   critical: "Critical",
@@ -172,6 +168,14 @@ const ACTION_BAND_LABEL: Record<FindingActionBand, string> = {
   act: "Act",
   attend: "Attend",
   track: "Track",
+}
+
+// SSVC-style priority derived from KEV + reachability + severity. The label
+// alone ("Act") isn't self-explanatory, so the badge tooltip carries the gloss.
+const ACTION_BAND_HINT: Record<FindingActionBand, string> = {
+  act: "Act now — actively exploited or reachable and severe",
+  attend: "Attend soon — elevated priority, schedule a fix",
+  track: "Track — lower priority, monitor for change",
 }
 
 const ACTION_BAND_COLOR: Record<FindingActionBand, string> = {
@@ -201,7 +205,7 @@ const REACHABILITY_SIGNAL: Record<
   reachable: {
     tone: "danger",
     label: "Reachable",
-    title: "A call path reaches the vulnerable symbol — exploitable in this codebase",
+    title: "A call path reaches the vulnerable symbol: exploitable in this codebase",
     glyph: (
       <svg {...REACH_GLYPH_PROPS}>
         <path d="M3 12h12" />
@@ -212,7 +216,7 @@ const REACHABILITY_SIGNAL: Record<
   no_path: {
     tone: "success",
     label: "Not reachable",
-    title: "No call path reaches the vulnerable symbol — lower exploitation risk",
+    title: "No call path reaches the vulnerable symbol: lower exploitation risk",
     glyph: (
       <svg {...REACH_GLYPH_PROPS}>
         <circle cx="12" cy="12" r="8" />
@@ -223,7 +227,7 @@ const REACHABILITY_SIGNAL: Record<
   unknown: {
     tone: "neutral",
     label: "Reachability unknown",
-    title: "Reachability could not be determined — treat as potentially reachable",
+    title: "Reachability could not be determined: treat as potentially reachable",
     glyph: (
       <svg {...REACH_GLYPH_PROPS}>
         <circle cx="12" cy="12" r="8" />
@@ -245,7 +249,7 @@ function ActionBandBadge({ band }: { band: FindingActionBand }) {
     <span
       className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-2xs font-semibold"
       style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)` }}
-      title={`Action band: ${ACTION_BAND_LABEL[band]}`}
+      title={`Action band · ${ACTION_BAND_LABEL[band]}: ${ACTION_BAND_HINT[band]}`}
     >
       {ACTION_BAND_LABEL[band]}
     </span>
@@ -283,7 +287,7 @@ function groupKeyFor(row: Finding, key: GroupKey): string {
 function groupLabelFor(key: GroupKey, value: string): string {
   switch (key) {
     case "scanner":
-      return SCANNER_GROUP_LABEL[value as Scanner] ?? value
+      return scannerLabel(value)
     case "severity":
       return SEVERITY_GROUP_LABEL[value as Severity] ?? value
     case "status":
@@ -521,7 +525,7 @@ function SortableTh({
       <button
         type="button"
         onClick={onClick}
-        className="group inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] rounded-sm"
+        className="font-mono group inline-flex items-center gap-1 uppercase tracking-[0.14em] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] rounded-sm"
         aria-label={`Sort by ${label}`}
       >
         {label}
@@ -763,7 +767,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
 
   useSSE("argus.intel_push", (data: ArgusIntelPushEvent) => {
     if (!dismissedIntelRef.current) {
-      setIntelMessage(data.message ?? "New Argus intel available — chain risk scores updated.")
+      setIntelMessage(data.message ?? "New Argus intel available. Chain risk scores updated.")
     }
   })
 
@@ -994,6 +998,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     [],
   )
   const [lastDismissed, setLastDismissed] = useState<{ finding: Finding; index: number; verb: string } | null>(null)
+  // Bulk dismiss can't restore rows optimistically, so it tracks just the ids to
+  // reopen and refetches on undo.
+  const [lastBulkDismissed, setLastBulkDismissed] = useState<{ ids: number[] } | null>(null)
   // A `?finding=<id>` deep link that resolved to nothing (deleted or out of scope).
   const [deepLinkMissing, setDeepLinkMissing] = useState(false)
 
@@ -1126,6 +1133,12 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     const t = window.setTimeout(() => setLastDismissed(null), 7000)
     return () => window.clearTimeout(t)
   }, [lastDismissed])
+
+  useEffect(() => {
+    if (!lastBulkDismissed) return
+    const t = window.setTimeout(() => setLastBulkDismissed(null), 8000)
+    return () => window.clearTimeout(t)
+  }, [lastBulkDismissed])
 
   // Auto-expire the missing-deep-link notice.
   useEffect(() => {
@@ -1261,9 +1274,21 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
     try {
       await reopenFinding(Number(d.finding.id))
     } catch {
-      setDismissError("Couldn't undo — the finding may remain actioned.")
+      setDismissError("Couldn't undo. The finding may remain actioned.")
     }
   }, [lastDismissed])
+
+  const handleUndoBulk = useCallback(async () => {
+    const b = lastBulkDismissed
+    if (!b) return
+    setLastBulkDismissed(null)
+    try {
+      await Promise.all(b.ids.map((id) => reopenFinding(id)))
+    } catch {
+      setDismissError("Couldn't undo every finding. Some may remain dismissed.")
+    }
+    void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
+  }, [lastBulkDismissed, load, sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page])
 
   useEffect(() => {
     if (!selectedFinding) return
@@ -1381,7 +1406,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           role="status"
           className="border-b border-[var(--color-verdict-uncertain-border)] bg-[var(--color-verdict-uncertain-subtle)] px-6 py-2 text-2xs text-[var(--color-verdict-uncertain)]"
         >
-          This view referenced {staleViewKeys.length} stale {staleViewKeys.length === 1 ? "filter" : "filters"} ({staleViewKeys.join(", ")}) — they were skipped.
+          This view referenced {staleViewKeys.length} stale {staleViewKeys.length === 1 ? "filter" : "filters"} ({staleViewKeys.join(", ")}). They were skipped.
         </div>
       )}
 
@@ -1497,7 +1522,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               <BulkActionBar
                 ids={Array.from(selection).map(Number).filter(Number.isFinite)}
                 onClear={clearSelection}
-                onDismissed={() => {
+                onDismissed={(ids) => {
+                  setLastDismissed(null)
+                  setLastBulkDismissed({ ids })
                   // Refetch to drop the now-dismissed rows.
                   void load(sevFilter, scannerFilter, searchQuery, repoFilter, stateFilter, sortKey, agePreset, verdictFilter, page)
                   clearSelection()
@@ -1688,9 +1715,9 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                               selectedFinding?.id === finding.id ? "bg-[var(--color-nav-active)]" : ""
                             }`}
                           >
-                            <Td className="px-4 py-3">
+                            <Td className="px-4 py-3" style={{ boxShadow: `inset 3px 0 0 ${SEV_COLOR[finding.severity]}` }}>
                               <span
-                                className="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide"
+                                className="inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-2xs font-bold uppercase tracking-wide"
                                 style={{
                                   color: SEV_COLOR[finding.severity],
                                   background: `color-mix(in srgb, ${SEV_COLOR[finding.severity]} 14%, transparent)`,
@@ -1728,7 +1755,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                                     className="mt-0.5 flex items-baseline gap-1.5 text-2xs text-[var(--color-text-tertiary)]"
                                     title={finding.ruledOutReason}
                                   >
-                                    <span className="shrink-0 font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]">
+                                    <span className="font-mono shrink-0 font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok-text)]">
                                       Ruled out
                                     </span>
                                     <span className="truncate">{finding.ruledOutReason}</span>
@@ -1851,7 +1878,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
           header={
             selectedFinding ? (
               <DrawerHeader
-                eyebrow={`${selectedFinding.severity.charAt(0).toUpperCase()}${selectedFinding.severity.slice(1)} · ${SCANNER_GROUP_LABEL[selectedFinding.scanner]}`}
+                eyebrow={`${selectedFinding.severity.charAt(0).toUpperCase()}${selectedFinding.severity.slice(1)} · ${scannerLabel(selectedFinding.scanner)}`}
                 eyebrowDotColor={SEV_COLOR[selectedFinding.severity]}
                 title={selectedFinding.title}
                 identifier={selectedFinding.cve ?? selectedFinding.filePath}
@@ -1903,6 +1930,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   : {
                       onDefer: handleDeferCurrent,
                       canDefer: !deferring,
+                      acceptRiskControl: <FindingAcceptRiskAction finding={selectedFinding} />,
                       dismiss: {
                         reasons: DISMISS_REASONS,
                         onDismiss: (reason: string) =>
@@ -1921,14 +1949,12 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 >
                   <p className="font-semibold">Couldn&apos;t load the full detail for this finding.</p>
                   <p className="mt-1 break-words text-[var(--color-text-secondary)]">
-                    Showing the summary only — code, verification, and remediation may be missing.
+                    Showing the summary only. Code, verification, and remediation may be missing.
                   </p>
                   <p className="mt-1 break-words font-mono text-2xs text-[var(--color-text-tertiary)]">{detailError}</p>
                 </div>
               )}
               <FindingDrawerGroup id="overview" label="Overview">
-              <TriageBanner finding={selectedFinding} />
-
               <FindingDescriptionSection
                 description={selectedFinding.description}
                 title={selectedFinding.title}
@@ -1941,12 +1967,34 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="analysis" label="Analysis">
-              <SummarySection
-                chain={selectedFinding.exploitChain ?? undefined}
-                refCount={selectedFinding.evidence?.length ?? 0}
-              />
-
-              <TechnicalDetailSection evidence={selectedFinding.evidence} />
+              {/* The verifier's output reads as one advisory document — parts
+                  omit themselves when empty; the whole thing collapses to a
+                  single note when nothing has been verified yet. */}
+              {hasVerifiedAdvisory(selectedFinding) ? (
+                <div className="space-y-5">
+                  <SummarySection
+                    chain={selectedFinding.exploitChain ?? undefined}
+                    refCount={selectedFinding.evidence?.length ?? 0}
+                  />
+                  <TechnicalDetailSection evidence={selectedFinding.evidence} />
+                  {selectedFinding.codeFlows && selectedFinding.codeFlows.length > 0 ? (
+                    <FindingDataFlowSection steps={selectedFinding.codeFlows} />
+                  ) : null}
+                  <AttackScenarioSection
+                    reproduction={selectedFinding.verificationMetadata?.reproduction}
+                    attackPaths={selectedFinding.verificationMetadata?.attack_paths}
+                    refCount={selectedFinding.evidence?.length ?? 0}
+                  />
+                  <ImpactSection impact={selectedFinding.verificationMetadata?.impact} />
+                  <MitigatingFactorsSection factors={selectedFinding.verificationMetadata?.mitigating_factors} />
+                  <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
+                </div>
+              ) : (
+                <AdvisoryUnverifiedNote
+                  verificationEnabled={verificationEnabled}
+                  findingId={selectedFinding.id}
+                />
+              )}
 
               {selectedFinding.scanner === "secret_scanning" && (
                 <SecretVerificationSection
@@ -1977,43 +2025,21 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 })}
               />
 
-              {selectedFinding.codeFlows && selectedFinding.codeFlows.length > 0 ? (
-                <FindingDataFlowSection steps={selectedFinding.codeFlows} />
-              ) : (
-                <section className="space-y-2">
-                  <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Call path (verified)</h3>
-                  <p className="text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-                    No verified call path — verify this finding to trace source → sink.
-                  </p>
-                </section>
-              )}
-
-              <AttackScenarioSection
-                reproduction={selectedFinding.verificationMetadata?.reproduction}
-                attackPaths={selectedFinding.verificationMetadata?.attack_paths}
-                refCount={selectedFinding.evidence?.length ?? 0}
+              <NotesVerificationSection
+                verdict={selectedFinding.verdict}
+                metadata={selectedFinding.verificationMetadata}
               />
+              </FindingDrawerGroup>
 
-              <ImpactSection impact={selectedFinding.verificationMetadata?.impact} />
-
-              <MitigatingFactorsSection factors={selectedFinding.verificationMetadata?.mitigating_factors} />
-
-              <DistinctnessSection distinctness={selectedFinding.verificationMetadata?.distinctness} />
-
+              <FindingDrawerGroup id="poc" label="Proof of Concept">
               <FindingPocSection
                 findingId={Number(selectedFinding.id)}
                 pocScript={selectedFinding.verificationMetadata?.poc_script}
                 pocFilename={selectedFinding.verificationMetadata?.poc_filename}
                 pocLanguage={selectedFinding.verificationMetadata?.poc_language}
+                verificationEnabled={verificationEnabled}
                 onGenerated={handlePocGenerated}
               />
-
-              <NotesVerificationSection
-                verdict={selectedFinding.verdict}
-                metadata={selectedFinding.verificationMetadata}
-              />
-
-              <FindingAcceptRiskAction finding={selectedFinding} />
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="remediation" label="Remediation">
@@ -2023,18 +2049,36 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-3 w-3">
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
-                  Fix verified — applies cleanly to the current code
+                  Fix verified, applies cleanly to the current code
                 </p>
               )}
 
-              {/* Fall back to the scanner's own remediation text only when there
-                  is no structured fix, so the "Recommended fix" heading never
-                  renders twice. */}
+              {/* Scanner's own remediation text, only when there is no structured
+                  fix (self-nulls if the scanner text isn't usable). */}
               {!selectedFinding.recommendedFix && (
                 <FindingRemediationSection remediation={selectedFinding.remediation} />
               )}
 
               <RemediationStepsSection steps={selectedFinding.verificationMetadata?.remediation} />
+
+              {/* No remediation from any source: a verified finding shows the
+                  partial-result note; an unverified one shows the blurred fix
+                  preview with the verification call to action. */}
+              {!selectedFinding.recommendedFix
+                && !isUsableRemediation(selectedFinding.remediation)
+                && !selectedFinding.verificationMetadata?.remediation?.length && (
+                  hasVerifiedAdvisory(selectedFinding) ? (
+                    <AdvisoryIncompleteNote
+                      verificationEnabled={verificationEnabled}
+                      findingId={selectedFinding.id}
+                    />
+                  ) : (
+                    <RemediationUnverifiedNote
+                      verificationEnabled={verificationEnabled}
+                      findingId={selectedFinding.id}
+                    />
+                  )
+                )}
               </FindingDrawerGroup>
 
               <FindingDrawerGroup id="context" label="Context" defaultOpen={false}>
@@ -2063,61 +2107,6 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 scannerLabel={SCANNER_LABEL[selectedFinding.scanner]}
               />
 
-              {/* Reference metadata: rule, weakness id, package, repository. */}
-              <section aria-labelledby="finding-details-title">
-                <h3 id="finding-details-title" className="text-base font-semibold text-[var(--color-text-primary)]">
-                  Details
-                </h3>
-                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                  {selectedFinding.rule && (
-                    <div className="col-span-2 min-w-0">
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Rule</dt>
-                      <dd
-                        className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
-                        title={selectedFinding.rule}
-                      >
-                        {selectedFinding.rule}
-                      </dd>
-                    </div>
-                  )}
-                  {selectedFinding.cwe && (
-                    <div>
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">CWE</dt>
-                      <dd className="mt-1 text-sm text-[var(--color-text-primary)]">
-                        <CweValue cwe={selectedFinding.cwe} />
-                      </dd>
-                    </div>
-                  )}
-                  {selectedFinding.package && (
-                    <div className="col-span-2 min-w-0">
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Package</dt>
-                      <dd
-                        className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
-                        title={selectedFinding.package}
-                      >
-                        {selectedFinding.package}
-                      </dd>
-                    </div>
-                  )}
-                  {selectedFinding.secretDetector && (
-                    <div>
-                      <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Detector</dt>
-                      <dd className="mt-1 text-sm text-[var(--color-text-primary)]">
-                        {selectedFinding.secretDetector}
-                      </dd>
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <dt className="text-2xs font-semibold uppercase tracking-wide text-[var(--color-text-tertiary)]">Repository</dt>
-                    <dd
-                      className="mt-1 truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]"
-                      title={selectedFinding.repo}
-                    >
-                      {selectedFinding.repo}
-                    </dd>
-                  </div>
-                </dl>
-              </section>
 
               <FindingReferencesSection
                 cve={selectedFinding.cve}
@@ -2133,9 +2122,11 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
               <div className="px-5 py-4">
                 <section className="space-y-2">
                   <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Testing &amp; Safe Harbor</h3>
+                  {/* Mirrors the backend advisory footer (advisory.py _SAFE_HARBOR_TEXT) — keep the wording in sync. */}
                   <p className="text-xs text-[var(--color-text-secondary)]">
-                    Findings are verified locally against source with benign proof-of-concept payloads;
-                    no production systems or user data are accessed. Reports are confidential pending a fix.
+                    All testing was performed locally against the open-source code with benign proof-of-concept
+                    payloads. No production systems or user data were accessed, and there was no impact to
+                    availability. This report is kept confidential pending a fix.
                   </p>
                 </section>
               </div>
@@ -2161,6 +2152,29 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
             variant="link"
             size="sm"
             onClick={handleUndoDismiss}
+            className="font-semibold text-[var(--color-accent)] hover:underline"
+          >
+            Undo
+          </Button>
+        </div>
+      )}
+
+      {lastBulkDismissed && !lastDismissed && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 left-1/2 z-[110] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-2.5 shadow-xl"
+        >
+          <span className="text-sm text-[var(--color-text-primary)]">
+            Dismissed{" "}
+            <span className="font-medium">
+              {lastBulkDismissed.ids.length} {lastBulkDismissed.ids.length === 1 ? "finding" : "findings"}
+            </span>
+          </span>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={handleUndoBulk}
             className="font-semibold text-[var(--color-accent)] hover:underline"
           >
             Undo
@@ -2241,25 +2255,18 @@ function FindingDescriptionSection({
 }
 
 function FindingRemediationSection({ remediation }: { remediation?: string }) {
-  // ponytail: a `$FUNC`-style token means the scanner handed us its raw rule
-  // template, not a usable fix — show the empty state instead of echoing it.
-  // Ceiling: also suppresses a real fix literally containing `$UPPER`; scanner
-  // remediation text rarely does, so fine until it bites.
-  const usable = remediation ? !/\$[A-Z][A-Z0-9_]*/.test(remediation) : false
+  // A `$FUNC`-style token means the scanner handed us its raw rule template, not
+  // a usable fix. When there's nothing usable this renders null and the parent
+  // shows the verification-aware empty state instead.
+  if (!isUsableRemediation(remediation)) return null
   return (
     <section aria-labelledby="finding-remediation-title">
       <h3 id="finding-remediation-title" className="text-base font-semibold text-[var(--color-text-primary)]">
         Recommended fix
       </h3>
-      {usable ? (
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-primary)]">
-          {remediation}
-        </p>
-      ) : (
-        <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-tertiary)]">
-          No automated fix yet — verify this finding to generate one.
-        </p>
-      )}
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[var(--color-text-primary)]">
+        {remediation}
+      </p>
     </section>
   )
 }
@@ -2291,41 +2298,12 @@ function SignalChip({
     <span
       title={title}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-2xs font-semibold uppercase tracking-[0.04em]",
         tones[tone],
       )}
     >
       {children}
     </span>
-  )
-}
-
-// One-line triage headline at the top of the drawer — the verdict + urgency +
-// severity thesis an analyst reads before scrolling into the detail below.
-function TriageBanner({ finding }: { finding: Finding }) {
-  const summary = triageSummary({
-    verdict: finding.verdict,
-    actionBand: finding.actionBand,
-    severity: finding.severity,
-    kev: finding.kev,
-  })
-  if (!summary) return null
-
-  const toneClass =
-    summary.tone === "danger"
-      ? "border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] text-[var(--color-severity-critical-text)]"
-      : summary.tone === "caution"
-        ? "border-[var(--color-severity-medium-border)] bg-[var(--color-severity-medium-subtle)] text-[var(--color-severity-medium-text)]"
-        : summary.tone === "positive"
-          ? "border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] text-[var(--color-status-ok-text)]"
-          : "border-[var(--color-border)] bg-[var(--color-bg-section)] text-[var(--color-text-secondary)]"
-
-  return (
-    <p
-      className={`rounded-md border-l-[3px] px-3 py-2 text-sm font-semibold leading-snug ${toneClass}`}
-    >
-      {summary.text}
-    </p>
   )
 }
 
@@ -2367,7 +2345,7 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
     <div className="flex flex-wrap items-center gap-2" aria-label="Risk signals">
       <SignalChip tone={SEVERITY_TONE[finding.severity]} title="Finding severity">
         <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
-        <span className="capitalize">{finding.severity}</span>
+        <span>{finding.severity}</span>
       </SignalChip>
       {likelihood && (
         <SignalChip
@@ -2378,7 +2356,7 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
         </SignalChip>
       )}
       {finding.actionBand && (
-        <SignalChip tone={bandTone} title="SSVC action band — derived from KEV, reachability, and severity">
+        <SignalChip tone={bandTone} title="SSVC action band: derived from KEV, reachability, and severity">
           <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
           {ACTION_BAND_LABEL[finding.actionBand]}
         </SignalChip>
@@ -2407,7 +2385,7 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
           tone={finding.secretVerified ? "danger" : "neutral"}
           title={
             finding.secretVerified
-              ? "The scanner authenticated this credential against the provider — it is live"
+              ? "The scanner authenticated this credential against the provider, so it is live"
               : "The scanner could not confirm this credential is live"
           }
         >
@@ -2445,20 +2423,6 @@ function FindingSignalRow({ finding }: { finding: Finding }) {
 
 // CWE id linked to its MITRE definition so an analyst can read the weakness
 // class in one click; renders plain text when the id isn't well-formed.
-function CweValue({ cwe }: { cwe: string }) {
-  const m = cwe.match(/(?:CWE-)?(\d+)/i)
-  if (!m) return <>{cwe}</>
-  return (
-    <a
-      href={`https://cwe.mitre.org/data/definitions/${m[1]}.html`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="rounded-sm text-[var(--color-accent)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1"
-    >
-      {cwe}
-    </a>
-  )
-}
 
 
 function statusPillLabel(state: string | undefined): string {
@@ -2557,7 +2521,7 @@ function CompactFindingRow({
           <span
             className="inline-flex h-[18px] shrink-0 items-center rounded px-1.5 text-2xs font-bold uppercase tracking-wide"
             style={{ background: SCANNER_BG[finding.scanner], color: SCANNER_FG[finding.scanner] }}
-            title={SCANNER_GROUP_LABEL[finding.scanner]}
+            title={scannerLabel(finding.scanner)}
           >
             {SCANNER_LABEL[finding.scanner]}
           </span>
@@ -2581,7 +2545,7 @@ function CompactFindingRow({
             className="mt-0.5 flex items-baseline gap-1.5 text-[11px] text-[var(--color-text-tertiary)]"
             title={finding.ruledOutReason}
           >
-            <span className="shrink-0 font-semibold uppercase tracking-[0.1em] text-[var(--color-status-ok-text)]">
+            <span className="font-mono shrink-0 font-semibold uppercase tracking-[0.1em] text-[var(--color-status-ok-text)]">
               Ruled out
             </span>
             <span className="truncate">{finding.ruledOutReason}</span>
@@ -2623,7 +2587,7 @@ function BulkActionBar({
 }: {
   ids: number[]
   onClear: () => void
-  onDismissed: () => void
+  onDismissed: (ids: number[]) => void
 }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -2635,7 +2599,7 @@ function BulkActionBar({
     setError(null)
     try {
       await bulkDismissFindings(ids, reason)
-      onDismissed()
+      onDismissed(ids)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Dismiss failed")
     } finally {
@@ -2878,7 +2842,7 @@ function FindingsSummaryStrip({
         valueClass={isEmpty ? NEUTRAL : summary.high > 0 ? WARN : OK}
       />
       <KpiCard
-        label="Resolved this week"
+        label="Fixed this week"
         value={fixedValue}
         note={isEmpty ? placeholder : `Fixed in last ${windowDays}d`}
         valueClass={isEmpty ? NEUTRAL : summary.fixed_recent > 0 ? OK : NEUTRAL}

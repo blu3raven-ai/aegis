@@ -5,6 +5,7 @@ import Link from "next/link"
 import { gqlQuery } from "@/lib/client/graphql-client"
 import { formatPercentile, type EpssTopFinding } from "@/lib/client/epss-api"
 import { listFindings, type Finding as ApiFinding } from "@/lib/client/findings-api"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import { listSourceConnections } from "@/lib/client/source-connections-api"
 import { HOME_DASHBOARD_QUERY } from "@/lib/shared/graphql/queries"
 import type {
@@ -115,7 +116,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
     ? `also in ${card.otherRepos.slice(0, 2).join(", ")}${card.otherRepos.length > 2 ? ` +${card.otherRepos.length - 2}` : ""}`
     : null
   return (
-    <Card className="rounded-xl">
+    <Card className="rounded-md">
       {/* Tag row — mock inherited-tag-row */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide ${sevClass}`}>
@@ -144,7 +145,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
         {card.identityKey}
         {card.cve && (
           <span className="ml-2 font-[family-name:var(--font-jetbrains-mono)] text-sm font-normal text-[var(--color-text-tertiary)]">
-            — {card.cve}
+            · {card.cve}
           </span>
         )}
       </h3>
@@ -158,7 +159,7 @@ function CveCard({ card }: { card: OpenCveCard }) {
 
       {/* Open-fix-PR / Jira stay disabled until those integrations are wired through. */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <LinkButton href={`/findings/${card.primaryFindingId}`} variant="primary" size="sm">
+        <LinkButton href={`/findings?finding=${card.primaryFindingId}`} variant="primary" size="sm">
           Investigate →
         </LinkButton>
         <Button variant="secondary" size="sm" disabled title="Coming soon">
@@ -189,19 +190,11 @@ function formatRelative(iso: string | null | undefined): string {
   return `${months}mo ago`
 }
 
-const SCANNER_SHORT: Record<string, string> = {
-  deps: "Dependencies",
-  container: "Container",
-  containers: "Container",
-  sast: "Code Scanning",
-  secrets: "Secrets",
-  iac: "IaC",
-}
 
 function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
   const sevKey = (finding.severity || "").toLowerCase()
   const sevClass = SEVERITY_BADGE[sevKey] ?? "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
-  const scannerLabel = SCANNER_SHORT[finding.scanner] ?? finding.scanner
+  const scannerName = scannerLabel(finding.scanner)
   const fileLine = finding.file_path
     ? finding.line != null
       ? `${finding.file_path}:${finding.line}`
@@ -209,8 +202,8 @@ function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
     : null
   return (
     <Link
-      href={`/findings/${finding.id}`}
-      className={`block rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
+      href={`/findings?finding=${finding.id}`}
+      className={`block rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
     >
       {/* Sev chip + title row */}
       <div className="flex items-start gap-3">
@@ -259,7 +252,7 @@ function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
           </>
         )}
         <span className="text-[var(--color-text-tertiary)]" aria-hidden="true">·</span>
-        <span className="text-[var(--color-text-tertiary)]">{scannerLabel}{finding.cve ? ` · ${finding.cve}` : ""}</span>
+        <span className="text-[var(--color-text-tertiary)]">{scannerName}{finding.cve ? ` · ${finding.cve}` : ""}</span>
       </div>
     </Link>
   )
@@ -268,7 +261,7 @@ function FeaturedFindingCard({ finding }: { finding: ApiFinding }) {
 function CompactFindingRow({ finding }: { finding: ApiFinding }) {
   const sevKey = (finding.severity || "").toLowerCase()
   const sevClass = SEVERITY_BADGE[sevKey] ?? "bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]"
-  const scannerLabel = SCANNER_SHORT[finding.scanner] ?? finding.scanner
+  const scannerName = scannerLabel(finding.scanner)
   const fileLine = finding.file_path
     ? finding.line != null
       ? `${finding.file_path}:${finding.line}`
@@ -276,8 +269,8 @@ function CompactFindingRow({ finding }: { finding: ApiFinding }) {
     : null
   return (
     <Link
-      href={`/findings/${finding.id}`}
-      className={`group flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
+      href={`/findings?finding=${finding.id}`}
+      className={`group flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 transition-colors hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] ${LINK_FOCUS}`}
     >
       <span
         className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${sevClass}`}
@@ -294,7 +287,7 @@ function CompactFindingRow({ finding }: { finding: ApiFinding }) {
           {fileLine && (
             <code className="font-[family-name:var(--font-jetbrains-mono)]">{fileLine}</code>
           )}
-          <span>{scannerLabel}</span>
+          <span>{scannerName}</span>
           {finding.created_at && <span>{formatRelative(finding.created_at)}</span>}
         </div>
       </div>
@@ -314,7 +307,7 @@ function JustIntroducedSection({ findings }: { findings: ApiFinding[] | null }) 
       <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2
           id="just-introduced-heading"
-          className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
+          className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
         >
           Just introduced · needs your attention
         </h2>
@@ -330,7 +323,7 @@ function JustIntroducedSection({ findings }: { findings: ApiFinding[] | null }) 
           {findings.length > 1 && <CompactFindingRow finding={findings[1]} />}
         </div>
       ) : (
-        <Card className="flex items-center gap-4 rounded-2xl">
+        <Card className="flex items-center gap-4 rounded-md">
           <span
             aria-hidden="true"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]"
@@ -359,7 +352,7 @@ function OpenInYourReposSection({ cards }: { cards: OpenCveCard[] }) {
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Open in your repos
         </h2>
         <span className="text-xs text-[var(--color-text-tertiary)]">
@@ -513,15 +506,15 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Your week
         </h2>
         <span className="text-xs text-[var(--color-text-tertiary)]">{rangeLabel}</span>
       </div>
-      <Card className="rounded-2xl">
+      <Card className="rounded-md">
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Introduced
             </p>
             <p className="mt-2 flex items-baseline text-3xl font-semibold tabular-nums leading-none text-[var(--color-severity-high-text)]">
@@ -531,7 +524,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
             <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
           </div>
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Fixed
             </p>
             <p className="mt-2 flex items-baseline text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">
@@ -541,7 +534,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
             <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
           </div>
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Net change
             </p>
             <p className={`mt-2 text-3xl font-semibold tabular-nums leading-none ${netClass}`}>
@@ -560,7 +553,7 @@ function YourWeekSection({ stats }: { stats: WeekStats }) {
 
 function ErrorBanner({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
+    <div className="flex items-center justify-between rounded-md border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
       <div className="flex items-center gap-2 text-sm">
         <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--color-severity-high-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
@@ -581,7 +574,7 @@ function YourReposList({ repos }: { repos: GqlHomeAnalytics["topRepositories"] }
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Your repos
         </h2>
         <span className="text-xs text-[var(--color-text-tertiary)]">
@@ -724,11 +717,11 @@ export function HomeDashboard() {
   useSSE("source.synced", () => { void loadAll() })
 
   const tools: ToolRow[] = [
-    { label: "Dependencies", href: "/findings?scanner=dependencies_scanning", counts: deps, state: depsState, icon: "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" },
-    { label: "Containers", href: "/findings?scanner=container_scanning", counts: containers, state: containerState, icon: "M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" },
+    { label: "Dependency Scanning", href: "/findings?scanner=dependencies_scanning", counts: deps, state: depsState, icon: "M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" },
+    { label: "Container Scanning", href: "/findings?scanner=container_scanning", counts: containers, state: containerState, icon: "M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" },
     { label: "Code Scanning", href: "/findings?scanner=code_scanning", counts: code, state: codeState, icon: "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" },
-    { label: "Secrets", href: "/findings?scanner=secret_scanning", counts: secrets, state: secretState, icon: "M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" },
-    { label: "IaC Security", href: "/findings?scanner=iac_scanning", settingsHref: "/settings/iac-security", counts: iac, state: iacState, icon: "M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" },
+    { label: "Secret Scanning", href: "/findings?scanner=secret_scanning", counts: secrets, state: secretState, icon: "M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z" },
+    { label: "IaC Scanning", href: "/findings?scanner=iac_scanning", settingsHref: "/settings/iac-security", counts: iac, state: iacState, icon: "M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 0 1-1.125-1.125v-3.75ZM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-8.25ZM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 0 1-1.125-1.125v-2.25Z" },
   ]
 
   const hasError = tools.some(t => t.state === "error") || sourcesState === "error"
@@ -752,7 +745,7 @@ export function HomeDashboard() {
     // Your week, Your repos). Each section is a small header rectangle + a content block sized
     // to the real component so the layout doesn't reflow when data arrives.
     const sectionHeader = "h-3 w-28"
-    const card = "rounded-2xl"
+    const card = "rounded-md"
     return (
       <div className="space-y-8" aria-busy="true" aria-live="polite">
         {/* Greeting */}

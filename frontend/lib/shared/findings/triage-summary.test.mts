@@ -10,19 +10,19 @@ describe("triageSummary", () => {
   it("fuses verdict + action + KEV qualifier", () => {
     const r = triageSummary({ verdict: "needs_verify", actionBand: "attend", severity: "medium", kev: true })
     assert.equal(r?.tone, "caution")
-    assert.equal(r!.text, "Needs review — attend soon, KEV-listed medium.")
+    assert.equal(r!.text, "Needs review: attend soon, KEV-listed medium.")
   })
 
   it("act band reads danger with a critical severity qualifier", () => {
     const r = triageSummary({ verdict: "confirmed", actionBand: "act", severity: "critical" })
     assert.equal(r?.tone, "danger")
-    assert.equal(r!.text, "Confirmed — act now, critical severity.")
+    assert.equal(r!.text, "Confirmed: act now, critical severity.")
   })
 
   it("track band reads neutral", () => {
     const r = triageSummary({ verdict: "possible", actionBand: "track", severity: "low" })
     assert.equal(r?.tone, "neutral")
-    assert.equal(r!.text, "Unconfirmed — track, low severity.")
+    assert.equal(r!.text, "Unconfirmed: track, low severity.")
   })
 
   it("ruled_out is a positive, mitigation-led headline (band ignored)", () => {
@@ -35,7 +35,7 @@ describe("triageSummary", () => {
 
   it("verdict without an action band still summarises", () => {
     const r = triageSummary({ verdict: "confirmed", severity: "high" })
-    assert.equal(r!.text, "Confirmed — high severity.")
+    assert.equal(r!.text, "Confirmed, high severity.")
   })
 
   it("action band without a verdict capitalises the action", () => {

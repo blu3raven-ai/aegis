@@ -117,7 +117,7 @@ describe("RecommendedFixSection — config_patch (IaC)", () => {
 
   it("copies the 'after' value and captions the review note", () => {
     assert.match(src, /value=\{fix\.after\}/)
-    assert.match(src, /Suggested change — review before applying\./)
+    assert.match(src, /Suggested change\. Review before applying\./)
   })
 })
 

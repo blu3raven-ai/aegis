@@ -103,7 +103,7 @@ export function ReportsPageContent() {
       if (!res.ok) {
         throw new Error(
           res.status === 404
-            ? "PCI DSS isn’t a tracked framework yet — add it under Compliance to export its attestation."
+            ? "PCI DSS isn’t a tracked framework yet. Add it under Compliance to export its attestation."
             : "Couldn’t generate the PCI DSS attestation. Please try again.",
         )
       }
@@ -263,13 +263,13 @@ export function ReportsPageContent() {
 
       <div
         ref={formRef}
-        className={`rounded-lg border bg-[var(--color-surface)] p-5 transition-shadow ${
+        className={`rounded-md border bg-[var(--color-surface)] p-5 transition-shadow ${
           formHighlighted
             ? "border-[var(--color-accent)] shadow-[0_0_0_3px_var(--color-accent-subtle)]"
             : "border-[var(--color-border)]"
         }`}
       >
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">Generate new report</h2>
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-4">Generate new report</h2>
         <form onSubmit={handleGenerate} className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="text-sm text-[var(--color-text-secondary)] w-28">Report type</span>
@@ -345,7 +345,7 @@ export function ReportsPageContent() {
       ) : (
       <div className="space-y-3">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Report history</h2>
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Report history</h2>
         <span className="text-xs text-[var(--color-text-secondary)] tabular-nums">
           {total} {total === 1 ? "report" : "reports"}
         </span>
@@ -387,7 +387,7 @@ export function ReportsPageContent() {
                         )
                       })()}
                     </Td>
-                    <Td className="px-5 py-3.5 text-xs uppercase text-[var(--color-text-secondary)]">{report.format}</Td>
+                    <Td className="px-5 py-3.5 text-xs font-mono uppercase text-[var(--color-text-secondary)]">{report.format}</Td>
                     <Td className="px-5 py-3.5 text-right tabular-nums text-[var(--color-text-secondary)]">
                       {report.row_count ?? "—"}
                     </Td>

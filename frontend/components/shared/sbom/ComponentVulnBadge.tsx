@@ -45,10 +45,10 @@ export function ComponentVulnBadge({
   return (
     <Link
       href={href}
-      title={`${breakdown} — view findings`}
+      title={`${breakdown}. View findings`}
       // The visible pill shows only the worst tier; give SR/keyboard users the
       // full per-tier breakdown that's otherwise trapped in the title.
-      aria-label={`${packageName}: ${breakdown} open — view findings`}
+      aria-label={`${packageName}: ${breakdown} open. View findings`}
       className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs font-semibold tabular-nums ${worst ? SEV_PILL[worst] : NEUTRAL_PILL}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />

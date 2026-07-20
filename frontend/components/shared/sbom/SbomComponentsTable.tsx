@@ -135,7 +135,7 @@ export function SbomComponentsTable({
   }
 
   return (
-    <Card padding="none" elevation="sm" className="flex flex-col overflow-hidden rounded-xl">
+    <Card padding="none" elevation="sm" className="flex flex-col overflow-hidden rounded-md">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-3">
         <SearchInput
@@ -220,7 +220,7 @@ export function SbomComponentsTable({
                   <button
                     type="button"
                     onClick={handleVulnSort}
-                    className="group inline-flex items-center gap-1 text-2xs font-semibold uppercase tracking-[0.14em] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] rounded-sm"
+                    className="group inline-flex items-center gap-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] rounded-sm"
                     aria-label="Sort by vulnerability severity, worst first"
                     title="Sort by severity (worst first)"
                   >

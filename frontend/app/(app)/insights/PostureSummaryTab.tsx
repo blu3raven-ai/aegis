@@ -14,6 +14,7 @@ import type { ComplianceFramework, ControlSummaryItem } from "@/lib/client/compl
 import type { SlaBreachSummary } from "@/lib/client/sla-api"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Card } from "@/components/ui/Card"
+import { LinkButton } from "@/components/ui/LinkButton"
 import { Button } from "@/components/ui/Button"
 import { Skeleton } from "@/components/ui/Skeleton"
 import {
@@ -24,6 +25,7 @@ import {
 } from "./PostureBreakdownPanels"
 import { findingsHref } from "./posture-links"
 import { Sparkline } from "@/components/shared/charts/Sparkline"
+import { ChartEmptyState } from "@/components/shared/charts/ChartEmptyState"
 import { useMeasuredWidth } from "@/components/shared/charts/useMeasuredWidth"
 
 
@@ -45,11 +47,14 @@ function formatChartDate(iso: string): string {
 }
 
 
+// Chart-adjacent severity dots/legends use the ordinal ramp so they match the
+// ramped chart fills (donut, severity mix). Discrete badges elsewhere in the
+// app keep the conventional severity tokens.
 const SEV_VARS = {
-  critical: "var(--color-severity-critical)",
-  high: "var(--color-severity-high)",
-  medium: "var(--color-severity-medium)",
-  low: "var(--color-severity-low)",
+  critical: "var(--color-sev-ramp-critical)",
+  high: "var(--color-sev-ramp-high)",
+  medium: "var(--color-sev-ramp-medium)",
+  low: "var(--color-sev-ramp-low)",
   unrated: "var(--color-text-tertiary)",
 }
 
@@ -183,10 +188,10 @@ function RiskScoreHero({
   }
 
   return (
-    <div className={`rounded-2xl border ${border} ${bg} overflow-hidden`}>
+    <div className={`panel-ticks rounded-md border ${border} ${bg} overflow-hidden`}>
       <div className="px-6 pt-5 pb-4">
         <div className="flex items-center gap-1.5">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
             Risk score
           </h2>
           <span className="group relative inline-flex">
@@ -203,7 +208,7 @@ function RiskScoreHero({
               role="tooltip"
               className="pointer-events-none absolute left-0 top-full z-20 mt-1.5 w-72 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-xs leading-relaxed text-[var(--color-text-secondary)] opacity-0 shadow-md transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
             >
-              Weighs every open finding by severity, then by exploitability — findings on CISA&rsquo;s KEV list (actively exploited) and reachable high-severity ones count for more. The total maps to 0&ndash;100 on a curve that keeps rising as the backlog grows but never pins at 100. Lower is better.
+              Weighs every open finding by severity, then by exploitability. Findings on CISA&rsquo;s KEV list (actively exploited) and reachable high-severity ones count for more. The total maps to 0&ndash;100 on a curve that keeps rising as the backlog grows but never pins at 100. Lower is better.
             </span>
           </span>
         </div>
@@ -219,7 +224,7 @@ function RiskScoreHero({
             {riskScore.rating}
           </span>
         </div>
-        <p className="mt-1 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <p className="font-mono mt-1 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           Lower is better
         </p>
         {deltaNode && <div className="mt-2">{deltaNode}</div>}
@@ -253,7 +258,7 @@ function RiskScoreHero({
 
         {scoreSeries && (
           <div className="mt-5 border-t border-[var(--color-border)] pt-4">
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               {RANGE_LABEL[rangeDays]} trend
             </p>
             <div className="mt-2">
@@ -290,10 +295,10 @@ function KpiCard({
   const card = (
     <Card
       padding="none"
-      className={`h-full rounded-2xl px-5 py-3 ${href ? "transition-colors hover:border-[var(--color-accent)]/40" : ""}`}
+      className={`panel-ticks h-full rounded-md px-5 py-3 ${href ? "transition-colors hover:border-[var(--color-accent)]/40" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           {label}
         </p>
         {delta && (
@@ -323,7 +328,7 @@ function KpiCard({
     <Link
       href={href}
       aria-label={`View ${label} in findings`}
-      className="block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+      className="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
     >
       {card}
     </Link>
@@ -387,7 +392,7 @@ function KpiGrid({
               </strong>
             </>
           ) : rem.avgDays == null ? (
-            "No remediations recorded yet"
+            "No fixes recorded yet"
           ) : undefined
         }
         spark={null}
@@ -396,7 +401,7 @@ function KpiGrid({
       />
 
       <KpiCard
-        label="Resolved (30d)"
+        label="Fixed (30d)"
         value={rem.fixedLast30d.toLocaleString()}
         detail={
           rem.totalFixed > 0 ? (
@@ -407,7 +412,7 @@ function KpiGrid({
               fixed all-time
             </>
           ) : (
-            "No remediations recorded yet"
+            "No fixes recorded yet"
           )
         }
         spark={null}
@@ -416,7 +421,7 @@ function KpiGrid({
       />
 
       <KpiCard
-        label="SLA attainment"
+        label="Within SLA"
         value={slaAttainment != null ? `${slaAttainment}` : "—"}
         unit={slaAttainment != null ? "%" : undefined}
         detail={
@@ -635,9 +640,9 @@ function AttentionPanel({
   }
 
   return (
-    <Card padding="none" className="rounded-2xl">
+    <Card padding="none" className="rounded-md">
       <div className="px-5 pt-5 pb-3">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Needs attention</h2>
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Needs attention</h2>
       </div>
       {rows.length === 0 && teams !== null ? (
         <p className="px-5 pb-5 text-sm text-[var(--color-text-secondary)]">
@@ -713,11 +718,13 @@ type StackLayer = "low" | "medium" | "high" | "critical"
 
 const STACK_ORDER: StackLayer[] = ["low", "medium", "high", "critical"]
 
+// Quiet fills, crisp strokes — the layer boundary lines carry the data while
+// the fill stays a faint tint, matching the backlog trend chart's language.
 const STACK_FILL: Record<StackLayer, { color: string; opacity: number }> = {
-  low:      { color: "var(--color-severity-low)",      opacity: 0.55 },
-  medium:   { color: "var(--color-severity-medium)",   opacity: 0.60 },
-  high:     { color: "var(--color-severity-high)",     opacity: 0.75 },
-  critical: { color: "var(--color-severity-critical)", opacity: 0.85 },
+  low:      { color: "var(--color-sev-ramp-low)",      opacity: 0.16 },
+  medium:   { color: "var(--color-sev-ramp-medium)",   opacity: 0.18 },
+  high:     { color: "var(--color-sev-ramp-high)",     opacity: 0.20 },
+  critical: { color: "var(--color-sev-ramp-critical)", opacity: 0.24 },
 }
 
 /** Composite risk score (0-100) over the selected window — the detail view of
@@ -738,14 +745,10 @@ function RiskTrendChart({
   const points = trend.points
   if (points.length < 2) {
     return (
-      <Card className="rounded-2xl">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Risk score over time
-        </h2>
-        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-          Not enough history to plot a trend yet.
-        </p>
-      </Card>
+      <ChartEmptyState
+        title="Risk score over time"
+        message="Not enough history to plot a trend yet. Scores appear here as scans accrue over days."
+      />
     )
   }
 
@@ -827,14 +830,14 @@ function RiskTrendChart({
   })()
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Risk score over time
         </h2>
         <div className="flex flex-wrap items-center gap-3">
           {periodVelocityNode}
-          <span className="text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             Last {RANGE_LABEL[rangeDays]} · lower is better
           </span>
         </div>
@@ -980,7 +983,7 @@ function RiskTrendChart({
                 style={{ left: xOf(hoverIdx) }}
               >
                 <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 shadow-lg whitespace-nowrap">
-                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                  <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                     {formatChartDate(hovered.date)}
                   </p>
                   <p className="mt-1 text-sm font-semibold tabular-nums text-[var(--color-text-primary)]">
@@ -1036,14 +1039,10 @@ function PostureTrendChart({
   const points = trend.points
   if (points.length < 2) {
     return (
-      <Card className="rounded-2xl">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Open findings by severity — last {RANGE_LABEL[rangeDays]}
-        </h2>
-        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-          Not enough data to plot a trend yet.
-        </p>
-      </Card>
+      <ChartEmptyState
+        title={`Open findings by severity · last ${RANGE_LABEL[rangeDays]}`}
+        message="Not enough data to plot a trend yet. Severity bands appear here as scans accrue over days."
+      />
     )
   }
 
@@ -1132,10 +1131,10 @@ function PostureTrendChart({
   })()
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-          Open findings by severity — last {RANGE_LABEL[rangeDays]}
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          Open findings by severity · last {RANGE_LABEL[rangeDays]}
         </h2>
         {netFindingsNode}
       </div>
@@ -1187,8 +1186,8 @@ function PostureTrendChart({
                     d={points.map((_, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(cumulative[i][idx]).toFixed(1)}`).join(" ")}
                     fill="none"
                     stroke={STACK_FILL[layer].color}
-                    strokeWidth={idx === STACK_ORDER.length - 1 ? 1.5 : 0.75}
-                    strokeOpacity={STACK_FILL[layer].opacity + 0.1}
+                    strokeWidth={idx === STACK_ORDER.length - 1 ? 1.5 : 1}
+                    strokeOpacity={0.9}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     pathLength={1}
@@ -1250,7 +1249,7 @@ function PostureTrendChart({
                 style={{ left: xOf(hoverIdx) }}
               >
                 <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 shadow-lg">
-                  <p className="mb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                  <p className="mb-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                     {formatChartDate(hovered.date)}
                   </p>
                   <div className="space-y-1">
@@ -1307,9 +1306,9 @@ function PostureTrendChart({
 // ── Discovery Velocity Chart ────────────────────────────────────────────────
 
 /**
- * Dual-bar chart showing findings introduced vs resolved per day.
- * "Resolved" is derived: resolved[i] = max(0, new[i] − netChange[i])
- * where netChange = open[i] − open[i−1].
+ * Mirrored flow chart: findings introduced per day above the midline,
+ * resolved mirrored below. "Resolved" is derived:
+ * resolved[i] = max(0, new[i] − netChange[i]) where netChange = open[i] − open[i−1].
  */
 function DiscoveryVelocityChart({
   trend,
@@ -1320,7 +1319,6 @@ function DiscoveryVelocityChart({
 }) {
   const [hoverIdx, setHoverIdx] = React.useState<number | null>(null)
   const [boxRef, W] = useMeasuredWidth<HTMLDivElement>()
-  const barId = `vel-${React.useId().replace(/:/g, "")}`
   const points = trend.points
 
   const derived = React.useMemo(() => points.map((p, i) => {
@@ -1336,12 +1334,12 @@ function DiscoveryVelocityChart({
 
   if (!hasData) {
     return (
-      <Card className="rounded-2xl">
+      <Card className="rounded-md">
         <div className="mb-1 flex items-center gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-            Discovery velocity
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            Findings introduced vs resolved
           </h2>
-          <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
+          <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
             last {RANGE_LABEL[rangeDays]}
           </span>
         </div>
@@ -1364,12 +1362,16 @@ function DiscoveryVelocityChart({
   const plotW = Math.max(W - PAD_L - PAD_R, 0)
   const plotH = H - PAD_T - PAD_B
   const maxVal = Math.max(...derived.map(d => Math.max(d.introduced, d.resolved)), 1)
-  const yOf = (v: number) => PAD_T + plotH - (v / maxVal) * plotH
+  // Mirror layout: introduced grows up from the midline, resolved mirrors
+  // down. One column per day instead of paired side-by-side bars keeps a long
+  // range readable instead of dissolving into alternating-colour noise.
+  const yMid = PAD_T + plotH / 2
+  const half = plotH / 2 - 2
+  const hOf = (v: number) => (v / maxVal) * half
 
   const groupW = plotW / Math.max(points.length, 1)
-  const barGap = 1.5
-  const barW = Math.max(1, (groupW * 0.82) / 2 - barGap / 2)
-  const xOfGroup = (i: number) => PAD_L + i * groupW + groupW * 0.09
+  const barW = Math.max(1.5, groupW * 0.6)
+  const xOfGroup = (i: number) => PAD_L + i * groupW + (groupW - barW) / 2
 
   function idxFromPointer(e: React.PointerEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -1378,17 +1380,17 @@ function DiscoveryVelocityChart({
     setHoverIdx(Math.round(frac * (points.length - 1)))
   }
 
-  const gridSteps = [0.25, 0.5, 0.75, 1.0]
+  const gridSteps = [0.5, 1.0]
   const hov = hoverIdx !== null ? { ...derived[hoverIdx], date: points[hoverIdx].date, idx: hoverIdx } : null
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-            Discovery velocity
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            Findings introduced vs resolved
           </h2>
-          <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
+          <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium text-[var(--color-text-secondary)] uppercase tracking-[0.14em]">
             last {RANGE_LABEL[rangeDays]}
           </span>
         </div>
@@ -1433,62 +1435,56 @@ function DiscoveryVelocityChart({
             role="img"
             aria-label="Findings introduced vs resolved per day"
           >
-            <defs>
-              <linearGradient id={`${barId}-intro`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-severity-high)" stopOpacity="0.9" />
-                <stop offset="100%" stopColor="var(--color-severity-high)" stopOpacity="0.35" />
-              </linearGradient>
-              <linearGradient id={`${barId}-resolved`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--color-status-ok)" stopOpacity="0.85" />
-                <stop offset="100%" stopColor="var(--color-status-ok)" stopOpacity="0.3" />
-              </linearGradient>
-            </defs>
-
-            {/* Subtle grid */}
-            <g stroke="var(--color-border)" strokeOpacity="0.3">
+            {/* Mirrored scale grid around the zero midline */}
+            <g stroke="var(--color-border)" strokeOpacity="0.35" strokeDasharray="3 4">
               {gridSteps.map((g) => (
-                <line key={g} x1={PAD_L} y1={yOf(maxVal * g)} x2={W - PAD_R} y2={yOf(maxVal * g)} />
+                <g key={g}>
+                  <line x1={PAD_L} y1={yMid - hOf(maxVal * g)} x2={W - PAD_R} y2={yMid - hOf(maxVal * g)} />
+                  <line x1={PAD_L} y1={yMid + hOf(maxVal * g)} x2={W - PAD_R} y2={yMid + hOf(maxVal * g)} />
+                </g>
               ))}
             </g>
+            <line
+              x1={PAD_L} y1={yMid} x2={W - PAD_R} y2={yMid}
+              stroke="var(--color-border-strong)" strokeOpacity="0.7"
+            />
             <g fontSize="10" fill="var(--color-text-tertiary)">
-              {gridSteps.map((g) => (
-                <text key={g} x="0" y={yOf(maxVal * g) + 3.5} textAnchor="start">
-                  {Math.round(maxVal * g)}
-                </text>
-              ))}
+              <text x="0" y={yMid - hOf(maxVal) + 3.5} textAnchor="start">{maxVal}</text>
+              <text x="0" y={yMid + 3.5} textAnchor="start">0</text>
+              <text x="0" y={yMid + hOf(maxVal) + 3.5} textAnchor="start">{maxVal}</text>
             </g>
 
-            {/* Bars */}
+            {/* Bars — introduced above the midline, resolved below */}
             {derived.map((d, i) => {
               const gx = xOfGroup(i)
-              const introH = Math.max(0, (d.introduced / maxVal) * plotH)
-              const resolvedH = Math.max(0, (d.resolved / maxVal) * plotH)
+              const introH = hOf(d.introduced)
+              const resolvedH = hOf(d.resolved)
               const isHov = hoverIdx === i
               const dimmed = hoverIdx !== null && !isHov
-              const delay = `${Math.min(i * 12, 360)}ms`
+              const delay = `${Math.min(i * 8, 320)}ms`
               return (
                 <g key={i} opacity={dimmed ? 0.35 : 1} style={{ transition: "opacity 80ms" }}>
                   {introH > 0 && (
                     <rect
                       x={gx}
-                      y={yOf(d.introduced)}
+                      y={yMid - introH}
                       width={barW}
                       height={introH}
-                      fill={`url(#${barId}-intro)`}
-                      rx="1.5"
-                      className="chart-grow"
+                      fill="var(--color-severity-high)"
+                      fillOpacity="0.8"
+                      className="chart-fade"
                       style={{ animationDelay: delay }}
                     />
                   )}
                   {resolvedH > 0 && (
                     <rect
-                      x={gx + barW + barGap}
-                      y={yOf(d.resolved)}
+                      x={gx}
+                      y={yMid + 1}
                       width={barW}
                       height={resolvedH}
-                      fill={`url(#${barId}-resolved)`}
-                      rx="1.5"
-                      className="chart-grow"
+                      fill="var(--color-status-ok)"
+                      fillOpacity="0.65"
+                      className="chart-fade"
                       style={{ animationDelay: delay }}
                     />
                   )}
@@ -1568,7 +1564,7 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
     rows = null
   } else if (teams.length === 0) {
     rows = []
-    emptyMessage = "Team data not configured."
+    emptyMessage = "Team data not configured"
   } else {
     const slice = teams.slice(0, 6)
     // Bar length tracks the same quantity as the printed number (critical + high).
@@ -1586,12 +1582,12 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
   }
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Risk by team
         </h2>
-        <span className="text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           Critical + high
         </span>
       </div>
@@ -1607,7 +1603,24 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <p className="text-sm text-[var(--color-text-secondary)]">{emptyMessage}</p>
+        <section className="flex flex-col items-center rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-4 text-center">
+          <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-[var(--color-text-primary)]">
+            {emptyMessage}
+          </h3>
+          <p className="mt-1 max-w-sm text-sm leading-relaxed text-[var(--color-text-secondary)]">
+            Group repositories into teams to see where critical and high risk concentrates.
+          </p>
+          <div className="mt-3">
+            <LinkButton
+              href="/teams"
+              variant="primary"
+              size="sm"
+              trailingIcon={<span aria-hidden="true">→</span>}
+            >
+              Set up teams
+            </LinkButton>
+          </div>
+        </section>
       ) : (
         <div className="space-y-3">
           {rows.map((row) => (
@@ -1618,9 +1631,9 @@ function TeamRiskPanel({ teams }: { teams: TeamPostureItem[] | null }) {
               >
                 {row.label}
               </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-raised)]">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)]">
                 <div
-                  className="h-full rounded-full"
+                  className="h-full rounded-[2px] origin-left chart-bar-grow"
                   title={`${row.label}: ${row.count.toLocaleString()} critical + high`}
                   style={{ width: `${row.bar * 100}%`, background: row.barColor }}
                 />
@@ -1657,28 +1670,35 @@ function ComplianceSnapshot({
 
     if (pct >= 0.95) {
       return (
-        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]">
+        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide bg-[var(--color-status-ok)]/10 text-[var(--color-status-ok-text)]">
           On track
         </span>
       )
     }
     if (pct >= 0.8) {
       return (
-        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold bg-[var(--color-severity-medium)]/15 text-[var(--color-severity-medium-text)]">
+        <span className="inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide bg-[var(--color-severity-medium)]/15 text-[var(--color-severity-medium-text)]">
           Partial
         </span>
       )
     }
     return (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold bg-[var(--color-severity-critical)]/15 text-[var(--color-severity-critical-text)]">
+      <span className="inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide bg-[var(--color-severity-critical)]/15 text-[var(--color-severity-critical-text)]">
         At risk
       </span>
     )
   }
 
+  /** Progress-bar tone tied to the same thresholds as the status badge. */
+  function barTone(pct: number): string {
+    if (pct >= 0.95) return "bg-[var(--color-status-ok)]/70"
+    if (pct >= 0.8) return "bg-[var(--color-severity-medium)]/70"
+    return "bg-[var(--color-severity-critical)]/70"
+  }
+
   return (
     <div>
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">
+      <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-4">
         Compliance posture
       </h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -1694,7 +1714,7 @@ function ComplianceSnapshot({
           const controls = summaries[fw.id]
           if (!controls) {
             return (
-              <Card key={fw.id} padding="none" className="rounded-2xl px-5 py-4">
+              <Card key={fw.id} padding="none" className="rounded-md px-5 py-4">
                 <p className="text-xs font-semibold text-[var(--color-text-primary)]">{fw.label}</p>
                 <Skeleton className="mt-3 h-4 w-16" />
                 <Skeleton className="mt-2 h-3 w-24" />
@@ -1703,12 +1723,26 @@ function ComplianceSnapshot({
           }
           const passing = controls.filter((c) => c.finding_count === 0).length
           const total = controls.length
+          const pct = total > 0 ? passing / total : 0
           return (
-            <Card key={fw.id} padding="none" className="rounded-2xl px-5 py-4">
-              <p className="text-xs font-semibold text-[var(--color-text-primary)]">{fw.label}</p>
-              <div className="mt-2">{statusBadge(controls)}</div>
+            <Card key={fw.id} padding="none" className="rounded-md px-5 py-4">
+              <p className="truncate text-xs font-semibold text-[var(--color-text-primary)]" title={fw.label}>
+                {fw.label}
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                {statusBadge(controls)}
+                <span className="font-mono text-2xs tabular-nums text-[var(--color-text-tertiary)]">
+                  {passing}/{total}
+                </span>
+              </div>
+              <div className="mt-2.5 h-1 overflow-hidden rounded-[2px] bg-[var(--color-surface-raised)]" aria-hidden="true">
+                <div
+                  className={`h-full rounded-[2px] origin-left chart-bar-grow ${barTone(pct)}`}
+                  style={{ width: `${Math.round(pct * 100)}%` }}
+                />
+              </div>
               <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
-                {passing} of {total} controls
+                {passing} of {total} controls passing
               </p>
             </Card>
           )
@@ -1792,13 +1826,13 @@ function BacklogFlowChart({
     : null
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-            Open backlog over time
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            Total open over time
           </h2>
-          <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             last {RANGE_LABEL[rangeDays]}
           </span>
         </div>
@@ -1812,7 +1846,7 @@ function BacklogFlowChart({
       <div ref={boxRef} className="relative select-none" style={{ height: H }}>
         {W > 0 && (
           <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} className="block" role="img"
-            aria-label="Open findings backlog level over the selected window">
+            aria-label="Total open findings over the selected window">
             <defs>
               <linearGradient id={`${gradId}-fill`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={tone} stopOpacity="0.26" />
@@ -1908,8 +1942,13 @@ function SeverityMixChart({
     })
   })
 
+  // Upper boundary of a layer — stroked as the crisp data line above the tint.
+  function boundaryPath(layerIdx: number): string {
+    return points.map((_, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(cum[i][layerIdx]).toFixed(1)}`).join(" ")
+  }
+
   function areaPath(layerIdx: number): string {
-    const top = points.map((_, i) => `${i === 0 ? "M" : "L"}${xOf(i).toFixed(1)},${yOf(cum[i][layerIdx]).toFixed(1)}`).join(" ")
+    const top = boundaryPath(layerIdx)
     if (layerIdx === 0) {
       return top + ` L${xOf(points.length - 1).toFixed(1)},${yOf(0).toFixed(1)} L${xOf(0).toFixed(1)},${yOf(0).toFixed(1)} Z`
     }
@@ -1924,13 +1963,13 @@ function SeverityMixChart({
   const critHighPct = Math.round(((last.critical + last.high) / last.total) * 100)
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Severity mix over time
           </h2>
-          <span className="rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <span className="font-mono rounded-full bg-[var(--color-surface-muted)] px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             share of open
           </span>
         </div>
@@ -1951,6 +1990,11 @@ function SeverityMixChart({
                 </linearGradient>
               ))}
             </defs>
+            <g stroke="var(--color-border)" strokeOpacity="0.4" strokeDasharray="3 4">
+              {[0, 0.5, 1].map((g) => (
+                <line key={g} x1={PAD_L} x2={PAD_L + plotW} y1={yOf(g)} y2={yOf(g)} />
+              ))}
+            </g>
             <g fontSize="10" fill="var(--color-text-tertiary)">
               {[0, 0.5, 1].map((g) => (
                 <text key={g} x="0" y={yOf(g) + 3.5}>{Math.round(g * 100)}%</text>
@@ -1961,6 +2005,21 @@ function SeverityMixChart({
                 key={layer}
                 d={areaPath(idx)}
                 fill={`url(#${gradId}-${layer})`}
+                className="chart-rise"
+                style={{ animationDelay: `${idx * 90}ms` }}
+              />
+            ))}
+            {/* Inner boundary strokes only — the top edge of a 100%-normalized
+                stack is a constant line and would just double the gridline. */}
+            {STACK_ORDER.slice(0, -1).map((layer, idx) => (
+              <path
+                key={`${layer}-edge`}
+                d={boundaryPath(idx)}
+                fill="none"
+                stroke={STACK_FILL[layer].color}
+                strokeWidth={1}
+                strokeOpacity={0.9}
+                vectorEffect="non-scaling-stroke"
                 className="chart-rise"
                 style={{ animationDelay: `${idx * 90}ms` }}
               />
@@ -2006,26 +2065,14 @@ function SlaComplianceGauge({
   const within = Math.max(totalOpen - breached, 0)
   const compliancePct = Math.round((within / totalOpen) * 100)
 
-  // 270° sweep gauge starting from bottom-left.
-  const size = 132
-  const cx = size / 2
-  const cy = size / 2
-  const r = 52
-  const stroke = 12
-  const startAngle = 135
-  const sweep = 270
-  const circ = 2 * Math.PI * r
-  const arcLen = (sweep / 360) * circ
-  const filled = (compliancePct / 100) * arcLen
-
+  // One percentage against a target reads far better as a number than a radial
+  // arc, so this is a big-number + threshold bar rather than a gauge. Status
+  // tone lives only in the bar fill; the number stays neutral.
+  const target = 90
   const tone =
-    compliancePct >= 90 ? "var(--color-status-ok)"
-    : compliancePct >= 70 ? "var(--color-severity-medium)"
-    : "var(--color-severity-critical)"
-  const toneText =
-    compliancePct >= 90 ? "var(--color-status-ok-text)"
-    : compliancePct >= 70 ? "var(--color-severity-medium-text)"
-    : "var(--color-severity-critical-text)"
+    compliancePct >= target ? "var(--color-status-ok)"
+    : compliancePct >= 70 ? "var(--color-sev-ramp-medium)"
+    : "var(--color-sev-ramp-critical)"
 
   const bySev = [
     { key: "critical", label: "Critical", n: slaPosture.criticalBreached },
@@ -2035,69 +2082,66 @@ function SlaComplianceGauge({
   ].filter((s) => s.n > 0)
 
   return (
-    <Card className="rounded-2xl">
-      <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
-        SLA compliance
-      </h2>
-      <div className="mt-3 flex items-center gap-5">
-        <div className="relative shrink-0" style={{ width: size, height: size }}>
-          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img"
-            aria-label={`${compliancePct}% of open findings within SLA`}>
-            <circle
-              cx={cx} cy={cy} r={r} fill="none"
-              stroke="var(--color-surface-raised)" strokeWidth={stroke}
-              strokeDasharray={`${arcLen} ${circ - arcLen}`} strokeLinecap="round"
-              transform={`rotate(${startAngle} ${cx} ${cy})`}
-            />
-            <circle
-              cx={cx} cy={cy} r={r} fill="none"
-              stroke={tone} strokeWidth={stroke}
-              strokeDasharray={`${filled} ${circ - filled}`} strokeLinecap="round"
-              transform={`rotate(${startAngle} ${cx} ${cy})`}
-              className="chart-arc-sweep"
-              style={{ ["--arc-len" as string]: filled }}
-            />
-          </svg>
-          <span className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-2xl font-bold leading-none tabular-nums" style={{ color: toneText }}>
-              {compliancePct}%
-            </span>
-            <span className="mt-0.5 text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
-              within SLA
-            </span>
-          </span>
+    <Card className="rounded-md">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          SLA compliance
+        </h2>
+        <span className="font-mono text-2xs font-medium uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          within target
+        </span>
+      </div>
+
+      <div className="mt-4 flex items-end gap-2.5">
+        <span
+          className="text-[40px] font-semibold leading-[0.85] tracking-[-0.02em] tabular-nums text-[var(--color-text-primary)]"
+          aria-label={`${compliancePct}% of open findings within SLA`}
+        >
+          {compliancePct}<span className="text-2xl text-[var(--color-text-tertiary)]">%</span>
+        </span>
+        <span className="pb-1.5 text-xs text-[var(--color-text-secondary)]">within SLA</span>
+      </div>
+
+      <div className="mt-4">
+        <div className="relative h-1.5 rounded-[3px] bg-[var(--color-surface-raised)]" role="img"
+          aria-label={`${compliancePct} percent within SLA against a ${target} percent target`}>
+          <div
+            className="h-full origin-left rounded-[3px] chart-bar-grow"
+            style={{ width: `${compliancePct}%`, background: tone }}
+          />
+          <div
+            className="absolute -top-1 -bottom-1 w-px bg-[var(--color-text-secondary)]"
+            style={{ left: `${target}%` }}
+            aria-hidden="true"
+          />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="text-lg font-semibold tabular-nums text-[var(--color-text-primary)]">
-              {within.toLocaleString()}
-            </span>
-            <span className="text-xs text-[var(--color-text-secondary)]">within SLA</span>
-          </div>
-          <div className="mt-0.5 flex items-baseline gap-2">
-            <span className="text-lg font-semibold tabular-nums" style={{ color: "var(--color-severity-critical-text)" }}>
-              {breached.toLocaleString()}
-            </span>
-            <span className="text-xs text-[var(--color-text-secondary)]">breached</span>
-          </div>
-          {bySev.length > 0 && (
-            <div className="mt-2.5 flex flex-col gap-1 border-t border-[var(--color-border)] pt-2">
-              {bySev.map((s) => (
-                <div key={s.key} className="flex items-center gap-2 text-2xs">
-                  <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: SEV_VARS[s.key as keyof typeof SEV_VARS] }} />
-                  <span className="text-[var(--color-text-secondary)]">{s.label}</span>
-                  <span className="ml-auto font-semibold tabular-nums text-[var(--color-text-primary)]">{s.n.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {slaPosture.maxBreachAgeDays > 0 && (
-            <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
-              Oldest breach: <span className="font-medium text-[var(--color-text-secondary)] tabular-nums">{slaPosture.maxBreachAgeDays}d</span> over target
-            </p>
-          )}
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-2xs">
+          <span className="text-[var(--color-text-secondary)]">
+            <b className="font-semibold tabular-nums text-[var(--color-text-primary)]">{within.toLocaleString()}</b> within
+          </span>
+          <span className="text-[var(--color-text-secondary)]">
+            <b className="font-semibold tabular-nums" style={{ color: "var(--color-severity-critical-text)" }}>{breached.toLocaleString()}</b> breached
+          </span>
+          <span className="text-[var(--color-text-tertiary)]">target {target}%</span>
         </div>
       </div>
+
+      {bySev.length > 0 && (
+        <div className="mt-3 flex flex-col gap-1 border-t border-[var(--color-border)] pt-2.5">
+          {bySev.map((s) => (
+            <div key={s.key} className="flex items-center gap-2 text-2xs">
+              <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: SEV_VARS[s.key as keyof typeof SEV_VARS] }} />
+              <span className="text-[var(--color-text-secondary)]">{s.label}</span>
+              <span className="ml-auto font-semibold tabular-nums text-[var(--color-text-primary)]">{s.n.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {slaPosture.maxBreachAgeDays > 0 && (
+        <p className="mt-2.5 text-2xs text-[var(--color-text-tertiary)]">
+          Oldest breach: <span className="font-medium text-[var(--color-text-secondary)] tabular-nums">{slaPosture.maxBreachAgeDays}d</span> over target
+        </p>
+      )}
     </Card>
   )
 }
@@ -2136,7 +2180,7 @@ export function PostureSummaryTab({
   return (
     <div className="px-6 py-5 space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-[var(--color-text-secondary)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Trends over the last {RANGE_LABEL[rangeDays]}
         </p>
         <SegmentedControl

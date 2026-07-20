@@ -25,8 +25,8 @@ export function PostureTrendKpiCard({ days = 30 }: Props) {
   }, [days])
 
   return (
-    <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+    <div className="panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 shadow-[var(--shadow-card)]">
+      <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Posture trend ({days}d)
       </p>
       <Body points={points} errored={errored} />

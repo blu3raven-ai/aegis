@@ -15,13 +15,8 @@ import {
   isDeleteAction,
   type RuleAction,
 } from "@/lib/client/rules-api"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 
-const SCANNER_LABELS: Record<string, string> = {
-  dependencies: "SCA",
-  code_scanning: "SAST",
-  container_scanning: "Containers",
-  secrets: "Secrets",
-}
 
 export function summarizeAction(action: RuleAction): string {
   if (isSlaAction(action)) {
@@ -35,7 +30,7 @@ export function summarizeAction(action: RuleAction): string {
   }
   if (isRequireScannersAction(action)) {
     if (action.required_scanners.length === 0) return "no scanners required"
-    return action.required_scanners.map((s) => SCANNER_LABELS[s] ?? s).join(" · ") + " required"
+    return action.required_scanners.map((s) => scannerLabel(s)).join(" · ") + " required"
   }
   if (isStaleAlertAction(action)) {
     const trigger = `Alert when scan is older than ${action.stale_after_days} day${action.stale_after_days === 1 ? "" : "s"}`

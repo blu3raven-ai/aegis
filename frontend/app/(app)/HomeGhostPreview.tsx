@@ -13,14 +13,14 @@ const SEV_BADGE_MED = "bg-[var(--color-severity-medium)]/10 text-[var(--color-se
 
 function FeaturedCard() {
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="flex items-start gap-3">
         <span className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${SEV_BADGE_CRIT}`}>
           <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
           critical
         </span>
         <h3 className="flex-1 min-w-0 text-base font-semibold text-[var(--color-text-primary)] tracking-[-0.005em]">
-          Newly introduced vulnerability — preview
+          Newly introduced vulnerability · preview
         </h3>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-text-secondary)]">
@@ -38,14 +38,14 @@ function FeaturedCard() {
 
 function CompactRow() {
   return (
-    <Card padding="none" className="flex items-center gap-3 rounded-xl px-4 py-3">
+    <Card padding="none" className="flex items-center gap-3 rounded-md px-4 py-3">
       <span className={`inline-flex shrink-0 items-center gap-1.5 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide ${SEV_BADGE_HIGH}`}>
         <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
         high
       </span>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium text-[var(--color-text-primary)]">
-          Recently surfaced finding — preview
+          Recently surfaced finding · preview
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--color-text-tertiary)]">
           <span>example-repo</span>
@@ -59,7 +59,7 @@ function CompactRow() {
 function CveCard({ severity }: { severity: "critical" | "high" }) {
   const sevClass = severity === "critical" ? SEV_BADGE_CRIT : SEV_BADGE_HIGH
   return (
-    <Card className="rounded-xl">
+    <Card className="rounded-md">
       <div className="flex flex-wrap items-center gap-1.5">
         <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide ${sevClass}`}>
           {severity}
@@ -72,14 +72,14 @@ function CveCard({ severity }: { severity: "critical" | "high" }) {
       <h3 className="mt-3 truncate text-base font-semibold text-[var(--color-text-primary)]">
         com.example:library
         <span className="ml-2 font-[family-name:var(--font-jetbrains-mono)] text-sm font-normal text-[var(--color-text-tertiary)]">
-          — CVE-0000-0000
+          · CVE-0000-0000
         </span>
       </h3>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)]">
+        <span className="inline-flex items-center gap-1.5 rounded bg-[var(--color-accent)] px-3 py-1.5 text-xs font-mono font-medium uppercase tracking-[0.055em] text-[var(--color-accent-on)]">
           Investigate →
         </span>
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-secondary)]">
+        <span className="inline-flex items-center gap-1.5 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-mono font-medium uppercase tracking-[0.055em] text-[var(--color-text-secondary)]">
           Open fix PR
         </span>
       </div>
@@ -161,7 +161,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
       {/* Just introduced */}
       <section>
         <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Just introduced · needs your attention
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
@@ -175,7 +175,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
       {/* Open in your repos */}
       <section>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Open in your repos
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
@@ -189,25 +189,25 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
       {/* Your week */}
       <section>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Your week
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
         </div>
-        <Card className="rounded-2xl">
+        <Card className="rounded-md">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Introduced</p>
+              <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Introduced</p>
               <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-severity-high-text)]">13</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
             </div>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Fixed</p>
+              <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Fixed</p>
               <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">18</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">vs last week</p>
             </div>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Net change</p>
+              <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Net change</p>
               <p className="mt-2 text-3xl font-semibold tabular-nums leading-none text-[var(--color-status-ok-text)]">−5</p>
               <p className="mt-2 text-xs text-[var(--color-text-tertiary)]">in your repos</p>
             </div>
@@ -221,7 +221,7 @@ export function HomeGhostPreview({ displayName, salutation }: { displayName: str
       {/* Your repos */}
       <section>
         <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Your repos
           </h2>
           <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>

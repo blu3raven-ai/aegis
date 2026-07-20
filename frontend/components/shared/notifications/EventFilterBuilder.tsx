@@ -8,12 +8,13 @@ import { Select } from "@/components/ui/Select"
 
 // Must mirror the router's SUBSCRIBED_EVENT_TYPES — only these are delivered.
 // Offering an event the router drops (chain.*, scan.*) would filter a
-// destination down to events it can never receive.
+// destination down to events it can never receive. The chip label is the
+// human-readable form; the value is the wire event type the toggle stores.
 const KNOWN_EVENT_TYPES = [
-  "finding.created",
-  "finding.severity_changed",
-  "intel.exploit_availability_changed",
-  "intel.anomaly_detected",
+  { value: "finding.created", label: "Finding created" },
+  { value: "finding.severity_changed", label: "Severity changed" },
+  { value: "intel.exploit_availability_changed", label: "Exploit availability" },
+  { value: "intel.anomaly_detected", label: "Anomaly detected" },
 ] as const
 
 const SEVERITY_OPTIONS = [
@@ -61,7 +62,7 @@ export function EventFilterBuilder({ value, onChange }: EventFilterBuilderProps)
     <div className="space-y-3">
       {/* Event types */}
       <div>
-        <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
+        <label className="block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
           Event types
         </label>
         <div className="flex flex-wrap gap-1.5">
@@ -72,10 +73,10 @@ export function EventFilterBuilder({ value, onChange }: EventFilterBuilderProps)
           />
           {KNOWN_EVENT_TYPES.map((et) => (
             <FilterChip
-              key={et}
-              label={et}
-              active={selectedTypes.includes(et)}
-              onClick={() => toggleType(et)}
+              key={et.value}
+              label={et.label}
+              active={selectedTypes.includes(et.value)}
+              onClick={() => toggleType(et.value)}
             />
           ))}
         </div>

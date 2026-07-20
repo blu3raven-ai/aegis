@@ -15,6 +15,7 @@ assignee_user_id. The handler routes to the appropriate lifecycle helper.
 """
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from typing import Any
 
@@ -63,7 +64,11 @@ from src.findings.advisory import (
 from src.findings.poc_generation import PocGenerationError, generate_poc
 from src.settings.llm.router import _resolve_org_id
 from src.settings.llm.service import fetch_llm_config
+from src.scans.service import ScannerNotApplicableError, submit_scan
+from src.audit_log.recorder import ActorInfo, RequestContext, get_recorder
 from src.authz.enforcement.scope import assignable_user_ids, resolve_asset_ids_from_request
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/findings", tags=["findings"])
 
@@ -565,6 +570,67 @@ async def generate_finding_poc(finding_id: int, request: Request) -> dict[str, A
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     await _persist_finding_poc(finding_id, poc)
     return {"poc": poc}
+
+
+@router.post("/{finding_id}/verify", status_code=202)
+async def reverify_finding(finding_id: int, request: Request) -> dict[str, Any]:
+    """Re-scan the finding's source so the verification pass runs again.
+
+    Gated by run_scans because it spends LLM tokens; scoped like the other
+    finding reads (404 out of scope). Asynchronous: the finding's advisory
+    updates when the re-scan completes and re-ingests, so the caller polls via
+    the usual findings SSE rather than blocking here. Re-verifies against the
+    source's last-scanned commit so the same tree is re-checked.
+    """
+    require_permission(request, RUN_SCANS)
+    finding = await _scoped_finding_dict(finding_id, request)
+    cfg = fetch_llm_config(_resolve_org_id())
+    if cfg is None or not cfg.enabled or not cfg.api_key:
+        raise HTTPException(status_code=409, detail="LLM is not configured")
+
+    asset_id = finding.get("asset_id")
+    if not asset_id:
+        raise HTTPException(status_code=422, detail="Finding has no source to re-scan")
+
+    async with get_session() as session:
+        last_sha = await session.scalar(
+            select(Asset.last_scanned_sha).where(Asset.id == asset_id)
+        )
+
+    try:
+        submission = await submit_scan(
+            asset_id=asset_id,
+            user_id=getattr(request.state, "user_sub", "") or "",
+            commit_sha=last_sha,
+        )
+    except ScannerNotApplicableError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except NotImplementedError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    try:
+        get_recorder().record(
+            action="scan.triggered",
+            resource_type="scan_run",
+            resource_id=submission.scan_id,
+            actor=ActorInfo(
+                user_id=getattr(request.state, "user_sub", None) or None,
+                role=str(getattr(request.state, "user_role", "") or ""),
+            ),
+            metadata={"triggered_by": "reverify_finding", "finding_id": finding_id, "asset_id": asset_id},
+            request=RequestContext(
+                method="POST",
+                path=str(request.url.path),
+                ip=getattr(request.client, "host", None) if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+            ),
+        )
+    except Exception:
+        logger.exception("audit_log: scan.triggered emit failed for %s", submission.scan_id)
+
+    return {"scan_id": submission.scan_id, "status": submission.status}
 
 
 @router.patch("")

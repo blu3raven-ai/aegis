@@ -45,7 +45,7 @@ export function verdictRationale(
     return {
       tone: "caution",
       text:
-        "The verifier proposed a mitigation but couldn't confirm it exists in your code, so this finding was not ruled out — treat it as unverified and review it.",
+        "The verifier proposed a mitigation but couldn't confirm it exists in your code, so this finding was not ruled out. Treat it as unverified and review it.",
     }
   }
 
@@ -53,7 +53,7 @@ export function verdictRationale(
     return {
       tone: "caution",
       text:
-        "The verifier described an exploit path, but some of the code it cited couldn't be confirmed against your repository — kept for review rather than confirmed.",
+        "The verifier described an exploit path, but some of the code it cited couldn't be confirmed against your repository. Kept for review rather than confirmed.",
     }
   }
 
@@ -61,7 +61,7 @@ export function verdictRationale(
     return {
       tone: "caution",
       text:
-        "The verifier judged that your code likely doesn't reach this vulnerability, but couldn't cite proof — kept for review rather than dismissed.",
+        "The verifier judged that your code likely doesn't reach this vulnerability, but couldn't cite proof. Kept for review rather than dismissed.",
     }
   }
 
@@ -69,7 +69,7 @@ export function verdictRationale(
     return {
       tone: "neutral",
       text:
-        "The vulnerable package isn't imported or referenced anywhere in your code, so there's likely no reachable path — kept for review, not auto-dismissed.",
+        "The vulnerable package isn't imported or referenced anywhere in your code, so there's likely no reachable path. Kept for review, not auto-dismissed.",
     }
   }
 
@@ -77,7 +77,7 @@ export function verdictRationale(
     return {
       tone: "neutral",
       text:
-        "The verifier couldn't trace an exploit path from user input to this sink. It hasn't confirmed the finding is exploitable — but hasn't ruled it out either.",
+        "The verifier couldn't trace an exploit path from user input to this sink. It hasn't confirmed the finding is exploitable, but hasn't ruled it out either.",
     }
   }
 
@@ -98,14 +98,14 @@ export function verdictRationale(
     return {
       tone: "caution",
       text:
-        "The verifier traced your code reaching this vulnerable dependency — a reachable path is likely, so prioritise it.",
+        "The verifier traced your code reaching this vulnerable dependency. A reachable path is likely, so prioritise it.",
     }
   }
   if (reachability === "no_path") {
     return {
       tone: "neutral",
       text:
-        "The verifier found no path from your code to the vulnerable function (its citations checked out), so exploitability is likely low — kept for review.",
+        "The verifier found no path from your code to the vulnerable function (its citations checked out), so exploitability is likely low. Kept for review.",
     }
   }
 

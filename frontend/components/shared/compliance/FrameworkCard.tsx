@@ -1,4 +1,5 @@
 import { type ControlSummaryItem, deriveControlStatus } from "@/lib/client/compliance-api"
+import { plural } from "@/lib/shared/plural"
 import { Button } from "@/components/ui/Button"
 
 interface FrameworkCardProps {
@@ -48,7 +49,7 @@ export function FrameworkCard({
           : "bg-[var(--color-severity-critical)]"
 
   const containerClass = [
-    "flex flex-col gap-3 rounded-xl border p-5 text-left transition-colors w-full",
+    "flex flex-col gap-3 rounded-md border p-5 text-left transition-colors w-full",
     selected
       ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
       : "border-[var(--color-border)] bg-[var(--color-surface)]",
@@ -123,7 +124,7 @@ export function FrameworkCard({
                   {pctValue}%
                 </span>
                 <span className="text-xs text-[var(--color-text-secondary)]">
-                  {derived.met} of {derived.total} controls
+                  {derived.met} of {derived.total} {plural(derived.total, "control")}
                 </span>
               </>
             )}

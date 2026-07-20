@@ -21,7 +21,7 @@ export default function Loading() {
       </div>
       <div className="flex flex-col gap-4 p-6">
         {Array.from({ length: 2 }).map((_, i) => (
-          <Card key={i} padding="none" className="h-72 w-full rounded-xl motion-safe:animate-pulse" />
+          <Card key={i} padding="none" className="h-72 w-full rounded-md motion-safe:animate-pulse" />
         ))}
       </div>
     </div>

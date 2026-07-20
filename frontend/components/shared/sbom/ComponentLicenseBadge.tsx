@@ -37,7 +37,7 @@ export function ComponentLicenseBadge({
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-px text-2xs font-semibold ${meta.tone}`}
-      title={`${meta.label} — ${meta.tooltip}`}
+      title={`${meta.label}: ${meta.tooltip}`}
     >
       {meta.icon && <LicenseIconGlyph icon={meta.icon} />}
       {label}

@@ -60,12 +60,12 @@ function StatTile({
   spin?: boolean
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+    <div className="flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
       <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-lg", TONE_CHIP[tone])}>
         <Icon className={cn("h-[18px] w-[18px]", spin && "animate-spin")} aria-hidden />
       </span>
       <div className="min-w-0">
-        <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        <div className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           {label}
         </div>
         <div
@@ -254,7 +254,7 @@ export function SourceOverviewPageContent() {
         {/* Connection details */}
         <Card as="section" className="lg:col-span-1">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               Connection details
             </h2>
             <StatusPill status={STATUS_PILL[connection.status]} label={STATUS_LABEL[connection.status]} />

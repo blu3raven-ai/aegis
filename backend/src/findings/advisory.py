@@ -14,13 +14,16 @@ import html
 _LANG_EXT = {"python": "py", "bash": "sh", "sh": "sh", "javascript": "js",
              "typescript": "ts", "ruby": "rb", "go": "go", "php": "php"}
 
-_SAFE_HARBOR = (
-    "## Testing & Safe Harbor\n\n"
+# Single source for the Safe Harbor prose. The Markdown and HTML report footers
+# below both derive from it; the frontend finding drawer mirrors this wording.
+_SAFE_HARBOR_TEXT = (
     "All testing was performed locally against the open-source code with benign "
     "proof-of-concept payloads. No production systems or user data were accessed, "
     "and there was no impact to availability. This report is kept confidential "
-    "pending a fix.\n"
+    "pending a fix."
 )
+
+_SAFE_HARBOR = f"## Testing & Safe Harbor\n\n{_SAFE_HARBOR_TEXT}\n"
 
 _POC_HEADER_TMPL = (
     "{comment} Proof of concept — {title}\n"
@@ -246,13 +249,7 @@ def compose_advisory_html(finding: dict) -> str:
     if ro.get("source") == "accepted_risk":
         body.append(f"<p>Ruled out — accepted risk: {_esc(ro.get('statement') or '')}</p>")
 
-    body.append(
-        "<h2>Testing &amp; Safe Harbor</h2>"
-        "<p>All testing was performed locally against the open-source code with benign "
-        "proof-of-concept payloads. No production systems or user data were accessed, "
-        "and there was no impact to availability. This report is kept confidential "
-        "pending a fix.</p>"
-    )
+    body.append(f"<h2>Testing &amp; Safe Harbor</h2><p>{_esc(_SAFE_HARBOR_TEXT)}</p>")
 
     return (
         '<!DOCTYPE html><html><head><meta charset="utf-8">'

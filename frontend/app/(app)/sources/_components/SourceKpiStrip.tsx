@@ -34,7 +34,7 @@ export function SourceKpiStrip({ connections }: SourceKpiStripProps) {
     : "No syncs recorded"
 
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3">
       <div className="flex items-center gap-2 text-sm">
         <span className="font-semibold tabular-nums text-[var(--color-text-primary)]">{total}</span>
         <span className="text-[var(--color-text-secondary)]">connection{total === 1 ? "" : "s"}</span>

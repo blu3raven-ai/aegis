@@ -136,7 +136,7 @@ export function RoutingRulesPanel() {
           </h2>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
             Send findings to the right channel based on rules. Rules evaluate in
-            priority order — the first match wins.
+            priority order. The first match wins.
           </p>
         </div>
         {!loading && !loadError && (
@@ -159,7 +159,7 @@ export function RoutingRulesPanel() {
 
       {/* Error state */}
       {loadError && (
-        <div className="rounded-2xl border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
+        <div className="rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] p-8">
           <p className="text-sm font-semibold text-[var(--color-severity-critical-text)]">
             Couldn&apos;t load rules
           </p>
@@ -176,10 +176,10 @@ export function RoutingRulesPanel() {
       {!loadError && activeTab === "rules" && (
         <>
           {!loading && rules.length === 0 ? (
-            <Card padding="none" className="rounded-2xl p-10 text-center">
+            <Card padding="none" className="rounded-md p-10 text-center">
               <p className="text-sm font-semibold text-[var(--color-text-primary)]">No routing rules</p>
               <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                All findings go to every enabled destination. Create a rule to route specific
+                All findings go to every enabled channel. Create a rule to route specific
                 findings to specific channels.
               </p>
               <div className="mt-4 inline-flex">
@@ -189,7 +189,7 @@ export function RoutingRulesPanel() {
               </div>
             </Card>
           ) : (
-            <Card padding="none" className="overflow-hidden rounded-2xl">
+            <Card padding="none" className="overflow-hidden rounded-md">
               <Table>
                 <Thead>
                   <Tr>
@@ -282,7 +282,7 @@ export function RoutingRulesPanel() {
           {!loading && !loadError && rules.length > 0 && (
             <p className="text-[11px] text-[var(--color-text-tertiary)]">
               Rules execute in priority order. If no rule matches a finding, notifications
-              fall back to all enabled destinations.
+              fall back to all enabled channels.
             </p>
           )}
         </>
@@ -290,7 +290,7 @@ export function RoutingRulesPanel() {
 
       {/* Preview tab */}
       {!loadError && activeTab === "preview" && (
-        <Card padding="lg" className="rounded-2xl">
+        <Card padding="lg" className="rounded-md">
           <RulePreview />
         </Card>
       )}

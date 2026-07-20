@@ -110,7 +110,7 @@ export function DestinationsTable({
   deletingId,
 }: DestinationsTableProps) {
   return (
-    <Card padding="none" className="overflow-hidden rounded-2xl">
+    <Card padding="none" className="overflow-hidden rounded-md">
       <Table>
         <Thead>
           <Tr>

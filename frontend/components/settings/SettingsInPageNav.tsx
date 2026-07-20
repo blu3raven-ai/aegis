@@ -21,6 +21,19 @@ function scrollMainTo(id: string, behavior: ScrollBehavior = "smooth") {
   })
 }
 
+// The browser's native hash-scroll (on a fresh nav to /settings#section) scrolls
+// ancestors to reveal the target — and does so even on overflow-hidden elements,
+// dragging the header/sidebar off-screen. The content column is the only thing
+// that should scroll, so undo any scroll the shell picked up.
+function pinShell() {
+  if (typeof window === "undefined") return
+  const main = document.querySelector("[data-app-scroll]") as HTMLElement | null
+  for (const el of [document.scrollingElement, document.body, document.documentElement, main]) {
+    const node = el as HTMLElement | null
+    if (node && node.scrollTop) node.scrollTop = 0
+  }
+}
+
 interface NavItem {
   id: string
   href: string
@@ -248,7 +261,7 @@ const NAV_GROUPS: NavGroupSpec[] = [
     label: "Organization",
     items: [
       { id: "general", href: "#general", label: "General", icon: ICONS.building },
-      { id: "sso", href: "#sso", label: "SSO / SAML", icon: ICONS.lock },
+      { id: "sso", href: "#sso", label: "SSO (SAML / OIDC)", icon: ICONS.lock },
       { id: "audit", href: "#audit", label: "Audit Log", icon: ICONS.scroll },
       { id: "runners", href: "#runners", label: "Runners", icon: ICONS.runner },
     ],
@@ -271,17 +284,31 @@ export function SettingsInPageNav() {
   // Honour the URL hash on initial mount + when the user navigates back/forward
   // — main needs to be scrolled manually because the document is overflow-locked.
   useEffect(() => {
+    let lateT: ReturnType<typeof setTimeout> | undefined
     const hash = window.location.hash.slice(1)
     if (hash) {
-      // Defer one frame so the layout has settled before we measure.
-      requestAnimationFrame(() => scrollMainTo(hash, "auto"))
+      // Defer one frame so the layout has settled, then scroll the content
+      // column and pin the shell. The native hash-scroll runs asynchronously,
+      // so re-pin on the next frame and shortly after to catch a late one.
+      requestAnimationFrame(() => {
+        scrollMainTo(hash, "auto")
+        pinShell()
+        requestAnimationFrame(pinShell)
+      })
+      lateT = setTimeout(pinShell, 120)
     }
     const onPopState = () => {
       const next = window.location.hash.slice(1)
-      if (next) scrollMainTo(next, "smooth")
+      if (next) {
+        scrollMainTo(next, "smooth")
+        pinShell()
+      }
     }
     window.addEventListener("popstate", onPopState)
-    return () => window.removeEventListener("popstate", onPopState)
+    return () => {
+      window.removeEventListener("popstate", onPopState)
+      if (lateT) clearTimeout(lateT)
+    }
   }, [])
 
   return (
@@ -310,7 +337,7 @@ function NavGroup({
           : "mb-1"
       }
     >
-      <div className="px-3 pb-1.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <div className="px-3 pb-1.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         {label}
       </div>
       <div className="flex flex-col gap-0.5">

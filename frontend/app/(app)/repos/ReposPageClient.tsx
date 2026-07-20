@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Button } from "@/components/ui/Button"
 import { PageHeader } from "@/components/layout/PageHeader"
 import { ReposIcon } from "@/lib/shared/ui/page-icons"
 import { RepositoriesPanel } from "@/app/(app)/sources/_components/RepositoriesPanel"
@@ -21,16 +22,18 @@ export function ReposPageClient() {
         description="Source-of-truth for every repo Aegis is watching · scanner coverage, severity, and last scan"
         count={count}
         controls={
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+            leadingIcon={
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            }
           >
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
             Add source
-          </button>
+          </Button>
         }
       />
       <RepositoriesPanel key={reloadKey} onCountChange={setCount} />

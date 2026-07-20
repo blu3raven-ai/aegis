@@ -64,7 +64,7 @@ export function EnableVerificationBanner({ verificationEnabled }: EnableVerifica
         collapsed ? "max-h-0 opacity-0" : "max-h-40 opacity-100",
       )}
     >
-      <div className="rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-3 flex items-start gap-3">
+      <div className="rounded-md border border-[var(--color-border)] border-l-2 border-l-[var(--color-accent)] bg-[var(--color-bg-section)] px-4 py-3 flex items-start gap-3">
         <svg
           aria-hidden="true"
           viewBox="0 0 24 24"
@@ -80,7 +80,7 @@ export function EnableVerificationBanner({ verificationEnabled }: EnableVerifica
           </p>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
             Your model runs an AI verification pass on SAST, IaC, and dependency findings
-            to mark them as confirmed, needs verify, possible, or ruled out —
+            to mark them as confirmed, needs verify, possible, or ruled out,
             typically reducing noise by 40–60%.
           </p>
           <div className="mt-2 flex items-center gap-3">

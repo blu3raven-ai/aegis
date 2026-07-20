@@ -13,7 +13,7 @@ export default function Loading() {
       </div>
       <div className="flex flex-col gap-4 p-6">
         <Skeleton className="h-9 w-72 rounded-lg" />
-        <Card padding="none" className="rounded-2xl">
+        <Card padding="none" className="rounded-md">
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}

@@ -182,7 +182,7 @@ export function DependenciesSetupForm({
   return (
     <div className="space-y-6">
       {!canEdit && (
-        <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-2.5 text-xs text-[var(--color-state-pending)]">
+        <div className="rounded-md border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-4 py-2.5 text-xs text-[var(--color-state-pending)]">
           Only owners and admins can edit tool settings.
         </div>
       )}
@@ -255,7 +255,7 @@ export function DependenciesSetupForm({
       <SettingsCard eyebrow="Automation" title="Scheduled Scans">
       <fieldset disabled={!canEdit} className="space-y-4 disabled:opacity-50">
           <div className="space-y-4">
-            <label className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm">
+            <label className="flex items-start gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm">
               <input
                 type="checkbox"
                 checked={autoRerunEnabled}
@@ -271,7 +271,7 @@ export function DependenciesSetupForm({
             </label>
 
             {autoRerunEnabled && (
-              <div className="space-y-4 rounded-lg border border-[var(--color-border)] p-4">
+              <div className="space-y-4 rounded-md border border-[var(--color-border)] p-4">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   {rerunScheduleType === "simple" ? (
                     <FormField
@@ -332,7 +332,7 @@ export function DependenciesSetupForm({
       </SettingsCard>
 
       {error && (
-        <div ref={errorRef} className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
+        <div ref={errorRef} className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-sm text-[var(--color-severity-critical)]">
           {error}
         </div>
       )}

@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Check } from "lucide-react"
 import { generateRunnerToken, fetchRunners, approveRunner } from "@/lib/client/settings/use-runners"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 import { Sheet } from "@/components/ui/Sheet"
+import { Skeleton } from "@/components/ui/Skeleton"
 import { HostReachabilityNote } from "@/components/shared/HostReachabilityNote"
 import { useSSE } from "@/components/providers/SSEProvider"
 
@@ -29,7 +30,7 @@ function CopyableBlock({ text, label }: { text: string; label: string }) {
       <p className="mb-1 text-xs font-semibold text-[var(--color-text-secondary)]">{label}</p>
       <button
         type="button"
-        className="relative block w-full cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 pr-16 text-left font-mono text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
+        className="relative block w-full cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-3 pr-16 text-left font-mono text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-border)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
         onClick={handleCopy}
         aria-label={copied ? `${label}: copied` : `Copy ${label.toLowerCase()}`}
       >
@@ -129,10 +130,11 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
       onClose={onClose}
       title="Add runner"
       description="Run these commands on your remote machine."
+      variant="modal"
       size="md"
     >
       {error ? (
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] p-4 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       ) : (
@@ -141,7 +143,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
           <div className={`flex items-center gap-2 text-xs font-medium ${expired ? "text-[var(--color-severity-critical-text)]" : "text-[var(--color-text-secondary)]"}`}>
             <span className={`h-2 w-2 rounded-full ${expired ? "bg-[var(--color-severity-critical)]" : "bg-[var(--color-status-ok)]"}`} />
             {expired
-              ? "Token expired — close and generate a new one"
+              ? "Token expired. Close and generate a new one"
               : `Token expires in ${minutes}:${String(seconds).padStart(2, "0")}`
             }
           </div>
@@ -158,7 +160,13 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
 
           <HostReachabilityNote origin={portalUrl} audience="the runner machine" />
 
-          {method === "docker" ? (
+          {!token ? (
+            <div className="space-y-3">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : method === "docker" ? (
             <CopyableBlock label="Run the runner" text={dockerCmd} />
           ) : (
             <>
@@ -179,14 +187,14 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
 
           {connected ? (
             <div
-              className="rounded-lg border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] p-3"
+              className="rounded-md border border-[var(--color-status-ok-border)] bg-[var(--color-status-ok-subtle)] p-3"
               role="status"
               aria-live="polite"
             >
               <div className="flex items-center gap-2 text-sm font-medium text-[var(--color-status-ok-text)]">
                 <Check className="h-4 w-4 shrink-0" aria-hidden />
                 {approved
-                  ? `${connected.name} approved — ready to receive scans`
+                  ? `${connected.name} approved. Ready to receive scans`
                   : `${connected.name} connected`}
               </div>
               {!approved && (
@@ -206,7 +214,7 @@ export function AddRunnerModal({ open, portalUrl, onClose }: Props) {
               role="status"
               aria-live="polite"
             >
-              <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] motion-reduce:animate-none" />
+              <Spinner className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" />
               Waiting for the runner to connect…
             </div>
           )}

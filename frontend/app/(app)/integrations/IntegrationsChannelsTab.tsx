@@ -1,12 +1,14 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useRef } from "react"
+import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
 
 import { DestinationsTable, type TestStatus } from "@/components/shared/notifications/DestinationsTable"
 import { DestinationForm } from "@/components/shared/notifications/DestinationForm"
 import { EmptyDestinationsState } from "@/components/shared/notifications/EmptyDestinationsState"
 import { DrawerSection } from "@/components/shared/FindingDrawer/DrawerSection"
 import { KpiCard } from "@/components/shared/KpiCard"
+import { Button } from "@/components/ui/Button"
 import {
   type NotificationDestination,
   type CreateDestinationPayload,
@@ -36,14 +38,14 @@ interface IntegrationsChannelsTabProps {
 
 function DestinationsLoadingSkeleton() {
   return (
-    <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+    <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--color-border)]">
             {["Name", "Type", "Status", "Filters", "Last updated", "Actions"].map((h) => (
               <th
                 key={h}
-                className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
+                className="px-4 py-3 text-left text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
               >
                 {h}
               </th>
@@ -87,7 +89,7 @@ function StatsStrip({ destinations }: { destinations: NotificationDestination[] 
       <KpiCard
         label="Channels configured"
         value={String(stats.channelCount)}
-        note={stats.channelCount === 1 ? "1 enabled destination" : `${stats.channelCount} enabled destinations`}
+        note={stats.channelCount === 1 ? "1 enabled channel" : `${stats.channelCount} enabled channels`}
         valueClass={NEUTRAL}
       />
       <KpiCard label="Events sent (24h)" value="—" note={unavailableHint} valueClass={NEUTRAL} />
@@ -115,6 +117,8 @@ export function IntegrationsChannelsTab({
   onStartCreate,
   onCancelCreate,
 }: IntegrationsChannelsTabProps) {
+  const createModalRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(createModalRef, onCancelCreate, creatingDest)
   return (
     <>
       <StatsStrip destinations={destinations} />
@@ -123,14 +127,10 @@ export function IntegrationsChannelsTab({
 
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Destinations</h2>
-          <button
-            type="button"
-            onClick={onStartCreate}
-            className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)]"
-          >
-            + Add destination
-          </button>
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Channels</h2>
+          <Button variant="primary" size="sm" onClick={onStartCreate}>
+            + Add channel
+          </Button>
         </div>
 
         {destsState === "loading" && <DestinationsLoadingSkeleton />}
@@ -159,8 +159,8 @@ export function IntegrationsChannelsTab({
       </section>
 
       {creatingDest && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--color-overlay)] p-4">
-          <div role="dialog" aria-modal="true" aria-label="New destination" className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[var(--color-overlay)] p-4" onClick={onCancelCreate}>
+          <div ref={createModalRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="New destination" onClick={(e) => e.stopPropagation()} className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-xl focus:outline-none">
             <DrawerSection label="New destination">
               {createError && (
                 <p role="alert" className="mb-3 text-sm text-[var(--color-severity-critical)]">{createError}</p>

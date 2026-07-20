@@ -38,11 +38,11 @@ from src.rules_engine.subjects import RuleFindingSubject
 logger = logging.getLogger(__name__)
 
 VALID_DISMISS_REASONS: frozenset[str] = frozenset([
-    "Fix started",
-    "Risk is tolerable",
+    # Dismiss is "this finding isn't actionable" only. Risk acceptance and
+    # fix-tracking are their own dispositions (accepted-risk carve-out / defer).
     "Alert is inaccurate",
     "Vulnerable code is not used",
-    "Auto-dismissed by rule",
+    "Auto-dismissed by rule",  # system-set by the auto-dismiss rule engine
 ])
 
 

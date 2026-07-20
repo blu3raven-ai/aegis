@@ -43,8 +43,8 @@ export function SbomHeader({
   return (
     <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
       <div className="min-w-0">
-        <h1 className="text-lg font-semibold tracking-tight text-[var(--color-text-primary)] truncate" title={`SBOM — ${repoName}`}>
-          SBOM — {repoName}
+        <h1 className="text-lg font-semibold tracking-tight text-[var(--color-text-primary)] truncate" title={`SBOM · ${repoName}`}>
+          SBOM · {repoName}
         </h1>
 
         {latestEntry ? (

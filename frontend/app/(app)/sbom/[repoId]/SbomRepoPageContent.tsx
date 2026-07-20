@@ -249,7 +249,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
       URL.revokeObjectURL(url)
       setToast({ message: "SBOM downloaded", tone: "ok" })
     } catch {
-      setToast({ message: "Export failed — please try again", tone: "error" })
+      setToast({ message: "Export failed. Please try again", tone: "error" })
     } finally {
       setExportLoading(false)
     }
@@ -326,7 +326,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
               {viewMode === "components" && isHistoricalSnapshot && !vulnsError && (
                 <span
                   className="inline-flex items-center gap-1.5 text-xs text-[var(--color-text-tertiary)]"
-                  title="You're viewing an older snapshot, but the vulnerability counts reflect the current open findings from the latest scan — not this snapshot's state at the time."
+                  title="You're viewing an older snapshot, but the vulnerability counts reflect the current open findings from the latest scan, not this snapshot's state at the time."
                 >
                   <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
@@ -346,7 +346,7 @@ export function SbomRepoPageContent({ params }: { params: Promise<{ repoId: stri
                 repo={repoDisplayName ?? undefined}
               />
             ) : (
-              <div className="flex-1 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+              <div className="flex-1 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]">
                 <SbomDependencyTree
                   components={parsed?.components ?? []}
                   dependencies={parsed?.dependencies ?? []}

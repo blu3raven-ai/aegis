@@ -33,7 +33,7 @@ export function RecentReleaseChecksTable({ releases, loading }: RecentReleaseChe
   return (
     <section className="flex flex-col gap-3">
       <header className="flex items-center justify-between gap-4">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Recent release checks
         </h2>
         <Link

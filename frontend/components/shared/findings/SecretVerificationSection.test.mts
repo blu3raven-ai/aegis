@@ -14,7 +14,7 @@ describe("SecretVerificationSection", () => {
   })
 
   it("shows a provider-verified live-credential state", () => {
-    assert.match(src, /Live credential — provider-verified/)
+    assert.match(src, /Live credential, provider-verified/)
     assert.match(src, /authenticated this credential against the provider/)
     assert.match(src, /Rotate it immediately/)
   })

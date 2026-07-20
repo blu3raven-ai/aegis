@@ -156,7 +156,7 @@ function ExternalLink({
 /** Plain mono code block, matching the drawer's code-preview chrome. */
 function CodeBlock({ children }: { children: string }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)]">
+    <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)]">
       <pre className="overflow-x-auto p-3 text-[12px] leading-relaxed">
         <code className="block whitespace-pre font-[family-name:var(--font-jetbrains-mono)] text-[var(--color-text-primary)]">
           {children}
@@ -177,7 +177,7 @@ function diffLineClass(line: string): string {
 function DiffBlock({ diff }: { diff: string }) {
   const lines = diff.replace(/\n$/, "").split("\n")
   return (
-    <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)]">
+    <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)]">
       <pre className="overflow-x-auto p-3 text-[12px] leading-relaxed" aria-label="Unified diff">
         <code className="block font-[family-name:var(--font-jetbrains-mono)]">
           {lines.map((line, i) => (
@@ -203,7 +203,7 @@ function ProvenanceCaption({ fix }: { fix: FindingRecommendedFix }) {
         <p className="text-xs text-[var(--color-text-secondary)]">{fix.rationale}</p>
       )}
       {(meta.length > 0 || fix.validated) && (
-        <p className="mt-1 flex flex-wrap items-center gap-2 text-2xs uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
+        <p className="mt-1 flex flex-wrap items-center gap-2 font-mono text-2xs uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
           {meta.length > 0 && <span>{meta.join(" · ")}</span>}
           {fix.validated && (
             <span className="inline-flex items-center gap-1 text-[var(--color-severity-low-text)]">
@@ -308,7 +308,7 @@ function ConfigPatchBody({ fix }: { fix: FindingRecommendedFix }) {
       <div className="mt-2 grid gap-3 md:grid-cols-2">
         {fix.before != null && (
           <div>
-            <p className="mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="mb-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Before
             </p>
             <CodeBlock>{fix.before}</CodeBlock>
@@ -316,7 +316,7 @@ function ConfigPatchBody({ fix }: { fix: FindingRecommendedFix }) {
         )}
         {fix.after != null && (
           <div>
-            <p className="mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <p className="mb-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               After
             </p>
             <CodeBlock>{fix.after}</CodeBlock>
@@ -333,7 +333,7 @@ function ConfigPatchBody({ fix }: { fix: FindingRecommendedFix }) {
           />
         )}
         <p className="text-xs text-[var(--color-text-tertiary)]">
-          Suggested change — review before applying.
+          Suggested change. Review before applying.
         </p>
       </div>
     </div>
@@ -406,7 +406,7 @@ function CodePatchBody({
 
 function RotationStep({ step }: { step: FindingRecommendedFixStep }) {
   return (
-    <li className="flex gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)] p-3">
+    <li className="flex gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)] p-3">
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-raised)] text-2xs font-semibold tabular-nums text-[var(--color-text-secondary)]">
         {step.order}
       </span>
@@ -414,7 +414,7 @@ function RotationStep({ step }: { step: FindingRecommendedFixStep }) {
         <p className="text-sm text-[var(--color-text-primary)]">
           {step.label}
           {step.destructive && (
-            <span className="ml-2 inline-flex items-center rounded-sm bg-[color-mix(in_srgb,var(--color-severity-critical)_14%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-critical-text)]">
+            <span className="font-mono ml-2 inline-flex items-center rounded-sm bg-[color-mix(in_srgb,var(--color-severity-critical)_14%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-critical-text)]">
               Destructive
             </span>
           )}
@@ -466,7 +466,7 @@ function RotationBody({ fix }: { fix: FindingRecommendedFix }) {
             </span>
           )}
           {fix.verifiedActive && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-high-text)]">
+            <span className="font-mono inline-flex items-center gap-1 rounded-full border border-[color-mix(in_srgb,var(--color-severity-high)_40%,transparent)] bg-[color-mix(in_srgb,var(--color-severity-high)_12%,transparent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-[var(--color-severity-high-text)]">
               Verified active
             </span>
           )}
@@ -486,7 +486,7 @@ function RotationBody({ fix }: { fix: FindingRecommendedFix }) {
       )}
 
       <p className="mt-3 text-xs text-[var(--color-severity-medium-text)]">
-        Removing the secret from code does not remediate it — the live credential must be
+        Removing the secret from code does not remediate it. The live credential must be
         revoked and rotated.
       </p>
     </div>
@@ -516,7 +516,7 @@ export function RecommendedFixSection({ fix, onViewDiff }: RecommendedFixSection
     <section aria-labelledby="finding-recommended-fix-title">
       <h3
         id="finding-recommended-fix-title"
-        className="text-base font-semibold text-[var(--color-text-primary)]"
+        className="border-b border-[var(--color-border-divider)] pb-1.5 text-base font-semibold text-[var(--color-text-primary)]"
       >
         Recommended fix
       </h3>

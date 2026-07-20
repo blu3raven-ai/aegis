@@ -27,8 +27,8 @@ export function HostReachabilityNote({ origin, audience }: HostReachabilityNoteP
           <p className="font-semibold">This address points at localhost</p>
           <p className="mt-0.5">
             {audience} can&apos;t reach{" "}
-            <code className="font-mono">{origin}</code>. Expose Aegis at a public URL — a reverse
-            proxy (nginx/Caddy) or a tunnel (e.g. cloudflared, ngrok) — and use that address here
+            <code className="font-mono">{origin}</code>. Expose Aegis at a public URL, using a reverse
+            proxy (nginx/Caddy) or a tunnel (e.g. cloudflared, ngrok), and use that address here
             instead.
           </p>
         </div>

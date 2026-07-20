@@ -166,7 +166,7 @@ function QueueSection({
 }) {
   return (
     <div className="px-2 pb-3">
-      <div className="px-2.5 pb-1 pt-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <div className="px-2.5 pb-1 pt-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         {label}
       </div>
       <div className="flex flex-col gap-0.5">
@@ -243,7 +243,7 @@ function SavedViewsSection({
 
   return (
     <div className="px-2 pb-3">
-      <div className="px-2.5 pb-1 pt-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <div className="px-2.5 pb-1 pt-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         Saved views
       </div>
 

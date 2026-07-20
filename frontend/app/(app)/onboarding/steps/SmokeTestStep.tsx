@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { startDependenciesRuns, fetchDependenciesRuns } from "@/lib/client/dependencies-client"
+import { Button, Spinner } from "@/components/ui/Button"
 import { StepLayout } from "@/components/shared/onboarding/StepLayout"
 import { WhileYouWaitCard } from "./WhileYouWaitCard"
 
@@ -70,7 +71,7 @@ export function SmokeTestStep({ onNext, onBack, onSkip, loading = false }: Smoke
 
   return (
     <StepLayout
-      title="Run a smoke scan"
+      title="Run your first scan"
       description="Trigger a dependency scan against your repositories to verify everything is connected."
       onBack={onBack}
       onNext={canProceed ? () => onNext({ scan_run_id: runId ?? undefined, findings_count: findingsCount ?? undefined }) : undefined}
@@ -86,19 +87,15 @@ export function SmokeTestStep({ onNext, onBack, onSkip, loading = false }: Smoke
               <p className="text-sm text-[var(--color-text-secondary)]">
                 Aegis will scan your connected repositories for known vulnerabilities in third-party dependencies. This usually takes 1–3 minutes.
               </p>
-              <button
-                type="button"
-                onClick={startScan}
-                className="rounded-lg bg-[var(--color-accent)] px-5 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-              >
+              <Button variant="primary" size="sm" onClick={startScan}>
                 Start scan
-              </button>
+              </Button>
             </div>
           )}
 
           {(status === "starting" || status === "running") && (
             <div className="flex items-center gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-6">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)]" />
+              <Spinner className="h-5 w-5 shrink-0 text-[var(--color-accent)]" />
               <div>
                 <p className="text-sm font-medium text-[var(--color-text-primary)]">
                   {status === "starting" ? "Starting scan…" : "Scan in progress…"}

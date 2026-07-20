@@ -11,7 +11,7 @@ interface IconChipProps {
  */
 export function IconChipFrame({ children }: IconChipProps) {
   return (
-    <div className="inline-flex items-center justify-center p-1.5 bg-[var(--color-accent-subtle)] rounded-lg">
+    <div className="inline-flex items-center justify-center p-1.5 rounded-md border border-[var(--color-accent-border)] bg-[var(--color-accent-subtle)]">
       {children}
     </div>
   )

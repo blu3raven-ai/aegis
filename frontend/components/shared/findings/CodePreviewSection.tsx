@@ -151,7 +151,7 @@ function CodeLines({
                 "whitespace-pre",
                 highlighted && blurHighlighted && "select-none blur-[5px]",
               )}
-              title={highlighted && blurHighlighted ? "Redacted — open in the repository to view the value" : undefined}
+              title={highlighted && blurHighlighted ? "Redacted. Open in the repository to view the value" : undefined}
             >
               {line || " "}
             </span>
@@ -245,7 +245,7 @@ export function CodePreviewSection({
           <h3 id="finding-code-preview-title" className="text-base font-semibold text-[var(--color-text-primary)]">
             Code preview
           </h3>
-          <div className="mt-2 space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)] p-4">
+          <div className="mt-2 space-y-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)] p-4">
             {[88, 64, 76, 48, 70].map((w, i) => (
               <div
                 key={i}
@@ -268,15 +268,15 @@ export function CodePreviewSection({
     if (showEmptyWhenMissing && (filePath || noSourceSite)) {
       const message = noSourceSite
         ? scanner === "container_scanning"
-          ? "No source to preview — this vulnerability comes from a package in the container image, not a line in your code."
-          : "No source to preview — this transitive dependency isn't declared in your manifests, so there's no line to point at."
-        : "We couldn't capture the surrounding code for this location. The source may not have been readable during the scan — re-run it to pull in the lines."
+          ? "No source to preview. This vulnerability comes from a package in the container image, not a line in your code."
+          : "No source to preview. This transitive dependency isn't declared in your manifests, so there's no line to point at."
+        : "We couldn't capture the surrounding code for this location. The source may not have been readable during the scan, so re-run it to pull in the lines."
       return (
         <section aria-labelledby="finding-code-preview-title">
           <h3 id="finding-code-preview-title" className="text-base font-semibold text-[var(--color-text-primary)]">
             Code preview
           </h3>
-          <div className="mt-2 rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] p-4 text-center">
+          <div className="mt-2 rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] p-4 text-center">
             {filePath && (
               <p className="truncate font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-tertiary)]" title={filePath}>
                 {filePath}
@@ -345,7 +345,7 @@ export function CodePreviewSection({
       )}
 
       {useCodeLines ? (
-        <div className="mt-2 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)]">
+        <div className="mt-2 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)]">
           <pre ref={preRef} className="relative max-h-72 overflow-auto p-3 text-[12px] leading-relaxed">
             <CodeLines
               lines={lines}
@@ -359,7 +359,7 @@ export function CodePreviewSection({
           </pre>
         </div>
       ) : (
-        <div className="mt-2 overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)] px-3 py-2">
+        <div className="mt-2 overflow-x-auto rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)] px-3 py-2">
           <code
             className={cn(
               "whitespace-pre font-[family-name:var(--font-jetbrains-mono)] text-[13px]",
@@ -373,7 +373,7 @@ export function CodePreviewSection({
 
       {isSecret && (
         <p className="mt-1.5 text-[11px] text-[var(--color-text-tertiary)]">
-          Only a short prefix is shown — the full secret is never stored. Open it at the source to view or rotate it.
+          Only a short prefix is shown. The full secret is never stored. Open it at the source to view or rotate it.
         </p>
       )}
 
@@ -392,7 +392,7 @@ export function CodePreviewSection({
             </div>
           }
         >
-          <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-section)]">
+          <div className="overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-bg-section)]">
             <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed">
               <CodeLines
                 lines={lines}

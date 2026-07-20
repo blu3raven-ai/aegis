@@ -66,7 +66,7 @@ function RunRow({ label, run, showMode }: { label: string; run: ScanHealthRun; s
       interactive={run.status !== "failed"}
       className={run.status === "failed" ? "bg-[var(--color-severity-critical-subtle)]" : undefined}
     >
-      <Td className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{label}</Td>
+      <Td className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{label}</Td>
       <Td className="text-[var(--color-text-primary)]">{formatScanTimestamp(run.startedAt ?? run.createdAt)}</Td>
       <Td>
         <span className={`capitalize ${statusColour(run.status)}`}>
@@ -106,7 +106,7 @@ export function ScanHealthTable({
       title="Recent scanner runs"
       description={`Status and outcomes of the most recent ${toolLabel} scans.`}
     >
-      <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
+      <div className="overflow-auto rounded-md border border-[var(--color-border)]">
         <Table className="min-w-full">
           <Thead>
             <Tr>

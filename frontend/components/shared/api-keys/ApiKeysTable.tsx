@@ -89,7 +89,7 @@ export function ApiKeysTable({ keys, onRevoke }: ApiKeysTableProps) {
           ) : keys.length === 0 ? (
             <Tr>
               <Td colSpan={6} className="py-8 text-center text-sm text-[var(--color-text-secondary)]">
-                No API keys found.
+                No API tokens found.
               </Td>
             </Tr>
           ) : (

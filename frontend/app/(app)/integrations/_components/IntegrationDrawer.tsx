@@ -14,6 +14,7 @@ export function IntegrationDrawer({ integration, onClose }: IntegrationDrawerPro
       open={integration !== null}
       onClose={onClose}
       title={integration?.name ?? ""}
+      variant="modal"
       description={integration?.description}
       size="xl"
     >

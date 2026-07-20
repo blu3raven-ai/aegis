@@ -140,8 +140,20 @@ export const SCANNER_LABELS: Record<ScannerType, string> = {
   code_scanning: "Code Scanning",
   container_scanning: "Container Scanning",
   iac_scanning: "IaC Scanning",
-  agent_scanning: "Agent Security",
+  agent_scanning: "Coding Agent Scanning",
   deep_audit: "Deep Audit",
+}
+
+
+/** Badge abbreviations for the tightest contexts (row tags, history timeline). */
+export const SCANNER_ABBREV: Record<ScannerType, string> = {
+  dependencies_scanning: "SCA",
+  secret_scanning: "SEC",
+  code_scanning: "SAST",
+  container_scanning: "CONT",
+  iac_scanning: "IaC",
+  agent_scanning: "AGT",
+  deep_audit: "AUD",
 }
 
 export const SCANNER_DESCRIPTIONS: Record<ScannerType, string> = {

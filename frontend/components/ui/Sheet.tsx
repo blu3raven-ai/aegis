@@ -18,6 +18,14 @@ interface SheetProps {
   title: string
   description?: string
   size?: SheetSize
+  /**
+   * How the panel presents itself. `drawer` (default) is a right-side
+   * slide-over that keeps the underlying list visible. `modal` centres the
+   * same panel as a dialog — use it for focused settings/workspace edit flows
+   * where the form is the sole task. Everything else (header, footer, focus
+   * trap, dismiss guard, scroll lock) is identical across both.
+   */
+  variant?: "drawer" | "modal"
   dismissGuard?: DismissGuard
   /**
    * Replaces the default title/description/close row. The custom header owns
@@ -52,15 +60,16 @@ export function openSheetCount(): number {
   return openSheetIds.length
 }
 
-// Right-side slide-over drawer. Used for create/edit flows where the user
-// benefits from keeping the underlying list/table visible for non-blocking
-// forms. Dialogs stay reserved for confirmation prompts.
+// Presents a titled form panel either as a right-side slide-over (default) or a
+// centred modal (`variant="modal"`). The drawer keeps the underlying list
+// visible for non-blocking edits; the modal focuses the user on a single task.
 export function Sheet({
   open,
   onClose,
   title,
   description,
   size = "md",
+  variant = "drawer",
   dismissGuard,
   header,
   children,
@@ -188,14 +197,19 @@ export function Sheet({
 
   if (!mounted) return null
 
+  const isModal = variant === "modal"
+
   return (
-    <div className="fixed inset-0 z-[100]" role="presentation">
+    <div
+      className={cn("fixed inset-0 z-[100]", isModal && "flex items-center justify-center p-4")}
+      role="presentation"
+    >
       <div
         aria-hidden="true"
-        onClick={handleClose}
-        className={cn(
+        onClick={handleClose}        className={cn(
           "fixed inset-0 bg-[var(--color-overlay-strong)] transition-opacity",
           animatingIn ? "opacity-100" : "opacity-0",
+          isModal && "cursor-pointer hover:bg-[var(--color-overlay)]",
         )}
         style={{ transitionDuration: `${animatingIn ? ENTER_MS : EXIT_MS}ms` }}
       />
@@ -206,9 +220,17 @@ export function Sheet({
         {...(header ? { "aria-label": title } : { "aria-labelledby": titleId })}
         tabIndex={-1}
         className={cn(
-          "fixed inset-y-0 right-0 flex w-full flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl outline-none transition-transform ease-out",
+          "flex w-full flex-col bg-[var(--color-surface)] shadow-2xl outline-none ease-out",
           sizeClasses[size],
-          animatingIn ? "translate-x-0" : "translate-x-full",
+          isModal
+            ? cn(
+                "relative max-h-[85vh] overflow-hidden rounded-2xl border border-[var(--color-border)] transition-[opacity,transform]",
+                animatingIn ? "scale-100 opacity-100" : "scale-95 opacity-0",
+              )
+            : cn(
+                "fixed inset-y-0 right-0 border-l border-[var(--color-border)] transition-transform",
+                animatingIn ? "translate-x-0" : "translate-x-full",
+              ),
         )}
         style={{ transitionDuration: `${animatingIn ? ENTER_MS : EXIT_MS}ms` }}
       >
@@ -229,8 +251,7 @@ export function Sheet({
             </div>
             <button
               type="button"
-              onClick={handleClose}
-              aria-label="Close"
+              onClick={handleClose}              aria-label="Close"
               className="-mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-bg-hover)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
             >
               <svg

@@ -123,7 +123,7 @@ export default function SbomDiffPage() {
   return (
     <div className="px-6 py-6">
       {reposError && (
-        <div role="alert" className="mb-4 flex items-center gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
+        <div role="alert" className="mb-4 flex items-center gap-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
           <svg className="h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
           </svg>
@@ -142,7 +142,7 @@ export default function SbomDiffPage() {
       <div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <SbomScanSelector
-            label="Side A — base"
+            label="Side A · base"
             repos={repos}
             reposLoading={reposLoading}
             selectedRepoId={sideARepo}
@@ -151,7 +151,7 @@ export default function SbomDiffPage() {
             onHashChange={setSideAHash}
           />
           <SbomScanSelector
-            label="Side B — target"
+            label="Side B · target"
             repos={repos}
             lockRepo
             selectedRepoId={sideARepo}
@@ -179,7 +179,7 @@ export default function SbomDiffPage() {
 
         {sameSnapshot && (
           <p className="mt-2 text-2xs text-[var(--color-text-tertiary)]">
-            Pick two different snapshots to compare — both sides are the same snapshot.
+            Pick two different snapshots to compare. Both sides are the same snapshot.
           </p>
         )}
       </div>
@@ -191,7 +191,7 @@ export default function SbomDiffPage() {
       </div>
 
       {diffState === "error" && errorMessage && (
-        <div role="alert" className="mt-6 flex items-start gap-3 rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
+        <div role="alert" className="mt-6 flex items-start gap-3 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3">
           <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
           </svg>
@@ -202,7 +202,7 @@ export default function SbomDiffPage() {
       {diffState === "ok" && diffResult && (
         <div className="mt-6 flex flex-col gap-2">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               Results
             </h2>
             <Button

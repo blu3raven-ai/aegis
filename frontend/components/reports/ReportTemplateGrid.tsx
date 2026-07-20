@@ -214,7 +214,7 @@ const TEMPLATES: ReportTemplate[] = [
 export function ReportTemplateGrid({ onSelect, disabledReasons }: ReportTemplateGridProps) {
   return (
     <section aria-label="Report templates">
-      <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)] mb-3">
+      <h2 className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)] mb-3">
         Templates
       </h2>
       <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2 lg:grid-cols-3">
@@ -247,7 +247,7 @@ function TemplateTile({
   const interactive = enabled && !disabledReason
 
   const baseClass =
-    "group relative flex h-full flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-left transition-all"
+    "group relative flex h-full flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-left transition-all"
   const stateClass = interactive
     ? "cursor-pointer hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)]"
     : "cursor-not-allowed opacity-60"
@@ -263,8 +263,8 @@ function TemplateTile({
         interactive
           ? `Use ${title} template`
           : disabledReason
-            ? `${title} — ${disabledReason}`
-            : `${title} — coming soon`
+            ? `${title}: ${disabledReason}`
+            : `${title}: coming soon`
       }
       className={`${baseClass} ${stateClass}`}
     >
@@ -277,12 +277,12 @@ function TemplateTile({
         </div>
         {interactive ? (
           <span
-            className={`text-2xs font-semibold uppercase tracking-[0.14em] rounded px-1.5 py-0.5 ${TAG_CLASS[tag]}`}
+            className={`font-mono text-2xs font-semibold uppercase tracking-[0.14em] rounded px-1.5 py-0.5 ${TAG_CLASS[tag]}`}
           >
             {TAG_LABEL[tag]}
           </span>
         ) : (
-          <span className="rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <span className="rounded border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-1.5 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             {disabledReason ? "Unavailable" : "Coming soon"}
           </span>
         )}
@@ -299,7 +299,7 @@ function TemplateTile({
           {formats.map(fmt => (
             <span
               key={fmt}
-              className="text-2xs font-semibold uppercase tracking-[0.06em] rounded px-1.5 py-0.5 bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]"
+              className="font-mono text-2xs font-semibold uppercase tracking-[0.06em] rounded px-1.5 py-0.5 bg-[var(--color-surface-raised)] text-[var(--color-text-tertiary)]"
             >
               {fmt}
             </span>

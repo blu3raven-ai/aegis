@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Button } from "@/components/ui/Button"
 
 interface AdvisorySourcesCopyBarProps {
   sourceLabel: string
@@ -17,7 +18,7 @@ export function AdvisorySourcesCopyBar({ sourceLabel, onCopy }: AdvisorySourcesC
         <svg className="h-4 w-4 text-[var(--color-status-ok)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
           <polyline points="20 6 9 17 4 12" />
         </svg>
-        <span className="text-sm text-[var(--color-status-ok)]">Copied — settings refreshed</span>
+        <span className="text-sm text-[var(--color-status-ok)]">Copied · settings refreshed</span>
       </div>
     )
   }
@@ -31,8 +32,10 @@ export function AdvisorySourcesCopyBar({ sourceLabel, onCopy }: AdvisorySourcesC
         {state === "error" && (
           <span className="text-xs text-[var(--color-severity-critical)]">{errorMsg}</span>
         )}
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
+          isLoading={state === "copying"}
           disabled={state === "copying"}
           onClick={async () => {
             setState("copying")
@@ -45,10 +48,9 @@ export function AdvisorySourcesCopyBar({ sourceLabel, onCopy }: AdvisorySourcesC
               setState("error")
             }
           }}
-          className="rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
         >
-          {state === "copying" ? "Copying..." : `Copy from ${sourceLabel}`}
-        </button>
+          {state === "copying" ? "Copying" : `Copy from ${sourceLabel}`}
+        </Button>
       </div>
     </div>
   )

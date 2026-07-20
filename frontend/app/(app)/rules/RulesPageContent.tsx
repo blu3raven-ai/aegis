@@ -32,6 +32,7 @@ import { useSession } from "@/lib/client/use-session"
 import { can } from "@/lib/shared/auth/roles"
 import { timeAgo } from "@/lib/shared/time-ago"
 import { KillSwitchDialog } from "@/components/shared/rules/KillSwitchDialog"
+import { Button } from "@/components/ui/Button"
 
 const ORG_ID = process.env.NEXT_PUBLIC_ORG_ID ?? "example-org"
 
@@ -415,30 +416,32 @@ export function RulesPageContent() {
                   </div>
                 </div>
                 {canManageAutoDismiss && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={handleDisengageKillSwitch}
-                    className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-semibold text-[var(--color-severity-critical)] hover:bg-[var(--color-surface-raised)]"
+                    className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical)]"
                   >
                     Re-enable
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
 
             {canManageAutoDismiss && !autoDismissKillSwitch && (
               <div className="flex justify-end">
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="xs"
                   onClick={() => {
                     setKillSwitchError(null)
                     setKillSwitchDialogOpen(true)
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-surface)] px-2.5 py-1 text-xs font-medium text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
+                  leadingIcon={<AlertOctagonIcon />}
+                  className="border-[var(--color-severity-critical-border)] text-[var(--color-severity-critical)] hover:bg-[var(--color-severity-critical-subtle)]"
                 >
-                  <AlertOctagonIcon />
                   Kill auto-dismiss
-                </button>
+                </Button>
               </div>
             )}
 

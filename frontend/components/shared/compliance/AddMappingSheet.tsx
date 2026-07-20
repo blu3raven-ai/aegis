@@ -103,6 +103,7 @@ export function AddMappingSheet({
       open={open}
       onClose={onClose}
       title="Map a finding"
+      variant="modal"
       description="Search open findings and link one the auto-mapper missed to this control."
       size="md"
     >

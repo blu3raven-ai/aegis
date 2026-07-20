@@ -72,7 +72,7 @@ export function SegmentedControl<T extends string>({
               })
             }
             className={cn(
-              "inline-flex items-center justify-center gap-1.5 rounded font-semibold transition-colors",
+              "inline-flex items-center justify-center gap-1.5 rounded font-mono font-medium uppercase tracking-[0.04em] transition-colors",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--color-surface)]",
               "disabled:cursor-not-allowed disabled:opacity-50",
               sizing,

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import { fetchRunnerDetail, fetchRunnerHeartbeats, saveRunnerSettings } from "@/lib/client/settings/use-runners"
 import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
 import { Card } from "@/components/ui/Card"
@@ -26,7 +27,7 @@ function formatDuration(start: string | null, end: string | null): string {
 }
 
 
-const cardClassExtras = "overflow-hidden rounded-xl"
+const cardClassExtras = "overflow-hidden rounded-md"
 
 function SettingsRow({
   label,
@@ -167,7 +168,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
           <Skeleton className="h-7 w-64" />
           <Skeleton className="h-4 w-48" />
         </div>
-        <Skeleton className="h-48 rounded-xl" />
+        <Skeleton className="h-48 rounded-md" />
       </div>
     )
   }
@@ -178,7 +179,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
         <Link href="/settings/runners" className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:underline">
           <ChevronLeft /> Back to Runners
         </Link>
-        <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-4 py-3 text-sm text-[var(--color-severity-critical-text)]">
           Runner not found
         </div>
       </div>
@@ -283,10 +284,10 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
               <Tbody divided={false}>
                 {recentJobs.slice(0, 10).map((job) => (
                   <Tr key={job.id} className="border-b border-[var(--color-border)] last:border-0">
-                    <Td className="py-2.5 text-[var(--color-text-primary)]">{job.jobType}</Td>
+                    <Td className="py-2.5 text-[var(--color-text-primary)]">{scannerLabel(job.jobType)}</Td>
                     <Td className="py-2.5 text-[var(--color-text-secondary)]">{job.org}</Td>
-                    <Td className={`py-2.5 font-medium ${JOB_STATUS_CLASS[job.status] ?? "text-[var(--color-text-tertiary)]"}`}>
-                      {job.status}
+                    <Td className={`py-2.5 font-medium capitalize ${JOB_STATUS_CLASS[job.status] ?? "text-[var(--color-text-tertiary)]"}`}>
+                      {job.status.replace(/_/g, " ")}
                     </Td>
                     <Td className="py-2.5 tabular-nums text-[var(--color-text-secondary)]">
                       {formatDuration(job.startedAt, job.completedAt)}
@@ -312,7 +313,7 @@ export function RunnerDetailContent({ runnerId, canEdit }: Props) {
                       key={n}
                       type="button"
                       onClick={() => setMaxConcurrent(n)}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                      className={`rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
                         maxConcurrent === n
                           ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
                           : "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-secondary)]"

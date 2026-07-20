@@ -29,7 +29,7 @@ export function EmptyOverviewBanner({
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center gap-4 rounded-2xl border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5 px-5 py-4"
+      className="flex flex-wrap items-center gap-4 rounded-md border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5 px-5 py-4"
     >
       <span
         aria-hidden="true"
@@ -53,7 +53,7 @@ export function EmptyOverviewBanner({
       </div>
       <Link
         href={ctaHref}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3.5 py-2 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded bg-[var(--color-accent)] px-3.5 py-2 text-xs font-semibold text-[var(--color-accent-on)] transition-colors hover:bg-[var(--color-accent-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
       >
         {ctaLabel}
         <svg

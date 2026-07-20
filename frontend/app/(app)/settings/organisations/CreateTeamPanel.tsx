@@ -48,6 +48,7 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
       onClose={handleClose}
       title="Create team"
       description="Set up a team first, then assign members, repositories, and container images from the editor."
+      variant="modal"
       size="md"
       dismissGuard={{ isDirty: name.trim() !== "" || description.trim() !== "" }}
       footer={
@@ -69,7 +70,7 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
       }
     >
       <form id="create-team-form" onSubmit={onSubmit} className="space-y-4">
-        <FormField label="Team name" htmlFor="create-team-name" required>
+        <FormField label="Team name" htmlFor="create-team-name" required error={error}>
           <Input
             id="create-team-name"
             required
@@ -88,14 +89,7 @@ export function CreateTeamPanel({ open, onClose, onCreated }: CreateTeamPanelPro
             placeholder="Owns the shared application platform and supporting services."
           />
         </FormField>
-        {error && (
-          <p
-            role="alert"
-            className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
-          >
-            {error}
-          </p>
-        )}
+
       </form>
     </Sheet>
   )

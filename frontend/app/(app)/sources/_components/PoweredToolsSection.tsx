@@ -62,8 +62,8 @@ export function PoweredToolsSection({ category, hasConnections }: PoweredToolsSe
   if (tools.length === 0) return null
 
   return (
-    <Card className="rounded-xl shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+    <Card className="rounded-md shadow-[var(--shadow-card)]">
+      <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
         Tools powered by this source
       </p>
 
@@ -88,7 +88,7 @@ export function PoweredToolsSection({ category, hasConnections }: PoweredToolsSe
             <Link
               key={tool.label}
               href={tool.href}
-              className="flex items-center gap-3 py-3 transition-colors hover:bg-[var(--color-bg-hover)] -mx-3 px-3 rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
+              className="flex items-center gap-3 py-3 transition-colors hover:bg-[var(--color-bg-hover)] -mx-3 px-3 rounded-md focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:outline-none"
             >
               <svg className="h-5 w-5 shrink-0 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                 <path d={tool.icon} />

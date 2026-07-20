@@ -12,8 +12,8 @@ describe("Sidebar branding section", () => {
     assert.ok(src.includes("{brandName}"), "should render brandName from the hook")
     assert.ok(!src.includes("brandSubtitle"), "subtitle is gone — customer layout is single-line")
   })
-  it("uses Space Grotesk font variable", () => {
-    assert.ok(src.includes("--font-space-grotesk"), "should reference Space Grotesk font variable")
+  it("uses the mono font for branding", () => {
+    assert.ok(src.includes("font-mono"), "branding should render in the mono font")
   })
   it("does not use the old fixed-height h-32 branding container", () => {
     assert.ok(!src.includes("h-32"), "old h-32 container should be gone")

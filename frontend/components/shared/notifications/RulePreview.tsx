@@ -101,9 +101,9 @@ export function RulePreview() {
 
       {/* Results */}
       {breakdown !== null && (
-        <Card padding="none" className="rounded-xl overflow-hidden">
+        <Card padding="none" className="rounded-md overflow-hidden">
           <div className="px-4 py-2.5 border-b border-[var(--color-border)]">
-            <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">
+            <span className="font-mono text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-[0.22em]">
               Results
             </span>
             {matchedIds !== null && matchedIds.length > 0 ? (
@@ -112,7 +112,7 @@ export function RulePreview() {
               </span>
             ) : (
               <span className="ml-2 text-xs text-[var(--color-text-tertiary)] font-medium">
-                No rules matched — default fanout applies
+                No rules matched. Default fanout applies
               </span>
             )}
           </div>

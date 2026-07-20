@@ -20,6 +20,20 @@ import { ArgusConnectionContent } from "../llm/ArgusConnectionContent"
 import type { DetailComponentProps } from "../registry"
 
 /**
+ * Refresh errors arrive as "npm: <cause>; PyPI: <cause>; …" — the same cause
+ * repeated once per feed. Collapse to the distinct cause(s) so the panel shows
+ * one readable line instead of a wall of identical storage errors.
+ */
+function summarizeRefreshError(raw: string): string {
+  const parts = raw.split(/;\s+/).map((p) => p.trim()).filter(Boolean)
+  const causes = [...new Set(parts.map((p) => p.replace(/^[A-Za-z0-9.\- ]+:\s*/, "")))]
+  if (causes.length === 1) {
+    return parts.length > 1 ? `${causes[0]} (${parts.length} feeds)` : causes[0]
+  }
+  return `${causes[0]} …and ${causes.length - 1} more`
+}
+
+/**
  * Advisory Data settings: the shared advisory feeds that drive vulnerability
  * matching and enrichment for every scanner. Three parts:
  *   1. Advisory mirror — freshness/size of the built-in OSV/EPSS/KEV feeds and
@@ -33,18 +47,7 @@ export function AdvisoryDataDetail({ onChanged }: DetailComponentProps) {
   return (
     <div className="flex flex-col gap-6">
       <AdvisoryMirrorCard canRefresh={canEdit} />
-      <AdvisorySourcesCard canEdit={canEdit} />
-      <SettingsCard
-        eyebrow="Suggested add-on"
-        title="Hosted Threat Intelligence"
-        subtitle="Layer exploit availability, chain risk, and advisory context on top of the built-in feeds above."
-      >
-        <ArgusConnectionContent
-          canEdit={canEdit}
-          sessionLoading={permLoading}
-          onActiveChange={() => onChanged?.()}
-        />
-      </SettingsCard>
+      <AdvisorySourcesCard canEdit={canEdit} sessionLoading={permLoading} onChanged={onChanged} />
     </div>
   )
 }
@@ -121,21 +124,21 @@ function AdvisoryMirrorCard({ canRefresh }: { canRefresh: boolean }) {
   return (
     <SettingsCard
       eyebrow="Advisory Mirror"
-      title="Vulnerability Feeds"
+      title="Built-in Vulnerability Feeds"
       subtitle="Central advisory data every scanner matches against. Refreshes automatically each night; refresh on demand to bootstrap or pull the latest."
     >
       <div className="space-y-4">
         {loading ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-10 animate-pulse rounded-lg bg-[var(--color-surface)]" />
+              <div key={i} className="h-10 animate-pulse rounded-md bg-[var(--color-surface)]" />
             ))}
           </div>
         ) : status ? (
           <div className="divide-y divide-[var(--color-border)]">
             <FeedRow
               name="OSV catalog"
-              detail="Open-source vulnerability advisories — drives dependency & container matching"
+              detail="Open-source vulnerability advisories. Drives dependency & container matching"
               count={status.osv.advisories}
               lastRefreshedAt={status.osv.lastRefreshedAt}
               error={status.osv.error}
@@ -156,15 +159,19 @@ function AdvisoryMirrorCard({ canRefresh }: { canRefresh: boolean }) {
         ) : null}
 
         {emptyMirror && (
-          <div className="rounded-lg border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-3 py-2.5 text-xs text-[var(--color-state-pending-text)]">
+          <div className="rounded-md border border-[var(--color-state-pending-border)] bg-[var(--color-state-pending-subtle)] px-3 py-2.5 text-xs text-[var(--color-state-pending-text)]">
             The advisory mirror hasn&apos;t been populated yet. Dependency and container scans
-            produce no findings until the first refresh completes — refresh now to bootstrap it.
+            produce no findings until the first refresh completes. Refresh now to bootstrap it.
           </div>
         )}
 
         {status?.osv.error && (
-          <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-xs text-[var(--color-severity-critical-text)]">
-            Last OSV refresh failed: {status.osv.error}
+          <div
+            className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-2.5 text-xs text-[var(--color-severity-critical-text)]"
+            title={status.osv.error}
+          >
+            <span className="font-semibold">Last OSV refresh failed.</span>{" "}
+            <span className="text-[var(--color-text-secondary)]">{summarizeRefreshError(status.osv.error)}</span>
           </div>
         )}
 
@@ -200,7 +207,7 @@ type AdvisorySourceDraft = {
   editingKey: boolean
 }
 
-function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
+function AdvisorySourcesCard({ canEdit, sessionLoading, onChanged }: { canEdit: boolean; sessionLoading: boolean; onChanged?: () => void }) {
   const [loaded, setLoaded] = useState(false)
   const [initialNvd, setInitialNvd] = useState({ enabled: true, apiKey: "", hint: "" })
   const [initialGhsa, setInitialGhsa] = useState({ enabled: false, apiKey: "", hint: "" })
@@ -321,11 +328,13 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
   return (
     <SettingsCard
       eyebrow="Advisory Sources"
-      title="Vulnerability Data Sources"
-      subtitle="Optional API keys that enrich matched vulnerabilities with CVSS scores, fix versions, and advisory detail. Applied to both dependency and container scanning."
+      title="Enrichment Sources"
+      subtitle="Enrich matched vulnerabilities with CVSS scores, fix versions, and advisory detail across dependency and container scanning. NVD and GHSA are free API keys; Argus is a hosted add-on."
     >
+      <div className="flex flex-col gap-3">
       <fieldset disabled={!canEdit || !loaded} className="disabled:opacity-50">
         <AdvisorySourcesGrid
+          variant="compact"
           canEdit={canEdit}
           includeArgus={false}
           values={{
@@ -347,10 +356,18 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
             },
           }}
         />
-        <div className="mt-6 border-t border-[var(--color-border)] pt-6">
+      </fieldset>
+      <ArgusConnectionContent
+        canEdit={canEdit}
+        sessionLoading={sessionLoading}
+        onActiveChange={() => onChanged?.()}
+        isAddon
+      />
+      </div>
+      <fieldset disabled={!canEdit || !loaded} className="mt-6 border-t border-[var(--color-border)] pt-6 disabled:opacity-50">
           <SettingsRow
             label="Flag recently published versions"
-            description="Look up each dependency version's publish date (via deps.dev) to flag supply-chain-fresh releases. Off by default — sends package names to deps.dev, so leave off for air-gapped installs."
+            description="Look up each dependency version's publish date (via deps.dev) to flag supply-chain-fresh releases. Off by default: sends package names to deps.dev, so leave off for air-gapped installs."
           >
             <ToggleSwitch
               label="Toggle release-age enrichment"
@@ -377,7 +394,7 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
           )}
           <SettingsRow
             label="Recommend newer base-image tags"
-            description="List a scanned image's tags from its registry to surface newer versions on container findings. Off by default — reaches the image registry, so leave off for air-gapped installs."
+            description="List a scanned image's tags from its registry to surface newer versions on container findings. Off by default: reaches the image registry, so leave off for air-gapped installs."
           >
             <ToggleSwitch
               label="Toggle base-image tag recommendations"
@@ -387,8 +404,8 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
             />
           </SettingsRow>
           <SettingsRow
-            label="Prove base-image upgrades"
-            description="SBOM-scan the newest available tag of each image and recommend it when it has fewer vulnerabilities. Off by default — runs an extra scan per image and reaches the registry, so leave off for air-gapped installs."
+            label="Recommend proven base-image upgrades"
+            description="SBOM-scan the newest available tag of each image and recommend it when it has fewer vulnerabilities. Off by default: runs an extra scan per image and reaches the registry, so leave off for air-gapped installs."
           >
             <ToggleSwitch
               label="Toggle base-image upgrade recommendations"
@@ -397,7 +414,6 @@ function AdvisorySourcesCard({ canEdit }: { canEdit: boolean }) {
               onChange={setBaseImageRecommend}
             />
           </SettingsRow>
-        </div>
       </fieldset>
     </SettingsCard>
   )

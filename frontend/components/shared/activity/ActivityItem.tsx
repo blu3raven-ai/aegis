@@ -18,7 +18,7 @@ const EVENT_META: Record<string, EventMeta> = {
     color: "var(--color-severity-medium)",
     href: (e) => {
       const id = e.payload?.finding_id
-      return id != null ? `/findings/${id}` : "/findings"
+      return id != null ? `/findings?finding=${id}` : "/findings"
     },
   },
   "finding.dismissed": {
@@ -26,7 +26,7 @@ const EVENT_META: Record<string, EventMeta> = {
     color: "var(--color-text-secondary)",
     href: (e) => {
       const id = e.payload?.finding_id
-      return id != null ? `/findings/${id}` : "/findings"
+      return id != null ? `/findings?finding=${id}` : "/findings"
     },
   },
   "finding.fixed": {
@@ -34,7 +34,7 @@ const EVENT_META: Record<string, EventMeta> = {
     color: "var(--color-severity-low)",
     href: (e) => {
       const id = e.payload?.finding_id
-      return id != null ? `/findings/${id}` : "/findings"
+      return id != null ? `/findings?finding=${id}` : "/findings"
     },
   },
   "finding.reopened": {
@@ -42,7 +42,7 @@ const EVENT_META: Record<string, EventMeta> = {
     color: "var(--color-severity-high)",
     href: (e) => {
       const id = e.payload?.finding_id
-      return id != null ? `/findings/${id}` : "/findings"
+      return id != null ? `/findings?finding=${id}` : "/findings"
     },
   },
   "scan.completed": {

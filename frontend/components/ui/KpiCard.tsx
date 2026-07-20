@@ -16,11 +16,11 @@ export function KpiCard({ label, value, hint, status = "neutral" }: Props) {
     "text-[var(--color-text-primary)]";
 
   return (
-    <div className="border border-[var(--color-border)] bg-[var(--color-surface-raised)] rounded px-5 py-3">
+    <div className="panel-ticks border border-[var(--color-border)] bg-[var(--color-surface-raised)] rounded px-5 py-3">
       <div className={cn("text-2xl font-semibold leading-none tabular-nums", valueColor)}>
         {value}
       </div>
-      <div className="mt-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] whitespace-nowrap">
+      <div className="mt-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] whitespace-nowrap">
         {label}
       </div>
       {hint && <div className="mt-1 text-xs text-[var(--color-text-secondary)]">{hint}</div>}

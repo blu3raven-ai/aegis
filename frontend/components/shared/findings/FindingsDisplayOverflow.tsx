@@ -76,7 +76,7 @@ export function FindingsDisplayOverflow({
           aria-label="Display options"
           className="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg"
         >
-          <div className="mb-2 px-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <div className="mb-2 px-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             Display
           </div>
           <DisplayRow label="Group by">

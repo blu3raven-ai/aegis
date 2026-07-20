@@ -53,7 +53,7 @@ export function SeverityPill({ severity, count, size = "md" }: Props) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded font-semibold align-middle leading-none tabular-nums whitespace-nowrap",
+        "inline-flex items-center rounded font-mono font-semibold uppercase tracking-[0.04em] align-middle leading-none tabular-nums whitespace-nowrap",
         sizeClasses,
         style.bg,
         style.fg,

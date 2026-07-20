@@ -40,7 +40,7 @@ export function triageSummary(input: {
 
   // Ruled out is suppressed by a verified mitigation — the action band is moot.
   if (verdict === "ruled_out") {
-    return { tone: "positive", text: "Ruled out — a verified mitigation neutralises this finding." }
+    return { tone: "positive", text: "Ruled out. A verified mitigation neutralises this finding." }
   }
 
   // KEV membership leads the qualifier because it's the strongest "how bad" cue.
@@ -59,9 +59,9 @@ export function triageSummary(input: {
 
   let text: string
   if (head && action) {
-    text = `${head} — ${action}${qualifier ? `, ${qualifier}` : ""}.`
+    text = `${head}: ${action}${qualifier ? `, ${qualifier}` : ""}.`
   } else if (head) {
-    text = `${head}${qualifier ? ` — ${qualifier}` : ""}.`
+    text = `${head}${qualifier ? `, ${qualifier}` : ""}.`
   } else {
     text = `${capitalise(action)}${qualifier ? `, ${qualifier}` : ""}.`
   }

@@ -20,7 +20,7 @@ from src.findings.router import router as findings_router  # noqa: E402
 
 _FAKE_ASSET_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 _OTHER_ASSET_ID = "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
-_VALID_REASON = "Risk is tolerable"
+_VALID_REASON = "Alert is inaccurate"
 
 
 def _make_app() -> FastAPI:
@@ -866,3 +866,53 @@ def test_generate_poc_route_forwards_instruction():
         resp = client.post("/api/v1/findings/42/poc/generate", json={"instruction": "use a curl one-liner"})
     assert resp.status_code == 200
     assert gen.await_args.kwargs["instruction"] == "use a curl one-liner"
+
+
+# ---------------------------------------------------------------------------
+# POST /findings/{id}/verify — re-run verification via a re-scan
+# ---------------------------------------------------------------------------
+
+
+def test_reverify_finding_404_when_out_of_scope():
+    finding = _finding(id=42, asset_id=_OTHER_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/verify")
+    assert resp.status_code == 404
+
+
+def test_reverify_finding_409_when_llm_not_configured():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict",
+               return_value={**_ADVISORY_DICT, "asset_id": _FAKE_ASSET_ID}), \
+         patch("src.findings.router.fetch_llm_config", return_value=None):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/verify")
+    assert resp.status_code == 409
+
+
+def test_reverify_finding_202_and_enqueues_scan_for_asset():
+    finding = _finding(id=42, asset_id=_FAKE_ASSET_ID)
+    submission = SimpleNamespace(scan_id="scan-xyz", status="queued")
+    scan = AsyncMock(return_value=submission)
+    with patch("src.findings.router.require_permission"), \
+         patch("src.findings.router.resolve_asset_ids_from_request",
+               new=AsyncMock(return_value=[_FAKE_ASSET_ID])), \
+         patch("src.findings.router.get_session", return_value=_Session([finding])), \
+         patch("src.findings.router._finding_to_dict",
+               return_value={**_ADVISORY_DICT, "asset_id": _FAKE_ASSET_ID}), \
+         patch("src.findings.router.fetch_llm_config", return_value=_llm_cfg()), \
+         patch("src.findings.router.submit_scan", new=scan), \
+         patch("src.findings.router.get_recorder", return_value=MagicMock()):
+        client = TestClient(_make_app())
+        resp = client.post("/api/v1/findings/42/verify")
+    assert resp.status_code == 202
+    assert resp.json() == {"scan_id": "scan-xyz", "status": "queued"}
+    assert scan.await_args.kwargs["asset_id"] == _FAKE_ASSET_ID

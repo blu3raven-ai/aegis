@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { fetchCurrentUser, type CurrentUser } from "@/lib/client/auth"
 import { apiClient } from "@/lib/client/api-client.ts"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { StatusBadge } from "@/components/ui/StatusBadge"
 import { EmailModal } from "./EmailModal"
@@ -95,8 +95,8 @@ export function AccountContent({ children }: { children?: React.ReactNode }) {
   if (loading) {
     return (
       <div className="space-y-3">
-        <Skeleton className="h-20 rounded-lg" />
-        <Skeleton className="h-24 rounded-lg" />
+        <Skeleton className="h-20 rounded-md" />
+        <Skeleton className="h-24 rounded-md" />
       </div>
     )
   }
@@ -136,7 +136,7 @@ export function AccountContent({ children }: { children?: React.ReactNode }) {
             )}
             {avatarUploading && (
               <div className="absolute inset-0 flex items-center justify-center rounded-full bg-[var(--color-bg)]/60">
-                <div className="h-5 w-5 rounded-full border-2 border-[var(--color-accent)] border-t-transparent motion-safe:animate-spin" />
+                <Spinner className="h-5 w-5 text-[var(--color-accent)]" />
               </div>
             )}
           </div>
@@ -147,7 +147,7 @@ export function AccountContent({ children }: { children?: React.ReactNode }) {
             <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
               {user.avatarUrl
                 ? "JPG, PNG, or GIF · max 100KB"
-                : "Add a profile photo — JPG, PNG, or GIF · max 100KB"}
+                : "Add a profile photo: JPG, PNG, or GIF · max 100KB"}
             </p>
             <div className="mt-2 flex items-center gap-3">
               <input

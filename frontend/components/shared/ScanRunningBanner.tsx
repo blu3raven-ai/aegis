@@ -202,7 +202,7 @@ export function ScanRunningBanner({
         padding="none"
         role="status"
         aria-live="polite"
-        className="overflow-hidden rounded-2xl shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5"
+        className="overflow-hidden rounded-2xl shadow-[var(--shadow-nav)]"
       >
         <div className="flex items-center gap-2 px-3 py-2 text-sm text-[var(--color-text-primary)]">
           <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg", chipClass)}>
@@ -261,7 +261,7 @@ export function ScanRunningBanner({
       padding="none"
       role="status"
       aria-live="polite"
-      className="overflow-hidden rounded-2xl shadow-[0_24px_70px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5"
+      className="overflow-hidden rounded-2xl border border-[var(--color-border)] shadow-[var(--shadow-nav)]"
     >
       <div className="space-y-4 p-4 text-sm text-[var(--color-text-primary)]">
         <div className="flex items-start gap-3">
@@ -273,7 +273,7 @@ export function ScanRunningBanner({
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
-              <span className={cn("text-2xs font-semibold uppercase tracking-[0.14em]", cfg.text)}>
+              <span className={cn("font-mono text-2xs font-semibold uppercase tracking-[0.14em]", cfg.text)}>
                 {stageLabel}
               </span>
               <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-secondary)]">
@@ -285,12 +285,12 @@ export function ScanRunningBanner({
             </p>
             {tone === "running" && (
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                You can keep working — we will notify you when it is done.
+                You can keep working. We will notify you when it is done.
               </p>
             )}
             {progress?.stage === "detonating" && (
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                Running untrusted code in an isolated sandbox — this can take a few minutes.
+                Running untrusted code in an isolated sandbox. This can take a few minutes.
               </p>
             )}
           </div>

@@ -38,7 +38,7 @@ export function ValuePicker({ attribute, currentValue, onApply, onClose }: Value
       aria-label={`Set ${attribute.label}`}
       className="absolute left-0 top-full z-50 mt-1 w-64 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg"
     >
-      <div className="mb-1 px-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <div className="mb-1 px-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         {attribute.label}
       </div>
       {attribute.type === "enum" && attribute.options && (
@@ -115,7 +115,7 @@ function OptionList({
                   role="option"
                   aria-selected={selected}
                   onClick={() => onApply(opt.value)}
-                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[var(--color-surface-raised)] focus-visible:bg-[var(--color-surface-raised)] focus-visible:outline-none ${
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-[var(--color-surface-raised)] focus-visible:bg-[var(--color-surface-raised)] focus-visible:outline-none ${
                     selected ? "bg-[var(--color-surface-raised)]" : ""
                   }`}
                 >
@@ -200,7 +200,7 @@ function AsyncList({
                 role="option"
                 aria-selected={selected}
                 onClick={() => onApply(opt.value)}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-[var(--color-surface-raised)] focus-visible:bg-[var(--color-surface-raised)] focus-visible:outline-none ${
+                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-[var(--color-surface-raised)] focus-visible:bg-[var(--color-surface-raised)] focus-visible:outline-none ${
                   selected ? "bg-[var(--color-surface-raised)]" : ""
                 }`}
               >

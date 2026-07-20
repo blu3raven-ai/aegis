@@ -82,7 +82,7 @@ function TreeNodeRow({
     >
       <div
         onClick={() => onRowClick(uid, hasChildren)}
-        className={`flex min-h-[30px] items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-[var(--color-surface-raised)] group-focus-visible/row:ring-1 group-focus-visible/row:ring-inset group-focus-visible/row:ring-[var(--color-accent)] ${hasChildren ? "cursor-pointer" : ""} ${depth === 0 ? "font-semibold" : ""}`}
+        className={`flex min-h-[30px] items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-[var(--color-surface-raised)] group-focus-visible/row:ring-1 group-focus-visible/row:ring-inset group-focus-visible/row:ring-[var(--color-accent)] ${hasChildren ? "cursor-pointer" : ""} ${depth === 0 ? "font-semibold" : ""}`}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
         {hasChildren ? (

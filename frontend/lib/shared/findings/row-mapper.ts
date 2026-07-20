@@ -1,5 +1,6 @@
 import type { Finding as ApiFinding } from "../../client/findings-api.ts"
 import { timeAgo } from "../time-ago.ts"
+import { SCANNER_LABELS, SCANNER_ABBREV, SCANNER_DESCRIPTIONS } from "../sources-types.ts"
 import type { Verdict } from "./verdicts.ts"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low"
@@ -327,6 +328,23 @@ const SCANNER_MAP: Record<string, FindingScanner> = {
 
 export function normaliseScanner(raw: string): FindingScanner {
   return SCANNER_MAP[raw] ?? "dependencies_scanning"
+}
+
+/** Human-readable scanner label from any key form (full or shorthand). Use this
+ *  instead of per-component label maps, which drift from the canonical enum. */
+export function scannerLabel(raw: string): string {
+  return SCANNER_LABELS[normaliseScanner(raw)]
+}
+
+/** Plain-language explanation of what a scanner does — for hover tooltips on
+ *  labels/filters where the name alone (e.g. "Deep Audit") isn't self-evident. */
+export function scannerDescription(raw: string): string {
+  return SCANNER_DESCRIPTIONS[normaliseScanner(raw)]
+}
+
+/** Badge abbreviation ("SCA", "AGT") for the tightest contexts. */
+export function scannerAbbrev(raw: string): string {
+  return SCANNER_ABBREV[normaliseScanner(raw)]
 }
 
 export function normaliseSeverity(raw: string | null): FindingSeverity {

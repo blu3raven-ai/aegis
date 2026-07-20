@@ -12,6 +12,7 @@ import type {
 import { getPostureRiskContributions } from "@/lib/client/posture-api"
 import { Card } from "@/components/ui/Card"
 import { SegmentedControl } from "@/components/ui/SegmentedControl"
+import { scannerLabel, scannerDescription } from "@/lib/shared/findings/row-mapper"
 import { findingsHref } from "./posture-links"
 
 // ── Shared severity styling (mirrors SbomEcosystemAnalytics) ────────────────
@@ -20,11 +21,12 @@ import { findingsHref } from "./posture-links"
 
 type SevKey = "critical" | "high" | "medium" | "low"
 
+// Chart-adjacent severity dots use the ordinal ramp to match the Overview.
 const SEV_DOT: Record<SevKey, string> = {
-  critical: "bg-[var(--color-severity-critical)]",
-  high: "bg-[var(--color-severity-high)]",
-  medium: "bg-[var(--color-severity-medium)]",
-  low: "bg-[var(--color-severity-low)]",
+  critical: "bg-[var(--color-sev-ramp-critical)]",
+  high: "bg-[var(--color-sev-ramp-high)]",
+  medium: "bg-[var(--color-sev-ramp-medium)]",
+  low: "bg-[var(--color-sev-ramp-low)]",
 }
 
 const SEV_TEXT: Record<SevKey, string> = {
@@ -32,13 +34,6 @@ const SEV_TEXT: Record<SevKey, string> = {
   high: "text-[var(--color-severity-high-text)]",
   medium: "text-[var(--color-severity-medium-text)]",
   low: "text-[var(--color-severity-low-text)]",
-}
-
-const SEV_BAR: Record<SevKey, string> = {
-  critical: "bg-[var(--color-severity-critical)]",
-  high: "bg-[var(--color-severity-high)]",
-  medium: "bg-[var(--color-severity-medium)]",
-  low: "bg-[var(--color-severity-low)]",
 }
 
 const SEV_ORDER: SevKey[] = ["critical", "high", "medium", "low"]
@@ -59,17 +54,6 @@ function riskTone(score: number): string {
   return "text-[var(--color-text-tertiary)]"
 }
 
-const SCANNER_LABELS: Record<string, string> = {
-  dependencies_scanning: "Dependency Scanning",
-  code_scanning: "Code Scanning",
-  container_scanning: "Container Scanning",
-  secret_scanning: "Secret Scanning",
-  iac_scanning: "IaC Scanning",
-}
-
-function scannerLabel(tool: string): string {
-  return SCANNER_LABELS[tool] ?? tool
-}
 
 interface PostureTriageTabProps {
   scannerBreakdown: ScannerBreakdownItem[] | null
@@ -141,11 +125,11 @@ function RiskDecompositionCard() {
     <Card padding="md" className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Risk decomposition
           </h2>
           <p className="text-2xs text-[var(--color-text-secondary)]">
-            Where your risk concentrates — switch the dimension to re-slice.
+            Where your risk concentrates. Switch the dimension to re-slice.
           </p>
         </div>
         <SegmentedControl
@@ -178,12 +162,18 @@ function RiskDecompositionCard() {
               const widthPct = Math.max(4, Math.round((row.riskScore / maxRisk) * 100))
               const canFilter = dimensionHasFilter(dimension)
               const href = canFilter ? riskRowHref(dimension, row.label) : undefined
+              // Canonical scanner name (same helper as the filter, tables, and
+              // the scanner-breakdown card below) so one scanner reads the same
+              // everywhere. The hover title carries what it actually covers.
               const label = dimension === "scanner" ? scannerLabel(row.label) : rowLabel(row.label)
 
               const inner = (
                 <>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="min-w-0 truncate text-sm font-medium text-[var(--color-text-primary)]">
+                    <span
+                      className="min-w-0 truncate text-sm font-medium text-[var(--color-text-primary)]"
+                      title={dimension === "scanner" ? scannerDescription(row.label) : undefined}
+                    >
                       {label}
                     </span>
                     <span className="flex shrink-0 items-center gap-3 text-xs tabular-nums">
@@ -199,11 +189,11 @@ function RiskDecompositionCard() {
                     </span>
                   </div>
                   <div
-                    className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--color-surface-muted)]"
+                    className="mt-1.5 h-1.5 w-full overflow-hidden rounded-[2px] bg-[var(--color-surface-muted)]"
                     aria-hidden="true"
                   >
                     <div
-                      className={`h-full rounded-full ${barTone(row.riskScore)}`}
+                      className={`h-full rounded-[2px] ${barTone(row.riskScore)} origin-left chart-bar-grow`}
                       style={{ width: `${widthPct}%` }}
                     />
                   </div>
@@ -266,13 +256,14 @@ function rowLabel(label: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
-/** Bar fill tone for a risk score (uses the bare token — bars, not text). */
+/** Bar fill tone for a risk score. Magnitude is carried by bar length against
+ *  the dashed scale gridlines; the fill uses the severity tone at /85 to match
+ *  the house chart language (see Home's week chart). */
 function barTone(score: number): string {
-  if (score >= 20) return SEV_BAR.critical
-  if (score >= 10) return SEV_BAR.high
-  if (score >= 3) return SEV_BAR.medium
-  if (score > 0) return SEV_BAR.low
-  return "bg-[var(--color-text-tertiary)]"
+  // The scanner name labels the row and the risk number carries the tier, so
+  // the bar is a neutral magnitude mark — only critical-tier rows get an accent.
+  if (score >= 20) return "bg-[var(--color-sev-ramp-critical)]/80"
+  return "bg-[var(--color-border-strong)]"
 }
 
 // ── Card 2: Scanner breakdown ───────────────────────────────────────────────
@@ -281,7 +272,7 @@ function ScannerBreakdownCard({ rows }: { rows: ScannerBreakdownItem[] | null })
   return (
     <Card padding="md" className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Scanner breakdown
         </h2>
         <p className="text-2xs text-[var(--color-text-secondary)]">
@@ -306,7 +297,7 @@ function ScannerBreakdownCard({ rows }: { rows: ScannerBreakdownItem[] | null })
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="border-b border-[var(--color-border)] text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              <tr className="border-b border-[var(--color-border)] text-left font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 <th className="py-2 pr-4 font-semibold">Scanner</th>
                 <th className="py-2 pr-4 font-semibold">Open findings</th>
                 <th className="py-2 pr-4 font-semibold">Risk</th>
@@ -333,53 +324,29 @@ function ScannerBreakdownCard({ rows }: { rows: ScannerBreakdownItem[] | null })
                     </td>
                     <td className="py-2.5 pr-4">
                       {visibleSev.length === 0 ? (
-                        <span className="text-xs italic text-[var(--color-text-tertiary)]">
-                          none
-                        </span>
+                        <span className="text-xs text-[var(--color-text-tertiary)]">—</span>
                       ) : (
-                        <div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            {visibleSev.map((s) => (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          {visibleSev.map((s) => (
+                            <span
+                              key={s}
+                              className="flex items-center gap-1 text-xs tabular-nums"
+                            >
                               <span
-                                key={s}
-                                className="flex items-center gap-1 text-xs tabular-nums"
-                              >
-                                <span
-                                  className={`h-1.5 w-1.5 rounded-full ${SEV_DOT[s]}`}
-                                  aria-hidden="true"
-                                />
-                                <span className={`font-semibold ${SEV_TEXT[s]}`}>
-                                  {row[s]}
-                                </span>
-                                <span className="text-[var(--color-text-secondary)]">
-                                  {s}
-                                </span>
+                                className={`h-1.5 w-1.5 rounded-full ${SEV_DOT[s]}`}
+                                aria-hidden="true"
+                              />
+                              <span className={`font-semibold ${SEV_TEXT[s]}`}>
+                                {row[s]}
                               </span>
-                            ))}
-                            <span className="text-xs tabular-nums text-[var(--color-text-tertiary)]">
-                              · {row.total.toLocaleString()} total
+                              <span className="text-[var(--color-text-secondary)]">
+                                {s}
+                              </span>
                             </span>
-                          </div>
-                          {/* Stacked severity proportion bar */}
-                          {(() => {
-                            const knownTotal = visibleSev.reduce((s, k) => s + row[k], 0)
-                            if (knownTotal === 0) return null
-                            return (
-                              <div
-                                className="mt-1.5 flex h-1 w-full min-w-[80px] overflow-hidden rounded-full"
-                                role="img"
-                                aria-label={`Severity composition: ${visibleSev.map(s => `${row[s]} ${s}`).join(", ")}`}
-                              >
-                                {SEV_ORDER.filter((s) => row[s] > 0).map((s) => (
-                                  <div
-                                    key={s}
-                                    className={SEV_BAR[s]}
-                                    style={{ width: `${(row[s] / knownTotal) * 100}%` }}
-                                  />
-                                ))}
-                              </div>
-                            )
-                          })()}
+                          ))}
+                          <span className="text-xs tabular-nums text-[var(--color-text-tertiary)]">
+                            · {row.total.toLocaleString()} total
+                          </span>
                         </div>
                       )}
                     </td>
@@ -422,7 +389,7 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
   return (
     <Card padding="md" className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Exploitability
         </h2>
         <p className="text-2xs text-[var(--color-text-secondary)]">
@@ -434,9 +401,9 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
         <Link
           href={findingsHref({ kev: true, state: "open" })}
           aria-label={`View ${kevCount} KEV-exposed findings`}
-          className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+          className="panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
         >
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             KEV-exposed
           </p>
           <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-severity-critical-text)]">
@@ -452,8 +419,8 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
         </Link>
 
         {data == null ? (
-          <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <div className="panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left">
+            <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               High EPSS
             </p>
             <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-severity-high-text)]">
@@ -465,9 +432,9 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
           <Link
             href={findingsHref({ epssMin: 0.9, state: "open" })}
             aria-label={`View ${highEpssCount} high-EPSS findings`}
-            className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+            className="panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left transition-colors hover:border-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               High EPSS
             </p>
             <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-severity-high-text)]">
@@ -486,7 +453,7 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
         </p>
       ) : (
         <div className="space-y-1.5">
-          <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             Top EPSS findings
           </p>
           {top.map((f) => {
@@ -525,11 +492,11 @@ function ExploitabilityCard({ data }: { data: ExploitabilitySummary | null }) {
                 </div>
                 {/* EPSS percentile bar — shows relative exploitability within the top list */}
                 <div
-                  className="mt-1 h-0.5 w-full overflow-hidden rounded-full bg-[var(--color-surface-muted)]"
+                  className="mt-1 h-0.5 w-full overflow-hidden rounded-[2px] bg-[var(--color-surface-muted)]"
                   aria-hidden="true"
                 >
                   <div
-                    className="h-full rounded-full bg-[var(--color-severity-high)]"
+                    className="h-full rounded-[2px] bg-[var(--color-severity-high)] origin-left chart-bar-grow"
                     style={{ width: `${(f.epssPercentile * 100).toFixed(1)}%` }}
                   />
                 </div>
@@ -580,7 +547,7 @@ function SlaPostureCard({ data }: { data: SlaPostureSummary | null }) {
   return (
     <Card padding="md" className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           SLA posture
         </h2>
         <p className="text-2xs text-[var(--color-text-secondary)]">
@@ -612,7 +579,7 @@ function SlaPostureCard({ data }: { data: SlaPostureSummary | null }) {
                       className={`h-1.5 w-1.5 rounded-full ${SEV_DOT[s.key]}`}
                       aria-hidden="true"
                     />
-                    <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                    <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                       {s.label}
                     </span>
                   </div>
@@ -660,7 +627,7 @@ function SlaPostureCard({ data }: { data: SlaPostureSummary | null }) {
             const maxBreach = Math.max(...byScanner.map((s) => s.breached), 1)
             return (
               <div className="space-y-1.5">
-                <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                <p className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                   Breaches by scanner
                 </p>
                 <div className="space-y-1">
@@ -675,11 +642,11 @@ function SlaPostureCard({ data }: { data: SlaPostureSummary | null }) {
                         </span>
                       </div>
                       <div
-                        className="mt-1 h-1 w-full overflow-hidden rounded-full bg-[var(--color-surface-muted)]"
+                        className="mt-1 h-1 w-full overflow-hidden rounded-[2px] bg-[var(--color-surface-muted)]"
                         aria-hidden="true"
                       >
                         <div
-                          className="h-full rounded-full bg-[var(--color-severity-high)]"
+                          className="h-full rounded-[2px] bg-[var(--color-severity-high)] origin-left chart-bar-grow"
                           style={{ width: `${Math.round((s.breached / maxBreach) * 100)}%` }}
                         />
                       </div>

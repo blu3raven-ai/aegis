@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
+import { SegmentedControl } from "@/components/ui/SegmentedControl"
 import { Sheet } from "@/components/ui/Sheet"
 import { Textarea } from "@/components/ui/Textarea"
 import { ApiClientError } from "@/lib/client/api-client.types"
@@ -11,11 +12,14 @@ import {
   createFrameworkWithControls,
   type CreateControlBody,
 } from "@/lib/client/compliance-api"
+import { FRAMEWORK_TEMPLATES } from "./framework-templates"
 
 interface Props {
   open: boolean
   onClose: () => void
   onCreated: () => void
+  /** Framework ids already tracked — their templates are hidden from the picker. */
+  trackedIds?: string[]
 }
 
 interface DraftControl {
@@ -40,13 +44,51 @@ function readErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback
 }
 
-export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
+// Picker options: a blank custom framework plus each prebuilt starter catalog.
+const TEMPLATE_OPTIONS = [
+  { id: "blank", label: "Blank" },
+  ...FRAMEWORK_TEMPLATES.map((t) => ({
+    id: t.id,
+    label: t.short,
+    count: t.controls.length,
+  })),
+] as const
+
+type TemplateOptionId = (typeof TEMPLATE_OPTIONS)[number]["id"]
+
+export function AddFrameworkModal({ open, onClose, onCreated, trackedIds = [] }: Props) {
+  const [templateId, setTemplateId] = useState<TemplateOptionId>("blank")
+  // Hide catalogs that are already tracked (adding a duplicate id would fail).
+  const templateOptions = TEMPLATE_OPTIONS.filter(
+    (o) => o.id === "blank" || !trackedIds.includes(o.id),
+  )
+  const hasTemplateChoices = templateOptions.length > 1
   const [id, setId] = useState("")
   const [label, setLabel] = useState("")
   const [description, setDescription] = useState("")
   const [controls, setControls] = useState<DraftControl[]>([{ ...EMPTY_CONTROL }])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Selecting a starter catalog prefills every field; "Blank" clears back to a
+  // single empty control. The framework id and control ids match what the
+  // finding auto-mapper emits, so adding a template surfaces existing mappings.
+  function applyTemplate(next: TemplateOptionId) {
+    setTemplateId(next)
+    setError(null)
+    const template = FRAMEWORK_TEMPLATES.find((t) => t.id === next)
+    if (!template) {
+      setId("")
+      setLabel("")
+      setDescription("")
+      setControls([{ ...EMPTY_CONTROL }])
+      return
+    }
+    setId(template.id)
+    setLabel(template.label)
+    setDescription(template.description)
+    setControls(template.controls.map((c) => ({ ...c })))
+  }
 
   function updateControl(index: number, patch: Partial<DraftControl>) {
     setControls((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)))
@@ -61,6 +103,7 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
   }
 
   function reset() {
+    setTemplateId("blank")
     setId("")
     setLabel("")
     setDescription("")
@@ -122,10 +165,32 @@ export function AddFrameworkModal({ open, onClose, onCreated }: Props) {
       open={open}
       onClose={handleClose}
       title="New compliance framework"
-      description="Define the framework and seed its initial controls. You can add or edit controls later."
+      variant="modal"
+      description="Start from a prebuilt catalog or define your own. You can edit every control before saving."
       size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+          {hasTemplateChoices && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                  Start from a template
+                </span>
+                <SegmentedControl
+                  options={templateOptions}
+                  value={templateId}
+                  onChange={applyTemplate}
+                  ariaLabel="Framework template"
+                />
+              </div>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                {templateId === "blank"
+                  ? "Define a custom framework and its controls by hand."
+                  : `Prefilled with ${controls.length} controls mapped by scanners. Edit any field before saving.`}
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <FormField label="Framework ID" htmlFor="framework-id" required>
               <Input

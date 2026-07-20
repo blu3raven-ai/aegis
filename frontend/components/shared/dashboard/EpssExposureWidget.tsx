@@ -26,9 +26,9 @@ export function EpssExposureWidget({ findings }: EpssExposureWidgetProps) {
   const hasData = findings.length > 0
 
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="flex items-start justify-between gap-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           EPSS Exposure
         </p>
         {hasData && (
@@ -46,7 +46,7 @@ export function EpssExposureWidget({ findings }: EpssExposureWidgetProps) {
             return (
               <li key={f.finding_id}>
                 <Link
-                  href={`/findings/${f.finding_id}`}
+                  href={`/findings?finding=${f.finding_id}`}
                   className={`group flex items-center gap-3 rounded-lg px-2 py-1.5 -mx-2 transition-colors hover:bg-[var(--color-bg-hover)] ${LINK_FOCUS}`}
                 >
                   <span className="font-[family-name:var(--font-jetbrains-mono)] text-[11.5px] text-[var(--color-text-primary)] shrink-0">
@@ -65,7 +65,7 @@ export function EpssExposureWidget({ findings }: EpssExposureWidgetProps) {
         </ul>
       ) : (
         <p className="mt-4 text-xs text-[var(--color-text-secondary)]">
-          No EPSS scores yet — run{" "}
+          No EPSS scores yet. Run{" "}
           <code className="font-[family-name:var(--font-jetbrains-mono)] text-[11px] text-[var(--color-text-primary)]">
             aegis epss refresh
           </code>{" "}

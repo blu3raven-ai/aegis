@@ -54,7 +54,7 @@ export function EvidenceSection({ verdict, evidence, exploitChain, metadata }: P
     return (
       <section className="mt-6">
         <div className="mb-2">
-          <h3 className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <h3 className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             Verification
           </h3>
         </div>
@@ -74,7 +74,7 @@ export function EvidenceSection({ verdict, evidence, exploitChain, metadata }: P
   return (
     <section className="mt-6">
       <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        <h3 className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           Verification
         </h3>
         <VerdictBadge verdict={verdict} />
@@ -91,7 +91,7 @@ export function EvidenceSection({ verdict, evidence, exploitChain, metadata }: P
               key={i}
               className="rounded border border-[var(--color-border)] bg-[var(--color-bg-section)] p-2"
             >
-              <div className="flex items-center justify-between gap-3 text-2xs font-semibold uppercase tracking-[0.14em]">
+              <div className="flex items-center justify-between gap-3 font-mono text-2xs font-semibold uppercase tracking-[0.14em]">
                 <span className={KIND_COLOR[e.kind] || "text-[var(--color-text-secondary)]"}>
                   {e.kind}
                 </span>
@@ -112,7 +112,7 @@ export function EvidenceSection({ verdict, evidence, exploitChain, metadata }: P
 
       {ruledOut && (ruledOut.reasoning || ruledOut.snippet) && (
         <div className="mt-3 border-l-2 border-[var(--color-status-ok-border)] pl-3">
-          <h4 className="mb-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok)]">
+          <h4 className="mb-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-status-ok)]">
             Mitigation found
           </h4>
           {ruledOut.reasoning && (

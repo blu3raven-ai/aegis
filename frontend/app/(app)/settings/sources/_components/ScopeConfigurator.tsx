@@ -143,7 +143,7 @@ export function ScopeConfigurator({
                 )}
               </span>
               <p className="text-xs text-[var(--color-text-secondary)]">
-                Cherry-pick the exact {itemLabel} to scan — nothing else is pulled.
+                Cherry-pick the exact {itemLabel} to scan. Nothing else is pulled.
               </p>
             </div>
           </label>
@@ -152,7 +152,7 @@ export function ScopeConfigurator({
 
       {/* Item selector — shown for the exclude and cherry-pick modes. */}
       {(scanScope === "all-except-excluded" || scanScope === "selected") && (
-        <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+        <div className="overflow-hidden rounded-md border border-[var(--color-border)]">
           {/* Search */}
           <div className="border-b border-[var(--color-border)] px-3 py-2">
             <div className="flex items-center gap-2">

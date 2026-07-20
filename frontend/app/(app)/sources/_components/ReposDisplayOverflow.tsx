@@ -43,7 +43,7 @@ export function ReposDisplayOverflow({ sort, onSortChange }: ReposDisplayOverflo
         onClick={() => setOpen((p) => !p)}
         aria-expanded={open}
         aria-label="Display options"
-        className="inline-grid h-8 w-8 place-items-center rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+        className="inline-grid h-8 w-8 place-items-center rounded border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
       >
         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
           <circle cx="12" cy="5" r="1.4" />
@@ -57,7 +57,7 @@ export function ReposDisplayOverflow({ sort, onSortChange }: ReposDisplayOverflo
           aria-label="Display options"
           className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg"
         >
-          <div className="mb-2 px-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+          <div className="mb-2 px-1 text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
             Display
           </div>
           <div className="flex items-center gap-3 px-1 py-1">

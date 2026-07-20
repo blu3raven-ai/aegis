@@ -40,8 +40,8 @@ export function IntegrationCard({ i, onSelect }: IntegrationCardProps) {
         onSelect(i);
       }}
       className={cn(
-        "group relative flex h-full flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-left transition-all",
-        "hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] hover:shadow-md",
+        "group relative flex h-full flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-left transition-all",
+        "hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-raised)] hover:shadow-[var(--shadow-card)]",
         "focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg)]",
       )}
     >
@@ -55,7 +55,7 @@ export function IntegrationCard({ i, onSelect }: IntegrationCardProps) {
         <span
           aria-label={`Status: ${i.status}`}
           className={cn(
-            "rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em]",
+            "rounded px-1.5 py-0.5 text-2xs font-mono font-semibold uppercase tracking-[0.14em]",
             STATUS_BADGE[i.status],
           )}
         >
@@ -70,14 +70,14 @@ export function IntegrationCard({ i, onSelect }: IntegrationCardProps) {
 
       <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.06em] tabular-nums text-[var(--color-text-tertiary)]">
+          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-mono font-semibold uppercase tracking-[0.06em] tabular-nums text-[var(--color-text-tertiary)]">
             {i.version}
           </span>
-          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--color-text-tertiary)]">
+          <span className="rounded bg-[var(--color-surface-raised)] px-1.5 py-0.5 text-2xs font-mono font-semibold uppercase tracking-[0.06em] text-[var(--color-text-tertiary)]">
             {CATEGORY_LABEL[i.category] ?? i.category}
           </span>
         </div>
-        <span className="shrink-0 text-xs font-semibold text-[var(--color-accent)] transition-transform group-hover:translate-x-0.5">
+        <span className="shrink-0 font-mono text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-accent)] transition-transform group-hover:translate-x-0.5">
           {ctaLabel} →
         </span>
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react"
 import Link from "next/link"
 import { NotificationsTabBody } from "@/components/layout/NotificationsTabBody"
+import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
 
 interface NotificationDrawerProps {
   open: boolean
@@ -30,6 +31,10 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
     }
   }, [open, onClose])
 
+  // Move focus into the drawer on open, trap Tab, and restore it to the trigger
+  // on close. Escape/outside-click are already handled above.
+  useDialogA11y(panelRef, onClose, open)
+
   if (!open) return null
 
   return (
@@ -38,9 +43,10 @@ export function NotificationDrawer({ open, onClose }: NotificationDrawerProps) {
 
       <aside
         ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-label="Notifications"
-        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]"
+        className="fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] focus:outline-none"
       >
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border)] px-4">
           <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Notifications</h2>

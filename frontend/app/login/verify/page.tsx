@@ -4,7 +4,7 @@ export default function VerifyPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[var(--color-background)] px-4">
       <div className="w-full max-w-sm">
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm">
           <div className="mb-6 text-center">
             <div className="mb-4 flex justify-center">
               <div className="rounded-xl bg-[var(--color-accent-subtle)] p-3">

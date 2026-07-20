@@ -24,7 +24,7 @@ TOOL_LABELS = {
     "secret_scanning": "Secrets",
     "container_scanning": "Containers",
     "iac_scanning": "IaC",
-    "agent_scanning": "Agent Security",
+    "agent_scanning": "Coding Agent Scanning",
 }
 
 

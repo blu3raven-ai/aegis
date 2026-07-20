@@ -76,7 +76,7 @@ function CvssBreakdown({ vector }: { vector: string }) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+      <dt className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
         {label}
       </dt>
       <dd className="mt-0.5 text-sm text-[var(--color-text-primary)]">{children}</dd>
@@ -130,7 +130,7 @@ export function SecurityBriefSection({
               CISA Known Exploited
             </span>
             {kev.known_ransomware && (
-              <span className="rounded-md border border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-severity-critical-text)]">
+              <span className="font-mono rounded-md border border-[color-mix(in_srgb,var(--color-severity-critical)_45%,transparent)] px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] text-[var(--color-severity-critical-text)]">
                 Ransomware
               </span>
             )}
@@ -138,7 +138,7 @@ export function SecurityBriefSection({
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
             {kevDue
               ? `Federal agencies must remediate by ${kevDue}.`
-              : "Actively exploited in the wild — prioritise remediation."}
+              : "Actively exploited in the wild. Prioritise remediation."}
           </p>
         </div>
       )}

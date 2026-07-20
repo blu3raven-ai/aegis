@@ -317,7 +317,7 @@ export function AddConnectionModal({
     setApiKeyError(null)
     try {
       const key = await createApiKey({
-        name: `CI/CD — ${SOURCE_TYPE_LABELS[selectedType]}`,
+        name: `CI/CD · ${SOURCE_TYPE_LABELS[selectedType]}`,
         scopes: ["scan:trigger"],
       })
       setApiKeyToken(key.token)
@@ -458,7 +458,7 @@ export function AddConnectionModal({
 
   const title =
     screen === "provider"
-      ? "Add a Source"
+      ? "Add Connection"
       : screen === "method"
         ? `Connect ${providerLabel}`
         : method === "webhook"
@@ -477,7 +477,7 @@ export function AddConnectionModal({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className={`relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.06)] focus:outline-none transition-[max-width] duration-200 ${splitView ? "max-w-4xl h-[85dvh]" : "max-w-lg"}`}
+        className={`relative flex max-h-[calc(100dvh-2rem)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)] focus:outline-none transition-[max-width] duration-200 ${splitView ? "max-w-4xl h-[85dvh]" : "max-w-lg"}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -486,7 +486,7 @@ export function AddConnectionModal({
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               Step {stepNumber} of {totalSteps}
             </p>
             <h2 id="add-source-title" className="mt-1 text-lg font-semibold text-[var(--color-text-primary)]">{title}</h2>
@@ -494,7 +494,7 @@ export function AddConnectionModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+            className="rounded p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
             aria-label="Close"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -518,14 +518,14 @@ export function AddConnectionModal({
                   return (
                     <div key={cat}>
                       {!lockedCategory && (
-                        <p className="mb-3 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+                        <p className="mb-3 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                           {CATEGORY_LABELS[cat]}
                         </p>
                       )}
                       {types.length === 0 ? (
                         <div
                           aria-disabled="true"
-                          className="flex cursor-not-allowed items-center gap-3 rounded-2xl border border-dashed border-[var(--color-border)] p-4 opacity-50"
+                          className="flex cursor-not-allowed items-center gap-3 rounded-md border border-dashed border-[var(--color-border)] p-4 opacity-50"
                         >
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center text-[var(--color-text-secondary)]">
                             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -545,7 +545,7 @@ export function AddConnectionModal({
                                 type="button"
                                 onClick={() => handleTypeSelect(type)}
                                 aria-pressed={isSelected}
-                                className={`group flex items-center gap-3 rounded-2xl border p-3.5 text-left transition-colors ${
+                                className={`group flex items-center gap-3 rounded-md border p-3.5 text-left transition-colors ${
                                   isSelected
                                     ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                                     : "border-[var(--color-border)] hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
@@ -590,7 +590,7 @@ export function AddConnectionModal({
                       key={m}
                       type="button"
                       onClick={() => pickMethod(m)}
-                      className="group flex w-full items-start gap-3.5 rounded-2xl border border-[var(--color-border)] p-4 text-left transition-colors hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
+                      className="group flex w-full items-start gap-3.5 rounded-md border border-[var(--color-border)] p-4 text-left transition-colors hover:border-[var(--color-accent-border)] hover:bg-[var(--color-surface-raised)]"
                     >
                       <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
                         <Icon className="h-5 w-5" />
@@ -599,7 +599,7 @@ export function AddConnectionModal({
                         <span className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-[var(--color-text-primary)]">{meta.label}</span>
                           {meta.recommended && (
-                            <span className="rounded-full bg-[var(--color-accent-subtle)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
+                            <span className="rounded-full bg-[var(--color-accent-subtle)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent)]">
                               Recommended
                             </span>
                           )}
@@ -630,7 +630,7 @@ export function AddConnectionModal({
               {(() => {
                 const guide = SOURCE_TYPE_SETUP_GUIDES[selectedType]
                 return (
-                  <div className="mb-5 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+                  <div className="mb-5 rounded-md border border-l-2 border-[var(--color-border)] border-l-[var(--color-accent)] bg-[var(--color-surface-raised)] p-4">
                     <div className="flex items-start gap-3">
                       <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-accent)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
@@ -714,7 +714,7 @@ export function AddConnectionModal({
               })}
 
               {error && (
-                <div role="alert" className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
+                <div role="alert" className="mb-4 flex items-start gap-2.5 rounded-md border border-l-2 border-[var(--color-severity-critical-border)] border-l-[var(--color-severity-critical)] bg-[var(--color-severity-critical-subtle)] px-3.5 py-3">
                   <svg className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-severity-critical-text)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
                   </svg>
@@ -774,7 +774,7 @@ export function AddConnectionModal({
                     <p className="max-w-xs text-xs leading-relaxed text-[var(--color-text-secondary)]">
                       {testing
                         ? "Discovering every repo your token can access."
-                        : "Enter your Personal Access Token on the left — every repo it can access loads here to cherry-pick."}
+                        : "Enter your Personal Access Token on the left. Every repo it can access loads here to cherry-pick."}
                     </p>
                   </div>
                 )}
@@ -822,7 +822,7 @@ export function AddConnectionModal({
                     <>
                       <CopyRow value={webhookSecret} mono copied={copied === "secret"} onCopy={(v) => copy(v, "secret")} />
                       <p className="text-[var(--color-text-tertiary)]">
-                        Copy it now — it won&apos;t be shown again. You can rotate it later from Webhook Endpoints.
+                        Copy it now. It won&apos;t be shown again. You can rotate it later from Webhook Endpoints.
                       </p>
                     </>
                   ) : (
@@ -861,14 +861,14 @@ export function AddConnectionModal({
               <div className="space-y-4">
                 <p className="text-sm text-[var(--color-text-secondary)]">
                   Run the Aegis scanner inside your {providerLabel} pipeline. It scans each build and reports findings
-                  back to Aegis — no webhook required.
+                  back to Aegis. No webhook required.
                 </p>
 
                 <HostReachabilityNote origin={aegisUrl} audience={`your ${providerLabel} pipeline`} />
 
                 <ol className="space-y-4">
                   <Step n={1}>
-                    Create an API key with{" "}
+                    Create an API token with{" "}
                     <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">scan:trigger</code>{" "}
                     scope and add it to your CI as a secret named{" "}
                     <code className="rounded bg-[var(--color-surface-raised)] px-1 py-0.5 font-mono text-[11px]">AEGIS_API_KEY</code>.
@@ -876,9 +876,9 @@ export function AddConnectionModal({
                       <>
                         <CopyRow value={apiKeyToken} mono copied={copied === "apikey"} onCopy={(v) => copy(v, "apikey")} />
                         <p className="text-[var(--color-text-tertiary)]">
-                          Copy it now — it won&apos;t be shown again. It&apos;s saved under{" "}
+                          Copy it now. It won&apos;t be shown again. It&apos;s saved under{" "}
                           <Link href="/settings/api-keys" className="text-[var(--color-accent)] underline" onClick={onClose}>
-                            Settings → API keys
+                            Settings → API tokens
                           </Link>.
                         </p>
                       </>
@@ -886,7 +886,7 @@ export function AddConnectionModal({
                       <>
                         <span className="block">
                           <Button variant="secondary" size="sm" onClick={handleCreateApiKey} disabled={apiKeyBusy} isLoading={apiKeyBusy}>
-                            {apiKeyBusy ? "Creating…" : "Create API key"}
+                            {apiKeyBusy ? "Creating…" : "Create API token"}
                           </Button>
                         </span>
                         {apiKeyError && <p role="alert" className="text-[var(--color-severity-critical-text)]">{apiKeyError}</p>}
@@ -902,7 +902,7 @@ export function AddConnectionModal({
                     )}
                   </Step>
                   <Step n={3}>
-                    That&apos;s it — Aegis links each scan to the right source from the repository
+                    That&apos;s it. Aegis links each scan to the right source from the repository
                     automatically, so there&apos;s no source id to manage.
                   </Step>
                 </ol>
@@ -971,7 +971,7 @@ function CopyRow({
     <div>
       {label && <p className="mb-1.5 text-xs font-medium text-[var(--color-text-secondary)]">{label}</p>}
       <div className="flex items-center gap-2">
-        <code className={`min-w-0 flex-1 truncate rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-xs text-[var(--color-text-primary)] ${mono ? "font-mono" : ""}`}>
+        <code className={`min-w-0 flex-1 truncate rounded-md border border-[var(--color-border)] bg-[var(--color-bg-input)] px-3 py-2 text-xs text-[var(--color-text-primary)] ${mono ? "font-mono" : ""}`}>
           {value}
         </code>
         <Button

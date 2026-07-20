@@ -17,7 +17,7 @@ export function NotificationBell() {
         aria-label={label}
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className="relative rounded-lg p-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+        className="relative rounded-lg p-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
       >
         <svg
           className="h-5 w-5"

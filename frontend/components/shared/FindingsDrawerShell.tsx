@@ -71,7 +71,7 @@ export function FindingsDrawerShell({
       role="dialog"
       aria-modal="true"
       aria-label={label}
-      className={`fixed right-0 top-0 z-40 flex h-full w-full flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_28px_80px_rgba(15,23,42,0.18)] transition-transform duration-200 ease-out xl:w-[60vw] ${open ? "translate-x-0" : "translate-x-full"}`}
+      className={`fixed right-0 top-0 z-40 flex h-full w-full flex-col border-l border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-nav)] transition-transform duration-200 ease-out xl:w-[60vw] ${open ? "translate-x-0" : "translate-x-full"}`}
     >
       {children}
     </aside>

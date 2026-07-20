@@ -8,7 +8,7 @@
 export function ArgusTag() {
   return (
     <span
-      className="inline-block rounded px-1.5 py-px text-[8px] font-bold uppercase tracking-[0.08em] text-[var(--color-accent-on)]"
+      className="font-mono inline-block rounded px-1.5 py-px text-[8px] font-bold uppercase tracking-[0.08em] text-[var(--color-accent-on)]"
       style={{ background: "linear-gradient(135deg, var(--color-accent), #c084fc)" }}
     >
       Argus

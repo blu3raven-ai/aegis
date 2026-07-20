@@ -38,8 +38,9 @@ describe("SearchModal component", () => {
   it("imports search from search-api", () => {
     assert.ok(src.includes("search-api"))
   })
-  it("defers the query to keep typing responsive", () => {
-    assert.ok(src.includes("useDeferredValue"))
+  it("debounces the query so a burst of keystrokes issues one request", () => {
+    assert.ok(src.includes("setDebouncedQuery"))
+    assert.match(src, /setTimeout\(\(\) => setDebouncedQuery/)
   })
   it("uses AbortController", () => {
     assert.ok(src.includes("AbortController"))
@@ -48,7 +49,7 @@ describe("SearchModal component", () => {
     assert.ok(src.includes("controller.abort()"))
   })
   it("shows loading indicator", () => {
-    assert.ok(src.includes("animate-spin") || src.includes("animate-pulse"))
+    assert.ok(src.includes("<Spinner") || src.includes("animate-spin") || src.includes("animate-pulse"))
   })
   it("renders grouped results", () => {
     assert.ok(src.includes("displayGrouped") || src.includes("grouped"))

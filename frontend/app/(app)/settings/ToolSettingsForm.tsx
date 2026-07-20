@@ -117,7 +117,7 @@ export function ToolSettingsForm({
     <form onSubmit={onSubmit} className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">{title}</h2>
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">{title}</h2>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{description}</p>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -155,7 +155,7 @@ export function ToolSettingsForm({
           {fields.map((field) => (
             <div key={field.key}>
               {field.type === "checkbox" ? (
-                <label className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm text-[var(--color-text-primary)]">
+                <label className="flex items-start gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm text-[var(--color-text-primary)]">
                   <input
                     type="checkbox"
                     checked={values[field.key] === "true"}
@@ -190,7 +190,7 @@ export function ToolSettingsForm({
       </fieldset>
 
       {error && (
-        <div className="rounded-lg bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
+        <div className="rounded-md bg-[var(--color-severity-critical-subtle)] border border-[var(--color-severity-critical-border)] px-3 py-2.5 text-sm text-[var(--color-severity-critical-text)]">
           {error}
         </div>
       )}

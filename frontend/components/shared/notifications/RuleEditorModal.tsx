@@ -7,7 +7,8 @@
  * and the ConditionBuilder recursive tree editor.
  */
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { useDialogA11y } from "@/lib/client/use-dialog-a11y"
 import type {
   Condition,
   CreateRulePayload,
@@ -63,6 +64,9 @@ export function RuleEditorModal({
     }
   }, [rule, open])
 
+  const panelRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(panelRef, onClose, open)
+
   if (!open) return null
 
   async function handleSubmit(e: React.FormEvent) {
@@ -89,10 +93,12 @@ export function RuleEditorModal({
 
       {/* Modal */}
       <div
+        ref={panelRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={rule ? "Edit routing rule" : "New routing rule"}
-        className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl"
+        className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xl focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-4">
@@ -132,7 +138,7 @@ export function RuleEditorModal({
               label="Channel"
               htmlFor="rule-channel"
               required
-              hint={destinations.length === 0 ? "No destinations configured. Add one in Notification destinations first." : undefined}
+              hint={destinations.length === 0 ? "No channels configured. Add one in Notification channels first." : undefined}
             >
               <Select
                 id="rule-channel"
@@ -140,7 +146,7 @@ export function RuleEditorModal({
                 value={channelId}
                 onChange={(e) => setChannelId(Number(e.target.value))}
               >
-                <option value="">— select channel —</option>
+                <option value="">Select channel…</option>
                 {destinations.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name} ({d.destination_type})
@@ -181,7 +187,7 @@ export function RuleEditorModal({
 
             {/* Conditions */}
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
+              <label className="block text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] mb-2">
                 Conditions
               </label>
               <p className="mb-2 text-xs text-[var(--color-text-tertiary)]">

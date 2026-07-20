@@ -64,15 +64,15 @@ export function ExportFindingsButton({ filters = {} }: ExportFindingsButtonProps
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1.5 w-36 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
+          className="absolute right-0 z-20 mt-1.5 w-36 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg"
         >
           <button
             type="button"
             role="menuitem"
             onClick={() => handleExport("csv")}
-            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] transition-colors"
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] transition-colors"
           >
-            <span className="font-[family-name:var(--font-jetbrains-mono)] text-2xs text-[var(--color-text-tertiary)] w-10">CSV</span>
+            <span className="font-mono text-2xs text-[var(--color-text-tertiary)] w-10">CSV</span>
             Spreadsheet
           </button>
           <div className="h-px bg-[var(--color-border-divider)]" />
@@ -80,9 +80,9 @@ export function ExportFindingsButton({ filters = {} }: ExportFindingsButtonProps
             type="button"
             role="menuitem"
             onClick={() => handleExport("json")}
-            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] transition-colors"
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] transition-colors"
           >
-            <span className="font-[family-name:var(--font-jetbrains-mono)] text-2xs text-[var(--color-text-tertiary)] w-10">JSONL</span>
+            <span className="font-mono text-2xs text-[var(--color-text-tertiary)] w-10">JSONL</span>
             Newline JSON
           </button>
           <div className="h-px bg-[var(--color-border-divider)]" />
@@ -90,9 +90,9 @@ export function ExportFindingsButton({ filters = {} }: ExportFindingsButtonProps
             type="button"
             role="menuitem"
             onClick={() => handleExport("sarif")}
-            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] transition-colors"
+            className="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--color-text-primary)] hover:bg-[var(--color-surface-raised)] transition-colors"
           >
-            <span className="font-[family-name:var(--font-jetbrains-mono)] text-2xs text-[var(--color-text-tertiary)] w-10">SARIF</span>
+            <span className="font-mono text-2xs text-[var(--color-text-tertiary)] w-10">SARIF</span>
             Code scanning
           </button>
         </div>

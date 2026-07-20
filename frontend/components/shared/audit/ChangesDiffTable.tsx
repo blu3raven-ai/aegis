@@ -56,7 +56,7 @@ export function ChangesDiffTable({ changes }: ChangesDiffTableProps) {
     <div>
       <button
         type="button"
-        className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+        className="mb-2 flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
         onClick={() => setCollapsed((c) => !c)}
       >
         <svg className={`h-3 w-3 transition-transform ${collapsed ? "" : "rotate-90"}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -68,8 +68,8 @@ export function ChangesDiffTable({ changes }: ChangesDiffTableProps) {
       {!collapsed && (
         <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
           <div className="grid grid-cols-2 border-b border-[var(--color-border)] bg-[var(--color-bg-section)]">
-            <div className="px-3 py-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] border-r border-[var(--color-border)]">Before</div>
-            <div className="px-3 py-2 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">After</div>
+            <div className="px-3 py-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] border-r border-[var(--color-border)]">Before</div>
+            <div className="px-3 py-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">After</div>
           </div>
           {rows.map((row) => (
             <div

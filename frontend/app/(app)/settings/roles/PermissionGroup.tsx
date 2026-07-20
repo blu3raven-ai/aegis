@@ -47,7 +47,7 @@ export function PermissionGroup({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between px-1">
-        <h4 className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+        <h4 className="text-2xs font-mono font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
           {label}
         </h4>
         <Button
@@ -55,7 +55,7 @@ export function PermissionGroup({
           size="xs"
           onClick={handleToggleGroup}
           disabled={disabled}
-          className="font-bold uppercase tracking-[0.14em] text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+          className="font-mono font-bold uppercase tracking-[0.14em] text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
         >
           {allSelected ? "Unselect All" : "Select All"}
         </Button>
@@ -64,7 +64,7 @@ export function PermissionGroup({
         {permissions.map((p) => (
           <label 
             key={p.id} 
-            className={`flex items-start space-x-3 rounded-lg border border-[var(--color-border)] p-3 transition-colors ${
+            className={`flex items-start space-x-3 rounded-md border border-[var(--color-border)] p-3 transition-colors ${
               disabled ? 'opacity-60 grayscale bg-[var(--color-surface-raised)]/50' : 'hover:bg-[var(--color-surface-raised)] cursor-pointer bg-[var(--color-surface)]'
             }`}
           >

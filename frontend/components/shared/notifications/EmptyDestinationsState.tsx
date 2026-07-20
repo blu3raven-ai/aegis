@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button"
 
 export function EmptyDestinationsState({ onAdd }: { onAdd: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface)] py-16">
+    <div className="flex flex-col items-center justify-center gap-4 rounded-md border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface)] py-16">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent)]/10">
         <svg
           className="h-6 w-6 text-[var(--color-accent)]"
@@ -21,14 +21,14 @@ export function EmptyDestinationsState({ onAdd }: { onAdd: () => void }) {
       </div>
       <div className="text-center">
         <p className="text-sm font-semibold text-[var(--color-text-primary)]">
-          No notification destinations
+          No notification channels
         </p>
         <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Route critical events to Slack, a webhook, or email.
         </p>
       </div>
       <Button variant="primary" size="md" onClick={onAdd}>
-        Add your first destination
+        Add your first channel
       </Button>
     </div>
   )

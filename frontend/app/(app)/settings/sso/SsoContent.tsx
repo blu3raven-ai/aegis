@@ -245,7 +245,7 @@ export function SsoContent() {
             value={draft?.protocol ?? ""}
             onChange={(e) => setDraft((d) => (d ? { ...d, protocol: (e.target.value || null) as SsoSettings["protocol"] } : d))}
           >
-            <option value="">— select —</option>
+            <option value="">Select…</option>
             <option value="saml">SAML 2.0</option>
             <option value="oidc">OIDC</option>
           </Select>
@@ -415,7 +415,7 @@ export function SsoContent() {
       <SettingsCard heading="Audit log streaming">
         <SettingsRow
           label="Enable streaming"
-          description="Forward audit events to your SIEM in real time. Delivery is at-least-once; each event carries a stable event_id field — dedup on it receiver-side."
+          description="Forward audit events to your SIEM in real time. Delivery is at-least-once; each event carries a stable event_id field. Dedup on it receiver-side."
         >
           <ToggleSwitch
             label="Toggle audit streaming"
@@ -431,7 +431,7 @@ export function SsoContent() {
             value={auditDraft?.targetType ?? ""}
             onChange={(e) => setAuditDraft((d) => (d ? { ...d, targetType: (e.target.value || null) as typeof d.targetType } : d))}
           >
-            <option value="">— select —</option>
+            <option value="">Select…</option>
             <option value="webhook">Generic webhook</option>
             <option value="splunk_hec">Splunk HEC</option>
             <option value="syslog">Syslog (TCP)</option>

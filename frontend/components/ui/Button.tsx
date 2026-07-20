@@ -14,13 +14,17 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const base =
-  "inline-flex items-center justify-center gap-1.5 rounded-md font-semibold transition-colors " +
+  "inline-flex items-center justify-center gap-1.5 rounded font-mono font-medium uppercase tracking-[0.055em] transition-colors " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] " +
   "disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none"
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--color-accent)] text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)]",
+    "relative bg-[var(--color-accent)] text-[var(--color-accent-on)] hover:bg-[var(--color-accent-hover)] " +
+    // CAD corner ticks — top-left and bottom-right L-brackets sitting just
+    // outside the button, reading against the page as an instrument affordance.
+    "before:content-[''] before:pointer-events-none before:absolute before:-top-[3px] before:-left-[3px] before:h-[6px] before:w-[6px] before:border-t-[1.5px] before:border-l-[1.5px] before:border-[var(--color-accent)] " +
+    "after:content-[''] after:pointer-events-none after:absolute after:-bottom-[3px] after:-right-[3px] after:h-[6px] after:w-[6px] after:border-b-[1.5px] after:border-r-[1.5px] after:border-[var(--color-accent)]",
   secondary:
     "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-hover)]",
   ghost:
@@ -130,7 +134,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   )
 })
 
-function Spinner({ className }: { className?: string }) {
+export function Spinner({ className }: { className?: string }) {
   return (
     <svg
       className={cn("animate-spin", className)}

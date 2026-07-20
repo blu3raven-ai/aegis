@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/Button"
+import { plural } from "@/lib/shared/plural"
 
 export interface FindingsPaginationProps {
   page: number
@@ -43,7 +44,7 @@ export function FindingsPagination({ page, pageSize, total, onChange }: Findings
 
   return (
     <div className="flex items-center justify-between border-t border-[var(--color-border)] px-4 py-2.5 text-xs text-[var(--color-text-secondary)]">
-      <span>Showing {startIdx}-{endIdx} of {total} findings</span>
+      <span>Showing {startIdx}-{endIdx} of {total} {plural(total, "finding")}</span>
       <nav className="flex items-center gap-1" aria-label="Pagination">
         <Button
           variant="secondary"

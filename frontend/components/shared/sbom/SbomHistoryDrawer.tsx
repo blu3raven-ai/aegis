@@ -27,7 +27,7 @@ export function SbomHistoryDrawer({
   return (
     <FindingsDrawerShell open={open} onClose={onClose} label="SBOM version history">
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-3.5">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Version History
         </h2>
         <Button
@@ -49,7 +49,7 @@ export function SbomHistoryDrawer({
         {loading ? (
           <div className="flex flex-col gap-2 p-5">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex flex-col gap-1.5 rounded-xl border border-[var(--color-border)] p-4">
+              <div key={i} className="flex flex-col gap-1.5 rounded-md border border-[var(--color-border)] p-4">
                 <Skeleton className="h-3.5 w-40" />
                 <Skeleton className="h-3 w-24" />
               </div>
@@ -74,7 +74,7 @@ export function SbomHistoryDrawer({
                   type="button"
                   onClick={() => onSelectVersion(entry)}
                   aria-current={isSelected ? "true" : undefined}
-                  className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
+                  className={`flex items-start gap-3 rounded-md border px-4 py-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
                     isSelected
                       ? "border-[var(--color-accent)] bg-[var(--color-accent-subtle)]"
                       : "border-[var(--color-border)] hover:bg-[var(--color-surface-raised)]"

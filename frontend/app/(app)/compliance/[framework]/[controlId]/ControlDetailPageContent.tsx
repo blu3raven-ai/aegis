@@ -30,13 +30,13 @@ function statusReason(
   highestSeverity: string | null,
 ): string {
   if (item?.manual_status) {
-    return `Manually attested ${item.manual_status.replace(/_/g, " ")} — this overrides the finding-derived status.`
+    return `Manually attested ${item.manual_status.replace(/_/g, " ")}. This overrides the finding-derived status.`
   }
-  if (openCount === 0) return "No open findings map to this control — derived as compliant."
+  if (openCount === 0) return "No open findings map to this control. Derived as compliant."
   if (highestSeverity === "critical" || highestSeverity === "high") {
-    return `${openCount} open finding${openCount === 1 ? "" : "s"} mapped (highest: ${highestSeverity}) — derived as at risk.`
+    return `${openCount} open finding${openCount === 1 ? "" : "s"} mapped (highest: ${highestSeverity}). Derived as at risk.`
   }
-  return `${openCount} open finding${openCount === 1 ? "" : "s"} mapped (highest: ${highestSeverity ?? "low"}) — derived as partial.`
+  return `${openCount} open finding${openCount === 1 ? "" : "s"} mapped (highest: ${highestSeverity ?? "low"}). Derived as partial.`
 }
 
 export function ControlDetailPageContent() {
@@ -113,7 +113,7 @@ export function ControlDetailPageContent() {
       )}
 
       {loadState === "error" && (
-        <Card padding="none" className="rounded-xl px-6 py-8 text-center">
+        <Card padding="none" className="rounded-md px-6 py-8 text-center">
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">
             Couldn&apos;t load control data
           </p>
@@ -129,7 +129,7 @@ export function ControlDetailPageContent() {
       )}
 
       {notFound && (
-        <Card padding="none" className="rounded-xl px-6 py-8 text-center">
+        <Card padding="none" className="rounded-md px-6 py-8 text-center">
           <p className="text-sm font-semibold text-[var(--color-text-primary)]">
             Control not found
           </p>
@@ -159,10 +159,10 @@ export function ControlDetailPageContent() {
           />
 
           {/* Findings section */}
-          <Card padding="none" elevation="sm" className="rounded-xl">
+          <Card padding="none" elevation="sm" className="rounded-md">
             <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border)] px-5 py-3">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                   Mapped Findings
                   {activeFindings.length > 0 && (
                     <span className="ml-2 rounded-full bg-[var(--color-severity-critical-subtle)] px-2 py-0.5 text-2xs font-semibold text-[var(--color-severity-critical-text)]">

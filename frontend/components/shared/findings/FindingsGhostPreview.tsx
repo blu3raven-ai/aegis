@@ -34,7 +34,7 @@ const MOCK_GROUPS: Array<{ group: string; rows: MockRow[] }> = [
   {
     group: "Dependencies",
     rows: [
-      { severity: "critical", title: "CVE-0000-0000 — example-package", repo: "example-org/frontend", scanner: "Dependencies", age: "2h", ageMinutes: 120 },
+      { severity: "critical", title: "CVE-0000-0000: example-package", repo: "example-org/frontend", scanner: "Dependencies", age: "2h", ageMinutes: 120 },
       { severity: "high",     title: "Outdated transitive dependency",  repo: "example-org/frontend", scanner: "Dependencies", age: "5h", ageMinutes: 300 },
       { severity: "medium",   title: "Known advisory in lockfile",      repo: "example-org/api",      scanner: "Dependencies", age: "1d", ageMinutes: 60 * 24 },
     ],
@@ -60,7 +60,7 @@ function GroupHeader({ label, count }: { label: string; count: number }) {
       <svg className="h-3 w-3 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
         <path d="m6 9 6 6 6-6" />
       </svg>
-      <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+      <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
         {label}
       </span>
       <span className="text-2xs tabular-nums text-[var(--color-text-tertiary)]">{count}</span>

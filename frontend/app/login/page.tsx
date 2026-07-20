@@ -19,9 +19,22 @@ export default function LoginPage() {
   // Show login form while loading or if not authenticated
   // FastAPI redirects authenticated users away from /login if they try accessing it
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--color-background)] px-4">
+    <main 
+      className="flex min-h-screen items-center justify-center px-4"
+      style={{
+        background: `
+          repeating-linear-gradient(0deg, rgba(45, 127, 249, 0.02) 0px, rgba(45, 127, 249, 0.02) 1px, transparent 1px, transparent 2px),
+          repeating-linear-gradient(90deg, rgba(45, 127, 249, 0.02) 0px, rgba(45, 127, 249, 0.02) 1px, transparent 1px, transparent 2px),
+          repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(45, 127, 249, 0.04) 4px, rgba(45, 127, 249, 0.04) 5px),
+          radial-gradient(circle at 15% 20%, rgba(45, 127, 249, 0.08) 0%, transparent 40%),
+          radial-gradient(circle at 85% 70%, rgba(45, 127, 249, 0.06) 0%, transparent 40%),
+          linear-gradient(135deg, #0a0e17 0%, #0f1419 50%, #0a0e17 100%)
+        `,
+        backgroundSize: '100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%',
+      }}
+    >
       <div className="w-full max-w-sm">
-        <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-lg">
+        <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-card)]">
           {/* Branding header — vendor identity when name is NULL; customer otherwise */}
           <div className="bg-[var(--color-accent-subtle)] px-8 pb-6 pt-8">
             <div className="flex items-center gap-4">
@@ -29,18 +42,30 @@ export default function LoginPage() {
               <div className="flex min-w-0 flex-col">
                 {isVendor ? (
                   <>
-                    <span className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
+                    <span
+                      className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
+                      style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+                    >
                       Raven Protocol
                     </span>
-                    <span className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
+                    <span
+                      className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
+                      style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+                    >
                       Blu3Raven
                     </span>
-                    <span className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                      Aegis — Vulnerability Management Portal
+                    <span
+                      className="mt-0.5 text-xs text-[var(--color-text-secondary)]"
+                      style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+                    >
+                      Aegis · Vulnerability Management Portal
                     </span>
                   </>
                 ) : (
-                  <span className="truncate text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
+                  <span
+                    className="truncate text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
+                    style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+                  >
                     {brandName}
                   </span>
                 )}

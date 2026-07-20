@@ -2,12 +2,13 @@
 @variant dark (&:where(.dark, .dark *));
 
 :root {
-  --color-bg:             #f4f7fb;
+  --color-bg:             #f4f4f2;
   --color-surface:        #ffffff;
-  --color-surface-raised: #fafbfd;
-  --color-bg-section:     #fafbfd;
+  --color-surface-raised: #faf9f6;
+  --color-bg-section:     #faf9f6;
   --color-bg-input:       #ffffff;
   --color-bg-hover:       rgba(15,39,71,0.05);
+  --color-grid:           rgba(18,21,27,0.055);
 
   --color-navy:           #10233f;
   --color-navy-hover:     #163b68;
@@ -22,14 +23,14 @@
   --color-text-secondary: #5e6d82;
   --color-text-tertiary:  #677689;
 
-  --color-accent:         #2d7ff9;
-  --color-accent-hover:   #1a6ae8;
+  --color-accent:         #2f6feb;
+  --color-accent-hover:   #2560d8;
   --color-accent-subtle:  #dbeafe;
-  --color-accent-border:  rgb(45 127 249 / 0.2);
+  --color-accent-border:  rgb(47 111 235 / 0.2);
   --color-accent-deep:    #163b68;
   --color-accent-ink:     #ffffff;
   --color-accent-on:      #ffffff;
-  --color-accent-gradient-end: #8b5cf6;
+  --color-accent-gradient-end: #2f6feb;
 
   --color-on-danger:      #ffffff;
   --color-status-ok:      #10b981;
@@ -58,15 +59,24 @@
   --color-severity-high-border: rgb(249 115 22 / 0.3);
   --color-severity-high-text: #c2410c;
 
-  --color-severity-medium:        #fbbf24;
-  --color-severity-medium-subtle: rgb(251 191 36 / 0.12);
-  --color-severity-medium-border: rgb(251 191 36 / 0.3);
+  --color-severity-medium:        #d97706;
+  --color-severity-medium-subtle: rgb(217 119 6 / 0.12);
+  --color-severity-medium-border: rgb(217 119 6 / 0.3);
   --color-severity-medium-text: #b45309;
 
   --color-severity-low:        #60a5fa;
   --color-severity-low-subtle: rgb(96 165 250 / 0.1);
   --color-severity-low-border: rgb(96 165 250 / 0.3);
   --color-severity-low-text: #2563eb;
+
+  /* Ordinal severity ramp — one warm family ordered by lightness, for adjacent
+     chart fills only (donut, severity mix, stacked bars). Discrete badges keep
+     the conventional severity tokens above. Light-mode values run darker so
+     fills and strokes clear contrast on the near-white surface. */
+  --color-sev-ramp-low:      #9c8368;
+  --color-sev-ramp-medium:   #b5791f;
+  --color-sev-ramp-high:     #c05a20;
+  --color-sev-ramp-critical: #cf463f;
 
   --color-state-dismissed:         #a855f7;
   --color-state-dismissed-subtle:  rgb(168 85 247 / 0.05);
@@ -136,13 +146,13 @@
   --color-chip-active-bg:          rgba(15, 39, 71, 0.08);
 
   --color-stat-primary:   #163b68;
-  --color-stat-secondary: #2d7ff9;
+  --color-stat-secondary: #2f6feb;
   --color-nav-active:     rgba(15,39,71,0.05);
 
-  --shadow-card:    0 2px 16px rgba(15,39,71,0.06);
-  --shadow-sidebar: 0 2px 12px rgba(15,39,71,0.06);
-  --shadow-nav:     0 4px 12px rgba(15,39,71,0.18);
-  --shadow-header:  0 16px 40px rgba(15,39,71,0.06);
+  --shadow-card:    0 1px 2px rgba(15,39,71,0.05);
+  --shadow-sidebar: 0 1px 2px rgba(15,39,71,0.04);
+  --shadow-nav:     0 2px 8px rgba(15,39,71,0.12);
+  --shadow-header:  0 1px 0 rgba(15,39,71,0.05);
 
   --gradient-blue:   linear-gradient(135deg, #f8fbff, #edf5ff, #cfe4ff);
   --gradient-red:    linear-gradient(135deg, #fff8f8, #fff1f0, #fde8e8);
@@ -158,9 +168,10 @@
   --color-bg-section:     #09101e;
   --color-bg-input:       #0f1e38;
   --color-bg-hover:       #253348;
+  --color-grid:           rgba(255,255,255,0.045);
 
-  --color-navy:           #0fbcff;
-  --color-navy-hover:     #3dcbff;
+  --color-navy:           #6f8dff;
+  --color-navy-hover:     #8aa0ff;
 
   --color-border:         #252A35;
   --color-border-medium:  #2B3447;
@@ -172,14 +183,14 @@
   --color-text-secondary: #AFB0B6;
   --color-text-tertiary:  #848592;
 
-  --color-accent:         #0fbcff;
-  --color-accent-hover:   #3dcbff;
-  --color-accent-subtle:  #0f2a4a;
-  --color-accent-border:  rgb(15 188 255 / 0.25);
-  --color-accent-deep:    #B2ECFF;
+  --color-accent:         #6f8dff;
+  --color-accent-hover:   #8aa0ff;
+  --color-accent-subtle:  #171f3a;
+  --color-accent-border:  rgb(111 141 255 / 0.25);
+  --color-accent-deep:    #c3ceff;
   --color-accent-ink:     #070d19;
   --color-accent-on:      #ffffff;
-  --color-accent-gradient-end: #a78bfa;
+  --color-accent-gradient-end: #6f8dff;
 
   --color-on-danger:      #F2F2F3;
 
@@ -199,15 +210,21 @@
   --color-severity-high-border: rgb(251 146 60 / 0.3);
   --color-severity-high-text: #fb923c;
 
-  --color-severity-medium:        #fbbf24;
-  --color-severity-medium-subtle: rgb(251 191 36 / 0.12);
-  --color-severity-medium-border: rgb(251 191 36 / 0.3);
-  --color-severity-medium-text: #fbbf24;
+  --color-severity-medium:        #d4a24a;
+  --color-severity-medium-subtle: rgb(212 162 74 / 0.14);
+  --color-severity-medium-border: rgb(212 162 74 / 0.3);
+  --color-severity-medium-text: #d4a24a;
 
   --color-severity-low:        #60a5fa;
   --color-severity-low-subtle: rgb(96 165 250 / 0.12);
   --color-severity-low-border: rgb(96 165 250 / 0.3);
   --color-severity-low-text: #60a5fa;
+
+  /* Ordinal severity ramp (dark) — toned warm family, no pure primaries. */
+  --color-sev-ramp-low:      #8a6f5a;
+  --color-sev-ramp-medium:   #c9963f;
+  --color-sev-ramp-high:     #d97a3c;
+  --color-sev-ramp-critical: #e0605a;
 
   --color-state-dismissed:         #c084fc;
   --color-state-dismissed-subtle:  rgb(192 132 252 / 0.08);
@@ -247,10 +264,10 @@
   --color-argus-border:            rgb(192 132 252 / 0.2);
   --color-argus-ink:               #070d19;
 
-  --color-state-pending:           #fbbf24;
-  --color-state-pending-subtle:    rgb(251 191 36 / 0.12);
-  --color-state-pending-border:    rgb(251 191 36 / 0.3);
-  --color-state-pending-text:      #fbbf24;
+  --color-state-pending:           #d4a24a;
+  --color-state-pending-subtle:    rgb(212 162 74 / 0.12);
+  --color-state-pending-border:    rgb(212 162 74 / 0.3);
+  --color-state-pending-text:      #d4a24a;
 
   --color-scanner-sast-bg:         rgb(192 132 252 / 0.18);
   --color-scanner-sast-fg:         #d4b0fc;
@@ -276,14 +293,14 @@
 
   --color-chip-active-bg:          rgb(255 255 255 / 0.08);
 
-  --color-stat-primary:   #0fbcff;
-  --color-stat-secondary: #3dcbff;
+  --color-stat-primary:   #6f8dff;
+  --color-stat-secondary: #8aa0ff;
   --color-nav-active:     #253348;
 
-  --shadow-card:    0 2px 16px rgba(0,0,0,0.40);
-  --shadow-sidebar: 0 2px 12px rgba(0,0,0,0.35);
-  --shadow-nav:     0 4px 12px rgba(0,0,0,0.45);
-  --shadow-header:  0 16px 40px rgba(0,0,0,0.40);
+  --shadow-card:    0 1px 2px rgba(0,0,0,0.35);
+  --shadow-sidebar: 0 1px 2px rgba(0,0,0,0.30);
+  --shadow-nav:     0 2px 8px rgba(0,0,0,0.40);
+  --shadow-header:  0 1px 0 rgba(0,0,0,0.35);
 
   --gradient-blue:   linear-gradient(135deg, #0C1524, #0f1e38, #1C2F49);
   --gradient-red:    linear-gradient(135deg, #0C1524, #1a1018, #251419);
@@ -313,9 +330,72 @@ body {
 }
 
 body {
-  background: var(--color-bg);
+  background-color: var(--color-bg);
   color: var(--color-text-primary);
   font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+/* Faint blueprint grid backdrop for the app shell — an instrument-panel
+   texture that reads through the gaps between opaque surfaces. */
+.app-grid-bg {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(45, 127, 249, 0.03) 0px, rgba(45, 127, 249, 0.03) 1px, transparent 1px, transparent 2px),
+    repeating-linear-gradient(90deg, rgba(45, 127, 249, 0.03) 0px, rgba(45, 127, 249, 0.03) 1px, transparent 1px, transparent 2px),
+    repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(45, 127, 249, 0.04) 4px, rgba(45, 127, 249, 0.04) 5px);
+  background-size: 100% 100%, 100% 100%, 100% 100%;
+}
+
+/* Instrument-grade scrollbars — thin, quiet, rounded; darken on hover.
+   Firefox uses scrollbar-width/color; WebKit/Blink use the pseudo-elements. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-tertiary);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* CAD corner registration ticks for instrument-panel cards. */
+.panel-ticks {
+  position: relative;
+}
+.panel-ticks::before,
+.panel-ticks::after {
+  content: "";
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-color: var(--color-border-strong);
+  pointer-events: none;
+}
+.panel-ticks::before {
+  left: 6px;
+  top: 6px;
+  border-left: 1px solid var(--color-border-strong);
+  border-top: 1px solid var(--color-border-strong);
+}
+.panel-ticks::after {
+  right: 6px;
+  bottom: 6px;
+  border-right: 1px solid var(--color-border-strong);
+  border-bottom: 1px solid var(--color-border-strong);
 }
 
 @layer base {
@@ -402,6 +482,16 @@ body {
   transform-box: fill-box;
   transform-origin: bottom;
   animation: chart-grow 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Grow-from-left for horizontal bar marks (HTML divs). Pair with `origin-left`
+   so the fill wipes out from its leading edge rather than the center. */
+@keyframes chart-bar-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.chart-bar-grow {
+  animation: chart-bar-grow 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Fade-in for radial fills and marker halos. */

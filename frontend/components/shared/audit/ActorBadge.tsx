@@ -28,7 +28,7 @@ export function ActorBadge({
         {displayName}
       </span>
       {actorRole && !isService && (
-        <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+        <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
           {actorRole}
         </span>
       )}

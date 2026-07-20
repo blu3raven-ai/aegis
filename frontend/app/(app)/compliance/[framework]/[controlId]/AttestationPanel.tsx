@@ -113,7 +113,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
       ? `Last attested ${formatAssessedAt(assessment.assessed_at)}${
           assessment.assessed_by ? ` · ${assessment.assessed_by}` : ""
         }`
-      : "Not yet attested — status is derived from open findings."
+      : "Not yet attested. Status is derived from open findings."
 
   const statusLabel = STATUS_OPTIONS.find((o) => o.id === assessment?.manual_status)?.label
 
@@ -121,12 +121,12 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
   const savedEvidenceLink = safeHttpUrl(savedEvidenceUrl)
 
   return (
-    <Card padding="none" elevation="sm" className="rounded-xl">
+    <Card padding="none" elevation="sm" className="rounded-md">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-5 py-3">
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Attestation</h2>
         <div className="flex items-center gap-2">
           {assessment?.overdue && (
-            <span className="rounded-full border border-[var(--color-severity-critical)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-critical-text)]">
+            <span className="rounded-full border border-[var(--color-severity-critical)] px-2 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-severity-critical-text)]">
               Overdue
             </span>
           )}
@@ -175,7 +175,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
         ) : (
           <>
             <div>
-              <span className="mb-2 block text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              <span className="mb-2 block font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 Status
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -193,7 +193,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
             <div>
               <label
                 htmlFor="evidence-note"
-                className="mb-2 block text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]"
+                className="mb-2 block font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]"
               >
                 Evidence note
               </label>
@@ -210,7 +210,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
             <div>
               <label
                 htmlFor="evidence-url"
-                className="mb-2 block text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]"
+                className="mb-2 block font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]"
               >
                 Evidence link (optional)
               </label>
@@ -225,7 +225,7 @@ export function AttestationPanel({ framework, controlId, assessment, onSaved }: 
             </div>
 
             <div>
-              <span className="mb-2 block text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              <span className="mb-2 block font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 Remediation
               </span>
               <div className="flex gap-3">

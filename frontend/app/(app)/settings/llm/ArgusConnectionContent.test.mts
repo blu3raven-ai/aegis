@@ -54,12 +54,13 @@ describe("ArgusConnectionContent", () => {
     assert.match(src, /form\.refresh_token\.length > 0/)
   })
 
-  it("saves and discards through the shared page-level save bar", () => {
-    assert.match(src, /useSaveBarSection\(/)
-    assert.match(src, /id: "argus"/)
-    assert.match(src, /onSave: handleSave/)
-    assert.match(src, /onDiscard: handleDiscard/)
-    // No inline primary Save button — the global save bar owns saving.
-    assert.doesNotMatch(src, /Save connection/)
+  it("configures through a modal opened by the toggle, not the shared save bar", () => {
+    // The connection form lives in a Sheet dialog opened by the Enable toggle;
+    // the dialog owns its own save, so Argus is off the shared page save bar.
+    assert.doesNotMatch(src, /useSaveBarSection\(/)
+    assert.match(src, /<Sheet/)
+    assert.match(src, /open=\{configOpen\}/)
+    assert.match(src, /onChange=\{handleToggle\}/)
+    assert.match(src, /async function saveConfig\(/)
   })
 })

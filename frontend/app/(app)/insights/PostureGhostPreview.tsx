@@ -9,14 +9,14 @@ import { Card } from "@/components/ui/Card"
 
 function RiskScoreHero() {
   return (
-    <Card padding="lg" className="rounded-2xl">
+    <Card padding="lg" className="panel-ticks rounded-md">
       <div className="flex flex-wrap items-center gap-8">
         <div className="flex items-center gap-5">
           <div className="grid h-20 w-20 place-items-center rounded-full border-4 border-[var(--color-status-ok)]/40">
             <span className="text-2xl font-semibold tabular-nums text-[var(--color-text-primary)]">82</span>
           </div>
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Risk score</p>
+            <p className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Risk score</p>
             <p className="mt-1 text-lg font-semibold tracking-tight text-[var(--color-text-primary)]">Healthy posture</p>
             <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">Calculated across all repositories</p>
           </div>
@@ -40,8 +40,8 @@ function KpiGrid() {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
       {items.map((kpi) => (
-        <Card key={kpi.label} padding="none" className="rounded-2xl px-5 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">{kpi.label}</p>
+        <Card key={kpi.label} padding="none" className="panel-ticks rounded-md px-5 py-3">
+          <p className="text-[11px] font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">{kpi.label}</p>
           <p className="mt-2 text-2xl font-semibold leading-none tabular-nums text-[var(--color-text-primary)]">{kpi.value}</p>
           <p className="mt-2 text-[11px] text-[var(--color-text-tertiary)]">{kpi.note}</p>
         </Card>
@@ -62,9 +62,9 @@ function TrendChart() {
     .map((v, i) => `${i === 0 ? "M" : "L"} ${(slotW * i).toFixed(1)} ${(usable - (v / max) * usable).toFixed(1)}`)
     .join(" ")
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex items-baseline justify-between">
-        <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Severity trend</h3>
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Severity trend</h3>
         <span className="text-xs text-[var(--color-text-tertiary)]">last 30 days · preview</span>
       </div>
       <svg viewBox={`0 0 ${w} ${h}`} className="h-32 w-full" preserveAspectRatio="none">
@@ -80,9 +80,9 @@ function TrendChart() {
 
 function AttentionPanel() {
   return (
-    <Card className="rounded-2xl">
+    <Card className="rounded-md">
       <div className="mb-3 flex items-baseline justify-between">
-        <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Needs attention</h3>
+        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Needs attention</h3>
         <span className="text-xs text-[var(--color-text-tertiary)]">preview</span>
       </div>
       <div className="space-y-2">

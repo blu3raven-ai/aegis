@@ -29,12 +29,12 @@ function EmptyState({
   const itemLabel = CATEGORY_ITEM_LABELS[category]
   return (
     <div className="py-8">
-      <Card padding="none" className="rounded-2xl p-8 shadow-[0_28px_80px_rgba(15,23,42,0.06)]">
+      <Card padding="none" className="rounded-md p-8 shadow-[var(--shadow-card)]">
         <div className="mx-auto max-w-md text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-accent)]/10">
             {icon}
           </div>
-          <h3 className="mt-4 text-base font-semibold text-[var(--color-text-primary)]">No Connections Yet</h3>
+          <h3 className="mt-4 text-base font-semibold text-[var(--color-text-primary)]">No connections yet</h3>
           <p className="mt-1.5 text-sm text-[var(--color-text-secondary)]">
             Sources are where Aegis discovers your {itemLabel}. Connect your provider below, and Aegis will
             automatically find and scan them for vulnerabilities, exposed secrets, and code issues.
@@ -166,7 +166,7 @@ export function SourcePageShell({
         {loading ? (
           <LoadingSkeleton />
         ) : loadError ? (
-          <div className="flex items-center justify-between rounded-2xl border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
+          <div className="flex items-center justify-between rounded-md border border-[var(--color-severity-high)]/20 bg-[var(--color-severity-high)]/5 px-5 py-3">
             <span className="text-sm text-[var(--color-text-primary)]">Failed to load connections.</span>
             <Button variant="secondary" size="sm" onClick={() => void load()}>
               Retry

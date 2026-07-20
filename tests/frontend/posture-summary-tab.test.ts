@@ -61,8 +61,8 @@ describe("PostureSummaryTab — Beat 1: Hero", () => {
   it("KpiGrid uses all four KPI labels", () => {
     assert.match(src, /Critical findings/)
     assert.match(src, /MTTR/)
-    assert.match(src, /Resolved \(30d\)/)
-    assert.match(src, /SLA attainment/)
+    assert.match(src, /Fixed \(30d\)/)
+    assert.match(src, /Within SLA/)
   })
   // The one live metric from the removed integration strip (all-time resolved)
   // folded into the KPI grid (#983).

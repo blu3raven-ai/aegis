@@ -12,6 +12,7 @@ import type { FindingsMoreFiltersValues } from "./FindingsMoreFiltersPopover"
 import type { AgePresetKey } from "./FindingsAgeFilter"
 import type { SortKey } from "./FindingsSortDropdown"
 import type { FindingActionBand } from "@/lib/shared/findings/row-mapper"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 
 const STATIC_ATTRIBUTES: AttributeDef[] = [
   {
@@ -58,13 +59,13 @@ const STATIC_ATTRIBUTES: AttributeDef[] = [
     description: "Which scanner surfaced the finding",
     type: "enum",
     options: [
-      { value: "dependencies_scanning", label: "Dependencies" },
-      { value: "code_scanning", label: "Code Scanning" },
-      { value: "container_scanning", label: "Containers" },
-      { value: "secret_scanning", label: "Secrets" },
-      { value: "iac_scanning", label: "Infrastructure as Code" },
-      { value: "agent_scanning", label: "Agent Security" },
-      { value: "deep_audit", label: "Deep Audit" },
+      { value: "dependencies_scanning", label: scannerLabel("dependencies_scanning") },
+      { value: "code_scanning", label: scannerLabel("code_scanning") },
+      { value: "container_scanning", label: scannerLabel("container_scanning") },
+      { value: "secret_scanning", label: scannerLabel("secret_scanning") },
+      { value: "iac_scanning", label: scannerLabel("iac_scanning") },
+      { value: "agent_scanning", label: scannerLabel("agent_scanning") },
+      { value: "deep_audit", label: scannerLabel("deep_audit") },
     ],
   },
   {
@@ -101,7 +102,7 @@ const STATIC_ATTRIBUTES: AttributeDef[] = [
     key: "bands",
     label: "action band",
     group: "Risk signals",
-    description: "SSVC action band — Act · Attend · Track",
+    description: "SSVC action band: Act · Attend · Track",
     type: "enum",
     options: [
       { value: "act", label: "Act" },
@@ -179,7 +180,7 @@ function BandMultiPicker({ value, onApply, onClose }: CustomPickerProps) {
       aria-label="Set action band"
       className="absolute left-0 top-full z-50 mt-1 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-lg"
     >
-      <div className="mb-1 px-1 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+      <div className="mb-1 px-1 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
         action band
       </div>
       <div className="flex flex-wrap gap-1.5 p-1">

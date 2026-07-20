@@ -14,8 +14,10 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react"
+import { plural } from "@/lib/shared/plural"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import type { DryRunConfirmation } from "@/lib/client/rules-api"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 import { FormField } from "@/components/ui/FormField"
 import { Input } from "@/components/ui/Input"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
@@ -138,11 +140,8 @@ export function DryRunConfirmDialog({
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
           {loading && result === null && (
-            <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
-              <span
-                aria-hidden="true"
-                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[var(--color-text-tertiary)] border-t-[var(--color-accent)]"
-              />
+            <div className="flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+              <Spinner className="inline-block h-4 w-4 shrink-0 text-[var(--color-accent)]" />
               <p className="text-sm text-[var(--color-text-secondary)]">
                 Running dry-run against the last 1000 findings…
               </p>
@@ -150,20 +149,20 @@ export function DryRunConfirmDialog({
           )}
 
           {result !== null && (
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
+            <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-4 py-3">
               {matchCount === 0 ? (
                 <p className="text-sm text-[var(--color-text-primary)]">
                   This rule wouldn&apos;t dismiss anything against the most
-                  recent findings. You can still enable it — it will dismiss
+                  recent findings. You can still enable it. It will dismiss
                   matches as they arrive.
                 </p>
               ) : (
                 <p className="text-sm text-[var(--color-text-primary)]">
-                  <span className="font-semibold">{matchCount} findings</span>{" "}
+                  <span className="font-semibold">{matchCount} {plural(matchCount, "finding")}</span>{" "}
                   would be auto-dismissed once this rule is enabled.
                 </p>
               )}
-              <p className="mt-1 text-2xs uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+              <p className="mt-1 text-2xs font-mono uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                 {formatExpiresIn(result.valid_until)}
               </p>
             </div>
@@ -174,7 +173,7 @@ export function DryRunConfirmDialog({
               <h3 className="mb-2 text-base font-semibold text-[var(--color-text-primary)]">
                 Sample matches ({samples.length})
               </h3>
-              <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+              <div className="overflow-hidden rounded-md border border-[var(--color-border)]">
                 <Table className="border-collapse">
                   <Thead>
                     <Tr>
@@ -195,7 +194,7 @@ export function DryRunConfirmDialog({
                           {m.severity}
                         </Td>
                         <Td className="px-3 py-2 text-sm text-[var(--color-text-primary)]">
-                          {m.scanner}
+                          {scannerLabel(m.scanner)}
                         </Td>
                         <Td className="px-3 py-2 text-sm text-[var(--color-text-primary)]">
                           {m.repo_id}
@@ -244,7 +243,7 @@ export function DryRunConfirmDialog({
           {error && (
             <div
               role="alert"
-              className="rounded-lg border border-[var(--color-severity-critical)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
+              className="rounded-md border border-l-2 border-[var(--color-severity-critical)] border-l-[var(--color-severity-critical)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm text-[var(--color-severity-critical-text)]"
             >
               {error}
             </div>

@@ -6,7 +6,7 @@ import {
   type ScannerPrerequisiteState,
   type PrerequisiteItem,
 } from "@/lib/shared/prerequisite-utils"
-import { Button } from "@/components/ui/Button"
+import { Button, Spinner } from "@/components/ui/Button"
 
 export type { PrerequisiteItem }
 
@@ -61,7 +61,7 @@ export function PrerequisitePanel({
 
   return (
     <div
-      className={`rounded-lg border p-4 space-y-3 ${
+      className={`rounded-md border p-4 space-y-3 ${
         allPass
           ? "border-[var(--color-state-fixed-border)] bg-[var(--color-state-fixed-subtle)]"
           : anyFail
@@ -71,7 +71,7 @@ export function PrerequisitePanel({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+          <p className="text-2xs font-mono font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
             {title}
           </p>
           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{description}</p>
@@ -85,7 +85,7 @@ export function PrerequisitePanel({
         {items.map((item) => (
           <li key={item.label} className="flex items-start gap-2.5">
             <span className="mt-0.5 shrink-0">
-              {item.status === "loading" && <SpinnerIcon />}
+              {item.status === "loading" && <Spinner className="h-4 w-4" />}
               {item.status === "pass" && <CheckIcon />}
               {item.status === "fail" && <XIcon />}
             </span>

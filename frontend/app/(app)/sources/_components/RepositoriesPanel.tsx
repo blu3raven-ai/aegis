@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/shared/KpiCard"
 import { PaginatedTableFooter } from "@/components/shared/PaginatedTableFooter"
 import { RepoSummaryRow } from "@/components/shared/repos/RepoSummaryRow"
 import { EmptyReposState } from "@/components/shared/repos/EmptyReposState"
+import { Button } from "@/components/ui/Button"
 import { Skeleton } from "@/components/ui/Skeleton"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { listRepos, type RepoSummary } from "@/lib/client/sources-api"
@@ -132,13 +133,14 @@ export function RepositoriesPanel({ onCountChange }: RepositoriesPanelProps = {}
       {error && (
         <div className="flex items-center justify-between gap-3 border-b border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-5 py-3">
           <p className="text-sm text-[var(--color-severity-critical-text)]">{error}</p>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
             onClick={() => void loadRepos()}
-            className="shrink-0 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             Retry
-          </button>
+          </Button>
         </div>
       )}
 
@@ -201,7 +203,7 @@ export function RepositoriesPanel({ onCountChange }: RepositoriesPanelProps = {}
       </div>
 
       <main className="flex w-full flex-col gap-6 px-6 py-8">
-      <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
+      <div className="overflow-auto rounded-md border border-[var(--color-border)]">
         <Table className="min-w-full">
           <Thead>
             <Tr>

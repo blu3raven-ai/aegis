@@ -199,7 +199,7 @@ export function SidebarContent({
   function GroupLabel({ label }: { label: string }) {
     if (collapsed) return <div className="mt-2" />
     return (
-      <p className="mt-3 mb-1 px-2.5 text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+      <p className="mt-3 mb-1 px-2.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
         {label}
       </p>
     )
@@ -215,18 +215,18 @@ export function SidebarContent({
             <div className="flex min-w-0 flex-col">
               {isVendor ? (
                 <>
-                  <span className="text-[0.6rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
+                  <span className="font-mono text-[0.6rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
                     Raven Protocol
                   </span>
-                  <span className="text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
+                  <span className="font-mono text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
                     Blu3Raven
                   </span>
-                  <span className="mt-0.5 text-2xs leading-tight text-[var(--color-text-secondary)]">
-                    Aegis — Vulnerability Management Portal
+                  <span className="mt-0.5 font-mono text-2xs leading-tight text-[var(--color-text-secondary)]">
+                    Aegis · Vulnerability Management Portal
                   </span>
                 </>
               ) : (
-                <span className="text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)] truncate">
+                <span className="font-mono text-[1.15rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)] truncate">
                   {brandName}
                 </span>
               )}
@@ -248,7 +248,7 @@ export function SidebarContent({
                 type="button"
                 onClick={() => onSearchOpen(!searchOpen)}
                 aria-label="Search"
-                className="flex w-full items-center justify-center rounded-lg py-2 px-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+                className="flex w-full items-center justify-center rounded-lg py-2 px-2 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
               >
                 <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
                   <path d={ICON_SEARCH} />
@@ -315,7 +315,7 @@ export function SidebarContent({
                 <>
                   <span className="truncate">{item.label}</span>
                   {item.badge && (
-                    <span className="ml-auto shrink-0 rounded border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-1.5 py-px text-2xs font-bold uppercase tracking-[0.08em] text-[var(--color-state-dismissed)]">
+                    <span className="font-mono ml-auto shrink-0 rounded border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-1.5 py-px text-2xs font-bold uppercase tracking-[0.08em] text-[var(--color-state-dismissed)]">
                       {item.badge}
                     </span>
                   )}

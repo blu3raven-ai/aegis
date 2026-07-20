@@ -98,7 +98,7 @@ function SectionHeader({
       type="button"
       onClick={onToggle}
       aria-expanded={expanded}
-      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--color-surface-raised)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
     >
       <ChevronIcon expanded={expanded} />
       <span className="text-xs font-semibold text-[var(--color-text-primary)]">{label}</span>
@@ -171,7 +171,7 @@ function TruncatedRow({ shown, total }: { shown: number; total: number }) {
   if (shown >= total) return null
   return (
     <li className="py-2 pl-4 text-2xs text-[var(--color-text-tertiary)]">
-      Showing the first {shown.toLocaleString()} of {total.toLocaleString()} — this diff is too large to
+      Showing the first {shown.toLocaleString()} of {total.toLocaleString()}. This diff is too large to
       list in full.
     </li>
   )
@@ -238,7 +238,7 @@ export function SbomDiffView({ diff }: { diff: SbomDiffResponse }) {
   ])
 
   return (
-    <Card padding="none" className="flex flex-col gap-0 divide-y divide-[var(--color-border)] rounded-xl overflow-hidden">
+    <Card padding="none" className="flex flex-col gap-0 divide-y divide-[var(--color-border)] rounded-md overflow-hidden">
       {/* Summary bar */}
       <div className="flex flex-wrap items-center gap-4 px-4 py-3">
         <span className="text-xs text-[var(--color-text-secondary)]">

@@ -13,7 +13,7 @@ export default function Loading() {
       </div>
       <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i} padding="none" className="h-36 rounded-xl motion-safe:animate-pulse" />
+          <Card key={i} padding="none" className="h-36 rounded-md motion-safe:animate-pulse" />
         ))}
       </div>
     </div>

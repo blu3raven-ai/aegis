@@ -5,7 +5,7 @@ import { SettingsInPageNav } from "@/components/settings/SettingsInPageNav"
 import { SettingsSections } from "./SettingsSections"
 
 const SETTINGS_ICON = (
-  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
     <svg
       aria-hidden="true"
       className="h-5 w-5"
@@ -24,7 +24,11 @@ const SETTINGS_ICON = (
 
 export default function SettingsPage() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // h-full + overflow-hidden pins this page to the main scroll area's height so
+    // `main` (overflow-y-auto, shared by every page) has nothing to scroll — the
+    // inner content column below is the only scroller. Without this the whole page
+    // grows and a hash jump (e.g. #license) scrolls `main`, unpinning the header.
+    <div className="flex h-full flex-col overflow-hidden">
       <PageHeader
         icon={SETTINGS_ICON}
         title="Settings"
@@ -32,7 +36,7 @@ export default function SettingsPage() {
       />
       <div className="flex min-h-0 flex-1">
         <SettingsInPageNav />
-        <div data-settings-content className="flex-1 overflow-y-auto px-6 py-6 pb-12">
+        <div data-settings-content className="min-h-0 flex-1 overflow-y-auto px-6 py-6 pb-12">
           <SettingsSections />
         </div>
       </div>

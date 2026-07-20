@@ -4,17 +4,17 @@ const META: Record<DependencyOrigin, { label: string; tone: string; tooltip: str
   direct: {
     label: "Direct",
     tone: "border-[var(--color-accent)]/30 bg-[var(--color-accent-subtle)] text-[var(--color-accent)]",
-    tooltip: "Declared in the project manifest — fix or upgrade it here.",
+    tooltip: "Declared in the project manifest. Fix or upgrade it here.",
   },
   transitive: {
     label: "Transitive",
     tone: "border-[var(--color-border)] bg-[var(--color-surface-raised)] text-[var(--color-text-secondary)]",
-    tooltip: "Pulled in by another dependency — remediate via the parent.",
+    tooltip: "Pulled in by another dependency. Remediate via the parent.",
   },
   unknown: {
     label: "Unknown",
     tone: "border-[var(--color-border)] bg-transparent text-[var(--color-text-tertiary)]",
-    tooltip: "Origin couldn't be determined — the SBOM has no dependency graph.",
+    tooltip: "Origin couldn't be determined. The SBOM has no dependency graph.",
   },
 }
 

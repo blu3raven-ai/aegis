@@ -58,16 +58,16 @@ const VERDICT_STYLES: Record<Verdict, VerdictStyle> = {
 function verdictTitle(release: ReleaseDetail): string {
   switch (release.verdict) {
     case "no_go":
-      return `${release.blocker_count} critical findings — not recommended for release`
+      return `${release.blocker_count} critical findings: not recommended for release`
     case "warn":
-      return `${release.warn_count} high findings — review before release`
+      return `${release.warn_count} high findings: review before release`
     case "go":
-      return "Cleared for release — no blockers"
+      return "Cleared for release, no blockers"
     case "pending":
       return "Scan in progress…"
     case "unknown":
     default:
-      return "Verdict unavailable — re-run scan to compute"
+      return "Verdict unavailable: re-run scan to compute"
   }
 }
 
@@ -124,7 +124,7 @@ export function ReleaseVerdictCard({
           {style.iconGlyph}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Pre-release scan result
           </div>
           <div className="mt-1 text-base font-semibold text-[var(--color-text-primary)]">

@@ -36,7 +36,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
   { id: "notifications", title: "Notifications", subtitle: "In-app notification preferences", group: "personal", detailComponent: NotificationsDetail },
   { id: "api-keys", title: "API tokens", subtitle: "Personal access tokens for the Aegis API", group: "personal", detailComponent: ApiKeysDetail },
   { id: "general", title: "General", subtitle: "Name, branding, and authentication policy", group: "organization", detailComponent: GeneralDetail },
-  { id: "sso", title: "SSO / SAML", subtitle: "Single sign-on, SCIM, and audit streaming", group: "organization", detailComponent: SsoDetail },
+  { id: "sso", title: "SSO (SAML / OIDC)", subtitle: "Single sign-on, SCIM, and audit streaming", group: "organization", detailComponent: SsoDetail },
   { id: "audit", title: "Audit Log", subtitle: "Org-wide activity and admin actions", group: "organization", detailComponent: AuditDetail },
   { id: "runners", title: "Runners", subtitle: "Self-hosted scan runners and concurrency", group: "organization", detailComponent: RunnersDetail },
   { id: "llm", title: "LLM verification", subtitle: "Verify findings and cut false positives with your own model", group: "add-ons", detailComponent: LlmDetail },

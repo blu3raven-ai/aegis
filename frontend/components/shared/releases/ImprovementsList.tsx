@@ -21,7 +21,7 @@ interface ImprovementsListProps {
 }
 
 const CHIP_BASE =
-  "inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-[0.14em]"
+  "inline-flex items-center rounded-full px-1.5 py-0.5 font-mono text-2xs font-semibold uppercase tracking-[0.14em]"
 
 export function ImprovementsList({ improvements }: ImprovementsListProps) {
   if (improvements.length === 0) return null
@@ -31,7 +31,7 @@ export function ImprovementsList({ improvements }: ImprovementsListProps) {
   return (
     <section className="flex flex-col gap-3">
       <header className="flex items-end justify-between gap-4">
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Improvements in this release
         </h2>
         <p className="text-xs text-[var(--color-text-secondary)] tabular-nums">
@@ -76,7 +76,7 @@ export function ImprovementsList({ improvements }: ImprovementsListProps) {
                 </div>
               </div>
               <Link
-                href={`/findings/${row.finding_id}`}
+                href={`/findings?finding=${row.finding_id}`}
                 className="shrink-0 text-xs font-semibold text-[var(--color-accent)] hover:underline"
               >
                 View finding →

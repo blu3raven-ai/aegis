@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { plural } from "@/lib/shared/plural"
 import type { OrganisationTeam, ResourceSharingIndex } from "./team-types"
 import { TeamImagesTab } from "./TeamImagesTab"
 import { TeamRepositoriesTab } from "./TeamRepositoriesTab"
@@ -106,6 +107,9 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
     }
   }
 
+  const repoCount = team.assets.filter((a) => a.type === "repo").length
+  const imageCount = team.assets.filter((a) => a.type === "image").length
+
   return (
     <Card as="section" className="min-w-0 flex-1">
       <Dialog
@@ -123,7 +127,7 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
             <FormField
               label="Team Name"
               htmlFor="team-name"
-              error={error && !name.trim() ? error : undefined}
+              error={error}
             >
               <Input
                 id="team-name"
@@ -144,7 +148,6 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
                 placeholder="What does this team do?"
               />
             </FormField>
-            {error && name.trim() && <p className="text-xs text-[var(--color-severity-critical-text)]">{error}</p>}
             <div className="flex gap-2">
               <Button
                 variant="primary"
@@ -213,10 +216,10 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
             </p>
           </>
         )}
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
-          <span>{team.members.length} members</span>
-          <span>{team.assets.filter((a) => a.type === "repo").length} repos</span>
-          <span>{team.assets.filter((a) => a.type === "image").length} images</span>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <span>{team.members.length} {plural(team.members.length, "member")}</span>
+          <span>{repoCount} {plural(repoCount, "repo")}</span>
+          <span>{imageCount} {plural(imageCount, "image")}</span>
         </div>
       </div>
 
@@ -240,8 +243,8 @@ export function TeamEditor({ team, sharing, canEdit, onChanged }: TeamEditorProp
         )}
       </div>
 
-      <div className="mt-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
-        <h4 className="text-xs font-semibold text-[var(--color-text-primary)]">Ownership Policy</h4>
+      <div className="mt-10 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+        <h4 className="text-xs font-semibold text-[var(--color-text-primary)]">Sharing &amp; role precedence</h4>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
           Resources can be shared with multiple teams. Users get their strongest matching team role for
           shared resources.

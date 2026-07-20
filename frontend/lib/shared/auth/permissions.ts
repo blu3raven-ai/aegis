@@ -144,3 +144,15 @@ export const IMPLIED_PERMISSIONS: Partial<Record<Permission, Permission[]>> = {
   manage_auto_dismiss_rules: ["view_rules"],
   manage_data_retention_rules: ["view_rules"],
 }
+
+// Flat permission-id -> display label, derived from the grouped catalog above so
+// there is a single source of truth for casing (e.g. "Manage SLA Rules", not the
+// naive "Manage Sla Rules" a de-underscore would produce).
+const PERMISSION_LABELS: Record<string, string> = Object.fromEntries(
+  PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => [p.id, p.label])),
+)
+
+/** Human-readable label for a permission id, with a de-underscored fallback. */
+export function permissionLabel(id: string): string {
+  return PERMISSION_LABELS[id] ?? id.replace(/_/g, " ")
+}

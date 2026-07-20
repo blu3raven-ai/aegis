@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useParams, useSearchParams } from "next/navigation"
+import { scannerLabel } from "@/lib/shared/findings/row-mapper"
 import Link from "next/link"
 import { RepoDetailHero } from "@/components/shared/repos/RepoDetailHero"
 import { ScanHistoryTimeline } from "@/components/shared/repos/ScanHistoryTimeline"
@@ -257,7 +258,7 @@ export function RepoDetailPageContent() {
           )}
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <h2 className="text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               Scanner coverage
             </h2>
             <ScannerCoverageStrip
@@ -279,7 +280,7 @@ export function RepoDetailPageContent() {
                   key={f.id}
                   type="button"
                   onClick={() => setFindingsFilter(f.id)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
                     findingsFilter === f.id
                       ? "border-[var(--color-accent)]/50 bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
                       : "border-[var(--color-border)] bg-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
@@ -291,7 +292,7 @@ export function RepoDetailPageContent() {
               )
             })}
           </div>
-          <div className="overflow-auto rounded-2xl border border-[var(--color-border)]">
+          <div className="overflow-auto rounded-md border border-[var(--color-border)]">
             {filteredFindings.length === 0 ? (
               <p className="py-10 text-center text-sm text-[var(--color-text-secondary)]">
                 {repo.active_findings.length === 0
@@ -300,7 +301,7 @@ export function RepoDetailPageContent() {
               </p>
             ) : (
               <table className="min-w-full divide-y divide-[var(--color-border)] text-sm">
-                <thead className="bg-[var(--color-surface-raised)] text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+                <thead className="bg-[var(--color-surface-raised)] text-left text-2xs font-mono font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
                   <tr>
                     <th className="px-5 py-3">Scanner</th>
                     <th className="px-5 py-3">Finding</th>
@@ -311,7 +312,7 @@ export function RepoDetailPageContent() {
                 <tbody className="divide-y divide-[var(--color-border)]">
                   {filteredFindings.map((f) => (
                     <tr key={f.id} className="hover:bg-[var(--color-surface-raised)]">
-                      <td className="px-5 py-3.5 text-xs text-[var(--color-text-secondary)]">{f.tool}</td>
+                      <td className="px-5 py-3.5 text-xs text-[var(--color-text-secondary)]">{scannerLabel(f.tool)}</td>
                       <td className="px-5 py-3.5 font-mono text-xs text-[var(--color-text-primary)] max-w-xs truncate">{f.identity_key}</td>
                       <td className={`px-5 py-3.5 text-xs font-semibold ${SEV_COLORS[f.severity ?? ""] ?? "text-[var(--color-text-secondary)]"}`}>
                         {f.severity ?? "—"}

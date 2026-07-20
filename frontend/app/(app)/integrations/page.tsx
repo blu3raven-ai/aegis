@@ -65,11 +65,11 @@ function IntegrationsPageContent() {
           ))}
         </div>
         {loading ? (
-          <Card padding="none" className="rounded-xl border-dashed px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
+          <Card padding="none" className="rounded-md border-dashed px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
             Loading integrations…
           </Card>
         ) : items.length === 0 ? (
-          <Card padding="none" className="rounded-xl border-dashed px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
+          <Card padding="none" className="rounded-md border-dashed px-4 py-8 text-center text-sm text-[var(--color-text-secondary)]">
             No integrations in this category yet.
           </Card>
         ) : (

@@ -12,14 +12,14 @@ export function KpiCard({
   onClick?: () => void
 }) {
   const base =
-    "flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-3 text-left shadow-[0_28px_80px_rgba(15,23,42,0.06)]"
+    "panel-ticks flex flex-col rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-5 py-4 text-left"
   const body = (
     <>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+      <p className="font-mono text-2xs font-semibold uppercase tracking-[0.16em] text-[var(--color-text-tertiary)]">
         {label}
       </p>
-      <p className={`mt-2 text-2xl font-semibold leading-none tabular-nums ${valueClass}`}>{value}</p>
-      <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{note}</p>
+      <p className={`mt-3 text-[28px] font-semibold leading-none tabular-nums tracking-[-0.02em] ${valueClass}`}>{value}</p>
+      <p className="mt-2 text-xs text-[var(--color-text-secondary)]">{note}</p>
     </>
   )
 

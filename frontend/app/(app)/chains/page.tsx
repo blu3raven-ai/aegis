@@ -118,14 +118,14 @@ const MOCK_CHAINS: MockChain[] = [
       "T1530 · Cloud storage access",
     ],
     recommendation: {
-      title: "Cheapest fix to break this chain",
+      title: "Fewest fixes to break this chain",
       body: (
         <>
           <strong>Upgrade log4j-core <code className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 font-[family-name:var(--font-jetbrains-mono)] text-[11.5px]">2.14.0 → 2.17.1</code></strong>
-          {" "}— patch release, no breaking changes, ~5 min to merge.
+          . Patch release, no breaking changes, ~5 min to merge.
         </>
       ),
-      meta: "Breaking node 3 (Log4j RCE) eliminates the bridge between exploit and impact — no need to fix the other 3 nodes.",
+      meta: "Breaking node 3 (Log4j RCE) eliminates the bridge between exploit and impact. No need to fix the other 3 nodes.",
       actions: [
         { label: "Open fix PR", primary: true },
         { label: "Create Jira ticket" },
@@ -236,7 +236,7 @@ export default function ChainsPreviewPage() {
         title="Attack Chains"
         description="Multi-step exploit paths Aegis identifies by correlating findings across repos."
         controls={
-          <span className="rounded border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-2 py-0.5 text-2xs font-bold uppercase tracking-[0.08em] text-[var(--color-state-dismissed)]">
+          <span className="font-mono rounded border border-[var(--color-state-dismissed-border)] bg-[var(--color-state-dismissed-subtle)] px-2 py-0.5 text-2xs font-bold uppercase tracking-[0.08em] text-[var(--color-state-dismissed)]">
             Preview
           </span>
         }
@@ -267,14 +267,14 @@ function PreviewBanner() {
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2 text-xs font-semibold text-[var(--color-state-dismissed)]">
-          <span className="rounded bg-[var(--color-state-dismissed)] px-1.5 py-0.5 text-2xs font-bold uppercase tracking-[0.08em] text-white">
+          <span className="font-mono rounded bg-[var(--color-state-dismissed)] px-1.5 py-0.5 text-2xs font-bold uppercase tracking-[0.08em] text-white">
             In development
           </span>
           Attack Chains is a preview of upcoming functionality
         </div>
         <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
           Chain correlation requires reachability analysis (Argus engine). The data below is a
-          design preview — not yet generally available. Targeted for a future release.
+          design preview. Not yet generally available. Targeted for a future release.
         </p>
       </div>
       <a
@@ -305,7 +305,7 @@ function StatStrip() {
         delta="verified by Argus"
       />
       <StatItem
-        label="Cheapest break"
+        label="Fewest to break all chains"
         value="3 fixes"
         delta="resolves all chains"
       />
@@ -331,7 +331,7 @@ function StatItem({
 }) {
   return (
     <div className="mr-6 border-r border-[var(--color-border)] pr-6 py-2 last:border-r-0 last:mr-0 last:pr-0">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
+      <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-tertiary)]">
         {label}
       </div>
       <div className="mt-1 flex items-baseline gap-2">
@@ -351,7 +351,7 @@ function ChainCard({ chain }: { chain: MockChain }) {
 
   return (
     <article
-      className={`overflow-hidden rounded-xl border bg-[var(--color-surface)] ${
+      className={`overflow-hidden rounded-md border bg-[var(--color-surface)] ${
         isCritical ? "border-[var(--color-severity-critical-border)]" : "border-[var(--color-border)]"
       }`}
     >
@@ -457,18 +457,18 @@ function ChainNode({ node }: { node: MockNode }) {
 
   return (
     <div
-      className={`relative w-[200px] shrink-0 rounded-xl border p-3.5 ${cfg.border} ${cfg.bg ?? "bg-[var(--color-surface)]"} ${
+      className={`relative w-[200px] shrink-0 rounded-md border p-3.5 ${cfg.border} ${cfg.bg ?? "bg-[var(--color-surface)]"} ${
         node.weakest
           ? "shadow-[0_0_0_2px_var(--color-accent),0_0_0_4px_var(--color-accent-subtle)]"
           : ""
       }`}
     >
       {node.weakest && (
-        <span className="absolute -top-2.5 right-2.5 rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--color-accent-on)] shadow-md">
+        <span className="font-mono absolute -top-2.5 right-2.5 rounded-full bg-[var(--color-accent)] px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.06em] text-[var(--color-accent-on)] shadow-md">
           Weakest link · Fix here
         </span>
       )}
-      <div className={`mb-2 text-2xs font-semibold uppercase tracking-[0.14em] ${cfg.roleColor}`}>
+      <div className={`mb-2 font-mono text-2xs font-semibold uppercase tracking-[0.14em] ${cfg.roleColor}`}>
         {node.role}
       </div>
       <div className={`mb-2.5 grid h-7 w-7 place-items-center rounded-md ${cfg.iconBg} ${cfg.iconColor}`}>
@@ -520,7 +520,7 @@ function NodeTag({ kind, label }: { kind: TagKind; label: string }) {
 
 function TacticsStrip({ tactics }: { tactics: string[] }) {
   return (
-    <div className="flex min-w-full px-6 pb-4 text-2xs uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+    <div className="font-mono flex min-w-full px-6 pb-4 text-2xs uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
       {tactics.map((t, i) => (
         <Fragment key={i}>
           <div className="w-[200px] shrink-0 text-center">{t}</div>

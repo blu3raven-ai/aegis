@@ -85,7 +85,7 @@ export function ActivityFeed({
         <section key={group.label}>
           {/* Day header */}
           <div className="flex items-center gap-3 py-2">
-            <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               {group.label}
             </span>
             <div className="flex-1 h-px bg-[var(--color-border)]" aria-hidden="true" />

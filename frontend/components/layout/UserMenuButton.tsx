@@ -55,7 +55,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
           type="button"
           aria-label={`Signed in as ${user.username}`}
           onClick={() => setOpen(!open)}
-          className="flex max-w-56 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
+          className="flex max-w-56 items-center gap-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-primary)]"
         >
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt={user.username} className="h-6 w-6 shrink-0 rounded-full object-cover" />
@@ -82,19 +82,19 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
         {open && (
           <>
             <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} aria-label="Close menu" />
-            <div className="absolute right-0 top-12 z-50 w-56 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-xl">
+            <div className="absolute right-0 top-12 z-50 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 shadow-xl">
               <div className="border-b border-[var(--color-border)] px-3 py-2 mb-1">
                 <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">
                   {user.username}
                 </p>
-                <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+                <p className="font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
                   {roleLabel}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={handleSignOut}
-                className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
+                className="flex w-full items-center rounded px-3 py-2 text-sm text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
               >
                 Sign out
               </button>
@@ -113,7 +113,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
         aria-label={`Signed in as ${user.username}`}
         onClick={() => setOpen(!open)}
         title={collapsed ? `${user.username} · ${roleLabel}` : undefined}
-        className={`w-full rounded-lg transition-colors hover:bg-[var(--color-surface-raised)] ${
+        className={`w-full rounded transition-colors hover:bg-[var(--color-surface-raised)] ${
           collapsed
             ? "flex justify-center p-1.5"
             : "flex items-center gap-2.5 px-2.5 py-2"
@@ -153,7 +153,7 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
 
       {open && (
         <div
-          className={`absolute z-50 w-52 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 shadow-xl ${
+          className={`absolute z-50 w-52 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 shadow-xl ${
             collapsed ? "left-12 bottom-0" : "bottom-12 left-0"
           }`}
         >
@@ -161,14 +161,14 @@ export function UserMenuButton({ variant, collapsed = false }: UserMenuButtonPro
             <p className="text-sm font-semibold text-[var(--color-text-primary)] truncate">
               {user.username}
             </p>
-            <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
               {roleLabel}
             </p>
           </div>
           <button
             type="button"
             onClick={handleSignOut}
-            className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
+            className="flex w-full items-center rounded px-3 py-2 text-sm text-[var(--color-severity-critical-text)] hover:bg-[var(--color-severity-critical-subtle)] transition-colors"
           >
             Sign out
           </button>

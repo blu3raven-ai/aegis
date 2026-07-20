@@ -107,7 +107,7 @@ export function ManageViewsPanel({ open, onClose, variant = "popover" }: ManageV
       }
     >
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Saved views</h3>
+        <h3 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">Saved views</h3>
         <Button
           variant="link"
           size="xs"

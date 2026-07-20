@@ -1,6 +1,7 @@
 "use client"
 
 import { RoleRecord } from "@/lib/client/settings-api"
+import { permissionLabel } from "@/lib/shared/auth/permissions"
 import { Card } from "@/components/ui/Card"
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/Table"
 import { formatDate } from "@/lib/shared/utils"
@@ -24,7 +25,7 @@ const TRASH_ICON =
 export function RolesTable({ roles, onSelectRole, onDuplicateRole, onDeleteRole }: RolesTableProps) {
   const formatPermissions = (permissions: string[]) => {
     if (permissions.length === 0) return "No permissions"
-    const visible = permissions.slice(0, 6).map(p => p.replace(/_/g, ' '))
+    const visible = permissions.slice(0, 6).map(permissionLabel)
     const joined = visible.join(", ")
     return permissions.length > 6 ? `${joined}, ...` : joined
   }

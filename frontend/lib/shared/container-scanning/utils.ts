@@ -1,14 +1,5 @@
 import type { DependenciesFinding } from "@/lib/shared/dependencies/types"
 
-// ── Dismiss reasons (shared between drawer and findings tab) ─────────────────
-
-export const DISMISS_REASONS = [
-  "Fix started",
-  "Risk is tolerable",
-  "Alert is inaccurate",
-  "Vulnerable code is not used",
-] as const
-
 // ── Identity key (must match backend lifecycle.finding_identity_key) ─────────
 
 export function findingIdentityKey(alert: DependenciesFinding): string {

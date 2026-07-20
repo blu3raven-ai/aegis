@@ -25,7 +25,7 @@ export const Table = forwardRef<HTMLTableElement, TableProps>(function Table(
 interface TheadProps extends HTMLAttributes<HTMLTableSectionElement> {}
 
 // Canonical header chrome — used by every list/table surface in the app.
-// `text-2xs font-semibold uppercase tracking-[0.14em]` keeps the eyebrow
+// `font-mono text-2xs font-semibold uppercase tracking-[0.14em]` keeps the eyebrow
 // hierarchy consistent across surfaces; the underline lives on the cell
 // row so sticky headers render correctly.
 export const Thead = forwardRef<HTMLTableSectionElement, TheadProps>(function Thead(
@@ -36,7 +36,7 @@ export const Thead = forwardRef<HTMLTableSectionElement, TheadProps>(function Th
     <thead
       ref={ref}
       className={cn(
-        "border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]",
+        "border-b border-[var(--color-border)] bg-[var(--color-surface-raised)] text-left font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]",
         className,
       )}
       {...rest}

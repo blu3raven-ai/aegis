@@ -27,8 +27,8 @@ describe("CatchUpBanner", () => {
     assert.ok(src.includes("You&apos;ve been away since"), "headline copy preserved")
   })
 
-  it("uses gradient background + accent icon square", () => {
-    assert.ok(src.includes("gradient-to-br"), "should render gradient background")
+  it("uses an accent wash background + accent icon square", () => {
+    assert.ok(src.includes("color-mix(in_srgb,var(--color-accent)"), "should render an accent wash background")
     assert.ok(src.includes("bg-[var(--color-accent)]"), "icon square uses accent")
   })
 

@@ -2,7 +2,9 @@
 
 import { useState } from "react"
 import { addOrganisationRepository, removeOrganisationRepository, searchOrganisationRepositories } from "@/lib/client/settings-api"
+import { FolderGit2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
+import { EmptyState } from "@/components/ui/EmptyState"
 import type { OrganisationTeam, ResourceSharingIndex } from "./team-types"
 import { ResourceAutocomplete } from "./ResourceAutocomplete"
 
@@ -18,6 +20,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [removingAssetId, setRemovingAssetId] = useState<string | null>(null)
 
   const repoAssets = team.assets.filter((a) => a.type === "repo")
 
@@ -50,11 +53,16 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
   }
 
   async function removeRepository(assetId: string) {
-    const result = await removeOrganisationRepository(team.id, assetId)
-    if (result.ok) {
-      await onChanged()
-    } else {
-      setError(result.error)
+    setRemovingAssetId(assetId)
+    try {
+      const result = await removeOrganisationRepository(team.id, assetId)
+      if (result.ok) {
+        await onChanged()
+      } else {
+        setError(result.error)
+      }
+    } finally {
+      setRemovingAssetId(null)
     }
   }
 
@@ -66,7 +74,7 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
           const isGitHubSourced = asset.source === "github"
 
           return (
-            <div key={asset.assetId} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
+            <div key={asset.assetId} className="flex items-center justify-between gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)]/50 p-3">
               <div className="flex flex-1 items-center gap-2 min-w-0">
                 <span className="font-mono text-sm text-[var(--color-text-primary)] truncate">{asset.displayName}</span>
                 {sharedTeamCount > 1 && (
@@ -82,10 +90,10 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
               </div>
               <Button
                 disabled={!canEdit || isGitHubSourced}
-                variant="secondary"
+                variant="destructive"
                 size="sm"
+                isLoading={removingAssetId === asset.assetId}
                 onClick={() => void removeRepository(asset.assetId)}
-                className="border-[var(--color-severity-critical-border)] bg-transparent text-[var(--color-severity-critical-text)] hover:border-[var(--color-severity-critical-border)] hover:bg-[var(--color-severity-critical-subtle)] hover:text-[var(--color-severity-critical-text)]"
                 title={isGitHubSourced ? "This repository is synced from a source connection and cannot be manually removed" : undefined}
               >
                 Remove
@@ -94,12 +102,18 @@ export function TeamRepositoriesTab({ team, sharing, canEdit, onChanged }: TeamR
           )
         })}
         {repoAssets.length === 0 && (
-          <p className="py-4 text-center text-xs text-[var(--color-text-secondary)] italic">No repositories assigned to this team.</p>
+          <div className="py-6">
+            <EmptyState
+              icon={FolderGit2}
+              title="No repositories assigned"
+              description="Add repositories to give this team access to scan results."
+            />
+          </div>
         )}
       </div>
 
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
-        <h4 className="text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] mb-3">Add repository</h4>
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+        <h4 className="font-mono text-2xs font-bold uppercase tracking-[0.14em] text-[var(--color-text-secondary)] mb-3">Add repository</h4>
         <div className="space-y-3">
           <ResourceAutocomplete
             value={value}

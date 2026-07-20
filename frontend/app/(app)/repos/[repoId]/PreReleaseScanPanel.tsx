@@ -6,19 +6,14 @@ import {
   getScanStatus,
   type ScanDetail,
 } from "@/lib/client/repos-api"
+import { scannerAbbrev } from "@/lib/shared/findings/row-mapper"
+import { Button } from "@/components/ui/Button"
 
 interface PreReleaseScanPanelProps {
   repoId: string
   onScanComplete: (scanId: string) => void
 }
 
-// Local redeclaration keeps the panel decoupled from ScanHistoryTimeline.
-const TOOL_LABELS: Record<string, string> = {
-  dependencies:        "SCA",
-  code_scanning:       "SAST",
-  container_scanning:  "CONT",
-  secrets:             "SEC",
-}
 
 const STATUS_STYLES: Record<ScanDetail["status"], string> = {
   queued:    "text-[var(--color-state-pending)]",
@@ -130,16 +125,16 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
       {/* Submission form */}
       <form
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
+        className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5"
       >
-        <h2 className="mb-4 text-base font-semibold text-[var(--color-text-primary)]">
+        <h2 className="mb-4 font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Trigger pre-release scan
         </h2>
 
         <div className="mb-4">
           <label
             htmlFor="pre-release-scan-sha"
-            className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
+            className="mb-1.5 block text-xs font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]"
           >
             Commit SHA
           </label>
@@ -152,17 +147,17 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
               value={sha}
               onChange={(e) => setSha(e.target.value)}
               placeholder="e.g. a1b2c3d"
-              className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-mono"
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm font-mono"
             />
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="sm"
               disabled={submitDisabled}
-              className={`shrink-0 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-accent-on)] ${
-                submitDisabled ? "opacity-50 cursor-not-allowed" : ""
-              }`}
+              className="shrink-0"
             >
               {submitting ? "Submitting…" : "Run scan →"}
-            </button>
+            </Button>
           </div>
           {shaError && (
             <p className="mt-1.5 text-xs text-[var(--color-severity-critical)]">{shaError}</p>
@@ -175,7 +170,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
         </div>
 
         <fieldset>
-          <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+          <legend className="mb-2 text-xs font-mono font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             Scanners
           </legend>
           <div className="flex flex-col gap-2">
@@ -227,7 +222,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
 
       {/* Active scan status card */}
       {activeScan && (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-[var(--color-text-primary)]">
@@ -240,7 +235,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
               )}
               {activeScan.status === "completed" && <span>✓</span>}
               {activeScan.status === "failed" && <span>×</span>}
-              <span>{activeScan.status}</span>
+              <span className="capitalize">{activeScan.status.replace(/_/g, " ")}</span>
             </div>
           </div>
 
@@ -253,7 +248,7 @@ export function PreReleaseScanPanel({ repoId, onScanComplete }: PreReleaseScanPa
                   key={st}
                   className="rounded px-1.5 py-0.5 text-xs font-semibold bg-[var(--color-accent-subtle)] text-[var(--color-accent)]"
                 >
-                  {TOOL_LABELS[st] ?? st}
+                  {scannerAbbrev(st)}
                 </span>
               ))}
             </div>

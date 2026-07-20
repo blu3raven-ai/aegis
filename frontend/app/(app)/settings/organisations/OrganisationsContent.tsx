@@ -104,14 +104,34 @@ export function OrganisationsContent({ canEdit = true, createTriggerRef }: Organ
         </div>
       )}
 
-      {error && <p className="rounded-lg border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2 text-sm text-[var(--color-severity-critical-text)]">{error}</p>}
+      {error && <p className="rounded-md border border-[var(--color-severity-critical)]/20 bg-[var(--color-severity-critical)]/10 px-3 py-2 text-sm text-[var(--color-severity-critical-text)]">{error}</p>}
 
       {showLoading ? (
         <Card padding="lg" className="text-sm text-[var(--color-text-secondary)]">Loading teams...</Card>
       ) : showEmpty ? (
-        <Card padding="lg" className="text-sm text-[var(--color-text-secondary)]">
-          No teams yet. Create your first team to start grouping members and access.
-        </Card>
+        <div className="flex flex-col items-center justify-center rounded border border-dashed border-[var(--color-border)] bg-[var(--color-surface-raised)]/30 py-16 px-6 text-center">
+          <svg className="mb-3 h-12 w-12 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M17 20h5v-2a3 3 0 00-5.856-1.487M7 20H2v-2a3 3 0 015.856-1.487M18 13a3 3 0 11-6 0 3 3 0 016 0m-9 0a3 3 0 11-6 0 3 3 0 016 0M13 6a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <h3 className="text-base font-semibold text-[var(--color-text-primary)]">No teams yet</h3>
+          <p className="mt-1 max-w-md text-sm text-[var(--color-text-secondary)]">Create your first team to start grouping members and access.</p>
+          {canEdit && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowCreate(true)}
+              className="mt-4"
+              leadingIcon={
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              }
+            >
+              New Team
+            </Button>
+          )}
+        </div>
       ) : (
         <div className="flex flex-col gap-6 md:min-h-[calc(100vh-12rem)] md:flex-row md:items-start">
           <TeamList teams={teams} selectedTeamId={selectedTeam?.id ?? null} query={query} onQueryChange={setQuery} onSelect={setSelectedTeamId} />

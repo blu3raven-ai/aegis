@@ -15,18 +15,30 @@ export default function NotFound() {
         <div className="mt-4 flex flex-col items-center">
           {isVendor ? (
             <>
-              <span className="text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]">
+              <span
+                className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.28em] text-[var(--color-text-secondary)]"
+                style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+              >
                 Raven Protocol
               </span>
-              <span className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
+              <span
+                className="text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
+                style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+              >
                 Blu3Raven
               </span>
-              <span className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                Aegis — Vulnerability Management Portal
+              <span
+                className="mt-1 text-xs text-[var(--color-text-secondary)]"
+                style={{ fontFamily: "var(--font-manrope)" }}
+              >
+                Aegis · Vulnerability Management Portal
               </span>
             </>
           ) : (
-            <span className="max-w-full truncate text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]">
+            <span
+              className="max-w-full truncate text-[1.6rem] font-bold leading-none tracking-[-0.04em] text-[var(--color-text-primary)]"
+              style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+            >
               {brandName}
             </span>
           )}
@@ -35,7 +47,7 @@ export default function NotFound() {
         {/* Divider keeps the brand and the error message as distinct tiers */}
         <div className="my-8 h-px w-12 bg-[var(--color-border)]" />
 
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
           Error 404
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--color-text-primary)]">

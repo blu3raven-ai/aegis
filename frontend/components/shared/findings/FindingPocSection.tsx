@@ -1,8 +1,11 @@
 "use client"
 
 import { useCallback, useRef, useState } from "react"
+import { Copy, Download, Sparkles } from "lucide-react"
 
 import { Button, buttonClassName } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
+import { LinkButton } from "@/components/ui/LinkButton"
 import { findingPocUrl, generateFindingPoc } from "@/lib/client/findings-api"
 
 interface GeneratedPoc {
@@ -16,8 +19,27 @@ interface FindingPocSectionProps {
   pocScript?: string
   pocFilename?: string
   pocLanguage?: string
+  /** Whether an LLM model key is configured. Generation needs one, so with it
+   *  off the panel shows a blurred preview and the BYOK call to action. */
+  verificationEnabled?: boolean
   /** Called after a successful generate/regenerate so the drawer can update the finding. */
   onGenerated: (poc: GeneratedPoc) => void
+}
+
+// Ghosted script lines blurred behind the call to action when generation is
+// locked. Decorative, so aria-hidden and inert.
+function GhostScript() {
+  const widths = ["w-9/12", "w-11/12", "w-7/12", "w-10/12", "w-6/12", "w-8/12"]
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none select-none space-y-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 opacity-60 blur-[3px]"
+    >
+      {widths.map((w, i) => (
+        <div key={i} className={`h-2.5 rounded bg-[var(--color-surface-raised)] ${w}`} />
+      ))}
+    </div>
+  )
 }
 
 /**
@@ -31,6 +53,7 @@ export function FindingPocSection({
   pocScript,
   pocFilename,
   pocLanguage,
+  verificationEnabled = true,
   onGenerated,
 }: FindingPocSectionProps) {
   const [instruction, setInstruction] = useState("")
@@ -75,71 +98,104 @@ export function FindingPocSection({
 
   return (
     <section className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Proof of Concept</h3>
-        {pocScript && meta ? (
-          <span className="text-2xs font-mono text-[var(--color-text-tertiary)]">{meta}</span>
-        ) : null}
-      </div>
+      {pocScript && meta ? (
+        <p className="text-right text-2xs font-mono text-[var(--color-text-tertiary)]">{meta}</p>
+      ) : null}
 
       {pocScript ? (
         <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 font-mono text-xs leading-relaxed text-[var(--color-text-primary)]">
           {pocScript}
         </pre>
-      ) : (
+      ) : verificationEnabled ? (
         <p className="text-sm text-[var(--color-text-secondary)]">
           Generate a runnable, benign proof-of-concept that demonstrates this finding is reachable.
         </p>
+      ) : (
+        // No model key configured: preview the shape, gate generation behind BYOK.
+        <div className="relative overflow-hidden rounded-md">
+          <GhostScript />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[color-mix(in_srgb,var(--color-surface)_55%,transparent)] px-6 text-center">
+            <p className="max-w-sm text-xs leading-relaxed text-[var(--color-text-secondary)]">
+              A benign proof-of-concept that demonstrates reachability is generated on demand.
+            </p>
+            <LinkButton
+              href="/settings#llm"
+              variant="primary"
+              size="sm"
+              trailingIcon={<span aria-hidden="true">→</span>}
+            >
+              Enable LLM verification
+            </LinkButton>
+          </div>
+        </div>
       )}
 
-      {busy ? (
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" isLoading disabled>
-            Generating…
-          </Button>
-          <Button variant="ghost" size="sm" onClick={cancel}>
-            Cancel
+      {/* Download / copy an existing script needs no model key. */}
+      {pocScript && !busy ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={findingPocUrl(findingId)}
+            download
+            className={buttonClassName({ variant: "secondary", size: "sm" })}
+          >
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
+            Download
+          </a>
+          <Button
+            variant="secondary"
+            size="sm"
+            leadingIcon={<Copy className="h-3.5 w-3.5" />}
+            onClick={copy}
+          >
+            {copied ? "Copied" : "Copy"}
           </Button>
         </div>
-      ) : (
-        <>
-          {pocScript ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <a
-                href={findingPocUrl(findingId)}
-                download
-                className={buttonClassName({ variant: "secondary", size: "sm" })}
-              >
-                Download
-              </a>
-              <Button variant="secondary" size="sm" onClick={copy}>
-                {copied ? "Copied" : "Copy"}
-              </Button>
-            </div>
-          ) : null}
+      ) : null}
+
+      {/* Generation controls need a configured model key. */}
+      {verificationEnabled &&
+        (busy ? (
           <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              maxLength={500}
-              aria-label="Proof-of-concept guidance"
-              placeholder={
-                pocScript
-                  ? "Refine (optional): what should it change?"
-                  : "Guidance (optional): e.g. target the login route, prefer curl"
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter") run()
-              }}
-              className="h-8 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)]"
-            />
-            <Button variant="secondary" size="sm" onClick={run}>
-              {pocScript ? "Regenerate" : "Generate PoC"}
+            <Button variant="secondary" size="sm" isLoading disabled>
+              Generating…
+            </Button>
+            <Button variant="ghost" size="sm" onClick={cancel}>
+              Cancel
             </Button>
           </div>
-        </>
-      )}
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Input
+                size="sm"
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                maxLength={500}
+                aria-label="Proof-of-concept guidance"
+                placeholder={
+                  pocScript
+                    ? "Refine (optional): what should it change?"
+                    : "Guidance (optional): e.g. target the login route, prefer curl"
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") run()
+                }}
+                className="flex-1"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                leadingIcon={<Sparkles className="h-3.5 w-3.5" />}
+                onClick={run}
+              >
+                {pocScript ? "Regenerate" : "Generate PoC"}
+              </Button>
+            </div>
+            <p className="text-2xs text-[var(--color-text-tertiary)]">
+              Runs on demand and spends tokens. The script proves reachability with a benign marker only.
+            </p>
+          </div>
+        ))}
 
       {error ? (
         <span role="alert" className="block text-xs text-[var(--color-severity-critical-text)]">

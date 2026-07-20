@@ -21,7 +21,7 @@ export interface FindingsSortDropdownProps {
 export function FindingsSortDropdown({ value, onChange }: FindingsSortDropdownProps) {
   return (
     <label className="inline-flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
-      <span className="text-2xs font-semibold uppercase tracking-[0.14em]">Sort</span>
+      <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em]">Sort</span>
       <Select
         size="sm"
         value={value}

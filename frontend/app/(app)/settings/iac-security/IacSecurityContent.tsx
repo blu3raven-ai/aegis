@@ -54,17 +54,17 @@ export function IacSecurityContent() {
 
   if (isLoading) {
     return (
-      <div className="space-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
+      <div className="space-y-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-raised)] p-4">
         <div className="h-6 w-40 animate-pulse rounded bg-[var(--color-surface)]" />
-        <div className="h-10 animate-pulse rounded-lg bg-[var(--color-surface)]" />
-        <div className="h-28 animate-pulse rounded-lg bg-[var(--color-surface)]" />
+        <div className="h-10 animate-pulse rounded-md bg-[var(--color-surface)]" />
+        <div className="h-28 animate-pulse rounded-md bg-[var(--color-surface)]" />
       </div>
     )
   }
 
   if (!settings) {
     return (
-      <div className="rounded-lg border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-3 text-sm text-[var(--color-severity-critical-text)]">
+      <div className="rounded-md border border-[var(--color-severity-critical-border)] bg-[var(--color-severity-critical-subtle)] px-3 py-3 text-sm text-[var(--color-severity-critical-text)]">
         <p>{error ?? "Could not load settings."}</p>
         <Button
           variant="secondary"

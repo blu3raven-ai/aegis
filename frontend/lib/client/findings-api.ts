@@ -379,10 +379,10 @@ export async function getFindingRelated(findingId: number): Promise<FindingRelat
 }
 
 
-/** Reasons accepted by the backend. Keep in sync with backend/src/shared/lifecycle.VALID_DISMISS_REASONS. */
+/** User-offered dismiss reasons — "this finding isn't actionable" only. Risk
+ *  acceptance and fix-tracking are handled by the Accept risk / Defer actions,
+ *  not dismiss. Keep in sync with backend/src/shared/lifecycle.VALID_DISMISS_REASONS. */
 export const DISMISS_REASONS = [
-  "Fix started",
-  "Risk is tolerable",
   "Alert is inaccurate",
   "Vulnerable code is not used",
 ] as const
@@ -448,6 +448,17 @@ export async function generateFindingPoc(
     signal: opts.signal,
   })
   return res.poc
+}
+
+/** Re-run verification by re-scanning the finding's source (LLM-backed; spends
+ *  tokens). Asynchronous — the advisory updates when the re-scan re-ingests. */
+export async function reverifyFinding(
+  findingId: number | string,
+): Promise<{ scan_id: string; status: string }> {
+  return apiClient<{ scan_id: string; status: string }>(
+    `/api/v1/findings/${encodeURIComponent(String(findingId))}/verify`,
+    { method: "POST", body: {} },
+  )
 }
 
 /** Defer (snooze) a finding — drops it from the open queue until reopened. */

@@ -116,7 +116,7 @@ export function PostureUsageTab() {
   if (state === "error" && usage === null) {
     return (
       <div className="space-y-5 px-6 py-5">
-        <Card padding="none" className="rounded-2xl px-6 py-12 text-center">
+        <Card padding="none" className="rounded-md px-6 py-12 text-center">
           <p className="text-sm font-medium text-[var(--color-text-primary)]">
             Could not load usage data
           </p>
@@ -150,7 +150,7 @@ export function PostureUsageTab() {
     <div className="space-y-5 px-6 py-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
+          <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">
             LLM verification usage
           </h2>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">

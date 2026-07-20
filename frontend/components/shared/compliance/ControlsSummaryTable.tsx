@@ -115,7 +115,7 @@ export function ControlsSummaryTable({ controls, framework, statusFilter = "all"
               <Tr key={`group-${group.category}`} className="bg-transparent">
                 <Td colSpan={7} className="px-0 pt-5 pb-1.5 first:pt-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
+                    <span className="font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-secondary)]">
                       {group.category}
                     </span>
                     <span className="text-2xs tabular-nums text-[var(--color-text-tertiary)]">

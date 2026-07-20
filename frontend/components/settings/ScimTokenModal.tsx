@@ -19,6 +19,7 @@ export function ScimTokenModal({ open, token, onClose }: Props) {
       onClose={onClose}
       title="SCIM bearer token"
       description="Copy this token into your IdP's SCIM configuration now. It will not be shown again."
+      variant="modal"
       size="md"
       footer={
         <div className="flex justify-end gap-2">

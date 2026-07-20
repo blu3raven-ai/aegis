@@ -12,7 +12,7 @@ interface CatchUpBannerProps {
 export function CatchUpBanner({ data, onDismiss }: CatchUpBannerProps) {
   const eventLabel = `${data.total} event${data.total === 1 ? "" : "s"}`
   return (
-    <div className="mb-4 flex items-center gap-3.5 rounded-xl border border-[color-mix(in_srgb,var(--color-accent)_22%,transparent)] bg-gradient-to-br from-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] to-[color-mix(in_srgb,#a78bfa_5%,transparent)] px-4 py-3.5">
+    <div className="mb-4 flex items-center gap-3.5 rounded-md border border-l-2 border-[color-mix(in_srgb,var(--color-accent)_22%,transparent)] border-l-[var(--color-accent)] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)] px-4 py-3.5">
       <span
         aria-hidden="true"
         className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-on)]"

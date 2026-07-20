@@ -79,7 +79,7 @@ export function SbomEcosystemAnalyticsPanel() {
   return (
     <Card padding="md" className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Risk by ecosystem</h2>
+        <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--color-text-secondary)]">Risk by ecosystem</h2>
         <p className="text-2xs text-[var(--color-text-secondary)]">
           Open dependency findings and SBOM coverage, grouped by package ecosystem across your scope.
         </p>
@@ -88,7 +88,7 @@ export function SbomEcosystemAnalyticsPanel() {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
-            <tr className="border-b border-[var(--color-border)] text-left text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
+            <tr className="border-b border-[var(--color-border)] text-left font-mono text-2xs font-semibold uppercase tracking-[0.14em] text-[var(--color-text-tertiary)]">
               <th className="py-2 pr-4 font-semibold">Ecosystem</th>
               <th className="py-2 pr-4 font-semibold">Open findings</th>
               <th className="py-2 pr-4 font-semibold">Risk</th>
