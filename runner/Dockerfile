@@ -154,7 +154,7 @@ COPY .honeypot/ /opt/aegis-honeypot/
 # Non-root user. The subuid/subgid ranges are what rootless podman maps into a
 # nested container's user namespace — without them it cannot start one.
 RUN useradd --create-home --shell /bin/bash --uid 10001 aegis && \
-    mkdir -p /workspace && \
+    mkdir -p /workspace /home/aegis/.vuln-runner && \
     echo "aegis:100000:65536" > /etc/subuid && \
     echo "aegis:100000:65536" > /etc/subgid && \
     chown -R aegis:aegis /app /workspace /home/aegis
