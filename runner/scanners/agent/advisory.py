@@ -100,6 +100,14 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Remove the MCP server. Never run one whose command pipes network content "
         "into a shell. Rotate anything it could have accessed.",
     ),
+    "AGENT_MCP_LOCAL_BINARY": (
+        "This MCP server's command points at a repo-relative path (./…) instead of "
+        "a package-manager launcher, so trusting the config auto-spawns a "
+        "repo-bundled script or binary; the staged payload ships with the repo, "
+        "not a reviewable published package.",
+        "Verify the local script/binary by hand before trusting the server; prefer "
+        "a versioned package-manager launcher (npx/uvx/docker) over a repo-local path.",
+    ),
     # ── Rules-file / instruction injection ───────────────────────────────────
     "AGENT_INSTRUCTION_INJECTION": (
         "This rules or instruction file tries to override the agent's guardrails — "
@@ -183,6 +191,14 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "real payload.",
         "Remove the hook, or run the script only as an explicit, reviewed step; never "
         "auto-run repo-supplied scripts on project open.",
+    ),
+    "AGENT_HOOK_YOLO_FLAG": (
+        "An agent hook drives an agent CLI with permission guardrails disabled "
+        "(--dangerously-skip-permissions / --yolo / --trust-all-tools), letting it "
+        "act without confirmation; the pattern used to auto-approve exfiltration "
+        "in real supply-chain attacks.",
+        "Remove the guardrail-disabling flag from the hook. Never auto-run an agent "
+        "CLI with permission checks off from a lifecycle hook.",
     ),
     "AGENT_CONFIG_API_KEY_HELPER": (
         "The apiKeyHelper setting makes the agent run a shell command on every start "
