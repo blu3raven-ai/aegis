@@ -40,6 +40,12 @@ def _strip_fences(content: str) -> str:
 # failure mode below shares this budget so a single call can't spin forever.
 _MAX_ATTEMPTS = 4
 
+# When a JSON response is truncated (output hit the token cap), retry the same
+# prompt with this many times the cap, bounded by the ceiling. One escalation
+# turns a verbose model's over-long answer into a complete, parseable one.
+_TRUNCATION_ESCALATE_FACTOR = 3
+_MAX_TOKENS_CEILING = 8000
+
 
 def _backoff(attempt: int, cap: float = 30.0) -> None:
     """Sleep with jittered exponential backoff before a retry.
@@ -88,6 +94,7 @@ class LlmResponse:
     tokens_in: int
     tokens_out: int
     prompt_hash: str
+    truncated: bool = False  # finish_reason == "length": output hit the token cap
 
 
 @dataclass
@@ -234,10 +241,11 @@ class LlmClient:
         prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         data = self._post_with_retry(payload, retry_empty=True)
         try:
+            choice = data["choices"][0]
             # content can be null when the model refuses or hits a length cap;
             # coerce to "" so _strip_fences and the caller's repair path handle
             # it instead of crashing on None.strip().
-            content = data["choices"][0]["message"].get("content") or ""
+            content = choice["message"].get("content") or ""
         except (KeyError, IndexError) as e:
             raise LlmError(f"malformed llm response: {e}") from e
         usage = data.get("usage", {})
@@ -246,6 +254,7 @@ class LlmClient:
             tokens_in=int(usage.get("prompt_tokens", 0)),
             tokens_out=int(usage.get("completion_tokens", 0)),
             prompt_hash=prompt_hash,
+            truncated=choice.get("finish_reason") == "length",
         )
 
     def chat_json(
@@ -266,15 +275,21 @@ class LlmClient:
         call; exhausting the repairs returns ``parsed=None`` so the caller can
         apply its existing fallback. Transport-level errors
         (``LlmRateLimitedError`` / ``LlmError``) propagate unchanged.
+
+        A truncated response (output hit the token cap) is not a format error a
+        repair prompt can fix, so it is instead retried on the ORIGINAL prompt
+        with a larger cap. Verbose or reasoning-style models overrun a tight cap
+        on hard findings; the escalation lets the response complete.
         """
         convo = list(messages)
+        cur_max_tokens = max_tokens
         tokens_in = 0
         tokens_out = 0
         prompt_hashes: list[str] = []
         last_error = ""
 
         for attempt in range(max_repairs + 1):
-            resp = self.chat(convo, temperature=temperature, max_tokens=max_tokens)
+            resp = self.chat(convo, temperature=temperature, max_tokens=cur_max_tokens)
             tokens_in += resp.tokens_in
             tokens_out += resp.tokens_out
             prompt_hashes.append(resp.prompt_hash)
@@ -284,14 +299,18 @@ class LlmClient:
                 last_error = str(exc)
                 if attempt >= max_repairs:
                     break
-                convo = convo + [
-                    {"role": "assistant", "content": resp.content},
-                    {"role": "user", "content": _REPAIR_INSTRUCTION.format(
-                        error=last_error,
-                        schema_name=model_cls.__name__,
-                        schema=json.dumps(model_cls.model_json_schema()),
-                    )},
-                ]
+                if resp.truncated:
+                    cur_max_tokens = min(cur_max_tokens * _TRUNCATION_ESCALATE_FACTOR, _MAX_TOKENS_CEILING)
+                    convo = list(messages)
+                else:
+                    convo = convo + [
+                        {"role": "assistant", "content": resp.content},
+                        {"role": "user", "content": _REPAIR_INSTRUCTION.format(
+                            error=last_error,
+                            schema_name=model_cls.__name__,
+                            schema=json.dumps(model_cls.model_json_schema()),
+                        )},
+                    ]
                 continue
             return JsonChatResult(
                 parsed=parsed, error=None,

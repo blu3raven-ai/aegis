@@ -11,11 +11,27 @@ from runner.verification.llm_client import (
 )
 
 
-def _ok(content: str, tokens_in: int = 10, tokens_out: int = 5) -> httpx.Response:
+def _ok(content: str, tokens_in: int = 10, tokens_out: int = 5,
+        finish_reason: str = "stop") -> httpx.Response:
     return httpx.Response(200, json={
-        "choices": [{"message": {"role": "assistant", "content": content}}],
+        "choices": [{"message": {"role": "assistant", "content": content},
+                     "finish_reason": finish_reason}],
         "usage": {"prompt_tokens": tokens_in, "completion_tokens": tokens_out},
     })
+
+
+def test_chat_flags_truncation_on_length_finish_reason():
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(
+        lambda req: _ok("partial", finish_reason="length")))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert resp.truncated is True
+
+
+def test_chat_not_truncated_on_normal_stop():
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(
+        lambda req: _ok("done", finish_reason="stop")))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert resp.truncated is False
 
 
 def test_chat_returns_content_and_token_counts():
