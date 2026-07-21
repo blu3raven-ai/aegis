@@ -62,22 +62,47 @@ Respond ONLY with valid JSON in this exact shape:
 }"""
 
 
-def _probe_user(runtime_question: str, port_hint: int | None) -> str:
-    hint = f"\nThe app likely listens on port {port_hint}." if port_hint else ""
-    return f"Runtime question to answer:\n{runtime_question}{hint}"
+def _probe_user(
+    runtime_question: str,
+    port_hint: int | None,
+    *,
+    context: dict[str, Any] | None = None,
+) -> str:
+    parts = [f"Runtime question to answer:\n{runtime_question}"]
+    if context:
+        # Ground the probe in the finding: which file/endpoint the flaw is in,
+        # the exact flagged code, and the exploit chain the static pass built.
+        # Without this the generator has only the one-line question and tends to
+        # guess the path/auth shape, producing an off-target (inconclusive) probe.
+        loc = context.get("file") or context.get("file_path")
+        if loc:
+            parts.append(f"\nFinding location: {loc}")
+        chain = (context.get("exploit_chain") or "").strip()
+        if chain:
+            parts.append(f"\nExploit chain (from static analysis):\n{chain[:1500]}")
+        window = (context.get("code_window") or "").strip()
+        if window:
+            parts.append(f"\nFlagged code:\n```\n{window[:1500]}\n```")
+    if port_hint:
+        parts.append(f"\nThe app likely listens on port {port_hint}.")
+    return "".join(parts)
 
 
 def generate_probe(
     runtime_question: str, *, llm, port_hint: int | None = None,
+    context: dict[str, Any] | None = None,
 ) -> ProbeSpec | None:
     """Generate a benign probe spec for the question, or None (no LLM / no question
-    / schema failure) — the caller then skips runtime verification for this finding."""
+    / schema failure) — the caller then skips runtime verification for this finding.
+
+    ``context`` optionally carries the finding's location, exploit_chain, and
+    code_window so the probe targets the real endpoint instead of guessing."""
     if llm is None or not (runtime_question or "").strip():
         return None
     result = llm.chat_json(
         [
             {"role": "system", "content": _PROBE_SYSTEM},
-            {"role": "user", "content": _probe_user(runtime_question, port_hint)},
+            {"role": "user", "content": _probe_user(runtime_question, port_hint, context=context)},
         ],
         ProbeSpec,
         temperature=0.0, max_tokens=500,
