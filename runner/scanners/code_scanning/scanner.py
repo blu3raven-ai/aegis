@@ -48,7 +48,7 @@ from runner.scanners.code_scanning import (
 from runner.verification.budget import DEFAULT_VERIFY_WORKERS, ScanBudget, verify_concurrency
 from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
 from runner.verification.ground_truth import build_ground_truth
-from runner.sandbox.orchestrator import verify_findings_at_runtime
+from runner.sandbox.sast_runtime import verify_findings_at_runtime
 from runner.verification.pipeline import verify_finding
 
 logger = logging.getLogger(__name__)
