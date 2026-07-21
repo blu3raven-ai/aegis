@@ -136,15 +136,20 @@ services:
 
   runner:
     build: ./runner
-    # NOTE: this service intentionally does NOT carry the read-only / cap-drop
-    # hardening its siblings do. It runs a nested rootless-podman detonation
-    # sandbox that needs userns setup (newuidmap/newgidmap) and writable podman
-    # state; applying that hardening to the outer container breaks the sandbox.
-    # The untrusted-code path is hardened per detonation container instead.
+    # Runs a nested rootless-podman detonation sandbox, so it can't take the
+    # read-only / cap-drop hardening its siblings do. It stays non-privileged:
+    # detonating untrusted code in a privileged container would let an escape
+    # reach the host. Where the platform allows nested podman, runtime
+    # verification runs; where it doesn't (e.g. Docker Desktop's VM), the pass
+    # graceful-skips (finding stays needs_runtime_verification) and never fails
+    # a scan. For guaranteed detonation on a self-hosted runner, run the runner
+    # under a nesting-capable runtime (e.g. sysbox).
     environment:
       BACKEND_URL: http://aegis:3000
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       RUNNER_NAME: ${RUNNER_NAME:-runner}
+      CONTAINER_CLI: podman
+      RUNTIME_VERIFY: ${RUNTIME_VERIFY:-true}
       SCANNER_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_scanner
       SCANNER_WORKSPACE_VOLUME: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_runner-workspace
     deploy:
