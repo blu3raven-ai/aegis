@@ -9,6 +9,7 @@ ARG CDXCLI_VERSION=0.27.1
 ARG TRUFFLEHOG_VERSION=3.95.2
 ARG SEMGREP_RULES_SHA=311ca4e9ba59d700624539bf658e3d29b134ee77
 ARG NODE_MAJOR=22
+ARG RUNSC_RELEASE=20260714.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -45,6 +46,18 @@ RUN ARCH=$(uname -m) && \
         | tar -xz -C /usr/local/bin trufflehog && \
     chmod +x /usr/local/bin/trufflehog
 
+# gVisor runsc: daemon-free OCI runtime for the detonation tier that runs where
+# nested rootless podman cannot (Docker Desktop's LinuxKit VM blocks nested
+# multi-ID userns). sha512-verified from the pinned release. arch dir matches
+# uname -m (aarch64 / x86_64).
+RUN ARCH=$(uname -m) && \
+    BASE="https://storage.googleapis.com/gvisor/releases/release/${RUNSC_RELEASE}/${ARCH}" && \
+    curl -fsSL "${BASE}/runsc" -o /usr/local/bin/runsc && \
+    curl -fsSL "${BASE}/runsc.sha512" -o /tmp/runsc.sha512 && \
+    cd /usr/local/bin && \
+    printf '%s  runsc\n' "$(awk '{print $1}' /tmp/runsc.sha512)" | sha512sum -c - && \
+    chmod +x /usr/local/bin/runsc && rm -f /tmp/runsc.sha512
+
 # semgrep-rules — pinned SHA, security subset only, .git stripped
 RUN git clone --no-checkout --filter=blob:none \
         https://github.com/semgrep/semgrep-rules.git /opt/semgrep-rules && \
@@ -78,6 +91,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv export --frozen --no-dev --no-emit-project --output-file=/tmp/requirements.txt && \
     uv pip install --system --prefix=/install -r /tmp/requirements.txt
 
+# ─── Detonation base rootfs stages ──────────────────────────────────────────────
+# Baked, per-ecosystem base filesystems for the gVisor detonation tier. The tier
+# overlays the target repo at /app and runs the setup entry directly against these
+# (no nested container build), so detonation works on hosts where nested podman
+# cannot build (Docker Desktop). Bases match the podman-tier detonation Dockerfiles.
+FROM node:20-slim AS rootfs-npm
+FROM python:3.12-slim AS rootfs-python
+FROM debian:stable-slim AS rootfs-shell
+
 # ─── Runtime stage ────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
@@ -92,7 +114,10 @@ ENV PYTHONUNBUFFERED=1 \
 #   libicu76   — cyclonedx-cli (.NET) globalization
 #   procps     — pgrep, used by the HEALTHCHECK below
 #   iptables   — the opt-in detonation honeypot uses this image as its own sidecar
-#                and needs iptables to redirect the target's outbound TCP
+#                and needs iptables to redirect the target's outbound TCP; the
+#                gVisor tier also uses it (with iproute2) to pin egress inside a
+#                throwaway network namespace
+#   iproute2   - `ip` for the gVisor tier's per-detonation network namespace
 # podman + rootless deps let the runner run the sandbox (runtime verification /
 # detonation) self-contained — nested rootless containers, no host Docker socket
 # to mount (that socket is host-root-equivalent, so avoiding it is a security win).
@@ -102,7 +127,7 @@ ENV PYTHONUNBUFFERED=1 \
 #                       the passt package; slirp4netns kept as a fallback)
 #   uidmap           — newuidmap/newgidmap for the user-namespace setup
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates git libstdc++6 libicu76 procps iptables \
+        ca-certificates git libstdc++6 libicu76 procps iptables iproute2 \
         podman crun fuse-overlayfs passt slirp4netns uidmap \
     && rm -rf /var/lib/apt/lists/*
 
@@ -122,15 +147,21 @@ RUN mkdir -p /etc/containers && \
 # (loaded into the embedded podman at startup, no registry pull). Enabling
 # detonation then needs only DETONATE=1.
 
-# Scanner CLIs
+# Scanner CLIs + gVisor runsc (daemon-free detonation runtime)
 COPY --from=builder \
     /usr/local/bin/syft \
     /usr/local/bin/cyclonedx \
     /usr/local/bin/trufflehog \
+    /usr/local/bin/runsc \
     /usr/local/bin/
 
 # Semgrep rules bundle
 COPY --from=builder /opt/semgrep-rules /opt/semgrep-rules
+
+# Baked detonation base rootfs, keyed by ecosystem (see runner/sandbox/gvisor.py).
+COPY --from=rootfs-npm / /opt/aegis-rootfs/npm/
+COPY --from=rootfs-python / /opt/aegis-rootfs/python/
+COPY --from=rootfs-shell / /opt/aegis-rootfs/shell/
 
 # Node.js runtime for cdxgen
 COPY --from=builder /usr/bin/node /usr/bin/node

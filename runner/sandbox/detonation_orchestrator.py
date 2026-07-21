@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import tempfile
 import threading
 from collections.abc import Callable
@@ -27,6 +28,7 @@ from runner.sandbox.build import BuildRecipe, build_image_args
 from runner.sandbox.detonation import detonate
 from runner.sandbox.detonation_verdict import DetonationVerdict, verdict_from_egress
 from runner.sandbox.entry import DetonationEntry, detect_entry
+from runner.sandbox.gvisor import detonate_gvisor, prepare_rootfs, runsc_available
 from runner.sandbox.harness import container_cli, docker_cli_env, runtime_available
 from runner.sandbox.triage import TriageResult, triage_target
 from runner.scanners._subprocess import run_tool
@@ -47,12 +49,17 @@ _DOCKERFILES = {
         "FROM node:20-slim\nWORKDIR /app\nCOPY . /app\n"
         "RUN npm install --ignore-scripts --no-audit --no-fund || true\n"
     ),
-    "shell": "FROM debian:stable-slim\nWORKDIR /app\nCOPY . /app\n",
+    # debian-slim carries make + sh; used for both setup scripts and Makefiles.
+    "shell": "FROM debian:stable-slim\nWORKDIR /app\nRUN apt-get update && apt-get install -y --no-install-recommends make || true\nCOPY . /app\n",
+    "python": "FROM python:3.12-slim\nWORKDIR /app\nCOPY . /app\n",
 }
 
 
 def _enabled(get) -> bool:
-    return (get("DETONATE") or "").strip().lower() in ("1", "true", "yes", "on")
+    # One sandbox switch: RUNTIME_VERIFY turns on the whole runtime pass (probe +
+    # detonate). DETONATE kept as a back-compat alias.
+    on = ("1", "true", "yes", "on")
+    return (get("RUNTIME_VERIFY") or get("DETONATE") or "").strip().lower() in on
 
 
 def dockerfile_body(ecosystem: str) -> str | None:
@@ -135,33 +142,89 @@ def detonate_repo(
         return []
     if not _enabled(env.get):
         return [_recommend_finding(triage)]
-    if not runtime_available():
-        return []
     # worth_detonating guarantees a runnable entry.
     body = dockerfile_body(entry.ecosystem)
     if body is None:
         return []
 
-    # Past every triage/consent/runtime gate — real execution (build + run) starts
-    # now and can take minutes. Signal it so the progress UI isn't silent here.
-    if on_detonation_start is not None:
-        on_detonation_start()
+    started = _StartOnce(on_detonation_start)
 
+    # Tier 1: nested podman/docker (native Linux). A None result means the runtime
+    # is present but cannot actually detonate here (e.g. Docker Desktop's LinuxKit
+    # VM blocks nested userns), so the daemon-free gVisor tier gets a turn.
+    if runtime_available():
+        result = _detonate_via_container(entry, repo_root, body, run_id, cancel_event, started)
+        if result is not None:
+            return result
+
+    # Tier 2: standalone gVisor, daemon-free, runs where nested podman can't.
+    if runsc_available(cancel_event):
+        result = _detonate_via_gvisor(entry, repo_root, run_id, cancel_event, started)
+        if result is not None:
+            return result
+
+    return []
+
+
+class _StartOnce:
+    """Fire the detonation-start progress callback at most once across tiers."""
+
+    def __init__(self, cb: "Callable[[], None] | None") -> None:
+        self._cb = cb
+        self._fired = False
+
+    def __call__(self) -> None:
+        if self._cb is not None and not self._fired:
+            self._fired = True
+            self._cb()
+
+
+def _verdict_findings(entry: DetonationEntry, events: list) -> list[dict]:
+    verdict = verdict_from_egress(events, entry_source=entry.source)
+    return [_finding(entry, verdict)] if verdict.malicious else []
+
+
+def _detonate_via_container(
+    entry: DetonationEntry, repo_root: str, body: str, run_id: str,
+    cancel_event: threading.Event | None, started: _StartOnce,
+) -> list[dict] | None:
+    """Build + detonate with the nested container runtime. None means this tier
+    could not detonate (build or runtime unavailable); the caller tries the next tier."""
+    started()  # real execution (build + run) starts now and can take minutes
     tag = f"aegis-deto-{run_id}:latest"
     fd, path = tempfile.mkstemp(prefix="aegis-deto-", suffix=".Dockerfile")
     try:
         with os.fdopen(fd, "w") as fh:
             fh.write(body)
         if not _build(BuildRecipe(dockerfile=path, context=repo_root), tag, cancel_event):
-            return []
+            return None
     finally:
         try:
             os.unlink(path)
         except OSError:
             pass
-
     events = detonate(tag, entry.cmd, run_id=run_id, cancel_event=cancel_event)
-    if events is None:  # setup failure inside detonate → skip
-        return []
-    verdict = verdict_from_egress(events, entry_source=entry.source)
-    return [_finding(entry, verdict)] if verdict.malicious else []
+    if events is None:  # runtime present but couldn't detonate, try next tier
+        return None
+    return _verdict_findings(entry, events)
+
+
+def _detonate_via_gvisor(
+    entry: DetonationEntry, repo_root: str, run_id: str,
+    cancel_event: threading.Event | None, started: _StartOnce,
+) -> list[dict] | None:
+    """Detonate under standalone gVisor. None means no baked base rootfs for this
+    ecosystem or the runtime couldn't detonate; the caller graceful-skips."""
+    rootfs = prepare_rootfs(entry.ecosystem, repo_root, run_id)
+    if rootfs is None:
+        return None
+    started()
+    try:
+        events = detonate_gvisor(
+            rootfs, entry.cmd, run_id=run_id, cwd="/app", cancel_event=cancel_event,
+        )
+    finally:
+        shutil.rmtree(rootfs, ignore_errors=True)
+    if events is None:
+        return None
+    return _verdict_findings(entry, events)

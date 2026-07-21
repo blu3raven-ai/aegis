@@ -25,6 +25,7 @@ def _run(env, *, static_hits=1, **over):
     # detonation-path stubs below then exercise the runtime flow.
     defaults = {
         "runtime_available": lambda: True,
+        "runsc_available": lambda cancel_event=None: False,
         "detect_entry": lambda root: _ENTRY,
         "_build": lambda recipe, tag, cancel_event: True,
         "detonate": lambda tag, cmd, *, run_id, cancel_event=None: [
@@ -38,7 +39,8 @@ def _run(env, *, static_hits=1, **over):
 def test_dockerfile_body_per_ecosystem():
     assert "--ignore-scripts" in orch.dockerfile_body("npm")
     assert "debian" in orch.dockerfile_body("shell")
-    assert orch.dockerfile_body("python") is None
+    assert "python" in orch.dockerfile_body("python")
+    assert orch.dockerfile_body("golang") is None
 
 
 # --- triage gate ---
@@ -87,8 +89,8 @@ def test_no_runtime_is_noop_when_enabled():
 
 
 def test_unsupported_ecosystem_is_noop():
-    py = DetonationEntry(cmd=("python", "-m", "x"), ecosystem="python", source="x")
-    assert _run(_Env(DETONATE="1"), detect_entry=lambda root: py) == []
+    go = DetonationEntry(cmd=("go", "run", "x"), ecosystem="golang", source="x")
+    assert _run(_Env(DETONATE="1"), detect_entry=lambda root: go) == []
 
 
 def test_build_failure_is_noop():
@@ -131,3 +133,50 @@ def test_obfuscated_entry_body_triages_as_worth_when_off():
                           source="setup.sh", body="eval(atob('cGF5bG9hZA=='))")
     findings = _run(_Env(), static_hits=0, detect_entry=lambda root: obf)
     assert len(findings) == 1 and findings[0]["check_id"] == "AGENT_DETONATION_RECOMMENDED"
+
+
+# --- tier fallback: standalone gVisor when nested container can't detonate ---
+
+def test_gvisor_tier_used_when_container_runtime_absent():
+    # No podman/docker, but gVisor is available, so detonate via the gVisor tier.
+    findings = _run(
+        _Env(DETONATE="1"),
+        runtime_available=lambda: False,
+        runsc_available=lambda cancel_event=None: True,
+        prepare_rootfs=lambda eco, root, rid: "/fake-rootfs",
+        detonate_gvisor=lambda rootfs, cmd, *, run_id, cwd, cancel_event=None: [
+            EgressEvent("dns", "_axiom-config.evil.example", "TXT")],
+    )
+    assert len(findings) == 1
+    assert findings[0]["check_id"] == "AGENT_DETONATION_EGRESS"
+
+
+def test_gvisor_tier_used_when_container_detonation_skips():
+    # Container runtime present but can't detonate (Docker Desktop), so fall to gVisor.
+    findings = _run(
+        _Env(DETONATE="1"),
+        detonate=lambda *a, **k: None,  # tier 1 skips
+        runsc_available=lambda cancel_event=None: True,
+        prepare_rootfs=lambda eco, root, rid: "/fake-rootfs",
+        detonate_gvisor=lambda rootfs, cmd, *, run_id, cwd, cancel_event=None: [
+            EgressEvent("dns", "beacon.evil.example", "A")],
+    )
+    assert len(findings) == 1 and findings[0]["check_id"] == "AGENT_DETONATION_EGRESS"
+
+
+def test_gvisor_tier_skips_when_no_base_rootfs():
+    # gVisor available but no baked base for this ecosystem, so graceful-skip, no crash.
+    assert _run(
+        _Env(DETONATE="1"),
+        runtime_available=lambda: False,
+        runsc_available=lambda cancel_event=None: True,
+        prepare_rootfs=lambda eco, root, rid: None,
+    ) == []
+
+
+def test_runtime_verify_flag_also_enables_detonation():
+    # One sandbox switch: RUNTIME_VERIFY enables the whole runtime pass, so
+    # detonation fires under it too (not just the DETONATE alias).
+    findings = _run(_Env(RUNTIME_VERIFY="true"))
+    assert len(findings) == 1
+    assert findings[0]["check_id"] == "AGENT_DETONATION_EGRESS"
