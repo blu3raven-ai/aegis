@@ -191,6 +191,27 @@ def ingest_dependencies_from_minio(org: str, run_id: str, source_type: str | Non
 
     all_findings: list[dict[str, Any]] = run_db(_match) if assets else []
 
+    # SBOMs were indexed but nothing matched — most often the OSV advisory
+    # mirror is empty (fresh install / post-wipe) so there is nothing to match
+    # against. Surface it so the operator knows to refresh enrichment rather
+    # than reading a silent 0 as "no vulnerable dependencies".
+    if assets and not all_findings:
+        async def _osv_count(session):
+            from src.db.models import OsvAdvisory
+            from sqlalchemy import func, select
+            return (await session.execute(select(func.count()).select_from(OsvAdvisory))).scalar() or 0
+        try:
+            osv_total = run_db(_osv_count)
+        except Exception:
+            osv_total = -1
+        if osv_total == 0:
+            logger.warning(
+                "dependency ingest for %s/%s produced 0 findings — the OSV advisory "
+                "mirror is empty. Refresh enrichment (OSV/EPSS/KEV) to populate "
+                "dependency findings.",
+                org, run_id,
+            )
+
     deps_config = read_app_config().get("tools", {}).get("dependencies", {})
     try:
         all_findings = enrich_findings_with_advisory_data(

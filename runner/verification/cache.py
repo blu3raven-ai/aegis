@@ -17,16 +17,24 @@ logger = logging.getLogger(__name__)
 # multi-megabyte key; the leading window is what determines the verdict anyway.
 _MAX_WINDOW = 4000
 
+# Bumped whenever the hunter prompt or schema changes in a way that should
+# re-verify existing findings (e.g. feeding reachability/call_chain). Without
+# this, the cache replays the prior verdict for unchanged code and a prompt
+# improvement never reaches findings that were already verified.
+_PROMPT_VERSION = "v2:reachability-callchain"
+
 
 def verification_input_hash(finding: dict[str, Any]) -> str:
     """Stable content hash of a finding's verification input (rule + location +
-    code window + reachability). Handles both SAST and IaC finding shapes."""
+    code window + reachability + prompt version). Handles both SAST and IaC
+    finding shapes. The prompt version busts the cache when the hunter prompt
+    changes so existing findings re-verify against the new prompt."""
     rule = str(finding.get("rule_id") or finding.get("check_id") or "")
     path = str(finding.get("file_path") or finding.get("file") or "")
     line = str(finding.get("start_line") or finding.get("line") or "")
     reach = str(finding.get("reachability") or "")
     window = str(finding.get("code_window") or finding.get("snippet") or "")[:_MAX_WINDOW]
-    parts = f"{rule}|{path}|{line}|{reach}|{window}"
+    parts = f"{_PROMPT_VERSION}|{rule}|{path}|{line}|{reach}|{window}"
     return hashlib.sha256(parts.encode("utf-8", "replace")).hexdigest()
 
 

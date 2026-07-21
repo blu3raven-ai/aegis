@@ -120,7 +120,7 @@ def fetch_epss_scores(timeout: float = 60.0) -> list[dict[str, Any]]:
     Individual rows that cannot be parsed are skipped with a WARNING log so a
     single malformed row never aborts the full refresh.
     """
-    with httpx.Client(timeout=timeout) as client:
+    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
         resp = client.get(EPSS_CSV_GZ_URL)
         resp.raise_for_status()
         compressed = resp.content

@@ -1082,8 +1082,8 @@ class KevEntry(Base):
     __tablename__ = "kev_entries"
 
     cve_id: Mapped[str] = mapped_column(String(20), primary_key=True)
-    vendor_project: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    product: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    vendor_project: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    product: Mapped[str | None] = mapped_column(String(255), nullable=True)
     vulnerability_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     date_added: Mapped[date | None] = mapped_column(Date(), nullable=True, index=True)
     short_description: Mapped[str | None] = mapped_column(Text, nullable=True)
