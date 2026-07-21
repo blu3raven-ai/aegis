@@ -151,7 +151,11 @@ def verify_finding(
         )
     )
 
-    reachability = (finding.get("detail") or {}).get("reachability") or None
+    # Reachability lives at the top level of the runner finding (set by the
+    # code_scanning normalizer from the call-graph analysis). Reading it from
+    # `detail` silently dropped it, so the hunter ran with no reachability
+    # signal and had to re-infer reachability from the code window alone.
+    reachability = finding.get("reachability") or (finding.get("detail") or {}).get("reachability") or None
 
     # The tier the rest of the verification runs on; escalation promotes it.
     active_llm = llm

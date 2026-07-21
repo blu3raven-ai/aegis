@@ -107,6 +107,23 @@ def hunter_user_message(
         elif reachability.get("reason"):
             extra = f" ({reachability['reason']})"
         parts.append(f"\nReachability: {verdict}{extra}\n")
+        # The static call-graph already traced the source-to-sink path; feed
+        # it to the hunter so it can anchor the exploit chain on the real hops
+        # instead of re-inferring them from the code window alone. Snippets are
+        # capped per hop so a deep chain can't blow the context budget.
+        chain = reachability.get("call_chain") or []
+        if chain:
+            hops = []
+            for i, hop in enumerate(chain[:8], start=1):
+                fn = hop.get("function") or "?"
+                fl = f"{hop.get('file', '')}:{hop.get('line', '')}"
+                snip = (hop.get("snippet") or "").strip()
+                if snip:
+                    snip = snip.splitlines()[0][:160]
+                    hops.append(f"  [{i}] {fn} ({fl}): {snip}")
+                else:
+                    hops.append(f"  [{i}] {fn} ({fl})")
+            parts.append("\nCall chain (entry point to finding):\n" + "\n".join(hops) + "\n")
     return "".join(parts)
 
 
