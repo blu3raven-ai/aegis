@@ -40,5 +40,5 @@ test("unverified advisory + remediation render a blurred verification upsell", (
   // Blurred ghost behind a BYOK call to action; a retry when a key is configured.
   assert.match(src, /blur-\[3px\]/)
   assert.match(src, /Enable LLM verification/)
-  assert.match(src, /<ReverifyButton findingId=\{findingId\} \/>/)
+  assert.match(src, /<ReverifyButton findingId=\{findingId\} findingUpdatedAt=\{findingUpdatedAt\} \/>/)
 })
