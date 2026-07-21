@@ -59,10 +59,14 @@ _FETCH_PIPE_EXEC = re.compile(
     re.I,
 )
 # Reverse shells: the bash /dev/tcp trick, an interactive shell redirected to a
-# socket, netcat -e, and the mkfifo|nc pattern.
+# socket, netcat -e, the mkfifo|nc pattern, and the interpreter socket idiom
+# (dup2 a socket fd onto stdio, or a pty shell after a socket connect) used by
+# the Python/Perl/Ruby one-liners.
 _REVERSE_SHELL = re.compile(
     r"(?:/dev/(?:tcp|udp)/|bash\s+-i\b[^\n]*>&|\b(?:nc|ncat)\b[^\n]{0,60}\s-e\b|"
-    r"mkfifo\b[^\n]*\|\s*(?:nc|ncat)\b)",
+    r"mkfifo\b[^\n]*\|\s*(?:nc|ncat)\b|"
+    r"dup2\s*\(\s*[\w.]{1,40}\.fileno\s*\(\s*\)\s*,\s*[0-2]\b|"
+    r"socket\b[^\n]{0,200}\bconnect\b[^\n]{0,200}\bpty\.spawn\b)",
     re.I,
 )
 # Reads of credential stores / environment.

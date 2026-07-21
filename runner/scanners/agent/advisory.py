@@ -174,6 +174,19 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Remove the secret-reading code. If the skill already ran, rotate the "
         "exposed credentials.",
     ),
+    "AGENT_SKILL_REVERSE_SHELL": (
+        "A skill runs code that opens a reverse shell (a socket back to an attacker "
+        "or a shell redirected to /dev/tcp). Invoking the skill hands the attacker "
+        "interactive control of the developer's machine.",
+        "Remove the reverse-shell code and treat the skill as malicious. If it "
+        "already ran, assume the host is compromised and rotate credentials.",
+    ),
+    "AGENT_SKILL_BROAD_EXEC": (
+        "A skill's frontmatter grants itself unrestricted shell (allowed-tools with "
+        "Bash(*)), so invoking it can run any command with no per-action approval.",
+        "Scope allowed-tools to the specific commands the skill needs. Never grant "
+        "Bash(*) in a committed skill.",
+    ),
     # ── Auto-execution on open / install / git ───────────────────────────────
     "AGENT_AUTOEXEC_TASK": (
         "An editor task is set to run automatically when the folder opens, so merely "

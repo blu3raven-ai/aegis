@@ -5,11 +5,13 @@ can execute on demand, with the user's own privileges and network access. That
 execution path is where the in-the-wild malicious-skill campaigns actually lived
 — the SKILL.md looks benign while a bundled setup script does the damage.
 
-The SKILL.md prose itself is already covered by the unicode and injection
-detectors; this module audits the *executable* bundle: any script sitting under
-a skill directory is checked for remote-fetch-to-shell, credential/secret reads,
-and obfuscated (decode-then-exec) payloads. Only high-signal combinations are
-flagged — "the script uses curl" is not enough on its own.
+This module audits the *executable* bundle: sibling scripts under a skill
+directory AND the fenced code blocks in the SKILL.md itself (the commands the
+agent runs on invocation), checked for remote-fetch-to-shell, reverse shells,
+credential/secret reads, and obfuscated (decode-then-exec) payloads, plus a
+broad Bash(*) grant in the frontmatter allowed-tools. Prose injection is covered
+separately by the unicode and injection detectors. Only high-signal combinations
+are flagged; "the script uses curl" is not enough on its own.
 """
 from __future__ import annotations
 
@@ -20,7 +22,9 @@ import re
 from pathlib import Path
 
 from runner.scanners.agent.config_keys import (
+    _BROAD_BASH,
     _PIPE_TO_SHELL,
+    _REVERSE_SHELL,
     _SHELL_SUBSHELL_FETCH,
     _SECRET_READ,
 )
@@ -30,6 +34,8 @@ logger = logging.getLogger(__name__)
 _SKILL_FETCH = "AGENT_SKILL_SCRIPT_FETCH"
 _SKILL_SECRET = "AGENT_SKILL_SECRET_READ"
 _SKILL_OBFUSCATED = "AGENT_SKILL_OBFUSCATED_EXEC"
+_SKILL_REVERSE_SHELL = "AGENT_SKILL_REVERSE_SHELL"
+_SKILL_BROAD_EXEC = "AGENT_SKILL_BROAD_EXEC"
 
 _GUIDELINE = (
     "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
@@ -100,6 +106,13 @@ def _audit_script(rel_path: str, text: str) -> list[dict]:
             f"Skill script reads credentials/environment in {rel_path}",
             rel_path, _line_of(text, m.start()), m.group(0),
         ))
+    m = _REVERSE_SHELL.search(text)
+    if m:
+        findings.append(_finding(
+            _SKILL_REVERSE_SHELL, "critical",
+            f"Skill script opens a reverse shell in {rel_path}",
+            rel_path, _line_of(text, m.start()), m.group(0),
+        ))
     return findings
 
 
@@ -123,6 +136,49 @@ def _iter_scripts(bundle_dir: Path):
             yield path
 
 
+_CODE_BLOCK = re.compile(r"```[^\n]*\n(.*?)```", re.S)
+
+
+def _iter_md_code_blocks(text: str):
+    """Yield (block_body, start_line) for every fenced code block. A skill's own
+    SKILL.md carries the commands the agent runs on invocation, so its code
+    blocks get the same command audit as a sibling script file."""
+    for m in _CODE_BLOCK.finditer(text):
+        yield m.group(1), _line_of(text, m.start(1))
+
+
+def _frontmatter(text: str) -> str:
+    if not text.startswith("---"):
+        return ""
+    end = text.find("\n---", 3)
+    return text[:end] if end != -1 else ""
+
+
+def _audit_skill_md(rel_path: str, text: str) -> list[dict]:
+    """Audit the SKILL.md itself: fenced code blocks (same checks as a script)
+    plus a broad ``Bash(*)`` grant in the frontmatter allowed-tools."""
+    findings: list[dict] = []
+    fm = _frontmatter(text)
+    m = re.search(r"allowed[-_]tools\s*:\s*(.*)", fm, re.I)
+    if m:
+        # Inline CSV value on the key line, plus any following YAML "- item" lines.
+        tokens = re.split(r"[,\[\]]", m.group(1)) + re.findall(r"^\s*-\s*(.+)$", fm[m.end():], re.M)
+        for tok in tokens:
+            t = tok.strip().strip("'\" ")
+            if _BROAD_BASH.match(t):
+                findings.append(_finding(
+                    _SKILL_BROAD_EXEC, "high",
+                    f"Skill frontmatter grants unrestricted shell (allowed-tools: {t}) in {rel_path}",
+                    rel_path, _line_of(text, m.start()), t,
+                ))
+                break
+    for body, start_line in _iter_md_code_blocks(text):
+        for f in _audit_script(rel_path, body):
+            f["line"] = f["line"] + start_line - 1
+            findings.append(f)
+    return findings
+
+
 def scan_skill_bundles(repo_root: str) -> list[dict]:
     """Audit the executable bundle under every SKILL.md in the repo."""
     root = Path(repo_root)
@@ -136,6 +192,12 @@ def scan_skill_bundles(repo_root: str) -> list[dict]:
         if bundle_dir in seen:
             continue
         seen.add(bundle_dir)
+        skill_md = bundle_dir / "SKILL.md"
+        try:
+            md_text = skill_md.read_text(encoding="utf-8")
+            findings.extend(_audit_skill_md(skill_md.relative_to(root).as_posix(), md_text))
+        except (UnicodeDecodeError, OSError, ValueError):
+            pass
         for script in _iter_scripts(bundle_dir):
             try:
                 text = script.read_text(encoding="utf-8")
