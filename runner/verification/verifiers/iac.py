@@ -127,6 +127,12 @@ def verify_iac_finding(
     line = int(finding.get("line", 1) or 1)
     resource_excerpt = _read_resource_excerpt(repo_root, file_path, line)
     sibling_excerpt = _collect_sibling_excerpt(repo_root, file_path)
+    # The parser already attached a code_window read from source at scan time;
+    # fall back to it when the disk excerpts came back empty (repo_root not
+    # resolving, file moved) so the hunter isn't handed "-" for the resource
+    # block and forced to guess.
+    if not resource_excerpt:
+        resource_excerpt = finding.get("code_window") or ""
 
     hunter_messages = [
         {"role": "system", "content": HUNTER_SYSTEM_IAC},
