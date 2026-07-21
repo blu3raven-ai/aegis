@@ -138,16 +138,25 @@ class LlmClient:
         prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
-        # Retry on transient failures: 5xx and empty-content 200s. The latter
-        # happens when the model returns nothing under concurrent load — a
-        # short overload window that a backoff clears. The immediate repair
-        # retry in chat_json hits the same window; backoff here lets it pass.
-        # 429 is surfaced to the caller (it carries a Retry-After); 4xx other
-        # than 429 is a real error, not retried.
+        # Retry on transient failures: 5xx, transport timeouts, and
+        # empty-content 200s. The latter happens when the model returns nothing
+        # under concurrent load; a short overload window that a backoff
+        # clears. The immediate repair retry in chat_json hits the same window;
+        # backoff here lets it pass. 429 is surfaced to the caller (it carries
+        # a Retry-After); 4xx other than 429 is a real error, not retried.
         last_error: Exception | None = None
         for attempt in range(3):
-            with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
-                resp = client.post(url, json=payload, headers=headers)
+            try:
+                with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
+                    resp = client.post(url, json=payload, headers=headers)
+            except httpx.TimeoutException as e:
+                # Slow endpoint under load; back off and retry before surfacing
+                # as a hard llm_error that leaves the finding unverified.
+                last_error = LlmTransientError(f"llm timeout: {type(e).__name__}")
+                if attempt < 2:
+                    time.sleep(2 ** attempt + random.uniform(0, 1))
+                    continue
+                raise last_error
 
             if resp.status_code in (401, 403):
                 raise LlmAuthError(f"llm auth failed: {resp.status_code}")
@@ -177,7 +186,7 @@ class LlmClient:
 
             content = _strip_fences(content)
             if not content and attempt < 2:
-                # 200 with empty content — transient overload. Back off and
+                # 200 with empty content; transient overload. Back off and
                 # retry before accepting the empty response (which falls
                 # through to chat_json's repair / needs_verify fallback).
                 # Jittered so concurrent workers don't retry in lockstep.

@@ -16,6 +16,7 @@ interface RunProgress {
   currentClassifying?: string | null
   ingestedRepos?: number
   expectedIngest?: number
+  verifyingFindings?: number
 }
 
 interface ScanRunningBannerProps {
@@ -77,6 +78,8 @@ const DEFAULT_STAGES: Record<string, string> = {
   queued: "Queued",
   scanning: "Scanning",
   detonating: "Detonating in sandbox",
+  normalizing: "Normalizing results",
+  verifying: "Verifying findings",
   ingesting: "Saving results",
   classifying: "Analysing findings",
 }
@@ -186,9 +189,12 @@ export function ScanRunningBanner({
     : `Scanning in progress for ${organization}`
 
   const recentLogLines = (logTail ?? []).slice(-4)
-  // No meaningful percent yet while queued or spinning up — show an
-  // indeterminate bar instead of a misleading full bar at 0%.
-  const isIndeterminate = isActive && (isQueued || isInitializing)
+  // No meaningful percent yet while queued, spinning up, or in the LLM
+  // verification phase (generation time varies per finding and there is no
+  // smooth percent to report). Show an indeterminate bar instead of one
+  // frozen at the pre-verify percentage.
+  const isVerifying = progress?.stage === "verifying"
+  const isIndeterminate = isActive && (isQueued || isInitializing || isVerifying)
   const progressFillWidth = Math.min(100, isActive ? Math.max(3, displayProgress) : displayProgress)
   const barColor = isFailed
     ? "bg-[var(--color-severity-critical)]"
@@ -293,6 +299,11 @@ export function ScanRunningBanner({
                 Running untrusted code in an isolated sandbox. This can take a few minutes.
               </p>
             )}
+            {isVerifying && (
+              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                LLM verification is running. Generation time varies per finding and can take several minutes. You can keep working; findings update as each is verified.
+              </p>
+            )}
           </div>
           <div className="-mr-1 -mt-1 flex shrink-0 items-center">
             {isActive && (
@@ -358,6 +369,14 @@ export function ScanRunningBanner({
             {currentClassifying ? (
               <span>
                 Classified <span className="font-mono text-[var(--color-text-primary)]">{currentClassifying}</span>
+              </span>
+            ) : isVerifying && progress?.verifyingFindings ? (
+              <span>
+                Verifying{" "}
+                <span className="tabular-nums text-[var(--color-text-primary)]">
+                  {progress.verifyingFindings}
+                </span>{" "}
+                finding{progress.verifyingFindings === 1 ? "" : "s"}
               </span>
             ) : progress?.stage === "ingesting" && progress?.expectedIngest ? (
               <span>
