@@ -152,6 +152,9 @@ services:
       BACKEND_URL: http://aegis:3000
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       RUNNER_NAME: ${RUNNER_NAME:-runner}
+      # On by default; runs the runtime-verify/detonation pass where the platform
+      # can sandbox, graceful-skips where it can't. Set false to disable.
+      RUNTIME_VERIFY: ${RUNTIME_VERIFY:-true}
       SCANNER_DOCKER_NETWORK: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_scanner
       SCANNER_WORKSPACE_VOLUME: ${COMPOSE_PROJECT_NAME:-vulnerability-management-portal}_runner-workspace
     deploy:
