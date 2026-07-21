@@ -92,6 +92,21 @@ def test_hunter_no_chain_yields_possible(tmp_path):
     assert len(llm.calls) == 1  # skeptic skipped
 
 
+def test_hunter_falls_back_to_code_window_when_disk_excerpt_empty(tmp_path):
+    # The parser attaches a code_window read from source at scan time. When the
+    # disk excerpts come back empty (repo_root no longer holds the file), the
+    # hunter must still see the resource block via the fallback instead of "-".
+    finding = _seed_module(tmp_path)
+    finding["code_window"] = 'resource "aws_s3_bucket" "data" {\n  bucket = "x"\n}'
+    empty_repo = tmp_path / "empty"
+    empty_repo.mkdir()
+    llm = _StubLlm([_hunter_chain_json("", [])])
+
+    verify_iac_finding(finding=finding, repo_root=str(empty_repo), llm=llm)
+    prompt = llm.calls[0][1]["content"]
+    assert "aws_s3_bucket" in prompt  # code_window landed in the resource block
+
+
 def test_hunter_confirms_then_skeptic_disagrees_yields_confirmed(tmp_path):
     finding = _seed_module(tmp_path)
     llm = _StubLlm([
