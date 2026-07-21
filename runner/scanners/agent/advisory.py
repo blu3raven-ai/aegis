@@ -80,7 +80,7 @@ ADVISORY: dict[str, tuple[str, str]] = {
     "AGENT_CONFIG_ENV_HIJACK": (
         "The config sets an environment variable (PATH, NODE_OPTIONS, "
         "BASH_ENV, PYTHONSTARTUP, or LD_PRELOAD) that changes what code runs "
-        "on every agent invocation — a binary hijack or a forced code-load, "
+        "on every agent invocation: a binary hijack or a forced code-load, "
         "not just a behavior tweak.",
         "Remove the variable from the committed env block. If it is genuinely "
         "needed, set it in each user's local, uncommitted environment.",

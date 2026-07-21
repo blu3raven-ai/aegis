@@ -265,7 +265,7 @@ def _scan_cargo_buildrs(rel_path: str, text: str) -> list[dict]:
 
 def _scan_cargo_config(rel_path: str, text: str) -> list[dict]:
     """`.cargo/config.toml` [build] rustc-wrapper or [target.*] runner silently
-    hijacks the compiler/test runner for every `cargo build`/`test`/`run` —
+    hijacks the compiler/test runner for every `cargo build`/`test`/`run`,
     dangerous by presence alone, like core.hooksPath."""
     import tomllib
     try:
@@ -374,13 +374,13 @@ def _scan_mise(rel_path: str, text: str) -> list[dict]:
 
 
 def _scan_precommit(rel_path: str, text: str) -> list[dict]:
-    """Only the ``repo: local`` hook shape is checked — a remote ``repo:`` url
+    """Only the ``repo: local`` hook shape is checked; a remote ``repo:`` url
     is the overwhelmingly common, legitimate pre-commit pattern and isn't
     flagged to avoid firing on nearly every real config."""
     import yaml
     try:
         data = yaml.safe_load(text)
-    except Exception:  # noqa: BLE001 — malformed YAML → nothing to inspect
+    except Exception:  # noqa: BLE001 - malformed YAML, nothing to inspect
         return []
     if not isinstance(data, dict):
         return []

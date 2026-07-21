@@ -90,7 +90,7 @@ _LOCAL_CMD_PATH = re.compile(r"^\.{1,2}/\S{1,256}$")
 _BROAD_BASH = re.compile(r"^Bash(\(\s*:?\*\s*\))?$")
 
 # `${VAR}` interpolation where VAR looks like a host secret (token/key/secret),
-# handed to a third-party MCP server's env — the server receives the live
+# handed to a third-party MCP server's env: the server receives the live
 # credential value on every launch.
 _ENV_SECRET_INTERP = re.compile(r"\$\{[A-Za-z0-9_]{0,64}(?:TOKEN|SECRET|KEY)[A-Za-z0-9_]{0,64}\}", re.I)
 
@@ -219,8 +219,8 @@ def _walk_strings(node: Any):
             yield from _walk_strings(v)
 
 
-# Claude Code hook events that fire on their own — no tool call, no user
-# action — so a dangerous command here has no approval gate at all, unlike
+# Claude Code hook events that fire on their own: no tool call, no user
+# action, so a dangerous command here has no approval gate at all, unlike
 # PreToolUse/PostToolUse which at least run alongside a tool invocation.
 _AUTORUN_HOOK_EVENTS = frozenset({
     "SessionStart", "UserPromptSubmit", "Stop", "SubagentStop",
@@ -693,7 +693,7 @@ _GEMINI_SHELL_TOKEN = re.compile(r"!\{[^{}\n]{0,256}\}")
 
 
 def _check_gemini_command(data: dict, rel_path: str, text: str) -> list[dict]:
-    """A Gemini CLI custom command's ``prompt`` can embed ``!{shell command}`` —
+    """A Gemini CLI custom command's ``prompt`` can embed ``!{shell command}``,
     executed when the slash command runs."""
     prompt = data.get("prompt")
     if not isinstance(prompt, str):
@@ -713,7 +713,7 @@ def _check_gemini_command(data: dict, rel_path: str, text: str) -> list[dict]:
 
 def _check_zed_tasks(data: list, rel_path: str, text: str) -> list[dict]:
     """Zed's ``tasks.json`` is a JSON array of {command, args} the developer
-    triggers from the command palette — a dangerous committed command is a
+    triggers from the command palette, so a dangerous committed command is a
     one-click-away foothold."""
     findings: list[dict] = []
     for task in data:

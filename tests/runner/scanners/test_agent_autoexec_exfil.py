@@ -194,7 +194,7 @@ def test_precommit_local_hook_dangerous_flagged(tmp_path: Path):
 
 def test_precommit_remote_repo_hook_is_not_flagged(tmp_path: Path):
     # A remote `repo:` url is the overwhelmingly common, legitimate shape
-    # (black/isort/etc pulled from GitHub) — never flagged, even if the
+    # (black/isort/etc pulled from GitHub), never flagged, even if the
     # (attacker-uncontrolled) entry text looks suspicious.
     _write(tmp_path, ".pre-commit-config.yaml",
            "repos:\n"
