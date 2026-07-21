@@ -547,6 +547,14 @@ def _load_yaml(text: str) -> Any | None:
         return None
 
 
+def _load_toml(text: str) -> Any | None:
+    import tomllib
+    try:
+        return tomllib.loads(text)
+    except (tomllib.TOMLDecodeError, ValueError):
+        return None
+
+
 def _check_cursor_permissions(data: dict, rel_path: str, text: str) -> list[dict]:
     """`.cursor/permissions.json` is committed per-repo and CONCATENATED into the
     user's own allowlist, so a repo can only widen what auto-runs — the injection
@@ -653,12 +661,94 @@ def _check_amazonq_agent(data: dict, rel_path: str, text: str) -> list[dict]:
     return findings
 
 
+def _check_codex_config(data: dict, rel_path: str, text: str) -> list[dict]:
+    """Codex CLI's ``config.toml`` unattended-execution and notify-hook keys."""
+    findings: list[dict] = []
+    if data.get("sandbox_mode") == "danger-full-access":
+        findings.append(_finding(
+            _BYPASS, "critical",
+            f"Codex config disables the sandbox via sandbox_mode = \"danger-full-access\" in {rel_path}",
+            rel_path, _line_of(text, "danger-full-access"), _BYPASS, {},
+        ))
+    if data.get("approval_policy") == "never":
+        findings.append(_finding(
+            _AUTO_APPROVE, "high",
+            f"Codex config auto-approves every action via approval_policy = \"never\" in {rel_path}",
+            rel_path, _line_of(text, "approval_policy"), _AUTO_APPROVE, {},
+        ))
+    notify = data.get("notify")
+    if isinstance(notify, list) and notify:
+        cmd = " ".join(str(p) for p in notify)
+        sev = "critical" if _cmd_is_dangerous(cmd) else "high"
+        findings.append(_finding(
+            _SPAWN_HOOK, sev,
+            f"Codex config runs a command automatically on every notification in {rel_path}",
+            rel_path, _line_of(text, "notify"), _SPAWN_HOOK,
+            {"command": cmd[:200]},
+        ))
+    return findings
+
+
+_GEMINI_SHELL_TOKEN = re.compile(r"!\{[^{}\n]{0,256}\}")
+
+
+def _check_gemini_command(data: dict, rel_path: str, text: str) -> list[dict]:
+    """A Gemini CLI custom command's ``prompt`` can embed ``!{shell command}`` —
+    executed when the slash command runs."""
+    prompt = data.get("prompt")
+    if not isinstance(prompt, str):
+        return []
+    findings: list[dict] = []
+    for m in _GEMINI_SHELL_TOKEN.finditer(prompt):
+        shell_cmd = m.group(0)[2:-1]
+        if _cmd_is_dangerous(shell_cmd):
+            findings.append(_finding(
+                _SPAWN_HOOK, "critical",
+                f"Gemini custom command embeds a dangerous shell token in {rel_path}",
+                rel_path, _line_of(text, m.group(0)[:40]), _SPAWN_HOOK,
+                {"command": shell_cmd[:200]},
+            ))
+    return findings
+
+
+def _check_zed_tasks(data: list, rel_path: str, text: str) -> list[dict]:
+    """Zed's ``tasks.json`` is a JSON array of {command, args} the developer
+    triggers from the command palette — a dangerous committed command is a
+    one-click-away foothold."""
+    findings: list[dict] = []
+    for task in data:
+        if not isinstance(task, dict):
+            continue
+        cmd = task.get("command")
+        if not isinstance(cmd, str) or not cmd.strip():
+            continue
+        args = task.get("args")
+        joined = cmd + (" " + " ".join(str(a) for a in args) if isinstance(args, list) else "")
+        if _cmd_is_dangerous(joined):
+            findings.append(_finding(
+                _SPAWN_HOOK, "high",
+                f"Zed task '{task.get('label', cmd)[:60]}' runs a dangerous command in {rel_path}",
+                rel_path, _line_of(text, cmd[:40]), _SPAWN_HOOK,
+                {"command": joined[:200]},
+            ))
+    return findings
+
+
 def scan_config(rel_path: str, text: str) -> list[dict]:
     """Inspect one agent config file; return findings for dangerous constructs."""
     base = rel_path.rsplit("/", 1)[-1]
     if base == ".aider.conf.yml":
         data = _load_yaml(text)
         return _check_aider(data, rel_path, text) if isinstance(data, dict) else []
+    if rel_path == ".codex/config.toml":
+        data = _load_toml(text)
+        return _check_codex_config(data, rel_path, text) if isinstance(data, dict) else []
+    if rel_path.startswith(".gemini/commands/") and base.endswith(".toml"):
+        data = _load_toml(text)
+        return _check_gemini_command(data, rel_path, text) if isinstance(data, dict) else []
+    if rel_path == ".zed/tasks.json":
+        data = _load(text)
+        return _check_zed_tasks(data, rel_path, text) if isinstance(data, list) else []
     data = _load(text)
     if not isinstance(data, dict):
         return []

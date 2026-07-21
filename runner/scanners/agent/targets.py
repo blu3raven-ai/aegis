@@ -24,6 +24,8 @@ _INSTRUCTION_BASENAMES = frozenset({
     "copilot-instructions.md",
     "SKILL.md",
     ".mcp.json",
+    ".roomodes",
+    ".pre-commit-config.yaml",
 })
 
 # Directory trees whose contents an agent loads (settings, hooks, commands,
@@ -39,10 +41,19 @@ _INSTRUCTION_PATHS = frozenset({
     ".github/copilot-instructions.md",
     ".vscode/settings.json",
     ".vscode/mcp.json",
+    ".vscode/extensions.json",
+    ".vscode/launch.json",
     ".cursor/mcp.json",
     ".cursor/permissions.json",
+    ".cursor/cli.json",
+    ".cursor/environment.json",
     ".gemini/settings.json",
     ".amazonq/mcp.json",
+    ".codex/config.toml",
+    ".continue/config.yaml",
+    ".continue/config.json",
+    ".zed/tasks.json",
+    ".zed/debug.json",
 })
 
 # Directories never worth walking — vendored code, build output, VCS internals.
@@ -77,6 +88,10 @@ def is_agent_instruction_file(rel_path: str) -> bool:
     if rel_path.startswith(".cursor/rules/") and suffix == ".mdc":
         return True
     if rel_path.startswith(".amazonq/cli-agents/") and suffix == ".json":
+        return True
+    if rel_path.startswith(".windsurf/workflows/") and suffix == ".md":
+        return True
+    if rel_path.startswith(".gemini/commands/") and suffix == ".toml":
         return True
     return False
 
