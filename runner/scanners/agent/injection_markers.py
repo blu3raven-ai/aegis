@@ -155,7 +155,7 @@ _PROSE_BASENAMES = frozenset({
 def scan_injection(rel_path: str, text: str) -> list[dict]:
     """Dispatch a file to the marker detector appropriate for its type."""
     base = rel_path.rsplit("/", 1)[-1]
-    if base == ".mcp.json" or rel_path == ".vscode/mcp.json":
+    if base in (".mcp.json", "mcp.json"):  # .mcp.json, .vscode/.cursor/.amazonq/mcp.json
         return scan_mcp(rel_path, text)
     if base in _PROSE_BASENAMES or base.endswith(".md") or base.endswith(".mdc"):
         return scan_prose(rel_path, text)
