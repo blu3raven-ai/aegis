@@ -173,6 +173,13 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Delete the hook and never source git hooks from an untrusted repo. Rotate "
         "any secrets it could have read.",
     ),
+    "AGENT_AUTOEXEC_HOOKS_REDIRECT": (
+        "A committed .gitconfig or setup command sets core.hooksPath to a "
+        "repo-relative directory, silently redirecting git hook execution there; "
+        "any name other than .githooks/.husky evades the git-hook content scanner.",
+        "Remove the core.hooksPath redirect. If a custom hooks directory is "
+        "genuinely required, name it .githooks or .husky and review its contents.",
+    ),
     # ── Agent lifecycle hooks ────────────────────────────────────────────────
     "AGENT_HOOK_SHELL_FETCH": (
         "An agent hook fetches remote content and runs it, so the agent executes "

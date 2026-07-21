@@ -44,6 +44,12 @@ _TASK = "AGENT_AUTOEXEC_TASK"
 _DEVCONTAINER = "AGENT_AUTOEXEC_DEVCONTAINER"
 _INSTALL_HOOK = "AGENT_AUTOEXEC_INSTALL_HOOK"
 _GIT_HOOK = "AGENT_AUTOEXEC_GIT_HOOK"
+_HOOKS_REDIRECT = "AGENT_AUTOEXEC_HOOKS_REDIRECT"
+
+# `git config core.hooksPath <dir>` silently redirects hook execution to a
+# repo-relative dir; if that dir isn't named .githooks/.husky, _classify()
+# never scans its contents. Flag the redirect itself, wherever it's issued.
+_HOOKS_PATH_CMD = re.compile(r"\bgit\s+config\b[^\n]{0,64}\bcore\.hooksPath\b", re.I)
 
 _GUIDELINE = (
     "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
@@ -194,6 +200,40 @@ def _scan_git_hook(rel_path: str, text: str) -> list[dict]:
     )]
 
 
+def _scan_hooks_path_redirect(rel_path: str, text: str) -> list[dict]:
+    if not _HOOKS_PATH_CMD.search(text):
+        return []
+    return [_finding(
+        _HOOKS_REDIRECT, "critical",
+        f"Command redirects git hooks via core.hooksPath in {rel_path}",
+        rel_path, _line_of(text, "core.hooksPath"), _HOOKS_REDIRECT,
+        {"snippet": " ".join(text.split())[:160]},
+    )]
+
+
+def _scan_gitconfig(rel_path: str, text: str) -> list[dict]:
+    """A committed .gitconfig setting [core] hooksPath redirects hook execution
+    to a repo-relative dir the moment it's applied (e.g. via a devcontainer
+    or setup script that sources it); same blast radius as _GIT_HOOK, but
+    the hooks dir can be named anything, so _classify() won't otherwise see it.
+    """
+    import configparser
+    parser = configparser.ConfigParser(strict=False)
+    try:
+        parser.read_string(text)
+    except configparser.Error:
+        return []
+    if not parser.has_option("core", "hooksPath"):
+        return []
+    hooks_path = parser.get("core", "hooksPath")
+    return [_finding(
+        _HOOKS_REDIRECT, "critical",
+        f"Committed .gitconfig redirects git hooks via core.hooksPath in {rel_path}",
+        rel_path, _line_of(text, "hooksPath"), _HOOKS_REDIRECT,
+        {"hooksPath": hooks_path[:200]},
+    )]
+
+
 def _classify(rel_path: str) -> str | None:
     base = rel_path.rsplit("/", 1)[-1]
     if rel_path == ".vscode/tasks.json":
@@ -204,6 +244,8 @@ def _classify(rel_path: str) -> str | None:
         return "package"
     if "/.githooks/" in f"/{rel_path}" or "/.husky/" in f"/{rel_path}":
         return "githook"
+    if base == ".gitconfig":
+        return "gitconfig"
     return None
 
 
@@ -237,6 +279,10 @@ def scan_autoexec_configs(repo_root: str) -> list[dict]:
                     findings.extend(_scan_package_json(rel, text))
                 elif kind == "githook":
                     findings.extend(_scan_git_hook(rel, text))
+                elif kind == "gitconfig":
+                    findings.extend(_scan_gitconfig(rel, text))
+                if kind in ("tasks", "devcontainer", "package", "githook"):
+                    findings.extend(_scan_hooks_path_redirect(rel, text))
             except Exception:  # noqa: BLE001
                 logger.exception("[!] agent autoexec scan failed for %s", rel)
     return findings
