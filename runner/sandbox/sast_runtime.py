@@ -16,7 +16,7 @@ import threading
 import uuid
 
 from runner.sandbox.build import build_image, detect_recipe
-from runner.sandbox.harness import runtime_available
+from runner.sandbox.harness import runtime_available, runtime_verify_enabled
 from runner.sandbox.network import internal_network
 from runner.sandbox.probe import generate_probe
 from runner.sandbox.probe_runner import run_probe
@@ -26,10 +26,6 @@ from runner.sandbox.runtime_verdict import resolve_runtime_verdict
 logger = logging.getLogger(__name__)
 
 _RUNTIME_VERDICT = "needs_runtime_verification"
-
-
-def _enabled(get) -> bool:
-    return (get("RUNTIME_VERIFY") or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def _runtime_question(finding: dict) -> str:
@@ -62,7 +58,7 @@ def verify_findings_at_runtime(
     """Resolve what it can in place and return the same list. A no-op (returns the
     list unchanged) whenever a precondition is missing — never raises, never
     downgrades a finding it couldn't prove."""
-    if not _enabled(env.get) or llm is None or not runtime_available():
+    if not runtime_verify_enabled(env.get) or llm is None or not runtime_available():
         return findings
     targets = _targets(findings)
     if not targets:

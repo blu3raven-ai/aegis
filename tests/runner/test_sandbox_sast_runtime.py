@@ -6,7 +6,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from unittest.mock import patch
 
-from runner.sandbox import orchestrator as orch
+from runner.sandbox import sast_runtime as orch
 from runner.sandbox.runtime_verdict import RuntimeResolution
 
 
@@ -50,7 +50,7 @@ def _run(findings, env, **overrides):
     def fake_net(name, *, cancel_event=None):
         yield "net"
 
-    with patch.multiple("runner.sandbox.orchestrator",
+    with patch.multiple("runner.sandbox.sast_runtime",
                         internal_network=fake_net,
                         **{k: v for k, v in defaults.items()}):
         return orch.verify_findings_at_runtime(findings, "/repo", env=env, llm=object())

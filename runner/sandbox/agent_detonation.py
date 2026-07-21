@@ -8,8 +8,8 @@ the honeypot, and turns any observed egress into a runtime-confirmed finding.
 
 Triage-gated: a fast static classifier decides whether a target is worth
 detonating (see ``triage.py``), so we run untrusted code selectively, not for
-every repo. Executing that code is still strictly opt-in (``DETONATE``) — the only
-place we run a repo's own setup end to end. When detonation is OFF but a target
+every repo. Executing that code is still strictly opt-in (``RUNTIME_VERIFY``), the
+only place we run a repo's own setup end to end. When detonation is OFF but a target
 triages as risky, we emit a low-severity 'recommend detonation' finding instead of
 running anything, so operators see the signal without us executing code. Graceful-
 skip on ANY missing precondition; never raises, never a false verdict; only ever
@@ -29,7 +29,12 @@ from runner.sandbox.detonation import detonate
 from runner.sandbox.detonation_verdict import DetonationVerdict, verdict_from_egress
 from runner.sandbox.entry import DetonationEntry, detect_entry
 from runner.sandbox.gvisor import detonate_gvisor, prepare_rootfs, runsc_available
-from runner.sandbox.harness import container_cli, docker_cli_env, runtime_available
+from runner.sandbox.harness import (
+    container_cli,
+    docker_cli_env,
+    runtime_available,
+    runtime_verify_enabled,
+)
 from runner.sandbox.triage import TriageResult, triage_target
 from runner.scanners._subprocess import run_tool
 from runner.scanners.agent.skill_bundle import _OBFUSCATED_EXEC
@@ -53,13 +58,6 @@ _DOCKERFILES = {
     "shell": "FROM debian:stable-slim\nWORKDIR /app\nRUN apt-get update && apt-get install -y --no-install-recommends make || true\nCOPY . /app\n",
     "python": "FROM python:3.12-slim\nWORKDIR /app\nCOPY . /app\n",
 }
-
-
-def _enabled(get) -> bool:
-    # One sandbox switch: RUNTIME_VERIFY turns on the whole runtime pass (probe +
-    # detonate). DETONATE kept as a back-compat alias.
-    on = ("1", "true", "yes", "on")
-    return (get("RUNTIME_VERIFY") or get("DETONATE") or "").strip().lower() in on
 
 
 def dockerfile_body(ecosystem: str) -> str | None:
@@ -119,7 +117,7 @@ def _build(recipe: BuildRecipe, tag: str, cancel_event: threading.Event | None) 
     return code == 0
 
 
-def detonate_repo(
+def detonate_agent_repo(
     repo_root: str, *, env, run_id: str, static_hits: int = 0,
     cancel_event: threading.Event | None = None,
     on_detonation_start: "Callable[[], None] | None" = None,
@@ -127,10 +125,10 @@ def detonate_repo(
     """Triage the target, then act on the verdict:
 
     - not worth detonating (no entry, or benign) → [] (never runs code, never nags)
-    - worth detonating + DETONATE off → a 'recommend detonation' finding (the signal
-      without executing anything)
-    - worth detonating + DETONATE on → detonate that target and return the runtime
-      verdict.
+    - worth detonating + RUNTIME_VERIFY off: a 'recommend detonation' finding (the
+      signal without executing anything)
+    - worth detonating + RUNTIME_VERIFY on: detonate that target and return the
+      runtime verdict.
     """
     entry = detect_entry(repo_root)
     obfuscated = bool(entry and entry.body and _OBFUSCATED_EXEC.search(entry.body))
@@ -140,7 +138,7 @@ def detonate_repo(
     )
     if not triage.worth_detonating:
         return []
-    if not _enabled(env.get):
+    if not runtime_verify_enabled(env.get):
         return [_recommend_finding(triage)]
     # worth_detonating guarantees a runnable entry.
     body = dockerfile_body(entry.ecosystem)

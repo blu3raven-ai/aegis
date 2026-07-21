@@ -31,7 +31,7 @@ from runner.scanners._shared import (
     repo_name_from_url,
 )
 from runner.scanners._subprocess import CANCELLED_EXIT_CODE
-from runner.sandbox.detonation_orchestrator import detonate_repo
+from runner.sandbox.agent_detonation import detonate_agent_repo
 from runner.scanners.agent.detectors import attach_code_window, scan_repo
 from runner.scanners.agent.llm_judge import judge_prose_files
 from runner.scanners.base import ExecutionResult
@@ -192,12 +192,12 @@ class AgentScanner:
                     log_tail.append(f"[!] agent LLM judge error ({repo_name}): {e}")
                     logger.exception("[!] agent LLM judge error")
 
-            # Opt-in detonation (DETONATE): run the repo's setup entry in the
-            # egress-denied sandbox and flag any runtime egress — the packed or
+            # Opt-in detonation (RUNTIME_VERIFY): run the repo's setup entry in the
+            # egress-denied sandbox and flag any runtime egress: the packed or
             # off-repo payloads the static detectors can't see. Graceful no-op
             # unless opted in with a container runtime available.
             try:
-                findings.extend(detonate_repo(
+                findings.extend(detonate_agent_repo(
                     str(clone_dir), env=env, run_id=uuid.uuid4().hex[:8],
                     static_hits=len(findings),  # detectors that already fired → a triage signal
                     cancel_event=cancel_event,

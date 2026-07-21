@@ -145,7 +145,7 @@ RUN mkdir -p /etc/containers && \
 
 # The detonation honeypot ships as a self-contained OCI archive baked in below
 # (loaded into the embedded podman at startup, no registry pull). Enabling
-# detonation then needs only DETONATE=1.
+# detonation then needs only RUNTIME_VERIFY=1.
 
 # Scanner CLIs + gVisor runsc (daemon-free detonation runtime)
 COPY --from=builder \

@@ -18,7 +18,7 @@ no skill markers, no static hit, not obfuscated, no oversized file — but fetch
 its payload only at runtime from an innocuous-looking host will NOT be detonated.
 Detonating every repo with a setup entry is the all-or-nothing cost we avoid; the
 mitigations are that the static detectors flag a malicious script's tell-tale
-strings (→ static_hit → detonate) and that DETONATE-off still emits a low-severity
+strings (static_hit, then detonate) and that RUNTIME_VERIFY-off still emits a low-severity
 recommendation. Closing the residual fully would need runtime analysis of every
 setup entry, which the opt-in design deliberately doesn't do.
 

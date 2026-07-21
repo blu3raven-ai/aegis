@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from runner.sandbox import detonation_orchestrator as orch
+from runner.sandbox import agent_detonation as orch
 from runner.sandbox.entry import DetonationEntry
 from runner.sandbox.honeypot import EgressEvent
 
@@ -32,8 +32,8 @@ def _run(env, *, static_hits=1, **over):
             EgressEvent("dns", "_axiom-config.evil.example", "TXT")],
     }
     defaults.update(over)
-    with patch.multiple("runner.sandbox.detonation_orchestrator", **defaults):
-        return orch.detonate_repo("/repo", env=env, run_id="x", static_hits=static_hits)
+    with patch.multiple("runner.sandbox.agent_detonation", **defaults):
+        return orch.detonate_agent_repo("/repo", env=env, run_id="x", static_hits=static_hits)
 
 
 def test_dockerfile_body_per_ecosystem():
@@ -47,11 +47,11 @@ def test_dockerfile_body_per_ecosystem():
 
 def test_not_worth_is_noop_even_with_entry():
     # entry present but no risk signal → don't run code, don't nag.
-    assert _run(_Env(DETONATE="1"), static_hits=0) == []
+    assert _run(_Env(RUNTIME_VERIFY="1"), static_hits=0) == []
 
 
 def test_no_entry_is_noop():
-    assert _run(_Env(DETONATE="1"), detect_entry=lambda root: None) == []
+    assert _run(_Env(RUNTIME_VERIFY="1"), detect_entry=lambda root: None) == []
 
 
 def test_on_detonation_start_fires_only_when_code_runs():
@@ -63,18 +63,18 @@ def test_on_detonation_start_fires_only_when_code_runs():
         "_build": lambda recipe, tag, cancel_event: True,
         "detonate": lambda tag, cmd, *, run_id, cancel_event=None: [],
     }
-    with patch.multiple("runner.sandbox.detonation_orchestrator", **defaults):
+    with patch.multiple("runner.sandbox.agent_detonation", **defaults):
         # Real execution → callback fires once.
-        orch.detonate_repo("/repo", env=_Env(DETONATE="1"), run_id="x", static_hits=1, on_detonation_start=cb)
+        orch.detonate_agent_repo("/repo", env=_Env(RUNTIME_VERIFY="1"), run_id="x", static_hits=1, on_detonation_start=cb)
         # Not worth detonating → no execution, no callback.
-        orch.detonate_repo("/repo", env=_Env(DETONATE="1"), run_id="x", static_hits=0, on_detonation_start=cb)
-        # DETONATE off → recommend only, no callback.
-        orch.detonate_repo("/repo", env=_Env(), run_id="x", static_hits=2, on_detonation_start=cb)
+        orch.detonate_agent_repo("/repo", env=_Env(RUNTIME_VERIFY="1"), run_id="x", static_hits=0, on_detonation_start=cb)
+        # RUNTIME_VERIFY off: recommend only, no callback.
+        orch.detonate_agent_repo("/repo", env=_Env(), run_id="x", static_hits=2, on_detonation_start=cb)
     assert calls == [1]
 
 
 def test_worth_but_detonation_off_recommends():
-    findings = _run(_Env(), static_hits=2)  # DETONATE unset, but a risk signal fired
+    findings = _run(_Env(), static_hits=2)  # RUNTIME_VERIFY unset, but a risk signal fired
     assert len(findings) == 1
     f = findings[0]
     assert f["check_id"] == "AGENT_DETONATION_RECOMMENDED"
@@ -85,28 +85,28 @@ def test_worth_but_detonation_off_recommends():
 # --- detonation path (worth + enabled) ---
 
 def test_no_runtime_is_noop_when_enabled():
-    assert _run(_Env(DETONATE="1"), runtime_available=lambda: False) == []
+    assert _run(_Env(RUNTIME_VERIFY="1"), runtime_available=lambda: False) == []
 
 
 def test_unsupported_ecosystem_is_noop():
     go = DetonationEntry(cmd=("go", "run", "x"), ecosystem="golang", source="x")
-    assert _run(_Env(DETONATE="1"), detect_entry=lambda root: go) == []
+    assert _run(_Env(RUNTIME_VERIFY="1"), detect_entry=lambda root: go) == []
 
 
 def test_build_failure_is_noop():
-    assert _run(_Env(DETONATE="1"), _build=lambda recipe, tag, cancel_event: False) == []
+    assert _run(_Env(RUNTIME_VERIFY="1"), _build=lambda recipe, tag, cancel_event: False) == []
 
 
 def test_detonate_skip_is_noop():
-    assert _run(_Env(DETONATE="1"), detonate=lambda *a, **k: None) == []
+    assert _run(_Env(RUNTIME_VERIFY="1"), detonate=lambda *a, **k: None) == []
 
 
 def test_no_egress_adds_no_finding():
-    assert _run(_Env(DETONATE="1"), detonate=lambda *a, **k: []) == []
+    assert _run(_Env(RUNTIME_VERIFY="1"), detonate=lambda *a, **k: []) == []
 
 
 def test_egress_produces_a_confirmed_critical_finding():
-    findings = _run(_Env(DETONATE="1"))
+    findings = _run(_Env(RUNTIME_VERIFY="1"))
     assert len(findings) == 1
     f = findings[0]
     assert f["check_id"] == "AGENT_DETONATION_EGRESS"
@@ -118,11 +118,11 @@ def test_egress_produces_a_confirmed_critical_finding():
 def test_build_helper_maps_exit_code_and_never_raises():
     from runner.sandbox.build import BuildRecipe
     recipe = BuildRecipe(dockerfile="/tmp/x.Dockerfile", context="/repo")
-    with patch("runner.sandbox.detonation_orchestrator.run_tool", return_value=(0, "", "")):
+    with patch("runner.sandbox.agent_detonation.run_tool", return_value=(0, "", "")):
         assert orch._build(recipe, "tag", None) is True
-    with patch("runner.sandbox.detonation_orchestrator.run_tool", return_value=(1, "", "err")):
+    with patch("runner.sandbox.agent_detonation.run_tool", return_value=(1, "", "err")):
         assert orch._build(recipe, "tag", None) is False
-    with patch("runner.sandbox.detonation_orchestrator.run_tool", side_effect=OSError("boom")):
+    with patch("runner.sandbox.agent_detonation.run_tool", side_effect=OSError("boom")):
         assert orch._build(recipe, "tag", None) is False
 
 
@@ -140,7 +140,7 @@ def test_obfuscated_entry_body_triages_as_worth_when_off():
 def test_gvisor_tier_used_when_container_runtime_absent():
     # No podman/docker, but gVisor is available, so detonate via the gVisor tier.
     findings = _run(
-        _Env(DETONATE="1"),
+        _Env(RUNTIME_VERIFY="1"),
         runtime_available=lambda: False,
         runsc_available=lambda cancel_event=None: True,
         prepare_rootfs=lambda eco, root, rid: "/fake-rootfs",
@@ -154,7 +154,7 @@ def test_gvisor_tier_used_when_container_runtime_absent():
 def test_gvisor_tier_used_when_container_detonation_skips():
     # Container runtime present but can't detonate (Docker Desktop), so fall to gVisor.
     findings = _run(
-        _Env(DETONATE="1"),
+        _Env(RUNTIME_VERIFY="1"),
         detonate=lambda *a, **k: None,  # tier 1 skips
         runsc_available=lambda cancel_event=None: True,
         prepare_rootfs=lambda eco, root, rid: "/fake-rootfs",
@@ -167,7 +167,7 @@ def test_gvisor_tier_used_when_container_detonation_skips():
 def test_gvisor_tier_skips_when_no_base_rootfs():
     # gVisor available but no baked base for this ecosystem, so graceful-skip, no crash.
     assert _run(
-        _Env(DETONATE="1"),
+        _Env(RUNTIME_VERIFY="1"),
         runtime_available=lambda: False,
         runsc_available=lambda cancel_event=None: True,
         prepare_rootfs=lambda eco, root, rid: None,
@@ -176,7 +176,7 @@ def test_gvisor_tier_skips_when_no_base_rootfs():
 
 def test_runtime_verify_flag_also_enables_detonation():
     # One sandbox switch: RUNTIME_VERIFY enables the whole runtime pass, so
-    # detonation fires under it too (not just the DETONATE alias).
+    # detonation fires under it too, same flag as the SAST probe.
     findings = _run(_Env(RUNTIME_VERIFY="true"))
     assert len(findings) == 1
     assert findings[0]["check_id"] == "AGENT_DETONATION_EGRESS"

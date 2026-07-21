@@ -25,6 +25,12 @@ _DOCKER_CLI_ENV_KEYS = (
 )
 
 
+def runtime_verify_enabled(get) -> bool:
+    """The single sandbox switch. RUNTIME_VERIFY gates the whole runtime pass:
+    both the SAST probe and repo detonation read this one flag."""
+    return (get("RUNTIME_VERIFY") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def docker_cli_env() -> dict[str, str]:
     """Allowlisted env for the docker CLI subprocess (no secrets)."""
     return {k: os.environ[k] for k in _DOCKER_CLI_ENV_KEYS if k in os.environ}
