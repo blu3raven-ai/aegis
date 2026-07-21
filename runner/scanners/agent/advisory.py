@@ -77,6 +77,21 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Replace the wildcard with a minimal, explicit command allowlist scoped to "
         "what the project actually needs.",
     ),
+    "AGENT_CONFIG_ENV_HIJACK": (
+        "The config sets an environment variable (PATH, NODE_OPTIONS, "
+        "BASH_ENV, PYTHONSTARTUP, or LD_PRELOAD) that changes what code runs "
+        "on every agent invocation: a binary hijack or a forced code-load, "
+        "not just a behavior tweak.",
+        "Remove the variable from the committed env block. If it is genuinely "
+        "needed, set it in each user's local, uncommitted environment.",
+    ),
+    "AGENT_CONFIG_BROAD_FS_GRANT": (
+        "additionalDirectories grants the agent access to the whole home "
+        "directory, an SSH/cloud-credential directory, or the filesystem "
+        "root, far beyond the project.",
+        "Scope additionalDirectories to specific project-relevant paths, "
+        "never the home directory, a credential directory, or /.",
+    ),
     # ── MCP tool poisoning ───────────────────────────────────────────────────
     "AGENT_MCP_DESCRIPTION_INJECTION": (
         "An MCP tool description contains hidden directives aimed at the agent (for "
@@ -107,6 +122,19 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "not a reviewable published package.",
         "Verify the local script/binary by hand before trusting the server; prefer "
         "a versioned package-manager launcher (npx/uvx/docker) over a repo-local path.",
+    ),
+    "AGENT_MCP_ENV_SECRET_EXFIL": (
+        "This MCP server's env block interpolates a live host secret (a token, "
+        "key, or credential env var) into the process the server runs, handing "
+        "the credential value to third-party server code on every launch.",
+        "Remove the secret from the MCP server's env, or scope a dedicated, "
+        "narrowly-permissioned credential to it instead of a broad host secret.",
+    ),
+    "AGENT_MCP_REMOTE_URL": (
+        "This remote MCP server's URL is not HTTPS, points at a raw IP address, "
+        "or carries a hardcoded auth header/token committed to the repo.",
+        "Use an HTTPS URL with a named, reviewable host, and move any "
+        "credential out of the committed config into a local secret store.",
     ),
     # ── Rules-file / instruction injection ───────────────────────────────────
     "AGENT_INSTRUCTION_INJECTION": (
@@ -180,6 +208,16 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Remove the core.hooksPath redirect. If a custom hooks directory is "
         "genuinely required, name it .githooks or .husky and review its contents.",
     ),
+    "AGENT_AUTOEXEC_BUILD_HOOK": (
+        "A non-npm build or interpreter auto-load hook (Cargo build.rs / "
+        ".cargo/config.toml toolchain redirect, Python .pth/sitecustomize/setup.py, "
+        "composer install script, direnv .envrc, mise hook/task, or a local "
+        "pre-commit hook) runs automatically and fetches/execs remote code or reads "
+        "a secret.",
+        "Remove the dangerous command from the hook. If the toolchain redirect "
+        "(rustc-wrapper / target runner) is not intentional, delete it and rotate "
+        "any secrets the hook could have read.",
+    ),
     # ── Agent lifecycle hooks ────────────────────────────────────────────────
     "AGENT_HOOK_SHELL_FETCH": (
         "An agent hook fetches remote content and runs it, so the agent executes "
@@ -206,6 +244,14 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "in real supply-chain attacks.",
         "Remove the guardrail-disabling flag from the hook. Never auto-run an agent "
         "CLI with permission checks off from a lifecycle hook.",
+    ),
+    "AGENT_HOOK_AUTORUN_EVENT": (
+        "A dangerous command sits under a hook event (SessionStart, "
+        "UserPromptSubmit, Stop, SubagentStop, SessionEnd, Notification, "
+        "PreCompact) or statusLine.command that fires automatically, with no "
+        "tool call and no user action to approve it first.",
+        "Remove the dangerous command from the auto-firing hook/statusLine. If "
+        "the behavior is required, move it behind a gated event like PreToolUse.",
     ),
     "AGENT_CONFIG_API_KEY_HELPER": (
         "The apiKeyHelper setting makes the agent run a shell command on every start "
