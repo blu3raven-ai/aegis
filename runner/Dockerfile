@@ -54,7 +54,8 @@ RUN ARCH=$(uname -m) && \
     BASE="https://storage.googleapis.com/gvisor/releases/release/${RUNSC_RELEASE}/${ARCH}" && \
     curl -fsSL "${BASE}/runsc" -o /usr/local/bin/runsc && \
     curl -fsSL "${BASE}/runsc.sha512" -o /tmp/runsc.sha512 && \
-    (cd /usr/local/bin && sha512sum -c <(sed "s#.*/#/usr/local/bin/#" /tmp/runsc.sha512)) && \
+    cd /usr/local/bin && \
+    printf '%s  runsc\n' "$(awk '{print $1}' /tmp/runsc.sha512)" | sha512sum -c - && \
     chmod +x /usr/local/bin/runsc && rm -f /tmp/runsc.sha512
 
 # semgrep-rules — pinned SHA, security subset only, .git stripped
