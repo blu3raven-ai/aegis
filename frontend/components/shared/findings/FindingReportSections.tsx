@@ -161,12 +161,14 @@ function VerificationUpsell({
   description,
   verificationEnabled,
   findingId,
+  findingUpdatedAt,
   ghost,
 }: {
   title: string
   description: string
   verificationEnabled: boolean
   findingId: number | string
+  findingUpdatedAt?: string | null
   ghost: React.ReactNode
 }) {
   return (
@@ -186,7 +188,7 @@ function VerificationUpsell({
         </p>
         {verificationEnabled ? (
           <div className="mt-1">
-            <ReverifyButton findingId={findingId} />
+            <ReverifyButton findingId={findingId} findingUpdatedAt={findingUpdatedAt} />
           </div>
         ) : (
           <div className="mt-1 flex flex-col items-center gap-1.5">
@@ -212,9 +214,11 @@ function VerificationUpsell({
 export function AdvisoryUnverifiedNote({
   verificationEnabled = true,
   findingId,
+  findingUpdatedAt,
 }: {
   verificationEnabled?: boolean
   findingId: number | string
+  findingUpdatedAt?: string | null
 }) {
   return (
     <VerificationUpsell
@@ -222,6 +226,7 @@ export function AdvisoryUnverifiedNote({
       description="LLM verification produces the full advisory: exploit summary, cited technical evidence, attack scenario, impact, and remediation guidance."
       verificationEnabled={verificationEnabled}
       findingId={findingId}
+      findingUpdatedAt={findingUpdatedAt}
       ghost={<GhostAdvisory />}
     />
   )
@@ -256,9 +261,11 @@ export function SecretNoVerificationNote() {
 export function RemediationUnverifiedNote({
   verificationEnabled = true,
   findingId,
+  findingUpdatedAt,
 }: {
   verificationEnabled?: boolean
   findingId: number | string
+  findingUpdatedAt?: string | null
 }) {
   return (
     <VerificationUpsell
@@ -266,6 +273,7 @@ export function RemediationUnverifiedNote({
       description="LLM verification proposes a concrete remediation: a patch or version upgrade with the steps to apply it safely."
       verificationEnabled={verificationEnabled}
       findingId={findingId}
+      findingUpdatedAt={findingUpdatedAt}
       ghost={<GhostRemediation />}
     />
   )
@@ -277,9 +285,11 @@ export function RemediationUnverifiedNote({
 export function AdvisoryIncompleteNote({
   verificationEnabled = true,
   findingId,
+  findingUpdatedAt,
 }: {
   verificationEnabled?: boolean
   findingId: number | string
+  findingUpdatedAt?: string | null
 }) {
   return (
     <section className="flex flex-col items-center rounded-md border border-dashed border-[var(--color-border)] bg-[var(--color-bg-section)] px-4 py-4 text-center">
@@ -291,7 +301,7 @@ export function AdvisoryIncompleteNote({
       </p>
       <div className="mt-3">
         {verificationEnabled ? (
-          <ReverifyButton findingId={findingId} />
+          <ReverifyButton findingId={findingId} findingUpdatedAt={findingUpdatedAt} />
         ) : (
           <LinkButton
             href="/settings#llm"

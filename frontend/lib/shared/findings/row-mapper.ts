@@ -246,6 +246,9 @@ export interface FindingRow {
   cwe?: string
   /** ISO timestamp of when the finding was first detected. */
   firstSeen?: string
+  /** ISO timestamp of the last write (re-scan re-ingest, triage change). Used
+   *  to detect that an in-flight re-verification has landed and refresh the UI. */
+  updatedAt?: string
   /** Short SHA of the commit that introduced the finding. */
   introducedByCommit?: string
   /** Author handle (e.g. "@maya.l") credited with introducing the finding. */
@@ -482,6 +485,7 @@ export function mapApiFinding(api: ApiFinding): FindingRow {
     epssPercentile: api.epssPercentile ?? undefined,
     state: api.state ?? undefined,
     firstSeen: api.created_at ?? undefined,
+    updatedAt: api.updated_at ?? undefined,
     kev: api.kev ?? undefined,
     malicious: api.malicious ?? undefined,
     cwe: api.cwe ?? undefined,

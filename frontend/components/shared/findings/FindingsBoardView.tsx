@@ -1996,6 +1996,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                 <AdvisoryUnverifiedNote
                   verificationEnabled={verificationEnabled}
                   findingId={selectedFinding.id}
+                  findingUpdatedAt={selectedFinding.updatedAt}
                 />
               )}
 
@@ -2084,6 +2085,7 @@ export function FindingsBoardView({ pageTitle, pageIcon, pageDescription, initia
                     <RemediationUnverifiedNote
                       verificationEnabled={verificationEnabled}
                       findingId={selectedFinding.id}
+                      findingUpdatedAt={selectedFinding.updatedAt}
                     />
                   ))
                 )}
