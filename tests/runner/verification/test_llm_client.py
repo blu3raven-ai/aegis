@@ -118,3 +118,56 @@ def test_chat_raises_transient_after_timeout_retries_exhaust(monkeypatch):
     from runner.verification.llm_client import LlmTransientError
     with pytest.raises(LlmTransientError):
         client.chat([{"role": "user", "content": "x"}])
+
+
+def test_chat_retries_on_connection_error_then_succeeds(monkeypatch):
+    # A connection blip (refused / DNS / reset) is transient; retry before
+    # leaving the finding unverified.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ConnectError("refused", request=req)
+        return _ok('{"a": 1}')
+
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert calls["n"] == 2
+    assert resp.content == '{"a": 1}'
+
+
+def test_chat_retries_on_non_json_body_then_succeeds(monkeypatch):
+    # A proxy/load balancer can return a 200 with an HTML error body; resp.json()
+    # raises ValueError. Retry before failing the finding.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200, text="<html>502 Bad Gateway</html>")
+        return _ok('{"a": 1}')
+
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert calls["n"] == 2
+    assert resp.content == '{"a": 1}'
+
+
+def test_chat_retries_on_malformed_choices_then_succeeds(monkeypatch):
+    # Valid JSON but missing the choices shape; retry before surfacing.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(200, json={"error": "overloaded"})
+        return _ok('{"a": 1}')
+
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert calls["n"] == 2
+    assert resp.content == '{"a": 1}'

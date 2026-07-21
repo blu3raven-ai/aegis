@@ -138,23 +138,30 @@ class LlmClient:
         prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
-        # Retry on transient failures: 5xx, transport timeouts, and
+        # Retry on transient failures: transport errors (connection / timeout /
+        # network / protocol), 5xx, non-JSON or wrong-shape responses, and
         # empty-content 200s. The latter happens when the model returns nothing
-        # under concurrent load; a short overload window that a backoff
-        # clears. The immediate repair retry in chat_json hits the same window;
-        # backoff here lets it pass. 429 is surfaced to the caller (it carries
-        # a Retry-After); 4xx other than 429 is a real error, not retried.
+        # under concurrent load; a short overload window that a backoff clears.
+        # The immediate repair retry in chat_json hits the same window; backoff
+        # here lets it pass. 429 is surfaced to the caller (it carries a
+        # Retry-After); 401/403 and other 4xx are real errors, not retried.
+        def _backoff(attempt: int) -> None:
+            # Jittered so concurrent workers don't all retry in lockstep and
+            # re-trigger the overload.
+            time.sleep(2 ** attempt + random.uniform(0, 1))
+
         last_error: Exception | None = None
         for attempt in range(3):
             try:
                 with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
                     resp = client.post(url, json=payload, headers=headers)
-            except httpx.TimeoutException as e:
-                # Slow endpoint under load; back off and retry before surfacing
-                # as a hard llm_error that leaves the finding unverified.
-                last_error = LlmTransientError(f"llm timeout: {type(e).__name__}")
+            except httpx.TransportError as e:
+                # Connection refused, DNS failure, network reset, read/write
+                # timeout, protocol error. All transient; retry before leaving
+                # the finding unverified.
+                last_error = LlmTransientError(f"llm transport: {type(e).__name__}")
                 if attempt < 2:
-                    time.sleep(2 ** attempt + random.uniform(0, 1))
+                    _backoff(attempt)
                     continue
                 raise last_error
 
@@ -167,31 +174,36 @@ class LlmClient:
             if resp.status_code >= 500:
                 last_error = LlmTransientError(f"llm 5xx: {resp.status_code}")
                 if attempt < 2:
-                    # Jittered backoff so concurrent workers don't all retry
-                    # in lockstep and re-trigger the overload.
-                    time.sleep(2 ** attempt + random.uniform(0, 1))
+                    _backoff(attempt)
                     continue
                 raise last_error
             if resp.status_code >= 400:
                 raise LlmError(f"llm unexpected: {resp.status_code} {resp.text[:200]}")
 
-            data = resp.json()
             try:
+                # A non-JSON body (e.g. an HTML error page from a proxy under
+                # load) raises ValueError; a valid-JSON response missing the
+                # expected choices shape raises KeyError/IndexError. Both are
+                # transient; retry before surfacing a hard llm_error.
+                data = resp.json()
                 # content can be null when the model refuses or hits a length cap;
                 # coerce to "" so _strip_fences and the repair path handle it
                 # instead of crashing on None.strip().
                 content = data["choices"][0]["message"].get("content") or ""
-            except (KeyError, IndexError) as e:
-                raise LlmError(f"malformed llm response: {e}") from e
+            except (ValueError, KeyError, IndexError) as e:
+                last_error = LlmTransientError(f"llm malformed response: {type(e).__name__}")
+                if attempt < 2:
+                    _backoff(attempt)
+                    continue
+                raise last_error
 
             content = _strip_fences(content)
             if not content and attempt < 2:
                 # 200 with empty content; transient overload. Back off and
                 # retry before accepting the empty response (which falls
                 # through to chat_json's repair / needs_verify fallback).
-                # Jittered so concurrent workers don't retry in lockstep.
                 last_error = LlmTransientError("llm returned empty content")
-                time.sleep(2 ** attempt + random.uniform(0, 1))
+                _backoff(attempt)
                 continue
             usage = data.get("usage", {})
             return LlmResponse(
