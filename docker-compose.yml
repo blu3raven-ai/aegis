@@ -141,6 +141,13 @@ services:
     # sandbox that needs userns setup (newuidmap/newgidmap) and writable podman
     # state; applying that hardening to the outer container breaks the sandbox.
     # The untrusted-code path is hardened per detonation container instead.
+    #
+    # seccomp=unconfined is required by the gVisor (runsc) detonation tier: its
+    # systrap platform re-execs itself with syscalls the default profile filters.
+    # This is a far smaller grant than --privileged and does NOT mount the host
+    # Docker socket, so the outer container stays non-root and host-isolated.
+    security_opt:
+      - seccomp:unconfined
     environment:
       BACKEND_URL: http://aegis:3000
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}

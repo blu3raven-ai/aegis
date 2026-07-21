@@ -9,6 +9,7 @@ ARG CDXCLI_VERSION=0.27.1
 ARG TRUFFLEHOG_VERSION=3.95.2
 ARG SEMGREP_RULES_SHA=311ca4e9ba59d700624539bf658e3d29b134ee77
 ARG NODE_MAJOR=22
+ARG RUNSC_RELEASE=20260714.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -44,6 +45,17 @@ RUN ARCH=$(uname -m) && \
     curl -fsSL "https://github.com/trufflesecurity/trufflehog/releases/download/v${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION}_linux_${TH_ARCH}.tar.gz" \
         | tar -xz -C /usr/local/bin trufflehog && \
     chmod +x /usr/local/bin/trufflehog
+
+# gVisor runsc — daemon-free OCI runtime for the detonation tier that runs where
+# nested rootless podman cannot (Docker Desktop's LinuxKit VM blocks nested
+# multi-ID userns). sha512-verified from the pinned release. arch dir matches
+# uname -m (aarch64 / x86_64).
+RUN ARCH=$(uname -m) && \
+    BASE="https://storage.googleapis.com/gvisor/releases/release/${RUNSC_RELEASE}/${ARCH}" && \
+    curl -fsSL "${BASE}/runsc" -o /usr/local/bin/runsc && \
+    curl -fsSL "${BASE}/runsc.sha512" -o /tmp/runsc.sha512 && \
+    (cd /usr/local/bin && sha512sum -c <(sed "s#.*/#/usr/local/bin/#" /tmp/runsc.sha512)) && \
+    chmod +x /usr/local/bin/runsc && rm -f /tmp/runsc.sha512
 
 # semgrep-rules — pinned SHA, security subset only, .git stripped
 RUN git clone --no-checkout --filter=blob:none \
@@ -122,11 +134,12 @@ RUN mkdir -p /etc/containers && \
 # (loaded into the embedded podman at startup, no registry pull). Enabling
 # detonation then needs only DETONATE=1.
 
-# Scanner CLIs
+# Scanner CLIs + gVisor runsc (daemon-free detonation runtime)
 COPY --from=builder \
     /usr/local/bin/syft \
     /usr/local/bin/cyclonedx \
     /usr/local/bin/trufflehog \
+    /usr/local/bin/runsc \
     /usr/local/bin/
 
 # Semgrep rules bundle
