@@ -52,9 +52,11 @@ class ScanBudget:
 
 
 # Verification is LLM-I/O-bound, so findings verify concurrently. The default is
-# modest to stay friendly to BYO model rate limits; raise LLM_VERIFY_CONCURRENCY
-# when the endpoint can take more.
-DEFAULT_VERIFY_WORKERS = 8
+# deliberately low: many self-hostable model endpoints return 200 with empty
+# content (instead of a 429) once concurrent in-flight requests exceed their
+# comfort zone, which forces a schema-invalid verdict. Raise
+# LLM_VERIFY_CONCURRENCY when the endpoint is known to take more.
+DEFAULT_VERIFY_WORKERS = 3
 
 
 def verify_concurrency(env: JobEnv) -> int:

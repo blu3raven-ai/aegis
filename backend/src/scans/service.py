@@ -293,8 +293,11 @@ async def submit_scan(
         _validate_scanners_for_asset_type(asset_type, scanners)
 
         if asset_type == "repo":
-            if commit_sha is None:
-                raise ScannerNotApplicableError("commit_sha is required for repo scans")
+            # commit_sha may be None when the caller has no pinned commit to
+            # re-check (e.g. re-verifying a finding from a source-connection
+            # scan that never recorded one). The runner scans the default
+            # branch HEAD in that case — same path the scheduled source scans
+            # take — so re-verification still runs instead of 422ing.
             return await _submit_repo_scan(session, asset_row, commit_sha, scanners, user_id)
 
         if asset_type == "image":
@@ -309,7 +312,7 @@ async def submit_scan(
 async def _submit_repo_scan(
     session,
     asset_row,
-    commit_sha: str,
+    commit_sha: str | None,
     scanners: list[str],
     user_id: str,
 ) -> ScanSubmission:
@@ -319,6 +322,9 @@ async def _submit_repo_scan(
     scm_type, owner, name, repo_url = _resolve_repo_dispatch_target(asset_row.external_ref or "")
     repo_id = f"{owner}/{name}"
     org = owner
+    # Empty COMMIT_SHA tells the runner to scan the default-branch HEAD — the
+    # same convention the scheduled source scans use.
+    dispatch_sha = commit_sha or ""
 
     metadata = {
         "commit_sha": commit_sha,
@@ -347,7 +353,7 @@ async def _submit_repo_scan(
     await session.commit()
     accepted_risks_json = await _accepted_risks_json(session, asset_row.id)
     _dispatch_scanner_jobs(
-        scan_id, repo_id, commit_sha, scanners, org,
+        scan_id, repo_id, dispatch_sha, scanners, org,
         source_type=scm_type, repo_url=repo_url,
         accepted_risks_json=accepted_risks_json,
     )

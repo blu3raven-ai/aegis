@@ -62,3 +62,29 @@ def test_chat_leaves_unfenced_content_untouched():
     client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(lambda r: _ok('{"a": 1}')))
     resp = client.chat([{"role": "user", "content": "x"}])
     assert resp.content == '{"a": 1}'
+
+
+def test_chat_retries_on_empty_content_then_succeeds(monkeypatch):
+    # Under concurrent load the model can return 200 with empty content — a
+    # transient overload window. chat() must back off and retry rather than
+    # accept the empty response and force a schema-invalid verdict.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        return _ok('{"a": 1}' if calls["n"] > 1 else "")
+
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert calls["n"] == 2
+    assert resp.content == '{"a": 1}'
+
+
+def test_chat_returns_empty_after_retries_exhaust(monkeypatch):
+    # If empty content persists, chat() returns the empty response so
+    # chat_json's repair / needs_verify fallback applies (not a hard crash).
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(lambda r: _ok("")))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert resp.content == ""
