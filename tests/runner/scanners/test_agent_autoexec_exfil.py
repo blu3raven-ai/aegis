@@ -71,6 +71,25 @@ def test_committed_git_hook_flagged(tmp_path: Path):
     assert _ids(scan_autoexec_configs(str(tmp_path))) == ["AGENT_AUTOEXEC_GIT_HOOK"]
 
 
+def test_gitconfig_hooks_path_redirect_flagged(tmp_path: Path):
+    _write(tmp_path, ".gitconfig", "[core]\n\thooksPath = .ci/hooks\n")
+    f = scan_autoexec_configs(str(tmp_path))
+    assert _ids(f) == ["AGENT_AUTOEXEC_HOOKS_REDIRECT"]
+    assert f[0]["severity"] == "critical"
+
+
+def test_gitconfig_without_hooks_path_is_clean(tmp_path: Path):
+    _write(tmp_path, ".gitconfig", "[user]\n\tname = dev\n")
+    assert scan_autoexec_configs(str(tmp_path)) == []
+
+
+def test_hooks_path_command_in_postinstall_flagged(tmp_path: Path):
+    _write(tmp_path, "package.json", json.dumps({
+        "scripts": {"postinstall": "git config core.hooksPath .ci/hooks"},
+    }))
+    assert _ids(scan_autoexec_configs(str(tmp_path))) == ["AGENT_AUTOEXEC_HOOKS_REDIRECT"]
+
+
 # --- exfil_instruction -----------------------------------------------------
 
 def test_exfil_secret_plus_external_url_is_critical():

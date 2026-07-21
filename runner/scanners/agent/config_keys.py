@@ -28,10 +28,12 @@ _BROAD_EXEC = "AGENT_CONFIG_BROAD_EXEC_ALLOW"
 _HOOK_FETCH = "AGENT_HOOK_SHELL_FETCH"
 _HOOK_SECRET = "AGENT_HOOK_SECRET_READ"
 _HOOK_LOCAL_SCRIPT = "AGENT_HOOK_LOCAL_SCRIPT"
+_HOOK_YOLO = "AGENT_HOOK_YOLO_FLAG"
 _API_KEY_HELPER = "AGENT_CONFIG_API_KEY_HELPER"
 _SPAWN_HOOK = "AGENT_CONFIG_SPAWN_HOOK"
 _MCP_SHELL = "AGENT_MCP_SHELL_COMMAND"
 _MCP_TOOL_SHADOW = "AGENT_MCP_TOOL_SHADOW"
+_MCP_LOCAL_BINARY = "AGENT_MCP_LOCAL_BINARY"
 
 _GUIDELINE = (
     "https://owasp.org/www-project-top-10-for-large-language-model-applications/"
@@ -73,17 +75,32 @@ _INTERP_LOCAL_FILE = re.compile(
     re.I,
 )
 
+# An MCP server ``command`` pointing at a repo-relative path (./, ../) instead
+# of a package-manager launcher (npx/uvx/docker) or bare interpreter name; the
+# server binary/script is auto-spawned from the repo the moment the config is
+# trusted, no package registry or shell-pipe pattern involved.
+_LOCAL_CMD_PATH = re.compile(r"^\.{1,2}/\S{1,256}$")
+
 # Permission entries granting effectively-unrestricted shell.
 _BROAD_BASH = re.compile(r"^Bash(\(\s*:?\*\s*\))?$")
+
+# A hook driving an installed agent CLI with guardrails off (the Nx/s1ngularity
+# exfil pattern). The disabling flag has no benign use in an automated hook.
+_AGENT_YOLO = re.compile(
+    r"--dangerously-skip-permissions\b|--yolo\b|--trust-all-tools\b|--dangerously-allow-all\b",
+    re.I,
+)
 
 
 def _cmd_is_dangerous(cmd: str) -> bool:
     """True if a config-supplied command fetches+runs remote code, opens a reverse
-    shell, reads secrets, or runs a bundled local script."""
+    shell, reads secrets, runs a bundled local script, or drives an agent CLI with
+    guardrails off."""
     return bool(
         _PIPE_TO_SHELL.search(cmd) or _SHELL_SUBSHELL_FETCH.search(cmd)
         or _FETCH_PIPE_EXEC.search(cmd) or _REVERSE_SHELL.search(cmd)
         or _SECRET_READ.search(cmd) or _INTERP_LOCAL_FILE.search(cmd)
+        or _AGENT_YOLO.search(cmd)
     )
 
 
@@ -198,6 +215,13 @@ def _check_hooks(data: dict, rel_path: str, text: str) -> list[dict]:
                 rel_path, _line_of(text, cmd[:40]), _HOOK_FETCH,
                 {"command": cmd[:200]},
             ))
+        elif _AGENT_YOLO.search(cmd):
+            findings.append(_finding(
+                _HOOK_YOLO, "critical",
+                f"Agent hook drives an agent CLI with permission guardrails disabled in {rel_path}",
+                rel_path, _line_of(text, cmd[:40]), _HOOK_YOLO,
+                {"command": cmd[:200]},
+            ))
         elif _SECRET_READ.search(cmd):
             findings.append(_finding(
                 _HOOK_SECRET, "high",
@@ -298,11 +322,19 @@ def _check_mcp(data: dict, rel_path: str, text: str) -> list[dict]:
             if isinstance(args, list):
                 parts.extend(str(a) for a in args)
             joined = " ".join(parts)
+            command = str(spec.get("command") or "").strip()
             if _PIPE_TO_SHELL.search(joined) or _SHELL_SUBSHELL_FETCH.search(joined) or \
                     re.search(r"\b(bash|sh|zsh)\s+-c\b", joined):
                 findings.append(_finding(
                     _MCP_SHELL, "high",
                     f"MCP server '{name}' launches a shell / fetches remote code in {rel_path}",
+                    rel_path, _line_of(text, str(name)), f"server:{name}",
+                    {"command": joined[:200]},
+                ))
+            elif _LOCAL_CMD_PATH.match(command):
+                findings.append(_finding(
+                    _MCP_LOCAL_BINARY, "high",
+                    f"MCP server '{name}' auto-spawns a repo-local script/binary in {rel_path}",
                     rel_path, _line_of(text, str(name)), f"server:{name}",
                     {"command": joined[:200]},
                 ))
