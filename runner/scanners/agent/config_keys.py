@@ -229,7 +229,8 @@ _AUTORUN_HOOK_EVENTS = frozenset({
 
 
 def _check_hook_command(cmd: str, rel_path: str, text: str) -> list[dict]:
-    if _PIPE_TO_SHELL.search(cmd) or _SHELL_SUBSHELL_FETCH.search(cmd):
+    if (_PIPE_TO_SHELL.search(cmd) or _SHELL_SUBSHELL_FETCH.search(cmd)
+            or _FETCH_PIPE_EXEC.search(cmd) or _REVERSE_SHELL.search(cmd)):
         return [_finding(
             _HOOK_FETCH, "critical",
             f"Agent hook pipes remote content into a shell in {rel_path}",
@@ -424,6 +425,7 @@ def _check_mcp(data: dict, rel_path: str, text: str) -> list[dict]:
             joined = " ".join(parts)
             command = str(spec.get("command") or "").strip()
             if _PIPE_TO_SHELL.search(joined) or _SHELL_SUBSHELL_FETCH.search(joined) or \
+                    _REVERSE_SHELL.search(joined) or _FETCH_PIPE_EXEC.search(joined) or \
                     re.search(r"\b(bash|sh|zsh)\s+-c\b", joined):
                 findings.append(_finding(
                     _MCP_SHELL, "high",
