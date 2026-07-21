@@ -71,3 +71,61 @@ def test_chat_json_respects_max_repairs_zero():
     )
     assert result.parsed is None
     assert len(llm.calls) == 1
+
+
+class _TruncStubLlm(LlmClient):
+    """Scripts ``chat`` with (content, truncated) pairs and records max_tokens."""
+
+    def __init__(self, responses):
+        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub-model")
+        self._r = list(responses)
+        self.calls = []
+        self.max_tokens_seen = []
+
+    def chat(self, messages, *, temperature=0.0, max_tokens=1024):
+        self.calls.append(list(messages))
+        self.max_tokens_seen.append(max_tokens)
+        content, truncated = self._r.pop(0)
+        return LlmResponse(
+            content=content, tokens_in=10, tokens_out=5,
+            prompt_hash=f"h-{len(self.calls)}", truncated=truncated,
+        )
+
+
+def test_chat_json_truncated_escalates_tokens_and_retries_original_prompt():
+    # A truncated first response is retried on the ORIGINAL prompt (no repair
+    # reprompt) with a larger token cap, and recovers when it completes.
+    llm = _TruncStubLlm([('{"exploit_chain":"x rea', True), (_VALID, False)])
+    result = llm.chat_json(
+        [{"role": "user", "content": "go"}], HunterResponse, max_tokens=3000,
+    )
+    assert isinstance(result.parsed, HunterResponse)
+    assert result.error is None
+    assert len(llm.calls) == 2
+    # Escalated cap on the retry.
+    assert llm.max_tokens_seen == [3000, 8000]
+    # Retry is the ORIGINAL prompt, not a repair conversation.
+    assert llm.calls[1] == [{"role": "user", "content": "go"}]
+
+
+def test_chat_json_truncation_escalation_is_capped():
+    # Escalation never exceeds the ceiling even from a high starting cap.
+    llm = _TruncStubLlm([("truncated…", True), (_VALID, False)])
+    result = llm.chat_json(
+        [{"role": "user", "content": "go"}], HunterResponse, max_tokens=5000,
+    )
+    assert isinstance(result.parsed, HunterResponse)
+    assert llm.max_tokens_seen == [5000, 8000]  # min(5000*3, 8000)
+
+
+def test_chat_json_schema_error_still_uses_repair_not_escalation():
+    # A non-truncated malformed response keeps the repair-reprompt behavior and
+    # does not escalate the token cap.
+    llm = _TruncStubLlm([("not json", False), (_VALID, False)])
+    result = llm.chat_json(
+        [{"role": "user", "content": "go"}], HunterResponse, max_tokens=3000,
+    )
+    assert isinstance(result.parsed, HunterResponse)
+    assert llm.max_tokens_seen == [3000, 3000]  # unchanged
+    assert llm.calls[1][1] == {"role": "assistant", "content": "not json"}
+    assert llm.calls[1][2]["role"] == "user"  # repair prompt present
