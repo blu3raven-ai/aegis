@@ -15,6 +15,7 @@ interface RunProgress {
   expectedRepos?: number | null
   currentRepo?: string | null
   stage?: string
+  verifyingFindings?: number
 }
 
 interface ActiveRun {
@@ -51,8 +52,12 @@ const STATUS_PRIORITY: Record<string, number> = {
 }
 
 function extractScannerType(runId: string): string {
+  // runId shape: <prefix>-<timestamp>-<org>-<scanner_type>. Scanner types use
+  // underscores (code_scanning, dependencies_scanning, …), so the type is the
+  // final dash segment — taking slice(2) swallowed the org label and produced
+  // a bogus scanner label like "frogasia-code_scanning".
   const parts = runId.split("-")
-  return parts.length >= 3 ? parts.slice(2).join("-") : runId
+  return parts.length >= 1 ? parts[parts.length - 1] : runId
 }
 
 function buildScanLabel(runs: ActiveRun[]): string {

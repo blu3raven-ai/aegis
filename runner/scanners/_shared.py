@@ -190,6 +190,7 @@ class ProgressEmitter:
         self._expected = max(0, int(expected))
         self._stage = "starting"
         self._current_repo: str | None = None
+        self._verifying_findings = 0
 
     def starting(self) -> None:
         with self._lock:
@@ -222,6 +223,17 @@ class ProgressEmitter:
             self._current_repo = None
             self._emit_locked()
 
+    def verifying(self, findings_count: int) -> None:
+        # LLM verification is the slow, unpredictable phase — generation time
+        # varies per finding and there is no smooth percent to report. Surface
+        # the count so the UI can show an honest indeterminate state instead
+        # of a bar frozen at the pre-verify percentage.
+        with self._lock:
+            self._stage = "verifying"
+            self._current_repo = None
+            self._verifying_findings = max(0, int(findings_count))
+            self._emit_locked()
+
     def done(self) -> None:
         with self._lock:
             self._finished = self._expected
@@ -240,6 +252,8 @@ class ProgressEmitter:
         }
         if self._current_repo:
             progress["currentRepo"] = self._current_repo
+        if self._stage == "verifying" and getattr(self, "_verifying_findings", 0):
+            progress["verifyingFindings"] = self._verifying_findings
         try:
             self._on_progress([], progress)
         except Exception:  # noqa: BLE001
@@ -397,8 +411,9 @@ def build_llm_client(env: JobEnv):
         model=env.get("LLM_API_MODEL", "gpt-4o-mini"),
         # Generation on slow/self-hosted endpoints can exceed the 60s httpx
         # default — the agent judge's large prompt regularly did, which surfaced
-        # as ReadTimeout and left agent findings unverified. Overridable per job.
-        timeout=float(env.get("LLM_TIMEOUT", "120")),
+        # as ReadTimeout and left agent findings unverified. Generous default;
+        # chat() also retries on timeout. Overridable per job.
+        timeout=float(env.get("LLM_TIMEOUT", "300")),
     )
 
 
@@ -423,7 +438,7 @@ def build_escalation_llm_client(env: JobEnv):
             or env.get("LLM_API_BASE_URL", "https://api.openai.com/v1")
         ),
         model=model,
-        timeout=float(env.get("LLM_TIMEOUT", "120")),
+        timeout=float(env.get("LLM_TIMEOUT", "300")),
     )
 
 

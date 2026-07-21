@@ -88,3 +88,33 @@ def test_chat_returns_empty_after_retries_exhaust(monkeypatch):
     client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(lambda r: _ok("")))
     resp = client.chat([{"role": "user", "content": "x"}])
     assert resp.content == ""
+
+
+def test_chat_retries_on_timeout_then_succeeds(monkeypatch):
+    # A slow endpoint under load raises ReadTimeout. chat() must back off and
+    # retry rather than surfacing as a hard llm_error that leaves the finding
+    # unverified.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.ReadTimeout("slow", request=req)
+        return _ok('{"a": 1}')
+
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert calls["n"] == 2
+    assert resp.content == '{"a": 1}'
+
+
+def test_chat_raises_transient_after_timeout_retries_exhaust(monkeypatch):
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    client = LlmClient(
+        "k", "https://x/v1", "m",
+        transport=httpx.MockTransport(lambda r: (_ for _ in ()).throw(httpx.ReadTimeout("slow", request=r))),
+    )
+    from runner.verification.llm_client import LlmTransientError
+    with pytest.raises(LlmTransientError):
+        client.chat([{"role": "user", "content": "x"}])

@@ -270,6 +270,10 @@ class CodeScanningScanner:
             # Only worth it when verification will actually run (LLM configured).
             if JobEnv(job).get("LLM_API_KEY"):
                 self._preview_ingest_findings(findings_file, job)
+                # LLM verification is the slow, unpredictable phase; tell the UI
+                # it has started (with the finding count) so the progress bar
+                # doesn't read as frozen while generation runs.
+                emitter.verifying(total)
 
             try:
                 self._verify_findings_file(findings_file, repo_root=str(out_dir), env=JobEnv(job))
