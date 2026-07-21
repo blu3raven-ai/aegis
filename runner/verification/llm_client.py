@@ -8,7 +8,9 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import random
 import re
+import time
 from dataclasses import dataclass
 from typing import TypeVar
 
@@ -134,40 +136,65 @@ class LlmClient:
             "max_tokens": max_tokens,
         }
         prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+        headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
-        with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
-            resp = client.post(
-                url, json=payload,
-                headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
+        # Retry on transient failures: 5xx and empty-content 200s. The latter
+        # happens when the model returns nothing under concurrent load — a
+        # short overload window that a backoff clears. The immediate repair
+        # retry in chat_json hits the same window; backoff here lets it pass.
+        # 429 is surfaced to the caller (it carries a Retry-After); 4xx other
+        # than 429 is a real error, not retried.
+        last_error: Exception | None = None
+        for attempt in range(3):
+            with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
+                resp = client.post(url, json=payload, headers=headers)
+
+            if resp.status_code in (401, 403):
+                raise LlmAuthError(f"llm auth failed: {resp.status_code}")
+            if resp.status_code == 429:
+                ra = resp.headers.get("Retry-After", "30")
+                retry_after = int(ra) if ra.isdigit() else 30
+                raise LlmRateLimitedError(retry_after_seconds=retry_after)
+            if resp.status_code >= 500:
+                last_error = LlmTransientError(f"llm 5xx: {resp.status_code}")
+                if attempt < 2:
+                    # Jittered backoff so concurrent workers don't all retry
+                    # in lockstep and re-trigger the overload.
+                    time.sleep(2 ** attempt + random.uniform(0, 1))
+                    continue
+                raise last_error
+            if resp.status_code >= 400:
+                raise LlmError(f"llm unexpected: {resp.status_code} {resp.text[:200]}")
+
+            data = resp.json()
+            try:
+                # content can be null when the model refuses or hits a length cap;
+                # coerce to "" so _strip_fences and the repair path handle it
+                # instead of crashing on None.strip().
+                content = data["choices"][0]["message"].get("content") or ""
+            except (KeyError, IndexError) as e:
+                raise LlmError(f"malformed llm response: {e}") from e
+
+            content = _strip_fences(content)
+            if not content and attempt < 2:
+                # 200 with empty content — transient overload. Back off and
+                # retry before accepting the empty response (which falls
+                # through to chat_json's repair / needs_verify fallback).
+                # Jittered so concurrent workers don't retry in lockstep.
+                last_error = LlmTransientError("llm returned empty content")
+                time.sleep(2 ** attempt + random.uniform(0, 1))
+                continue
+            usage = data.get("usage", {})
+            return LlmResponse(
+                content=content,
+                tokens_in=int(usage.get("prompt_tokens", 0)),
+                tokens_out=int(usage.get("completion_tokens", 0)),
+                prompt_hash=prompt_hash,
             )
 
-        if resp.status_code in (401, 403):
-            raise LlmAuthError(f"llm auth failed: {resp.status_code}")
-        if resp.status_code == 429:
-            ra = resp.headers.get("Retry-After", "30")
-            retry_after = int(ra) if ra.isdigit() else 30
-            raise LlmRateLimitedError(retry_after_seconds=retry_after)
-        if resp.status_code >= 500:
-            raise LlmTransientError(f"llm 5xx: {resp.status_code}")
-        if resp.status_code >= 400:
-            raise LlmError(f"llm unexpected: {resp.status_code} {resp.text[:200]}")
-
-        data = resp.json()
-        try:
-            # content can be null when the model refuses or hits a length cap;
-            # coerce to "" so _strip_fences and the repair path handle it
-            # instead of crashing on None.strip().
-            content = data["choices"][0]["message"].get("content") or ""
-        except (KeyError, IndexError) as e:
-            raise LlmError(f"malformed llm response: {e}") from e
-
-        usage = data.get("usage", {})
-        return LlmResponse(
-            content=_strip_fences(content),
-            tokens_in=int(usage.get("prompt_tokens", 0)),
-            tokens_out=int(usage.get("completion_tokens", 0)),
-            prompt_hash=prompt_hash,
-        )
+        # Unreachable: every branch above either returns or raises on the
+        # final attempt. Kept as a defensive guard.
+        raise last_error if last_error is not None else LlmError("llm empty after retries")
 
     def chat_json(
         self,

@@ -106,6 +106,43 @@ async def test_submit_repo_scan_resolves_provider_url_and_source_type(db_session
 
 
 @pytest.mark.asyncio
+async def test_submit_repo_scan_without_commit_sha_scans_head(db_session, monkeypatch):
+    """Re-verification of a finding from a source-connection scan has no pinned
+    commit (Asset.last_scanned_sha is NULL). submit_scan must dispatch a HEAD
+    scan (empty COMMIT_SHA) rather than 422 — the runner scans the default
+    branch, same as scheduled source scans."""
+    from src.scans.service import submit_scan
+
+    asset_id = str(uuid.uuid4())
+    db_session.add(Asset(
+        id=asset_id, type="repo", source="source_connection",
+        external_ref=f"github:acme/api-{asset_id[:8]}",
+        display_name="acme/api", asset_metadata={},
+    ))
+    await db_session.commit()
+
+    @asynccontextmanager
+    async def _patched_get_session():
+        yield db_session
+
+    jobs = _capture_dispatch(monkeypatch)
+    monkeypatch.setattr("src.scans.service.get_session", _patched_get_session)
+    monkeypatch.setattr("src.shared.config.get_instance_url_for_org", lambda org, st: "")
+
+    try:
+        sub = await submit_scan(asset_id, "user-1", commit_sha=None,
+                                scanner_types=["code_scanning"])
+        assert sub is not None
+        assert sub.commit_sha is None
+        # Empty COMMIT_SHA is the runner's signal to scan the default-branch HEAD.
+        assert jobs[0]["env_vars"]["COMMIT_SHA"] == ""
+    finally:
+        await db_session.execute(delete(ScanRun).where(ScanRun.asset_id == asset_id))
+        await db_session.execute(delete(Asset).where(Asset.id == asset_id))
+        await db_session.commit()
+
+
+@pytest.mark.asyncio
 async def test_submit_ci_scan_resolves_provider_url_and_source_type(db_session, monkeypatch):
     """CI dispatch resolves SOURCE_TYPE + a provider clone URL from the asset's
     external_ref — never the bare github.com/{uuid} the UUID source_id implied."""

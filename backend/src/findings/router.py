@@ -580,7 +580,8 @@ async def reverify_finding(finding_id: int, request: Request) -> dict[str, Any]:
     finding reads (404 out of scope). Asynchronous: the finding's advisory
     updates when the re-scan completes and re-ingests, so the caller polls via
     the usual findings SSE rather than blocking here. Re-verifies against the
-    source's last-scanned commit so the same tree is re-checked.
+    source's last-scanned commit when one is recorded; otherwise re-scans the
+    default-branch HEAD (the same path scheduled source scans take).
     """
     require_permission(request, RUN_SCANS)
     finding = await _scoped_finding_dict(finding_id, request)

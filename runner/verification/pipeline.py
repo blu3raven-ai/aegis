@@ -83,7 +83,7 @@ def run_tp_reasoning(finding: dict, code_context: str, reachability, *, llm):
             {"role": "user", "content": hunter_user_message(finding, code_context, reachability)},
         ],
         HunterResponse,
-        temperature=0.0, max_tokens=800,
+        temperature=0.0, max_tokens=1500,
     )
 
 
