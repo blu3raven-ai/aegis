@@ -38,7 +38,8 @@ def _run(env, *, static_hits=1, **over):
 def test_dockerfile_body_per_ecosystem():
     assert "--ignore-scripts" in orch.dockerfile_body("npm")
     assert "debian" in orch.dockerfile_body("shell")
-    assert orch.dockerfile_body("python") is None
+    assert "python" in orch.dockerfile_body("python")
+    assert orch.dockerfile_body("golang") is None
 
 
 # --- triage gate ---
@@ -87,8 +88,8 @@ def test_no_runtime_is_noop_when_enabled():
 
 
 def test_unsupported_ecosystem_is_noop():
-    py = DetonationEntry(cmd=("python", "-m", "x"), ecosystem="python", source="x")
-    assert _run(_Env(DETONATE="1"), detect_entry=lambda root: py) == []
+    go = DetonationEntry(cmd=("go", "run", "x"), ecosystem="golang", source="x")
+    assert _run(_Env(DETONATE="1"), detect_entry=lambda root: go) == []
 
 
 def test_build_failure_is_noop():
@@ -131,3 +132,11 @@ def test_obfuscated_entry_body_triages_as_worth_when_off():
                           source="setup.sh", body="eval(atob('cGF5bG9hZA=='))")
     findings = _run(_Env(), static_hits=0, detect_entry=lambda root: obf)
     assert len(findings) == 1 and findings[0]["check_id"] == "AGENT_DETONATION_RECOMMENDED"
+
+
+def test_runtime_verify_flag_also_enables_detonation():
+    # One sandbox switch: RUNTIME_VERIFY enables the whole runtime pass, so
+    # detonation fires under it too (not just the DETONATE alias).
+    findings = _run(_Env(RUNTIME_VERIFY="true"))
+    assert len(findings) == 1
+    assert findings[0]["check_id"] == "AGENT_DETONATION_EGRESS"

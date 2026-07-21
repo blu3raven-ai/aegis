@@ -11,6 +11,7 @@ Pure and table-tested; the caller feeds the returned command to ``detonate``.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from pathlib import Path
 _NPM_AUTO_SCRIPTS = ("preinstall", "install", "postinstall", "prepare")
 # Conventionally-named setup scripts an agent is told to run.
 _SETUP_SCRIPTS = ("setup.sh", "install.sh", "bootstrap.sh")
+# Make targets an agent commonly runs to set up a repo.
+_MAKE_TARGETS = ("install", "setup", "bootstrap")
 
 
 @dataclass(frozen=True)
@@ -69,10 +72,50 @@ def _script_entry(repo_root: Path) -> DetonationEntry | None:
     return None
 
 
+def _pip_entry(repo_root: Path) -> DetonationEntry | None:
+    # `pip install .` runs setup.py / a pyproject build backend: arbitrary code
+    # at install time, the Python equivalent of an npm postinstall.
+    for name in ("setup.py", "pyproject.toml"):
+        p = repo_root / name
+        if p.is_file():
+            try:
+                body = p.read_text(encoding="utf-8", errors="replace")[:_MAX_BODY_BYTES]
+            except OSError:
+                body = ""
+            return DetonationEntry(
+                cmd=("pip", "install", "--no-build-isolation", "."),
+                ecosystem="python", source=name, body=body,
+            )
+    return None
+
+
+def _make_entry(repo_root: Path) -> DetonationEntry | None:
+    p = repo_root / "Makefile"
+    if not p.is_file():
+        return None
+    try:
+        body = p.read_text(encoding="utf-8", errors="replace")[:_MAX_BODY_BYTES]
+    except OSError:
+        return None
+    for target in _MAKE_TARGETS:
+        if re.search(rf"^{target}\s*:", body, re.MULTILINE):
+            return DetonationEntry(
+                cmd=("make", target), ecosystem="shell",
+                source=f"Makefile:{target}", body=body,
+            )
+    return None
+
+
 def detect_entry(repo_root: str) -> DetonationEntry | None:
-    """The setup entry to detonate, or None. npm lifecycle scripts first (they
-    auto-run on install), then a conventional setup script."""
+    """The setup entry to detonate, or None. Checks the auto-run install points
+    across ecosystems: npm lifecycle scripts, pip build (setup.py/pyproject),
+    a Makefile setup target, then a conventional setup script."""
     root = Path(repo_root)
     if not root.is_dir():
         return None
-    return _npm_entry(root) or _script_entry(root)
+    return (
+        _npm_entry(root)
+        or _pip_entry(root)
+        or _make_entry(root)
+        or _script_entry(root)
+    )

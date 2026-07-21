@@ -47,12 +47,17 @@ _DOCKERFILES = {
         "FROM node:20-slim\nWORKDIR /app\nCOPY . /app\n"
         "RUN npm install --ignore-scripts --no-audit --no-fund || true\n"
     ),
-    "shell": "FROM debian:stable-slim\nWORKDIR /app\nCOPY . /app\n",
+    # debian-slim carries make + sh; used for both setup scripts and Makefiles.
+    "shell": "FROM debian:stable-slim\nWORKDIR /app\nRUN apt-get update && apt-get install -y --no-install-recommends make || true\nCOPY . /app\n",
+    "python": "FROM python:3.12-slim\nWORKDIR /app\nCOPY . /app\n",
 }
 
 
 def _enabled(get) -> bool:
-    return (get("DETONATE") or "").strip().lower() in ("1", "true", "yes", "on")
+    # One sandbox switch: RUNTIME_VERIFY turns on the whole runtime pass (probe +
+    # detonate). DETONATE kept as a back-compat alias.
+    on = ("1", "true", "yes", "on")
+    return (get("RUNTIME_VERIFY") or get("DETONATE") or "").strip().lower() in on
 
 
 def dockerfile_body(ecosystem: str) -> str | None:
