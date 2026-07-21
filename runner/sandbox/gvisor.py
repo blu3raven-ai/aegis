@@ -18,7 +18,7 @@ The runtime picture (validated empirically on Docker Desktop arm64):
 - The whole flow runs inside ``unshare --net --map-root-user`` so the honeypot +
   netfilter rules live in a throwaway namespace and never touch the runner's own
   networking. This needs only default container caps + ``seccomp=unconfined`` on
-  the runner (see docker-compose.yml) — no ``--privileged``, no socket.
+  the runner (see docker-compose.yml): no ``--privileged``, no socket.
 
 The argv / OCI / script builders below are pure and unit-tested;
 ``detonate_gvisor`` is the thin real-namespace orchestration, guarded so ANY
@@ -61,7 +61,7 @@ def _honeypot_argv() -> list[str]:
 
 
 def runsc_do_argv(cmd: Sequence[str], *, network: str = "none") -> list[str]:
-    """Standalone ``runsc do`` argv (no bundle) — used by the availability probe."""
+    """Standalone ``runsc do`` argv (no bundle), used by the availability probe."""
     return [
         runsc_binary(),
         "--rootless",
@@ -95,7 +95,7 @@ def oci_config(entry_cmd: Sequence[str], *, cwd: str = "/", read_only: bool = Tr
 
     No network namespace is declared, so the container shares the caller's netns
     (the routeless one with the honeypot). Root is read-only, caps are dropped,
-    scratch is a size-capped tmpfs — the same profile as the docker/podman tier.
+    scratch is a size-capped tmpfs, the same profile as the docker/podman tier.
     """
     return {
         "ociVersion": "1.0.0",
@@ -204,7 +204,7 @@ def _probe(cancel_event: "threading.Event | None") -> bool:
         code, _out, _err = run_tool(
             unshare_argv(path), timeout=_PROBE_TIMEOUT_S, cancel_event=cancel_event,
         )
-    except Exception:  # noqa: BLE001 — unshare/runsc missing or blocked → unavailable
+    except Exception:  # noqa: BLE001 - unshare/runsc missing or blocked, so unavailable
         logger.info("[detonation] gVisor tier unavailable on this host", exc_info=True)
         return False
     finally:
@@ -213,6 +213,47 @@ def _probe(cancel_event: "threading.Event | None") -> bool:
         except OSError:
             pass
     return code == 0
+
+
+# Baked per-ecosystem base rootfs (extracted base images). The gVisor tier runs
+# the setup entry directly against this + the repo overlaid at /app, avoiding the
+# nested container build that fails on Docker Desktop. CI bakes these dirs into
+# the runner image; absent means the tier graceful-skips.
+_BASE_ROOTFS_DIR = "/opt/aegis-rootfs"
+_ECOSYSTEM_BASE = {"npm": "npm", "python": "python", "shell": "shell"}
+
+
+def base_rootfs_dir() -> str:
+    return (os.environ.get("AEGIS_BASE_ROOTFS_DIR") or _BASE_ROOTFS_DIR).strip() or _BASE_ROOTFS_DIR
+
+
+def prepare_rootfs(ecosystem: str, repo_root: str, run_id: str) -> str | None:
+    """Materialise a writable rootfs for ``ecosystem`` with the repo at /app, or
+    None if the baked base for this ecosystem is absent (tier graceful-skips).
+
+    The setup entry installs its own deps at detonation time (that is the payload
+    we want to fire), so no pre-built dependency image is needed, just the base
+    interpreter/toolchain plus the repo tree.
+    """
+    base_name = _ECOSYSTEM_BASE.get(ecosystem)
+    if not base_name:
+        return None
+    base = os.path.join(base_rootfs_dir(), base_name)
+    if not os.path.isdir(base):
+        return None
+    dest = tempfile.mkdtemp(prefix=f"aegis-gvisor-rootfs-{run_id}-")
+    try:
+        # ponytail: full copy of the base rootfs per detonation. Detonation is
+        # triage-gated + opt-in (rare), so simplicity wins; switch to an overlay
+        # lowerdir if throughput ever matters.
+        shutil.copytree(base, dest, dirs_exist_ok=True, symlinks=True)
+        app = os.path.join(dest, "app")
+        shutil.copytree(repo_root, app, dirs_exist_ok=True, symlinks=True)
+        return dest
+    except Exception:  # noqa: BLE001 - any prep failure means skip, never a false verdict
+        shutil.rmtree(dest, ignore_errors=True)
+        logger.warning("[detonation] gVisor rootfs prep failed for %s", ecosystem, exc_info=True)
+        return None
 
 
 def detonate_gvisor(
@@ -226,7 +267,7 @@ def detonate_gvisor(
     empty list means 'ran, observed no egress'.
 
     ``rootfs_dir`` is a prepared root filesystem (base image extracted + repo
-    files in place). We do not build an image here — the gVisor tier avoids the
+    files in place). We do not build an image here; the gVisor tier avoids the
     nested container build that fails on Docker Desktop.
     """
     if not runsc_available(cancel_event):
@@ -259,8 +300,8 @@ def detonate_gvisor(
                 pass
         with open(log_path) as fh:
             return parse_egress_log(fh.read())
-    except Exception:  # noqa: BLE001 — any failure → graceful-skip, never a false verdict
-        logger.warning("[detonation] gVisor detonation errored — skipping", exc_info=True)
+    except Exception:  # noqa: BLE001 - any failure means graceful-skip, never a false verdict
+        logger.warning("[detonation] gVisor detonation errored, skipping", exc_info=True)
         return None
     finally:
         shutil.rmtree(bundle, ignore_errors=True)

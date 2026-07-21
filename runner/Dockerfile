@@ -46,7 +46,7 @@ RUN ARCH=$(uname -m) && \
         | tar -xz -C /usr/local/bin trufflehog && \
     chmod +x /usr/local/bin/trufflehog
 
-# gVisor runsc — daemon-free OCI runtime for the detonation tier that runs where
+# gVisor runsc: daemon-free OCI runtime for the detonation tier that runs where
 # nested rootless podman cannot (Docker Desktop's LinuxKit VM blocks nested
 # multi-ID userns). sha512-verified from the pinned release. arch dir matches
 # uname -m (aarch64 / x86_64).
@@ -90,6 +90,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv export --frozen --no-dev --no-emit-project --output-file=/tmp/requirements.txt && \
     uv pip install --system --prefix=/install -r /tmp/requirements.txt
 
+# ─── Detonation base rootfs stages ──────────────────────────────────────────────
+# Baked, per-ecosystem base filesystems for the gVisor detonation tier. The tier
+# overlays the target repo at /app and runs the setup entry directly against these
+# (no nested container build), so detonation works on hosts where nested podman
+# cannot build (Docker Desktop). Bases match the podman-tier detonation Dockerfiles.
+FROM node:20-slim AS rootfs-npm
+FROM python:3.12-slim AS rootfs-python
+FROM debian:stable-slim AS rootfs-shell
+
 # ─── Runtime stage ────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
@@ -104,7 +113,10 @@ ENV PYTHONUNBUFFERED=1 \
 #   libicu76   — cyclonedx-cli (.NET) globalization
 #   procps     — pgrep, used by the HEALTHCHECK below
 #   iptables   — the opt-in detonation honeypot uses this image as its own sidecar
-#                and needs iptables to redirect the target's outbound TCP
+#                and needs iptables to redirect the target's outbound TCP; the
+#                gVisor tier also uses it (with iproute2) to pin egress inside a
+#                throwaway network namespace
+#   iproute2   - `ip` for the gVisor tier's per-detonation network namespace
 # podman + rootless deps let the runner run the sandbox (runtime verification /
 # detonation) self-contained — nested rootless containers, no host Docker socket
 # to mount (that socket is host-root-equivalent, so avoiding it is a security win).
@@ -114,7 +126,7 @@ ENV PYTHONUNBUFFERED=1 \
 #                       the passt package; slirp4netns kept as a fallback)
 #   uidmap           — newuidmap/newgidmap for the user-namespace setup
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates git libstdc++6 libicu76 procps iptables \
+        ca-certificates git libstdc++6 libicu76 procps iptables iproute2 \
         podman crun fuse-overlayfs passt slirp4netns uidmap \
     && rm -rf /var/lib/apt/lists/*
 
@@ -144,6 +156,11 @@ COPY --from=builder \
 
 # Semgrep rules bundle
 COPY --from=builder /opt/semgrep-rules /opt/semgrep-rules
+
+# Baked detonation base rootfs, keyed by ecosystem (see runner/sandbox/gvisor.py).
+COPY --from=rootfs-npm / /opt/aegis-rootfs/npm/
+COPY --from=rootfs-python / /opt/aegis-rootfs/python/
+COPY --from=rootfs-shell / /opt/aegis-rootfs/shell/
 
 # Node.js runtime for cdxgen
 COPY --from=builder /usr/bin/node /usr/bin/node
