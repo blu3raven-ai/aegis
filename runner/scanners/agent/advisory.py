@@ -208,6 +208,16 @@ ADVISORY: dict[str, tuple[str, str]] = {
         "Remove the core.hooksPath redirect. If a custom hooks directory is "
         "genuinely required, name it .githooks or .husky and review its contents.",
     ),
+    "AGENT_AUTOEXEC_BUILD_HOOK": (
+        "A non-npm build or interpreter auto-load hook (Cargo build.rs / "
+        ".cargo/config.toml toolchain redirect, Python .pth/sitecustomize/setup.py, "
+        "composer install script, direnv .envrc, mise hook/task, or a local "
+        "pre-commit hook) runs automatically and fetches/execs remote code or reads "
+        "a secret.",
+        "Remove the dangerous command from the hook. If the toolchain redirect "
+        "(rustc-wrapper / target runner) is not intentional, delete it and rotate "
+        "any secrets the hook could have read.",
+    ),
     # ── Agent lifecycle hooks ────────────────────────────────────────────────
     "AGENT_HOOK_SHELL_FETCH": (
         "An agent hook fetches remote content and runs it, so the agent executes "

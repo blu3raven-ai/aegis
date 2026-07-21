@@ -45,6 +45,7 @@ _DEVCONTAINER = "AGENT_AUTOEXEC_DEVCONTAINER"
 _INSTALL_HOOK = "AGENT_AUTOEXEC_INSTALL_HOOK"
 _GIT_HOOK = "AGENT_AUTOEXEC_GIT_HOOK"
 _HOOKS_REDIRECT = "AGENT_AUTOEXEC_HOOKS_REDIRECT"
+_BUILD_HOOK = "AGENT_AUTOEXEC_BUILD_HOOK"
 
 # `git config core.hooksPath <dir>` silently redirects hook execution to a
 # repo-relative dir; if that dir isn't named .githooks/.husky, _classify()
@@ -62,6 +63,9 @@ _SKIP_DIRS = frozenset({
 
 # npm lifecycle scripts that run automatically on `npm install`.
 _INSTALL_SCRIPTS = ("preinstall", "install", "postinstall", "prepare", "prepublish")
+
+# composer lifecycle scripts that run automatically on `composer install`.
+_COMPOSER_SCRIPTS = ("post-install-cmd", "post-autoload-dump")
 
 _MAX_FILE_BYTES = 1 * 1024 * 1024
 
@@ -234,6 +238,174 @@ def _scan_gitconfig(rel_path: str, text: str) -> list[dict]:
     )]
 
 
+def _snippet(text: str) -> str:
+    return " ".join(text.split())[:160]
+
+
+def _scan_dangerous_source(rel_path: str, text: str, label: str, resource: str,
+                            severity: str = "critical") -> list[dict]:
+    """Flag a file that always runs in full (build script / interpreter
+    auto-load hook) when its content matches a dangerous pattern."""
+    if not _is_dangerous(text):
+        return []
+    return [_finding(
+        _BUILD_HOOK, severity,
+        f"{label} in {rel_path}",
+        rel_path, 1, f"{_BUILD_HOOK}:{resource}", {"snippet": _snippet(text)},
+    )]
+
+
+def _scan_cargo_buildrs(rel_path: str, text: str) -> list[dict]:
+    return _scan_dangerous_source(
+        rel_path, text,
+        "build.rs (runs on cargo build/test) fetches/execs remote code or reads secrets",
+        "cargo-buildrs",
+    )
+
+
+def _scan_cargo_config(rel_path: str, text: str) -> list[dict]:
+    """`.cargo/config.toml` [build] rustc-wrapper or [target.*] runner silently
+    hijacks the compiler/test runner for every `cargo build`/`test`/`run` —
+    dangerous by presence alone, like core.hooksPath."""
+    import tomllib
+    try:
+        data = tomllib.loads(text)
+    except (tomllib.TOMLDecodeError, ValueError):
+        return []
+    findings: list[dict] = []
+    build = data.get("build")
+    if isinstance(build, dict) and "rustc-wrapper" in build:
+        findings.append(_finding(
+            _BUILD_HOOK, "critical",
+            f"Cargo config redirects the compiler via build.rustc-wrapper in {rel_path}",
+            rel_path, _line_of(text, "rustc-wrapper"), f"{_BUILD_HOOK}:rustc-wrapper",
+            {"rustc-wrapper": str(build.get("rustc-wrapper"))[:200]},
+        ))
+    target = data.get("target")
+    if isinstance(target, dict):
+        for triple, cfg in target.items():
+            if isinstance(cfg, dict) and "runner" in cfg:
+                findings.append(_finding(
+                    _BUILD_HOOK, "critical",
+                    f"Cargo config redirects the run/test wrapper via target.{triple}.runner in {rel_path}",
+                    rel_path, _line_of(text, "runner"), f"{_BUILD_HOOK}:runner:{triple}",
+                    {"runner": str(cfg.get("runner"))[:200]},
+                ))
+    return findings
+
+
+def _scan_pth_file(rel_path: str, text: str) -> list[dict]:
+    """A `.pth` line starting with ``import `` is exec'd by Python on every
+    interpreter start; other lines are inert sys.path entries."""
+    findings: list[dict] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("import ") and _is_dangerous(stripped):
+            findings.append(_finding(
+                _BUILD_HOOK, "critical",
+                f".pth file auto-executes an import line on every interpreter start in {rel_path}",
+                rel_path, _line_of(text, stripped[:40]), f"{_BUILD_HOOK}:pth",
+                {"line": stripped[:200]},
+            ))
+    return findings
+
+
+def _scan_python_autoload(rel_path: str, text: str) -> list[dict]:
+    return _scan_dangerous_source(
+        rel_path, text,
+        "Python auto-load file runs on every interpreter start and fetches/execs remote code or reads secrets",
+        "python-autoload",
+    )
+
+
+def _scan_setup_py(rel_path: str, text: str) -> list[dict]:
+    return _scan_dangerous_source(
+        rel_path, text,
+        "setup.py runs on pip install and fetches/execs remote code or reads secrets",
+        "setup-py",
+    )
+
+
+def _scan_composer_json(rel_path: str, text: str) -> list[dict]:
+    data = _load(text)
+    if not isinstance(data, dict):
+        return []
+    scripts = data.get("scripts")
+    if not isinstance(scripts, dict):
+        return []
+    findings: list[dict] = []
+    for name in _COMPOSER_SCRIPTS:
+        for cmd in _walk_strings(scripts.get(name)):
+            if _is_dangerous(cmd):
+                findings.append(_finding(
+                    _BUILD_HOOK, "high",
+                    f"composer {name} script fetches/execs remote code or reads secrets in {rel_path}",
+                    rel_path, _line_of(text, name), f"{_BUILD_HOOK}:composer:{name}",
+                    {"script": name, "command": cmd[:200]},
+                ))
+    return findings
+
+
+def _scan_envrc(rel_path: str, text: str) -> list[dict]:
+    return _scan_dangerous_source(
+        rel_path, text,
+        "direnv .envrc runs automatically on cd and fetches/execs remote code or reads secrets",
+        "envrc",
+    )
+
+
+def _scan_mise(rel_path: str, text: str) -> list[dict]:
+    import tomllib
+    try:
+        data = tomllib.loads(text)
+    except (tomllib.TOMLDecodeError, ValueError):
+        return []
+    findings: list[dict] = []
+    for section in ("hooks", "tasks"):
+        for cmd in _walk_strings(data.get(section)):
+            if _is_dangerous(cmd):
+                findings.append(_finding(
+                    _BUILD_HOOK, "high",
+                    f"mise {section} runs a command that fetches/execs remote code or reads secrets in {rel_path}",
+                    rel_path, _line_of(text, cmd[:40]), f"{_BUILD_HOOK}:mise:{section}",
+                    {"section": section, "command": cmd[:200]},
+                ))
+    return findings
+
+
+def _scan_precommit(rel_path: str, text: str) -> list[dict]:
+    """Only the ``repo: local`` hook shape is checked — a remote ``repo:`` url
+    is the overwhelmingly common, legitimate pre-commit pattern and isn't
+    flagged to avoid firing on nearly every real config."""
+    import yaml
+    try:
+        data = yaml.safe_load(text)
+    except Exception:  # noqa: BLE001 — malformed YAML → nothing to inspect
+        return []
+    if not isinstance(data, dict):
+        return []
+    repos = data.get("repos")
+    if not isinstance(repos, list):
+        return []
+    findings: list[dict] = []
+    for repo in repos:
+        if not isinstance(repo, dict) or repo.get("repo") != "local":
+            continue
+        for hook in repo.get("hooks") or []:
+            if not isinstance(hook, dict):
+                continue
+            entry = hook.get("entry")
+            if isinstance(entry, str) and _is_dangerous(entry):
+                hook_id = str(hook.get("id") or "")
+                findings.append(_finding(
+                    _BUILD_HOOK, "high",
+                    f"pre-commit local hook '{hook_id}' fetches/execs remote code or reads secrets in {rel_path}",
+                    rel_path, _line_of(text, entry[:40]), f"{_BUILD_HOOK}:precommit:{hook_id}",
+                    {"entry": entry[:200]},
+                ))
+    return findings
+
+
 def _classify(rel_path: str) -> str | None:
     base = rel_path.rsplit("/", 1)[-1]
     if rel_path == ".vscode/tasks.json":
@@ -246,6 +418,24 @@ def _classify(rel_path: str) -> str | None:
         return "githook"
     if base == ".gitconfig":
         return "gitconfig"
+    if base == "build.rs":
+        return "cargo_buildrs"
+    if rel_path.endswith(".cargo/config.toml") or rel_path.endswith(".cargo/config"):
+        return "cargo_config"
+    if base.endswith(".pth"):
+        return "pth"
+    if base in ("sitecustomize.py", "usercustomize.py", "conftest.py"):
+        return "python_autoload"
+    if base == "setup.py":
+        return "setup_py"
+    if base == "composer.json":
+        return "composer_json"
+    if base == ".envrc":
+        return "envrc"
+    if base in (".mise.toml", "mise.toml"):
+        return "mise"
+    if base in (".pre-commit-config.yaml", ".pre-commit-config.yml"):
+        return "precommit"
     return None
 
 
@@ -281,6 +471,24 @@ def scan_autoexec_configs(repo_root: str) -> list[dict]:
                     findings.extend(_scan_git_hook(rel, text))
                 elif kind == "gitconfig":
                     findings.extend(_scan_gitconfig(rel, text))
+                elif kind == "cargo_buildrs":
+                    findings.extend(_scan_cargo_buildrs(rel, text))
+                elif kind == "cargo_config":
+                    findings.extend(_scan_cargo_config(rel, text))
+                elif kind == "pth":
+                    findings.extend(_scan_pth_file(rel, text))
+                elif kind == "python_autoload":
+                    findings.extend(_scan_python_autoload(rel, text))
+                elif kind == "setup_py":
+                    findings.extend(_scan_setup_py(rel, text))
+                elif kind == "composer_json":
+                    findings.extend(_scan_composer_json(rel, text))
+                elif kind == "envrc":
+                    findings.extend(_scan_envrc(rel, text))
+                elif kind == "mise":
+                    findings.extend(_scan_mise(rel, text))
+                elif kind == "precommit":
+                    findings.extend(_scan_precommit(rel, text))
                 if kind in ("tasks", "devcontainer", "package", "githook"):
                     findings.extend(_scan_hooks_path_redirect(rel, text))
             except Exception:  # noqa: BLE001
