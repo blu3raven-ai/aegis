@@ -56,3 +56,29 @@ def test_prompt_is_benign_locked():
     sys = probe._PROBE_SYSTEM.lower()
     assert "read-only" in sys or "observe" in sys
     assert "must not" in sys and "exfiltrate" in sys and "destructive" in sys
+
+
+def test_context_is_injected_into_prompt():
+    # The probe generator must receive the finding's location, exploit chain,
+    # and flagged code so it targets the real endpoint instead of guessing.
+    llm = _mock_llm(_SPEC)
+    generate_probe(
+        "Confirm /admin is reachable without auth",
+        llm=llm,
+        port_hint=8080,
+        context={
+            "file": "app/routes/admin.py",
+            "exploit_chain": "unauthenticated GET /admin returns the dashboard",
+            "code_window": "@app.get('/admin')\ndef admin(): return render()",
+        },
+    )
+    user_msg = llm.chat.call_args_list[0].args[0][1]["content"]
+    assert "app/routes/admin.py" in user_msg
+    assert "unauthenticated GET /admin" in user_msg
+    assert "@app.get('/admin')" in user_msg
+
+
+def test_context_optional_backwards_compatible():
+    # Without context the prompt is still valid (just the question + port hint).
+    spec = generate_probe("Confirm /admin is reachable", llm=_mock_llm(_SPEC), port_hint=8080)
+    assert isinstance(spec, ProbeSpec)

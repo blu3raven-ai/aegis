@@ -87,7 +87,17 @@ def verify_findings_at_runtime(
             if not wait_ready(app_name, port_hint or 0, network=net, cancel_event=cancel_event):
                 return findings
             for finding in targets:
-                spec = generate_probe(_runtime_question(finding), llm=llm, port_hint=port_hint)
+                # Ground the probe in the finding so it targets the real
+                # endpoint/code instead of guessing from the one-line question.
+                probe_context = {
+                    "file": finding.get("file") or finding.get("file_path"),
+                    "exploit_chain": finding.get("exploit_chain"),
+                    "code_window": finding.get("code_window"),
+                }
+                spec = generate_probe(
+                    _runtime_question(finding), llm=llm, port_hint=port_hint,
+                    context=probe_context,
+                )
                 if spec is None:
                     continue
                 results = run_probe(

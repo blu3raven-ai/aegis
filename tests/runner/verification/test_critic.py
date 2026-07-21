@@ -103,3 +103,37 @@ def test_advisory_citation_no_file_lookup_attempted(tmp_path):
     # The advisory citation is valid (has source + snippet); the file
     # field should be ignored since kind=advisory.
     assert unverified == []
+
+
+def test_traversal_citation_is_jailed(tmp_path):
+    # A prompt-injected citation pointing outside the repo (../../) must never
+    # be read off the host. The out-of-repo file exists and the snippet matches,
+    # but the jail rejects the path, so it reports file_missing (oracle bit=0)
+    # instead of confirming the citation.
+    repo = tmp_path / "repo" / "_checkout"
+    repo.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("TOPSECRET=leakme\n")
+
+    evidence = [
+        {"file": "../../outside/secret.txt", "line": 1,
+         "snippet": "TOPSECRET=leakme", "kind": "code"},
+    ]
+    unverified, _ = verify_citations(evidence, str(repo))
+    assert unverified == ["../../outside/secret.txt:1 (file_missing)"]
+
+
+def test_absolute_path_citation_is_jailed(tmp_path):
+    # An absolute-path citation (e.g. /etc/passwd) must also be rejected, not
+    # read — even though the file exists and is readable on the host.
+    repo = tmp_path / "repo" / "_checkout"
+    repo.mkdir(parents=True)
+    secret = tmp_path / "abs_secret.txt"
+    secret.write_text("root:x:0:0\n")
+
+    evidence = [
+        {"file": str(secret), "line": 1, "snippet": "root:x:0:0", "kind": "code"},
+    ]
+    unverified, _ = verify_citations(evidence, str(repo))
+    assert unverified == [f"{secret}:1 (file_missing)"]

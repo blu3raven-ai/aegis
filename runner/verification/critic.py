@@ -1,7 +1,7 @@
 """Grep-verify every evidence citation against the actual repo."""
 from __future__ import annotations
 
-from pathlib import Path
+from runner.scanners._context import resolve_in_root
 
 
 def verify_citations(evidence: list[dict], repo_root: str) -> tuple[list[str], list[str]]:
@@ -27,8 +27,12 @@ def verify_citations(evidence: list[dict], repo_root: str) -> tuple[list[str], l
             unverified.append(f"{f}:{line}")
             continue
 
-        path = Path(repo_root) / f
-        if not path.exists():
+        # The citation path is LLM output, so a prompt-injection payload in the
+        # scanned repo can point it outside the clone (../../, /etc/passwd).
+        # Jail it to the repo like every other reader in this module; an escape
+        # resolves to None and is reported as file_missing, never read.
+        path = resolve_in_root(repo_root, f)
+        if path is None:
             unverified.append(f"{f}:{line} (file_missing)")
             continue
 

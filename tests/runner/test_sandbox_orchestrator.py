@@ -38,7 +38,7 @@ def _run(findings, env, **overrides):
         "start_app": lambda *a, **k: True,
         "wait_ready": lambda *a, **k: True,
         "stop_app": lambda name: None,
-        "generate_probe": lambda q, *, llm, port_hint=None: _Spec(),
+        "generate_probe": lambda q, *, llm, port_hint=None, context=None: _Spec(),
         "run_probe": lambda *a, **k: ["result"],
         "resolve_runtime_verdict": lambda results: RuntimeResolution(
             "confirmed", {"kind": "runtime_log", "snippet": "GET /admin (no credential) → 200",

@@ -39,13 +39,39 @@ def test_chat_raises_on_auth_failure():
         client.chat([{"role": "user", "content": "x"}])
 
 
-def test_chat_raises_on_rate_limit_with_retry_after():
+def test_chat_retries_on_rate_limit_then_raises(monkeypatch):
+    # A persistent 429 backs off (honoring Retry-After, capped) across the full
+    # attempt budget, then surfaces LlmRateLimitedError rather than failing the
+    # finding on the first 429.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
     def handler(req):
+        calls["n"] += 1
         return httpx.Response(429, headers={"Retry-After": "30"})
+
     client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
     with pytest.raises(LlmRateLimitedError) as exc_info:
         client.chat([{"role": "user", "content": "x"}])
     assert exc_info.value.retry_after_seconds == 30
+    assert calls["n"] == 4  # 1 initial + 3 retries
+
+
+def test_chat_retries_on_rate_limit_then_succeeds(monkeypatch):
+    # A transient 429 that clears is retried, not surfaced.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429, headers={"Retry-After": "1"})
+        return _ok('{"a": 1}')
+
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    resp = client.chat([{"role": "user", "content": "x"}])
+    assert calls["n"] == 2
+    assert resp.content == '{"a": 1}'
 
 
 def test_chat_strips_markdown_fences_from_content():
@@ -171,3 +197,56 @@ def test_chat_retries_on_malformed_choices_then_succeeds(monkeypatch):
     resp = client.chat([{"role": "user", "content": "x"}])
     assert calls["n"] == 2
     assert resp.content == '{"a": 1}'
+
+
+def _ok_tool_call(func_name: str = "grep") -> httpx.Response:
+    # A normal tool-calling turn: empty content alongside a tool_calls array.
+    return httpx.Response(200, json={
+        "choices": [{"message": {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": func_name, "arguments": "{}"},
+            }],
+        }}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+    })
+
+
+def test_chat_with_tools_retries_transient_then_succeeds(monkeypatch):
+    # The investigator loop uses chat_with_tools; a 5xx / 429 / connection blip
+    # must retry rather than aborting the whole investigation on the first hit.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503)
+        if calls["n"] == 2:
+            raise httpx.ConnectError("refused", request=req)
+        return _ok_tool_call()
+
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    resp = client.chat_with_tools([{"role": "user", "content": "x"}], tools=[])
+    assert calls["n"] == 3
+    assert len(resp.tool_calls) == 1
+    assert resp.tool_calls[0].name == "grep"
+
+
+def test_chat_with_tools_empty_content_not_retried(monkeypatch):
+    # Empty content is the NORMAL shape for a tool-calling turn (it rides with
+    # tool_calls); chat_with_tools must NOT retry it as a stall.
+    monkeypatch.setattr("runner.verification.llm_client.time.sleep", lambda _s: None)
+    calls = {"n": 0}
+
+    def handler(req):
+        calls["n"] += 1
+        return _ok_tool_call()
+
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    resp = client.chat_with_tools([{"role": "user", "content": "x"}], tools=[])
+    assert calls["n"] == 1  # no retry on the empty-content tool turn
+    assert len(resp.tool_calls) == 1

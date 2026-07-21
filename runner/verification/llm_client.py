@@ -35,6 +35,20 @@ def _strip_fences(content: str) -> str:
     s = _FENCE_CLOSE.sub("", s, count=1)
     return s.strip()
 
+
+# Total HTTP attempts per LLM call (1 initial + 3 retries). Every transient
+# failure mode below shares this budget so a single call can't spin forever.
+_MAX_ATTEMPTS = 4
+
+
+def _backoff(attempt: int, cap: float = 30.0) -> None:
+    """Sleep with jittered exponential backoff before a retry.
+
+    Jittered so concurrent workers don't retry in lockstep and re-trigger the
+    overload; capped so a single retry can't stall a worker indefinitely.
+    """
+    time.sleep(min(2 ** (attempt + 1) + random.uniform(0, 1), cap))
+
 _T = TypeVar("_T", bound=BaseModel)
 
 # Re-prompt used when a structured response fails schema validation. Weaker
@@ -127,40 +141,36 @@ class LlmClient:
         self._transport = transport
         self._timeout = timeout
 
-    def chat(self, messages: list[dict], *, temperature: float = 0.0, max_tokens: int = 1024) -> LlmResponse:
+    def _post_with_retry(self, payload: dict, *, retry_empty: bool) -> dict:
+        """POST to /chat/completions with the shared transient-failure retry
+        policy, returning the parsed JSON body.
+
+        Every LLM entry point (plain chat, JSON chat, tool-calling agent loop)
+        funnels through here so they all get identical hardening: transport
+        errors (connection / timeout / network / protocol), 429 rate limits,
+        5xx, and non-JSON bodies are retried with jittered backoff; 401/403 and
+        other 4xx surface immediately. ``retry_empty`` additionally retries a
+        200 whose assistant content is empty — meaningful for text completions
+        (the model stalled under load), but not for tool-calling turns where an
+        empty content field with tool_calls is the normal shape.
+
+        Raises the last transient error after the attempt budget is exhausted;
+        the caller's ``except Exception`` degrades the finding to needs_verify.
+        """
         url = f"{self._api_base_url}/chat/completions"
-        payload = {
-            "model": self._model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
-
-        # Retry on transient failures: transport errors (connection / timeout /
-        # network / protocol), 5xx, non-JSON or wrong-shape responses, and
-        # empty-content 200s. The latter happens when the model returns nothing
-        # under concurrent load; a short overload window that a backoff clears.
-        # The immediate repair retry in chat_json hits the same window; backoff
-        # here lets it pass. 429 is surfaced to the caller (it carries a
-        # Retry-After); 401/403 and other 4xx are real errors, not retried.
-        def _backoff(attempt: int) -> None:
-            # Jittered so concurrent workers don't all retry in lockstep and
-            # re-trigger the overload.
-            time.sleep(2 ** attempt + random.uniform(0, 1))
-
+        last = _MAX_ATTEMPTS - 1
         last_error: Exception | None = None
-        for attempt in range(3):
+
+        for attempt in range(_MAX_ATTEMPTS):
             try:
                 with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
                     resp = client.post(url, json=payload, headers=headers)
             except httpx.TransportError as e:
                 # Connection refused, DNS failure, network reset, read/write
-                # timeout, protocol error. All transient; retry before leaving
-                # the finding unverified.
+                # timeout, protocol error. All transient.
                 last_error = LlmTransientError(f"llm transport: {type(e).__name__}")
-                if attempt < 2:
+                if attempt < last:
                     _backoff(attempt)
                     continue
                 raise last_error
@@ -168,12 +178,18 @@ class LlmClient:
             if resp.status_code in (401, 403):
                 raise LlmAuthError(f"llm auth failed: {resp.status_code}")
             if resp.status_code == 429:
+                # Honor the server's Retry-After but cap it so a runaway value
+                # can't stall a worker indefinitely; retry before surfacing.
                 ra = resp.headers.get("Retry-After", "30")
                 retry_after = int(ra) if ra.isdigit() else 30
-                raise LlmRateLimitedError(retry_after_seconds=retry_after)
+                last_error = LlmRateLimitedError(retry_after_seconds=retry_after)
+                if attempt < last:
+                    time.sleep(min(retry_after, 20) + random.uniform(0, 1))
+                    continue
+                raise last_error
             if resp.status_code >= 500:
                 last_error = LlmTransientError(f"llm 5xx: {resp.status_code}")
-                if attempt < 2:
+                if attempt < last:
                     _backoff(attempt)
                     continue
                 raise last_error
@@ -182,40 +198,55 @@ class LlmClient:
 
             try:
                 # A non-JSON body (e.g. an HTML error page from a proxy under
-                # load) raises ValueError; a valid-JSON response missing the
-                # expected choices shape raises KeyError/IndexError. Both are
-                # transient; retry before surfacing a hard llm_error.
+                # load) raises ValueError. Transient; retry.
                 data = resp.json()
-                # content can be null when the model refuses or hits a length cap;
-                # coerce to "" so _strip_fences and the repair path handle it
-                # instead of crashing on None.strip().
-                content = data["choices"][0]["message"].get("content") or ""
-            except (ValueError, KeyError, IndexError) as e:
-                last_error = LlmTransientError(f"llm malformed response: {type(e).__name__}")
-                if attempt < 2:
+            except ValueError as e:
+                last_error = LlmTransientError(f"llm non-json response: {type(e).__name__}")
+                if attempt < last:
                     _backoff(attempt)
                     continue
                 raise last_error
 
-            content = _strip_fences(content)
-            if not content and attempt < 2:
-                # 200 with empty content; transient overload. Back off and
-                # retry before accepting the empty response (which falls
-                # through to chat_json's repair / needs_verify fallback).
-                last_error = LlmTransientError("llm returned empty content")
-                _backoff(attempt)
-                continue
-            usage = data.get("usage", {})
-            return LlmResponse(
-                content=content,
-                tokens_in=int(usage.get("prompt_tokens", 0)),
-                tokens_out=int(usage.get("completion_tokens", 0)),
-                prompt_hash=prompt_hash,
-            )
+            if retry_empty and attempt < last:
+                # A 200 with empty assistant content is a transient overload
+                # for a text completion; back off and retry before accepting it.
+                try:
+                    content = data["choices"][0]["message"].get("content") or ""
+                except (KeyError, IndexError):
+                    content = ""
+                if not _strip_fences(content):
+                    last_error = LlmTransientError("llm returned empty content")
+                    _backoff(attempt)
+                    continue
 
-        # Unreachable: every branch above either returns or raises on the
-        # final attempt. Kept as a defensive guard.
-        raise last_error if last_error is not None else LlmError("llm empty after retries")
+            return data
+
+        # Unreachable: every branch either returns or raises on the last attempt.
+        raise last_error if last_error is not None else LlmError("llm failed after retries")
+
+    def chat(self, messages: list[dict], *, temperature: float = 0.0, max_tokens: int = 1024) -> LlmResponse:
+        payload = {
+            "model": self._model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+        data = self._post_with_retry(payload, retry_empty=True)
+        try:
+            # content can be null when the model refuses or hits a length cap;
+            # coerce to "" so _strip_fences and the caller's repair path handle
+            # it instead of crashing on None.strip().
+            content = data["choices"][0]["message"].get("content") or ""
+        except (KeyError, IndexError) as e:
+            raise LlmError(f"malformed llm response: {e}") from e
+        usage = data.get("usage", {})
+        return LlmResponse(
+            content=_strip_fences(content),
+            tokens_in=int(usage.get("prompt_tokens", 0)),
+            tokens_out=int(usage.get("completion_tokens", 0)),
+            prompt_hash=prompt_hash,
+        )
 
     def chat_json(
         self,
@@ -282,8 +313,14 @@ class LlmClient:
         temperature: float = 0.0,
         max_tokens: int = 1024,
     ) -> LlmToolResponse:
-        """Chat completion with OpenAI-style function-calling."""
-        url = f"{self._api_base_url}/chat/completions"
+        """Chat completion with OpenAI-style function-calling.
+
+        Shares the same transient-failure retry policy as ``chat`` via
+        ``_post_with_retry`` so the investigator loop survives a 429 / 5xx /
+        connection blip instead of aborting the whole run. ``retry_empty`` is
+        False here: an empty content field alongside tool_calls is the normal
+        shape for a tool-calling turn, not a stall.
+        """
         payload: dict = {
             "model": self._model,
             "messages": messages,
@@ -294,25 +331,7 @@ class LlmClient:
             payload["tools"] = tools
         prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
-        with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
-            resp = client.post(
-                url,
-                json=payload,
-                headers={"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"},
-            )
-
-        if resp.status_code in (401, 403):
-            raise LlmAuthError(f"llm auth failed: {resp.status_code}")
-        if resp.status_code == 429:
-            ra = resp.headers.get("Retry-After", "30")
-            retry_after = int(ra) if ra.isdigit() else 30
-            raise LlmRateLimitedError(retry_after_seconds=retry_after)
-        if resp.status_code >= 500:
-            raise LlmTransientError(f"llm 5xx: {resp.status_code}")
-        if resp.status_code >= 400:
-            raise LlmError(f"llm unexpected: {resp.status_code} {resp.text[:200]}")
-
-        data = resp.json()
+        data = self._post_with_retry(payload, retry_empty=False)
         try:
             message = data["choices"][0]["message"]
         except (KeyError, IndexError) as e:

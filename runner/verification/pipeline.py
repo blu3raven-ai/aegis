@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from runner.scanners._context import resolve_in_root
 from runner.verification.critic import verify_citations
 from runner.verification.prompts import (
     HUNTER_SYSTEM,
@@ -57,8 +58,11 @@ class VerificationResult:
 
 
 def _read_code_context(file_path: str, line: int, repo_root: str, *, window: int = 40) -> str:
-    full = Path(repo_root) / file_path
-    if not full.exists():
+    # Jail the path to the repo: file_path can originate from finding data that
+    # traces back to attacker-controlled source, so an escape (../../, absolute)
+    # must not read off the runner host. resolve_in_root returns None on escape.
+    full = resolve_in_root(repo_root, file_path)
+    if full is None:
         return f"// {file_path} not readable"
     try:
         text = full.read_text(encoding="utf-8", errors="replace")

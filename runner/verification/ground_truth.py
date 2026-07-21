@@ -5,9 +5,9 @@ the caller falls back to user-declared carve-outs only and the scan never blocks
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
+from runner.scanners._context import resolve_in_root
 from runner.verification.prompts.sast import (
     GROUND_TRUTH_SYSTEM,
     ground_truth_user_message,
@@ -31,9 +31,14 @@ def _sample_files(repo_root: str, findings: list[dict[str, Any]]) -> list[tuple[
             break
     out: list[tuple[str, str]] = []
     for rel in seen:
-        abs_path = os.path.join(repo_root, rel)
+        # Jail to the repo: os.path.join lets an absolute rel escape
+        # (os.path.join(root, "/etc/passwd") == "/etc/passwd"). resolve_in_root
+        # rejects that and any ../ traversal, returning None.
+        abs_path = resolve_in_root(repo_root, rel)
+        if abs_path is None:
+            continue
         try:
-            with open(abs_path, "r", encoding="utf-8", errors="replace") as fh:
+            with open(str(abs_path), "r", encoding="utf-8", errors="replace") as fh:
                 out.append((rel, fh.read(_MAX_BYTES_PER_FILE)))
         except OSError:
             continue
