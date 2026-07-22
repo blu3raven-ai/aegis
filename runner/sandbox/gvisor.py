@@ -60,11 +60,22 @@ def _honeypot_argv() -> list[str]:
     return [sys.executable, "-m", "runner.sandbox.honeypot"]
 
 
+def _runsc_state_root() -> str:
+    """A writable state root for runsc. Rootless runsc defaults to /var/run/runsc,
+    which the non-root runner cannot create; point it at a writable temp dir so
+    ``runsc run`` can materialise its container state. Per-container_id state
+    lives under here, so one shared root is safe across concurrent runs."""
+    root = os.path.join(tempfile.gettempdir(), "aegis-runsc")
+    os.makedirs(root, exist_ok=True)
+    return root
+
+
 def runsc_do_argv(cmd: Sequence[str], *, network: str = "none") -> list[str]:
     """Standalone ``runsc do`` argv (no bundle), used by the availability probe."""
     return [
         runsc_binary(),
         "--rootless",
+        "--root", _runsc_state_root(),
         f"--network={network}",
         f"--platform={_PLATFORM}",
         "--ignore-cgroups",
@@ -80,6 +91,7 @@ def runsc_run_argv(bundle_dir: str, container_id: str) -> list[str]:
     return [
         runsc_binary(),
         "--rootless",
+        "--root", _runsc_state_root(),
         "--network=host",
         f"--platform={_PLATFORM}",
         "--ignore-cgroups",
@@ -238,13 +250,27 @@ def _copy_tree_tolerant(src: str, dst: str) -> None:
     without any privilege escalation. Leaving those secrets out of the sandbox
     is the right posture anyway.
     """
-    for root, _dirs, files in os.walk(src):  # os.walk ignores unreadable dirs
+    for root, dirs, files in os.walk(src):  # os.walk ignores unreadable dirs
         rel = os.path.relpath(root, src)
         dst_dir = dst if rel == "." else os.path.join(dst, rel)
         try:
             os.makedirs(dst_dir, exist_ok=True)
+            os.chmod(dst_dir, 0o755)  # traversable: the sandbox must read the tree
         except OSError:
             continue
+        # Recreate symlinked directories as symlinks. os.walk does not descend
+        # into them, so without this a base's /lib -> usr/lib (and the dynamic
+        # linker it points to) is dropped and nothing in the rootfs can load.
+        for name in list(dirs):
+            s = os.path.join(root, name)
+            if os.path.islink(s):
+                d = os.path.join(dst_dir, name)
+                try:
+                    if not os.path.lexists(d):
+                        os.symlink(os.readlink(s), d)
+                except OSError:
+                    pass
+                dirs.remove(name)
         for name in files:
             s = os.path.join(root, name)
             d = os.path.join(dst_dir, name)

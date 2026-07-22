@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from runner.sandbox.gvisor import (
+    _runsc_state_root,
     oci_config,
     runsc_available,
     runsc_binary,
@@ -170,7 +171,7 @@ def probe_netns_script(
     run = " ".join(shlex.quote(a) for a in runsc_run_argv(bundle_dir, container_id))
     ready = " ".join(shlex.quote(a) for a in _ready_curl_argv(port))
     delete = " ".join(
-        shlex.quote(a) for a in [runsc_binary(), "--rootless", "delete", "--force", container_id]
+        shlex.quote(a) for a in [runsc_binary(), "--rootless", "--root", _runsc_state_root(), "delete", "--force", container_id]
     )
     lines = [
         "set -u",
