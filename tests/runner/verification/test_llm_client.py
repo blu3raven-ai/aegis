@@ -1,6 +1,8 @@
 """LLM client (OpenAI-compatible HTTP) tests."""
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -32,6 +34,55 @@ def test_chat_not_truncated_on_normal_stop():
         lambda req: _ok("done", finish_reason="stop")))
     resp = client.chat([{"role": "user", "content": "x"}])
     assert resp.truncated is False
+
+
+def test_reasoning_effort_sent_only_when_set():
+    seen = {}
+    def handler(req):
+        seen["body"] = json.loads(req.content)
+        return _ok("hi")
+    with_effort = LlmClient("k", "https://x/v1", "m", reasoning_effort="low",
+                            transport=httpx.MockTransport(handler))
+    with_effort.chat([{"role": "user", "content": "x"}])
+    assert seen["body"]["reasoning_effort"] == "low"
+
+    without = LlmClient("k", "https://x/v1", "m", reasoning_effort="  ",
+                        transport=httpx.MockTransport(handler))
+    without.chat([{"role": "user", "content": "x"}])
+    assert "reasoning_effort" not in seen["body"]  # blank is treated as unset
+
+
+def test_reasoning_effort_disable_words_turn_it_off():
+    seen = {}
+    def handler(req):
+        seen["body"] = json.loads(req.content)
+        return _ok("hi")
+    for word in ("off", "none", "0", "Disabled"):
+        client = LlmClient("k", "https://x/v1", "m", reasoning_effort=word,
+                           transport=httpx.MockTransport(handler))
+        client.chat([{"role": "user", "content": "x"}])
+        assert "reasoning_effort" not in seen["body"], word
+
+
+def test_reasoning_effort_fails_open_on_400_and_disables():
+    calls = []
+    def handler(req):
+        body = json.loads(req.content)
+        calls.append(body)
+        if "reasoning_effort" in body:
+            return httpx.Response(400, json={"error": "unknown field: reasoning_effort"})
+        return _ok("ok")
+    client = LlmClient("k", "https://x/v1", "m", reasoning_effort="high",
+                       transport=httpx.MockTransport(handler))
+    # First call: 400 with the field, then a transparent retry without it.
+    r1 = client.chat([{"role": "user", "content": "a"}])
+    assert r1.content == "ok"
+    assert "reasoning_effort" in calls[0] and "reasoning_effort" not in calls[1]
+    # It is disabled for the rest of the client's life: no more rejected calls.
+    r2 = client.chat([{"role": "user", "content": "b"}])
+    assert r2.content == "ok"
+    assert "reasoning_effort" not in calls[-1]
+    assert len(calls) == 3  # 400+retry, then one clean call
 
 
 def test_chat_returns_content_and_token_counts():

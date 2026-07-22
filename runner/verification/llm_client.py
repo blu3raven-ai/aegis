@@ -141,12 +141,21 @@ class LlmClient:
     def __init__(
         self, api_key: str, api_base_url: str, model: str,
         *, transport: httpx.BaseTransport | None = None, timeout: float = 60.0,
+        reasoning_effort: str | None = None,
     ) -> None:
         self._api_key = api_key
         self._api_base_url = api_base_url.rstrip("/")
         self._model = model
         self._transport = transport
         self._timeout = timeout
+        # Optional hint that tells a reasoning model to think less before it
+        # answers. Verification is a bounded task, so deep reasoning wastes
+        # tokens and starves the scan budget. Sent only when set; an endpoint
+        # that rejects the field (400) makes us drop it and retry without it,
+        # so it can never break a model that does not understand it. The
+        # disable words let a deployment turn it off explicitly.
+        effort = (reasoning_effort or "").strip().lower()
+        self._reasoning_effort = None if effort in ("", "off", "none", "disabled", "0") else effort
         # Reasoning models spend completion tokens thinking before they emit the
         # JSON, so their true output need is only learned at runtime. When one
         # finding truncates and escalates, this floor ratchets up so every later
@@ -210,6 +219,16 @@ class LlmClient:
                     continue
                 raise last_error
             if resp.status_code >= 400:
+                # Fail open on a rejected reasoning_effort: some OpenAI-compatible
+                # endpoints 400 on the unknown field. Drop it, disable it for the
+                # rest of this client's life, and retry without it.
+                if resp.status_code == 400 and payload.pop("reasoning_effort", None) is not None:
+                    self._reasoning_effort = None
+                    logger.info("llm endpoint rejected reasoning_effort; retrying without it")
+                    last_error = LlmTransientError("reasoning_effort rejected")
+                    if attempt < last:
+                        continue
+                    raise last_error
                 raise LlmError(f"llm unexpected: {resp.status_code} {resp.text[:200]}")
 
             try:
@@ -247,6 +266,8 @@ class LlmClient:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if self._reasoning_effort:
+            payload["reasoning_effort"] = self._reasoning_effort
         prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
         data = self._post_with_retry(payload, retry_empty=True)
         try:
@@ -362,6 +383,8 @@ class LlmClient:
         }
         if tools:
             payload["tools"] = tools
+        if self._reasoning_effort:
+            payload["reasoning_effort"] = self._reasoning_effort
         prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
         data = self._post_with_retry(payload, retry_empty=False)
