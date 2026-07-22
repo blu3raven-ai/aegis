@@ -127,7 +127,7 @@ ENV PYTHONUNBUFFERED=1 \
 #                       the passt package; slirp4netns kept as a fallback)
 #   uidmap           — newuidmap/newgidmap for the user-namespace setup
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates git libstdc++6 libicu76 procps iptables iproute2 \
+        ca-certificates curl git libstdc++6 libicu76 procps iptables iproute2 \
         podman crun fuse-overlayfs passt slirp4netns uidmap \
     && rm -rf /var/lib/apt/lists/*
 
