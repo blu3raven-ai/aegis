@@ -15,8 +15,10 @@ import concurrent.futures
 import dataclasses
 import json
 import logging
+import os
 import shutil
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -59,6 +61,23 @@ logger = logging.getLogger(__name__)
 _SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 _MIN_VERIFY_SEVERITY = 1  # skip 'info'
 
+# Streaming flush cadence: re-ingest the partial findings after this many new
+# verdicts, but no more often than the min interval, so verdicts surface in the
+# UI as they land instead of all at completion — without hammering the backend
+# on a large scan.
+_STREAM_FLUSH_EVERY = 5
+_STREAM_MIN_INTERVAL_S = 10.0
+
+
+def _write_findings_jsonl(path: Path, findings: list[dict]) -> None:
+    """Serialise findings to JSONL atomically (temp write + replace) so a reader
+    or a concurrent streaming flush never observes a half-written file."""
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w") as f:
+        for finding in findings:
+            f.write(json.dumps(finding, separators=(",", ":")) + "\n")
+    os.replace(tmp, path)
+
 
 def _build_scan_budget(env: JobEnv) -> ScanBudget:
     return ScanBudget(
@@ -70,7 +89,7 @@ def _build_scan_budget(env: JobEnv) -> ScanBudget:
 def _maybe_verify(
     *, findings: list[dict], repo_root: str, llm, escalation_llm=None, scan_budget: ScanBudget,
     backend=None, max_workers: int = DEFAULT_VERIFY_WORKERS, accepted_risks: list | None = None,
-    runtime_enabled: bool = False,
+    runtime_enabled: bool = False, on_progress: Callable[[list[dict]], None] | None = None,
 ) -> list[dict]:
     # Precompute each finding's cache key and, when verification is on, ask the
     # backend which of those were already verified with identical input — those
@@ -109,11 +128,20 @@ def _maybe_verify(
         build_ground_truth(repo_root=repo_root, findings=findings, llm=llm) if pending else None
     )
 
+    # Streaming state: a worker assigns its finished record to out[i] as a single
+    # atomic reference swap, so a concurrent snapshot (list(out)) only ever sees
+    # fully-built records. The counter/throttle are guarded by a lock, but the
+    # (slow, network) flush runs outside it so verification isn't serialised on I/O.
+    flush_lock = threading.Lock()
+    flush_state = {"done": 0, "last": 0.0}
+
     def _verify_one(i: int) -> None:
-        f, input_hash, copy = findings[i], hashes[i], out[i]
+        f, input_hash = findings[i], hashes[i]
+        rec = dict(out[i])
         if not scan_budget.allow():
-            copy["verdict"] = "possible"
-            copy.setdefault("verification_metadata", {})["skipped"] = scan_budget.skip_reason
+            rec["verdict"] = "possible"
+            rec.setdefault("verification_metadata", {})["skipped"] = scan_budget.skip_reason
+            out[i] = rec
             return
         try:
             result = verify_finding(
@@ -122,16 +150,33 @@ def _maybe_verify(
                 runtime_enabled=runtime_enabled,
             )
             scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
-            copy["verdict"] = result.verdict
-            copy["evidence"] = result.evidence
-            copy["exploit_chain"] = result.exploit_chain
+            rec["verdict"] = result.verdict
+            rec["evidence"] = result.evidence
+            rec["exploit_chain"] = result.exploit_chain
             meta = dict(result.verification_metadata or {})
             # Stamp the key so the next scan can cache-hit this exact input.
             meta["verification_input_hash"] = input_hash
-            copy["verification_metadata"] = meta
+            rec["verification_metadata"] = meta
         except Exception as e:  # noqa: BLE001
-            copy["verdict"] = None
-            copy.setdefault("verification_metadata", {})["skipped"] = f"llm_error:{type(e).__name__}"
+            rec["verdict"] = None
+            rec.setdefault("verification_metadata", {})["skipped"] = f"llm_error:{type(e).__name__}"
+        finally:
+            out[i] = rec
+
+        if on_progress is None:
+            return
+        snapshot: list[dict] | None = None
+        with flush_lock:
+            flush_state["done"] += 1
+            now = time.monotonic()
+            if flush_state["done"] % _STREAM_FLUSH_EVERY == 0 and now - flush_state["last"] >= _STREAM_MIN_INTERVAL_S:
+                flush_state["last"] = now
+                snapshot = list(out)
+        if snapshot is not None:
+            try:
+                on_progress(snapshot)
+            except Exception:  # noqa: BLE001
+                logger.warning("[!] streaming preview flush failed (continuing)", exc_info=True)
 
     if pending:
         workers = max(1, min(max_workers, len(pending)))
@@ -279,7 +324,7 @@ class CodeScanningScanner:
                 emitter.verifying(total)
 
             try:
-                self._verify_findings_file(findings_file, repo_root=str(out_dir), env=JobEnv(job))
+                self._verify_findings_file(findings_file, repo_root=str(out_dir), env=JobEnv(job), job=job)
             except Exception:  # noqa: BLE001
                 logger.exception("[!] _verify_findings_file failed (continuing)")
                 log_tail.append("[!] verification step failed; findings unverified")
@@ -320,15 +365,29 @@ class CodeScanningScanner:
 
     def _verify_findings_file(
         self, findings_file: Path, *, repo_root: str, env: JobEnv,
+        job: dict | None = None,
         cancel_event: threading.Event | None = None,
     ) -> None:
         """Read findings.jsonl, run _maybe_verify, rewrite in place.
 
         No-op when the file is missing. When the LLM client can't be built
         (no BYO key configured), every finding is marked skipped=llm_disabled.
+        When ``job`` is given, verdicts are streamed to the UI mid-pass: each
+        throttled flush rewrites the file atomically and re-triggers preview
+        ingest, so findings flip from needs_verify to their real verdict live.
         """
         if not findings_file.exists():
             return
+
+        flush_write_lock = threading.Lock()
+
+        def _stream_flush(snapshot: list[dict]) -> None:
+            # Atomic rewrite (temp + replace) so a concurrent flush or the reader
+            # never sees a half-written file, then re-ingest the partial verdicts.
+            with flush_write_lock:
+                _write_findings_jsonl(findings_file, snapshot)
+            if job is not None:
+                self._preview_ingest_findings(findings_file, job)
 
         raw_findings: list[dict] = []
         for line in findings_file.read_text().splitlines():
@@ -358,6 +417,7 @@ class CodeScanningScanner:
             max_workers=verify_concurrency(env),
             accepted_risks=accepted_risks,
             runtime_enabled=runtime_verify_enabled(env.get),
+            on_progress=_stream_flush if job is not None else None,
         )
 
         # Opt-in runtime pass (RUNTIME_VERIFY): actually run the target to resolve
@@ -367,9 +427,7 @@ class CodeScanningScanner:
             cancel_event=cancel_event,
         )
 
-        with open(findings_file, "w") as f:
-            for finding in verified:
-                f.write(json.dumps(finding, separators=(",", ":")) + "\n")
+        _write_findings_jsonl(findings_file, verified)
 
     @staticmethod
     def _build_config_args(
