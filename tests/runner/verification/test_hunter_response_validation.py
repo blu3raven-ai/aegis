@@ -1,20 +1,20 @@
 """Pydantic schema enforcement on the SAST hunter LLM response."""
 from __future__ import annotations
 
-from runner.verification.llm_client import LlmClient, LlmResponse
+from runner.verification.llm_client import LlmClient, LlmToolResponse
 from runner.verification.pipeline import verify_finding
 
 
 class _FixedLlm(LlmClient):
-    """Returns a fixed content string for every chat call (repair-safe)."""
+    """Returns a fixed final answer for every investigator turn."""
 
     def __init__(self, content: str) -> None:
         super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._content = content
 
-    def chat(self, messages, *, temperature=0.0, max_tokens=1024):
-        return LlmResponse(content=self._content, tokens_in=10, tokens_out=5,
-                           prompt_hash="h-1")
+    def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1024):
+        return LlmToolResponse(content=self._content, tool_calls=[], tokens_in=10,
+                               tokens_out=5, prompt_hash="h-1")
 
 
 _FINDING = {
@@ -57,11 +57,11 @@ def test_valid_hunter_response_schema_passes_through():
         def __init__(self) -> None:
             super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
 
-        def chat(self, messages, *, temperature=0.0, max_tokens=1024):
+        def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1024):
             content = responses[idx[0]]
             idx[0] += 1
-            return LlmResponse(content=content, tokens_in=10, tokens_out=5,
-                               prompt_hash=f"h-{idx[0]}")
+            return LlmToolResponse(content=content, tool_calls=[], tokens_in=10,
+                                   tokens_out=5, prompt_hash=f"h-{idx[0]}")
 
     result = verify_finding(
         finding=_FINDING, repo_root="/repo", llm=_TwoShotLlm(),
@@ -84,20 +84,19 @@ def test_hunter_schema_invalid_verdict_falls_back():
 
 
 class _TwoShotLlm(LlmClient):
-    """Returns a fixed hunter response then a fixed skeptic response."""
+    """Returns a fixed hunter answer then a fixed skeptic answer."""
 
     def __init__(self, hunter_content: str, skeptic_content: str) -> None:
         super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._responses = [hunter_content, skeptic_content]
         self._idx = 0
 
-    def chat(self, messages, *, temperature=0.0, max_tokens=1024):
-        # Clamp to the last scripted response so a chat_json repair-retry sees the
-        # same (still-invalid) skeptic content and exhausts its budget.
+    def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1024):
+        # Clamp to the last scripted response so any extra turn is deterministic.
         content = self._responses[min(self._idx, len(self._responses) - 1)]
         self._idx += 1
-        return LlmResponse(content=content, tokens_in=10, tokens_out=5,
-                           prompt_hash=f"h-{self._idx}")
+        return LlmToolResponse(content=content, tool_calls=[], tokens_in=10,
+                               tokens_out=5, prompt_hash=f"h-{self._idx}")
 
 
 _VALID_HUNTER_JSON = (

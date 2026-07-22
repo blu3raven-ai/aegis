@@ -6,21 +6,29 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from runner.verification.llm_client import LlmResponse
+from runner.verification.llm_client import LlmClient, LlmResponse, LlmToolResponse
 from runner.verification.schemas.verdict import GroundTruth, SkepticResponse
 
 
-def _make_resp(content: str) -> LlmResponse:
-    return LlmResponse(content=content, tokens_in=10, tokens_out=20, prompt_hash="x")
+class _StreamLlm(LlmClient):
+    """Serves one ordered response stream to both the ground-truth chat_json
+    path and the agentic hunter/skeptic chat_with_tools path, in call order."""
+
+    def __init__(self, responses):
+        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub-model")
+        self._stream = list(responses)
+
+    def chat(self, messages, *, temperature=0.0, max_tokens=1024):
+        return LlmResponse(content=self._stream.pop(0), tokens_in=10, tokens_out=20,
+                           prompt_hash="x")
+
+    def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1024):
+        return LlmToolResponse(content=self._stream.pop(0), tool_calls=[],
+                               tokens_in=10, tokens_out=20, prompt_hash="x")
 
 
-def _mock_llm(*responses: str) -> MagicMock:
-    from runner.verification.llm_client import LlmClient
-    llm = MagicMock()
-    llm.chat.side_effect = [_make_resp(r) for r in responses]
-    llm.chat_json.side_effect = lambda *a, **kw: LlmClient.chat_json(llm, *a, **kw)
-    llm._min_completion_tokens = 0  # impersonating LlmClient: state chat_json reads
-    return llm
+def _mock_llm(*responses: str) -> _StreamLlm:
+    return _StreamLlm(responses)
 
 
 def test_skeptic_schema_has_carveout_fields() -> None:

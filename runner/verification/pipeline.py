@@ -22,8 +22,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from pydantic import BaseModel, ValidationError
+
 from runner.scanners._context import resolve_in_root
+from runner.verification.agents.base import investigate
+from runner.verification.agents.parsing import extract_json_object
 from runner.verification.critic import verify_citations
+from runner.verification.llm_client import JsonChatResult
 from runner.verification.prompts import (
     HUNTER_SYSTEM,
     SKEPTIC_SYSTEM,
@@ -33,6 +38,11 @@ from runner.verification.prompts import (
 from runner.verification.schemas.verdict import (
     HunterResponse,
     SkepticResponse,
+)
+from runner.verification.tools.base import ToolRegistry
+from runner.verification.tools.repo import (
+    make_grep_repo_tool,
+    make_read_file_range_tool,
 )
 
 logger = logging.getLogger(__name__)
@@ -74,39 +84,97 @@ def _read_code_context(file_path: str, line: int, repo_root: str, *, window: int
     return "\n".join(f"{i+1}: {lines[i]}" for i in range(start, end))
 
 
-def run_tp_reasoning(finding: dict, code_context: str, reachability, *, llm):
+def _agentic_verify(
+    system: str,
+    task: str,
+    model_cls: type[BaseModel],
+    *,
+    llm,
+    repo_root: str,
+    max_tokens_per_turn: int,
+) -> JsonChatResult:
+    """Run one reasoning chain as a tool-using investigator over the repo.
+
+    The model can grep and read files to trace the chain and ground its
+    citations before answering with the schema JSON. The return shape matches
+    ``chat_json`` so the caller's verdict logic is unchanged; ``prompt_hashes``
+    is empty because the investigator loop is multi-turn.
+    """
+    tools = ToolRegistry(
+        [make_grep_repo_tool(Path(repo_root)), make_read_file_range_tool(Path(repo_root))]
+    )
+    result = investigate(
+        system_prompt=system,
+        user_task=task,
+        tools=tools,
+        llm=llm,
+        max_tokens_per_turn=max_tokens_per_turn,
+    )
+    payload = extract_json_object(result.final_message)
+    if payload is None:
+        return JsonChatResult(
+            parsed=None,
+            error=f"no json (stopped:{result.stopped_reason})",
+            tokens_in=result.tokens_in,
+            tokens_out=result.tokens_out,
+            prompt_hashes=[],
+        )
+    try:
+        parsed = model_cls.model_validate(payload)
+    except ValidationError as exc:
+        return JsonChatResult(
+            parsed=None,
+            error=str(exc),
+            tokens_in=result.tokens_in,
+            tokens_out=result.tokens_out,
+            prompt_hashes=[],
+        )
+    return JsonChatResult(
+        parsed=parsed,
+        error=None,
+        tokens_in=result.tokens_in,
+        tokens_out=result.tokens_out,
+        prompt_hashes=[],
+    )
+
+
+def run_tp_reasoning(finding: dict, code_context: str, reachability, *, llm, repo_root: str):
     """TP-reasoning chain (hunter): try to build a concrete exploit chain.
 
-    Returns the raw ``llm.chat_json`` result (parsed ``HunterResponse`` or ``None``
-    on schema failure, plus token counts and prompt hashes). Kept as a standalone
-    unit so the reasoning chain can be tested — and later model-tiered — on its own.
+    Runs as a tool-using investigator so the model can trace the input to its
+    true source and ground each cited snippet across files before deciding.
+    Returns a ``JsonChatResult`` (parsed ``HunterResponse`` or ``None`` on
+    schema failure) so the reasoning chain stays a standalone, testable unit.
     """
-    return llm.chat_json(
-        [
-            {"role": "system", "content": HUNTER_SYSTEM},
-            {"role": "user", "content": hunter_user_message(finding, code_context, reachability)},
-        ],
+    return _agentic_verify(
+        HUNTER_SYSTEM,
+        hunter_user_message(finding, code_context, reachability),
         HunterResponse,
-        temperature=0.0, max_tokens=3000,
+        llm=llm,
+        repo_root=repo_root,
+        max_tokens_per_turn=3000,
     )
 
 
 def run_fp_detection(
-    finding: dict, chain: str, code_context: str, *, llm,
+    finding: dict, chain: str, code_context: str, *, llm, repo_root: str,
     accepted_risks: list | None = None, ground_truth=None,
 ):
     """FP-detection chain (skeptic): look for a grounded upstream mitigation, and
-    match the finding against declared accepted-risks / baseline ground truth."""
-    return llm.chat_json(
-        [
-            {"role": "system", "content": SKEPTIC_SYSTEM},
-            {"role": "user", "content": skeptic_user_message(
-                finding, chain, code_context,
-                accepted_risks=accepted_risks, ground_truth=ground_truth,
-            )},
-        ],
+    match the finding against declared accepted-risks / baseline ground truth.
+
+    Runs as a tool-using investigator so the model can search for sanitizers and
+    gates across files before ruling the chain out."""
+    return _agentic_verify(
+        SKEPTIC_SYSTEM,
+        skeptic_user_message(
+            finding, chain, code_context,
+            accepted_risks=accepted_risks, ground_truth=ground_truth,
+        ),
         SkepticResponse,
-        temperature=0.0, max_tokens=1000,
+        llm=llm,
+        repo_root=repo_root,
+        max_tokens_per_turn=1500,
     )
 
 
@@ -165,7 +233,7 @@ def verify_finding(
     active_llm = llm
 
     # TP-reasoning chain: can this finding be exploited?
-    hunter_result = run_tp_reasoning(finding, code_context, reachability, llm=active_llm)
+    hunter_result = run_tp_reasoning(finding, code_context, reachability, llm=active_llm, repo_root=repo_root)
     tokens_in_total += hunter_result.tokens_in
     tokens_out_total += hunter_result.tokens_out
     metadata["prompt_hashes"].extend(hunter_result.prompt_hashes)
@@ -179,7 +247,7 @@ def verify_finding(
         metadata["tier"] = "frontier"
         metadata["model"] = getattr(escalation_llm, "_model", "unknown")
         active_llm = escalation_llm
-        hunter_result = run_tp_reasoning(finding, code_context, reachability, llm=active_llm)
+        hunter_result = run_tp_reasoning(finding, code_context, reachability, llm=active_llm, repo_root=repo_root)
         tokens_in_total += hunter_result.tokens_in
         tokens_out_total += hunter_result.tokens_out
         metadata["prompt_hashes"].extend(hunter_result.prompt_hashes)
@@ -207,7 +275,7 @@ def verify_finding(
 
     # FP-detection chain: is there a grounded mitigation that neutralises it?
     skeptic_result = run_fp_detection(
-        finding, chain, code_context, llm=active_llm,
+        finding, chain, code_context, llm=active_llm, repo_root=repo_root,
         accepted_risks=matched_risks, ground_truth=ground_truth,
     )
     tokens_in_total += skeptic_result.tokens_in

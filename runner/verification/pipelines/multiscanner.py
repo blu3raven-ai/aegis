@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
 
 from runner.verification.agents.base import investigate
+from runner.verification.agents.parsing import extract_json_object
 from runner.verification.prompts.correlator import (
     CORRELATOR_SYSTEM,
     correlator_user_message,
@@ -128,7 +128,7 @@ def _parse_correlator_output(
 ) -> CorrelatedFinding | None:
     """Map the agent's final JSON to a CorrelatedFinding. Returns None on
     junk output or no_chain verdict (we don't surface those)."""
-    raw_payload = _extract_json(final_message)
+    raw_payload = extract_json_object(final_message)
     if not raw_payload:
         return None
 
@@ -169,28 +169,6 @@ def _parse_correlator_output(
         tokens_out=tokens_out,
         metadata={"stopped_reason": stopped_reason},
     )
-
-
-def _extract_json(text: str) -> dict | None:
-    """Extract a JSON object from prose-wrapped agent output."""
-    if not text:
-        return None
-    candidates: list[str] = []
-    stripped = text.strip()
-    if stripped.startswith("{") and stripped.endswith("}"):
-        candidates.append(stripped)
-    start = text.find("{")
-    end = text.rfind("}")
-    if 0 <= start < end:
-        candidates.append(text[start : end + 1])
-    for c in candidates:
-        try:
-            obj = json.loads(c)
-            if isinstance(obj, dict):
-                return obj
-        except json.JSONDecodeError:
-            continue
-    return None
 
 
 def _correlation_id(source_finding_ids: list[str]) -> str:

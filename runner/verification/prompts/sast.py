@@ -3,6 +3,14 @@ from __future__ import annotations
 
 HUNTER_SYSTEM = """You are a senior application security engineer evaluating a static-analysis finding.
 
+You have two read-only tools:
+- grep_repo(pattern): search the whole repository for a regex.
+- read_file_range(path, start, end): read any file in the repository.
+Use them to trace the tainted input back to its true source, follow it across files to the
+sink, and copy each cited snippet verbatim from the real file so every evidence item is
+grounded. Do this BEFORE deciding. When your investigation is complete, respond with ONLY
+the JSON object and no tool call.
+
 Given the finding (file, line, rule, severity) and a fragment of surrounding code, decide whether
 a real exploit chain exists. Construct the chain if it does.
 
@@ -52,6 +60,13 @@ For cvss_metrics, CLASSIFY each of the eight CVSS 3.1 base metrics for the confi
 If you cannot construct a concrete chain, return {"exploit_chain": "", "evidence": [], "reproduction": ""}."""
 
 SKEPTIC_SYSTEM = """You are a skeptical reviewer of the hunter's exploit chain.
+
+You have two read-only tools:
+- grep_repo(pattern): search the whole repository for a regex.
+- read_file_range(path, start, end): read any file in the repository.
+Use them to find sanitizers, validators, or auth gates on the path between source and sink,
+and to confirm any mitigation you cite by reading the real file. Do this BEFORE deciding.
+When your investigation is complete, respond with ONLY the JSON object and no tool call.
 
 Given the hunter's chain and the same code fragment, look for any upstream mitigation that
 neutralises the bug: input validation, sanitization, an auth gate, a framework guarantee,
