@@ -1,23 +1,23 @@
 """Verify that reachability data from finding.detail flows into the hunter context."""
 from __future__ import annotations
 
-from runner.verification.llm_client import LlmClient, LlmResponse
+from runner.verification.llm_client import LlmClient, LlmToolResponse
 from runner.verification.pipeline import verify_finding
 
 
 class _CapturingLlm(LlmClient):
-    """Captures all chat calls and returns canned responses."""
+    """Captures the investigator messages and returns canned final answers."""
 
     def __init__(self, responses: list[str]) -> None:
         super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._responses = list(responses)
         self.calls: list[list[dict]] = []
 
-    def chat(self, messages, *, temperature=0.0, max_tokens=1024):
+    def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1024):
         self.calls.append(messages)
         content = self._responses.pop(0)
-        return LlmResponse(content=content, tokens_in=10, tokens_out=5,
-                           prompt_hash=f"h-{len(self.calls)}")
+        return LlmToolResponse(content=content, tool_calls=[], tokens_in=10,
+                               tokens_out=5, prompt_hash=f"h-{len(self.calls)}")
 
 
 _HUNTER_NO_CHAIN = '{"exploit_chain":"","evidence":[]}'

@@ -12,7 +12,11 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from runner.verification.llm_client import JsonChatResult, LlmResponse
+from runner.verification.llm_client import (
+    JsonChatResult,
+    LlmResponse,
+    LlmToolResponse,
+)
 
 
 class ReplayError(RuntimeError):
@@ -52,6 +56,30 @@ class ReplayLlm:
             )
         self.calls += 1
         return self._queue.popleft()
+
+    def chat_with_tools(
+        self,
+        messages: list[dict],
+        *,
+        tools: list[dict],
+        temperature: float = 0.0,
+        max_tokens: int = 1024,
+    ) -> LlmToolResponse:
+        """Replay-backed mirror of ``LlmClient.chat_with_tools``.
+
+        Pops one queued response and returns it as a final answer (no tool
+        call), so the investigator loop terminates on the recorded JSON. A
+        fixture never needs to record tool calls; it records the answer the
+        model would settle on.
+        """
+        resp = self.chat(messages, temperature=temperature, max_tokens=max_tokens)
+        return LlmToolResponse(
+            content=resp.content,
+            tool_calls=[],
+            tokens_in=resp.tokens_in,
+            tokens_out=resp.tokens_out,
+            prompt_hash=resp.prompt_hash,
+        )
 
     def chat_json(
         self,

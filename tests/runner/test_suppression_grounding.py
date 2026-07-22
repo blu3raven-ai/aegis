@@ -9,7 +9,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from runner.verification.llm_client import LlmClient, LlmResponse
+from runner.verification.llm_client import LlmClient, LlmResponse, LlmToolResponse
 from runner.verification.pipeline import verify_finding
 from runner.verification.verifiers.iac import verify_iac_finding
 
@@ -23,21 +23,28 @@ def _make_resp(content: str) -> LlmResponse:
 
 
 class _ScriptedLlm(LlmClient):
-    """Drives the inherited chat_json against a scripted response sequence.
+    """Serves a scripted response sequence to both the IaC chat_json path and
+    the agentic SAST chat_with_tools path, in call order.
 
-    The final scripted response repeats so a chat_json repair-retry sees the
-    same content and the verdict path is deterministic.
+    The final scripted response repeats so the verdict path stays deterministic.
     """
 
     def __init__(self, responses: tuple[str, ...]) -> None:
         super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._responses = list(responses)
 
-    def chat(self, messages, *, temperature=0.0, max_tokens=1024):
+    def _next(self) -> str:
         content = self._responses[0]
         if len(self._responses) > 1:
             self._responses.pop(0)
-        return _make_resp(content)
+        return content
+
+    def chat(self, messages, *, temperature=0.0, max_tokens=1024):
+        return _make_resp(self._next())
+
+    def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1024):
+        return LlmToolResponse(content=self._next(), tool_calls=[],
+                               tokens_in=10, tokens_out=20, prompt_hash="x")
 
 
 def _mock_llm(*responses: str) -> _ScriptedLlm:
