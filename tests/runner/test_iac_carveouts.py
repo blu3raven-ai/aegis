@@ -11,21 +11,25 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from runner.verification.llm_client import LlmResponse
+from runner.verification.llm_client import LlmToolResponse
 from runner.verification.schemas.verdict import GroundTruth
 from runner.verification.verifiers.iac import verify_iac_finding
 
 
-def _make_resp(content: str) -> LlmResponse:
-    return LlmResponse(content=content, tokens_in=10, tokens_out=20, prompt_hash="x")
-
-
 def _mock_llm(*responses: str) -> MagicMock:
-    from runner.verification.llm_client import LlmClient
+    """Scripts ``chat_with_tools`` so the hunter / skeptic investigator loop is
+    driven directly; each response is returned as a tool-free final message."""
     llm = MagicMock()
-    llm.chat.side_effect = [_make_resp(r) for r in responses]
-    llm.chat_json.side_effect = lambda *a, **kw: LlmClient.chat_json(llm, *a, **kw)
-    llm._min_completion_tokens = 0  # impersonating LlmClient: state chat_json reads
+    llm._model = "stub"
+    seq = iter(responses)
+
+    def _cwt(messages, *, tools, temperature=0.0, max_tokens=1024):
+        return LlmToolResponse(
+            content=next(seq), tool_calls=[], tokens_in=10, tokens_out=20,
+            prompt_hash="x",
+        )
+
+    llm.chat_with_tools.side_effect = _cwt
     return llm
 
 

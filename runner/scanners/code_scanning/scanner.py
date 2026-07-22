@@ -15,7 +15,6 @@ import concurrent.futures
 import dataclasses
 import json
 import logging
-import os
 import shutil
 import threading
 import time
@@ -39,6 +38,7 @@ from runner.scanners._shared import (
     derive_html_url,
     repo_name_from_url,
     run_per_repo,
+    write_findings_jsonl,
 )
 from runner.scanners._subprocess import run_tool
 from runner.scanners.base import ExecutionResult
@@ -67,16 +67,6 @@ _MIN_VERIFY_SEVERITY = 1  # skip 'info'
 # on a large scan.
 _STREAM_FLUSH_EVERY = 5
 _STREAM_MIN_INTERVAL_S = 10.0
-
-
-def _write_findings_jsonl(path: Path, findings: list[dict]) -> None:
-    """Serialise findings to JSONL atomically (temp write + replace) so a reader
-    or a concurrent streaming flush never observes a half-written file."""
-    tmp = path.with_name(path.name + ".tmp")
-    with open(tmp, "w") as f:
-        for finding in findings:
-            f.write(json.dumps(finding, separators=(",", ":")) + "\n")
-    os.replace(tmp, path)
 
 
 def _build_scan_budget(env: JobEnv) -> ScanBudget:
@@ -385,7 +375,7 @@ class CodeScanningScanner:
             # Atomic rewrite (temp + replace) so a concurrent flush or the reader
             # never sees a half-written file, then re-ingest the partial verdicts.
             with flush_write_lock:
-                _write_findings_jsonl(findings_file, snapshot)
+                write_findings_jsonl(findings_file, snapshot)
             if job is not None:
                 self._preview_ingest_findings(findings_file, job)
 
@@ -427,7 +417,7 @@ class CodeScanningScanner:
             cancel_event=cancel_event,
         )
 
-        _write_findings_jsonl(findings_file, verified)
+        write_findings_jsonl(findings_file, verified)
 
     @staticmethod
     def _build_config_args(

@@ -8,6 +8,7 @@ import concurrent.futures
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -26,6 +27,7 @@ from runner.scanners._shared import (
     parse_repos,
     register_output,
     repo_name_from_url,
+    write_findings_jsonl,
 )
 from runner.scanners._subprocess import (
     CANCELLED_EXIT_CODE,
@@ -47,6 +49,13 @@ TIMEOUT_CHECKOV: float = 600.0
 _FAILURE_EXIT_CODE = 2
 
 _IAC_VERIFY_SEVERITIES = {"high", "critical"}
+
+# Streaming flush cadence: re-ingest the partial findings after this many new
+# verdicts, but no more often than the min interval, so verdicts surface in the
+# UI as they land instead of all at completion, without hammering the backend
+# on a large scan.
+_STREAM_FLUSH_EVERY = 5
+_STREAM_MIN_INTERVAL_S = 10.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -124,19 +133,37 @@ class IacScanner:
         if not isinstance(accepted_risks, list):
             accepted_risks = []
 
+        findings_path = out_dir / "findings.jsonl"
+
+        # Stream partial verdicts to the UI mid-scan: each throttled flush writes
+        # the findings-so-far (completed repos + the in-flight repo's snapshot)
+        # atomically and re-triggers preview ingest, so findings flip from
+        # needs_verify to their real verdict live instead of all at completion.
+        # Only worth it when verification will actually run (LLM configured).
+        stream = job is not None and bool(env.get("LLM_API_KEY"))
+        flush_write_lock = threading.Lock()
+
         all_findings: list[dict] = []
         any_clone_failed = False
+
+        def _stream_flush(snapshot: list[dict]) -> None:
+            # Repos are scanned sequentially, so `all_findings` (completed repos)
+            # is stable while the in-flight repo's workers stream their snapshot.
+            with flush_write_lock:
+                write_findings_jsonl(findings_path, all_findings + snapshot)
+            self._preview_ingest_findings(findings_path, job)
+
         for repo_url in repos:
             if cancel_event is not None and cancel_event.is_set():
                 break
             findings, cloned = self._scan_one_repo(
                 repo_url, out_dir, cfg, llm, escalation_llm, budget,
                 cancel_event, log_tail, emitter, accepted_risks,
+                on_progress=_stream_flush if stream else None,
             )
             any_clone_failed = any_clone_failed or not cloned
             all_findings.extend(findings)
 
-        findings_path = out_dir / "findings.jsonl"
         with findings_path.open("w", encoding="utf-8") as fh:
             for f in all_findings:
                 fh.write(json.dumps(f) + "\n")
@@ -173,6 +200,7 @@ class IacScanner:
         log_tail: list[str],
         emitter: ProgressEmitter,
         accepted_risks: list | None = None,
+        on_progress: Callable[[list[dict]], None] | None = None,
     ) -> tuple[list[dict], bool]:
         """Clone + checkov-scan a single repo. Returns (stamped findings, cloned_ok).
 
@@ -233,6 +261,16 @@ class IacScanner:
                             "[!] checkov diff resolution failed (%s) - keeping full results", e
                         )
 
+            # Stamp the repo BEFORE verification so streamed partial findings
+            # carry asset attribution for the mid-scan preview ingest.
+            html_url = derive_html_url(repo_url)
+            for f in findings:
+                # Stamp the repo so backend ingest can attach the finding to the
+                # right asset (mirrors the other scanners' output).
+                f.setdefault("repo_full_name", repo_name)
+                # Web URL of the repo so the finding can deep-link back to source.
+                f.setdefault("repo_html_url", html_url)
+
             findings = self._maybe_verify_iac(
                 findings=findings,
                 repo_root=str(clone_dir),
@@ -242,23 +280,34 @@ class IacScanner:
                 cancel_event=cancel_event,
                 max_workers=cfg.verify_workers,
                 accepted_risks=accepted_risks,
+                on_progress=on_progress,
             )
 
             # Deterministic config-hardening patches for pattern-clear checks.
             # Always-on and independent of the LLM verifier above.
             findings = attach_iac_fixes(findings, str(clone_dir))
-
-            html_url = derive_html_url(repo_url)
-            for f in findings:
-                # Stamp the repo so backend ingest can attach the finding to the
-                # right asset (mirrors the other scanners' output).
-                f.setdefault("repo_full_name", repo_name)
-                # Web URL of the repo so the finding can deep-link back to source.
-                f.setdefault("repo_html_url", html_url)
             return findings, True
         finally:
             shutil.rmtree(clone_dir, ignore_errors=True)
             emitter.finished(repo_name)
+
+    def _preview_ingest_findings(self, findings_file: Path, job: dict) -> None:
+        """Upload the partial findings and trigger a mid-scan preview ingest so
+        verdicts surface as verification runs. Best-effort: any failure just
+        means the findings appear at completion instead of early."""
+        backend = getattr(self, "_backend", None)
+        job_id = job.get("jobId")
+        if backend is None or not job_id or not findings_file.exists():
+            return
+        try:
+            from runner.clients.uploader import post_to_url
+
+            spec = backend.presign_uploads(job_id, ["findings.jsonl"]).get("findings.jsonl")
+            if not spec or post_to_url(findings_file, spec["url"], spec["fields"]) != "ok":
+                return
+            backend.preview_ingest(job_id)
+        except Exception:  # noqa: BLE001
+            logger.warning("[!] preview ingest failed (continuing)", exc_info=True)
 
     def _maybe_verify_iac(
         self,
@@ -271,6 +320,7 @@ class IacScanner:
         cancel_event: threading.Event | None = None,
         max_workers: int = DEFAULT_VERIFY_WORKERS,
         accepted_risks: list | None = None,
+        on_progress: Callable[[list[dict]], None] | None = None,
     ) -> list[dict]:
         hashes = [verification_input_hash(f) for f in findings]
         cache = (
@@ -308,35 +358,62 @@ class IacScanner:
             if pending else None
         )
 
+        # Streaming state: a worker assigns its finished record to out[i] as a
+        # single atomic reference swap, so a concurrent snapshot (list(out)) only
+        # ever sees fully-built records. The counter/throttle are guarded by a
+        # lock, but the (slow, network) flush runs outside it.
+        flush_lock = threading.Lock()
+        flush_state = {"done": 0, "last": 0.0}
+
         def _verify_one(i: int) -> None:
-            copy, input_hash = out[i], hashes[i]
-            metadata = copy.setdefault("verification_metadata", {})
+            input_hash = hashes[i]
+            rec = dict(out[i])
+            metadata = rec.setdefault("verification_metadata", {})
             # Re-check cancel per worker so a long backlog stops promptly.
             if cancel_event is not None and cancel_event.is_set():
-                copy["verdict"] = "possible"
+                rec["verdict"] = "possible"
                 metadata["skipped"] = "cancelled"
+                out[i] = rec
                 return
             if not scan_budget.allow():
-                copy["verdict"] = "possible"
+                rec["verdict"] = "possible"
                 metadata["skipped"] = scan_budget.skip_reason
+                out[i] = rec
                 return
             try:
                 result = verify_iac_finding(
-                    finding=copy, repo_root=repo_root, llm=llm,
+                    finding=rec, repo_root=repo_root, llm=llm,
                     escalation_llm=escalation_llm,
                     accepted_risks=accepted_risks, ground_truth=ground_truth,
                 )
                 scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
-                copy["verdict"] = result.verdict
-                copy["evidence"] = result.evidence
-                copy["exploit_chain"] = result.exploit_chain
+                rec["verdict"] = result.verdict
+                rec["evidence"] = result.evidence
+                rec["exploit_chain"] = result.exploit_chain
                 meta = dict(result.verification_metadata or {})
                 meta["verification_input_hash"] = input_hash
-                copy["verification_metadata"] = meta
+                rec["verification_metadata"] = meta
             except Exception as e:  # noqa: BLE001
-                copy["verdict"] = None
-                metadata["skipped"] = f"llm_error:{type(e).__name__}"
-                logger.exception("[!] iac verification failed for %s", copy.get("check_id"))
+                rec["verdict"] = None
+                rec.setdefault("verification_metadata", {})["skipped"] = f"llm_error:{type(e).__name__}"
+                logger.exception("[!] iac verification failed for %s", rec.get("check_id"))
+            finally:
+                out[i] = rec
+
+            if on_progress is None:
+                return
+            snapshot: list[dict] | None = None
+            with flush_lock:
+                flush_state["done"] += 1
+                now = time.monotonic()
+                if flush_state["done"] % _STREAM_FLUSH_EVERY == 0 and now - flush_state["last"] >= _STREAM_MIN_INTERVAL_S:
+                    flush_state["last"] = now
+                    snapshot = list(out)
+            if snapshot is not None:
+                try:
+                    on_progress(snapshot)
+                except Exception:  # noqa: BLE001
+                    logger.warning("[!] streaming preview flush failed (continuing)", exc_info=True)
 
         if pending:
             workers = max(1, min(max_workers, len(pending)))

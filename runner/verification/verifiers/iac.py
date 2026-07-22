@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from runner.verification.pipeline import VerificationResult
+from runner.verification.pipeline import VerificationResult, _agentic_verify
 from runner.verification.prompts.iac import (
     HUNTER_SYSTEM_IAC,
     SKEPTIC_SYSTEM_IAC,
@@ -134,24 +134,20 @@ def verify_iac_finding(
     if not resource_excerpt:
         resource_excerpt = finding.get("code_window") or ""
 
-    hunter_messages = [
-        {"role": "system", "content": HUNTER_SYSTEM_IAC},
-        {
-            "role": "user",
-            "content": hunter_iac_user_message(
-                finding, resource_excerpt, sibling_excerpt
-            ),
-        },
-    ]
+    hunter_user_msg = hunter_iac_user_message(
+        finding, resource_excerpt, sibling_excerpt
+    )
 
     # The tier the rest of the verification runs on; escalation promotes it.
     active_llm = llm
 
-    hunter_result = active_llm.chat_json(
-        hunter_messages,
+    hunter_result = _agentic_verify(
+        HUNTER_SYSTEM_IAC,
+        hunter_user_msg,
         HunterResponse,
-        temperature=0.0,
-        max_tokens=_HUNTER_MAX_TOKENS,
+        llm=active_llm,
+        repo_root=repo_root,
+        max_tokens_per_turn=_HUNTER_MAX_TOKENS,
     )
     tokens_in += hunter_result.tokens_in
     tokens_out += hunter_result.tokens_out
@@ -166,11 +162,13 @@ def verify_iac_finding(
         metadata["tier"] = "frontier"
         metadata["model"] = getattr(escalation_llm, "_model", "unknown")
         active_llm = escalation_llm
-        hunter_result = active_llm.chat_json(
-            hunter_messages,
+        hunter_result = _agentic_verify(
+            HUNTER_SYSTEM_IAC,
+            hunter_user_msg,
             HunterResponse,
-            temperature=0.0,
-            max_tokens=_HUNTER_MAX_TOKENS,
+            llm=active_llm,
+            repo_root=repo_root,
+            max_tokens_per_turn=_HUNTER_MAX_TOKENS,
         )
         tokens_in += hunter_result.tokens_in
         tokens_out += hunter_result.tokens_out
@@ -204,20 +202,16 @@ def verify_iac_finding(
             verification_metadata=metadata,
         )
 
-    skeptic_result = active_llm.chat_json(
-        [
-            {"role": "system", "content": SKEPTIC_SYSTEM_IAC},
-            {
-                "role": "user",
-                "content": skeptic_iac_user_message(
-                    finding, chain, resource_excerpt, sibling_excerpt,
-                    accepted_risks=accepted_risks, ground_truth=ground_truth,
-                ),
-            },
-        ],
+    skeptic_result = _agentic_verify(
+        SKEPTIC_SYSTEM_IAC,
+        skeptic_iac_user_message(
+            finding, chain, resource_excerpt, sibling_excerpt,
+            accepted_risks=accepted_risks, ground_truth=ground_truth,
+        ),
         SkepticResponse,
-        temperature=0.0,
-        max_tokens=_SKEPTIC_MAX_TOKENS,
+        llm=active_llm,
+        repo_root=repo_root,
+        max_tokens_per_turn=_SKEPTIC_MAX_TOKENS,
     )
     tokens_in += skeptic_result.tokens_in
     tokens_out += skeptic_result.tokens_out
