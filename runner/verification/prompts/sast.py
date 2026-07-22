@@ -51,6 +51,8 @@ Respond ONLY with valid JSON in this exact shape:
   "runtime_question": "<one concrete runtime check, or empty string>"
 }
 
+When the chain is real but its exploitability hinges on a runtime fact you cannot settle statically (does this route respond without auth, does this input reflect or execute), you MAY call runtime_probe with observation requests (GET/HEAD/OPTIONS) to check the running app, then decide confirmed/ruled_out from the responses. runtime_probe runs the untrusted app and is heavy: batch ALL the paths into a SINGLE call. If runtime_probe is unavailable or the responses are inconclusive, fall back to needs_runtime=true with a runtime_question as below.
+
 Set needs_runtime=true with a single concrete runtime_question ONLY when the chain is real but its exploitability depends on a runtime/deployment fact you cannot verify from the code (e.g. whether a route is authenticated in production, whether a feature flag is enabled). Phrase runtime_question as ONE check starting "Confirm that ...". Otherwise needs_runtime=false and runtime_question="".
 
 Only include attack_paths when there are genuinely MULTIPLE distinct routes to the sink; for a single obvious path leave it [] (exploit_chain already covers it). Use mitigating_factors to state honestly what reduces severity. Both are optional — [] when not applicable.
