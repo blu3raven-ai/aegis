@@ -444,7 +444,7 @@ def preview_ingest_endpoint(job_id: str, request: Request) -> JSONResponse:
     asset_id = env_vars.get("REPO_ID") or None
 
     try:
-        _dispatch_ingest(job_type, org, run_id, source_type)
+        _dispatch_ingest(job_type, org, run_id, source_type, preview=True)
     except Exception as e:  # noqa: BLE001
         _logger.warning("[!] preview-ingest failed for %s %s/%s: %s", job_type, org, run_id, e)
         return JSONResponse({"ok": False, "error": "ingest_failed"})
@@ -459,11 +459,12 @@ def preview_ingest_endpoint(job_id: str, request: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | None) -> None:
+def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | None, preview: bool = False) -> None:
     """Read the scanner's findings from MinIO and upsert them. Idempotent
     (upsert by identity_key), so it is safe to call mid-scan for a preview and
     again on completion. Shared by the completion handler and the preview-ingest
-    endpoint."""
+    endpoint. preview=True forbids the verifying scanners from marking the run
+    completed, since the verification tail is still running."""
     if job_type == "dependencies_scanning":
         from src.dependencies.scanner import ingest_dependencies_from_minio
         ingest_dependencies_from_minio(org, run_id, source_type=source_type)
@@ -472,7 +473,7 @@ def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | No
         ingest_secrets_from_minio(org, run_id, source_type=source_type)
     elif job_type == "code_scanning":
         from src.code_scanning.scanner import ingest_code_scanning_from_minio
-        ingest_code_scanning_from_minio(org, run_id, source_type=source_type)
+        ingest_code_scanning_from_minio(org, run_id, source_type=source_type, preview=preview)
     elif job_type == "container_scanning":
         # reco- runs are internal candidate SBOM scans for the base-image
         # recommendation; their SBOM is consumed by the reco flow directly,
@@ -482,7 +483,7 @@ def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | No
             ingest_container_from_minio(org, run_id, source_type=source_type)
     elif job_type == "iac_scanning":
         from src.iac.scanner import ingest_iac_from_minio
-        ingest_iac_from_minio(org, run_id, source_type=source_type)
+        ingest_iac_from_minio(org, run_id, source_type=source_type, preview=preview)
     elif job_type == "agent_scanning":
         from src.agent_scanning.scanner import ingest_agent_from_minio
         ingest_agent_from_minio(org, run_id, source_type=source_type)
