@@ -14,6 +14,21 @@ logger = logging.getLogger(__name__)
 _DEFAULT_MAX_TURNS = 8
 _DEFAULT_MAX_TOKENS_PER_TURN = 1000
 
+# When the loop exhausts its turns still mid-investigation, spend one final call
+# with tools disabled so the model is forced to commit its answer from what it
+# has already gathered. Without this, a model that keeps grepping/reading until
+# the last turn yields no final JSON and the whole investigation is discarded.
+_FORCE_FINAL_DIRECTIVE = (
+    "You have used all available investigation steps. Do not call any more tools. "
+    "Respond NOW with ONLY the final JSON object required by your instructions, "
+    "based on everything you have gathered."
+)
+
+# A model that re-issues tool calls it has already made is spinning, not
+# investigating. After this many consecutive no-progress turns (every call a
+# repeat of one already run) we stop feeding it turns and force the answer.
+_STUCK_STALL_LIMIT = 2
+
 
 @dataclasses.dataclass
 class AgentResult:
@@ -24,7 +39,11 @@ class AgentResult:
     tokens_in: int
     tokens_out: int
     turns: int
-    stopped_reason: str  # 'completed' | 'max_turns' | 'budget' | 'llm_error'
+    stopped_reason: str  # 'completed' | 'forced_final' | 'budget' | 'llm_error'
+
+
+def _call_fingerprint(name: str, arguments: dict) -> str:
+    return f"{name}:{json.dumps(arguments, sort_keys=True, default=str)}"
 
 
 def investigate(
@@ -45,8 +64,46 @@ def investigate(
     tool_log: list[ToolCallRecord] = []
     tokens_in_total = 0
     tokens_out_total = 0
+    seen_calls: set[str] = set()
+    stalled_turns = 0
 
     tool_spec = tools.to_openai_spec()
+
+    def force_final(turns: int) -> AgentResult:
+        """One tool-free call so gathered work becomes a verdict, not garbage.
+
+        Used both when turns run out and when the model is detected spinning on
+        repeat tool calls. Errors degrade to the same ``llm_error`` shape the
+        main loop uses so the caller's verdict logic is unchanged.
+        """
+        nonlocal tokens_in_total, tokens_out_total
+        messages.append({"role": "user", "content": _FORCE_FINAL_DIRECTIVE})
+        try:
+            final = llm.chat_with_tools(
+                messages, tools=[], temperature=0.0, max_tokens=max_tokens_per_turn,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("investigator forced-final llm error: %s", exc)
+            return AgentResult(
+                final_message=f"// stopped: llm error ({type(exc).__name__})",
+                tool_calls=tool_log,
+                tokens_in=tokens_in_total,
+                tokens_out=tokens_out_total,
+                turns=turns,
+                stopped_reason="llm_error",
+            )
+        tokens_in_total += final.tokens_in
+        tokens_out_total += final.tokens_out
+        if budget is not None:
+            budget.record(tokens_in=final.tokens_in, tokens_out=final.tokens_out)
+        return AgentResult(
+            final_message=final.content or "",
+            tool_calls=tool_log,
+            tokens_in=tokens_in_total,
+            tokens_out=tokens_out_total,
+            turns=turns,
+            stopped_reason="forced_final",
+        )
 
     for turn in range(1, max_turns + 1):
         if budget is not None and not budget.allow():
@@ -110,9 +167,14 @@ def investigate(
                 ],
             }
         )
+        made_progress = False
         for call in resp.tool_calls:
             record = tools.execute(call.name, call.arguments)
             tool_log.append(record)
+            fp = _call_fingerprint(call.name, call.arguments)
+            if fp not in seen_calls:
+                seen_calls.add(fp)
+                made_progress = True
             messages.append(
                 {
                     "role": "tool",
@@ -122,11 +184,13 @@ def investigate(
                 }
             )
 
-    return AgentResult(
-        final_message="// stopped: hit max_turns without final answer",
-        tool_calls=tool_log,
-        tokens_in=tokens_in_total,
-        tokens_out=tokens_out_total,
-        turns=max_turns,
-        stopped_reason="max_turns",
-    )
+        # A turn whose every call repeats one already run gathered nothing new.
+        # Let the model recover from a single stumble, but break a hard loop
+        # instead of grinding through every remaining turn.
+        stalled_turns = 0 if made_progress else stalled_turns + 1
+        if stalled_turns >= _STUCK_STALL_LIMIT:
+            logger.warning("investigator stuck repeating tool calls; forcing answer at turn %d", turn)
+            return force_final(turn)
+
+    # Turns exhausted mid-investigation: force the answer from gathered work.
+    return force_final(max_turns)

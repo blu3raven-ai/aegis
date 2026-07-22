@@ -127,9 +127,13 @@ def test_parallel_tool_calls_in_one_turn_all_executed():
 # ---------------------------------------------------------------------------
 
 
-def test_max_turns_cap_stops_with_reason():
-    # Endless tool-turn stream
-    responses = [_tool_turn(ToolCall(id=f"c{i}", name="echo", arguments={})) for i in range(20)]
+def test_max_turns_cap_forces_final_answer():
+    # Model keeps calling tools through every turn, then the forcing call
+    # (tools disabled) makes it commit a final answer instead of discarding it.
+    responses = [
+        _tool_turn(ToolCall(id=f"c{i}", name="echo", arguments={})) for i in range(3)
+    ]
+    responses.append(_final("forced verdict json", tokens_in=10, tokens_out=5))
     llm = _StubLlm(responses)
     reg = ToolRegistry([_echo_tool()])
     result = investigate(
@@ -139,8 +143,65 @@ def test_max_turns_cap_stops_with_reason():
         llm=llm,
         max_turns=3,
     )
-    assert result.stopped_reason == "max_turns"
+    assert result.stopped_reason == "forced_final"
+    assert result.final_message == "forced verdict json"
     assert result.turns == 3
+    assert llm.call_count == 4  # 3 tool turns + 1 forcing turn
+
+
+def test_stuck_repeating_same_call_breaks_early_and_forces_answer():
+    # Model issues the identical tool call every turn (no new information).
+    # After the stall limit it must be cut off and forced, well before max_turns.
+    same_call = ToolCall(id="c", name="echo", arguments={"msg": "loop"})
+    # 3 identical tool turns then the forcing call (4th) is answered.
+    responses = [_tool_turn(same_call) for _ in range(3)]
+    responses.append(_final("forced out of the loop"))
+    llm = _StubLlm(responses)
+    reg = ToolRegistry([_echo_tool()])
+    result = investigate(
+        system_prompt="sys", user_task="ask", tools=reg, llm=llm, max_turns=8,
+    )
+    assert result.stopped_reason == "forced_final"
+    assert result.final_message == "forced out of the loop"
+    # Turn 1's call is new info; turns 2 and 3 are pure repeats, so the 2nd
+    # stalled turn forces the answer at turn 3 — nowhere near the 8-turn cap.
+    assert result.turns == 3
+    assert llm.call_count == 4
+
+
+def test_distinct_calls_do_not_trip_stuck_detector():
+    llm = _StubLlm([
+        _tool_turn(ToolCall(id="c1", name="echo", arguments={"msg": "a"})),
+        _tool_turn(ToolCall(id="c2", name="echo", arguments={"msg": "b"})),
+        _tool_turn(ToolCall(id="c3", name="echo", arguments={"msg": "c"})),
+        _final("done properly"),
+    ])
+    reg = ToolRegistry([_echo_tool()])
+    result = investigate(
+        system_prompt="sys", user_task="ask", tools=reg, llm=llm, max_turns=8,
+    )
+    assert result.stopped_reason == "completed"
+    assert result.final_message == "done properly"
+
+
+def test_forced_final_llm_error_returns_error_reason():
+    class _FailOnForce:
+        _model = "x"
+
+        def __init__(self):
+            self.n = 0
+
+        def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1000):
+            self.n += 1
+            if tools:  # tool turns keep the loop going
+                return _tool_turn(ToolCall(id=f"c{self.n}", name="echo", arguments={}))
+            raise RuntimeError("transport down")  # forcing turn fails
+
+    reg = ToolRegistry([_echo_tool()])
+    result = investigate(
+        system_prompt="sys", user_task="ask", tools=reg, llm=_FailOnForce(), max_turns=2,
+    )
+    assert result.stopped_reason == "llm_error"
 
 
 def test_llm_error_returns_error_reason_not_raise():
