@@ -75,7 +75,7 @@ services:
     build: .
     read_only: true
     tmpfs:
-      - /tmp:noexec,nosuid,size=100m
+      - /tmp:noexec,nosuid
       - /home/app:size=20m,uid=10001,gid=10001
     cap_drop: [ALL]
     security_opt:

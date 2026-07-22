@@ -237,7 +237,7 @@ class TestRunAllProbes:
              patch("src.health.probes.probe_recent_scans", _ok), \
              patch("src.health.probes.probe_argus", _ok):
             results = await run_all_probes()
-        assert len(results) == 5
+        assert len(results) == 6
         assert all(isinstance(r, ProbeResult) for r in results)
 
     @pytest.mark.asyncio
@@ -251,7 +251,7 @@ class TestRunAllProbes:
              patch("src.health.probes.probe_recent_scans", _ok), \
              patch("src.health.probes.probe_argus", _ok):
             results = await run_all_probes()
-        assert len(results) == 5
+        assert len(results) == 6
         postgres_result = next(r for r in results if r.name == "postgres")
         assert postgres_result.status == "fail"
         assert "kaboom" in (postgres_result.error or "")
@@ -279,3 +279,31 @@ class TestRunAllProbes:
         assert postgres_result.status == "fail"
         assert postgres_result.error == "probe timeout"
         assert postgres_result.duration_ms == 5000
+
+
+class TestProbeDisk:
+    @pytest.mark.asyncio
+    async def test_ok_when_ample_free_space(self, monkeypatch):
+        from src.health import probes
+        import shutil
+        monkeypatch.setattr(shutil, "disk_usage", lambda p: type("U", (), {"free": 90, "total": 100})())
+        r = await probes.probe_disk()
+        assert r.name == "disk"
+        assert r.status == "ok"
+        assert r.details["percent_free"] == 90.0
+
+    @pytest.mark.asyncio
+    async def test_degraded_below_warn_threshold(self, monkeypatch):
+        from src.health import probes
+        import shutil
+        monkeypatch.setattr(shutil, "disk_usage", lambda p: type("U", (), {"free": 10, "total": 100})())
+        r = await probes.probe_disk()
+        assert r.status == "degraded"
+
+    @pytest.mark.asyncio
+    async def test_fail_below_fail_threshold(self, monkeypatch):
+        from src.health import probes
+        import shutil
+        monkeypatch.setattr(shutil, "disk_usage", lambda p: type("U", (), {"free": 2, "total": 100})())
+        r = await probes.probe_disk()
+        assert r.status == "fail"

@@ -7,6 +7,7 @@ post progress, and report failures.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
 
@@ -39,6 +40,8 @@ from src.shared.paths import now_iso, SAFE_RELATIVE_PATH
 from src.shared.rate_limit import rate_limit_by_ip, rate_limit_by_runner
 
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
+
+_logger = logging.getLogger(__name__)
 
 # Upper bound on presigned upload URLs a single request may mint.
 _MAX_PRESIGN_FILES = 256
@@ -508,8 +511,6 @@ def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | No
 
 def _ingest_from_minio(job: dict[str, Any]) -> None:
     """Ingest scan results from MinIO after runner uploads. Runs in background thread."""
-    import logging
-    _logger = logging.getLogger(__name__)
 
     org = job.get("org", "")
     run_id = job.get("runId", "")
@@ -624,8 +625,7 @@ def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, An
             from src.storage import update_deep_audit_run
             update_deep_audit_run(org, run_id, patch)
     except Exception:
-        import logging
-        logging.getLogger(__name__).warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)
+        _logger.warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)
 
 
 _TERMINAL_JOB_STATUSES = frozenset({"completed", "failed", "cancelled"})
@@ -641,8 +641,6 @@ def _try_close_umbrella_run(base_scan_id: str, org: str) -> None:
     umbrella 'completed' or 'failed' so CI polling and dedup detection both see
     the correct final state.
     """
-    import logging
-    _logger = logging.getLogger(__name__)
     try:
         from src.runner.storage import list_jobs
         prefix = f"{base_scan_id}:"

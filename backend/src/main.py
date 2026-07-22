@@ -57,6 +57,7 @@ from src.connectors.webhooks.providers.azure_devops import router as azure_devop
 from src.connectors.webhooks.providers.jenkins import router as jenkins_webhook_router
 from src.graphql.schema import create_graphql_router
 from src.health.router import router as health_router
+from src.health.router import system_router
 from src.scans.router import router as scans_router
 from src.sources.router import router as sources_router
 from src.scans.manual_router import router as scans_manual_router
@@ -645,6 +646,7 @@ app.include_router(bitbucket_webhook_router)
 app.include_router(azure_devops_webhook_router)
 app.include_router(jenkins_webhook_router)
 app.include_router(health_router)
+app.include_router(system_router)
 app.include_router(sla_router)
 app.include_router(rules_router)
 app.include_router(sources_router)

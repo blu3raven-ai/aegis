@@ -11,13 +11,19 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
-from src.authz.permissions.catalog import MANAGE_SETTINGS
+from src.authz.enforcement.dependencies import Permission
+from src.authz.permissions.catalog import MANAGE_SETTINGS, VIEW_SETTINGS
 from src.authz.permissions.service import has_role_permission
-from src.health.probes import run_all_probes
+from src.health.probes import probe_disk, run_all_probes
 
 router = APIRouter()
+
+# Frontend-reachable (the /health root path is not proxied to the browser). The
+# low-disk banner polls this so an operator is warned before a full disk starts
+# silently dropping scan findings on ingest.
+system_router = APIRouter(prefix="/api/v1/system", tags=["settings"])
 
 
 def _overall(statuses: list[str]) -> str:
@@ -49,3 +55,10 @@ async def health_check(request: Request) -> dict:
             for r in results
         ]
     return body
+
+
+@system_router.get("/disk")
+async def disk_status(_: None = Depends(Permission(VIEW_SETTINGS))) -> dict:
+    """Free space where scan results are staged. Drives the low-disk banner."""
+    result = await probe_disk()
+    return {"status": result.status, **result.details}
