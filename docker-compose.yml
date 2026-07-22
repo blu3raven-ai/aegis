@@ -164,7 +164,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          # Semgrep and cdxgen are memory-hungry on real repos; 2G got them
+          # OOM-killed (semgrep exit -9) and produced zero findings. The scanners
+          # also self-limit (semgrep --max-memory), but give the runner real
+          # headroom so a large repo scans instead of dying.
+          memory: 6G
     volumes:
       - runner-workspace:/workspace
       - aegis-grype-cache:/home/aegis/.cache/grype

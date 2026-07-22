@@ -17,6 +17,12 @@ _DEFAULT_CONFIG_PATH = "/opt/semgrep-rules"
 
 _PER_FILE_TIMEOUT = 30
 _OVERALL_TIMEOUT = 1800
+# Cap semgrep's memory so a large repo self-limits instead of being OOM-killed
+# (which silently yields zero findings). --max-memory bounds a single rule/file
+# in MiB; --jobs bounds parallel workers so total stays within the container.
+# Both overridable for hosts with more or less headroom.
+_MAX_MEMORY_MB = os.getenv("SEMGREP_MAX_MEMORY_MB", "2000")
+_JOBS = os.getenv("SEMGREP_JOBS", "2")
 
 
 def _resolve_configs() -> list[str]:
@@ -53,6 +59,8 @@ def run_semgrep_sarif(
         "--quiet", "--no-git-ignore",
         "--timeout", str(_PER_FILE_TIMEOUT),
         "--timeout-threshold", "3",
+        "--max-memory", _MAX_MEMORY_MB,
+        "--jobs", _JOBS,
     ])
     if include_files:
         for f in include_files:
@@ -94,6 +102,8 @@ def run_semgrep(
         "--json", "--quiet", "--no-git-ignore",
         "--timeout", str(_PER_FILE_TIMEOUT),
         "--timeout-threshold", "3",
+        "--max-memory", _MAX_MEMORY_MB,
+        "--jobs", _JOBS,
     ])
     if include_files:
         for f in include_files:
