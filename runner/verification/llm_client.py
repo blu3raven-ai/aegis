@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import random
 import re
 import time
@@ -18,6 +19,16 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
+
+# An endpoint that lacks the responses API answers a POST to /responses with a
+# route-level rejection: 404/405, or (on some gateways) a 4xx whose body names
+# the missing route. A 400/422 means the route exists but the request was bad,
+# so those are NOT unsupported signals. Kept conservative to avoid mistaking a
+# genuine bad-request for a missing endpoint.
+_UNSUPPORTED_ROUTE_RE = re.compile(
+    r"not\s*found|unknown|unsupported|no\s*such|does\s*not\s*exist|no\s*route|not\s*implemented",
+    re.IGNORECASE,
+)
 
 # Many self-hostable models wrap JSON in ```json ... ``` fences despite the
 # system prompt saying "raw JSON only". Stripping before validation avoids a
@@ -88,6 +99,14 @@ class LlmTransientError(LlmError):
     pass
 
 
+class LlmResponsesUnsupported(LlmError):
+    """Raised when the configured endpoint has no responses API route.
+
+    Internal signal that flips a client permanently onto chat completions; it is
+    never a transient failure, so it does not go through the retry policy.
+    """
+
+
 @dataclass
 class LlmResponse:
     content: str
@@ -135,6 +154,44 @@ class LlmToolResponse:
     tokens_in: int
     tokens_out: int
     prompt_hash: str
+    # Server-assigned id of a responses-API turn; the next turn threads it as
+    # previous_response_id so only the new input is re-sent. None on the chat
+    # path, which is stateless and carries the whole history every turn.
+    response_id: str | None = None
+
+
+def _is_unsupported_route(resp: httpx.Response) -> bool:
+    """Whether a /responses reply signals the route does not exist.
+
+    404/405 are unambiguous. A 400/422 means the route exists but the request
+    was malformed, so it is never treated as unsupported. For other 4xx we fall
+    back to a body-text sniff, which some gateways use for unknown paths.
+    """
+    if resp.status_code in (404, 405):
+        return True
+    if resp.status_code in (400, 401, 403, 422, 429) or resp.status_code >= 500:
+        return False
+    if 400 <= resp.status_code < 500:
+        return bool(_UNSUPPORTED_ROUTE_RE.search(resp.text or ""))
+    return False
+
+
+def _to_responses_tools(tools: list[dict]) -> list[dict]:
+    """Translate OpenAI chat function-tool specs to the flat responses shape.
+
+    Chat nests the schema under ``function``; responses hoists name/description/
+    parameters to the top level of each tool item.
+    """
+    out: list[dict] = []
+    for t in tools:
+        fn = t.get("function", t)
+        out.append({
+            "type": "function",
+            "name": fn.get("name", ""),
+            "description": fn.get("description", ""),
+            "parameters": fn.get("parameters", {}),
+        })
+    return out
 
 
 class LlmClient:
@@ -165,10 +222,21 @@ class LlmClient:
         # is monotonic, so a lost update under concurrency just costs one more
         # truncation, never a wrong value; no lock needed.
         self._min_completion_tokens = 0
+        # Transport selection. `auto` probes the responses API once and caches
+        # the result; `responses` forces it (no fallback); `chat` forces chat
+        # completions and never probes. Unknown values degrade to auto.
+        mode = (os.environ.get("LLM_TRANSPORT") or "auto").strip().lower()
+        self._transport_mode = mode if mode in ("auto", "chat", "responses") else "auto"
+        # None = not yet probed, True/False = cached capability. Shared across a
+        # scan's concurrent conversations so the endpoint is probed once.
+        self._supports_responses: bool | None = None
 
-    def _post_with_retry(self, payload: dict, *, retry_empty: bool) -> dict:
-        """POST to /chat/completions with the shared transient-failure retry
-        policy, returning the parsed JSON body.
+    def _post_with_retry(
+        self, payload: dict, *, retry_empty: bool,
+        path: str = "/chat/completions", detect_unsupported: bool = False,
+    ) -> dict:
+        """POST to ``path`` with the shared transient-failure retry policy,
+        returning the parsed JSON body.
 
         Every LLM entry point (plain chat, JSON chat, tool-calling agent loop)
         funnels through here so they all get identical hardening: transport
@@ -179,10 +247,15 @@ class LlmClient:
         (the model stalled under load), but not for tool-calling turns where an
         empty content field with tool_calls is the normal shape.
 
+        ``detect_unsupported`` (responses path only) raises
+        ``LlmResponsesUnsupported`` on a route-not-found signal so the caller can
+        fall back permanently; a 400/422/200 means the route exists and is not
+        treated as unsupported.
+
         Raises the last transient error after the attempt budget is exhausted;
         the caller's ``except Exception`` degrades the finding to needs_verify.
         """
-        url = f"{self._api_base_url}/chat/completions"
+        url = f"{self._api_base_url}{path}"
         headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
         last = _MAX_ATTEMPTS - 1
         last_error: Exception | None = None
@@ -218,11 +291,19 @@ class LlmClient:
                     _backoff(attempt)
                     continue
                 raise last_error
+            if detect_unsupported and _is_unsupported_route(resp):
+                # Route does not exist: a permanent capability fact, not a
+                # transient blip. Surface it so the caller flips to chat.
+                raise LlmResponsesUnsupported(f"responses route unsupported: {resp.status_code}")
             if resp.status_code >= 400:
-                # Fail open on a rejected reasoning_effort: some OpenAI-compatible
-                # endpoints 400 on the unknown field. Drop it, disable it for the
-                # rest of this client's life, and retry without it.
-                if resp.status_code == 400 and payload.pop("reasoning_effort", None) is not None:
+                # Fail open on a rejected reasoning hint: some OpenAI-compatible
+                # endpoints 400 on the unknown field (top-level reasoning_effort
+                # on the chat path, or the nested reasoning object on responses).
+                # Drop it, disable it for the rest of this client's life, retry.
+                if resp.status_code == 400 and (
+                    payload.pop("reasoning_effort", None) is not None
+                    or payload.pop("reasoning", None) is not None
+                ):
                     self._reasoning_effort = None
                     logger.info("llm endpoint rejected reasoning_effort; retrying without it")
                     last_error = LlmTransientError("reasoning_effort rejected")
@@ -417,4 +498,105 @@ class LlmClient:
             tokens_in=int(usage.get("prompt_tokens", 0)),
             tokens_out=int(usage.get("completion_tokens", 0)),
             prompt_hash=prompt_hash,
+        )
+
+    def _responses_turn(
+        self,
+        input_items: list[dict],
+        *,
+        tools: list[dict],
+        previous_response_id: str | None,
+        temperature: float,
+        max_tokens: int,
+    ) -> LlmToolResponse:
+        """Run one turn against the responses API.
+
+        Sends only ``input_items`` (the new user/tool input) plus
+        ``previous_response_id``; the server retains prior context, which is the
+        multi-turn token win over re-sending the whole history each turn. On the
+        first probe in ``auto`` mode an unsupported endpoint flips the client
+        permanently onto chat completions (logged once); a real bad request or a
+        transient blip is not treated as unsupported.
+        """
+        payload: dict = {
+            "model": self._model,
+            "input": input_items,
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+        }
+        if tools:
+            payload["tools"] = _to_responses_tools(tools)
+        if previous_response_id:
+            payload["previous_response_id"] = previous_response_id
+        if self._reasoning_effort:
+            payload["reasoning"] = {"effort": self._reasoning_effort}
+        prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+        try:
+            data = self._post_with_retry(
+                payload, retry_empty=False, path="/responses", detect_unsupported=True,
+            )
+        except LlmResponsesUnsupported:
+            if self._supports_responses is None:
+                logger.info("endpoint does not support the responses api; using chat completions")
+            self._supports_responses = False
+            raise
+        # A parseable turn confirms the route exists; cache so peers skip probing.
+        self._supports_responses = True
+
+        content_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        for item in data.get("output") or []:
+            if not isinstance(item, dict):
+                continue
+            itype = item.get("type")
+            if itype == "message":
+                for part in item.get("content") or []:
+                    if isinstance(part, dict) and part.get("type") in ("output_text", "text"):
+                        content_parts.append(part.get("text", ""))
+            elif itype == "function_call":
+                raw_args = item.get("arguments", "{}")
+                try:
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+                except json.JSONDecodeError:
+                    args = {"__raw__": raw_args}
+                tool_calls.append(ToolCall(
+                    # call_id threads the tool result back on the next turn.
+                    id=item.get("call_id") or item.get("id", ""),
+                    name=item.get("name", ""),
+                    arguments=args if isinstance(args, dict) else {},
+                ))
+
+        usage = data.get("usage", {})
+        return LlmToolResponse(
+            content="".join(content_parts),
+            tool_calls=tool_calls,
+            tokens_in=int(usage.get("input_tokens", 0)),
+            tokens_out=int(usage.get("output_tokens", 0)),
+            prompt_hash=prompt_hash,
+            response_id=data.get("id"),
+        )
+
+    def start_conversation(
+        self, *, system_prompt: str, tools: list[dict],
+        max_tokens_per_turn: int, temperature: float = 0.0,
+    ):
+        """Open a transport-agnostic multi-turn conversation.
+
+        Picks the responses API when the endpoint supports it (cached per
+        client) and falls back to stateless chat completions otherwise, honoring
+        the ``LLM_TRANSPORT`` override. The agent loop drives the returned
+        object without knowing which transport backs it.
+        """
+        from runner.verification.agents.conversation import ChatConversation, ResponsesConversation
+
+        kwargs = dict(
+            system_prompt=system_prompt, tools=tools,
+            max_tokens_per_turn=max_tokens_per_turn, temperature=temperature,
+        )
+        if self._transport_mode == "chat" or self._supports_responses is False:
+            return ChatConversation(self, **kwargs)
+        # `responses` forces it with no fallback; `auto` allows degrade-to-chat.
+        return ResponsesConversation(
+            self, allow_fallback=self._transport_mode == "auto", **kwargs,
         )

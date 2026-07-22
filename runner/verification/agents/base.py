@@ -4,8 +4,9 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
-from typing import Any
 
+from runner.verification.agents.conversation import ChatConversation
+from runner.verification.llm_client import LlmClient
 from runner.verification.tools.base import ToolCallRecord, ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -89,10 +90,6 @@ def investigate(
     if soft_conclude_at is None:
         soft_conclude_at = max(1, max_turns // 2)
     nudged = False
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_task},
-    ]
     tool_log: list[ToolCallRecord] = []
     tokens_in_total = 0
     tokens_out_total = 0
@@ -100,20 +97,40 @@ def investigate(
     stalled_turns = 0
 
     tool_spec = tools.to_openai_spec()
+    # Transport-agnostic conversation. A real LlmClient with the stock transport
+    # delegates the responses-vs-chat choice (auto-detect + cache + fallback) to
+    # start_conversation. Anything that substituted its own transport at
+    # chat_with_tools (a bare stub, or a subclass that overrides it) is honored
+    # by wrapping that method directly, so existing callers/tests are unchanged.
+    stock_transport = getattr(type(llm), "chat_with_tools", None) is LlmClient.chat_with_tools
+    if stock_transport and hasattr(llm, "start_conversation"):
+        conv = llm.start_conversation(
+            system_prompt=system_prompt, tools=tool_spec,
+            max_tokens_per_turn=max_tokens_per_turn, temperature=0.0,
+        )
+    else:
+        conv = ChatConversation(
+            llm, system_prompt=system_prompt, tools=tool_spec,
+            max_tokens_per_turn=max_tokens_per_turn, temperature=0.0,
+        )
 
-    def force_final(turns: int) -> AgentResult:
+    def force_final(turns: int, pending) -> AgentResult:
         """One tool-free call so gathered work becomes a verdict, not garbage.
 
         Used both when turns run out and when the model is detected spinning on
-        repeat tool calls. Errors degrade to the same ``llm_error`` shape the
-        main loop uses so the caller's verdict logic is unchanged.
+        repeat tool calls. Any tool results from the triggering turn ride the
+        forcing directive so they are committed before the model must answer.
+        Errors degrade to the same ``llm_error`` shape the main loop uses so the
+        caller's verdict logic is unchanged.
         """
         nonlocal tokens_in_total, tokens_out_total
-        messages.append({"role": "user", "content": _FORCE_FINAL_DIRECTIVE})
         try:
-            final = llm.chat_with_tools(
-                messages, tools=[], temperature=0.0, max_tokens=max_tokens_per_turn,
-            )
+            if pending:
+                final = conv.send_tool_results(
+                    pending, follow_up=_FORCE_FINAL_DIRECTIVE, disable_tools=True,
+                )
+            else:
+                final = conv.send_user(_FORCE_FINAL_DIRECTIVE, disable_tools=True)
         except Exception as exc:  # noqa: BLE001
             logger.warning("investigator forced-final llm error: %s", exc)
             return AgentResult(
@@ -137,6 +154,10 @@ def investigate(
             stopped_reason="forced_final",
         )
 
+    # Drives what the next turn transmits: the opening user task, or the prior
+    # turn's tool results (optionally trailed by the soft-conclude nudge).
+    pending_records: list | None = None
+    pending_follow_up: str | None = None
     for turn in range(1, max_turns + 1):
         if budget is not None and not budget.allow():
             return AgentResult(
@@ -149,12 +170,10 @@ def investigate(
             )
 
         try:
-            resp = llm.chat_with_tools(
-                messages,
-                tools=tool_spec,
-                temperature=0.0,
-                max_tokens=max_tokens_per_turn,
-            )
+            if pending_records is None:
+                resp = conv.send_user(user_task)
+            else:
+                resp = conv.send_tool_results(pending_records, follow_up=pending_follow_up)
         except Exception as exc:  # noqa: BLE001
             logger.warning("investigator llm error on turn %d: %s", turn, exc)
             return AgentResult(
@@ -182,31 +201,13 @@ def investigate(
                     stopped_reason="completed",
                 )
             # Stopped calling tools but gave no usable answer (reasoning prose,
-            # no final JSON). Don't accept the non-answer — record it and force a
-            # tool-free answer instead of degrading the whole finding.
+            # no final JSON). Don't accept the non-answer; force a tool-free
+            # answer instead of degrading the whole finding.
             logger.info("investigator completed without a usable answer; forcing at turn %d", turn)
-            messages.append({"role": "assistant", "content": resp.content or ""})
-            return force_final(turn)
+            return force_final(turn, None)
 
-        # Persist assistant message verbatim so providers can correlate tool responses.
-        messages.append(
-            {
-                "role": "assistant",
-                "content": resp.content or None,
-                "tool_calls": [
-                    {
-                        "id": call.id,
-                        "type": "function",
-                        "function": {
-                            "name": call.name,
-                            "arguments": json.dumps(call.arguments),
-                        },
-                    }
-                    for call in resp.tool_calls
-                ],
-            }
-        )
         made_progress = False
+        records: list[tuple[str, str, str]] = []
         for call in resp.tool_calls:
             record = tools.execute(call.name, call.arguments)
             tool_log.append(record)
@@ -214,14 +215,7 @@ def investigate(
             if fp not in seen_calls:
                 seen_calls.add(fp)
                 made_progress = True
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "name": call.name,
-                    "content": record.error or record.result,
-                }
-            )
+            records.append((call.id, call.name, record.error or record.result))
 
         # A turn whose every call repeats one already run gathered nothing new.
         # Let the model recover from a single stumble, but break a hard loop
@@ -229,17 +223,19 @@ def investigate(
         stalled_turns = 0 if made_progress else stalled_turns + 1
         if stalled_turns >= _STUCK_STALL_LIMIT:
             logger.warning("investigator stuck repeating tool calls; forcing answer at turn %d", turn)
-            return force_final(turn)
+            return force_final(turn, records)
 
         # Half-spent and still investigating: nudge it once to conclude so a
         # decided-but-indecisive model stops early instead of grinding the cap.
+        pending_follow_up = None
         if turn >= soft_conclude_at and not nudged:
-            messages.append({"role": "user", "content": _SOFT_CONCLUDE_DIRECTIVE})
+            pending_follow_up = _SOFT_CONCLUDE_DIRECTIVE
             nudged = True
             logger.info("investigator soft-conclude nudge at turn %d", turn)
+        pending_records = records
 
     # Turns exhausted mid-investigation: force the answer from gathered work.
     # Logged so the exhaustion rate is visible — a high rate means the cap is
     # genuinely too low (raise it); a low rate means the cap is fine.
     logger.info("investigator hit max_turns=%d, forcing answer from gathered work", max_turns)
-    return force_final(max_turns)
+    return force_final(max_turns, pending_records)
