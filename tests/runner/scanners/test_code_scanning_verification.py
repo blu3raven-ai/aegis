@@ -26,10 +26,17 @@ def test_no_llm_config_marks_skipped(monkeypatch):
     assert result[0]["verification_metadata"]["skipped"] == "llm_disabled"
 
 
-def test_streaming_flush_emits_partial_verdicts(monkeypatch):
+def test_streaming_flush_only_emits_resolved_findings(monkeypatch):
+    """Verdicts stream finding-by-finding: a flush carries only findings the LLM
+    has already judged. A still-pending raw finding must never appear."""
+    import runner.scanners.code_scanning.scanner as mod
+    # Flush after every resolved finding so early flushes fire while others pend.
+    monkeypatch.setattr(mod, "_STREAM_FLUSH_EVERY", 1)
+    monkeypatch.setattr(mod, "_STREAM_MIN_INTERVAL_S", 0.0)
+
     findings = [
         {"file": f"f{i}.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"}
-        for i in range(5)
+        for i in range(4)
     ]
 
     def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None, **kwargs):
@@ -39,9 +46,7 @@ def test_streaming_flush_emits_partial_verdicts(monkeypatch):
             "tokens_in": 1, "tokens_out": 1, "verification_metadata": {},
         })()
 
-    monkeypatch.setattr(
-        "runner.scanners.code_scanning.scanner.verify_finding", _fake_verify,
-    )
+    monkeypatch.setattr(mod, "verify_finding", _fake_verify)
 
     snapshots: list[list[dict]] = []
     result = _maybe_verify(
@@ -49,11 +54,57 @@ def test_streaming_flush_emits_partial_verdicts(monkeypatch):
         scan_budget=ScanBudget(scan_budget=10_000, daily_remaining=1_000_000),
         max_workers=1, on_progress=lambda snap: snapshots.append(snap),
     )
-    # A flush fired mid-pass and carried real verdicts, not needs_verify defaults.
     assert snapshots, "expected at least one streaming flush"
+    # No streamed snapshot ever carries a still-pending (raw) finding.
+    for snap in snapshots:
+        for f in snap:
+            assert f.get("verdict") is not None or f.get("verification_metadata"), \
+                "pending raw finding leaked into a streamed snapshot"
+    # An early flush streamed a strict subset, findings arrive one by one.
+    assert any(len(snap) < len(findings) for snap in snapshots)
     assert any(f.get("verdict") == "confirmed" for snap in snapshots for f in snap)
-    # Final result is unaffected by streaming.
     assert all(f["verdict"] == "confirmed" for f in result)
+
+
+def test_llm_down_marks_error_and_keeps_finding(monkeypatch):
+    """When the endpoint errors per finding, verify catches it, marks llm_error,
+    and still returns the finding (never hangs, never drops)."""
+    findings = [{"file": "a.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"}]
+
+    def _boom(*, finding, repo_root, llm, escalation_llm=None, critic=None, **kwargs):
+        raise ConnectionError("endpoint down")
+
+    monkeypatch.setattr("runner.scanners.code_scanning.scanner.verify_finding", _boom)
+    result = _maybe_verify(
+        findings=findings, repo_root="/x", llm=object(),
+        scan_budget=ScanBudget(scan_budget=10_000, daily_remaining=1_000_000),
+    )
+    assert len(result) == 1
+    assert result[0]["verdict"] is None
+    assert result[0]["verification_metadata"]["skipped"].startswith("llm_error")
+
+
+def test_verify_findings_file_writes_when_endpoint_down(tmp_path, monkeypatch):
+    """A down endpoint (verify raises) still leaves the full finding set on disk
+    for the completion ingest, nothing is lost."""
+    findings_file = tmp_path / "findings.jsonl"
+    findings_file.write_text(json.dumps({
+        "file": "x.py", "line": 1, "rule": "x", "severity": "high", "engine": "semgrep",
+    }) + "\n")
+
+    def _boom(*, finding, repo_root, llm, escalation_llm=None, critic=None, **kwargs):
+        raise ConnectionError("endpoint down")
+
+    monkeypatch.setattr("runner.scanners.code_scanning.scanner.verify_finding", _boom)
+
+    CodeScanningScanner()._verify_findings_file(
+        findings_file, repo_root=str(tmp_path), env=_env(api_key="sk-test"),
+    )
+
+    rewritten = [json.loads(l) for l in findings_file.read_text().splitlines() if l.strip()]
+    assert len(rewritten) == 1
+    assert rewritten[0]["file"] == "x.py"
+    assert rewritten[0]["verification_metadata"]["skipped"].startswith("llm_error")
 
 
 def test_maybe_verify_routes_by_detector(monkeypatch):

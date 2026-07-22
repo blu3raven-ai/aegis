@@ -51,12 +51,13 @@ class ScanBudget:
             self.total_tokens_out += tokens_out
 
 
-# Verification is LLM-I/O-bound, so findings verify concurrently. The default is
-# deliberately low: many self-hostable model endpoints return 200 with empty
-# content (instead of a 429) once concurrent in-flight requests exceed their
-# comfort zone, which forces a schema-invalid verdict. Raise
-# LLM_VERIFY_CONCURRENCY when the endpoint is known to take more.
-DEFAULT_VERIFY_WORKERS = 3
+# Verification is LLM-I/O-bound and now gates when findings appear (they paint as
+# each clears the LLM, with no raw preview first), so the default is set for
+# throughput: findings should surface in minutes, not hours. Lower
+# LLM_VERIFY_CONCURRENCY when a self-hostable endpoint returns 200 with empty
+# content (instead of a 429) once concurrent in-flight requests exceed its comfort
+# zone.
+DEFAULT_VERIFY_WORKERS = 16
 
 
 def verify_concurrency(env: JobEnv) -> int:

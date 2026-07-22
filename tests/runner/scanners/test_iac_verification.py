@@ -188,8 +188,15 @@ def test_full_verify_invokes_llm_for_high_severity(tmp_path):
     assert len(llm.calls) == 3  # Ground truth + Hunter + Skeptic
 
 
-def test_streaming_flush_emits_partial_verdicts(tmp_path, monkeypatch):
-    findings = [dict(_seed_repo(tmp_path), check_id=f"CKV_{i}") for i in range(5)]
+def test_streaming_flush_only_emits_resolved_findings(tmp_path, monkeypatch):
+    """Verdicts stream finding-by-finding: a flush carries only findings the LLM
+    has already judged. A still-pending raw finding must never appear."""
+    import runner.scanners.iac.scanner as mod
+    # Flush after every resolved finding so early flushes fire while others pend.
+    monkeypatch.setattr(mod, "_STREAM_FLUSH_EVERY", 1)
+    monkeypatch.setattr(mod, "_STREAM_MIN_INTERVAL_S", 0.0)
+
+    findings = [dict(_seed_repo(tmp_path), check_id=f"CKV_{i}") for i in range(4)]
 
     def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, **kwargs):
         return type("R", (), {
@@ -198,9 +205,7 @@ def test_streaming_flush_emits_partial_verdicts(tmp_path, monkeypatch):
             "tokens_in": 1, "tokens_out": 1, "verification_metadata": {},
         })()
 
-    monkeypatch.setattr(
-        "runner.scanners.iac.scanner.verify_iac_finding", _fake_verify,
-    )
+    monkeypatch.setattr(mod, "verify_iac_finding", _fake_verify)
 
     snapshots: list[list[dict]] = []
     scanner = IacScanner()
@@ -211,10 +216,15 @@ def test_streaming_flush_emits_partial_verdicts(tmp_path, monkeypatch):
         scan_budget=_unlimited_budget(), max_workers=1,
         on_progress=lambda snap: snapshots.append(snap),
     )
-    # A flush fired mid-pass and carried real verdicts, not needs_verify defaults.
     assert snapshots, "expected at least one streaming flush"
+    # No streamed snapshot ever carries a still-pending (raw) finding.
+    for snap in snapshots:
+        for f in snap:
+            assert f.get("verdict") is not None or f.get("verification_metadata"), \
+                "pending raw finding leaked into a streamed snapshot"
+    # An early flush streamed a strict subset, findings arrive one by one.
+    assert any(len(snap) < len(findings) for snap in snapshots)
     assert any(f.get("verdict") == "confirmed" for snap in snapshots for f in snap)
-    # Final result is unaffected by streaming.
     assert all(f["verdict"] == "confirmed" for f in result)
 
 

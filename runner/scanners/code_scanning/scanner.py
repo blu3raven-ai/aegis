@@ -62,12 +62,20 @@ logger = logging.getLogger(__name__)
 _SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 _MIN_VERIFY_SEVERITY = 1  # skip 'info'
 
-# Streaming flush cadence: re-ingest the partial findings after this many new
+# Streaming flush cadence: re-ingest the resolved findings after this many new
 # verdicts, but no more often than the min interval, so verdicts surface in the
 # UI as they land instead of all at completion — without hammering the backend
 # on a large scan.
 _STREAM_FLUSH_EVERY = 5
 _STREAM_MIN_INTERVAL_S = 10.0
+
+
+def _is_resolved(rec: dict) -> bool:
+    """A finding is streamable only once verification has judged it, i.e. it has
+    a verdict or any verification_metadata (a real verdict, a cache hit, or a
+    skip such as llm_disabled/llm_error). Still-pending findings (no verdict, no
+    metadata) are excluded so raw findings never paint before the LLM sees them."""
+    return rec.get("verdict") is not None or bool(rec.get("verification_metadata"))
 
 
 def _build_scan_budget(env: JobEnv) -> ScanBudget:
@@ -120,10 +128,14 @@ def _maybe_verify(
         build_ground_truth(repo_root=repo_root, findings=findings, llm=llm) if pending else None
     )
 
+    # Findings stream to the UI finding-by-finding as they clear the LLM, so log
+    # the count going in up front and how many resolved at the end.
+    logger.info("[+] verifying %d code findings via LLM", len(pending))
+
     # Streaming state: a worker assigns its finished record to out[i] as a single
-    # atomic reference swap, so a concurrent snapshot (list(out)) only ever sees
-    # fully-built records. The counter/throttle are guarded by a lock, but the
-    # (slow, network) flush runs outside it so verification isn't serialised on I/O.
+    # atomic reference swap, so a concurrent snapshot only ever sees fully-built
+    # records. The counter/throttle are guarded by a lock, but the (slow, network)
+    # flush runs outside it so verification isn't serialised on I/O.
     flush_lock = threading.Lock()
     flush_state = {"done": 0, "last": 0.0}
 
@@ -174,7 +186,9 @@ def _maybe_verify(
             now = time.monotonic()
             if flush_state["done"] % _STREAM_FLUSH_EVERY == 0 and now - flush_state["last"] >= _STREAM_MIN_INTERVAL_S:
                 flush_state["last"] = now
-                snapshot = list(out)
+                # Stream only the findings verify has already judged; pending raw
+                # findings stay hidden until their own LLM round-trip completes.
+                snapshot = [rec for rec in out if _is_resolved(rec)]
         if snapshot is not None:
             try:
                 on_progress(snapshot)
@@ -186,6 +200,10 @@ def _maybe_verify(
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             list(pool.map(_verify_one, pending))
 
+    logger.info(
+        "[+] verified %d/%d code findings",
+        sum(1 for i in pending if out[i].get("verdict") is not None), len(pending),
+    )
     return out
 
 
@@ -330,14 +348,14 @@ class CodeScanningScanner:
 
             findings_file = out_dir / "findings.jsonl"
             try:
-                # Surface the unverified findings before the slow verification pass
-                # so they appear in seconds; verdicts then stream in as verification
-                # runs. Only worth it when verification will actually run (LLM set).
+                # Verdicts stream to the UI finding-by-finding as verification
+                # clears each one, with no upfront raw dump, so nothing paints before
+                # the LLM has judged it. Only worth it when verification will
+                # actually run (LLM set).
                 if JobEnv(job).get("LLM_API_KEY"):
                     # Fold authz candidates into the same findings.jsonl before the
                     # single verify pass verifies both SAST and authz findings.
                     self._append_authz_candidates(findings_file, log_tail)
-                    self._preview_ingest_findings(findings_file, job)
                     # LLM verification is the slow, unpredictable phase; tell the UI
                     # it has started (with the finding count) so the progress bar
                     # doesn't read as frozen while generation runs.
@@ -488,28 +506,33 @@ class CodeScanningScanner:
         if not isinstance(accepted_risks, list):
             accepted_risks = []
 
-        verified = _maybe_verify(
-            findings=raw_findings,
-            repo_root=repo_root,
-            llm=build_llm_client(env),
-            escalation_llm=build_escalation_llm_client(env),
-            scan_budget=_build_scan_budget(env),
-            backend=getattr(self, "_backend", None),
-            max_workers=verify_concurrency(env),
-            accepted_risks=accepted_risks,
-            runtime_enabled=runtime_verify_enabled(env.get),
-            on_progress=_stream_flush if job is not None else None,
-            authz_repo_root=authz_repo_root,
-        )
+        # Default to the raw findings so a raise anywhere in the verify pass still
+        # leaves the full set on disk for the completion ingest; streaming writes
+        # only the resolved subset, so we must never leave that as the final state.
+        verified = raw_findings
+        try:
+            verified = _maybe_verify(
+                findings=raw_findings,
+                repo_root=repo_root,
+                llm=build_llm_client(env),
+                escalation_llm=build_escalation_llm_client(env),
+                scan_budget=_build_scan_budget(env),
+                backend=getattr(self, "_backend", None),
+                max_workers=verify_concurrency(env),
+                accepted_risks=accepted_risks,
+                runtime_enabled=runtime_verify_enabled(env.get),
+                on_progress=_stream_flush if job is not None else None,
+                authz_repo_root=authz_repo_root,
+            )
 
-        # Opt-in runtime pass (RUNTIME_VERIFY): actually run the target to resolve
-        # any "confirmed IF <question>" findings. Graceful no-op otherwise.
-        verified = verify_findings_at_runtime(
-            verified, repo_root, env=env, llm=build_llm_client(env),
-            cancel_event=cancel_event,
-        )
-
-        write_findings_jsonl(findings_file, verified)
+            # Opt-in runtime pass (RUNTIME_VERIFY): actually run the target to resolve
+            # any "confirmed IF <question>" findings. Graceful no-op otherwise.
+            verified = verify_findings_at_runtime(
+                verified, repo_root, env=env, llm=build_llm_client(env),
+                cancel_event=cancel_event,
+            )
+        finally:
+            write_findings_jsonl(findings_file, verified)
 
     @staticmethod
     def _build_config_args(
