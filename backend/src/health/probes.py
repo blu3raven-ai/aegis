@@ -227,11 +227,56 @@ async def probe_argus() -> ProbeResult:
         )
 
 
+async def probe_disk() -> ProbeResult:
+    """Free space on the volume where scan results are staged for ingest.
+
+    A full disk makes result ingest fail with ENOSPC, which silently drops the
+    scan's findings. Warn (`degraded`) before it fails (`fail`) so the operator
+    can reclaim space first. Thresholds are operator-tunable via env because the
+    right headroom depends on the host's disk size and scan volume.
+    """
+    import shutil
+    import tempfile
+
+    warn_pct = float(os.getenv("DISK_WARN_PERCENT", "15"))
+    fail_pct = float(os.getenv("DISK_FAIL_PERCENT", "5"))
+    path = os.getenv("DISK_PROBE_PATH") or tempfile.gettempdir()
+
+    t0 = time.monotonic()
+    try:
+        usage = await asyncio.get_event_loop().run_in_executor(None, shutil.disk_usage, path)
+        percent_free = round(usage.free / usage.total * 100, 1) if usage.total else 0.0
+        if percent_free <= fail_pct:
+            status = "fail"
+        elif percent_free <= warn_pct:
+            status = "degraded"
+        else:
+            status = "ok"
+        elapsed = int((time.monotonic() - t0) * 1000)
+        return ProbeResult(
+            name="disk",
+            status=status,
+            duration_ms=elapsed,
+            details={
+                "path": path,
+                "free_bytes": usage.free,
+                "total_bytes": usage.total,
+                "percent_free": percent_free,
+                "warn_percent": warn_pct,
+                "fail_percent": fail_pct,
+            },
+        )
+    except Exception as exc:
+        elapsed = int((time.monotonic() - t0) * 1000)
+        return ProbeResult(name="disk", status="fail", duration_ms=elapsed, details={}, error=str(exc))
+
+
 async def run_all_probes() -> list[ProbeResult]:
     """Run all probes concurrently with a per-probe 5-second timeout."""
     probes: list[tuple[str, Callable[[], Awaitable[ProbeResult]]]] = [
         ("postgres", probe_postgres),
         ("minio", probe_minio),
+        ("disk", probe_disk),
         ("connected_runners", probe_connected_runners),
         ("recent_scans", probe_recent_scans),
         ("argus", probe_argus),
