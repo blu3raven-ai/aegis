@@ -149,6 +149,33 @@ def test_max_turns_cap_forces_final_answer():
     assert llm.call_count == 4  # 3 tool turns + 1 forcing turn
 
 
+def test_prose_only_completion_is_rejected_and_forced():
+    # Model stops calling tools but returns reasoning prose with no JSON. With a
+    # JSON-aware is_final, that non-answer must not be accepted — it forces a
+    # tool-free answer instead.
+    import json as _json
+    llm = _StubLlm([
+        _final("Here is my reasoning, but no json object yet."),
+        _final(_json.dumps({"exploit_chain": "x"})),
+    ])
+    reg = ToolRegistry([_echo_tool()])
+    result = investigate(
+        system_prompt="sys", user_task="ask", tools=reg, llm=llm, max_turns=8,
+        is_final=lambda c: "{" in c and "}" in c,
+    )
+    assert result.stopped_reason == "forced_final"
+    assert "{" in result.final_message
+    assert llm.call_count == 2  # non-answer turn + forcing turn
+
+
+def test_default_is_final_accepts_any_nonempty_content():
+    llm = _StubLlm([_final("plain answer, no json")])
+    reg = ToolRegistry([_echo_tool()])
+    result = investigate(system_prompt="sys", user_task="ask", tools=reg, llm=llm)
+    assert result.stopped_reason == "completed"
+    assert result.final_message == "plain answer, no json"
+
+
 def test_stuck_repeating_same_call_breaks_early_and_forces_answer():
     # Model issues the identical tool call every turn (no new information).
     # After the stall limit it must be cut off and forced, well before max_turns.

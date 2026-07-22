@@ -117,6 +117,9 @@ def _agentic_verify(
         tools=tools,
         llm=llm,
         max_tokens_per_turn=max_tokens_per_turn,
+        # A tool-free turn only counts as done if it actually carries the schema
+        # JSON — a reasoning model's prose-only "answer" must not be accepted.
+        is_final=lambda content: extract_json_object(content) is not None,
     )
     payload = extract_json_object(result.final_message)
     if payload is None:

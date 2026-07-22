@@ -127,7 +127,7 @@ def _capture_investigate(monkeypatch):
     seen = {}
 
     def _fake(*, system_prompt, user_task, tools, llm, max_turns=8,
-              max_tokens_per_turn=1000, budget=None):
+              max_tokens_per_turn=1000, budget=None, is_final=None):
         seen["tools"] = tools.names()
         return AgentResult(
             final_message=_GOOD_HUNTER, tool_calls=[], tokens_in=1, tokens_out=1,

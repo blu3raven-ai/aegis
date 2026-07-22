@@ -59,8 +59,20 @@ def investigate(
     max_turns: int = _DEFAULT_MAX_TURNS,
     max_tokens_per_turn: int = _DEFAULT_MAX_TOKENS_PER_TURN,
     budget=None,
+    is_final=None,
 ) -> AgentResult:
-    """Run the agent loop. ``llm`` must implement ``chat_with_tools``."""
+    """Run the agent loop. ``llm`` must implement ``chat_with_tools``.
+
+    ``is_final`` decides whether a tool-free model turn is actually the answer.
+    A reasoning model sometimes stops calling tools and returns prose (its
+    thinking) with no final JSON; accepting that as "completed" hands the caller
+    a non-answer. The verification caller passes a predicate that checks the
+    content really contains the schema JSON, so a prose-only turn triggers the
+    forcing turn instead of being taken at face value. Defaults to "any
+    non-empty content is final" for schema-agnostic callers.
+    """
+    if is_final is None:
+        is_final = lambda content: bool((content or "").strip())  # noqa: E731
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_task},
@@ -144,14 +156,21 @@ def investigate(
             budget.record(tokens_in=resp.tokens_in, tokens_out=resp.tokens_out)
 
         if not resp.tool_calls:
-            return AgentResult(
-                final_message=resp.content or "",
-                tool_calls=tool_log,
-                tokens_in=tokens_in_total,
-                tokens_out=tokens_out_total,
-                turns=turn,
-                stopped_reason="completed",
-            )
+            if is_final(resp.content or ""):
+                return AgentResult(
+                    final_message=resp.content or "",
+                    tool_calls=tool_log,
+                    tokens_in=tokens_in_total,
+                    tokens_out=tokens_out_total,
+                    turns=turn,
+                    stopped_reason="completed",
+                )
+            # Stopped calling tools but gave no usable answer (reasoning prose,
+            # no final JSON). Don't accept the non-answer — record it and force a
+            # tool-free answer instead of degrading the whole finding.
+            logger.info("investigator completed without a usable answer; forcing at turn %d", turn)
+            messages.append({"role": "assistant", "content": resp.content or ""})
+            return force_final(turn)
 
         # Persist assistant message verbatim so providers can correlate tool responses.
         messages.append(
