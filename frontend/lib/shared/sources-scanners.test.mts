@@ -18,7 +18,6 @@ describe("CATEGORY_SCANNERS mirrors the backend mapping", () => {
       "code_scanning",
       "iac_scanning",
       "agent_scanning",
-      "deep_audit",
     ])
   })
 

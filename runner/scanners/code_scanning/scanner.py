@@ -52,6 +52,7 @@ from runner.verification.cache import apply_cache_hit, lookup_cache, verificatio
 from runner.verification.ground_truth import build_ground_truth
 from runner.sandbox.harness import runtime_verify_enabled
 from runner.sandbox.sast_runtime import verify_findings_at_runtime
+from runner.scanners.deep_audit.engine import detect_authz_candidates, verify_authz_finding
 from runner.verification.pipeline import verify_finding
 
 logger = logging.getLogger(__name__)
@@ -61,12 +62,20 @@ logger = logging.getLogger(__name__)
 _SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 _MIN_VERIFY_SEVERITY = 1  # skip 'info'
 
-# Streaming flush cadence: re-ingest the partial findings after this many new
+# Streaming flush cadence: re-ingest the resolved findings after this many new
 # verdicts, but no more often than the min interval, so verdicts surface in the
 # UI as they land instead of all at completion — without hammering the backend
 # on a large scan.
 _STREAM_FLUSH_EVERY = 5
 _STREAM_MIN_INTERVAL_S = 10.0
+
+
+def _is_resolved(rec: dict) -> bool:
+    """A finding is streamable only once verification has judged it, i.e. it has
+    a verdict or any verification_metadata (a real verdict, a cache hit, or a
+    skip such as llm_disabled/llm_error). Still-pending findings (no verdict, no
+    metadata) are excluded so raw findings never paint before the LLM sees them."""
+    return rec.get("verdict") is not None or bool(rec.get("verification_metadata"))
 
 
 def _build_scan_budget(env: JobEnv) -> ScanBudget:
@@ -80,6 +89,7 @@ def _maybe_verify(
     *, findings: list[dict], repo_root: str, llm, escalation_llm=None, scan_budget: ScanBudget,
     backend=None, max_workers: int = DEFAULT_VERIFY_WORKERS, accepted_risks: list | None = None,
     runtime_enabled: bool = False, on_progress: Callable[[list[dict]], None] | None = None,
+    authz_repo_root: str | None = None,
 ) -> list[dict]:
     # Precompute each finding's cache key and, when verification is on, ask the
     # backend which of those were already verified with identical input — those
@@ -118,10 +128,14 @@ def _maybe_verify(
         build_ground_truth(repo_root=repo_root, findings=findings, llm=llm) if pending else None
     )
 
+    # Findings stream to the UI finding-by-finding as they clear the LLM, so log
+    # the count going in up front and how many resolved at the end.
+    logger.info("[+] verifying %d code findings via LLM", len(pending))
+
     # Streaming state: a worker assigns its finished record to out[i] as a single
-    # atomic reference swap, so a concurrent snapshot (list(out)) only ever sees
-    # fully-built records. The counter/throttle are guarded by a lock, but the
-    # (slow, network) flush runs outside it so verification isn't serialised on I/O.
+    # atomic reference swap, so a concurrent snapshot only ever sees fully-built
+    # records. The counter/throttle are guarded by a lock, but the (slow, network)
+    # flush runs outside it so verification isn't serialised on I/O.
     flush_lock = threading.Lock()
     flush_state = {"done": 0, "last": 0.0}
 
@@ -134,11 +148,22 @@ def _maybe_verify(
             out[i] = rec
             return
         try:
-            result = verify_finding(
-                finding=f, repo_root=repo_root, llm=llm, escalation_llm=escalation_llm,
-                accepted_risks=accepted_risks, ground_truth=ground_truth,
-                runtime_enabled=runtime_enabled,
-            )
+            # Route by detector: authz candidates (from deep_audit detection) get
+            # the authz verifier and resolve against the live checkout root; every
+            # other finding is a SAST result verified over repo_root. Both return
+            # a VerificationResult, so everything below is identical.
+            if f.get("detector") == "deep_audit":
+                result = verify_authz_finding(
+                    finding=f, repo_root=authz_repo_root or repo_root, llm=llm,
+                    escalation_llm=escalation_llm, accepted_risks=accepted_risks,
+                    ground_truth=ground_truth,
+                )
+            else:
+                result = verify_finding(
+                    finding=f, repo_root=repo_root, llm=llm, escalation_llm=escalation_llm,
+                    accepted_risks=accepted_risks, ground_truth=ground_truth,
+                    runtime_enabled=runtime_enabled,
+                )
             scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
             rec["verdict"] = result.verdict
             rec["evidence"] = result.evidence
@@ -161,7 +186,9 @@ def _maybe_verify(
             now = time.monotonic()
             if flush_state["done"] % _STREAM_FLUSH_EVERY == 0 and now - flush_state["last"] >= _STREAM_MIN_INTERVAL_S:
                 flush_state["last"] = now
-                snapshot = list(out)
+                # Stream only the findings verify has already judged; pending raw
+                # findings stay hidden until their own LLM round-trip completes.
+                snapshot = [rec for rec in out if _is_resolved(rec)]
         if snapshot is not None:
             try:
                 on_progress(snapshot)
@@ -173,6 +200,10 @@ def _maybe_verify(
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
             list(pool.map(_verify_one, pending))
 
+    logger.info(
+        "[+] verified %d/%d code findings",
+        sum(1 for i in pending if out[i].get("verdict") is not None), len(pending),
+    )
     return out
 
 
@@ -262,6 +293,19 @@ class CodeScanningScanner:
         self._backend = backend
         cfg = CodeScanningConfig.from_job(job)
 
+        # Authz (deep_audit) detection runs inline per repo while the checkout is
+        # live; candidates are stashed here and appended to findings.jsonl after
+        # normalize. Checkouts are kept alive through verification (see _post_scan)
+        # so both SAST and authz verifiers can ground against the real tree.
+        env = JobEnv(job)
+        self._authz_llm = build_llm_client(env) if env.get("LLM_API_KEY") else None
+        self._authz_escalation = build_escalation_llm_client(env) if self._authz_llm else None
+        self._authz_budget = _build_scan_budget(env) if self._authz_llm else None
+        self._authz_cancel = cancel_event
+        self._authz_candidates: list[dict] = []
+        self._authz_lock = threading.Lock()
+        self._live_checkouts: list[Path] = []
+
         out_dir = Path(job_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -303,21 +347,33 @@ class CodeScanningScanner:
                 logger.exception("[!] Normalization failed")
 
             findings_file = out_dir / "findings.jsonl"
-            # Surface the unverified findings before the slow verification pass so
-            # they appear in seconds; verdicts then stream in as verification runs.
-            # Only worth it when verification will actually run (LLM configured).
-            if JobEnv(job).get("LLM_API_KEY"):
-                self._preview_ingest_findings(findings_file, job)
-                # LLM verification is the slow, unpredictable phase; tell the UI
-                # it has started (with the finding count) so the progress bar
-                # doesn't read as frozen while generation runs.
-                emitter.verifying(total)
-
             try:
-                self._verify_findings_file(findings_file, repo_root=str(out_dir), env=JobEnv(job), job=job)
-            except Exception:  # noqa: BLE001
-                logger.exception("[!] _verify_findings_file failed (continuing)")
-                log_tail.append("[!] verification step failed; findings unverified")
+                # Verdicts stream to the UI finding-by-finding as verification
+                # clears each one, with no upfront raw dump, so nothing paints before
+                # the LLM has judged it. Only worth it when verification will
+                # actually run (LLM set).
+                if JobEnv(job).get("LLM_API_KEY"):
+                    # Fold authz candidates into the same findings.jsonl before the
+                    # single verify pass verifies both SAST and authz findings.
+                    self._append_authz_candidates(findings_file, log_tail)
+                    # LLM verification is the slow, unpredictable phase; tell the UI
+                    # it has started (with the finding count) so the progress bar
+                    # doesn't read as frozen while generation runs.
+                    emitter.verifying(total)
+
+                try:
+                    self._verify_findings_file(
+                        findings_file, repo_root=str(out_dir), env=JobEnv(job), job=job,
+                        authz_repo_root=self._authz_repo_root(),
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception("[!] _verify_findings_file failed (continuing)")
+                    log_tail.append("[!] verification step failed; findings unverified")
+            finally:
+                # Checkouts were kept alive through verification for on-disk
+                # grounding; reclaim the disk now, even if verify raised.
+                for checkout in self._live_checkouts:
+                    shutil.rmtree(checkout, ignore_errors=True)
 
         return run_per_repo(
             items=repos,
@@ -353,10 +409,63 @@ class CodeScanningScanner:
         except Exception:  # noqa: BLE001
             logger.warning("[!] preview ingest failed (continuing)", exc_info=True)
 
+    def _maybe_detect_authz(self, clone_dir: Path, repo_name: str, html_url: str) -> None:
+        """Run authz (deep_audit) detection over a live checkout and stash the
+        unverified candidates. Best-effort: a detection failure must not sink the
+        code scan, so any error is logged and swallowed."""
+        if getattr(self, "_authz_llm", None) is None:
+            return
+        try:
+            candidates = detect_authz_candidates(
+                str(clone_dir), llm=self._authz_llm, escalation_llm=self._authz_escalation,
+                scan_budget=self._authz_budget, cancel_event=self._authz_cancel,
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("[!] authz detection failed for %s (continuing)", repo_name, exc_info=True)
+            return
+        if not candidates:
+            return
+        for c in candidates:
+            c.setdefault("repo_full_name", repo_name)
+            c.setdefault("repo_html_url", html_url)
+        with self._authz_lock:
+            self._authz_candidates.extend(candidates)
+
+    def _append_authz_candidates(self, findings_file: Path, log_tail: list[str]) -> None:
+        """Append the stashed authz candidates to findings.jsonl (read, extend,
+        rewrite atomically) so the single verify pass covers them too. No-op when
+        detection found nothing."""
+        candidates = getattr(self, "_authz_candidates", [])
+        if not candidates:
+            return
+        existing: list[dict] = []
+        if findings_file.exists():
+            for line in findings_file.read_text().splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    existing.append(json.loads(line))
+                except json.JSONDecodeError:
+                    logger.warning("[!] skip non-JSON line in %s", findings_file)
+        write_findings_jsonl(findings_file, existing + candidates)
+        log_tail.append(f"[+] Appended {len(candidates)} authz candidate(s)")
+
+    def _authz_repo_root(self) -> str | None:
+        """Resolvable root for authz on-disk grounding during verification.
+
+        ponytail: single-repo (the current reality) resolves against its own
+        live checkout so citation grounding works. Multi-repo falls back to None
+        (verify uses out_dir); authz still grounds via each finding's embedded
+        auth-context. Give each repo its own verify root when multi-repo lands.
+        """
+        checkouts = getattr(self, "_live_checkouts", [])
+        return str(checkouts[0]) if len(checkouts) == 1 else None
+
     def _verify_findings_file(
         self, findings_file: Path, *, repo_root: str, env: JobEnv,
         job: dict | None = None,
         cancel_event: threading.Event | None = None,
+        authz_repo_root: str | None = None,
     ) -> None:
         """Read findings.jsonl, run _maybe_verify, rewrite in place.
 
@@ -397,27 +506,33 @@ class CodeScanningScanner:
         if not isinstance(accepted_risks, list):
             accepted_risks = []
 
-        verified = _maybe_verify(
-            findings=raw_findings,
-            repo_root=repo_root,
-            llm=build_llm_client(env),
-            escalation_llm=build_escalation_llm_client(env),
-            scan_budget=_build_scan_budget(env),
-            backend=getattr(self, "_backend", None),
-            max_workers=verify_concurrency(env),
-            accepted_risks=accepted_risks,
-            runtime_enabled=runtime_verify_enabled(env.get),
-            on_progress=_stream_flush if job is not None else None,
-        )
+        # Default to the raw findings so a raise anywhere in the verify pass still
+        # leaves the full set on disk for the completion ingest; streaming writes
+        # only the resolved subset, so we must never leave that as the final state.
+        verified = raw_findings
+        try:
+            verified = _maybe_verify(
+                findings=raw_findings,
+                repo_root=repo_root,
+                llm=build_llm_client(env),
+                escalation_llm=build_escalation_llm_client(env),
+                scan_budget=_build_scan_budget(env),
+                backend=getattr(self, "_backend", None),
+                max_workers=verify_concurrency(env),
+                accepted_risks=accepted_risks,
+                runtime_enabled=runtime_verify_enabled(env.get),
+                on_progress=_stream_flush if job is not None else None,
+                authz_repo_root=authz_repo_root,
+            )
 
-        # Opt-in runtime pass (RUNTIME_VERIFY): actually run the target to resolve
-        # any "confirmed IF <question>" findings. Graceful no-op otherwise.
-        verified = verify_findings_at_runtime(
-            verified, repo_root, env=env, llm=build_llm_client(env),
-            cancel_event=cancel_event,
-        )
-
-        write_findings_jsonl(findings_file, verified)
+            # Opt-in runtime pass (RUNTIME_VERIFY): actually run the target to resolve
+            # any "confirmed IF <question>" findings. Graceful no-op otherwise.
+            verified = verify_findings_at_runtime(
+                verified, repo_root, env=env, llm=build_llm_client(env),
+                cancel_event=cancel_event,
+            )
+        finally:
+            write_findings_jsonl(findings_file, verified)
 
     @staticmethod
     def _build_config_args(
@@ -496,6 +611,11 @@ class CodeScanningScanner:
             log("done", repo_name)
             raise
 
+        # Keep the checkout alive past this method so the verify pass (SAST and
+        # authz) can ground against the real tree; _post_scan reclaims it.
+        with self._authz_lock:
+            self._live_checkouts.append(clone_dir)
+
         try:
             head_sha = self._read_head_sha(clone_dir, cancel_event)
             (repo_out / "head-sha.txt").write_text(head_sha or "HEAD")
@@ -554,13 +674,23 @@ class CodeScanningScanner:
                     )
                     (repo_out / "reachability.json").write_text("{}")
 
+            # Authz (deep_audit) detection over the live checkout; candidates are
+            # stashed and folded into findings.jsonl before the single verify pass.
+            self._maybe_detect_authz(clone_dir, repo_name, html_url)
+
             for f in sorted(repo_out.glob("*.json")):
                 register_output(out_dir, f, repo_name)
 
             log("done", repo_name)
             return sarif_file if sarif_file.exists() else None
-        finally:
+        except Exception:
+            # On failure this repo's checkout is useless to verification; drop it
+            # now and unregister so _post_scan doesn't try to clean it twice.
+            with self._authz_lock:
+                if clone_dir in self._live_checkouts:
+                    self._live_checkouts.remove(clone_dir)
             shutil.rmtree(clone_dir, ignore_errors=True)
+            raise
 
     def _run_semgrep(
         self,

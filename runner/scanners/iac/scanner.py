@@ -50,12 +50,20 @@ _FAILURE_EXIT_CODE = 2
 
 _IAC_VERIFY_SEVERITIES = {"high", "critical"}
 
-# Streaming flush cadence: re-ingest the partial findings after this many new
+# Streaming flush cadence: re-ingest the resolved findings after this many new
 # verdicts, but no more often than the min interval, so verdicts surface in the
 # UI as they land instead of all at completion, without hammering the backend
 # on a large scan.
 _STREAM_FLUSH_EVERY = 5
 _STREAM_MIN_INTERVAL_S = 10.0
+
+
+def _is_resolved(rec: dict) -> bool:
+    """A finding is streamable only once verification has judged it, i.e. it has
+    a verdict or any verification_metadata (a real verdict, a cache hit, or a
+    skip such as llm_disabled/llm_error). Still-pending findings (no verdict, no
+    metadata) are excluded so raw findings never paint before the LLM sees them."""
+    return rec.get("verdict") is not None or bool(rec.get("verification_metadata"))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -358,10 +366,14 @@ class IacScanner:
             if pending else None
         )
 
+        # Findings stream to the UI finding-by-finding as they clear the LLM, so
+        # log the count going in up front and how many resolved at the end.
+        logger.info("[+] verifying %d iac findings via LLM", len(pending))
+
         # Streaming state: a worker assigns its finished record to out[i] as a
-        # single atomic reference swap, so a concurrent snapshot (list(out)) only
-        # ever sees fully-built records. The counter/throttle are guarded by a
-        # lock, but the (slow, network) flush runs outside it.
+        # single atomic reference swap, so a concurrent snapshot only ever sees
+        # fully-built records. The counter/throttle are guarded by a lock, but the
+        # (slow, network) flush runs outside it.
         flush_lock = threading.Lock()
         flush_state = {"done": 0, "last": 0.0}
 
@@ -408,7 +420,9 @@ class IacScanner:
                 now = time.monotonic()
                 if flush_state["done"] % _STREAM_FLUSH_EVERY == 0 and now - flush_state["last"] >= _STREAM_MIN_INTERVAL_S:
                     flush_state["last"] = now
-                    snapshot = list(out)
+                    # Stream only the findings verify has already judged; pending
+                    # raw findings stay hidden until their own round-trip completes.
+                    snapshot = [rec for rec in out if _is_resolved(rec)]
             if snapshot is not None:
                 try:
                     on_progress(snapshot)
@@ -419,6 +433,11 @@ class IacScanner:
             workers = max(1, min(max_workers, len(pending)))
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
                 list(pool.map(_verify_one, pending))
+
+        logger.info(
+            "[+] verified %d/%d iac findings",
+            sum(1 for i in pending if out[i].get("verdict") is not None), len(pending),
+        )
         return out
 
 

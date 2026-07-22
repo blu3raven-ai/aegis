@@ -38,7 +38,6 @@ def test_supported_types_lists_all_scanners():
         "container_scanning",
         "secret_scanning",
         "code_scanning",
-        "deep_audit",
         "iac_scanning",
         "agent_scanning",
         "dependencies_reachability",

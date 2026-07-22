@@ -139,8 +139,14 @@ def _build_run_output_dir(org: str, run_id: str) -> Path:
     return CODE_SCANNING_DATA_DIR / "raw" / normalize_org(org) / normalize_path_segment(run_id)
 
 
-def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
-    """Ingest code scanning results from object store after runner completion."""
+def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | None = None, preview: bool = False) -> None:
+    """Ingest code scanning results from object store.
+
+    preview=True is the mid-scan call fired repeatedly by the runner while the
+    slow verification tail is still in flight: it upserts findings-so-far but must
+    NOT end the run. Only the final (preview=False) completion call moves the run
+    to a terminal state.
+    """
     from src.shared.object_store import find_findings_jsonl, download_bytes as _download_bytes
     from src.code_scanning.ingest import ingest_findings_jsonl, load_active_rule_ids
     import tempfile
@@ -201,6 +207,16 @@ def ingest_code_scanning_from_minio(org: str, run_id: str, source_type: str | No
     current = next((r for r in list_code_scanning_runs(org) if r.get("id") == run_id), None)
     if current and current.get("status") == "cancelled":
         logger.info("Skipping completion — run %s already cancelled", run_id)
+        return
+
+    if preview:
+        # Keep the run in-flight: verification is still running, so surface the
+        # findings-so-far without a terminal status/finishedAt.
+        update_code_scanning_run(org, run_id, {
+            "status": "running",
+            "findingsCount": len(all_findings),
+            "progress": {"percent": 95, "stage": "verifying"},
+        })
         return
 
     update_code_scanning_run(org, run_id, {

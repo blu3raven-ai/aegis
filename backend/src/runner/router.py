@@ -316,9 +316,6 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
     elif job_type == "agent_scanning":
         from src.storage import update_agent_run, list_agent_runs
         current = next((r for r in list_agent_runs(org) if str(r.get("id", "")) == run_id), None)
-    elif job_type == "deep_audit":
-        from src.storage import update_deep_audit_run, list_deep_audit_runs
-        current = next((r for r in list_deep_audit_runs(org) if str(r.get("id", "")) == run_id), None)
 
     db = (current or {}).get("progress") or {}
 
@@ -348,8 +345,6 @@ def _sync_progress_to_run(job: dict[str, Any], log_tail: list[str], progress: di
         update_iac_run(org, run_id, patch)
     elif job_type == "agent_scanning":
         update_agent_run(org, run_id, patch)
-    elif job_type == "deep_audit":
-        update_deep_audit_run(org, run_id, patch)
 
     # Publish SSE event
     tool_label = {
@@ -449,7 +444,7 @@ def preview_ingest_endpoint(job_id: str, request: Request) -> JSONResponse:
     asset_id = env_vars.get("REPO_ID") or None
 
     try:
-        _dispatch_ingest(job_type, org, run_id, source_type)
+        _dispatch_ingest(job_type, org, run_id, source_type, preview=True)
     except Exception as e:  # noqa: BLE001
         _logger.warning("[!] preview-ingest failed for %s %s/%s: %s", job_type, org, run_id, e)
         return JSONResponse({"ok": False, "error": "ingest_failed"})
@@ -464,11 +459,12 @@ def preview_ingest_endpoint(job_id: str, request: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | None) -> None:
+def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | None, preview: bool = False) -> None:
     """Read the scanner's findings from MinIO and upsert them. Idempotent
     (upsert by identity_key), so it is safe to call mid-scan for a preview and
     again on completion. Shared by the completion handler and the preview-ingest
-    endpoint."""
+    endpoint. preview=True forbids the verifying scanners from marking the run
+    completed, since the verification tail is still running."""
     if job_type == "dependencies_scanning":
         from src.dependencies.scanner import ingest_dependencies_from_minio
         ingest_dependencies_from_minio(org, run_id, source_type=source_type)
@@ -477,7 +473,7 @@ def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | No
         ingest_secrets_from_minio(org, run_id, source_type=source_type)
     elif job_type == "code_scanning":
         from src.code_scanning.scanner import ingest_code_scanning_from_minio
-        ingest_code_scanning_from_minio(org, run_id, source_type=source_type)
+        ingest_code_scanning_from_minio(org, run_id, source_type=source_type, preview=preview)
     elif job_type == "container_scanning":
         # reco- runs are internal candidate SBOM scans for the base-image
         # recommendation; their SBOM is consumed by the reco flow directly,
@@ -487,13 +483,10 @@ def _dispatch_ingest(job_type: str, org: str, run_id: str, source_type: str | No
             ingest_container_from_minio(org, run_id, source_type=source_type)
     elif job_type == "iac_scanning":
         from src.iac.scanner import ingest_iac_from_minio
-        ingest_iac_from_minio(org, run_id, source_type=source_type)
+        ingest_iac_from_minio(org, run_id, source_type=source_type, preview=preview)
     elif job_type == "agent_scanning":
         from src.agent_scanning.scanner import ingest_agent_from_minio
         ingest_agent_from_minio(org, run_id, source_type=source_type)
-    elif job_type == "deep_audit":
-        from src.deep_audit.scanner import ingest_deep_audit_from_minio
-        ingest_deep_audit_from_minio(org, run_id, source_type=source_type)
     elif job_type == "dependencies_reachability":
         import asyncio
 
@@ -592,9 +585,6 @@ def _read_run_record(job_type: str, org: str, run_id: str) -> dict[str, Any] | N
         elif job_type == "agent_scanning":
             from src.storage import list_agent_runs
             return next((r for r in list_agent_runs(org) if str(r.get("id", "")) == run_id), None)
-        elif job_type == "deep_audit":
-            from src.storage import list_deep_audit_runs
-            return next((r for r in list_deep_audit_runs(org) if str(r.get("id", "")) == run_id), None)
     except Exception:
         pass
     return None
@@ -621,9 +611,6 @@ def _update_run_status(job_type: str, org: str, run_id: str, patch: dict[str, An
         elif job_type == "agent_scanning":
             from src.storage import update_agent_run
             update_agent_run(org, run_id, patch)
-        elif job_type == "deep_audit":
-            from src.storage import update_deep_audit_run
-            update_deep_audit_run(org, run_id, patch)
     except Exception:
         _logger.warning("[!] Failed to update %s run status for %s/%s", job_type, org, run_id, exc_info=True)
 

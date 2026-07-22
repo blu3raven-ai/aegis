@@ -24,8 +24,14 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
-def ingest_iac_from_minio(org: str, run_id: str, source_type: str | None = None) -> None:
-    """Ingest IaC scanning results from object store after runner completion."""
+def ingest_iac_from_minio(org: str, run_id: str, source_type: str | None = None, preview: bool = False) -> None:
+    """Ingest IaC scanning results from object store.
+
+    preview=True is the mid-scan call fired repeatedly by the runner while the
+    slow verification tail is still in flight: it upserts findings-so-far but must
+    NOT end the run. Only the final (preview=False) completion call moves the run
+    to a terminal state.
+    """
     from src.shared.object_store import find_findings_jsonl
     from src.iac.ingest import read_iac_findings
 
@@ -82,6 +88,16 @@ def ingest_iac_from_minio(org: str, run_id: str, source_type: str | None = None)
     current = next((r for r in list_iac_runs(org) if r.get("id") == run_id), None)
     if current and current.get("status") == "cancelled":
         logger.info("Skipping completion — run %s already cancelled", run_id)
+        return
+
+    if preview:
+        # Keep the run in-flight: verification is still running, so surface the
+        # findings-so-far without a terminal status/finishedAt.
+        update_iac_run(org, run_id, {
+            "status": "running",
+            "findingsCount": len(all_findings),
+            "progress": {"percent": 95, "stage": "verifying"},
+        })
         return
 
     update_iac_run(org, run_id, {

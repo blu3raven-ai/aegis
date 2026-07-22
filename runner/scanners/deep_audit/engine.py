@@ -22,7 +22,7 @@ from runner.scanners.deep_audit.targets import select_files
 from runner.verification.carveouts import carveout_verdict
 from runner.verification.critic import verify_citations
 from runner.verification.enrich import stash_confirmed_enrichment
-from runner.verification.pipeline import _agentic_verify
+from runner.verification.pipeline import VerificationResult, _agentic_verify
 from runner.verification.schemas.verdict import HunterResponse, SkepticResponse
 
 logger = logging.getLogger(__name__)
@@ -153,19 +153,24 @@ def _to_finding_dict(candidate: dict, verdict: str, metadata: dict) -> dict:
     }
 
 
-def audit_repo(
-    repo_root: str, *, llm, escalation_llm=None, scan_budget, accepted_risks=None,
-    ground_truth=None, max_workers: int = 4, max_files: int = 40, max_chars: int = 8000,
-    cancel_event=None,
+def detect_authz_candidates(
+    repo_root: str, *, llm, escalation_llm=None, scan_budget, max_workers: int = 4,
+    max_files: int = 40, max_chars: int = 8000, cancel_event=None,
 ) -> list[dict]:
-    """Run the authz audit over one checkout, returning verified finding dicts.
-    No-op (empty) when no LLM is configured."""
+    """Run only the authz HUNTER over the selected handler files and return
+    *unverified* candidate finding dicts (``verdict=None``).
+
+    Each row is shaped for findings.jsonl and is marked ``detector="deep_audit"``
+    so the shared verify pass can route it to the authz verifier. The raw hunter
+    candidate is stashed under ``authz_candidate`` and a repo-wide auth-context
+    grep (computed here, while the checkout is live) under ``authz_auth_context``
+    so ``verify_authz_finding`` can run the skeptic without re-reading the tree.
+    Returns ``[]`` when no LLM is configured."""
     if llm is None:
         return []
     files = select_files(repo_root, max_files=max_files, max_chars=max_chars)
-    out: list[dict] = []
 
-    def _audit_file(entry: tuple[str, str]) -> list[dict]:
+    def _hunt_file(entry: tuple[str, str]) -> list[dict]:
         rel, text = entry
         if (cancel_event and cancel_event.is_set()) or not scan_budget.allow():
             return []
@@ -182,42 +187,116 @@ def audit_repo(
                     llm=active, repo_root=repo_root, max_tokens_per_turn=2000,
                 )
             scan_budget.record(tokens_in=res.tokens_in, tokens_out=res.tokens_out)
-        except Exception:  # noqa: BLE001 — one bad file must not sink the scan
+        except Exception:  # noqa: BLE001 - one bad file must not sink detection
             logger.warning("[!] authz hunter failed on %s", rel, exc_info=True)
             return []
         if res.parsed is None:
             return []
 
+        auth_ctx = _auth_context(repo_root, rel, text, max_chars)
         rows: list[dict] = []
         for cand in res.parsed.findings:
             if not scan_budget.allow():
                 break
             candidate = cand.model_dump()
-            metadata = {"model": getattr(active, "_model", "unknown"), "tier": "default",
-                        "scanner": "deep_audit", "prompt_hashes": []}
-            auth_ctx = _auth_context(repo_root, rel, text, max_chars)
-            try:
-                sk = _agentic_verify(
-                    SKEPTIC_SYSTEM,
-                    skeptic_user(candidate, auth_ctx, accepted_risks, ground_truth),
-                    SkepticResponse,
-                    llm=active, repo_root=repo_root, max_tokens_per_turn=500,
-                )
-                scan_budget.record(tokens_in=sk.tokens_in, tokens_out=sk.tokens_out)
-                skeptic = sk.parsed or SkepticResponse()
-            except Exception:  # noqa: BLE001
-                logger.warning("[!] authz skeptic failed on %s", rel, exc_info=True)
-                skeptic = SkepticResponse()
-            verdict, metadata = _finalize(
-                candidate=candidate, skeptic=skeptic, hunter_model=_hunter_model(candidate),
-                repo_root=repo_root, metadata=metadata, accepted_risks=accepted_risks,
-                tokens_in=0, tokens_out=0,
-            )
-            rows.append(_to_finding_dict(candidate, verdict, metadata))
+            row = _to_finding_dict(candidate, verdict=None, metadata={"scanner": "deep_audit"})
+            row["detector"] = "deep_audit"
+            row["authz_candidate"] = candidate
+            row["authz_auth_context"] = auth_ctx
+            rows.append(row)
         return rows
 
     workers = max(1, min(max_workers, len(files) or 1))
+    out: list[dict] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-        for rows in pool.map(_audit_file, files):
+        for rows in pool.map(_hunt_file, files):
             out.extend(rows)
+    return out
+
+
+def verify_authz_finding(
+    *, finding: dict, repo_root: str, llm, escalation_llm=None,
+    accepted_risks=None, ground_truth=None,
+) -> VerificationResult:
+    """Verify one authz candidate from :func:`detect_authz_candidates`.
+
+    Runs the SKEPTIC + :func:`_finalize` (carve-out -> grounded mitigation ->
+    citation critic -> confirmed/needs_verify -> enrich) exactly as the old
+    ``audit_repo`` did, and returns a ``VerificationResult`` in the same shape
+    code_scanning's ``verify_finding`` returns. The skeptic reasons over the
+    embedded auth-context (grounding floor) and, when the checkout is kept live,
+    its grep/read tools over ``repo_root`` (grounding ceiling).
+
+    ``escalation_llm`` is accepted for signature symmetry with the SAST verifier;
+    escalation fires only on the hunter, which ran at detection time."""
+    candidate = finding.get("authz_candidate") or {
+        "file": finding.get("file", ""),
+        "line": finding.get("line", 0),
+        "title": finding.get("title", ""),
+        "exploit_chain": finding.get("exploit_chain", ""),
+        "evidence": finding.get("evidence", []) or [],
+        "endpoint": finding.get("resource", ""),
+        "severity": finding.get("severity", "medium"),
+        "fix": finding.get("recommended_fix", ""),
+    }
+    auth_ctx = finding.get("authz_auth_context", "")
+    metadata = {"model": getattr(llm, "_model", "unknown"), "tier": "default",
+                "scanner": "deep_audit", "prompt_hashes": []}
+
+    tokens_in = tokens_out = 0
+    try:
+        sk = _agentic_verify(
+            SKEPTIC_SYSTEM,
+            skeptic_user(candidate, auth_ctx, accepted_risks, ground_truth),
+            SkepticResponse,
+            llm=llm, repo_root=repo_root, max_tokens_per_turn=500,
+        )
+        skeptic = sk.parsed or SkepticResponse()
+        tokens_in, tokens_out = sk.tokens_in, sk.tokens_out
+    except Exception:  # noqa: BLE001
+        logger.warning("[!] authz skeptic failed", exc_info=True)
+        skeptic = SkepticResponse()
+
+    verdict, metadata = _finalize(
+        candidate=candidate, skeptic=skeptic, hunter_model=_hunter_model(candidate),
+        repo_root=repo_root, metadata=metadata, accepted_risks=accepted_risks,
+        tokens_in=0, tokens_out=0,
+    )
+    return VerificationResult(
+        verdict=verdict,
+        exploit_chain=candidate.get("exploit_chain", ""),
+        evidence=candidate.get("evidence", []) or [],
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        verification_metadata=metadata,
+    )
+
+
+def audit_repo(
+    repo_root: str, *, llm, escalation_llm=None, scan_budget, accepted_risks=None,
+    ground_truth=None, max_workers: int = 4, max_files: int = 40, max_chars: int = 8000,
+    cancel_event=None,
+) -> list[dict]:
+    """Detect authz candidates then verify each, returning verified finding dicts.
+    Thin wrapper over :func:`detect_authz_candidates` + :func:`verify_authz_finding`;
+    no-op (empty) when no LLM is configured."""
+    if llm is None:
+        return []
+    candidates = detect_authz_candidates(
+        repo_root, llm=llm, escalation_llm=escalation_llm, scan_budget=scan_budget,
+        max_workers=max_workers, max_files=max_files, max_chars=max_chars,
+        cancel_event=cancel_event,
+    )
+    out: list[dict] = []
+    for finding in candidates:
+        if (cancel_event and cancel_event.is_set()) or not scan_budget.allow():
+            break
+        result = verify_authz_finding(
+            finding=finding, repo_root=repo_root, llm=llm, escalation_llm=escalation_llm,
+            accepted_risks=accepted_risks, ground_truth=ground_truth,
+        )
+        scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
+        out.append(_to_finding_dict(
+            finding["authz_candidate"], result.verdict, result.verification_metadata
+        ))
     return out

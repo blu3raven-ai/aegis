@@ -145,3 +145,71 @@ def test_backend_llm_env_keys_match_runner_read_keys():
         "environment, so reading from os.environ here silently disables "
         "agentic verification for all scanners."
     )
+
+
+def _capture_code_scanning_update(monkeypatch, *, preview):
+    """Drive ingest_code_scanning_from_minio with zero findings and capture the
+    run-status patch it writes, without touching the DB or object store."""
+    from src.code_scanning import scanner as cs
+    import src.shared.object_store as object_store
+    import src.storage as storage
+    import src.assets.service as assets_service
+
+    captured: list[dict] = []
+    # Empty (non-None) output means "scan ran, zero findings": proceeds to the
+    # status transition we want to assert, while skipping lifecycle/notifications.
+    monkeypatch.setattr(object_store, "find_findings_jsonl", lambda prefix: b"")
+    monkeypatch.setattr(storage, "list_code_scanning_runs", lambda org: [])
+    monkeypatch.setattr(cs, "update_code_scanning_run", lambda org, run_id, patch: captured.append(patch))
+    monkeypatch.setattr(cs, "get_scan_sources_for_org", lambda org: [])
+    monkeypatch.setattr(cs, "build_source_repo_list", lambda sources: [])
+    monkeypatch.setattr(assets_service, "resolve_repo_asset_ids", lambda names: {})
+
+    cs.ingest_code_scanning_from_minio("acme-org", "run-1", preview=preview)
+    assert captured, "ingest wrote no run-status update"
+    return captured[-1]
+
+
+def test_code_scanning_preview_ingest_keeps_run_in_progress(monkeypatch):
+    """A mid-scan preview ingest must never move the run to a terminal state;
+    the verification tail is still running."""
+    patch = _capture_code_scanning_update(monkeypatch, preview=True)
+    assert patch["status"] != "completed"
+    assert "finishedAt" not in patch
+    assert patch.get("progress", {}).get("stage") != "completed"
+
+
+def test_code_scanning_final_ingest_completes_run(monkeypatch):
+    patch = _capture_code_scanning_update(monkeypatch, preview=False)
+    assert patch["status"] == "completed"
+    assert "finishedAt" in patch
+    assert patch["progress"]["stage"] == "completed"
+
+
+def _capture_iac_update(monkeypatch, *, preview):
+    from src.iac import scanner as iac
+    import src.shared.object_store as object_store
+    import src.storage as storage
+
+    captured: list[dict] = []
+    monkeypatch.setattr(object_store, "find_findings_jsonl", lambda prefix: b"")
+    monkeypatch.setattr(storage, "list_iac_runs", lambda org: [])
+    monkeypatch.setattr(iac, "update_iac_run", lambda org, run_id, patch: captured.append(patch))
+
+    iac.ingest_iac_from_minio("acme-org", "run-1", preview=preview)
+    assert captured, "ingest wrote no run-status update"
+    return captured[-1]
+
+
+def test_iac_preview_ingest_keeps_run_in_progress(monkeypatch):
+    patch = _capture_iac_update(monkeypatch, preview=True)
+    assert patch["status"] != "completed"
+    assert "finishedAt" not in patch
+    assert patch.get("progress", {}).get("stage") != "completed"
+
+
+def test_iac_final_ingest_completes_run(monkeypatch):
+    patch = _capture_iac_update(monkeypatch, preview=False)
+    assert patch["status"] == "completed"
+    assert "finishedAt" in patch
+    assert patch["progress"]["stage"] == "completed"

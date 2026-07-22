@@ -46,7 +46,6 @@ def test_assigned_scope_matches_image_ref():
 _REPO_SCANNERS = [
     "backend/src/agent_scanning/scanner.py",
     "backend/src/code_scanning/scanner.py",
-    "backend/src/deep_audit/scanner.py",
     "backend/src/dependencies/scanner.py",
     "backend/src/iac/scanner.py",
     "backend/src/secrets/scanner.py",
