@@ -65,3 +65,30 @@ def test_runsc_available_false_when_binary_missing():
     with patch.object(gvisor.shutil, "which", return_value=None):
         assert gvisor.runsc_available() is False
     gvisor._available = None
+
+
+def test_copy_tree_tolerant_skips_unreadable_files(tmp_path, monkeypatch):
+    # An unprivileged copy of a base rootfs must copy everything readable and
+    # drop the root-only files it cannot read, rather than aborting the whole
+    # tree (the bug that left the gVisor tier unable to prepare a rootfs).
+    src = tmp_path / "src"
+    (src / "sub").mkdir(parents=True)
+    (src / "bin").mkdir()
+    (src / "bin" / "python").write_text("#!interp")
+    (src / "sub" / "good").write_text("g")
+    (src / "sub" / "shadow").write_text("secret")
+    dst = tmp_path / "dst"
+
+    real_copy = gvisor.shutil.copy2
+
+    def flaky_copy(s, d, **kw):
+        if str(s).endswith("shadow"):
+            raise PermissionError(13, "Permission denied")
+        return real_copy(s, d, **kw)
+
+    monkeypatch.setattr(gvisor.shutil, "copy2", flaky_copy)
+    gvisor._copy_tree_tolerant(str(src), str(dst))
+
+    assert (dst / "bin" / "python").read_text() == "#!interp"
+    assert (dst / "sub" / "good").read_text() == "g"
+    assert not (dst / "sub" / "shadow").exists()  # skipped, no exception raised

@@ -227,6 +227,37 @@ def base_rootfs_dir() -> str:
     return (os.environ.get("AEGIS_BASE_ROOTFS_DIR") or _BASE_ROOTFS_DIR).strip() or _BASE_ROOTFS_DIR
 
 
+def _copy_tree_tolerant(src: str, dst: str) -> None:
+    """Copy a directory tree, skipping entries the current user cannot read.
+
+    The runner is unprivileged (non-root), and a base image ships root-only
+    files (shadow, private keys, dpkg locks) that a running app never touches
+    and a non-root copy cannot read. An all-or-nothing copytree aborts on the
+    first such file; this copies everything readable (interpreter, libraries,
+    public certs, the repo) and drops what it cannot, so the rootfs is usable
+    without any privilege escalation. Leaving those secrets out of the sandbox
+    is the right posture anyway.
+    """
+    for root, _dirs, files in os.walk(src):  # os.walk ignores unreadable dirs
+        rel = os.path.relpath(root, src)
+        dst_dir = dst if rel == "." else os.path.join(dst, rel)
+        try:
+            os.makedirs(dst_dir, exist_ok=True)
+        except OSError:
+            continue
+        for name in files:
+            s = os.path.join(root, name)
+            d = os.path.join(dst_dir, name)
+            try:
+                if os.path.islink(s):
+                    if not os.path.lexists(d):
+                        os.symlink(os.readlink(s), d)
+                else:
+                    shutil.copy2(s, d, follow_symlinks=False)
+            except OSError:
+                continue  # unreadable entry: skip it, keep the rest
+
+
 def prepare_rootfs(ecosystem: str, repo_root: str, run_id: str) -> str | None:
     """Materialise a writable rootfs for ``ecosystem`` with the repo at /app, or
     None if the baked base for this ecosystem is absent (tier graceful-skips).
@@ -246,9 +277,8 @@ def prepare_rootfs(ecosystem: str, repo_root: str, run_id: str) -> str | None:
         # ponytail: full copy of the base rootfs per detonation. Detonation is
         # triage-gated + opt-in (rare), so simplicity wins; switch to an overlay
         # lowerdir if throughput ever matters.
-        shutil.copytree(base, dest, dirs_exist_ok=True, symlinks=True)
-        app = os.path.join(dest, "app")
-        shutil.copytree(repo_root, app, dirs_exist_ok=True, symlinks=True)
+        _copy_tree_tolerant(base, dest)
+        _copy_tree_tolerant(repo_root, os.path.join(dest, "app"))
         return dest
     except Exception:  # noqa: BLE001 - any prep failure means skip, never a false verdict
         shutil.rmtree(dest, ignore_errors=True)
