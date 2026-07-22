@@ -414,6 +414,10 @@ def build_llm_client(env: JobEnv):
         # as ReadTimeout and left agent findings unverified. Generous default;
         # chat() also retries on timeout. Overridable per job.
         timeout=float(env.get("LLM_TIMEOUT", "300")),
+        # Default low: verification is bounded, so a reasoning model does not
+        # need deep thinking, and low keeps its token spend from starving the
+        # scan budget. Set LLM_REASONING_EFFORT to medium/high, or off to disable.
+        reasoning_effort=env.get("LLM_REASONING_EFFORT") or "low",
     )
 
 
@@ -439,6 +443,11 @@ def build_escalation_llm_client(env: JobEnv):
         ),
         model=model,
         timeout=float(env.get("LLM_TIMEOUT", "300")),
+        reasoning_effort=(
+            env.get("LLM_ESCALATION_REASONING_EFFORT")
+            or env.get("LLM_REASONING_EFFORT")
+            or "low"
+        ),
     )
 
 

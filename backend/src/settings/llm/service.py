@@ -1,6 +1,7 @@
 """Per-org BYO LLM credential storage and retrieval."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -150,7 +151,7 @@ def build_llm_scan_env() -> dict[str, str]:
     cfg = fetch_llm_config(LLM_CONFIG_KEY)
     if not (cfg and cfg.enabled):
         return {}
-    return {
+    env = {
         "LLM_API_KEY":               cfg.api_key,
         "LLM_API_BASE_URL":          cfg.api_base_url,
         "LLM_API_MODEL":             cfg.model,
@@ -160,3 +161,10 @@ def build_llm_scan_env() -> dict[str, str]:
             daily_budget=cfg.daily_token_budget,
         )),
     }
+    # Optional ops hint to keep a reasoning model from over-thinking a bounded
+    # verification task. Passed through only when set; the runner drops it if
+    # the endpoint rejects it.
+    effort = os.environ.get("LLM_REASONING_EFFORT", "").strip()
+    if effort:
+        env["LLM_REASONING_EFFORT"] = effort
+    return env

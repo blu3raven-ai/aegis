@@ -94,6 +94,10 @@ services:
       RUNNER_REGISTRATION_TOKEN: ${RUNNER_REGISTRATION_TOKEN:?Set RUNNER_REGISTRATION_TOKEN in .env}
       APP_SECRET: ${APP_SECRET:?Set APP_SECRET in .env}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      # Reasoning-model thinking on verification. The runner defaults to low
+      # (bounded task); set medium/high for more depth, or off to disable. The
+      # runner drops it automatically if the endpoint rejects the field.
+      LLM_REASONING_EFFORT: ${LLM_REASONING_EFFORT:-}
       # Public base URL used to build links in outbound email (e.g. the
       # email-change confirmation link). Set to how users reach the app.
       PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:3000}
