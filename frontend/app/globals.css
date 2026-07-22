@@ -133,8 +133,6 @@
   --color-scanner-iac-fg:          #60a5fa;
   --color-scanner-agent-bg:        rgb(217 70 239 / 0.18);
   --color-scanner-agent-fg:        #c026d3;
-  --color-scanner-audit-bg:        rgb(99 102 241 / 0.18);
-  --color-scanner-audit-fg:        #4f46e5;
   --color-scanner-entry-bg:        rgb(96 165 250 / 0.18);
   --color-scanner-entry-fg:        #60a5fa;
   --color-scanner-impact-bg:       rgb(239 68 68 / 0.18);
@@ -281,8 +279,6 @@
   --color-scanner-iac-fg:          #93c2fa;
   --color-scanner-agent-bg:        rgb(217 70 239 / 0.18);
   --color-scanner-agent-fg:        #e9a5f5;
-  --color-scanner-audit-bg:        rgb(99 102 241 / 0.20);
-  --color-scanner-audit-fg:        #a5b4fc;
   --color-scanner-entry-bg:        rgb(96 165 250 / 0.18);
   --color-scanner-entry-fg:        #93c2fa;
   --color-scanner-impact-bg:       rgb(248 113 113 / 0.18);

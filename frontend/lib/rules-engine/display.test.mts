@@ -33,8 +33,8 @@ describe("summarizeAction — require_scanners branch", () => {
   })
 
   it("humanizes required scanners via the shared scannerLabel helper", () => {
-    // Previously a local 4-key map that dropped iac/agent/deep_audit and leaked
-    // raw keys; now routed through the canonical scannerLabel (all 7 members).
+    // Previously a local 4-key map that dropped iac/agent and leaked raw keys;
+    // now routed through the canonical scannerLabel (all members).
     assert.match(src, /scannerLabel\(s\)/)
     assert.match(src, /import \{ scannerLabel \} from "@\/lib\/shared\/findings\/row-mapper"/)
   })
