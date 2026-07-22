@@ -194,15 +194,17 @@ def test_hunter_calls_tool_then_answers_yields_confirmed():
 
 def test_hunter_unparseable_final_falls_back_to_needs_verify():
     """An unparseable final message yields parsed=None -> needs_verify (recall-safe)."""
-    llm = _StubLlm(["garbage"])
+    # Prose with no JSON is rejected, so the loop spends a forcing turn; when
+    # that also yields no JSON the finding still falls back to needs_verify.
+    llm = _StubLlm(["garbage", "still no json"])
     result = verify_finding(
         finding=_FINDING, repo_root="/x", llm=llm,
         critic=lambda ev, root: ([], []),
     )
     assert result.verdict == "needs_verify"
-    assert len(llm.calls) == 1
+    assert len(llm.calls) == 2  # hunter turn + forcing turn
     assert result.verification_metadata["reason"].startswith("hunter_schema_invalid:")
-    assert result.tokens_in == 100
+    assert result.tokens_in == 200
 
 
 def test_hunter_valid_first_response_makes_no_extra_call():
@@ -220,13 +222,15 @@ def test_hunter_valid_first_response_makes_no_extra_call():
 
 def test_skeptic_unparseable_falls_back_to_no_mitigation():
     """An unparseable skeptic answer defaults to no mitigation -> confirmed."""
-    llm = _StubLlm([_GOOD_HUNTER, "oops prose not json"])
+    # Skeptic prose with no JSON forces a retry; still no JSON defaults to no
+    # mitigation -> confirmed.
+    llm = _StubLlm([_GOOD_HUNTER, "oops prose not json", "still not json"])
     result = verify_finding(
         finding=_FINDING, repo_root="/x", llm=llm,
         critic=lambda ev, root: ([], []),
     )
     assert result.verdict == "confirmed"
-    assert len(llm.calls) == 2
+    assert len(llm.calls) == 3  # hunter + skeptic + skeptic forcing turn
 
 
 # --- The two chains are independently invokable ---------------------------------
@@ -273,7 +277,7 @@ def test_tier_default_stamped_and_no_escalation_key_by_default():
 
 def test_escalates_to_frontier_when_default_hunter_schema_fails():
     """Default can't produce a valid exploit chain -> the frontier tier retries."""
-    default = _StubLlm(["garbage"])  # default hunter fails to produce JSON
+    default = _StubLlm(["garbage", "still garbage"])  # default hunter fails even after forcing
     frontier = _StubLlm([_GOOD_HUNTER, _GOOD_SKEPTIC])
     result = verify_finding(
         finding=_FINDING, repo_root="/x", llm=default, escalation_llm=frontier,
@@ -282,10 +286,10 @@ def test_escalates_to_frontier_when_default_hunter_schema_fails():
     assert result.verdict == "confirmed"
     assert result.verification_metadata["escalated"] is True
     assert result.verification_metadata["tier"] == "frontier"
-    assert len(default.calls) == 1   # default hunter chain
-    assert len(frontier.calls) == 2  # frontier hunter + skeptic
+    assert len(default.calls) == 2   # default hunter turn + forcing turn
+    assert len(frontier.calls) == 2  # frontier hunter + skeptic (both valid, no forcing)
     # Tokens accumulate across BOTH tiers.
-    assert result.tokens_in == 300
+    assert result.tokens_in == 400
 
 
 def test_no_escalation_when_default_hunter_succeeds():
