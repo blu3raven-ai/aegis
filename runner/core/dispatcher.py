@@ -10,7 +10,6 @@ from runner.scanners.code_scanning.scanner import CodeScanningScanner
 from runner.scanners.container.scanner import ContainerScanner
 from runner.scanners.dependencies.scanner import DependenciesScanner
 from runner.scanners.container_verification.scanner import ContainerVerificationScanner
-from runner.scanners.deep_audit.scanner import DeepAuditScanner
 from runner.scanners.deps_reachability.scanner import DepsReachabilityScanner
 from runner.scanners.iac.scanner import IacScanner
 from runner.scanners.secrets.scanner import SecretsScanner
@@ -20,7 +19,6 @@ _SCANNERS: dict[str, object] = {
     "container_scanning": ContainerScanner(),
     "secret_scanning": SecretsScanner(),
     "code_scanning": CodeScanningScanner(),
-    "deep_audit": DeepAuditScanner(),
     "iac_scanning": IacScanner(),
     "agent_scanning": AgentScanner(),
     "dependencies_reachability": DepsReachabilityScanner(),
