@@ -599,18 +599,6 @@ def list_agent_runs(org_key: str) -> list[dict[str, Any]]:
     return _list_runs("agent_scanning", org_key)
 
 
-def create_deep_audit_run(org_key: str, run_id: str) -> dict[str, Any]:
-    return _create_run("deep_audit", org_key, run_id, track_repos=False)
-
-
-def update_deep_audit_run(org_key: str, run_id: str, patch: dict[str, Any]) -> None:
-    _update_run(run_id, patch)
-
-
-def list_deep_audit_runs(org_key: str) -> list[dict[str, Any]]:
-    return _list_runs("deep_audit", org_key)
-
-
 # Code Scanning Findings — read from unified Finding table
 
 def read_code_scanning_findings(*, asset_ids: list[str], include_archived_rows: bool = False) -> list[dict[str, Any]]:
