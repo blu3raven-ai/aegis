@@ -147,6 +147,15 @@ class LlmClient:
         self._model = model
         self._transport = transport
         self._timeout = timeout
+        # Reasoning models spend completion tokens thinking before they emit the
+        # JSON, so their true output need is only learned at runtime. When one
+        # finding truncates and escalates, this floor ratchets up so every later
+        # finding in the same scan starts with that headroom instead of each
+        # paying for its own truncated first call. One client is shared across a
+        # scan's concurrent findings, so the lesson is learned once. The ratchet
+        # is monotonic, so a lost update under concurrency just costs one more
+        # truncation, never a wrong value; no lock needed.
+        self._min_completion_tokens = 0
 
     def _post_with_retry(self, payload: dict, *, retry_empty: bool) -> dict:
         """POST to /chat/completions with the shared transient-failure retry
@@ -279,10 +288,12 @@ class LlmClient:
         A truncated response (output hit the token cap) is not a format error a
         repair prompt can fix, so it is instead retried on the ORIGINAL prompt
         with a larger cap. Verbose or reasoning-style models overrun a tight cap
-        on hard findings; the escalation lets the response complete.
+        on hard findings; the escalation lets the response complete, and the
+        learned headroom carries to later findings in the same scan.
         """
         convo = list(messages)
-        cur_max_tokens = max_tokens
+        # Start at the floor a prior finding's reasoning spike already taught us.
+        cur_max_tokens = max(max_tokens, self._min_completion_tokens)
         tokens_in = 0
         tokens_out = 0
         prompt_hashes: list[str] = []
@@ -302,6 +313,9 @@ class LlmClient:
                 if resp.truncated:
                     cur_max_tokens = min(cur_max_tokens * _TRUNCATION_ESCALATE_FACTOR, _MAX_TOKENS_CEILING)
                     convo = list(messages)
+                    # Remember the model needs this much room so later findings
+                    # in the scan start here instead of truncating first.
+                    self._min_completion_tokens = max(self._min_completion_tokens, cur_max_tokens)
                 else:
                     convo = convo + [
                         {"role": "assistant", "content": resp.content},
