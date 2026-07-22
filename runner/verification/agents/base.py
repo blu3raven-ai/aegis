@@ -11,7 +11,11 @@ from runner.verification.tools.base import ToolCallRecord, ToolRegistry
 logger = logging.getLogger(__name__)
 
 
-_DEFAULT_MAX_TURNS = 8
+# A hunter tracing source -> gate -> sink across files needs several distinct
+# grep/read rounds before it can synthesise a verdict. 8 was tight enough that a
+# thorough investigation ran out mid-trace; the forcing turn + stuck-loop harness
+# make a higher cap safe (spinning is cut off early, the token budget bounds cost).
+_DEFAULT_MAX_TURNS = 12
 _DEFAULT_MAX_TOKENS_PER_TURN = 1000
 
 # When the loop exhausts its turns still mid-investigation, spend one final call
@@ -193,4 +197,7 @@ def investigate(
             return force_final(turn)
 
     # Turns exhausted mid-investigation: force the answer from gathered work.
+    # Logged so the exhaustion rate is visible — a high rate means the cap is
+    # genuinely too low (raise it); a low rate means the cap is fine.
+    logger.info("investigator hit max_turns=%d, forcing answer from gathered work", max_turns)
     return force_final(max_turns)
