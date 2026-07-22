@@ -52,7 +52,7 @@ from runner.sandbox.probe_runner import (
     _parse,
     ProbeResult,
 )
-from runner.scanners._subprocess import run_tool
+from runner.scanners._subprocess import ScannerTimeoutError, run_tool
 
 logger = logging.getLogger(__name__)
 
@@ -170,8 +170,12 @@ def probe_netns_script(
     shell-quoted."""
     run = " ".join(shlex.quote(a) for a in runsc_run_argv(bundle_dir, container_id))
     ready = " ".join(shlex.quote(a) for a in _ready_curl_argv(port))
+    root = _runsc_state_root()
+    stop = " ".join(
+        shlex.quote(a) for a in [runsc_binary(), "--rootless", "--root", root, "kill", container_id, "KILL"]
+    )
     delete = " ".join(
-        shlex.quote(a) for a in [runsc_binary(), "--rootless", "--root", _runsc_state_root(), "delete", "--force", container_id]
+        shlex.quote(a) for a in [runsc_binary(), "--rootless", "--root", root, "delete", "--force", container_id]
     )
     lines = [
         "set -u",
@@ -186,9 +190,14 @@ def probe_netns_script(
         c = " ".join(shlex.quote(a) for a in argv)
         out = shlex.quote(os.path.join(result_dir, str(idx)))
         lines.append(f"{c} > {out} 2>/dev/null || true")
+    # Decisive, time-bounded teardown: stop the sandbox and reap the launcher so
+    # the script exits promptly. An unbounded `runsc delete` on a still-running
+    # container blocks until the app timeout, which would otherwise strand the
+    # whole probe past its deadline and throw away the results just captured.
     lines += [
-        "kill $APP 2>/dev/null || true",
-        f"{delete} 2>/dev/null || true",
+        f"timeout 10 {stop} >/dev/null 2>&1 || true",
+        "kill -9 $APP 2>/dev/null || true",
+        f"timeout 10 {delete} >/dev/null 2>&1 || true",
     ]
     return "\n".join(lines) + "\n"
 
@@ -254,9 +263,14 @@ def run_gvisor_probe(
         try:
             with os.fdopen(sfd, "w") as fh:
                 fh.write(script)
-            run_tool(
-                unshare_argv(spath), timeout=app_timeout_s + 30.0, cancel_event=cancel_event,
-            )
+            try:
+                run_tool(
+                    unshare_argv(spath), timeout=app_timeout_s + 30.0, cancel_event=cancel_event,
+                )
+            except ScannerTimeoutError:
+                # The probes write their result files before the teardown runs, so
+                # a slow sandbox teardown must not throw away a captured response.
+                logger.warning("[sast-runtime] gVisor probe timed out; salvaging captured results")
         finally:
             try:
                 os.unlink(spath)
@@ -268,4 +282,5 @@ def run_gvisor_probe(
         return None
     finally:
         shutil.rmtree(bundle, ignore_errors=True)
+        shutil.rmtree(result_dir, ignore_errors=True)
         shutil.rmtree(result_dir, ignore_errors=True)
