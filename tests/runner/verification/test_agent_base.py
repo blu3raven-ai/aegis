@@ -149,6 +149,46 @@ def test_max_turns_cap_forces_final_answer():
     assert llm.call_count == 4  # 3 tool turns + 1 forcing turn
 
 
+def test_soft_conclude_nudge_injected_once_when_half_spent():
+    # Model keeps calling tools; once half the turns are spent it must be nudged
+    # once to conclude, and only once (no repeated nudges bloating context).
+    seen_msgs = []
+
+    class _RecordingLlm:
+        _model = "rec"
+
+        def __init__(self):
+            self.n = 0
+
+        def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1000):
+            self.n += 1
+            seen_msgs.append([m.get("content") for m in messages if m["role"] == "user"])
+            if self.n <= 5:
+                return _tool_turn(ToolCall(id=f"c{self.n}", name="echo", arguments={"msg": str(self.n)}))
+            return _final("done")
+
+    llm = _RecordingLlm()
+    reg = ToolRegistry([_echo_tool()])
+    result = investigate(
+        system_prompt="sys", user_task="ask", tools=reg, llm=llm, max_turns=8,
+    )
+    # soft_conclude_at defaults to max_turns//2 = 4; the nudge should appear in
+    # the user messages exactly once across the whole run.
+    from runner.verification.agents.base import _SOFT_CONCLUDE_DIRECTIVE
+    nudge_appearances = sum(
+        1 for msgs in seen_msgs if any(_SOFT_CONCLUDE_DIRECTIVE == m for m in msgs)
+    )
+    # Present on every call after injection, but injected only once.
+    assert nudge_appearances >= 1
+    injections = sum(
+        _SOFT_CONCLUDE_DIRECTIVE in (seen_msgs[i] or [])
+        and _SOFT_CONCLUDE_DIRECTIVE not in (seen_msgs[i - 1] or [])
+        for i in range(1, len(seen_msgs))
+    )
+    assert injections == 1
+    assert result.stopped_reason == "completed"
+
+
 def test_prose_only_completion_is_rejected_and_forced():
     # Model stops calling tools but returns reasoning prose with no JSON. With a
     # JSON-aware is_final, that non-answer must not be accepted — it forces a

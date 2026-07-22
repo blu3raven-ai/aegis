@@ -33,6 +33,18 @@ _FORCE_FINAL_DIRECTIVE = (
 # repeat of one already run) we stop feeding it turns and force the answer.
 _STUCK_STALL_LIMIT = 2
 
+# Some reasoning models keep investigating with fresh (non-repeating) tool calls
+# every turn and never decide, grinding to the turn cap on nearly every finding.
+# Once the investigation is half-spent, nudge it once to conclude unless a
+# specific gap remains — it keeps depth when genuinely needed but lets the
+# already-decided case stop early instead of burning every turn.
+_SOFT_CONCLUDE_DIRECTIVE = (
+    "You have gathered substantial evidence. Unless a specific, named fact is "
+    "still missing, stop investigating now and respond with ONLY the final JSON "
+    "object required by your instructions. Do not call more tools just to be "
+    "thorough."
+)
+
 
 @dataclasses.dataclass
 class AgentResult:
@@ -60,6 +72,7 @@ def investigate(
     max_tokens_per_turn: int = _DEFAULT_MAX_TOKENS_PER_TURN,
     budget=None,
     is_final=None,
+    soft_conclude_at: int | None = None,
 ) -> AgentResult:
     """Run the agent loop. ``llm`` must implement ``chat_with_tools``.
 
@@ -73,6 +86,9 @@ def investigate(
     """
     if is_final is None:
         is_final = lambda content: bool((content or "").strip())  # noqa: E731
+    if soft_conclude_at is None:
+        soft_conclude_at = max(1, max_turns // 2)
+    nudged = False
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_task},
@@ -214,6 +230,13 @@ def investigate(
         if stalled_turns >= _STUCK_STALL_LIMIT:
             logger.warning("investigator stuck repeating tool calls; forcing answer at turn %d", turn)
             return force_final(turn)
+
+        # Half-spent and still investigating: nudge it once to conclude so a
+        # decided-but-indecisive model stops early instead of grinding the cap.
+        if turn >= soft_conclude_at and not nudged:
+            messages.append({"role": "user", "content": _SOFT_CONCLUDE_DIRECTIVE})
+            nudged = True
+            logger.info("investigator soft-conclude nudge at turn %d", turn)
 
     # Turns exhausted mid-investigation: force the answer from gathered work.
     # Logged so the exhaustion rate is visible — a high rate means the cap is
