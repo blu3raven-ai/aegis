@@ -4,25 +4,29 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from runner.verification.llm_client import LlmClient, LlmResponse
+from runner.verification.llm_client import LlmToolResponse
 from runner.verification.verifiers.iac import verify_iac_finding
 
 
-class _StubLlm(LlmClient):
-    """Scripts ``chat`` so the inherited ``chat_json`` repair loop is exercised."""
+class _StubLlm:
+    """Scripts ``chat_with_tools`` so the investigator loop is driven directly.
+
+    Each scripted response is a raw JSON string (returned as a final message
+    with no tool call) or an ``LlmToolResponse`` used verbatim for a tool turn.
+    """
 
     def __init__(self, responses):
-        super().__init__(api_key="k", api_base_url="https://x/v1", model="stub-model")
         self._r = list(responses)
+        self._model = "stub-model"
         self.calls = []
 
-    def chat(self, messages, *, temperature=0.0, max_tokens=1024):
+    def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1024):
         self.calls.append(messages)
-        content = self._r.pop(0)
-        return LlmResponse(
-            content=content,
-            tokens_in=100,
-            tokens_out=50,
+        item = self._r.pop(0)
+        if isinstance(item, LlmToolResponse):
+            return item
+        return LlmToolResponse(
+            content=item, tool_calls=[], tokens_in=100, tokens_out=50,
             prompt_hash=f"h-{len(self.calls)}",
         )
 
@@ -195,7 +199,8 @@ def test_skeptic_finds_compensating_control_yields_ruled_out(tmp_path):
 
 def test_malformed_hunter_json_falls_back_safely(tmp_path):
     finding = _seed_module(tmp_path)
-    # Malformed on both the first turn and the repair-retry → exhaust → fall back.
+    # Prose with no JSON on the first turn is rejected, so the loop spends a
+    # forcing turn; that also yields no JSON, so the finding falls back.
     llm = _StubLlm([
         "not json at all",
         "still not json",
@@ -208,7 +213,7 @@ def test_malformed_hunter_json_falls_back_safely(tmp_path):
     )
     assert result.verdict == "needs_verify"
     assert "hunter_schema_invalid" in result.verification_metadata.get("reason", "")
-    assert len(llm.calls) == 2  # first turn + one repair, then fall back
+    assert len(llm.calls) == 2  # hunter turn + forcing turn
 
 
 def test_malformed_skeptic_json_falls_back_to_needs_verify(tmp_path):
@@ -268,7 +273,8 @@ def test_records_scanner_in_metadata(tmp_path):
     )
     assert result.verification_metadata["scanner"] == "iac_scanning"
     assert result.verification_metadata["model"] == "stub-model"
-    assert result.verification_metadata["prompt_hashes"] == ["h-1"]
+    # The investigator loop is multi-turn, so it reports no single prompt hash.
+    assert result.verification_metadata["prompt_hashes"] == []
 
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ from runner.scanners.deep_audit.targets import select_files
 from runner.verification.carveouts import carveout_verdict
 from runner.verification.critic import verify_citations
 from runner.verification.enrich import stash_confirmed_enrichment
+from runner.verification.pipeline import _agentic_verify
 from runner.verification.schemas.verdict import HunterResponse, SkepticResponse
 
 logger = logging.getLogger(__name__)
@@ -170,17 +171,15 @@ def audit_repo(
             return []
         active = llm
         try:
-            res = active.chat_json(
-                [{"role": "system", "content": HUNTER_SYSTEM},
-                 {"role": "user", "content": hunter_user(rel, text)}],
-                AuthzHunterResponse, temperature=0.0, max_tokens=2000,
+            res = _agentic_verify(
+                HUNTER_SYSTEM, hunter_user(rel, text), AuthzHunterResponse,
+                llm=active, repo_root=repo_root, max_tokens_per_turn=2000,
             )
             if res.parsed is None and escalation_llm is not None:
                 active = escalation_llm
-                res = active.chat_json(
-                    [{"role": "system", "content": HUNTER_SYSTEM},
-                     {"role": "user", "content": hunter_user(rel, text)}],
-                    AuthzHunterResponse, temperature=0.0, max_tokens=2000,
+                res = _agentic_verify(
+                    HUNTER_SYSTEM, hunter_user(rel, text), AuthzHunterResponse,
+                    llm=active, repo_root=repo_root, max_tokens_per_turn=2000,
                 )
             scan_budget.record(tokens_in=res.tokens_in, tokens_out=res.tokens_out)
         except Exception:  # noqa: BLE001 — one bad file must not sink the scan
@@ -198,10 +197,11 @@ def audit_repo(
                         "scanner": "deep_audit", "prompt_hashes": []}
             auth_ctx = _auth_context(repo_root, rel, text, max_chars)
             try:
-                sk = active.chat_json(
-                    [{"role": "system", "content": SKEPTIC_SYSTEM},
-                     {"role": "user", "content": skeptic_user(candidate, auth_ctx, accepted_risks, ground_truth)}],
-                    SkepticResponse, temperature=0.0, max_tokens=500,
+                sk = _agentic_verify(
+                    SKEPTIC_SYSTEM,
+                    skeptic_user(candidate, auth_ctx, accepted_risks, ground_truth),
+                    SkepticResponse,
+                    llm=active, repo_root=repo_root, max_tokens_per_turn=500,
                 )
                 scan_budget.record(tokens_in=sk.tokens_in, tokens_out=sk.tokens_out)
                 skeptic = sk.parsed or SkepticResponse()

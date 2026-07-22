@@ -6,10 +6,14 @@ import threading
 from pathlib import Path
 
 from runner.scanners.iac.scanner import IacScanner
-from runner.verification.llm_client import LlmClient, LlmResponse
+from runner.verification.llm_client import LlmClient, LlmResponse, LlmToolResponse
 
 
 class _StubLlm(LlmClient):
+    """Scripts both LLM entry points from one response queue: ``chat`` serves the
+    advisory ground-truth recon; ``chat_with_tools`` drives the hunter / skeptic
+    investigator loop (each JSON string is returned as a tool-free final turn)."""
+
     def __init__(self, responses):
         super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
         self._r = list(responses)
@@ -21,6 +25,16 @@ class _StubLlm(LlmClient):
             content=self._r.pop(0),
             tokens_in=100,
             tokens_out=50,
+            prompt_hash=f"h-{len(self.calls)}",
+        )
+
+    def chat_with_tools(self, messages, *, tools, temperature=0.0, max_tokens=1024):
+        self.calls.append(messages)
+        item = self._r.pop(0)
+        if isinstance(item, LlmToolResponse):
+            return item
+        return LlmToolResponse(
+            content=item, tool_calls=[], tokens_in=100, tokens_out=50,
             prompt_hash=f"h-{len(self.calls)}",
         )
 
@@ -174,6 +188,36 @@ def test_full_verify_invokes_llm_for_high_severity(tmp_path):
     assert len(llm.calls) == 3  # Ground truth + Hunter + Skeptic
 
 
+def test_streaming_flush_emits_partial_verdicts(tmp_path, monkeypatch):
+    findings = [dict(_seed_repo(tmp_path), check_id=f"CKV_{i}") for i in range(5)]
+
+    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, **kwargs):
+        return type("R", (), {
+            "verdict": "confirmed", "exploit_chain": "c",
+            "evidence": [{"file": "f", "line": 1}],
+            "tokens_in": 1, "tokens_out": 1, "verification_metadata": {},
+        })()
+
+    monkeypatch.setattr(
+        "runner.scanners.iac.scanner.verify_iac_finding", _fake_verify,
+    )
+
+    snapshots: list[list[dict]] = []
+    scanner = IacScanner()
+    # llm=object() keeps verification enabled while the advisory ground-truth
+    # recon fails open (no chat_json); verify_iac_finding is faked out anyway.
+    result = scanner._maybe_verify_iac(
+        findings=findings, repo_root=str(tmp_path), llm=object(),
+        scan_budget=_unlimited_budget(), max_workers=1,
+        on_progress=lambda snap: snapshots.append(snap),
+    )
+    # A flush fired mid-pass and carried real verdicts, not needs_verify defaults.
+    assert snapshots, "expected at least one streaming flush"
+    assert any(f.get("verdict") == "confirmed" for snap in snapshots for f in snap)
+    # Final result is unaffected by streaming.
+    assert all(f["verdict"] == "confirmed" for f in result)
+
+
 def test_full_verify_invokes_llm_for_critical(tmp_path):
     finding = _seed_repo(tmp_path)
     finding["severity"] = "critical"
@@ -254,6 +298,9 @@ def test_llm_error_recorded_does_not_raise(tmp_path):
         def chat(self, *a, **kw):
             raise RuntimeError("upstream timeout")
 
+        def chat_with_tools(self, *a, **kw):
+            raise RuntimeError("upstream timeout")
+
     scanner = IacScanner()
     verified = scanner._maybe_verify_iac(
         findings=[finding],
@@ -261,8 +308,10 @@ def test_llm_error_recorded_does_not_raise(tmp_path):
         llm=_ExplodingLlm(),
         scan_budget=_unlimited_budget(),
     )
-    assert verified[0]["verdict"] is None
-    assert "llm_error" in verified[0]["verification_metadata"]["skipped"]
+    # The investigator loop absorbs the transport error and degrades the finding
+    # to needs_verify (schema-invalid) instead of crashing the scan.
+    assert verified[0]["verdict"] == "needs_verify"
+    assert "hunter_schema_invalid" in verified[0]["verification_metadata"].get("reason", "")
 
 
 def test_per_finding_exception_does_not_poison_others(tmp_path):
@@ -274,32 +323,33 @@ def test_per_finding_exception_does_not_poison_others(tmp_path):
     class _PartiallyExplodingLlm(LlmClient):
         def __init__(self):
             super().__init__(api_key="k", api_base_url="https://x/v1", model="stub")
-            self.call_count = 0
+            self.tool_calls = 0
 
         def chat(self, *a, **kw):
-            self.call_count += 1
-            # Call 1 is the scan-level ground-truth recon (must succeed so the
-            # per-finding path runs); call 2 is the first finding's hunter and
-            # raises transiently.
-            if self.call_count == 1:
-                return LlmResponse(
-                    content=json.dumps({"baseline_refs": [], "accepted_behaviors": []}),
-                    tokens_in=10, tokens_out=5, prompt_hash="gt",
-                )
-            if self.call_count == 2:
-                raise RuntimeError("transient")
+            # The scan-level ground-truth recon (must succeed so the per-finding
+            # path runs).
             return LlmResponse(
+                content=json.dumps({"baseline_refs": [], "accepted_behaviors": []}),
+                tokens_in=10, tokens_out=5, prompt_hash="gt",
+            )
+
+        def chat_with_tools(self, *a, **kw):
+            self.tool_calls += 1
+            # The first finding's hunter raises transiently; the second finding's
+            # hunter returns a clean no-chain answer.
+            if self.tool_calls == 1:
+                raise RuntimeError("transient")
+            return LlmToolResponse(
                 content=json.dumps({"exploit_chain": "", "evidence": []}),
-                tokens_in=10,
-                tokens_out=5,
-                prompt_hash=f"h-{self.call_count}",
+                tool_calls=[], tokens_in=10, tokens_out=5, prompt_hash="h",
             )
 
     scanner = IacScanner()
-    # max_workers=1 so the raising chat() call deterministically hits the first
+    # max_workers=1 so the raising hunter deterministically hits the first
     # finding; verification is concurrent now, so which finding sees the
     # transient error is otherwise nondeterministic. The isolation property under
-    # test (one finding's exception doesn't poison others) holds either way.
+    # test (one finding's failure doesn't poison others) holds either way: the
+    # investigator absorbs the error into a needs_verify verdict.
     verified = scanner._maybe_verify_iac(
         findings=[bad, good],
         repo_root=str(tmp_path),
@@ -307,8 +357,8 @@ def test_per_finding_exception_does_not_poison_others(tmp_path):
         scan_budget=_unlimited_budget(),
         max_workers=1,
     )
-    assert verified[0]["verdict"] is None
-    assert "llm_error" in verified[0]["verification_metadata"]["skipped"]
+    assert verified[0]["verdict"] == "needs_verify"
+    assert "hunter_schema_invalid" in verified[0]["verification_metadata"].get("reason", "")
     assert verified[1]["verdict"] == "possible"
 
 
@@ -370,21 +420,21 @@ def test_cancel_event_set_midway_short_circuits_remaining(tmp_path):
             self._cancel = cancel
 
         def chat(self, *a, **kw):
+            # The scan-level ground-truth recon; let it pass.
             self.calls += 1
-            # Call 1 is the scan-level ground-truth recon; let it pass. Cancel
-            # from the first finding's hunter (call 2) onward so the remaining
-            # findings short-circuit before starting.
-            if self.calls == 1:
-                return LlmResponse(
-                    content=json.dumps({"baseline_refs": [], "accepted_behaviors": []}),
-                    tokens_in=10, tokens_out=5, prompt_hash="gt",
-                )
-            self._cancel.set()
             return LlmResponse(
+                content=json.dumps({"baseline_refs": [], "accepted_behaviors": []}),
+                tokens_in=10, tokens_out=5, prompt_hash="gt",
+            )
+
+        def chat_with_tools(self, *a, **kw):
+            # The first finding's hunter cancels so the remaining findings
+            # short-circuit before starting.
+            self.calls += 1
+            self._cancel.set()
+            return LlmToolResponse(
                 content=json.dumps({"exploit_chain": "", "evidence": []}),
-                tokens_in=10,
-                tokens_out=5,
-                prompt_hash="h",
+                tool_calls=[], tokens_in=10, tokens_out=5, prompt_hash="h",
             )
 
     cancel = threading.Event()

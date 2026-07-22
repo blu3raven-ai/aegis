@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import dataclasses
+import json
 import logging
 import os
 import re
@@ -161,6 +162,16 @@ def clone_repo(
 def register_output(output_dir: Path, file_path: Path, repo: str) -> None:
     """Append a sha256 manifest entry for a per-repo output file."""
     _manifest.record_output(output_dir, file_path, repo)
+
+
+def write_findings_jsonl(path: Path, findings: list[dict]) -> None:
+    """Serialise findings to JSONL atomically (temp write + replace) so a reader
+    or a concurrent streaming flush never observes a half-written file."""
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w") as f:
+        for finding in findings:
+            f.write(json.dumps(finding, separators=(",", ":")) + "\n")
+    os.replace(tmp, path)
 
 
 def log(prefix: str, target: str) -> None:
