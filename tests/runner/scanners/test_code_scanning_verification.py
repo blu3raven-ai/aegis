@@ -56,6 +56,43 @@ def test_streaming_flush_emits_partial_verdicts(monkeypatch):
     assert all(f["verdict"] == "confirmed" for f in result)
 
 
+def test_maybe_verify_routes_by_detector(monkeypatch):
+    """A detector='deep_audit' finding goes to the authz verifier; every other
+    finding goes to the SAST verifier. Both return a VerificationResult, so the
+    only difference is which function is called."""
+    calls = {"sast": [], "authz": []}
+
+    def _result():
+        return type("R", (), {
+            "verdict": "confirmed", "exploit_chain": "c", "evidence": [],
+            "tokens_in": 1, "tokens_out": 1, "verification_metadata": {},
+        })()
+
+    def _fake_sast(*, finding, repo_root, **kwargs):
+        calls["sast"].append(finding["file"])
+        return _result()
+
+    def _fake_authz(*, finding, repo_root, **kwargs):
+        calls["authz"].append(finding["file"])
+        return _result()
+
+    monkeypatch.setattr("runner.scanners.code_scanning.scanner.verify_finding", _fake_sast)
+    monkeypatch.setattr("runner.scanners.code_scanning.scanner.verify_authz_finding", _fake_authz)
+
+    findings = [
+        {"file": "a.py", "line": 1, "rule": "x", "severity": "high"},
+        {"file": "b.py", "line": 1, "severity": "medium", "detector": "deep_audit"},
+    ]
+    result = _maybe_verify(
+        findings=findings, repo_root="/x", llm=object(),
+        scan_budget=ScanBudget(scan_budget=10_000, daily_remaining=1_000_000),
+        max_workers=1,
+    )
+    assert calls["sast"] == ["a.py"]
+    assert calls["authz"] == ["b.py"]
+    assert all(f["verdict"] == "confirmed" for f in result)
+
+
 def test_no_progress_callback_still_verifies(monkeypatch):
     findings = [{"file": "a.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"}]
 

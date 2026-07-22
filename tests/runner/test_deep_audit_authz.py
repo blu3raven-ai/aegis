@@ -7,7 +7,11 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from runner.scanners.deep_audit.engine import audit_repo
+from runner.scanners.deep_audit.engine import (
+    audit_repo,
+    detect_authz_candidates,
+    verify_authz_finding,
+)
 from runner.scanners.deep_audit.targets import select_files
 from runner.verification.llm_client import LlmToolResponse
 
@@ -100,6 +104,33 @@ def test_user_declared_accepted_risk_rules_out():
 
 def test_no_llm_is_noop():
     assert audit_repo(_repo_with_handler(), llm=None, scan_budget=_Budget()) == []
+
+
+def test_detect_returns_unverified_candidates():
+    repo = _repo_with_handler()
+    # Detection runs the hunter only, so a single scripted response is consumed.
+    rows = detect_authz_candidates(repo, llm=_mock_llm(_HUNTER), scan_budget=_Budget(), max_workers=1)
+    assert len(rows) == 1
+    assert rows[0]["verdict"] is None
+    assert rows[0]["detector"] == "deep_audit"
+    assert rows[0]["check_id"] == "deep_audit.authz.missing_object_scope"
+    # The raw candidate is stashed so the verify pass can run the skeptic later.
+    assert rows[0]["authz_candidate"]["file"] == "app/routes.py"
+
+
+def test_detect_no_llm_is_noop():
+    assert detect_authz_candidates(_repo_with_handler(), llm=None, scan_budget=_Budget()) == []
+
+
+def test_verify_authz_finding_returns_result():
+    repo = _repo_with_handler()
+    [candidate] = detect_authz_candidates(
+        repo, llm=_mock_llm(_HUNTER), scan_budget=_Budget(), max_workers=1
+    )
+    result = verify_authz_finding(finding=candidate, repo_root=repo, llm=_mock_llm(_skeptic()))
+    assert result.verdict == "confirmed"
+    assert result.exploit_chain
+    assert result.verification_metadata["scanner"] == "deep_audit"
 
 
 def test_select_files_picks_handlers_skips_tests():
