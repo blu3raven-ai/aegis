@@ -92,6 +92,9 @@ def test_run_semgrep_sarif_writes_sarif_output(tmp_path):
     assert "-o" in args
     assert str(sarif_out) in args
     assert "--json" not in args
+    # Memory guard: semgrep must self-limit so a large repo cannot OOM-kill the
+    # scan into zero findings.
+    assert "--max-memory" in args and "--jobs" in args
 
 
 def test_run_semgrep_sarif_returns_none_on_missing_output(tmp_path):
