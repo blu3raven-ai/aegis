@@ -44,6 +44,7 @@ from runner.verification.tools.repo import (
     make_grep_repo_tool,
     make_read_file_range_tool,
 )
+from runner.verification.tools.runtime import make_runtime_probe_tool
 
 logger = logging.getLogger(__name__)
 
@@ -92,16 +93,23 @@ def _agentic_verify(
     llm,
     repo_root: str,
     max_tokens_per_turn: int,
+    extra_tools: list | None = None,
 ) -> JsonChatResult:
     """Run one reasoning chain as a tool-using investigator over the repo.
 
     The model can grep and read files to trace the chain and ground its
-    citations before answering with the schema JSON. The return shape matches
-    ``chat_json`` so the caller's verdict logic is unchanged; ``prompt_hashes``
-    is empty because the investigator loop is multi-turn.
+    citations before answering with the schema JSON. ``extra_tools`` adds
+    chain-specific tools (the hunter's runtime probe) on top of the read-only
+    repo tools. The return shape matches ``chat_json`` so the caller's verdict
+    logic is unchanged; ``prompt_hashes`` is empty because the investigator loop
+    is multi-turn.
     """
     tools = ToolRegistry(
-        [make_grep_repo_tool(Path(repo_root)), make_read_file_range_tool(Path(repo_root))]
+        [
+            make_grep_repo_tool(Path(repo_root)),
+            make_read_file_range_tool(Path(repo_root)),
+            *(extra_tools or []),
+        ]
     )
     result = investigate(
         system_prompt=system,
@@ -138,14 +146,21 @@ def _agentic_verify(
     )
 
 
-def run_tp_reasoning(finding: dict, code_context: str, reachability, *, llm, repo_root: str):
+def run_tp_reasoning(
+    finding: dict, code_context: str, reachability, *, llm, repo_root: str,
+    runtime_enabled: bool = False,
+):
     """TP-reasoning chain (hunter): try to build a concrete exploit chain.
 
     Runs as a tool-using investigator so the model can trace the input to its
-    true source and ground each cited snippet across files before deciding.
-    Returns a ``JsonChatResult`` (parsed ``HunterResponse`` or ``None`` on
-    schema failure) so the reasoning chain stays a standalone, testable unit.
+    true source and ground each cited snippet across files before deciding. When
+    ``runtime_enabled`` (RUNTIME_VERIFY), the hunter also gets ``runtime_probe``
+    so it can serve and observe the running app when a verdict hinges on a
+    runtime fact. Returns a ``JsonChatResult`` (parsed ``HunterResponse`` or
+    ``None`` on schema failure) so the reasoning chain stays a standalone,
+    testable unit.
     """
+    extra_tools = [make_runtime_probe_tool(repo_root)] if runtime_enabled else None
     return _agentic_verify(
         HUNTER_SYSTEM,
         hunter_user_message(finding, code_context, reachability),
@@ -153,6 +168,7 @@ def run_tp_reasoning(finding: dict, code_context: str, reachability, *, llm, rep
         llm=llm,
         repo_root=repo_root,
         max_tokens_per_turn=3000,
+        extra_tools=extra_tools,
     )
 
 
@@ -186,6 +202,7 @@ def verify_finding(
     escalation_llm=None,
     accepted_risks: list | None = None,
     ground_truth=None,
+    runtime_enabled: bool = False,
     critic: Callable[[list[dict], str], tuple[list[str], list[str]]] = verify_citations,
 ) -> VerificationResult:
     """Verify one finding on the default model, escalating to a frontier model
@@ -233,7 +250,10 @@ def verify_finding(
     active_llm = llm
 
     # TP-reasoning chain: can this finding be exploited?
-    hunter_result = run_tp_reasoning(finding, code_context, reachability, llm=active_llm, repo_root=repo_root)
+    hunter_result = run_tp_reasoning(
+        finding, code_context, reachability, llm=active_llm, repo_root=repo_root,
+        runtime_enabled=runtime_enabled,
+    )
     tokens_in_total += hunter_result.tokens_in
     tokens_out_total += hunter_result.tokens_out
     metadata["prompt_hashes"].extend(hunter_result.prompt_hashes)
@@ -247,7 +267,10 @@ def verify_finding(
         metadata["tier"] = "frontier"
         metadata["model"] = getattr(escalation_llm, "_model", "unknown")
         active_llm = escalation_llm
-        hunter_result = run_tp_reasoning(finding, code_context, reachability, llm=active_llm, repo_root=repo_root)
+        hunter_result = run_tp_reasoning(
+            finding, code_context, reachability, llm=active_llm, repo_root=repo_root,
+            runtime_enabled=runtime_enabled,
+        )
         tokens_in_total += hunter_result.tokens_in
         tokens_out_total += hunter_result.tokens_out
         metadata["prompt_hashes"].extend(hunter_result.prompt_hashes)

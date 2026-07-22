@@ -48,6 +48,7 @@ from runner.scanners.code_scanning import (
 from runner.verification.budget import DEFAULT_VERIFY_WORKERS, ScanBudget, verify_concurrency
 from runner.verification.cache import apply_cache_hit, lookup_cache, verification_input_hash
 from runner.verification.ground_truth import build_ground_truth
+from runner.sandbox.harness import runtime_verify_enabled
 from runner.sandbox.sast_runtime import verify_findings_at_runtime
 from runner.verification.pipeline import verify_finding
 
@@ -69,6 +70,7 @@ def _build_scan_budget(env: JobEnv) -> ScanBudget:
 def _maybe_verify(
     *, findings: list[dict], repo_root: str, llm, escalation_llm=None, scan_budget: ScanBudget,
     backend=None, max_workers: int = DEFAULT_VERIFY_WORKERS, accepted_risks: list | None = None,
+    runtime_enabled: bool = False,
 ) -> list[dict]:
     # Precompute each finding's cache key and, when verification is on, ask the
     # backend which of those were already verified with identical input — those
@@ -117,6 +119,7 @@ def _maybe_verify(
             result = verify_finding(
                 finding=f, repo_root=repo_root, llm=llm, escalation_llm=escalation_llm,
                 accepted_risks=accepted_risks, ground_truth=ground_truth,
+                runtime_enabled=runtime_enabled,
             )
             scan_budget.record(tokens_in=result.tokens_in, tokens_out=result.tokens_out)
             copy["verdict"] = result.verdict
@@ -354,6 +357,7 @@ class CodeScanningScanner:
             backend=getattr(self, "_backend", None),
             max_workers=verify_concurrency(env),
             accepted_risks=accepted_risks,
+            runtime_enabled=runtime_verify_enabled(env.get),
         )
 
         # Opt-in runtime pass (RUNTIME_VERIFY): actually run the target to resolve
