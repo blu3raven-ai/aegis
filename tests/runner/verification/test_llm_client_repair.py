@@ -129,3 +129,27 @@ def test_chat_json_schema_error_still_uses_repair_not_escalation():
     assert llm.max_tokens_seen == [3000, 3000]  # unchanged
     assert llm.calls[1][1] == {"role": "assistant", "content": "not json"}
     assert llm.calls[1][2]["role"] == "user"  # repair prompt present
+
+
+def test_learned_headroom_carries_to_the_next_finding():
+    # First finding truncates and escalates to 8000; the shared client remembers
+    # the reasoning spike, so a second finding starts at 8000 rather than
+    # truncating at the passed baseline again.
+    llm = _TruncStubLlm([
+        ("truncated…", True), (_VALID, False),   # finding 1: truncate -> escalate
+        (_VALID, False),                          # finding 2: must start at floor
+    ])
+    r1 = llm.chat_json([{"role": "user", "content": "f1"}], HunterResponse, max_tokens=3000)
+    r2 = llm.chat_json([{"role": "user", "content": "f2"}], HunterResponse, max_tokens=3000)
+    assert isinstance(r1.parsed, HunterResponse) and isinstance(r2.parsed, HunterResponse)
+    # calls: f1 @3000 (trunc), f1 @8000 (ok), f2 @8000 (starts at learned floor).
+    assert llm.max_tokens_seen == [3000, 8000, 8000]
+
+
+def test_no_truncation_leaves_baseline_untouched():
+    # A model that never truncates never inflates the floor: every finding stays
+    # at its cheap passed baseline.
+    llm = _TruncStubLlm([(_VALID, False), (_VALID, False)])
+    llm.chat_json([{"role": "user", "content": "f1"}], HunterResponse, max_tokens=3000)
+    llm.chat_json([{"role": "user", "content": "f2"}], HunterResponse, max_tokens=3000)
+    assert llm.max_tokens_seen == [3000, 3000]

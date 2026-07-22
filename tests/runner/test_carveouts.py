@@ -19,6 +19,7 @@ def _mock_llm(*responses: str) -> MagicMock:
     llm = MagicMock()
     llm.chat.side_effect = [_make_resp(r) for r in responses]
     llm.chat_json.side_effect = lambda *a, **kw: LlmClient.chat_json(llm, *a, **kw)
+    llm._min_completion_tokens = 0  # impersonating LlmClient: state chat_json reads
     return llm
 
 
