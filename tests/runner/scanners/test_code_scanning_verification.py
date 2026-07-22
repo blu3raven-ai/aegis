@@ -26,6 +26,55 @@ def test_no_llm_config_marks_skipped(monkeypatch):
     assert result[0]["verification_metadata"]["skipped"] == "llm_disabled"
 
 
+def test_streaming_flush_emits_partial_verdicts(monkeypatch):
+    findings = [
+        {"file": f"f{i}.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"}
+        for i in range(5)
+    ]
+
+    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None, **kwargs):
+        return type("R", (), {
+            "verdict": "confirmed", "exploit_chain": "c",
+            "evidence": [{"file": "f", "line": 1}],
+            "tokens_in": 1, "tokens_out": 1, "verification_metadata": {},
+        })()
+
+    monkeypatch.setattr(
+        "runner.scanners.code_scanning.scanner.verify_finding", _fake_verify,
+    )
+
+    snapshots: list[list[dict]] = []
+    result = _maybe_verify(
+        findings=findings, repo_root="/x", llm=object(),
+        scan_budget=ScanBudget(scan_budget=10_000, daily_remaining=1_000_000),
+        max_workers=1, on_progress=lambda snap: snapshots.append(snap),
+    )
+    # A flush fired mid-pass and carried real verdicts, not needs_verify defaults.
+    assert snapshots, "expected at least one streaming flush"
+    assert any(f.get("verdict") == "confirmed" for snap in snapshots for f in snap)
+    # Final result is unaffected by streaming.
+    assert all(f["verdict"] == "confirmed" for f in result)
+
+
+def test_no_progress_callback_still_verifies(monkeypatch):
+    findings = [{"file": "a.py", "line": 1, "tool": "sast", "rule": "x", "severity": "high"}]
+
+    def _fake_verify(*, finding, repo_root, llm, escalation_llm=None, critic=None, **kwargs):
+        return type("R", (), {
+            "verdict": "confirmed", "exploit_chain": "c", "evidence": [],
+            "tokens_in": 1, "tokens_out": 1, "verification_metadata": {},
+        })()
+
+    monkeypatch.setattr(
+        "runner.scanners.code_scanning.scanner.verify_finding", _fake_verify,
+    )
+    result = _maybe_verify(
+        findings=findings, repo_root="/x", llm=object(),
+        scan_budget=ScanBudget(scan_budget=10_000, daily_remaining=1_000_000),
+    )
+    assert result[0]["verdict"] == "confirmed"
+
+
 def test_below_severity_skipped():
     findings = [{"file": "a.py", "line": 1, "tool": "sast", "rule": "x", "severity": "info"}]
     result = _maybe_verify(
