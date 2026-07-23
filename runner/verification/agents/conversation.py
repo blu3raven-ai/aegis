@@ -20,7 +20,10 @@ from runner.verification.llm_client import LlmResponsesUnsupported, LlmToolRespo
 def _assistant_message(resp: LlmToolResponse) -> dict:
     """Chat-shaped assistant message mirroring a turn, so providers can
     correlate the tool responses that follow it."""
-    msg: dict = {"role": "assistant", "content": resp.content or None}
+    # Some endpoints reject a null/absent content field on an assistant message
+    # (they require the key even when the turn is only tool calls); send "" so a
+    # tool-call turn does not 400.
+    msg: dict = {"role": "assistant", "content": resp.content or ""}
     if resp.tool_calls:
         msg["tool_calls"] = [
             {
