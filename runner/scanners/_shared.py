@@ -429,6 +429,9 @@ def build_llm_client(env: JobEnv):
         # need deep thinking, and low keeps its token spend from starving the
         # scan budget. Set LLM_REASONING_EFFORT to medium/high, or off to disable.
         reasoning_effort=env.get("LLM_REASONING_EFFORT") or "low",
+        # Full Anthropic Messages API base; only consulted when
+        # LLM_TRANSPORT=anthropic. Never derived from LLM_API_BASE_URL.
+        anthropic_base_url=env.get("LLM_ANTHROPIC_BASE_URL") or None,
     )
 
 
@@ -459,6 +462,7 @@ def build_escalation_llm_client(env: JobEnv):
             or env.get("LLM_REASONING_EFFORT")
             or "low"
         ),
+        anthropic_base_url=env.get("LLM_ANTHROPIC_BASE_URL") or None,
     )
 
 
