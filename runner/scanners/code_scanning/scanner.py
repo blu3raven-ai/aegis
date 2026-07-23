@@ -301,6 +301,9 @@ class CodeScanningScanner:
         self._authz_llm = build_llm_client(env) if env.get("LLM_API_KEY") else None
         self._authz_escalation = build_escalation_llm_client(env) if self._authz_llm else None
         self._authz_budget = _build_scan_budget(env) if self._authz_llm else None
+        # Detection is an LLM pass over many files; parallelise it like verify so
+        # it does not serialise the scan phase at the low engine default.
+        self._authz_workers = verify_concurrency(env)
         self._authz_cancel = cancel_event
         self._authz_candidates: list[dict] = []
         self._authz_lock = threading.Lock()
@@ -419,6 +422,7 @@ class CodeScanningScanner:
             candidates = detect_authz_candidates(
                 str(clone_dir), llm=self._authz_llm, escalation_llm=self._authz_escalation,
                 scan_budget=self._authz_budget, cancel_event=self._authz_cancel,
+                max_workers=self._authz_workers,
             )
         except Exception:  # noqa: BLE001
             logger.warning("[!] authz detection failed for %s (continuing)", repo_name, exc_info=True)

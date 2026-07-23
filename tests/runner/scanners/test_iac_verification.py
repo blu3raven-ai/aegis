@@ -95,12 +95,24 @@ def test_verify_marks_findings_llm_disabled(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_below_severity_skips_llm(tmp_path):
+def test_medium_severity_verifies(tmp_path):
+    # Medium iac findings now go through the agentic verifier (aligned with the
+    # code scanning altitude) instead of being skipped below severity.
     finding = _seed_repo(tmp_path)
     finding["severity"] = "medium"
 
     scanner = IacScanner()
-    llm = _StubLlm([])
+    llm = _StubLlm([
+        _GROUND_TRUTH,
+        json.dumps({
+            "exploit_chain": "bucket holds PII without encryption",
+            "evidence": [
+                {"kind": "resource", "file": "infra/s3.tf", "line": 1,
+                 "snippet": 'resource "aws_s3_bucket" "data"'},
+            ],
+        }),
+        json.dumps({"mitigation_found": False, "reasoning": ""}),
+    ])
 
     verified = scanner._maybe_verify_iac(
         findings=[finding],
@@ -108,9 +120,9 @@ def test_below_severity_skips_llm(tmp_path):
         llm=llm,
         scan_budget=_unlimited_budget(),
     )
-    assert verified[0]["verdict"] is None
-    assert verified[0]["verification_metadata"]["skipped"] == "below_severity"
-    assert llm.calls == []
+    assert verified[0]["verdict"] == "confirmed"
+    assert (verified[0].get("verification_metadata") or {}).get("skipped") != "below_severity"
+    assert len(llm.calls) == 3
 
 
 def test_low_severity_skips_llm(tmp_path):
