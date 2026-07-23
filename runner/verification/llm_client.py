@@ -194,14 +194,37 @@ def _to_responses_tools(tools: list[dict]) -> list[dict]:
     return out
 
 
+def _to_anthropic_tools(tools: list[dict]) -> list[dict]:
+    """Translate OpenAI chat function-tool specs to the Anthropic tool shape.
+
+    Accepts either the nested chat form ``{"type":"function","function":{...}}``
+    or a flat ``{"name","description","parameters"}``. The JSON Schema moves from
+    ``parameters`` to ``input_schema``; name/description hoist to the top level.
+    """
+    out: list[dict] = []
+    for t in tools:
+        fn = t.get("function", t)
+        out.append({
+            "name": fn.get("name", ""),
+            "description": fn.get("description", ""),
+            "input_schema": fn.get("parameters", {}),
+        })
+    return out
+
+
 class LlmClient:
     def __init__(
         self, api_key: str, api_base_url: str, model: str,
         *, transport: httpx.BaseTransport | None = None, timeout: float = 60.0,
-        reasoning_effort: str | None = None,
+        reasoning_effort: str | None = None, anthropic_base_url: str | None = None,
     ) -> None:
         self._api_key = api_key
         self._api_base_url = api_base_url.rstrip("/")
+        # Full base for the Anthropic Messages API (the messages endpoint is
+        # {anthropic_base_url}/messages). Endpoint-agnostic: the operator supplies
+        # it; it is never derived from the OpenAI base. Only required when the
+        # anthropic transport is selected (checked below).
+        self._anthropic_base_url = (anthropic_base_url or "").rstrip("/")
         self._model = model
         self._transport = transport
         self._timeout = timeout
@@ -231,14 +254,23 @@ class LlmClient:
         # OpenAI-compatible endpoint implements; enable it per-endpoint with
         # LLM_TRANSPORT=auto (probe + fall back) or responses (force).
         mode = (os.environ.get("LLM_TRANSPORT") or "chat").strip().lower()
-        self._transport_mode = mode if mode in ("auto", "chat", "responses") else "chat"
+        self._transport_mode = mode if mode in ("auto", "chat", "responses", "anthropic") else "chat"
         # None = not yet probed, True/False = cached capability. Shared across a
         # scan's concurrent conversations so the endpoint is probed once.
         self._supports_responses: bool | None = None
+        # The anthropic transport is explicit opt-in and cannot guess its base
+        # URL, so a missing one is a misconfiguration, not something to fall back
+        # from. Fail loudly at construction naming the env var to set.
+        if self._transport_mode == "anthropic" and not self._anthropic_base_url:
+            raise LlmError(
+                "LLM_TRANSPORT=anthropic requires LLM_ANTHROPIC_BASE_URL to be set "
+                "to the endpoint's Anthropic Messages API base"
+            )
 
     def _post_with_retry(
         self, payload: dict, *, retry_empty: bool,
         path: str = "/chat/completions", detect_unsupported: bool = False,
+        url: str | None = None, headers: dict | None = None,
     ) -> dict:
         """POST to ``path`` with the shared transient-failure retry policy,
         returning the parsed JSON body.
@@ -260,8 +292,13 @@ class LlmClient:
         Raises the last transient error after the attempt budget is exhausted;
         the caller's ``except Exception`` degrades the finding to needs_verify.
         """
-        url = f"{self._api_base_url}{path}"
-        headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
+        # A caller on a different API (the anthropic transport) passes an explicit
+        # url + headers; everyone else uses the OpenAI-compatible defaults. The
+        # 429/5xx/transient retry policy below is identical either way.
+        if url is None:
+            url = f"{self._api_base_url}{path}"
+        if headers is None:
+            headers = {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
         last = _MAX_ATTEMPTS - 1
         last_error: Exception | None = None
 
@@ -592,6 +629,75 @@ class LlmClient:
             response_id=data.get("id"),
         )
 
+    def _anthropic_turn(
+        self,
+        system: list[dict],
+        messages: list[dict],
+        *,
+        tools: list[dict],
+        max_tokens: int,
+        disable_tools: bool,
+    ) -> LlmToolResponse:
+        """Run one turn against the Anthropic Messages API.
+
+        ``system`` and ``messages`` arrive already shaped as content-block arrays
+        with cache_control breakpoints stamped by the conversation, so this method
+        only assembles the body, POSTs (reusing the shared retry policy with the
+        anthropic url + auth headers), and parses. ``disable_tools`` omits the
+        tools field for the forcing turn. tokens_in folds the cache read/creation
+        counts in with the fresh input so the budget sees true prompt cost.
+        """
+        payload: dict = {
+            "model": self._model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": messages,
+        }
+        if tools and not disable_tools:
+            payload["tools"] = _to_anthropic_tools(tools)
+        prompt_hash = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+        headers = {
+            "x-api-key": self._api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        data = self._post_with_retry(
+            payload, retry_empty=False,
+            url=f"{self._anthropic_base_url}/messages", headers=headers,
+        )
+
+        content_parts: list[str] = []
+        tool_calls: list[ToolCall] = []
+        for block in data.get("content") or []:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            if btype == "text":
+                content_parts.append(block.get("text", ""))
+            elif btype == "tool_use":
+                # thinking blocks are ignored; only text + tool_use carry the turn.
+                inp = block.get("input")
+                tool_calls.append(ToolCall(
+                    id=block.get("id", ""),
+                    name=block.get("name", ""),
+                    arguments=inp if isinstance(inp, dict) else {},
+                ))
+
+        usage = data.get("usage", {})
+        tokens_in = (
+            int(usage.get("input_tokens", 0))
+            + int(usage.get("cache_read_input_tokens", 0))
+            + int(usage.get("cache_creation_input_tokens", 0))
+        )
+        return LlmToolResponse(
+            content="".join(content_parts),
+            tool_calls=tool_calls,
+            tokens_in=tokens_in,
+            tokens_out=int(usage.get("output_tokens", 0)),
+            prompt_hash=prompt_hash,
+        )
+
     def start_conversation(
         self, *, system_prompt: str, tools: list[dict],
         max_tokens_per_turn: int, temperature: float = 0.0,
@@ -603,12 +709,17 @@ class LlmClient:
         the ``LLM_TRANSPORT`` override. The agent loop drives the returned
         object without knowing which transport backs it.
         """
-        from runner.verification.agents.conversation import ChatConversation, ResponsesConversation
+        from runner.verification.agents.conversation import (
+            AnthropicConversation, ChatConversation, ResponsesConversation,
+        )
 
         kwargs = dict(
             system_prompt=system_prompt, tools=tools,
             max_tokens_per_turn=max_tokens_per_turn, temperature=temperature,
         )
+        # Explicit opt-in; the anthropic transport is never part of auto-probing.
+        if self._transport_mode == "anthropic":
+            return AnthropicConversation(self, **kwargs)
         if self._transport_mode == "chat" or self._supports_responses is False:
             return ChatConversation(self, **kwargs)
         # `responses` forces it with no fallback; `auto` allows degrade-to-chat.
