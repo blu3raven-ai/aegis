@@ -107,6 +107,16 @@ class LlmResponsesUnsupported(LlmError):
     """
 
 
+class LlmAnthropicUnsupported(LlmError):
+    """Raised when the configured endpoint has no Anthropic Messages route.
+
+    Same role as ``LlmResponsesUnsupported`` for the anthropic transport: a
+    permanent capability fact (missing route or a request shape the endpoint
+    rejects) that flips the client onto chat completions rather than failing
+    every finding.
+    """
+
+
 @dataclass
 class LlmResponse:
     content: str
@@ -258,6 +268,10 @@ class LlmClient:
         # None = not yet probed, True/False = cached capability. Shared across a
         # scan's concurrent conversations so the endpoint is probed once.
         self._supports_responses: bool | None = None
+        # Same cache for the anthropic transport: once a call proves the endpoint
+        # lacks the Messages route (or rejects our shape), later findings in the
+        # scan skip the dead path and go straight to chat.
+        self._supports_anthropic: bool | None = None
         # The anthropic transport is explicit opt-in and cannot guess its base
         # URL, so a missing one is a misconfiguration, not something to fall back
         # from. Fail loudly at construction naming the env var to set.
@@ -662,10 +676,21 @@ class LlmClient:
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         }
-        data = self._post_with_retry(
-            payload, retry_empty=False,
-            url=f"{self._anthropic_base_url}/messages", headers=headers,
-        )
+        try:
+            data = self._post_with_retry(
+                payload, retry_empty=False, detect_unsupported=True,
+                url=f"{self._anthropic_base_url}/messages", headers=headers,
+            )
+        except LlmResponsesUnsupported as exc:
+            # detect_unsupported raises the responses-named signal on any missing
+            # route / rejected shape; re-flag it as the anthropic equivalent so
+            # the conversation degrades to chat. Cache so peers skip the dead path.
+            if self._supports_anthropic is None:
+                logger.info("endpoint does not support the anthropic messages api; using chat completions")
+            self._supports_anthropic = False
+            raise LlmAnthropicUnsupported(str(exc)) from exc
+        # A parseable turn confirms the route exists; cache so peers skip probing.
+        self._supports_anthropic = True
 
         content_parts: list[str] = []
         tool_calls: list[ToolCall] = []
@@ -704,10 +729,23 @@ class LlmClient:
     ):
         """Open a transport-agnostic multi-turn conversation.
 
-        Picks the responses API when the endpoint supports it (cached per
-        client) and falls back to stateless chat completions otherwise, honoring
-        the ``LLM_TRANSPORT`` override. The agent loop drives the returned
-        object without knowing which transport backs it.
+        Selects the best transport for this endpoint and always falls back to
+        stateless chat completions (the guaranteed floor). Honors the
+        ``LLM_TRANSPORT`` override; ``auto`` prefers anthropic when a base URL is
+        configured, else probes responses, then degrades to chat. The agent loop
+        drives the returned object without knowing which transport backs it.
+
+        ``auto`` precedence:
+          1. anthropic, when ``LLM_ANTHROPIC_BASE_URL`` is set (degrades to chat
+             permanently on an unsupported/route/shape signal, cached).
+          2. responses, otherwise (probes on the first turn; degrades to chat
+             permanently on a route-not-found / bad-shape signal, cached).
+          3. chat, the always-available floor.
+
+        Explicit ``chat`` / ``responses`` / ``anthropic`` force that transport.
+        ``chat`` never probes. ``responses`` and ``anthropic`` still degrade to
+        chat on an unsupported signal so a single misconfigured endpoint does not
+        fail every finding; the degrade is logged.
         """
         from runner.verification.agents.conversation import (
             AnthropicConversation, ChatConversation, ResponsesConversation,
@@ -717,10 +755,21 @@ class LlmClient:
             system_prompt=system_prompt, tools=tools,
             max_tokens_per_turn=max_tokens_per_turn, temperature=temperature,
         )
-        # Explicit opt-in; the anthropic transport is never part of auto-probing.
-        if self._transport_mode == "anthropic":
+        if self._transport_mode == "chat":
+            return ChatConversation(self, **kwargs)
+
+        # Anthropic: explicit mode, or auto with a base URL configured. Once the
+        # endpoint has proven it lacks the route, later findings skip to chat.
+        want_anthropic = self._transport_mode == "anthropic" or (
+            self._transport_mode == "auto" and bool(self._anthropic_base_url)
+        )
+        if want_anthropic:
+            if self._supports_anthropic is False:
+                return ChatConversation(self, **kwargs)
             return AnthropicConversation(self, **kwargs)
-        if self._transport_mode == "chat" or self._supports_responses is False:
+
+        # Responses: explicit mode, or auto without an anthropic base.
+        if self._supports_responses is False:
             return ChatConversation(self, **kwargs)
         # `responses` forces it with no fallback; `auto` allows degrade-to-chat.
         return ResponsesConversation(
