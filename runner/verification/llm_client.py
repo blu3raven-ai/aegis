@@ -310,6 +310,16 @@ class LlmClient:
                     if attempt < last:
                         continue
                     raise last_error
+                # On the responses path the route exists (turn 1 succeeded), so a
+                # surviving 400 means this endpoint's responses implementation
+                # rejects our request shape (a common quirk: it cannot replay a
+                # prior tool call via previous_response_id). Treat it as an
+                # unsupported signal so the conversation degrades to chat instead
+                # of failing every finding to needs_verify.
+                if detect_unsupported and resp.status_code == 400:
+                    raise LlmResponsesUnsupported(
+                        f"responses request shape unsupported: {resp.text[:160]}"
+                    )
                 raise LlmError(f"llm unexpected: {resp.status_code} {resp.text[:200]}")
 
             try:
