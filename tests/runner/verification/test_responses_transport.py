@@ -132,6 +132,38 @@ def test_responses_404_falls_back_permanently_and_stops_probing(monkeypatch):
     assert paths and all(not p.endswith("/responses") for p in paths)
 
 
+def test_responses_400_on_continuation_degrades_to_chat(monkeypatch):
+    # Turn 1 (a tool call) succeeds on /responses, but the continuation turn
+    # (previous_response_id + function_call_output) 400s because this endpoint
+    # cannot replay a prior tool call. The conversation must degrade to chat and
+    # still complete, not fail the finding to needs_verify.
+    monkeypatch.setenv("LLM_TRANSPORT", "auto")
+    calls: list[str] = []
+
+    def handler(req):
+        p = req.url.path
+        calls.append(p)
+        if p.endswith("/responses"):
+            body = req.content.decode()
+            if "previous_response_id" in body or "function_call_output" in body:
+                return httpx.Response(400, json={"error": {
+                    "message": "Missing required parameter: 'messages.[0].content[1].type'.",
+                    "type": "invalid_request_error", "code": "missing_required_parameter"}})
+            return _resp_tool("r1", "c1", "echo", {"msg": "hi"})
+        # chat path: the replayed continuation resolves the finding
+        return _chat_final('{"exploit_chain": "x"}')
+
+    reg = ToolRegistry([_echo_tool()])
+    client = LlmClient("k", "https://x/v1", "m", transport=httpx.MockTransport(handler))
+    r = investigate(system_prompt="s", user_task="a", tools=reg, llm=client, is_final=_IS_JSON)
+    assert r.stopped_reason == "completed"
+    assert "{" in r.final_message
+    # the finding was resolved, not degraded to a non-answer
+    assert client._supports_responses is False
+    # the tool was executed once (turn 1), then the degrade replayed over chat
+    assert any(p.endswith("/chat/completions") for p in calls)
+
+
 def test_responses_200_uses_responses_and_caches(monkeypatch):
     monkeypatch.setenv("LLM_TRANSPORT", "auto")
     paths: list[str] = []
