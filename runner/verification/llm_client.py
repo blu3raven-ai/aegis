@@ -225,8 +225,13 @@ class LlmClient:
         # Transport selection. `auto` probes the responses API once and caches
         # the result; `responses` forces it (no fallback); `chat` forces chat
         # completions and never probes. Unknown values degrade to auto.
-        mode = (os.environ.get("LLM_TRANSPORT") or "auto").strip().lower()
-        self._transport_mode = mode if mode in ("auto", "chat", "responses") else "auto"
+        # Default to the proven chat transport. The responses transport is a
+        # token optimisation that depends on the endpoint correctly replaying a
+        # prior tool call via previous_response_id, which not every
+        # OpenAI-compatible endpoint implements; enable it per-endpoint with
+        # LLM_TRANSPORT=auto (probe + fall back) or responses (force).
+        mode = (os.environ.get("LLM_TRANSPORT") or "chat").strip().lower()
+        self._transport_mode = mode if mode in ("auto", "chat", "responses") else "chat"
         # None = not yet probed, True/False = cached capability. Shared across a
         # scan's concurrent conversations so the endpoint is probed once.
         self._supports_responses: bool | None = None
