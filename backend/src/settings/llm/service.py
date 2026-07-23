@@ -22,6 +22,8 @@ class LlmConfigDTO:
     scan_token_budget: int
     daily_token_budget: int
     enabled: bool
+    transport: str = "auto"
+    anthropic_base_url: str = ""
 
 
 @dataclass
@@ -33,6 +35,8 @@ class LlmConfigUpsert:
     scan_token_budget: int = 100_000
     daily_token_budget: int = 1_000_000
     enabled: bool = False
+    transport: str = "auto"
+    anthropic_base_url: str = ""
 
 
 def upsert_llm_config(upsert: LlmConfigUpsert) -> None:
@@ -42,6 +46,10 @@ def upsert_llm_config(upsert: LlmConfigUpsert) -> None:
     # UnsafeURLError, which the router surfaces as 422).
     if upsert.api_base_url:
         assert_sendable_url(upsert.api_base_url)
+    # The anthropic base URL is likewise shipped to the runner and receives the
+    # API key as a header, so it needs the same SSRF guard as api_base_url.
+    if upsert.anthropic_base_url:
+        assert_sendable_url(upsert.anthropic_base_url)
 
     async def _q(session: AsyncSession) -> None:
         row = (
@@ -60,6 +68,8 @@ def upsert_llm_config(upsert: LlmConfigUpsert) -> None:
                     scan_token_budget=upsert.scan_token_budget,
                     daily_token_budget=upsert.daily_token_budget,
                     enabled=upsert.enabled,
+                    transport=upsert.transport,
+                    anthropic_base_url=upsert.anthropic_base_url,
                 )
             )
         else:
@@ -69,6 +79,8 @@ def upsert_llm_config(upsert: LlmConfigUpsert) -> None:
             row.scan_token_budget = upsert.scan_token_budget
             row.daily_token_budget = upsert.daily_token_budget
             row.enabled = upsert.enabled
+            row.transport = upsert.transport
+            row.anthropic_base_url = upsert.anthropic_base_url
 
     run_db(_q)
 
@@ -91,6 +103,8 @@ def fetch_llm_config(org_id: str) -> LlmConfigDTO | None:
             scan_token_budget=row.scan_token_budget,
             daily_token_budget=row.daily_token_budget,
             enabled=row.enabled,
+            transport=row.transport,
+            anthropic_base_url=row.anthropic_base_url,
         )
 
     return run_db(_q)
@@ -112,6 +126,8 @@ def fetch_public_llm_config(org_id: str) -> dict | None:
             "scan_token_budget": row.scan_token_budget,
             "daily_token_budget": row.daily_token_budget,
             "enabled": row.enabled,
+            "transport": row.transport,
+            "anthropic_base_url": row.anthropic_base_url,
             "configured": True,
         }
 
@@ -167,4 +183,7 @@ def build_llm_scan_env() -> dict[str, str]:
     effort = os.environ.get("LLM_REASONING_EFFORT", "").strip()
     if effort:
         env["LLM_REASONING_EFFORT"] = effort
+    env["LLM_TRANSPORT"] = cfg.transport or "auto"
+    if cfg.anthropic_base_url:
+        env["LLM_ANTHROPIC_BASE_URL"] = cfg.anthropic_base_url
     return env
