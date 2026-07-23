@@ -9,6 +9,21 @@ import { ApiClientError } from "./api-client.types.ts"
 /** Rough USD-per-1k-token estimate for display-only cost figures; exact provider rates aren't tracked. */
 export const APPROX_COST_PER_1K_TOKENS = 0.01
 
+/** Wire protocol the verifier uses to talk to the configured endpoint.
+ *  `auto` probes the best supported path and falls back to chat completions;
+ *  the rest force one specific API. */
+export type LlmTransport = "auto" | "chat" | "responses" | "anthropic"
+
+/** Selectable transports with display labels (functional API names). */
+export const LLM_TRANSPORTS: { id: LlmTransport; label: string }[] = [
+  { id: "auto", label: "Auto (recommended)" },
+  { id: "chat", label: "Chat completions" },
+  { id: "responses", label: "Responses" },
+  { id: "anthropic", label: "Anthropic messages" },
+]
+
+export const DEFAULT_LLM_TRANSPORT: LlmTransport = "auto"
+
 export interface LlmPublicConfig {
   org_id: string
   api_base_url: string
@@ -18,6 +33,10 @@ export interface LlmPublicConfig {
   enabled: boolean
   /** Always true when a row exists; the key itself is never returned. */
   configured: boolean
+  /** Optional so an older backend that omits it degrades to "auto" client-side. */
+  transport?: LlmTransport
+  /** Only meaningful for the anthropic transport; "" when unset. */
+  anthropic_base_url?: string
 }
 
 /** PUT payload — includes the secret api_key (never returned on GET). */
@@ -28,6 +47,8 @@ export interface LlmConfigUpdate {
   scan_token_budget: number
   daily_token_budget: number
   enabled: boolean
+  transport: LlmTransport
+  anthropic_base_url: string
 }
 
 export interface LlmDayUsage {

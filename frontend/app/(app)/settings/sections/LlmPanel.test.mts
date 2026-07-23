@@ -4,6 +4,10 @@ import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 
 const src = readFileSync(fileURLToPath(new URL("./LlmPanel.tsx", import.meta.url)), "utf-8")
+const apiSrc = readFileSync(
+  fileURLToPath(new URL("../../../../lib/client/llm-settings-api.ts", import.meta.url)),
+  "utf-8",
+)
 
 describe("LlmPanel", () => {
   it("wires config / usage / delete to the api client", () => {
@@ -31,6 +35,25 @@ describe("LlmPanel", () => {
     assert.match(src, /enabled !== baseline\.enabled/)
     // A freshly entered key always counts as a change.
     assert.match(src, /byo\.api_key\.trim\(\)\.length > 0/)
+  })
+
+  it("offers the four verification transports, defaulting to auto", () => {
+    for (const id of ["auto", "chat", "responses", "anthropic"]) {
+      assert.match(apiSrc, new RegExp(`id: "${id}"`))
+    }
+    assert.match(apiSrc, /Auto \(recommended\)/)
+    assert.match(apiSrc, /DEFAULT_LLM_TRANSPORT: LlmTransport = "auto"/)
+    // The panel renders every transport option and seeds the form to the default.
+    assert.match(src, /LLM_TRANSPORTS\.map/)
+    assert.match(src, /transport: DEFAULT_LLM_TRANSPORT/)
+  })
+
+  it("sends the transport in the saved payload and shows the anthropic base only for anthropic", () => {
+    assert.match(src, /transport: e\.target\.value as LlmTransport/)
+    // updateLlmConfig spreads the form (which now carries transport + anthropic_base_url).
+    assert.match(src, /updateLlmConfig\(\{ \.\.\.byo, enabled \}\)/)
+    assert.match(src, /byo\.transport === "anthropic"/)
+    assert.match(src, /anthropic_base_url/)
   })
 
   it("shows token usage in Insights, not in settings", () => {
