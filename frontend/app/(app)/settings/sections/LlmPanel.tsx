@@ -5,6 +5,7 @@ import Link from "next/link"
 
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { Select } from "@/components/ui/Select"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 import { SettingsRow } from "@/components/settings/SettingsRow"
 import { ToggleSwitch } from "@/components/settings/ToggleSwitch"
@@ -15,7 +16,10 @@ import {
   deleteLlmConfig,
   getLlmConfig,
   updateLlmConfig,
+  DEFAULT_LLM_TRANSPORT,
+  LLM_TRANSPORTS,
   type LlmPublicConfig,
+  type LlmTransport,
 } from "@/lib/client/llm-settings-api"
 import { useSaveBarSection } from "@/app/(app)/settings/save-bar/SaveBarProvider"
 import type { DetailComponentProps } from "../registry"
@@ -26,6 +30,8 @@ interface ByoForm {
   model: string
   scan_token_budget: number
   daily_token_budget: number
+  transport: LlmTransport
+  anthropic_base_url: string
 }
 
 const DEFAULT_BYO: ByoForm = {
@@ -34,10 +40,15 @@ const DEFAULT_BYO: ByoForm = {
   model: "gpt-4o-mini",
   scan_token_budget: 100_000,
   daily_token_budget: 1_000_000,
+  transport: DEFAULT_LLM_TRANSPORT,
+  anthropic_base_url: "",
 }
 
 /** Non-secret fields tracked for dirty detection (api_key is write-only). */
-type LlmBaseline = Pick<ByoForm, "api_base_url" | "model" | "scan_token_budget" | "daily_token_budget"> & {
+type LlmBaseline = Pick<
+  ByoForm,
+  "api_base_url" | "model" | "scan_token_budget" | "daily_token_budget" | "transport" | "anthropic_base_url"
+> & {
   enabled: boolean
 }
 
@@ -46,6 +57,8 @@ const DEFAULT_BASELINE: LlmBaseline = {
   model: DEFAULT_BYO.model,
   scan_token_budget: DEFAULT_BYO.scan_token_budget,
   daily_token_budget: DEFAULT_BYO.daily_token_budget,
+  transport: DEFAULT_BYO.transport,
+  anthropic_base_url: DEFAULT_BYO.anthropic_base_url,
   enabled: false,
 }
 
@@ -55,6 +68,8 @@ function baselineOf(cfg: LlmPublicConfig): LlmBaseline {
     model: cfg.model,
     scan_token_budget: cfg.scan_token_budget,
     daily_token_budget: cfg.daily_token_budget,
+    transport: cfg.transport ?? DEFAULT_LLM_TRANSPORT,
+    anthropic_base_url: cfg.anthropic_base_url ?? "",
     enabled: cfg.enabled,
   }
 }
@@ -66,6 +81,8 @@ function applyConfig(setByo: (fn: (f: ByoForm) => ByoForm) => void, cfg: LlmPubl
     model: cfg.model,
     scan_token_budget: cfg.scan_token_budget,
     daily_token_budget: cfg.daily_token_budget,
+    transport: cfg.transport ?? DEFAULT_LLM_TRANSPORT,
+    anthropic_base_url: cfg.anthropic_base_url ?? "",
   }))
 }
 
@@ -126,6 +143,8 @@ export function LlmDetail({ onChanged }: DetailComponentProps) {
     byo.model !== baseline.model ||
     byo.scan_token_budget !== baseline.scan_token_budget ||
     byo.daily_token_budget !== baseline.daily_token_budget ||
+    byo.transport !== baseline.transport ||
+    byo.anthropic_base_url !== baseline.anthropic_base_url ||
     enabled !== baseline.enabled
 
   const handleSave = async () => {
@@ -250,6 +269,35 @@ export function LlmDetail({ onChanged }: DetailComponentProps) {
         <SettingsRow label="Model" description="Model identifier">
           <Input size="sm" value={byo.model} onChange={(e) => setByo((f) => ({ ...f, model: e.target.value }))} />
         </SettingsRow>
+        <SettingsRow
+          label="Verification transport"
+          description="Auto tries the best supported path for your endpoint and falls back to chat completions. The others force a specific API."
+        >
+          <Select
+            size="sm"
+            value={byo.transport}
+            onChange={(e) => setByo((f) => ({ ...f, transport: e.target.value as LlmTransport }))}
+          >
+            {LLM_TRANSPORTS.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </Select>
+        </SettingsRow>
+        {byo.transport === "anthropic" && (
+          <SettingsRow
+            label="Anthropic base URL"
+            description="Only needed for the Anthropic messages transport."
+          >
+            <Input
+              size="sm"
+              placeholder="https://host/anthropic/v1"
+              value={byo.anthropic_base_url}
+              onChange={(e) => setByo((f) => ({ ...f, anthropic_base_url: e.target.value }))}
+            />
+          </SettingsRow>
+        )}
         <SettingsRow label="Per-scan token budget">
           <Input
             type="number"
