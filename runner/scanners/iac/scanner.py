@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 TIMEOUT_CHECKOV: float = 600.0
 _FAILURE_EXIT_CODE = 2
 
-_IAC_VERIFY_SEVERITIES = {"high", "critical"}
+_IAC_VERIFY_SEVERITIES = {"medium", "high", "critical"}
 
 # Streaming flush cadence: re-ingest the resolved findings after this many new
 # verdicts, but no more often than the min interval, so verdicts surface in the
