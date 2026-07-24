@@ -15,7 +15,11 @@ from __future__ import annotations
 import copy
 import json
 
-from runner.verification.llm_client import LlmResponsesUnsupported, LlmToolResponse
+from runner.verification.llm_client import (
+    LlmAnthropicUnsupported,
+    LlmResponsesUnsupported,
+    LlmToolResponse,
+)
 
 
 def _assistant_message(resp: LlmToolResponse) -> dict:
@@ -106,6 +110,11 @@ class AnthropicConversation:
     message, so the whole growing prefix is cached and the next turn reads it back
     cheaply. Breakpoints are stamped on a per-turn deep copy so the stored history
     stays clean and the count never exceeds two.
+
+    A chat-shaped shadow history is kept in parallel so an unsupported/route/shape
+    signal from the endpoint can degrade the in-flight conversation to chat
+    completions by replaying the accumulated logical history, mirroring
+    ``ResponsesConversation``.
     """
 
     def __init__(
@@ -116,36 +125,69 @@ class AnthropicConversation:
         self._system_prompt = system_prompt
         self._tools = tools
         self._max_tokens = max_tokens_per_turn
-        # temperature is accepted for interface parity; the verified Anthropic
-        # body for this task omits it and uses the endpoint default.
+        # temperature is unused by the anthropic body (it omits the field and uses
+        # the endpoint default) but is threaded to the chat fallback on a degrade.
+        self._temperature = temperature
         self._messages: list[dict] = []
+        self._shadow: list[dict] = [{"role": "system", "content": system_prompt}]
+        self._fallback: ChatConversation | None = None
 
     def send_user(self, text: str, *, disable_tools: bool = False) -> LlmToolResponse:
+        if self._fallback is not None:
+            return self._fallback.send_user(text, disable_tools=disable_tools)
         self._messages.append({"role": "user", "content": [{"type": "text", "text": text}]})
+        self._shadow.append({"role": "user", "content": text})
         return self._turn(disable_tools=disable_tools)
 
     def send_tool_results(
         self, results, *, follow_up: str | None = None, disable_tools: bool = False,
     ) -> LlmToolResponse:
+        if self._fallback is not None:
+            return self._fallback.send_tool_results(
+                results, follow_up=follow_up, disable_tools=disable_tools
+            )
         content: list[dict] = [
             {"type": "tool_result", "tool_use_id": tool_call_id, "content": result}
             for tool_call_id, _name, result in results
         ]
+        for tool_call_id, name, result in results:
+            self._shadow.append(
+                {"role": "tool", "tool_call_id": tool_call_id, "name": name, "content": result}
+            )
         if follow_up:
             content.append({"type": "text", "text": follow_up})
+            self._shadow.append({"role": "user", "content": follow_up})
         self._messages.append({"role": "user", "content": content})
         return self._turn(disable_tools=disable_tools)
 
     def _turn(self, *, disable_tools: bool) -> LlmToolResponse:
         system, messages = self._cached_request()
-        resp = self._client._anthropic_turn(
-            system, messages,
-            tools=[] if disable_tools else self._tools,
-            max_tokens=self._max_tokens,
-            disable_tools=disable_tools,
-        )
+        try:
+            resp = self._client._anthropic_turn(
+                system, messages,
+                tools=[] if disable_tools else self._tools,
+                max_tokens=self._max_tokens,
+                disable_tools=disable_tools,
+            )
+        except LlmAnthropicUnsupported:
+            return self._degrade_and_retry(disable_tools=disable_tools)
         self._messages.append(_anthropic_assistant_message(resp))
+        self._shadow.append(_assistant_message(resp))
         return resp
+
+    def _degrade_and_retry(self, *, disable_tools: bool) -> LlmToolResponse:
+        # Replay the accumulated logical history over chat completions. The
+        # current turn's input is already in the shadow, so re-run it directly.
+        fb = ChatConversation(
+            self._client,
+            system_prompt=self._system_prompt,
+            tools=self._tools,
+            max_tokens_per_turn=self._max_tokens,
+            temperature=self._temperature,
+        )
+        fb._messages = list(self._shadow)
+        self._fallback = fb
+        return fb._turn(disable_tools=disable_tools)
 
     def _cached_request(self) -> tuple[list[dict], list[dict]]:
         """Build the (system, messages) request copy with the two breakpoints.

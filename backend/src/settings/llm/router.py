@@ -1,6 +1,8 @@
 """REST API for per-org LLM configuration."""
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -32,6 +34,8 @@ class LlmConfigBody(BaseModel):
     scan_token_budget: int = Field(100_000, ge=1_000, le=10_000_000)
     daily_token_budget: int = Field(1_000_000, ge=10_000, le=100_000_000)
     enabled: bool = False
+    transport: Literal["auto", "chat", "responses", "anthropic"] = "auto"
+    anthropic_base_url: str = Field("", max_length=512)
 
 
 @router.get("")
@@ -61,6 +65,8 @@ def put_llm_config(
             scan_token_budget=body.scan_token_budget,
             daily_token_budget=body.daily_token_budget,
             enabled=body.enabled,
+            transport=body.transport,
+            anthropic_base_url=body.anthropic_base_url,
         ))
     except UnsafeURLError as exc:
         raise HTTPException(status_code=422, detail=f"unsafe_url: {str(exc)[:200]}") from exc

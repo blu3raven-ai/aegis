@@ -78,7 +78,10 @@ def _build_verification_env() -> dict[str, str]:
                 org_id=_LLM_CONFIG_KEY,
                 daily_budget=llm_cfg.daily_token_budget,
             )),
+            "LLM_TRANSPORT":             llm_cfg.transport or "auto",
         })
+        if llm_cfg.anthropic_base_url:
+            env["LLM_ANTHROPIC_BASE_URL"] = llm_cfg.anthropic_base_url
 
     return env
 

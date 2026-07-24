@@ -11,6 +11,11 @@ import { CostChart } from "@/components/shared/settings/llm/CostChart"
 import { TestConnectionButton } from "@/components/shared/settings/llm/TestConnectionButton"
 import { UsageMeter } from "@/components/shared/settings/llm/UsageMeter"
 import { apiClient } from "@/lib/client/api-client"
+import {
+  DEFAULT_LLM_TRANSPORT,
+  LLM_TRANSPORTS,
+  type LlmTransport,
+} from "@/lib/client/llm-settings-api"
 
 type ProviderId = "anthropic" | "openai" | "azure_openai" | "custom"
 
@@ -89,6 +94,8 @@ type LlmConfig = {
   daily_token_budget: number
   enabled: boolean
   configured: boolean
+  transport?: LlmTransport
+  anthropic_base_url?: string
 }
 
 type DayUsage = {
@@ -113,6 +120,8 @@ type FormState = {
   scan_token_budget: number
   daily_token_budget: number
   enabled: boolean
+  transport: LlmTransport
+  anthropic_base_url: string
 }
 
 const DEFAULT_PROVIDER = PROVIDERS[0]
@@ -125,6 +134,8 @@ const INITIAL_FORM: FormState = {
   scan_token_budget: 100_000,
   daily_token_budget: 1_000_000,
   enabled: false,
+  transport: DEFAULT_LLM_TRANSPORT,
+  anthropic_base_url: "",
 }
 
 function formatTokens(n: number): string {
@@ -165,6 +176,8 @@ export function LlmContent({ canEdit = true, sessionLoading = false }: LlmConten
           scan_token_budget: data.scan_token_budget ?? f.scan_token_budget,
           daily_token_budget: data.daily_token_budget ?? f.daily_token_budget,
           enabled: Boolean(data.enabled),
+          transport: data.transport ?? DEFAULT_LLM_TRANSPORT,
+          anthropic_base_url: data.anthropic_base_url ?? "",
         }))
       })
       .catch(() => {
@@ -215,6 +228,8 @@ export function LlmContent({ canEdit = true, sessionLoading = false }: LlmConten
           scan_token_budget: form.scan_token_budget,
           daily_token_budget: form.daily_token_budget,
           enabled: form.enabled,
+          transport: form.transport,
+          anthropic_base_url: form.anthropic_base_url,
         },
       })
       setCfg(next)
@@ -236,7 +251,9 @@ export function LlmContent({ canEdit = true, sessionLoading = false }: LlmConten
       form.model !== cfg.model ||
       form.scan_token_budget !== cfg.scan_token_budget ||
       form.daily_token_budget !== cfg.daily_token_budget ||
-      form.enabled !== cfg.enabled
+      form.enabled !== cfg.enabled ||
+      form.transport !== (cfg.transport ?? DEFAULT_LLM_TRANSPORT) ||
+      form.anthropic_base_url !== (cfg.anthropic_base_url ?? "")
     )
   )
 
@@ -334,6 +351,43 @@ export function LlmContent({ canEdit = true, sessionLoading = false }: LlmConten
             />
           )}
         </SettingsRow>
+      </SettingsCard>
+
+      {/* Transport */}
+      <SettingsCard heading="Transport">
+        <SettingsRow
+          label="Verification transport"
+          description="Auto tries the best supported path for your endpoint and falls back to chat completions. The others force a specific API."
+          layout="stack"
+        >
+          <Select
+            id="llm-transport"
+            value={form.transport}
+            onChange={(e) => setForm({ ...form, transport: e.target.value as LlmTransport })}
+          >
+            {LLM_TRANSPORTS.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </Select>
+        </SettingsRow>
+
+        {form.transport === "anthropic" && (
+          <SettingsRow
+            label="Anthropic base URL"
+            description="Only needed for the Anthropic messages transport."
+            layout="stack"
+          >
+            <Input
+              id="llm-anthropic-base-url"
+              type="url"
+              placeholder="https://host/anthropic/v1"
+              value={form.anthropic_base_url}
+              onChange={(e) => setForm({ ...form, anthropic_base_url: e.target.value })}
+            />
+          </SettingsRow>
+        )}
       </SettingsCard>
 
       {/* Limits */}

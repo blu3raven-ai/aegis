@@ -1436,6 +1436,8 @@ class LlmConfig(Base):
     scan_token_budget: Mapped[int] = mapped_column(Integer, nullable=False, default=100_000)
     daily_token_budget: Mapped[int] = mapped_column(Integer, nullable=False, default=1_000_000)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    transport: Mapped[str] = mapped_column(String(16), nullable=False, default="auto", server_default="auto")
+    anthropic_base_url: Mapped[str] = mapped_column(String(512), nullable=False, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
